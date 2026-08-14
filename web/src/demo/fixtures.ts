@@ -1,6 +1,20 @@
 // Seed data for the GitHub Pages demo. This is the canned world the fake backend
 // (demoBackend.ts) starts from — a plausible slice of an engineering day so every
 // cockpit panel has something real-looking to render. No server, no network.
+//
+// One repository, one product: **Markdown Magpie**, a Git-backed Markdown
+// knowledge system that indexes documents, answers questions with citations, logs
+// the weak answers, clusters them into knowledge gaps and publishes Markdown
+// improvements as pull requests. Every goal, pull request, plan, finding and
+// transcript below is work on that codebase. The theme is load-bearing rather
+// than decorative: a demo whose tickets come from three unrelated products reads
+// as noise, and an operator learning the cockpit is trying to follow one story
+// through it.
+//
+// The other rule this file is built to: **every pickup status appears exactly
+// where it belongs.** `issuePickupStatus` has fourteen answers, and a demo
+// carrying eight of them teaches an operator that the other six are broken when
+// they finally show up. See the roll-call comment above `issues` below.
 import type {
   AppState,
   Issue,
@@ -59,7 +73,7 @@ function demoCheck(
   seed: Partial<ValidationCheck> & Pick<ValidationCheck, 'id' | 'letter' | 'seq' | 'title' | 'createdAt' | 'updatedAt'>,
 ): ValidationCheck {
   return {
-    originRef: 'issue:231',
+    originRef: 'issue:395',
     do: '',
     expect: '',
     uses: [],
@@ -199,13 +213,21 @@ export function buildDemoState(): DemoSeed {
       takenAt: ago(0),
       pullRequests: [
         demoPr({
-          id: 'pr-142',
-          number: 142,
-          title: 'Add rate limiting to the ingest API',
-          branch: 'feature/rate-limit',
+          id: 'pr-412',
+          number: 412,
+          // Deliberately not word-for-word its goal's title: a demo where the
+          // ticket and the pull request are one string cannot show that the two
+          // are different objects, and every row that quotes one reads as the other.
+          title: 'Cut the ranked section list down to the token budget',
+          branch: 'feature/context-budget',
           ciStatus: 'failing',
           unresolvedComments: [
-            { id: 'c-1', author: 'reviewer', body: 'Can you pull the window size into config?', handled: false },
+            {
+              id: 'c-1',
+              author: 'reviewer',
+              body: 'Can the budget be per-flow rather than one global number? Our runbook flow needs a bigger window than the FAQ one.',
+              handled: false,
+            },
           ],
           approved: false,
           mergeable: true,
@@ -219,10 +241,10 @@ export function buildDemoState(): DemoSeed {
           attention: { status: 'harness', reasons: ['an agent is working this branch'] },
         }),
         demoPr({
-          id: 'pr-141',
-          number: 141,
-          title: 'Cache PR merge commits between cycles',
-          branch: 'feature/merge-cache',
+          id: 'pr-411',
+          number: 411,
+          title: 'Reuse section embeddings across incremental index runs',
+          branch: 'feature/embed-cache',
           ciStatus: 'passing',
           unresolvedComments: [],
           approved: true,
@@ -234,10 +256,10 @@ export function buildDemoState(): DemoSeed {
           attention: { status: 'you', reasons: ['a merge is waiting on your verdict'] },
         }),
         demoPr({
-          id: 'pr-139',
-          number: 139,
-          title: 'Azure DevOps connector: reviewer votes → approval',
-          branch: 'feature/azure-approval',
+          id: 'pr-409',
+          number: 409,
+          title: 'Read GitHub review decisions as proposal approval',
+          branch: 'feature/review-decision',
           ciStatus: 'passing',
           unresolvedComments: [
             { id: 'c-2', author: 'maintainer', body: 'Rebase on main — this is behind.', handled: false },
@@ -251,10 +273,10 @@ export function buildDemoState(): DemoSeed {
           attention: { status: 'harness', reasons: ['queued for a base update'] },
         }),
         demoPr({
-          id: 'pr-143',
-          number: 143,
-          title: '#212 [2/3] refactor(store): route reads through the interface',
-          branch: 'issue/212/reads',
+          id: 'pr-413',
+          number: 413,
+          title: '#390 [2/3] refactor(jobs): validate every payload through the catalog',
+          branch: 'issue/390/validate',
           ciStatus: 'passing',
           unresolvedComments: [],
           approved: true,
@@ -266,27 +288,27 @@ export function buildDemoState(): DemoSeed {
           attention: { status: 'you', reasons: ['a merge is waiting on your verdict'] },
         }),
         demoPr({
-          id: 'pr-144',
-          number: 144,
-          title: '#212 [3/3] refactor(store): route writes through the interface',
-          branch: 'issue/212/writes',
+          id: 'pr-414',
+          number: 414,
+          title: '#390 [3/3] refactor(jobs): route the watcher’s intake through the catalog',
+          branch: 'issue/390/watcher',
           ciStatus: 'failing',
           unresolvedComments: [],
           approved: false,
           mergeable: true,
-          baseBranch: 'issue/212/reads',
+          baseBranch: 'issue/390/validate',
           mergeableState: 'unknown',
           merged: false,
-          health: { blocked: true, reasons: ['CI failing on base PR #143'] },
-          attention: { status: 'elsewhere', reasons: ['waiting on PR #143'] },
+          health: { blocked: true, reasons: ['CI failing on base PR #413'] },
+          attention: { status: 'elsewhere', reasons: ['waiting on PR #413'] },
         }),
         // The ignore tag as a *state*, so the demo shows the one row the harness
         // will never touch: tagged, still listed with its health, drawn spent.
         demoPr({
-          id: 'pr-137',
-          number: 137,
-          title: 'Spike: swap the queue for a work-stealing pool',
-          branch: 'spike/work-stealing',
+          id: 'pr-407',
+          number: 407,
+          title: 'Spike: replace pg-boss with a LISTEN/NOTIFY worker loop',
+          branch: 'spike/listen-notify',
           ciStatus: 'failing',
           unresolvedComments: [],
           approved: false,
@@ -303,10 +325,10 @@ export function buildDemoState(): DemoSeed {
       // it leaves the open set, with nothing to say whether it landed.
       closedPullRequests: [
         {
-          id: 'pr-140',
-          number: 140,
-          title: 'Fold check-runs and combined status into one CI verdict',
-          branch: 'feature/ci-aggregate',
+          id: 'pr-410',
+          number: 410,
+          title: 'Verify gap closure on merge instead of resolving blindly',
+          branch: 'feature/verify-gap-closure',
           ciStatus: 'unknown',
           unresolvedComments: [],
           baseBranch: 'main',
@@ -315,10 +337,36 @@ export function buildDemoState(): DemoSeed {
           closedAt: ago(52),
         },
         {
-          id: 'pr-138',
-          number: 138,
-          title: 'Screen-scrape the PTY transcript',
-          branch: 'feature/screen-scrape',
+          id: 'pr-406',
+          number: 406,
+          title: '#390 [1/3] refactor(jobs): move every payload schema into the catalog',
+          branch: 'issue/390/schemas',
+          ciStatus: 'unknown',
+          unresolvedComments: [],
+          baseBranch: 'main',
+          merged: true,
+          state: 'merged',
+          closedAt: ago(30),
+        },
+        {
+          // The pull request behind the shortfall on #382: it merged, it did what
+          // it said, and the assessor still found the goal unreached.
+          id: 'pr-405',
+          number: 405,
+          title: 'Raise the gap-cluster similarity threshold to 0.81',
+          branch: 'issue/382/threshold',
+          ciStatus: 'unknown',
+          unresolvedComments: [],
+          baseBranch: 'main',
+          merged: true,
+          state: 'merged',
+          closedAt: ago(180),
+        },
+        {
+          id: 'pr-408',
+          number: 408,
+          title: 'Screen-scrape the watcher log for job outcomes',
+          branch: 'spike/log-scrape',
           ciStatus: 'unknown',
           unresolvedComments: [],
           baseBranch: 'main',
@@ -327,16 +375,40 @@ export function buildDemoState(): DemoSeed {
           closedAt: ago(96),
         },
       ],
+      /*
+       * The pickup roll-call. `issuePickupStatus` answers fourteen ways, and each
+       * one is somebody's whole reading of why nothing is happening — so each has
+       * a goal here, in the order they are gated:
+       *
+       *   done       #352   retained  #357   has_pr    #388, #376
+       *   active     #332   ignored   #366   container #300
+       *   unwatched  #371   planning  #390, #395       delivered #364
+       *   assay      #379   cooldown  #345   escalated #359
+       *   blocked    #333, #368, #382  eligible  #341
+       *
+       * `blocked` outnumbers `eligible` on purpose: the cap is 3 and two agents
+       * are live, so exactly one goal can start this cycle and the queue below
+       * dispatches it. A fixture set where six goals are all "eligible" under a
+       * cap of three is a world the dispatcher could never have produced.
+       *
+       * Twelve of the fourteen are reachable by clicking: the backlog lists every
+       * *open* item, in one of its four groups. `done` (#352) and `retained`
+       * (#357) are the two that are not, because no surface lists a closed goal —
+       * they are carried anyway, since both are readings the wire ships and the
+       * goal page draws (a retained run is drawn there with the dismissal that
+       * ends it), and a demo world with no closed goal in it would be the only
+       * world the cockpit ever sees that has none.
+       */
       issues: [
-        // A three-row slice of an Azure Boards tree, which is the one thing a
+        // A three-row slice of a work-item tree, which is the one thing a
         // GitHub-shaped fixture set cannot show: a container the harness refuses
-        // to work, a story that reads its feature's goal, and an orphan flagged
-        // but still worked. See docs/spec/06-issue-pickup.md#hierarchy.
+        // to work, a story that reads its feature's goal, and an orphan bug
+        // flagged but still worked. See docs/spec/06-issue-pickup.md#hierarchy.
         demoIssue({
-          id: 'iss-812',
-          number: 812,
-          title: 'Self-serve checkout',
-          body: 'Customers can complete a purchase without contacting support. Success is a checkout that works on one page, keeps card details out of our logs, and degrades to the old flow if the payment provider is down.',
+          id: 'iss-300',
+          number: 300,
+          title: 'Source-grounded document patrols',
+          body: 'A patrol reads the documents it maintains against the code they describe, rather than against a sample of file content pasted into a prompt. Success is a patrol that can open any file in a read-only checkout of the source repository, and a correction that cites the line it was drawn from.',
           labels: ['lubbdubb-watch'],
           state: 'open',
           issueType: 'Feature',
@@ -344,22 +416,22 @@ export function buildDemoState(): DemoSeed {
           parent: null,
           children: [
             {
-              number: 843,
-              title: 'One-page checkout shell',
+              number: 331,
+              title: 'Give each source-grounded job a read-only workspace',
               issueType: 'User Story',
               workItemState: 'Closed',
               state: 'closed',
             },
             {
-              number: 844,
-              title: 'Tokenise card entry',
+              number: 332,
+              title: 'Give HTTP providers a bounded file-tool loop',
               issueType: 'User Story',
               workItemState: 'Active',
               state: 'open',
             },
             {
-              number: 845,
-              title: 'Validate the address form inline',
+              number: 333,
+              title: 'Verify a document against its sources before correcting it',
               issueType: 'User Story',
               workItemState: 'Active',
               state: 'open',
@@ -373,66 +445,66 @@ export function buildDemoState(): DemoSeed {
           },
         }),
         demoIssue({
-          id: 'iss-845',
-          number: 845,
-          title: 'Validate the address form inline',
-          body: 'Validate the address fields as they are typed, against the same rules the payment provider applies.',
+          id: 'iss-333',
+          number: 333,
+          title: 'Verify a document against its sources before correcting it',
+          body: 'The patrol currently drafts a correction from one read. Split it: `verify_document` reports what the document gets wrong, and `correct_document` only runs when there is something to correct.',
           labels: ['lubbdubb-watch'],
           state: 'open',
           issueType: 'User Story',
           workItemState: 'Active',
           parent: {
-            number: 812,
-            title: 'Self-serve checkout',
+            number: 300,
+            title: 'Source-grounded document patrols',
             issueType: 'Feature',
             workItemState: 'Active',
             state: 'open',
-            body: 'Customers can complete a purchase without contacting support. Success is a checkout that works on one page, keeps card details out of our logs, and degrades to the old flow if the payment provider is down.',
+            body: 'A patrol reads the documents it maintains against the code they describe, rather than against a sample of file content pasted into a prompt. Success is a patrol that can open any file in a read-only checkout of the source repository, and a correction that cites the line it was drawn from.',
           },
           siblings: [
             {
-              number: 843,
-              title: 'One-page checkout shell',
+              number: 331,
+              title: 'Give each source-grounded job a read-only workspace',
               issueType: 'User Story',
               workItemState: 'Closed',
               state: 'closed',
             },
             {
-              number: 844,
-              title: 'Tokenise card entry',
+              number: 332,
+              title: 'Give HTTP providers a bounded file-tool loop',
               issueType: 'User Story',
               workItemState: 'Active',
               state: 'open',
             },
           ],
           linkedPrNumber: null,
-          pickup: { eligible: true, status: 'eligible', reasons: [] },
+          pickup: { eligible: false, status: 'blocked', reasons: ['no agent capacity'] },
         }),
         demoIssue({
-          id: 'iss-844',
-          number: 844,
-          title: 'Tokenise card entry',
-          body: 'Card details go to the provider iframe and never touch our servers or logs.',
+          id: 'iss-332',
+          number: 332,
+          title: 'Give HTTP providers a bounded file-tool loop',
+          body: 'A CLI provider walks the checkout with its own tools. An HTTP provider has none, so it needs `list_dir` / `read_file` / `grep` offered as tools with a hard call ceiling.',
           labels: ['lubbdubb-watch'],
           state: 'open',
           issueType: 'User Story',
           workItemState: 'Active',
           parent: {
-            number: 812,
-            title: 'Self-serve checkout',
+            number: 300,
+            title: 'Source-grounded document patrols',
             issueType: 'Feature',
             workItemState: 'Active',
             state: 'open',
-            body: 'Customers can complete a purchase without contacting support.',
+            body: 'A patrol reads the documents it maintains against the code they describe, rather than against a sample of file content pasted into a prompt.',
           },
           linkedPrNumber: null,
           pickup: { eligible: false, status: 'active', reasons: ['agent running'] },
         }),
         demoIssue({
-          id: 'iss-903',
-          number: 903,
-          title: 'Totals drift by a penny on multi-currency carts',
-          body: 'Rounding is applied per line rather than per order, so a mixed-currency cart is out by a penny.',
+          id: 'iss-341',
+          number: 341,
+          title: 'Answers cite a heading the section splitter renamed',
+          body: 'Sectioning lower-cases and de-duplicates heading anchors, but the citation is built from the raw heading text — so every citation into a document with two "Configuration" headings points at the wrong one.',
           labels: ['bug', 'lubbdubb-watch'],
           state: 'open',
           issueType: 'Bug',
@@ -445,101 +517,101 @@ export function buildDemoState(): DemoSeed {
           pickup: { eligible: true, status: 'eligible', reasons: [] },
         }),
         demoIssue({
-          id: 'iss-208',
-          number: 208,
-          title: 'Retry transient GitHub 502s in the snapshotter',
-          body: 'Snapshot cycles occasionally fail on a 502 from the REST API. Wrap the calls in a bounded retry.',
+          id: 'iss-368',
+          number: 368,
+          title: 'Retry transient 502s from the embeddings endpoint',
+          body: 'An incremental index run aborts whole-sale on one 502 from the embeddings provider, leaving the index half-written. Wrap the batch call in a bounded retry.',
           labels: ['bug', 'priority:high', 'lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: null,
-          pickup: { eligible: true, status: 'eligible', reasons: [] },
+          pickup: { eligible: false, status: 'blocked', reasons: ['no agent capacity'] },
         }),
         // The two goals the in-flight pull requests belong to. They are here so
         // that every ask the demo raises has a goal page to be read on: an
-        // escalation from PR #142 or #139 resolves through `linkedPrNumber` and
+        // escalation from PR #412 or #409 resolves through `linkedPrNumber` and
         // opens its goal, rather than a panel with no context around it. The
         // harness does work ticketless PRs — the console still has the goal-less
         // reading for them — but a demo is what the flow is *meant* to look like,
         // and that is a queue where every row leads somewhere.
         demoIssue({
-          id: 'iss-248',
-          number: 248,
-          title: 'Add token-bucket rate limiting to the ingest API',
-          body: 'The ingest endpoint has no ceiling; one client can starve the rest. Token bucket per API key.',
+          id: 'iss-388',
+          number: 388,
+          title: 'Cap the retrieval context at the token budget before ranking',
+          body: 'A question that matches forty sections sends all forty to the provider; the request is rejected or silently truncated at the far end. Cut the ranked list to the budget before the prompt is built.',
           labels: ['lubbdubb-watch'],
           state: 'open',
-          linkedPrNumber: 142,
-          pickup: { eligible: false, status: 'has_pr', reasons: ['resolved into PR #142 — the PR rules own it now'] },
+          linkedPrNumber: 412,
+          pickup: { eligible: false, status: 'has_pr', reasons: ['has open PR #412'] },
         }),
         demoIssue({
-          id: 'iss-236',
-          number: 236,
-          title: 'Read Azure DevOps reviewer votes as approval',
-          body: 'The connector reports every Azure PR as unapproved: reviewer votes are never mapped to approval state.',
+          id: 'iss-376',
+          number: 376,
+          title: 'Read GitHub review decisions as proposal approval',
+          body: 'The publisher reports every proposal as unreviewed: a GitHub review decision of APPROVED is never mapped onto the proposal’s own approval state, so a reviewed proposal sits in the console forever.',
           labels: ['bug', 'lubbdubb-watch'],
           state: 'open',
-          linkedPrNumber: 139,
-          pickup: { eligible: false, status: 'has_pr', reasons: ['resolved into PR #139 — the PR rules own it now'] },
+          linkedPrNumber: 409,
+          pickup: { eligible: false, status: 'has_pr', reasons: ['has open PR #409'] },
         }),
         demoIssue({
-          id: 'iss-205',
-          number: 205,
-          title: 'Document the sentinel protocol in the README',
-          body: 'Explain @@LUBBDUBB_DONE@@ / @@LUBBDUBB_WAITING@@ and where detection lives.',
+          id: 'iss-364',
+          number: 364,
+          title: 'Document the two-watcher requirement for maintenance jobs',
+          body: 'A maintenance job blocks in an API callback while the API waits on the AI jobs it enqueued, so a single watcher self-starves. Nothing says so outside a code comment.',
           labels: ['docs', 'lubbdubb-watch'],
           state: 'open',
-          // Delivered by PR #140, which merged and left the open list — the state
+          // Delivered by PR #410, which merged and left the open list — the state
           // the retrospective exists for, and the one the demo could not show
           // before: a goal that is finished but not yet closed by a human.
-          linkedPrNumber: 140,
+          linkedPrNumber: 410,
           pickup: { eligible: false, status: 'delivered', reasons: ['assessed as delivered'] },
           delivery: {
-            summary: 'PR #140 folded the checks and the docs landed with it.',
+            summary: 'PR #410 landed the deadlock note and the console warning with it.',
             by: 'assessor',
-            decidedAt: new Date(Date.now() - 5_400_000).toISOString(),
+            decidedAt: ago(90),
           },
           conclusion: {
             verdict: 'done' as const,
             by: 'agent' as const,
-            note: 'README section added; detection covered.',
-            at: new Date(Date.now() - 5_700_000).toISOString(),
+            note: 'architecture.md gained the section; the console warns on one watcher.',
+            at: ago(95),
           },
           // The reading only — the document is fetched when the station is opened.
           retrospective: {
             summary: 'Delivered in one PR, but two agents were spent chasing a red base that was never ours.',
             hasDocument: true,
-            updatedAt: new Date(Date.now() - 3_600_000).toISOString(),
+            updatedAt: ago(60),
           },
           // What the agents wrote each other while they worked it — the testimony
           // the write-up above was written from, and the demo's one readable pad.
           // The count and the age only; the trail is fetched on open.
-          scratchpad: { entries: 4, updatedAt: new Date(Date.now() - 4_200_000).toISOString() },
+          scratchpad: { entries: 4, updatedAt: ago(70) },
           // A finished goal, so its total has stopped moving: the write-up above
           // says two agents were spent on a red base that was never ours, and this
           // is what that cost.
-          spend: demoSpend(205, 6.14, 4),
+          spend: demoSpend(364, 6.14, 4),
         }),
         demoIssue({
-          id: 'iss-212',
-          number: 212,
-          title: 'Move the store behind a repository interface',
-          body: 'Too big for one PR: the schema move has to land before anything reads through the new interface.',
+          id: 'iss-390',
+          number: 390,
+          title: 'Validate job payloads in the catalog, not in each runner',
+          body: 'Too big for one PR: every runner re-parses its own payload, so the schema move has to land before anything validates against it.',
           labels: ['refactor', 'lubbdubb-watch'],
           state: 'open',
-          linkedPrNumber: 143,
+          linkedPrNumber: 413,
           // A plan, not a PR: the chip reports plan progress rather than whichever
           // part happened to open a pull request last.
-          pickup: { eligible: false, status: 'planning', reasons: ['1/3 parts merged'] },
+          pickup: { eligible: false, status: 'planning', reasons: ['1/5 parts done'] },
           // Still running, and the figure with it: a decomposed goal's spend is the
           // planner plus every part, which is exactly what one number per goal is
           // for — no card anywhere else adds those up.
-          spend: demoSpend(212, 18.42, 7),
+          spend: demoSpend(390, 18.42, 7),
         }),
         demoIssue({
-          id: 'iss-210',
-          number: 210,
-          title: 'Explore a Slack notification channel',
-          body: 'Nice-to-have: mirror escalations into a Slack channel.',
+          id: 'iss-371',
+          number: 371,
+          title: 'Mirror new knowledge gaps into a Slack channel',
+          body: 'Nice-to-have: post a message when a gap cluster crosses the drafting threshold.',
           labels: ['idea'],
           state: 'open',
           linkedPrNumber: null,
@@ -548,13 +620,13 @@ export function buildDemoState(): DemoSeed {
         // A watched ticket the harness has deliberately not started on: the goal
         // assay could not work out what to do from the description, so pickup is
         // held and the row carries both overrides plus a way into the question the
-        // harness asked on the thread (#171). The one demo state where the harness
-        // has spoken to somebody outside the cockpit.
+        // harness asked on the thread. The one demo state where the harness has
+        // spoken to somebody outside the cockpit.
         demoIssue({
-          id: 'iss-219',
-          number: 219,
-          title: 'Make the queue smarter',
-          body: 'Up next puts the wrong things first sometimes.',
+          id: 'iss-379',
+          number: 379,
+          title: 'Make retrieval smarter',
+          body: 'Search brings back the wrong sections sometimes.',
           labels: ['lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: null,
@@ -566,22 +638,23 @@ export function buildDemoState(): DemoSeed {
           assay: {
             verdict: 'unclear',
             summary:
-              'Nothing here names which ordering is wrong, or what the right one would be. Which two items ' +
-              'came out in the wrong order, and which should have been first?',
+              'Nothing here names which question came back wrong, or what the right sections would have been. ' +
+              'Retrieval is keyword search, vector search and an RRF fold over both — which of the three is ' +
+              'bringing back the wrong thing, and for which question?',
             by: 'assayer',
             decidedAt: ago(52),
-            commentRef: 'issue:219:comment:8402',
+            commentRef: 'issue:379:comment:8402',
           },
         }),
         demoIssue({
-          id: 'iss-231',
-          number: 231,
-          title: 'Split the cockpit auth guard from the artifact route',
-          body: 'Artifact chips 401 unauthenticated — the fix touches the guard, the route, and the snapshot.',
+          id: 'iss-395',
+          number: 395,
+          title: 'Snapshot downloads 401 in the review console',
+          body: 'Every snapshot download link 401s — the fix touches the auth guard, the route, and the payload the console reads.',
           labels: ['refactor', 'lubbdubb-watch'],
           state: 'open',
           linkedPrNumber: null,
-          pickup: { eligible: false, status: 'planning', reasons: ['0/3 parts merged'] },
+          pickup: { eligible: false, status: 'planning', reasons: ['awaiting your approval of the 3-part plan'] },
           // The goal the demo's validation plan hangs off, so it is the one issue
           // that carries a verdict. It has to agree with `validationChecks` below —
           // three passed of six live — because the header chip is the way in to the
@@ -589,19 +662,131 @@ export function buildDemoState(): DemoSeed {
           // the one thing this whole surface exists to prevent.
           validation: { state: 'flagged', total: 6, passed: 3, failed: 0, unrun: 3, deferred: 0, waived: 0 },
         }),
+        // Worked, landed, and still not what was asked for. A shortfall gates
+        // nothing — the goal is eligible again the moment there is capacity — and
+        // the assessor's write-up is the body of the ask in the queue below.
+        demoIssue({
+          id: 'iss-382',
+          number: 382,
+          title: 'Gap clustering merges unrelated questions into one gap',
+          body: 'Two questions about different documents land in the same cluster whenever they share a common noun, so the drafted proposal answers neither.',
+          labels: ['bug', 'lubbdubb-watch'],
+          state: 'open',
+          linkedPrNumber: 405,
+          pickup: { eligible: false, status: 'blocked', reasons: ['no agent capacity'] },
+          shortfall: {
+            cause: 'goal',
+            partSlug: null,
+            summary:
+              'The threshold was raised and the two example questions now cluster apart — but the goal asks for ' +
+              'clusters that are “about one thing”, and no threshold decides that.',
+            by: 'assessor',
+            decidedAt: ago(4),
+          },
+          spend: demoSpend(382, 4.2, 3),
+        }),
+        // Attempted twice and failed twice: the dispatcher is waiting out the
+        // re-dispatch gap rather than spending a third agent on the same minute.
+        // The operator's own verdict is on it as well — `more_work` from a human
+        // is what puts a goal back in front of pickup, and the demo should show
+        // one that has been.
+        demoIssue({
+          id: 'iss-345',
+          number: 345,
+          title: 'The watcher drops its claim when the API restarts mid-job',
+          body: 'A job claimed by a watcher stays claimed after an API restart, so it is neither retried nor completed until the visibility timeout expires twenty minutes later.',
+          labels: ['bug', 'lubbdubb-watch'],
+          state: 'open',
+          linkedPrNumber: null,
+          pickup: { eligible: false, status: 'cooldown', reasons: ['on cooldown after 2 attempts'] },
+          conclusion: {
+            verdict: 'more_work' as const,
+            by: 'operator' as const,
+            note: 'Both attempts fixed the symptom in the watcher. The claim is the API’s to release.',
+            at: ago(80),
+          },
+          spend: demoSpend(345, 3.08, 2),
+        }),
+        // The cap spent: three agents have been and gone, and the harness has
+        // stopped rather than spending a fourth. Nothing moves until a person does.
+        demoIssue({
+          id: 'iss-359',
+          number: 359,
+          title: 'Embedding backfill times out on the 40k-section repository',
+          body: 'A first index of the platform handbook never finishes: the backfill embeds every section in one transaction and the statement times out at 40k rows.',
+          labels: ['bug', 'priority:high', 'lubbdubb-watch'],
+          state: 'open',
+          linkedPrNumber: null,
+          pickup: {
+            eligible: false,
+            status: 'escalated',
+            reasons: ['3 failed attempts — escalated to a human'],
+          },
+          spend: demoSpend(359, 7.36, 3),
+        }),
+        // Closed, and the harness never had a run at it — the reading `done`
+        // keeps, and the one a closed ticket gets on every deployment.
+        demoIssue({
+          id: 'iss-352',
+          number: 352,
+          title: 'Publish to a local-git destination without polling for a pull request',
+          body: 'A `file://` destination has no pull requests to poll, so the PR-poll schedule must never be offered for one.',
+          labels: ['lubbdubb-watch'],
+          state: 'closed',
+          linkedPrNumber: null,
+          pickup: { eligible: false, status: 'done', reasons: ['closed'] },
+        }),
+        // Closed in the tracker, and the harness is still holding its run: the
+        // state that separates "the ticket is shut" from "the work is over". The
+        // only way out is the operator's dismissal, which is why it is a queue row
+        // and not a chip.
+        demoIssue({
+          id: 'iss-357',
+          number: 357,
+          title: 'The reconciler re-opens gaps that a merge already closed',
+          body: 'Merging a proposal resolves its gap, and the next reconciliation pass re-opens it because the questions are still logged against the old document path.',
+          labels: ['bug', 'lubbdubb-watch'],
+          state: 'closed',
+          linkedPrNumber: null,
+          pickup: { eligible: false, status: 'retained', reasons: ['closed; run kept until you dismiss it'] },
+          run: { startedAt: ago(400), completedAt: ago(120), outcome: 'judged' as const, dismissed: false },
+          conclusion: {
+            verdict: 'done' as const,
+            by: 'assessor' as const,
+            note: 'Reconciliation keys on the proposal id now, not the path.',
+            at: ago(120),
+          },
+          spend: demoSpend(357, 5.51, 3),
+        }),
+        // Tagged leave-alone. Listed, with its health, and never touched — the
+        // ignore tag as a state rather than an absence.
+        demoIssue({
+          id: 'iss-366',
+          number: 366,
+          title: 'Rewrite the review console in Svelte',
+          body: 'The console is Next.js with Emotion. This proposes starting again.',
+          labels: ['lubbdubb-ignore'],
+          state: 'open',
+          linkedPrNumber: null,
+          pickup: {
+            eligible: false,
+            status: 'ignored',
+            reasons: ['tagged "lubbdubb-ignore" — the harness is leaving it alone'],
+          },
+        }),
       ],
     },
     tasks: [
       {
         id: 'task-a1',
         kind: 'code',
-        title: 'Fix failing CI on PR #142',
-        prompt: 'CI is red on feature/rate-limit. Investigate the failing test and push a fix.',
-        branch: 'feature/rate-limit',
-        originRef: 'pr:142',
-        originTitle: 'Add token-bucket rate limiting to the ingest API',
-        originSummary: 'PR #142 on branch feature/rate-limit · CI failing',
-        dispatchReason: 'PR #142 has failing CI and no agent is on it.',
+        title: 'Fix failing CI on PR #412',
+        prompt: 'CI is red on feature/context-budget. Investigate the failing test and push a fix.',
+        branch: 'feature/context-budget',
+        originRef: 'pr:412',
+        originTitle: 'Cap the retrieval context at the token budget before ranking',
+        originSummary: 'PR #412 on branch feature/context-budget · CI failing',
+        dispatchReason: 'PR #412 has failing CI and no agent is on it.',
         status: 'running',
         agentId: 'agent-a1',
         createdAt: ago(8),
@@ -610,13 +795,13 @@ export function buildDemoState(): DemoSeed {
       {
         id: 'task-a2',
         kind: 'code',
-        title: 'Rebase PR #139 on main',
-        prompt: 'PR #139 is behind base. Rebase on main and resolve any conflicts.',
-        branch: 'feature/azure-approval',
-        originRef: 'pr:139',
-        originTitle: 'Map Azure DevOps reviewer votes to approval state',
-        originSummary: 'PR #139 on branch feature/azure-approval · behind main',
-        dispatchReason: 'PR #139 is behind main and no agent is on it.',
+        title: 'Rebase PR #409 on main',
+        prompt: 'PR #409 is behind base. Rebase on main and resolve any conflicts.',
+        branch: 'feature/review-decision',
+        originRef: 'pr:409',
+        originTitle: 'Read GitHub review decisions as proposal approval',
+        originSummary: 'PR #409 on branch feature/review-decision · behind main',
+        dispatchReason: 'PR #409 is behind main and no agent is on it.',
         status: 'running',
         agentId: 'agent-a2',
         createdAt: ago(4),
@@ -625,149 +810,149 @@ export function buildDemoState(): DemoSeed {
       {
         id: 'task-a0',
         kind: 'code',
-        title: 'Document sentinel protocol (#205)',
-        prompt: 'Add a README section describing the sentinel protocol.',
-        branch: 'feature/merge-cache',
-        originRef: 'issue:205',
-        originTitle: 'Document the sentinel protocol',
-        originSummary: 'Agents signal done/waiting via reserved control strings; the README should explain them.',
-        dispatchReason: 'Open issue #205 has no linked PR and no agent is on it.',
+        title: 'Document the two-watcher requirement (#364)',
+        prompt: 'Add a section to docs/architecture.md explaining why maintenance jobs need two watchers.',
+        branch: 'feature/verify-gap-closure',
+        originRef: 'issue:364',
+        originTitle: 'Document the two-watcher requirement for maintenance jobs',
+        originSummary:
+          'A maintenance job blocks in an API callback while its follow-up AI jobs queue; one watcher self-starves.',
+        dispatchReason: 'Open issue #364 has no linked PR and no agent is on it.',
         status: 'done',
         agentId: 'agent-a0',
-        createdAt: ago(40),
-        updatedAt: ago(22),
+        createdAt: ago(140),
+        updatedAt: ago(100),
       },
     ],
     // One decomposed issue, so the plan panel has a stack to draw: part 1 merged,
     // part 2 in review with its PR open, part 3 ready but held by the plan's own
     // two-at-a-time concurrency cap.
-    // The same three-part decomposition seen as pull requests rather than as plan
-    // rows: part 2 is the bottom rung (its base is the default branch, part 1 having
-    // merged) and part 3 stacks on it, red only because part 2's commits are red.
+    // The same decomposition seen as pull requests rather than as plan rows: part
+    // 2 is the bottom rung (its base is the default branch, part 1 having merged)
+    // and part 3 stacks on it, red only because part 2's commits are red.
     stacks: [
       {
-        ref: 'stack:143',
-        issueNumber: 212,
-        issueTitle: 'Move the store behind a repository interface',
-        planId: 'plan-212',
+        ref: 'stack:413',
+        issueNumber: 390,
+        issueTitle: 'Validate job payloads in the catalog, not in each runner',
+        planId: 'plan-390',
         rungs: [
           {
-            prNumber: 143,
-            title: '#212 [2/3] refactor(store): route reads through the interface',
-            branch: 'issue/212/reads',
+            prNumber: 413,
+            title: '#390 [2/3] refactor(jobs): validate every payload through the catalog',
+            branch: 'issue/390/validate',
             base: 'main',
             position: 1,
-            partSlug: 'reads',
+            partSlug: 'validate',
           },
           {
-            prNumber: 144,
-            title: '#212 [3/3] refactor(store): route writes through the interface',
-            branch: 'issue/212/writes',
-            base: 'issue/212/reads',
+            prNumber: 414,
+            title: '#390 [3/3] refactor(jobs): route the watcher’s intake through the catalog',
+            branch: 'issue/390/watcher',
+            base: 'issue/390/validate',
             position: 2,
-            partSlug: 'writes',
+            partSlug: 'watcher',
           },
         ],
       },
     ],
-    // Withheld, because rung #144 is red — the state worth having in the demo, since
+    // Withheld, because rung #414 is red — the state worth having in the demo, since
     // "why can't I click it" is the question the control has to answer on its own.
-    stackLandings: [{ ref: 'stack:143', offer: false, blockedBy: '#144 CI failing', landing: null, landed: 0 }],
+    stackLandings: [{ ref: 'stack:413', offer: false, blockedBy: '#414 CI failing', landing: null, landed: 0 }],
     plans: [
       {
-        id: 'plan-212',
-        originRef: 'issue:212',
-        title: 'Move the store behind a repository interface',
+        id: 'plan-390',
+        originRef: 'issue:390',
+        title: 'Validate job payloads in the catalog, not in each runner',
         status: 'active',
         // Deliberately left on the old shape: a plan written before `diagnosis`
         // and `approach` existed, so the modal falls back to reading `reason` as
         // the headline. Every plan in a real database predates them once.
         diagnosis: null,
         approach: null,
-        reason: 'The schema move has to merge before anything reads through the new interface.',
+        reason: 'The schemas have to move into the catalog before anything can validate against them.',
         risks:
-          'The repository interface has to cover every query the harness makes today, or a missed one surfaces as a runtime error instead of a compile error.',
-        outOfScope: 'Swapping the underlying engine off SQLite — this only adds the seam, it does not use it.',
+          'The catalog has to describe every payload the queue carries today, or a job type nobody moved fails to enqueue at runtime instead of at build time.',
+        outOfScope: 'Changing any payload shape — this only moves where they are declared.',
         alternatives: null,
         openQuestions: null,
         verification: null,
         evidence: [],
         document:
-          '# Move the store behind a repository interface\n\n' +
-          'Three parts, stacked: the schema migration has to land before anything can read through the new ' +
-          'interface, and the read path has to land before the write path so there is never a window where ' +
-          'both paths disagree about what a query returns.\n\n' +
+          '# Validate job payloads in the catalog\n\n' +
+          'Three parts, stacked: the schemas move first, then the API validates at enqueue, then the watcher ' +
+          'validates at intake. Enqueue has to land before intake, or there is a window in which the watcher ' +
+          'refuses payloads the API is still happily writing.\n\n' +
           '## Why three PRs\n\n' +
-          'Each part is independently reviewable and each one leaves the harness in a working state — the ' +
-          'schema part alone is a no-op migration; the reads part alone changes what code reads but not what ' +
-          'it means.',
+          'Each part is independently reviewable and each one leaves the queue working — the schema move alone ' +
+          'is a no-op re-export; the enqueue part alone tightens what may be written without changing what is read.',
         discussing: false,
         // An active plan whose parts have moved: the reconciler has news to
         // report, so its one living comment exists. Canonical (`issue:<n>:comment:<id>`)
         // exactly as the server ships it — the store's provider id never reaches here.
-        statusCommentRef: 'issue:212:comment:8391',
-        createdAt: ago(90),
+        statusCommentRef: 'issue:390:comment:8391',
+        createdAt: ago(300),
         updatedAt: ago(6),
       },
       // A decomposition still waiting on a human: the approval escalation below
       // and the plan card's Approve/Reject footer are the whole point of this entry.
       {
-        id: 'plan-231',
-        originRef: 'issue:231',
-        title: 'Split the cockpit auth guard from the artifact route',
+        id: 'plan-395',
+        originRef: 'issue:395',
+        title: 'Snapshot downloads 401 in the review console',
         status: 'awaiting_approval',
         diagnosis:
-          'Every artifact chip 401s, and not because the guard is wrong: `/artifacts/:id` sits **inside** the `/api` prefix the cockpit guards with a bearer token, and opening a chip is a top-level browser navigation — which cannot carry an `Authorization` header. The route has never been reachable the way it is reached.',
+          'Every snapshot download 401s, and not because the guard is wrong: `/snapshots/:id/download` sits **inside** the `/api` prefix the console guards with an Auth0 bearer token, and clicking a download link is a top-level browser navigation — which cannot carry an `Authorization` header. The route has never been reachable the way it is reached.',
         approach:
-          'Move `/artifacts/:id` out from behind the prefix guard and gate it on a short-lived signed capability instead, minted into the state snapshot beside each chip. The URL carries its own proof, so a plain navigation works and nothing else moves outside the guard.',
+          'Move `/snapshots/:id/download` out from behind the prefix guard and gate it on a short-lived signed capability instead, minted into the snapshot list beside each row. The URL carries its own proof, so a plain navigation works and nothing else moves outside the guard.',
         reason:
           'The capability signer has to exist before the route can verify one, and the guard change touches every route.',
         risks:
-          '**Guard window.** Moving `/artifacts` outside the `/api` prefix means part 2 briefly serves artifacts with no guard at all — the capability check has to land in the same PR, not a later one. **Two modes.** With `auth.enabled` off there is no signing key, so the route serves with no capability at all, and only one of those two modes is covered by the capability tests today. **Snapshot churn.** Part 3 widens the state snapshot, which every cockpit panel reads; a field added there is a field every consumer has to tolerate the absence of on an older server.',
+          '**Guard window.** Moving `/snapshots` outside the `/api` prefix means part 2 briefly serves snapshots with no guard at all — the capability check has to land in the same PR, not a later one. **Two modes.** With `AUTH_ENABLED` off there is no signing key, so the route serves with no capability at all, and only one of those two modes is covered by the tests today. **Payload churn.** Part 3 widens the snapshot list payload, which the console reads on every render; a field added there is a field the console has to tolerate the absence of on an older API.',
         outOfScope:
-          '- Capability revocation. Named as a rejected alternative in the write-up — it needs a store of its own and nothing here creates one.\n- Any change to the cockpit bearer token.\n- Artifact TTL, which stays at 5 minutes.',
+          '- Capability revocation. Named as a rejected alternative in the write-up — it needs a store of its own and nothing here creates one.\n- Any change to the console’s Auth0 session.\n- The snapshot retention window, which stays at 30 days.',
         alternatives:
           '**Allow-list the route inside the prefix guard.** One line, and the fix I would have shipped a year ago. Rejected because one exception is a line and the second one is a policy: the guard stops being readable as "everything under `/api` is authenticated" the moment anything under it is not.\n\n' +
-          '**Serve the artifact through an authenticated `fetch` and hand the browser a blob URL.** Works, and keeps the route where it is — but the chip stops being a link, so it cannot be opened in a new tab, bookmarked or sent to anyone. That is most of what a chip is for.\n\n' +
-          '**A cookie scoped to `/artifacts`.** Rejected on the two-modes problem below: with `auth.enabled` off there is nothing to put in it, so the cookie path needs the same unauthenticated arm the capability path needs, and it costs a `SameSite` argument as well.',
+          '**Fetch the snapshot with the bearer token and hand the browser a blob URL.** Works, and keeps the route where it is — but the row stops being a link, so it cannot be opened in a new tab, bookmarked or sent to anyone. That is most of what a download link is for.\n\n' +
+          '**A cookie scoped to `/snapshots`.** Rejected on the two-modes problem below: with `AUTH_ENABLED` off there is nothing to put in it, so the cookie path needs the same unauthenticated arm the capability path needs, and it costs a `SameSite` argument as well.',
         openQuestions:
-          'With `auth.enabled` off there is no signing key, so the route has to serve with no capability at all — and I am not certain that arm should exist rather than the route simply 404ing. I have written it as "serves everything", which is what the operator running with auth off has already chosen, but it is the one decision here I would want argued with.\n\n' +
+          'With `AUTH_ENABLED` off there is no signing key, so the route has to serve with no capability at all — and I am not certain that arm should exist rather than the route simply 404ing. I have written it as "serves everything", which is what the operator running with auth off has already chosen, but it is the one decision here I would want argued with.\n\n' +
           'Second, smaller: I assumed the capability rides in the query string. A path segment would keep it out of proxy logs. I have no evidence anyone proxies this.',
         verification:
-          'Open an artifact chip in the cockpit with `auth.enabled` on, in a new tab, and get the file rather than a 401 — that is the whole bug, and it is not reproducible from a test that can set a header.',
+          'Open a snapshot download link in the console with `AUTH_ENABLED` on, in a new tab, and get the file rather than a 401 — that is the whole bug, and it is not reproducible from a test that can set a header.',
         evidence: [
           {
-            path: 'src/server/app.ts',
-            line: 88,
-            note: 'the prefix guard: `addHook` over `/api`, which `/artifacts/:id` sits under',
+            path: 'apps/api/src/app.ts',
+            line: 96,
+            note: 'the prefix guard: the auth hook over `/api`, which `/snapshots/:id/download` sits under',
           },
           {
-            path: 'src/server/routes/artifacts.ts',
-            line: 24,
-            note: 'the route, registered inside the guarded prefix',
+            path: 'apps/api/src/features/snapshots/routes.ts',
+            line: 41,
+            note: 'the download route, registered inside the guarded prefix',
           },
           {
-            path: 'web/src/components/AgentDrawer.tsx',
-            line: 212,
-            note: 'the chip is an `<a href>` — a navigation, so no Authorization header',
+            path: 'apps/web/src/app/snapshots/page.tsx',
+            line: 128,
+            note: 'the row is an `<a href>` — a navigation, so no Authorization header',
           },
         ],
         document:
-          '# Serving artifacts outside the authenticated /api prefix\n\n' +
-          'Every artifact chip in the cockpit currently 401s. This is not a bug in the guard — it is a structural ' +
-          'consequence of where the route lives.\n\n' +
+          '# Serving snapshot downloads outside the authenticated /api prefix\n\n' +
+          'Every snapshot download link in the console currently 401s. This is not a bug in the guard — it is a ' +
+          'structural consequence of where the route lives.\n\n' +
           '## Why it is broken\n\n' +
-          'Opening a chip is a top-level browser navigation, and a navigation cannot carry the `Authorization` ' +
-          'header the cockpit attaches to every `fetch`.\n\n' +
+          'Clicking a download link is a top-level browser navigation, and a navigation cannot carry the ' +
+          '`Authorization` header the console attaches to every `fetch`.\n\n' +
           '> Allow-listing the route inside the prefix guard is the tempting fix and the one to avoid. One ' +
           'exception is one line; the second one is a policy.\n\n' +
           '## Why three pull requests\n\n' +
           '1. The signer is a pure predicate with no callers.\n' +
           '2. The route change is the only part that alters who can reach what.\n' +
-          '3. The snapshot change touches the cockpit as well as the server.\n\n' +
+          '3. The payload change touches the console as well as the API.\n\n' +
           '## The one thing I am unsure about\n\n' +
-          'With `auth.enabled` off there is no signing key, so the route must serve with no capability at all. ' +
-          'That means two modes and only one of them is covered by the capability tests.',
+          'With `AUTH_ENABLED` off there is no signing key, so the route must serve with no capability at all. ' +
+          'That means two modes and only one of them is covered by the tests.',
         discussing: false,
         // An unapproved decomposition announces nothing, so the reconciler has
         // deliberately written no comment for this one.
@@ -778,55 +963,54 @@ export function buildDemoState(): DemoSeed {
     ],
     planParts: [
       demoPart({
-        id: 'plan-212:schema',
-        planId: 'plan-212',
-        slug: 'schema',
+        id: 'plan-390:schemas',
+        planId: 'plan-390',
+        slug: 'schemas',
         seq: 1,
-        title: 'Add the repository tables and migration',
-        scope: 'src/store/',
+        title: 'Move every payload schema into the jobs catalog',
+        scope: 'packages/jobs/src/',
         dependsOn: [],
         rationale:
-          'The migration has to be reviewable on its own — it changes nothing behaviourally until the reads part lands.',
-        acceptance: 'The new tables exist and the migration runs clean on a copy of the production database.',
+          'The move has to be reviewable on its own — it changes nothing behaviourally until the enqueue part lands.',
+        acceptance: 'Every job type’s payload schema is declared in the catalog and re-exported from where it was.',
         touches: [],
         acceptanceMet: [],
         size: null,
-        branch: 'issue/212/schema',
-        prNumber: 140,
+        branch: 'issue/390/schemas',
+        prNumber: 406,
         status: 'merged',
         taskId: null,
-        createdAt: ago(90),
+        createdAt: ago(300),
         updatedAt: ago(30),
       }),
       demoPart({
-        id: 'plan-212:reads',
-        planId: 'plan-212',
-        slug: 'reads',
+        id: 'plan-390:validate',
+        planId: 'plan-390',
+        slug: 'validate',
         seq: 2,
-        title: 'Route reads through the interface',
-        scope: 'src/harness.ts, src/dispatcher/',
-        dependsOn: ['schema'],
-        rationale: 'Reads are safe to move first — nothing downstream depends on the write path also having moved.',
-        acceptance:
-          'Every dispatcher/harness read goes through the interface; no direct SQL remains outside the store.',
-        branch: 'issue/212/reads',
-        prNumber: 143,
+        title: 'Validate every payload at enqueue through the catalog',
+        scope: 'apps/api/src/features/jobs/, apps/api/src/jobs/',
+        dependsOn: ['schemas'],
+        rationale: 'Enqueue is safe to tighten first — nothing downstream depends on the watcher also having moved.',
+        acceptance: 'Every enqueue path validates against the catalog; no route parses a payload shape of its own.',
+        branch: 'issue/390/validate',
+        prNumber: 413,
         status: 'in_review',
         taskId: null,
-        createdAt: ago(90),
+        createdAt: ago(300),
         updatedAt: ago(6),
       }),
       demoPart({
-        id: 'plan-212:writes',
-        planId: 'plan-212',
-        slug: 'writes',
+        id: 'plan-390:watcher',
+        planId: 'plan-390',
+        slug: 'watcher',
         seq: 3,
-        title: 'Route writes through the interface',
-        scope: 'src/executor/, src/agents/',
-        dependsOn: ['reads'],
+        title: 'Route the watcher’s job intake through the catalog',
+        scope: 'apps/watcher/src/worker-loop.ts, apps/watcher/src/runners/',
+        dependsOn: ['validate'],
         rationale:
-          'Writes go last — the read path has to be proven out first, or a write bug is indistinguishable from a read bug.',
-        acceptance: 'Every executor/agent write goes through the interface; direct SQLite access is gone from both.',
+          'Intake goes last — enqueue has to be proven out first, or a rejected job is indistinguishable from a bad write.',
+        acceptance: 'Every runner receives a payload the catalog parsed; no runner re-parses one itself.',
         touches: [],
         acceptanceMet: [],
         size: null,
@@ -834,7 +1018,7 @@ export function buildDemoState(): DemoSeed {
         prNumber: null,
         status: 'ready',
         taskId: null,
-        createdAt: ago(90),
+        createdAt: ago(300),
         updatedAt: ago(6),
       }),
       // The step a person owns, and the part waiting behind it. Two rows rather
@@ -842,16 +1026,16 @@ export function buildDemoState(): DemoSeed {
       // `cutover` nobody is waiting on and one stopping a verification look
       // identical on a list, and the queue's holding count exists to tell them apart.
       demoPart({
-        id: 'plan-212:cutover',
-        planId: 'plan-212',
+        id: 'plan-390:cutover',
+        planId: 'plan-390',
         slug: 'cutover',
         seq: 4,
-        title: 'Point the staging database at the new schema',
-        scope: 'the RDS console — no agent has an account for it',
-        dependsOn: ['writes'],
+        title: 'Re-point the staging watchers at the new queue names',
+        scope: 'the hosting dashboard — no agent has an account for it',
+        dependsOn: ['watcher'],
         expectedKind: 'human',
-        rationale: 'Nobody gave the fleet console credentials, and nobody should.',
-        acceptance: 'Staging reads and writes against the new tables.',
+        rationale: 'Nobody gave the fleet dashboard credentials, and nobody should.',
+        acceptance: 'Both staging watchers claim jobs from the catalog’s queue names.',
         touches: [],
         acceptanceMet: [],
         size: null,
@@ -859,19 +1043,19 @@ export function buildDemoState(): DemoSeed {
         prNumber: null,
         status: 'ready',
         taskId: null,
-        createdAt: ago(90),
+        createdAt: ago(300),
         updatedAt: ago(6),
       }),
       demoPart({
-        id: 'plan-212:soak',
-        planId: 'plan-212',
+        id: 'plan-390:soak',
+        planId: 'plan-390',
         slug: 'soak',
         seq: 5,
-        title: 'Assert on a staging soak run',
-        scope: 'test/soak/',
+        title: 'Assert on a staging queue soak run',
+        scope: 'scripts/queue-e2e.mjs',
         dependsOn: ['cutover'],
         rationale: 'The only part that can prove the cutover worked, and it cannot start before it has.',
-        acceptance: 'A soak run over the new schema passes against staging.',
+        acceptance: 'A queue end-to-end run against staging completes every job type once.',
         touches: [],
         acceptanceMet: [],
         size: null,
@@ -879,25 +1063,25 @@ export function buildDemoState(): DemoSeed {
         prNumber: null,
         status: 'pending',
         taskId: null,
-        createdAt: ago(90),
+        createdAt: ago(300),
         updatedAt: ago(6),
       }),
-      // plan-231's three parts — all `ready`, none dispatched, because the plan
+      // plan-395's three parts — all `ready`, none dispatched, because the plan
       // itself is still awaiting approval (rule `plan-part` queues them `unapproved`).
       demoPart({
-        id: 'plan-231:signer',
-        planId: 'plan-231',
+        id: 'plan-395:signer',
+        planId: 'plan-395',
         slug: 'signer',
         seq: 1,
-        title: 'Add the capability signer',
+        title: 'Add the download capability signer',
         scope: 'The signing and verification of a short-lived capability, and nothing that calls it.',
         dependsOn: [],
         rationale: 'A pure sign/verify predicate with no callers yet — reviewable in isolation from the route change.',
         acceptance:
-          '- A capability minted for a flag id verifies, and one for another id does not.\n' +
+          '- A capability minted for a snapshot id verifies, and one for another id does not.\n' +
           '- An expired capability is refused.\n' +
           '- A tampered payload is refused.',
-        touches: ['src/server/artifactCapability.ts'],
+        touches: ['apps/api/src/features/snapshots/download-capability.ts'],
         acceptanceMet: [],
         size: 's',
         depth: 0,
@@ -909,19 +1093,19 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(12),
       }),
       demoPart({
-        id: 'plan-231:route',
-        planId: 'plan-231',
+        id: 'plan-395:route',
+        planId: 'plan-395',
         slug: 'route',
         seq: 2,
-        title: 'Move the artifact route outside /api and require the capability',
-        scope: 'Where the artifact route is registered, and the guard it sits behind.',
+        title: 'Move the download route outside /api and require the capability',
+        scope: 'Where the snapshot download route is registered, and the guard it sits behind.',
         dependsOn: ['signer'],
         rationale: 'This is the only part that changes who can reach what, so it stays separate from the pure signer.',
         acceptance:
-          '- `/artifacts/:id` serves only with a valid capability.\n' +
+          '- `/snapshots/:id/download` serves only with a valid capability.\n' +
           '- Every route still under `/api` 401s without a bearer token.\n' +
-          '- With `auth.enabled` off the route serves with no capability at all.',
-        touches: ['src/server/app.ts', 'src/server/routes/artifacts.ts'],
+          '- With `AUTH_ENABLED` off the route serves with no capability at all.',
+        touches: ['apps/api/src/app.ts', 'apps/api/src/features/snapshots/routes.ts'],
         acceptanceMet: [],
         size: 'm',
         depth: 1,
@@ -933,21 +1117,21 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(12),
       }),
       demoPart({
-        id: 'plan-231:mint',
-        planId: 'plan-231',
+        id: 'plan-395:mint',
+        planId: 'plan-395',
         slug: 'mint',
         seq: 3,
-        title: 'Mint capabilities into the snapshot',
-        scope: 'The state snapshot that mints a capability per chip, and the chip that opens it.',
+        title: 'Mint capabilities into the snapshot list',
+        scope: 'The snapshot list payload that mints a capability per row, and the console row that opens it.',
         // A rejoin: it wires the signer's output into the route, so it waits for
         // *both* lanes to have merged rather than stacking on either.
         dependsOn: ['signer', 'route'],
         rationale:
-          'Touches the cockpit as well as the server, so it waits until both the signer and the route it points at exist.',
+          'Touches the console as well as the API, so it waits until both the signer and the route it points at exist.',
         acceptance:
-          '- Every artifact chip in the cockpit opens in a new tab without a 401.\n' +
-          '- The snapshot carries a capability per chip, and no capability for a flag with no artifact.',
-        touches: ['src/server/stateSnapshot.ts', 'web/src/components/AgentDrawer.tsx'],
+          '- Every snapshot row in the console opens in a new tab without a 401.\n' +
+          '- The payload carries a capability per row, and none for a snapshot whose file has been pruned.',
+        touches: ['apps/api/src/features/snapshots/list.ts', 'apps/web/src/app/snapshots/page.tsx'],
         acceptanceMet: [],
         size: 'm',
         depth: 2,
@@ -967,17 +1151,17 @@ export function buildDemoState(): DemoSeed {
     // desktop session.
     validationChecks: [
       demoCheck({
-        id: 'chip-opens-in-a-new-tab',
+        id: 'download-opens-in-a-new-tab',
         createdAt: ago(12),
         updatedAt: ago(12),
         letter: 'A',
         seq: 1,
-        title: 'An artifact chip opens in a new tab with auth on',
-        do: 'Run the cockpit with `auth.enabled`, open a goal with an artifact chip, and middle-click the chip.',
-        expect: 'The file renders. No 401, and no bearer token anywhere in the URL bar.',
+        title: 'A snapshot download opens in a new tab with auth on',
+        do: 'Run the console with `AUTH_ENABLED`, open /snapshots, and middle-click a download link.',
+        expect: 'The file downloads. No 401, and no bearer token anywhere in the URL bar.',
         covers: ['route'],
         state: 'passed',
-        resultNote: 'Opened #212’s design doc in a new tab — served straight through.',
+        resultNote: 'Opened last night’s handbook snapshot in a new tab — served straight through.',
         resultBy: 'operator',
         resultAt: ago(2),
       }),
@@ -987,9 +1171,9 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(12),
         letter: 'B',
         seq: 2,
-        title: 'With auth off, artifacts still serve',
-        do: 'Set `auth.enabled` to false, restart, and open the same chip.',
-        expect: 'The file renders with no capability in the URL at all.',
+        title: 'With auth off, snapshot downloads still serve',
+        do: 'Set `AUTH_ENABLED` to false, restart the API, and open the same link.',
+        expect: 'The file downloads with no capability in the URL at all.',
         covers: ['route'],
         // The case the amber band exists for, and the reason it is in the demo
         // rather than only in a test: somebody ran this, and then the check
@@ -999,11 +1183,11 @@ export function buildDemoState(): DemoSeed {
           'An agent working this goal amended the validation plan: the unsigned path now redirects rather ' +
           'than serving inline, so "no capability in the URL" was no longer the thing to look at.',
         revision: {
-          title: 'With auth off, artifacts still serve',
-          do: 'Set `auth.enabled` to false, restart, and open the same chip.',
-          expect: 'The file renders inline.',
+          title: 'With auth off, snapshot downloads still serve',
+          do: 'Set `AUTH_ENABLED` to false, restart the API, and open the same link.',
+          expect: 'The file downloads after one redirect.',
           state: 'passed',
-          note: 'Rendered inline with auth off, as expected.',
+          note: 'Redirected once and downloaded, as expected.',
         },
       }),
       demoCheck({
@@ -1013,11 +1197,11 @@ export function buildDemoState(): DemoSeed {
         letter: 'C',
         seq: 3,
         title: 'A tampered capability is refused',
-        do: 'Copy an artifact URL, change one character of the signature, and request it.',
-        expect: 'A 403, and the artifact is not served.',
+        do: 'Copy a download URL, change one character of the signature, and request it.',
+        expect: 'A 403, and the snapshot is not served.',
         covers: ['signer'],
         fleetCandidate: true,
-        candidateWhy: 'a plain HTTP request against a running harness; needs no login and no browser',
+        candidateWhy: 'a plain HTTP request against a running API; needs no login and no browser',
         // Claimed right now by a desktop session, nine minutes in. In the demo
         // because the claim is otherwise unreachable by clicking — nothing in the
         // cockpit takes one — and because it is the whole of what the fleet
@@ -1038,8 +1222,8 @@ export function buildDemoState(): DemoSeed {
         letter: 'D',
         seq: 4,
         title: 'An expired capability is refused',
-        do: 'Mint a capability with a one-second lifetime, wait, and request the artifact.',
-        expect: 'A 403 naming expiry, and the artifact is not served.',
+        do: 'Mint a capability with a one-second lifetime, wait, and request the snapshot.',
+        expect: 'A 403 naming expiry, and the snapshot is not served.',
         covers: ['signer'],
         fleetCandidate: true,
         candidateWhy: 'clock arithmetic and one request; nothing interactive',
@@ -1048,19 +1232,19 @@ export function buildDemoState(): DemoSeed {
         // Attributed, and that is the point of drawing it at all: "an agent says
         // this passed" is a weaker fact than "I ran it and it passed", and the
         // section must never let the second be read off the first.
-        resultNote: 'Minted a 1s capability, slept 2s, requested it: 403 "capability expired". Artifact not served.',
+        resultNote: 'Minted a 1s capability, slept 2s, requested it: 403 "capability expired". Snapshot not served.',
         resultBy: 'agent',
         resultAt: ago(1),
       }),
       demoCheck({
-        id: 'chip-renders-on-mobile',
+        id: 'download-reachable-on-mobile',
         createdAt: ago(12),
         updatedAt: ago(1),
         letter: 'E',
         seq: 5,
-        title: 'The chip is reachable on a narrow viewport',
-        do: 'Open a goal at 380px wide and tap the artifact chip.',
-        expect: 'The chip is hittable and the file opens.',
+        title: 'The download link is reachable on a narrow viewport',
+        do: 'Open /snapshots at 380px wide and tap a download link.',
+        expect: 'The link is hittable and the file downloads.',
         covers: ['route'],
         // The answer that is neither a pass nor a failure, and the reason there
         // are three: this agent found nothing out about the goal, so recording
@@ -1071,17 +1255,17 @@ export function buildDemoState(): DemoSeed {
       // kind of check up on a machine that *does* have a browser, and the row
       // says which of the three kinds of reader took the reading.
       demoCheck({
-        id: 'sheet-scrolls-on-a-phone',
+        id: 'proposal-sheet-scrolls-on-a-phone',
         createdAt: ago(12),
         updatedAt: ago(1),
         letter: 'F',
         seq: 6,
-        title: 'The plan sheet scrolls cleanly on a phone',
-        do: 'Open a goal with a nine-part plan at 380px wide and scroll to the validation section.',
-        expect: 'No horizontal scroll, and every check row is readable.',
+        title: 'The proposal review sheet scrolls cleanly on a phone',
+        do: 'Open a proposal with a nine-file diff at 380px wide and scroll to the review controls.',
+        expect: 'No horizontal scroll, and every hunk header is readable.',
         covers: ['route'],
         state: 'passed',
-        resultNote: 'Drove it at 380px in Chrome: no horizontal overflow, all six check rows legible.',
+        resultNote: 'Drove it at 380px in Chrome: no horizontal overflow, every hunk header legible.',
         resultBy: 'desktop',
         resultAt: ago(1),
       }),
@@ -1095,16 +1279,17 @@ export function buildDemoState(): DemoSeed {
     schedules: [
       {
         id: 'sch-1',
-        title: 'Sweep the dependency updates',
-        prompt: 'Check for outdated dependencies, upgrade the safe ones and open a PR with the changelog links.',
+        title: 'Sweep docs/ for links that no longer resolve',
+        prompt:
+          'Check every relative link and code path referenced under docs/ still exists, fix the ones that moved and open a PR.',
         kind: 'code',
         cron: '0 9 * * 1',
         enabled: true,
         nextRunAt: null,
-        lastFiredAt: new Date(Date.now() - 3 * 24 * 3_600_000).toISOString(),
+        lastFiredAt: new Date(now - 3 * 24 * 3_600_000).toISOString(),
         lastJobId: null,
-        createdAt: new Date(Date.now() - 21 * 24 * 3_600_000).toISOString(),
-        updatedAt: new Date(Date.now() - 3 * 24 * 3_600_000).toISOString(),
+        createdAt: new Date(now - 21 * 24 * 3_600_000).toISOString(),
+        updatedAt: new Date(now - 3 * 24 * 3_600_000).toISOString(),
       },
     ],
     // Every list `/api/state` always ships, empty here because the demo has no
@@ -1127,25 +1312,25 @@ export function buildDemoState(): DemoSeed {
     // which is the whole point of detecting it off what was actually written.
     overlaps: [
       {
-        path: 'src/integrations/azure/restAzureDevOpsApi.ts',
+        path: 'apps/api/src/config-holder.ts',
         sameWorktree: false,
         live: true,
         writers: [
           {
             agentId: 'agent-a2',
             taskId: 'task-a2',
-            originRef: 'pr:139',
-            originTitle: 'Map Azure DevOps reviewer votes to approval state',
-            branch: 'feature/azure-approval',
+            originRef: 'pr:409',
+            originTitle: 'Read GitHub review decisions as proposal approval',
+            branch: 'feature/review-decision',
             status: 'waiting',
             at: ago(2),
           },
           {
             agentId: 'agent-a1',
             taskId: 'task-a1',
-            originRef: 'pr:142',
-            originTitle: 'Add token-bucket rate limiting to the ingest API',
-            branch: 'feature/rate-limit',
+            originRef: 'pr:412',
+            originTitle: 'Cap the retrieval context at the token budget before ranking',
+            branch: 'feature/context-budget',
             status: 'running',
             at: ago(6),
           },
@@ -1162,17 +1347,17 @@ export function buildDemoState(): DemoSeed {
         id: 'find-1',
         agentId: 'agent-a1',
         taskId: 'task-a1',
-        originRef: 'pr:142:ci',
+        originRef: 'pr:412:ci',
         kind: 'out_of_scope',
         ref: null,
-        summary: 'The retry helper squares the delay instead of doubling it, so the 5th retry waits ~17 minutes',
-        where: 'src/net/backoff.ts:41',
+        summary: 'The RRF fold divides by the rank instead of (k + rank), so one list’s top hit swamps every other',
+        where: 'packages/retrieval/src/rrf.ts:41',
         detail:
-          'Not what I was sent to fix, but it is why `ingest.flaky.test.ts` times out — the ' +
-          'test budget is 60s and the 4th retry alone sleeps 256s.\n\n' +
+          'Not what I was sent to fix, but it is why `rrf.test.ts` fails once the context is capped — the ' +
+          'cap only exposes it, because the swamped list used to be carried anyway.\n\n' +
           '```\n' +
-          'delay = base ** attempt   // 2, 4, 16, 256, 65536\n' +
-          'delay = base * 2 ** attempt   // what the comment above it describes\n' +
+          'score += 1 / rank        // 1, 0.5, 0.33 …\n' +
+          'score += 1 / (k + rank)  // what the comment above it describes\n' +
           '```',
         status: 'open',
         jobId: null,
@@ -1184,10 +1369,10 @@ export function buildDemoState(): DemoSeed {
         id: 'find-2',
         agentId: 'agent-a2',
         taskId: 'task-a2',
-        originRef: 'issue:139',
+        originRef: 'issue:376',
         kind: 'duplicate',
-        ref: 'issue:118',
-        summary: 'This asks for the same provider seam as #118, which already has a merged design doc',
+        ref: 'issue:318',
+        summary: 'This asks for the same publisher seam as #318, which already has a merged design doc',
         where: null,
         detail: null,
         status: 'open',
@@ -1200,13 +1385,13 @@ export function buildDemoState(): DemoSeed {
         id: 'find-3',
         agentId: 'agent-a0',
         taskId: 'task-a0',
-        originRef: 'issue:205',
+        originRef: 'issue:364',
         kind: 'blocked',
-        ref: 'issue:205',
+        ref: 'issue:364',
         // Deliberately unsplit: a row filed before `where`/`detail` existed, so the
         // demo shows what the card does with one (clamps it, does not pretend).
         summary:
-          'The real fix is in the upstream azure-devops-node-api types — the field exists on the wire but not in the published typings. Nothing I can change from this repo.',
+          'The real fix is in pg-boss’s published typings — the job’s `singletonKey` is on the wire but not in the declared result type, so the watcher cannot read it back without a cast. Nothing I can change from this repo.',
         where: null,
         detail: null,
         status: 'dismissed',
@@ -1221,15 +1406,15 @@ export function buildDemoState(): DemoSeed {
         id: 'find-4',
         agentId: 'agent-a1',
         taskId: 'task-a1',
-        originRef: 'pr:142:ci',
+        originRef: 'pr:412:ci',
         kind: 'out_of_scope',
         ref: null,
-        summary: 'The ingest API has no request-size limit, so a 200MB body is buffered before anything rejects it',
-        where: 'src/server/routes/ingest.ts, the POST /v1/events handler',
-        detail: 'Unrelated to the CI failure I was sent for. Reproduced with a 200MB body — RSS peaked at 1.4GB.',
+        summary: 'POST /api/ask has no body-size limit, so a 40MB question is buffered before anything rejects it',
+        where: 'apps/api/src/features/ask/routes.ts, the POST /api/ask handler',
+        detail: 'Unrelated to the CI failure I was sent for. Reproduced with a 40MB body — RSS peaked at 1.1GB.',
         status: 'filed',
         jobId: 'job-filed-1',
-        ticketRef: 'issue:214',
+        ticketRef: 'issue:346',
         createdAt: ago(64),
         updatedAt: ago(58),
       },
@@ -1241,32 +1426,32 @@ export function buildDemoState(): DemoSeed {
     humanTasks: [
       {
         id: 'hum-1',
-        title: 'Point the staging database at the new schema',
+        title: 'Re-point the staging watchers at the new queue names',
         detail:
-          'RDS console → `lubbdubb-staging` → Parameter groups.\n\n' +
-          '- Switch `search_path` to the new schema\n' +
-          '- Restart the instance, then check the app comes back clean\n\n' +
-          'Done when staging reads and writes against the new tables. Nobody gave the fleet ' +
-          'console credentials, and nobody should.',
-        originRef: 'issue:212:part:cutover',
-        partId: 'plan-212:cutover',
+          'Hosting dashboard → the two `magpie-watcher` services → Environment.\n\n' +
+          '- Set `JOB_QUEUE_PREFIX` to the catalog’s\n' +
+          '- Redeploy both, then check the console reports two watchers connected\n\n' +
+          'Done when both staging watchers claim jobs from the catalog’s queue names. Nobody gave the fleet ' +
+          'dashboard credentials, and nobody should.',
+        originRef: 'issue:390:part:cutover',
+        partId: 'plan-390:cutover',
         kind: 'ask',
         agentId: null,
         taskId: null,
         status: 'open',
-        resolution: null,
         createdAt: ago(18),
         updatedAt: ago(18),
+        resolution: null,
         resolvedAt: null,
         dismissedAt: null,
       },
       {
         id: 'hum-2',
-        title: 'Confirm the new empty state reads correctly on a real phone',
+        title: 'Judge whether the truncated-context notice reads as an error on a real phone',
         detail:
-          'I can render it and diff the DOM, but not judge whether the copy lands at 375px in ' +
-          'sunlight. Screenshot attached to the PR.',
-        originRef: 'pr:142',
+          'When the budget cuts the context I show "answered from 8 of 23 sections". I can render it and ' +
+          'diff the DOM, but not judge whether that reads as a warning at 375px. Screenshot attached to the PR.',
+        originRef: 'pr:412',
         partId: null,
         kind: 'ask',
         agentId: 'agent-a1',
@@ -1280,33 +1465,33 @@ export function buildDemoState(): DemoSeed {
       },
       {
         id: 'hum-3',
-        title: 'Rotate the CI deploy key',
+        title: 'Rotate the GitHub App private key',
         detail: null,
-        originRef: 'issue:205',
+        originRef: 'issue:364',
         partId: null,
         kind: 'ask',
         agentId: 'agent-a0',
         taskId: 'task-a0',
         status: 'declined',
-        resolution: 'Not until the migration lands — rotating now breaks the release branch mid-flight.',
+        resolution: 'Not until the catalog migration lands — rotating now stops the publisher mid-flight.',
         createdAt: ago(72),
         updatedAt: ago(52),
         resolvedAt: ago(52),
         dismissedAt: null,
       },
       {
-        // The harness's own, on the goal it delivered at #205 and cannot close.
+        // The harness's own, on the goal it delivered at #364 and cannot close.
         // Nobody asked for it — no agent, no operator — which is what a
         // `close_out` with a null `agentId` says, and it settles itself as soon as
         // the tracker stops listing the item open.
         id: 'hum-4',
-        title: 'Close issue #205 in the tracker',
+        title: 'Close issue #364 in the tracker',
         detail:
-          'The assessor marked **Document the sentinel protocol in the README** delivered — ' +
-          '"PR #140 folded the checks and the docs landed with it."\n\n' +
+          'The assessor marked **Document the two-watcher requirement for maintenance jobs** delivered — ' +
+          '"PR #410 landed the deadlock note and the console warning with it."\n\n' +
           'The item is still open in the tracker. Close it there and this settles itself on the ' +
           'next pulse — or mark it done here, or decline it and say why.',
-        originRef: 'issue:205',
+        originRef: 'issue:364',
         partId: null,
         kind: 'close_out',
         agentId: null,
@@ -1324,7 +1509,7 @@ export function buildDemoState(): DemoSeed {
         id: 'agent-a1',
         taskId: 'task-a1',
         status: 'running',
-        cwd: '/work/lubbdubb-142',
+        cwd: '/work/magpie-412',
         pid: 4821,
         waitingReason: null,
         sessionId: null,
@@ -1334,7 +1519,7 @@ export function buildDemoState(): DemoSeed {
         inputTokens: 412_000,
         outputTokens: 18_400,
         numTurns: 3,
-        note: 'Reworking the policy-evaluation fold so a superseded push stops poisoning CI status',
+        note: 'Cutting the ranked list to the budget before the prompt is built, not after',
         notedAt: ago(3),
         resumedAt: null,
       },
@@ -1342,9 +1527,9 @@ export function buildDemoState(): DemoSeed {
         id: 'agent-a2',
         taskId: 'task-a2',
         status: 'waiting',
-        cwd: '/work/lubbdubb-139',
+        cwd: '/work/magpie-409',
         pid: 4899,
-        waitingReason: 'Rebase hit a conflict in restAzureDevOpsApi.ts — resolve which side wins?',
+        waitingReason: 'Rebase hit a conflict in review-decision.ts — resolve which side wins?',
         sessionId: null,
         startedAt: ago(4),
         endedAt: null,
@@ -1362,38 +1547,38 @@ export function buildDemoState(): DemoSeed {
         id: 'agent-a0',
         taskId: 'task-a0',
         status: 'done',
-        cwd: '/work/lubbdubb-205',
+        cwd: '/work/magpie-364',
         pid: null,
         waitingReason: null,
         sessionId: null,
-        startedAt: ago(40),
-        endedAt: ago(22),
+        startedAt: ago(140),
+        endedAt: ago(100),
         costUsd: 2.17,
         inputTokens: 1_240_000,
         outputTokens: 54_000,
         numTurns: 9,
         // A finished agent keeps its last note: the one-line summary of the run.
         note: 'Suite green, PR opened',
-        notedAt: ago(22),
+        notedAt: ago(100),
         resumedAt: null,
       },
     ],
-    // The act behind the drafted-reply escalation below (issue #109). It is what
-    // turns that card from "type something" into "approve & send / reject": the
-    // draft was written, and nothing goes out until you say so.
+    // The act behind the drafted-reply escalation below. It is what turns that
+    // card from "type something" into "approve & send / reject": the draft was
+    // written, and nothing goes out until you say so.
     proposals: [
       {
         id: 'prop-1',
         kind: 'reply_draft',
-        ref: 'pr:142:comment:c-1',
+        ref: 'pr:412:comment:c-1',
         status: 'pending',
         action: {
           type: 'reply_on_pr',
-          reason: 'reviewer asked whether the window is configurable',
-          prNumber: 142,
+          reason: 'reviewer asked whether the budget is per-flow',
+          prNumber: 412,
           commentId: 'c-1',
           draft:
-            'Good call — I pulled the window size into config as `RATE_LIMIT_WINDOW_MS` (defaulting to the old 60s) and wired it through. Pushed as a fixup.',
+            'Good call — the budget is read per flow now (`contextTokenBudget` on the flow config, falling back to the global `RETRIEVAL_CONTEXT_TOKENS`), so the runbook flow can keep its bigger window. Pushed as a fixup.',
         },
         note: null,
         decidedBy: null,
@@ -1405,13 +1590,13 @@ export function buildDemoState(): DemoSeed {
       {
         id: 'prop-2',
         kind: 'plan',
-        ref: 'issue:231:plan',
+        ref: 'issue:395:plan',
         status: 'pending',
         action: {
           type: 'propose_plan',
-          reason: 'Issue #231 was decomposed into 3 part(s) and approval is required before any is scheduled.',
-          planId: 'plan-231',
-          originRef: 'issue:231',
+          reason: 'Issue #395 was decomposed into 3 part(s) and approval is required before any is scheduled.',
+          planId: 'plan-395',
+          originRef: 'issue:395',
         },
         note: null,
         decidedBy: null,
@@ -1423,21 +1608,21 @@ export function buildDemoState(): DemoSeed {
     escalations: [
       {
         // A drafted PR reply held for sign-off — the auto-send gate wrote a
-        // response to the reviewer's comment on #142 but wasn't confident enough
+        // response to the reviewer's comment on #412 but wasn't confident enough
         // to send it unattended, so it escalates for approval (the "Draft reply"
         // panel + approve flow).
         id: 'esc-2',
         type: 'review_reply',
         status: 'open',
         prompt:
-          'Draft reply for PR #142:\n\nGood call — I pulled the window size into config as `RATE_LIMIT_WINDOW_MS` (defaulting to the old 60s) and wired it through. Pushed as a fixup.',
+          'Draft reply for PR #412:\n\nGood call — the budget is read per flow now (`contextTokenBudget` on the flow config, falling back to the global `RETRIEVAL_CONTEXT_TOKENS`), so the runbook flow can keep its bigger window. Pushed as a fixup.',
         context: {
-          taskTitle: 'Fix failing CI on PR #142',
-          originRef: 'pr:142',
-          prNumber: 142,
+          taskTitle: 'Fix failing CI on PR #412',
+          originRef: 'pr:412',
+          prNumber: 412,
           commentId: 'c-1',
           draft:
-            'Good call — I pulled the window size into config as `RATE_LIMIT_WINDOW_MS` (defaulting to the old 60s) and wired it through. Pushed as a fixup.',
+            'Good call — the budget is read per flow now (`contextTokenBudget` on the flow config, falling back to the global `RETRIEVAL_CONTEXT_TOKENS`), so the runbook flow can keep its bigger window. Pushed as a fixup.',
           confidence: 0.62,
         },
         agentId: 'agent-a1',
@@ -1454,13 +1639,13 @@ export function buildDemoState(): DemoSeed {
         type: 'approve_change',
         status: 'open',
         prompt:
-          'There is a plan for issue #231 ("Mint fails on a rotated signer") and nothing is scheduled until you ' +
-          'approve it — 3 pull requests of work.\n\n' +
-          'Why this shape: split on the seams the tests already draw; one PR would put the signer rewrite and ' +
-          'the route change in the same review.',
+          'There is a plan for issue #395 ("Snapshot downloads 401 in the review console") and nothing is ' +
+          'scheduled until you approve it — 3 pull requests of work.\n\n' +
+          'Why this shape: split on the seams the tests already draw; one PR would put the signer and the ' +
+          'guard change in the same review.',
         context: {
-          originRef: 'issue:231',
-          planId: 'plan-231',
+          originRef: 'issue:395',
+          planId: 'plan-395',
           // Whose words these are, said rather than guessed at. A plan approval
           // has no agent behind it and is not an assessment, so a card deriving
           // the label from "no agent" would caption a planner's decomposition as
@@ -1471,12 +1656,13 @@ export function buildDemoState(): DemoSeed {
           // demo shows the rendered path rather than the grey block it used to be.
           detail:
             "**What's wrong**\n\n" +
-            'The signer is cached at module load, so a rotation leaves every mint route holding the retired key ' +
-            'until the process restarts.\n\n' +
+            'The snapshot download route sits inside the `/api` prefix the console guards with a bearer token, ' +
+            'and clicking a download link is a top-level navigation — which cannot carry an `Authorization` ' +
+            'header. The route has never been reachable the way it is reached.\n\n' +
             "**What we'll do**\n\n" +
-            'Make the signer a resolved dependency rather than a module singleton, thread it through the mint ' +
-            'route, and have the route ask for it per request. The cache stays, keyed on the rotation stamp the ' +
-            'signer already publishes.',
+            'Move the route out from behind the prefix guard and gate it on a short-lived signed capability ' +
+            'minted into the snapshot list beside each row. The URL carries its own proof, so a plain ' +
+            'navigation works and nothing else moves outside the guard.',
         },
         agentId: null,
         taskId: null,
@@ -1493,22 +1679,24 @@ export function buildDemoState(): DemoSeed {
         status: 'open',
         prompt: "I've read the plan against the code — three things I'd question before we approve it.",
         context: {
-          taskTitle: 'Discuss the plan for issue #231',
-          originRef: 'issue:231',
+          taskTitle: 'Discuss the plan for issue #395',
+          originRef: 'issue:395',
           questions: [
             {
-              question: 'Part one is fat — split it, or leave it as two parts?',
+              question: 'Part two is fat — split it, or leave it as one?',
               detail:
-                'Store module + schema + routes + `/api/state` + the gate + the cockpit floor + six ' +
-                'specs. The riskiest bit (the gate) is buried in a big single review.',
-              options: ['Split into three parts', 'Keep two parts'],
+                'The guard move, the capability check and the two-mode arm are one review. The riskiest bit ' +
+                '(the window in which the route serves unguarded) is buried in the middle of it.',
+              options: ['Split into two parts', 'Keep it as one'],
             },
             {
-              question: "Keep `requestedBy: 'operator'` with a null origin?",
-              detail: "An operator parking a note for themselves is scope the acceptance criteria don't ask for.",
-              options: ['Keep it', 'Cut it'],
+              question: 'Should the unauthenticated arm serve, or 404?',
+              detail:
+                'With `AUTH_ENABLED` off there is no signing key. Serving everything matches what the operator ' +
+                'already chose by turning auth off; 404 is the safer default and a surprise.',
+              options: ['Serve everything', '404 the route'],
             },
-            { question: 'Rename `PartExpectedKind` to `expectedKind` in the part-two file list?' },
+            { question: 'Capability in the query string, or a path segment?' },
           ],
         },
         // Agentless, like the plan approval above: an ask with no agent is the
@@ -1523,12 +1711,12 @@ export function buildDemoState(): DemoSeed {
         id: 'esc-1',
         type: 'answer_question',
         status: 'open',
-        prompt: 'Rebase hit a conflict in restAzureDevOpsApi.ts — resolve which side wins?',
+        prompt: 'Rebase hit a conflict in review-decision.ts — resolve which side wins?',
         context: {
-          taskTitle: 'Rebase PR #139 on main',
-          originRef: 'pr:139',
-          recentOutput: 'CONFLICT (content): Merge conflict in src/integrations/azure/restAzureDevOpsApi.ts',
-          prNumber: 139,
+          taskTitle: 'Rebase PR #409 on main',
+          originRef: 'pr:409',
+          recentOutput: 'CONFLICT (content): Merge conflict in packages/git/src/review-decision.ts',
+          prNumber: 409,
         },
         agentId: 'agent-a2',
         taskId: 'task-a2',
@@ -1551,28 +1739,29 @@ export function buildDemoState(): DemoSeed {
         type: 'resolve_ambiguity',
         status: 'open',
         prompt:
-          'An assessment of issue #205 ("Document the sentinel protocol") found the work done and the goal ' +
-          'still not reached, and the issue itself to be what is wrong — no planner and no agent can fix a ' +
-          'goal, so nothing has been dispatched and nothing will be.',
+          'An assessment of issue #382 ("Gap clustering merges unrelated questions") found the work done and ' +
+          'the goal still not reached, and the issue itself to be what is wrong — no planner and no agent can ' +
+          'fix a goal, so nothing has been dispatched and nothing will be.',
         context: {
-          taskTitle: 'Document the sentinel protocol',
-          originRef: 'issue:205:shortfall',
-          issueNumber: 205,
+          taskTitle: 'Gap clustering merges unrelated questions into one gap',
+          originRef: 'issue:382:shortfall',
+          issueNumber: 382,
           detailFrom: 'What the assessor found',
           detail:
-            '**The README section landed; the protocol it documents is two protocols, and the issue names ' +
-            'neither.**\n\n' +
+            '**The threshold moved and the two example questions now cluster apart. The goal asks for ' +
+            'clusters that are about one thing, and no threshold decides that.**\n\n' +
             '## Present\n\n' +
-            'PR #143 added `docs/sentinels.md` and linked it from the README. It documents the `DONE` and ' +
-            '`WAITING` tokens, their exact spelling, and the scanner that strips SGR escapes out of them.\n\n' +
+            'PR #405 raised the cosine threshold from 0.72 to 0.81 and added the two questions from the ' +
+            'issue as a regression test. They cluster apart. The test passes.\n\n' +
             '## Missing\n\n' +
-            '- The stream runtime has no sentinels at all — it reads terminals off the result event — so ' +
-            'half the fleet is undocumented and the page does not say so.\n' +
-            '- `agentMode` is never mentioned, which is what decides which half a reader is in.\n\n' +
+            '- Three other pairs in the same corpus still merge at 0.81, and lowering it far enough to split ' +
+            'them splits the pairs that *should* merge.\n' +
+            '- Nothing in the clusterer reads what a question is *about* — only how its embedding sits ' +
+            'against another’s. A threshold is the wrong instrument for the stated goal.\n\n' +
             '## Why the goal, and not the plan\n\n' +
-            'Both parts delivered exactly the scope they declared. The issue asks to "document the sentinel ' +
-            'protocol", singular, and there are two; a planner handed this back would decompose the same ' +
-            'wrong question again. Someone has to say which protocol the docs are for.',
+            'The part delivered exactly the scope it declared. The issue asks for clusters that are "about ' +
+            'one thing"; a planner handed this back would tune the same number again. Someone has to say ' +
+            'whether that means topic labelling, a second pass over the cluster, or simply a better number.',
         },
         agentId: null,
         taskId: null,
@@ -1585,8 +1774,8 @@ export function buildDemoState(): DemoSeed {
       {
         id: 'dec-4',
         cycleId: 'cycle-103',
-        action: { type: 'reply_on_pr', reason: 'reviewer asked for a config change on #142' },
-        subjectRef: 'pr:142',
+        action: { type: 'reply_on_pr', reason: 'reviewer asked for a per-flow budget on #412' },
+        subjectRef: 'pr:412',
         outcome: 'executed',
         detail: 'Drafted a reply and escalated for approval (confidence 0.62 below threshold)',
         rule: null,
@@ -1596,10 +1785,10 @@ export function buildDemoState(): DemoSeed {
       {
         id: 'dec-3',
         cycleId: 'cycle-102',
-        action: { type: 'dispatch_code_agent', reason: 'PR #142 CI is failing' },
-        subjectRef: 'pr:142:ci',
+        action: { type: 'dispatch_code_agent', reason: 'PR #412 CI is failing' },
+        subjectRef: 'pr:412:ci',
         outcome: 'executed',
-        detail: 'Dispatched agent onto feature/rate-limit',
+        detail: 'Dispatched agent onto feature/context-budget',
         rule: 'pr-ci-failing',
         admission: null,
         createdAt: ago(8),
@@ -1611,7 +1800,7 @@ export function buildDemoState(): DemoSeed {
         // An escalation is about a human, not a ticket: the column draws a dash.
         subjectRef: null,
         outcome: 'executed',
-        detail: 'Rebase conflict on PR #139 needs a call',
+        detail: 'Rebase conflict on PR #409 needs a call',
         rule: 'pr-base-update',
         admission: null,
         createdAt: ago(2),
@@ -1619,8 +1808,8 @@ export function buildDemoState(): DemoSeed {
       {
         id: 'dec-1',
         cycleId: 'cycle-98',
-        action: { type: 'merge_pr', reason: 'PR #141 is merge-ready' },
-        subjectRef: 'pr:141',
+        action: { type: 'merge_pr', reason: 'PR #411 is merge-ready' },
+        subjectRef: 'pr:411',
         outcome: 'deferred',
         detail: 'auto-merge disabled — leaving for a human',
         rule: 'pr-merge-ready',
@@ -1636,48 +1825,48 @@ export function buildDemoState(): DemoSeed {
       at: ago(0),
       items: [
         {
-          origin: 'issue:208',
+          origin: 'issue:341',
           rule: 'issue-pickup',
-          title: 'Resolve issue #208',
+          title: 'Resolve issue #341',
           kind: 'code',
-          branch: 'issue/208',
+          branch: 'issue/341',
           status: 'dispatching',
-          reason: 'Open issue #208 has no linked PR and no agent is on it.',
+          reason: 'Open issue #341 has no linked PR and no agent is on it.',
         },
         {
           // Held by the plan's own concurrency cap rather than by fleet headroom —
           // a free slot wouldn't start it, which is why it says `capped` and not
           // `waiting`, and why it is queued at all rather than skipped in silence.
-          origin: 'issue:212:part:writes',
+          origin: 'issue:390:part:watcher',
           rule: 'plan-part',
-          title: 'Issue #212 part: Route writes through the interface',
+          title: 'Issue #390 part: Route the watcher’s job intake through the catalog',
           kind: 'code',
-          branch: 'issue/212/writes',
+          branch: 'issue/390/watcher',
           status: 'capped',
           reason:
-            'Part "writes" of issue #212 is ready and stacks on issue/212/reads. Held: issue #212 is already at its 2-part concurrency cap.',
+            'Part "watcher" of issue #390 is ready and stacks on issue/390/validate. Held: issue #390 is already at its 2-part concurrency cap.',
         },
         {
-          // Queued but held, same as `writes` above — this time by the plan's own
+          // Queued but held, same as `watcher` above — this time by the plan's own
           // awaiting_approval status rather than a concurrency cap.
-          origin: 'issue:231:part:signer',
+          origin: 'issue:395:part:signer',
           rule: 'plan-part',
-          title: 'Issue #231 part: Add the capability signer',
+          title: 'Issue #395 part: Add the download capability signer',
           kind: 'code',
-          branch: 'issue/231/signer',
+          branch: 'issue/395/signer',
           status: 'unapproved',
           reason:
-            'Part "signer" of issue #231 is ready and has no agent. Held: the plan for issue #231 is awaiting your approval — nothing is scheduled until you accept it.',
+            'Part "signer" of issue #395 is ready and has no agent. Held: the plan for issue #395 is awaiting your approval — nothing is scheduled until you accept it.',
         },
         {
-          origin: 'issue:231:part:route',
+          origin: 'issue:395:part:route',
           rule: 'plan-part',
-          title: 'Issue #231 part: Move the artifact route outside /api and require the capability',
+          title: 'Issue #395 part: Move the download route outside /api and require the capability',
           kind: 'code',
-          branch: 'issue/231/route',
+          branch: 'issue/395/route',
           status: 'unapproved',
           reason:
-            'Part "route" of issue #231 is ready and stacks on issue/231/signer. Held: the plan for issue #231 is awaiting your approval — nothing is scheduled until you accept it.',
+            'Part "route" of issue #395 is ready and stacks on issue/395/signer. Held: the plan for issue #395 is awaiting your approval — nothing is scheduled until you accept it.',
         },
       ],
     },
@@ -1686,7 +1875,7 @@ export function buildDemoState(): DemoSeed {
         id: 'err-2',
         source: 'agent',
         message: 'Agent agent-a0 failed (task task-a0), exit code 1',
-        detail: 'npm test\n✗ rate-limit window resets on rollover\nProcess exited with code 1',
+        detail: 'npm test\n✗ retrieval › the context fits the budget\nProcess exited with code 1',
         createdAt: ago(11),
       },
       {
@@ -1698,49 +1887,61 @@ export function buildDemoState(): DemoSeed {
       },
     ],
     worldEvents: [
-      { id: 'we-5', kind: 'pr_ci', ref: 'pr:142', summary: 'CI failing on PR #142', createdAt: ago(8) },
-      { id: 'we-4', kind: 'pr_comment', ref: 'pr:142', summary: 'reviewer commented on PR #142', createdAt: ago(7) },
-      { id: 'we-3', kind: 'pr_approved', ref: 'pr:141', summary: 'PR #141 approved', createdAt: ago(9) },
-      { id: 'we-2', kind: 'issue_opened', ref: 'issue:208', summary: 'Issue #208 opened', createdAt: ago(15) },
-      { id: 'we-1', kind: 'pr_merged', ref: 'pr:138', summary: 'PR #138 merged', createdAt: ago(30) },
+      { id: 'we-5', kind: 'pr_ci', ref: 'pr:412', summary: 'CI failing on PR #412', createdAt: ago(8) },
+      { id: 'we-4', kind: 'pr_comment', ref: 'pr:412', summary: 'reviewer commented on PR #412', createdAt: ago(7) },
+      { id: 'we-3', kind: 'pr_approved', ref: 'pr:411', summary: 'PR #411 approved', createdAt: ago(9) },
+      { id: 'we-2', kind: 'issue_opened', ref: 'issue:341', summary: 'Issue #341 opened', createdAt: ago(15) },
+      { id: 'we-1', kind: 'pr_merged', ref: 'pr:406', summary: 'PR #406 merged', createdAt: ago(30) },
     ],
     // Ref → URL map the real provider builds; canned here so the demo's issue/PR
     // references render as clickable links, keyed by how they appear in the UI (`#N`).
     refUrls: {
-      '#142': 'https://github.com/example/lubbdubb/pull/142',
-      '#141': 'https://github.com/example/lubbdubb/pull/141',
-      '#139': 'https://github.com/example/lubbdubb/pull/139',
-      '#208': 'https://github.com/example/lubbdubb/issues/208',
-      '#205': 'https://github.com/example/lubbdubb/issues/205',
-      '#210': 'https://github.com/example/lubbdubb/issues/210',
-      '#212': 'https://github.com/example/lubbdubb/issues/212',
-      '#143': 'https://github.com/example/lubbdubb/pull/143',
-      '#140': 'https://github.com/example/lubbdubb/pull/140',
-      '#231': 'https://github.com/example/lubbdubb/issues/231',
-      '#219': 'https://github.com/example/lubbdubb/issues/219',
+      '#412': 'https://github.com/example/markdown-magpie/pull/412',
+      '#411': 'https://github.com/example/markdown-magpie/pull/411',
+      '#409': 'https://github.com/example/markdown-magpie/pull/409',
+      '#413': 'https://github.com/example/markdown-magpie/pull/413',
+      '#410': 'https://github.com/example/markdown-magpie/pull/410',
+      '#406': 'https://github.com/example/markdown-magpie/pull/406',
+      '#405': 'https://github.com/example/markdown-magpie/pull/405',
+      '#300': 'https://github.com/example/markdown-magpie/issues/300',
+      '#332': 'https://github.com/example/markdown-magpie/issues/332',
+      '#333': 'https://github.com/example/markdown-magpie/issues/333',
+      '#341': 'https://github.com/example/markdown-magpie/issues/341',
+      '#345': 'https://github.com/example/markdown-magpie/issues/345',
+      '#357': 'https://github.com/example/markdown-magpie/issues/357',
+      '#359': 'https://github.com/example/markdown-magpie/issues/359',
+      '#364': 'https://github.com/example/markdown-magpie/issues/364',
+      '#368': 'https://github.com/example/markdown-magpie/issues/368',
+      '#371': 'https://github.com/example/markdown-magpie/issues/371',
+      '#379': 'https://github.com/example/markdown-magpie/issues/379',
+      '#382': 'https://github.com/example/markdown-magpie/issues/382',
+      '#388': 'https://github.com/example/markdown-magpie/issues/388',
+      '#390': 'https://github.com/example/markdown-magpie/issues/390',
+      '#395': 'https://github.com/example/markdown-magpie/issues/395',
       // The two comments the harness maintains on a ticket by itself, keyed by the
-      // canonical ref the snapshot ships (#171) and anchored the way the provider
-      // builds them. Absent from this map ⇒ the cockpit draws no way in at all.
-      'issue:212:comment:8391': 'https://github.com/example/lubbdubb/issues/212#issuecomment-8391',
-      'issue:219:comment:8402': 'https://github.com/example/lubbdubb/issues/219#issuecomment-8402',
+      // canonical ref the snapshot ships and anchored the way the provider builds
+      // them. Absent from this map ⇒ the cockpit draws no way in at all.
+      'issue:390:comment:8391': 'https://github.com/example/markdown-magpie/issues/390#issuecomment-8391',
+      'issue:379:comment:8402': 'https://github.com/example/markdown-magpie/issues/379#issuecomment-8402',
       // The colon form, which is what the harness speaks: a part's ref, a job's
       // origin, an agent's origin and a decision's subject are all structured refs,
       // and the `#n` keys above answer none of them. The server keys both families
       // for the same items (see `buildRefUrls`), so the demo does too — otherwise
       // the Pages build is the one place every new link renders as plain text.
-      'issue:205': 'https://github.com/example/lubbdubb/issues/205',
-      'issue:208': 'https://github.com/example/lubbdubb/issues/208',
-      'issue:210': 'https://github.com/example/lubbdubb/issues/210',
-      'issue:212': 'https://github.com/example/lubbdubb/issues/212',
-      'issue:219': 'https://github.com/example/lubbdubb/issues/219',
-      'issue:231': 'https://github.com/example/lubbdubb/issues/231',
-      'issue:212:part:writes': 'https://github.com/example/lubbdubb/issues/212',
-      'issue:231:part:route': 'https://github.com/example/lubbdubb/issues/231',
-      'issue:231:part:signer': 'https://github.com/example/lubbdubb/issues/231',
-      'pr:139': 'https://github.com/example/lubbdubb/pull/139',
-      'pr:141': 'https://github.com/example/lubbdubb/pull/141',
-      'pr:142': 'https://github.com/example/lubbdubb/pull/142',
-      'pr:142:ci': 'https://github.com/example/lubbdubb/pull/142/checks',
+      'issue:341': 'https://github.com/example/markdown-magpie/issues/341',
+      'issue:364': 'https://github.com/example/markdown-magpie/issues/364',
+      'issue:371': 'https://github.com/example/markdown-magpie/issues/371',
+      'issue:379': 'https://github.com/example/markdown-magpie/issues/379',
+      'issue:382': 'https://github.com/example/markdown-magpie/issues/382',
+      'issue:390': 'https://github.com/example/markdown-magpie/issues/390',
+      'issue:395': 'https://github.com/example/markdown-magpie/issues/395',
+      'issue:390:part:watcher': 'https://github.com/example/markdown-magpie/issues/390',
+      'issue:395:part:route': 'https://github.com/example/markdown-magpie/issues/395',
+      'issue:395:part:signer': 'https://github.com/example/markdown-magpie/issues/395',
+      'pr:409': 'https://github.com/example/markdown-magpie/pull/409',
+      'pr:411': 'https://github.com/example/markdown-magpie/pull/411',
+      'pr:412': 'https://github.com/example/markdown-magpie/pull/412',
+      'pr:412:ci': 'https://github.com/example/markdown-magpie/pull/412/checks',
     },
     // The rule book the server ships in /api/state (src/dispatcher/rules.ts) —
     // canned to just the rules the demo's decisions reference.
@@ -1811,52 +2012,52 @@ export function buildDemoState(): DemoSeed {
     // Real `renderBlocks` output, markers intact, so the demo exercises the drawer's
     // collapsed tool blocks rather than only plain prose.
     'agent-a1': [
-      'Reading feature/rate-limit — the failing case is the window edge.\n',
-      '\x1b[36m⚙ Bash\x1b[0m \x1b[2mnpm test -- ratelimit\x1b[0m\n',
+      'Reading feature/context-budget — the failing case is a question that matches every section.\n',
+      '\x1b[36m⚙ Bash\x1b[0m \x1b[2mnpm test -w packages/retrieval\x1b[0m\n',
       '\n',
       '\x1b[31m  ↳ error\x1b[0m\x1b[2m · 5 lines\x1b[0m\n',
-      '  ✗ ratelimit › rejects over the window\n',
-      '    Expected 429, got 200\n',
-      '    at rateLimit.test.ts:41\n',
+      '  ✗ retrieval › the context fits the budget\n',
+      '    Expected 8000, got 21440\n',
+      '    at index.test.ts:118\n',
       '  \n',
       '  1 failing, 82 passing\n',
-      'So a request exactly on the boundary is let through. Let me read the comparison.\n',
-      '\x1b[36m⚙ Read\x1b[0m \x1b[2msrc/ingest/rateLimit.ts\x1b[0m\n',
+      'So the cut is applied after the prompt is assembled, not before. Let me read the fold.\n',
+      '\x1b[36m⚙ Read\x1b[0m \x1b[2mpackages/retrieval/src/index.ts\x1b[0m\n',
       '\n',
       '\x1b[90m  ↳ result\x1b[0m\x1b[2m · 18 lines\x1b[0m\n',
-      '  30	  const within = elapsed <= windowMs;\n',
-      '  31	  const within = elapsed <= windowMs;\n',
-      '  32	  const within = elapsed <= windowMs;\n',
-      '  33	  const within = elapsed <= windowMs;\n',
-      '  34	  const within = elapsed <= windowMs;\n',
-      '  35	  const within = elapsed <= windowMs;\n',
-      '  36	  const within = elapsed <= windowMs;\n',
-      '  37	  const within = elapsed <= windowMs;\n',
-      '  38	  const within = elapsed <= windowMs;\n',
-      '  39	  const within = elapsed <= windowMs;\n',
-      '  40	  const within = elapsed <= windowMs;\n',
-      '  41	  const within = elapsed <= windowMs;\n',
-      '  42	  const within = elapsed <= windowMs;\n',
-      '  43	  const within = elapsed <= windowMs;\n',
-      '  44	  const within = elapsed <= windowMs;\n',
-      '  45	  const within = elapsed <= windowMs;\n',
-      '  46	  const within = elapsed <= windowMs;\n',
-      '  47	  const within = elapsed <= windowMs;\n',
-      'The window comparison uses <= where it should be <. Patching.\n',
+      '  30	  const chosen = ranked.slice(0, topK);\n',
+      '  31	  const chosen = ranked.slice(0, topK);\n',
+      '  32	  const chosen = ranked.slice(0, topK);\n',
+      '  33	  const chosen = ranked.slice(0, topK);\n',
+      '  34	  const chosen = ranked.slice(0, topK);\n',
+      '  35	  const chosen = ranked.slice(0, topK);\n',
+      '  36	  const chosen = ranked.slice(0, topK);\n',
+      '  37	  const chosen = ranked.slice(0, topK);\n',
+      '  38	  const chosen = ranked.slice(0, topK);\n',
+      '  39	  const chosen = ranked.slice(0, topK);\n',
+      '  40	  const chosen = ranked.slice(0, topK);\n',
+      '  41	  const chosen = ranked.slice(0, topK);\n',
+      '  42	  const chosen = ranked.slice(0, topK);\n',
+      '  43	  const chosen = ranked.slice(0, topK);\n',
+      '  44	  const chosen = ranked.slice(0, topK);\n',
+      '  45	  const chosen = ranked.slice(0, topK);\n',
+      '  46	  const chosen = ranked.slice(0, topK);\n',
+      '  47	  const chosen = ranked.slice(0, topK);\n',
+      '`topK` counts sections, not tokens — a section can be 4k on its own. Patching.\n',
     ].join(''),
     'agent-a2': [
-      '$ claude --resume rebase-139',
+      '$ claude --resume rebase-409',
       'git fetch origin main',
       'git rebase origin/main',
-      'CONFLICT (content): Merge conflict in src/integrations/azure/restAzureDevOpsApi.ts',
-      'Both sides changed resolveAzureAuth. Need a human call.',
-      '@@LUBBDUBB_WAITING: which auth path wins?@@',
+      'CONFLICT (content): Merge conflict in packages/git/src/review-decision.ts',
+      'Both sides changed reviewDecisionToApproval. Need a human call.',
+      '@@LUBBDUBB_WAITING: which mapping wins?@@',
     ].join('\n'),
     'agent-a0': [
-      '$ claude implement-205',
-      'Added "Sentinel protocol" section to README.md',
-      'npm run check … all green',
-      'git push && opened PR #141',
+      '$ claude implement-364',
+      'Added "Why maintenance jobs need two watchers" to docs/architecture.md',
+      'npm run build && npm test … all green',
+      'git push && opened PR #410',
       '@@LUBBDUBB_DONE@@',
     ].join('\n'),
   };
@@ -1867,19 +2068,18 @@ export function buildDemoState(): DemoSeed {
 /**
  * A plan's revision history, for the sheet's "What changed" view.
  *
- * Authored rather than derived, and only for `plan-231` — the demo's world is
+ * Authored rather than derived, and only for `plan-395` — the demo's world is
  * built fresh in the browser each load, so no replan has ever landed in it and
  * there is nothing to snapshot. The real route reads `plan_revisions`, which
  * `ingestPlanDocument` writes on every submission.
  *
  * The amendment below is the one worth showing: a discussion in which the
- * operator argued the snapshot change was not a third pull request, the planner
- * agreed and folded it in, and a new part appeared for the unauthenticated arm
- * nobody had thought about. Anything else answers with no revisions, which is what
+ * operator argued the console change was not a fourth pull request, the planner
+ * agreed and folded it in. Anything else answers with no revisions, which is what
  * a plan with no history draws — no History control at all.
  */
 export function demoPlanHistory(planId: string): PlanHistory {
-  if (planId !== 'plan-231') return { revisions: [], diff: null };
+  if (planId !== 'plan-395') return { revisions: [], diff: null };
   const at = (mins: number) => new Date(Date.now() - mins * 60_000).toISOString();
   const narrative = (over: Partial<PlanNarrative>): PlanNarrative => ({
     reason: null,
@@ -1907,51 +2107,51 @@ export function demoPlanHistory(planId: string): PlanHistory {
   });
   const revisions: PlanRevision[] = [
     {
-      id: 'rev-231-1',
+      id: 'rev-395-1',
       planId,
       seq: 1,
       verdict: 'parts',
       at: at(40),
       narrative: narrative({
         reason: 'The signer has to exist before the route can verify one, and the guard change touches every route.',
-        approach: 'Sign a short-lived capability into the artifact URL and move the route out from behind the guard.',
+        approach: 'Sign a short-lived capability into the download URL and move the route out from behind the guard.',
       }),
       parts: [
         part({
           slug: 'signer',
           seq: 1,
-          title: 'Add the capability signer',
-          touches: ['src/server/artifactCapability.ts'],
+          title: 'Add the download capability signer',
+          touches: ['apps/api/src/features/snapshots/download-capability.ts'],
           size: 's',
         }),
         part({
           slug: 'route',
           seq: 2,
-          title: 'Move the artifact route outside /api',
-          touches: ['src/server/app.ts'],
+          title: 'Move the download route outside /api',
+          touches: ['apps/api/src/app.ts'],
           dependsOn: ['signer'],
           size: 'm',
         }),
         part({
           slug: 'mint',
           seq: 3,
-          title: 'Mint capabilities into the snapshot',
-          touches: ['src/server/stateSnapshot.ts'],
+          title: 'Mint capabilities into the snapshot list',
+          touches: ['apps/api/src/features/snapshots/list.ts'],
           dependsOn: ['route'],
           size: 's',
         }),
         part({
-          slug: 'chips',
+          slug: 'rows',
           seq: 4,
-          title: 'Point the cockpit chips at the minted URL',
-          touches: ['web/src/components/AgentDrawer.tsx'],
+          title: 'Point the console’s snapshot rows at the minted URL',
+          touches: ['apps/web/src/app/snapshots/page.tsx'],
           dependsOn: ['mint'],
           size: 's',
         }),
       ],
     },
     {
-      id: 'rev-231-2',
+      id: 'rev-395-2',
       planId,
       seq: 2,
       verdict: 'parts',
@@ -1960,30 +2160,30 @@ export function demoPlanHistory(planId: string): PlanHistory {
         reason:
           'The capability signer has to exist before the route can verify one, and the guard change touches every route.',
         approach:
-          'Move `/artifacts/:id` out from behind the prefix guard and gate it on a short-lived signed capability instead.',
+          'Move `/snapshots/:id/download` out from behind the prefix guard and gate it on a short-lived signed capability instead.',
         openQuestions: 'Whether the unauthenticated arm should serve everything or 404.',
       }),
       parts: [
         part({
           slug: 'signer',
           seq: 1,
-          title: 'Add the capability signer',
-          touches: ['src/server/artifactCapability.ts'],
+          title: 'Add the download capability signer',
+          touches: ['apps/api/src/features/snapshots/download-capability.ts'],
           size: 's',
         }),
         part({
           slug: 'route',
           seq: 2,
-          title: 'Move the artifact route outside /api and require the capability',
-          touches: ['src/server/app.ts', 'src/server/routes/artifacts.ts'],
+          title: 'Move the download route outside /api and require the capability',
+          touches: ['apps/api/src/app.ts', 'apps/api/src/features/snapshots/routes.ts'],
           dependsOn: ['signer'],
           size: 'm',
         }),
         part({
           slug: 'mint',
           seq: 3,
-          title: 'Mint capabilities into the snapshot',
-          touches: ['src/server/stateSnapshot.ts', 'web/src/components/AgentDrawer.tsx'],
+          title: 'Mint capabilities into the snapshot list',
+          touches: ['apps/api/src/features/snapshots/list.ts', 'apps/web/src/app/snapshots/page.tsx'],
           dependsOn: ['signer', 'route'],
           size: 'm',
         }),
@@ -1997,42 +2197,42 @@ export function demoPlanHistory(planId: string): PlanHistory {
       againstSeq: 1,
       verdictChanged: false,
       parts: [
-        { slug: 'signer', kind: 'unchanged', title: 'Add the capability signer', fields: [] },
+        { slug: 'signer', kind: 'unchanged', title: 'Add the download capability signer', fields: [] },
         {
           slug: 'route',
           kind: 'changed',
-          title: 'Move the artifact route outside /api and require the capability',
+          title: 'Move the download route outside /api and require the capability',
           fields: [
             {
               field: 'title',
-              from: 'Move the artifact route outside /api',
-              to: 'Move the artifact route outside /api and require the capability',
+              from: 'Move the download route outside /api',
+              to: 'Move the download route outside /api and require the capability',
             },
             {
               field: 'touches',
-              from: 'src/server/app.ts',
-              to: 'src/server/app.ts, src/server/routes/artifacts.ts',
+              from: 'apps/api/src/app.ts',
+              to: 'apps/api/src/app.ts, apps/api/src/features/snapshots/routes.ts',
             },
           ],
         },
         {
           slug: 'mint',
           kind: 'changed',
-          title: 'Mint capabilities into the snapshot',
+          title: 'Mint capabilities into the snapshot list',
           fields: [
             {
               field: 'touches',
-              from: 'src/server/stateSnapshot.ts',
-              to: 'src/server/stateSnapshot.ts, web/src/components/AgentDrawer.tsx',
+              from: 'apps/api/src/features/snapshots/list.ts',
+              to: 'apps/api/src/features/snapshots/list.ts, apps/web/src/app/snapshots/page.tsx',
             },
             { field: 'dependsOn', from: 'route', to: 'route, signer' },
             { field: 'size', from: 's', to: 'm' },
           ],
         },
         {
-          slug: 'chips',
+          slug: 'rows',
           kind: 'dropped',
-          title: 'Point the cockpit chips at the minted URL',
+          title: 'Point the console’s snapshot rows at the minted URL',
           fields: [],
         },
       ],

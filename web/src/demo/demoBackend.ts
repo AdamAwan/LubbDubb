@@ -42,14 +42,16 @@ interface Conn {
 }
 
 // Plausible log lines a "running" agent emits, cycled to fake live progress.
+// Markdown Magpie's own commands, so the drawer reads like the repository the
+// rest of the demo world is about.
 const CHATTER = [
   'reading changed files …',
-  'npm test',
+  'npm test -w packages/retrieval',
   '  ✓ 128 passing',
-  'editing src/harness.ts',
+  'editing packages/retrieval/src/index.ts',
   'git add -A && git commit -m "wip"',
-  'running npm run check …',
-  '  lint ok · typecheck ok · knip ok',
+  'running npm run typecheck …',
+  '  build ok · typecheck ok · lint ok',
   'thinking about the next step …',
 ];
 
@@ -1200,7 +1202,7 @@ class DemoServer {
     if (this.deskBeats < 2) return;
     held.state = 'passed';
     held.resultNote =
-      'Copied the artifact URL, flipped one character of the signature and requested it: 403, and the file was not served.';
+      'Copied the download URL, flipped one character of the signature and requested it: 403, and the snapshot was not served.';
     held.resultBy = 'desktop';
     held.resultAt = new Date().toISOString();
     held.claimedBy = null;
@@ -1233,12 +1235,12 @@ function getServer(): DemoServer {
  * about the *process* rather than the diff — that is what the station is for.
  */
 const DEMO_RETROSPECTIVE = {
-  originRef: 'issue:205',
+  originRef: 'issue:364',
   summary: 'Delivered in one PR, but two agents were spent chasing a red base that was never ours.',
   document: [
     '## What shipped',
     '',
-    'PR #140 documents the sentinel protocol and where detection lives, including the cross-chunk case in the PTY runtime. Nothing was left outstanding.',
+    'PR #410 documents why a maintenance job needs two watchers — the orchestrator blocks in an API callback while the API waits on the AI jobs it enqueued — and the console now warns when only one watcher is connected. Nothing was left outstanding.',
     '',
     '## How the run went',
     '',
@@ -1265,28 +1267,28 @@ const DEMO_RETROSPECTIVE = {
 const DEMO_SCRATCHPAD = [
   {
     id: 'scr_demo1',
-    padRef: 'issue:205',
-    authorOriginRef: 'issue:205',
+    padRef: 'issue:364',
+    authorOriginRef: 'issue:364',
     agentId: 'agent-4',
     taskId: 'task-4',
-    topic: 'detection',
-    note: 'Detection lives in two places, not one: sentinels.ts has the pure helpers, and PtySession additionally handles a sentinel split across two data chunks. The README section has to cover both or it describes half the protocol.',
+    topic: 'deadlock',
+    note: 'The starvation is not "the queue is busy": a maintenance orchestrator holds its watcher while it blocks in the API callback, and the follow-up AI jobs it enqueued can only be claimed by a *second* watcher. With one watcher it waits for itself. The docs have to say that, not "run more watchers if it feels slow".',
     createdAt: new Date(Date.now() - 9_000_000).toISOString(),
   },
   {
     id: 'scr_demo2',
-    padRef: 'issue:205',
-    authorOriginRef: 'issue:205',
+    padRef: 'issue:364',
+    authorOriginRef: 'issue:364',
     agentId: 'agent-4',
     taskId: 'task-4',
     topic: 'ci',
-    note: 'CI on this branch is red and none of it is ours — the failures are all in the base PR (#137). Do not chase them.',
+    note: 'CI on this branch is red and none of it is ours — the failures are all in the base PR (#406). Do not chase them.',
     createdAt: new Date(Date.now() - 7_800_000).toISOString(),
   },
   {
     id: 'scr_demo3',
-    padRef: 'issue:205',
-    authorOriginRef: 'issue:205:part:docs',
+    padRef: 'issue:364',
+    authorOriginRef: 'issue:364:part:docs',
     agentId: 'agent-6',
     taskId: 'task-6',
     topic: 'ci',
@@ -1295,12 +1297,12 @@ const DEMO_SCRATCHPAD = [
   },
   {
     id: 'scr_demo4',
-    padRef: 'issue:205',
-    authorOriginRef: 'issue:205:assess',
+    padRef: 'issue:364',
+    authorOriginRef: 'issue:364:assess',
     agentId: 'agent-7',
     taskId: 'task-7',
     topic: null,
-    note: 'PR #140 covers both runtimes and the stripping rule. Nothing outstanding that I can see.',
+    note: 'PR #410 covers the deadlock and the one-watcher warning. Nothing outstanding that I can see.',
     createdAt: new Date(Date.now() - 4_200_000).toISOString(),
   },
 ];
@@ -1315,8 +1317,8 @@ const DEMO_SCRATCHPAD = [
  * seeds below, because a hand-typed set of totals that disagrees with its own
  * rows is a demo of a bug.
  *
- * The two goals the world fixture already prices — 205 at $6.14 over 4 runs and
- * 212 at $18.42 over 7 — carry those exact figures here. A panel contradicting the
+ * The two goals the world fixture already prices — 364 at $6.14 over 4 runs and
+ * 390 at $18.42 over 7 — carry those exact figures here. A panel contradicting the
  * card three inches behind it is the one thing this screen must not do.
  */
 const DEMO_GOAL_SEEDS: {
@@ -1327,30 +1329,33 @@ const DEMO_GOAL_SEEDS: {
   byPhase: Partial<Record<SpendPhase, number>>;
 }[] = [
   {
-    issueNumber: 212,
-    title: 'Route every store read through the interface',
+    issueNumber: 390,
+    title: 'Validate job payloads in the catalog, not in each runner',
     agents: 7,
     hoursAgo: 2,
     byPhase: { deliberation: 3.4, build: 9.8, ci: 2.6, landing: 1.3, evidence: 1.32 },
   },
   {
-    issueNumber: 205,
-    title: 'Document the sentinel protocol in the README',
+    issueNumber: 364,
+    title: 'Document the two-watcher requirement for maintenance jobs',
     agents: 4,
     hoursAgo: 1,
     byPhase: { deliberation: 1.6, build: 3.24, ci: 0.3, landing: 0.2, evidence: 0.8 },
   },
   {
-    issueNumber: 903,
-    title: 'Totals drift by a penny on multi-currency carts',
+    issueNumber: 382,
+    title: 'Gap clustering merges unrelated questions into one gap',
     agents: 3,
     hoursAgo: 26,
     // The goal whose CI dwarfs its build — the shape the split exists to surface,
-    // on screen in the demo rather than only in the argument for it.
-    byPhase: { deliberation: 0.6, build: 1.44, ci: 0.92, landing: 0.12, evidence: 0.2 },
+    // on screen in the demo rather than only in the argument for it. Sums to the
+    // $4.20 the goal's own card states.
+    byPhase: { deliberation: 0.3, build: 1.1, ci: 2.6, landing: 0.1, evidence: 0.1 },
   },
   {
-    issueNumber: 208,
+    // A goal the world snapshot no longer carries — closed and aged out of the
+    // open list — so the panel has one row that can only draw its number.
+    issueNumber: 331,
     title: null,
     agents: 2,
     hoursAgo: 74,
@@ -1391,8 +1396,8 @@ const DEMO_RUNS: {
 }[] = [
   {
     agentId: 'agent-d1',
-    title: 'Route store reads through the interface',
-    originRef: 'issue:212:part:reads',
+    title: 'Validate every payload at enqueue',
+    originRef: 'issue:390:part:validate',
     phase: 'build',
     costUsd: 4.12,
     turns: 61,
@@ -1400,8 +1405,8 @@ const DEMO_RUNS: {
   },
   {
     agentId: 'agent-d2',
-    title: 'Plan the store refactor',
-    originRef: 'issue:212:plan',
+    title: 'Plan the jobs-catalog move',
+    originRef: 'issue:390:plan',
     phase: 'deliberation',
     costUsd: 2.7,
     turns: 24,
@@ -1409,8 +1414,8 @@ const DEMO_RUNS: {
   },
   {
     agentId: 'agent-d3',
-    title: 'Route store writes through the interface',
-    originRef: 'issue:212:part:writes',
+    title: 'Route the watcher’s intake through the catalog',
+    originRef: 'issue:390:part:watcher',
     phase: 'build',
     costUsd: 2.44,
     turns: 38,
@@ -1418,8 +1423,8 @@ const DEMO_RUNS: {
   },
   {
     agentId: 'agent-d4',
-    title: 'Fix the failing checks on #143',
-    originRef: 'pr:143:ci',
+    title: 'Fix the failing checks on #413',
+    originRef: 'pr:413:ci',
     phase: 'ci',
     costUsd: 2.2,
     turns: 31,
@@ -1427,8 +1432,8 @@ const DEMO_RUNS: {
   },
   {
     agentId: 'agent-d5',
-    title: 'Document the sentinel protocol',
-    originRef: 'issue:205:part:docs',
+    title: 'Document the two-watcher requirement',
+    originRef: 'issue:364:part:docs',
     phase: 'build',
     costUsd: 1.86,
     turns: 27,
@@ -1436,8 +1441,8 @@ const DEMO_RUNS: {
   },
   {
     agentId: 'agent-d6',
-    title: 'Answer the review on #144',
-    originRef: 'pr:144:comments',
+    title: 'Answer the review on #414',
+    originRef: 'pr:414:comments',
     phase: 'landing',
     costUsd: 1.7,
     turns: 22,
@@ -1445,8 +1450,8 @@ const DEMO_RUNS: {
   },
   {
     agentId: 'agent-d7',
-    title: 'Assess what shipped for #212',
-    originRef: 'issue:212:assess',
+    title: 'Assess what shipped for #390',
+    originRef: 'issue:390:assess',
     phase: 'evidence',
     costUsd: 1.32,
     turns: 14,
@@ -1454,7 +1459,7 @@ const DEMO_RUNS: {
   },
   {
     agentId: 'agent-d8',
-    title: 'Sweep the changelog',
+    title: 'Sweep docs/ for links that no longer resolve',
     originRef: 'job:demo-1',
     phase: 'job',
     costUsd: 0.96,
@@ -1495,13 +1500,13 @@ const RULE_COPY: Record<string, { label: string; description: string | null }> =
 };
 
 /**
- * What each failing check costs. Qodana is the shape the table exists to expose:
- * fewer runs than the test suite, but nearly twice as expensive each time — the
- * reading only the per-dispatch column gives.
+ * What each failing check costs. The Postgres-backed suite is the shape the table
+ * exists to expose: fewer runs than the unit tests, but nearly twice as expensive
+ * each time — the reading only the per-dispatch column gives.
  */
 const DEMO_CHECKS: { name: string; costUsd: number; runs: number; soleRuns: number; hoursAgo: number }[] = [
-  { name: 'dotnet test', costUsd: 1.94, runs: 5, soleRuns: 3, hoursAgo: 4 },
-  { name: 'Qodana', costUsd: 1.18, runs: 2, soleRuns: 2, hoursAgo: 9 },
+  { name: 'test (unit)', costUsd: 1.94, runs: 5, soleRuns: 3, hoursAgo: 4 },
+  { name: 'test:db (postgres)', costUsd: 1.18, runs: 2, soleRuns: 2, hoursAgo: 9 },
   { name: 'build (ubuntu-latest)', costUsd: 0.46, runs: 3, soleRuns: 0, hoursAgo: 26 },
   { name: 'lint', costUsd: 0.24, runs: 2, soleRuns: 1, hoursAgo: 31 },
 ];
@@ -1576,11 +1581,11 @@ const DEMO_CI_DAYS: [number, number][] = [
  * or nobody sees the branch. The costs sum to `ciCostUsd` below.
  */
 const DEMO_FLAKY: CiSubject[] = [
-  { ref: 'pr:144', prNumber: 144, reds: 6, greens: 5, redMs: 4.2 * 3_600_000, stillRed: true, costUsd: 1.9 },
-  { ref: 'pr:212', prNumber: 212, reds: 4, greens: 4, redMs: 1.6 * 3_600_000, stillRed: false, costUsd: 1.1 },
-  { ref: 'pr:205', prNumber: 205, reds: 3, greens: 3, redMs: 52 * 60_000, stillRed: false, costUsd: 0.6 },
-  { ref: 'pr:198', prNumber: 198, reds: 3, greens: 2, redMs: 2.1 * 3_600_000, stillRed: true, costUsd: 0.7 },
-  { ref: 'pr:151', prNumber: 151, reds: 1, greens: 1, redMs: 14 * 60_000, stillRed: false, costUsd: 0 },
+  { ref: 'pr:414', prNumber: 414, reds: 6, greens: 5, redMs: 4.2 * 3_600_000, stillRed: true, costUsd: 1.9 },
+  { ref: 'pr:413', prNumber: 413, reds: 4, greens: 4, redMs: 1.6 * 3_600_000, stillRed: false, costUsd: 1.1 },
+  { ref: 'pr:410', prNumber: 410, reds: 3, greens: 3, redMs: 52 * 60_000, stillRed: false, costUsd: 0.6 },
+  { ref: 'pr:412', prNumber: 412, reds: 3, greens: 2, redMs: 2.1 * 3_600_000, stillRed: true, costUsd: 0.7 },
+  { ref: 'pr:405', prNumber: 405, reds: 1, greens: 1, redMs: 14 * 60_000, stillRed: false, costUsd: 0 },
 ];
 
 /** Origins the harness went round more than once — the reading no card shows. */
@@ -1592,9 +1597,16 @@ const DEMO_REPEATS: {
   costUsd: number;
   hoursAgo: number;
 }[] = [
-  { originRef: 'pr:144:ci', title: 'Fix the failing checks on #144', runs: 4, lost: 1, costUsd: 3.9, hoursAgo: 2 },
-  { originRef: 'issue:212:part:schema', title: 'Land the schema part', runs: 3, lost: 1, costUsd: 5.2, hoursAgo: 6 },
-  { originRef: 'issue:205', title: 'Retry the pickup on #205', runs: 2, lost: 0, costUsd: 4.1, hoursAgo: 19 },
+  { originRef: 'pr:414:ci', title: 'Fix the failing checks on #414', runs: 4, lost: 1, costUsd: 3.9, hoursAgo: 2 },
+  {
+    originRef: 'issue:390:part:schemas',
+    title: 'Land the schema move',
+    runs: 3,
+    lost: 1,
+    costUsd: 5.2,
+    hoursAgo: 6,
+  },
+  { originRef: 'issue:345', title: 'Retry the pickup on #345', runs: 2, lost: 0, costUsd: 4.1, hoursAgo: 19 },
 ];
 
 function buildDemoReliability(): ReliabilityInsights {
@@ -1805,11 +1817,11 @@ export const demoApi = {
   // Everything else answers null, which is the same thing the real route says for a
   // goal nobody wrote up — silence, not an error.
   getRetrospective: (ref: string) =>
-    Promise.resolve({ retrospective: ref === 'issue:205' ? DEMO_RETROSPECTIVE : null }),
+    Promise.resolve({ retrospective: ref === 'issue:364' ? DEMO_RETROSPECTIVE : null }),
   // The pad behind that write-up. Every other goal answers an empty trail, which
   // is what the real route says for a pad nobody has written to — and no way in
   // is drawn for one, since the snapshot's reading is what the control keys on.
-  getScratchpad: (ref: string) => Promise.resolve({ padRef: ref, entries: ref === 'issue:205' ? DEMO_SCRATCHPAD : [] }),
+  getScratchpad: (ref: string) => Promise.resolve({ padRef: ref, entries: ref === 'issue:364' ? DEMO_SCRATCHPAD : [] }),
   // The spend breakdown, authored above. The real route derives it from every
   // agent the store holds; the demo's world is built fresh in the browser each
   // load, so a fixture is the only honest way to show the panel at all.
