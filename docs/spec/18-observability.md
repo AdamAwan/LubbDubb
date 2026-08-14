@@ -81,6 +81,13 @@ column** so the audit log can answer "which rule fired" first-class rather than 
 Each cycle also records its dispatcher rationale as a `no_op`/`skipped` row detailed
 `` `[${source}] ${rationale}` ``, so an idle cycle is as explainable as a busy one.
 
+When any provider served a last-good slice, the detail carries `[stale: <integration ids>]`
+between the source and the rationale ([03](03-world-model.md#worldsnapshot)). The cycle still decides
+— a stale world is the best available one — but the row says what it decided against, because a
+decision that looks wrong months later is most often a decision taken against a world that had
+stopped updating, and the error log recording the provider failure is not what a reader of the
+Decision log is looking at.
+
 `DISPATCH_RULES` ships in the state snapshot, so the cockpit expands a decision's rule id into the
 rule's name, number and standing rationale — the reason the rule exists, independent of any one firing.
 

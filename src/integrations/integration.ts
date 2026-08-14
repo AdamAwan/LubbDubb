@@ -37,8 +37,17 @@ export type Capability = 'sourceControl' | 'issues';
 /** One provider chosen per capability. This is the swap switch (set in config). */
 export type IntegrationSelection = Record<Capability, string>;
 
-/** One integration's contribution to the world — only the domains it owns. */
-export type WorldSlice = Partial<Pick<WorldSnapshot, 'pullRequests' | 'closedPullRequests' | 'issues'>>;
+/**
+ * One integration's contribution to the world — only the domains it owns.
+ *
+ * `stale` is the one field that is not a domain: an integration whose read failed
+ * serves its last known good lists rather than nothing, and sets this so the
+ * composite can name it on {@link WorldSnapshot.staleSources}. Optional, so a
+ * provider that cannot fail this way says nothing.
+ */
+export type WorldSlice = Partial<Pick<WorldSnapshot, 'pullRequests' | 'closedPullRequests' | 'issues'>> & {
+  stale?: boolean;
+};
 
 /** Everything a provider factory needs to build an integration. */
 export interface IntegrationContext {

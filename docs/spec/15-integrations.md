@@ -301,5 +301,35 @@ field, feed it into `buildRefUrls`.
 ## Snapshot failures
 
 Providers take an optional `errors` recorder in their `IntegrationContext`. A snapshot failure is
-recorded through it — never swallowed — and the provider degrades (last good slice for GitHub source
-control). See [18](18-observability.md).
+recorded through it — never swallowed — and the provider degrades to its last good slice. All four
+real integrations do this: both source-control providers and both issue providers hold the lists
+their previous successful read produced, and serve those rather than nothing. Emptying the world
+instead would make every open pull request look closed and every watched issue look gone, which is a
+far more destructive reading of "GitHub returned a 502" than simply being a cycle behind.
+
+**A degraded slice sets `stale: true` on the `WorldSlice`**, and `CompositeConnector` folds those
+into `WorldSnapshot.staleSources` ([03](03-world-model.md#worldsnapshot)). The fallback was correct
+from the start; what it lacked was a mark. Without one, a cycle deciding against a world several
+hours old is indistinguishable from a cycle deciding against a world that simply had not changed —
+including in the decision log, which is the record an operator reads when the harness does something
+that looks wrong. The error log carries the failure and the decision log now carries the caveat,
+because a reader of one is not looking at the other.
+
+## Rate limits
+
+Both real providers retry a request the service itself said to retry, with the same budget
+(`MAX_RETRIES`, 3 extra attempts) and the same diagnostic sink — a `log` callback wired to the error
+log in production, silent in tests. A retry that succeeds still records a notice, because a limit the
+fleet is absorbing is the early warning that its read has outgrown its heartbeat.
+
+- **Azure DevOps** retries 429 and 5xx, and the sign-in-HTML response an `az`-CLI token produces
+  while it propagates, forcing a token refresh between attempts.
+- **GitHub** carries `@octokit/plugin-retry` and `@octokit/plugin-throttling`, which cover 5xx and
+  network failures, the primary hourly rate limit, and the **secondary** (abuse) limit. The secondary
+  one is what this fleet actually provokes: it is triggered by burst concurrency rather than an
+  hourly budget, and the world read fans out per open pull request and per open issue on every pulse,
+  which is a burst by construction.
+
+Neither retry is a substitute for reading less. The GitHub world read costs on the order of one
+request per open issue plus six per open pull request, every pulse, and nothing caches or conditions
+those reads — a repository open enough will exhaust an hourly budget that no retry can restore.

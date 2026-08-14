@@ -15,6 +15,7 @@ interface WorldSnapshot {
   pullRequests: PullRequest[]; // OPEN pull requests, and only those
   closedPullRequests?: PullRequest[]; // PRs that left the open set within closedPrWindowMs
   issues: Issue[];
+  staleSources?: string[]; // integration ids serving a last-good slice, absent when all are current
 }
 ```
 
@@ -26,6 +27,20 @@ rather than by remembering to filter a status in nine places. **Nothing in the d
 
 `takenAt` is the clock the whole cycle is judged against: cooldown arithmetic uses it rather than
 wall-clock at decision time, so a cycle is evaluated against when its world was observed.
+
+`staleSources` names the integrations whose slice is **last known good** rather than freshly read —
+a provider read that failed and fell back ([15](15-integrations.md#snapshot-failures)). Absent when
+every slice is current, so nothing has to tell "no stale sources" from a snapshot written before the
+field existed. It is named per integration rather than counted, because which half of the world is
+old changes what a decision taken against it is worth: a stale issue list with fresh pull requests is
+a fleet that will not pick up new work, and the reverse is one that may act on a pull request that
+has since merged.
+
+**Nothing gates on it.** A stale world is still the best available world, and a pulse that refused to
+decide on one would turn a provider blip into a stalled fleet — the failure the fallback exists to
+prevent. Its one consumer is the cycle's rationale row, which is prefixed `[stale: <ids>]` so the
+Decision log explains a decision the world no longer justifies
+([18](18-observability.md#the-decision-log)).
 
 ### What is in the dispatcher's world, and what puts it there
 

@@ -198,3 +198,29 @@ test('setPrLabel throws when no PrLabelCapable integration is enabled', async ()
   );
   store.close();
 });
+
+test('a stale slice names its integration on the snapshot, and a fresh world says nothing', async () => {
+  const store = new Store(':memory:');
+  // Two integrations, one of which is serving its last-good lists. The composite
+  // has to name *which*, since a stale issue list and a stale PR list mean
+  // different things about the decisions taken against them.
+  const connector = new CompositeConnector(
+    [
+      {
+        id: 'sourceControl:flaky',
+        capability: 'sourceControl',
+        snapshot: async () => ({ pullRequests: [], stale: true }),
+      },
+      { id: 'issues:fine', capability: 'issues', snapshot: async () => ({ issues: [] }) },
+    ],
+    FIXED,
+  );
+  assert.deepEqual((await connector.getState()).staleSources, ['sourceControl:flaky']);
+
+  // Absent rather than empty when everything is current: nothing downstream should
+  // have to tell "no stale sources" from "this snapshot predates the field".
+  const { store: s2, connector: healthy } = build();
+  assert.equal((await healthy.getState()).staleSources, undefined);
+  s2.close();
+  store.close();
+});

@@ -1,4 +1,6 @@
 import { Octokit } from '@octokit/rest';
+import { retry } from '@octokit/plugin-retry';
+import { throttling } from '@octokit/plugin-throttling';
 import type { MergeMethod } from '../../sink/actionSink.js';
 import { withinClosedWindow } from '../closedWindow.js';
 import type {
@@ -58,6 +60,31 @@ interface GqlReviewThreadPage {
  */
 const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
+/**
+ * Extra attempts after the first for a request GitHub itself said to retry —
+ * a rate limit, a secondary (abuse) limit, a 5xx, a dropped socket.
+ *
+ * The same budget as Azure's `MAX_RETRIES`, and for the same reason: the snapshot
+ * is re-taken every heartbeat anyway, so the retry only has to cover a blip that
+ * would otherwise cost a whole cycle's world. Chasing a limit for longer than that
+ * spends the pulse waiting instead.
+ */
+const MAX_RETRIES = 3;
+
+/**
+ * Octokit with the two plugins that make a rate limit survivable.
+ *
+ * Without them a snapshot is one 403 away from failing whole, and the failure is
+ * quiet in the way that matters: the integration catches it, records it, and
+ * serves `lastGood` — so the dispatcher decides this cycle against a world that
+ * may be hours old, and "nothing changed" and "GitHub refused us" look identical
+ * from every surface downstream. Azure has retried 429/5xx since it landed; this
+ * is the same guarantee on the provider that fans out hardest, since the world
+ * read is O(open issues + open PRs) requests per pulse and secondary limits are
+ * triggered by exactly that shape of burst.
+ */
+const ResilientOctokit = Octokit.plugin(retry, throttling);
+
 /** Tuning for {@link resolvePullDetail}: how hard to chase a lazily-computed merge state. */
 interface ResolvePullOpts {
   /** Extra reads after the first while GitHub is still computing (`mergeable === null`). */
@@ -103,8 +130,40 @@ export class OctokitGitHubApi implements GitHubApi {
     private readonly repo: string,
   ) {}
 
-  static fromToken(token: string, owner: string, repo: string): OctokitGitHubApi {
-    return new OctokitGitHubApi(new Octokit({ auth: token }), owner, repo);
+  /**
+   * `log` is the diagnostic sink for retry notices, wired to the error log in
+   * production and silent by default — Azure's arrangement exactly. A limit the
+   * retry absorbs still costs the pulse its latency and still says the fleet is
+   * reading GitHub too hard, so it is recorded even though nothing failed.
+   */
+  static fromToken(
+    token: string,
+    owner: string,
+    repo: string,
+    log: (message: string) => void = () => {},
+  ): OctokitGitHubApi {
+    const octokit = new ResilientOctokit({
+      auth: token,
+      retry: { retries: MAX_RETRIES },
+      throttle: {
+        onRateLimit: (retryAfter, options, _octokit, retryCount) => {
+          log(
+            `GitHub ${options.method} ${options.url}: rate limited, retry ${retryCount + 1}/${MAX_RETRIES} in ${retryAfter}s`,
+          );
+          return retryCount < MAX_RETRIES;
+        },
+        // The secondary limit is the one this fleet actually provokes: it is
+        // triggered by burst concurrency rather than by an hourly budget, and the
+        // snapshot's per-PR and per-issue fan-out is a burst by construction.
+        onSecondaryRateLimit: (retryAfter, options, _octokit, retryCount) => {
+          log(
+            `GitHub ${options.method} ${options.url}: secondary rate limit, retry ${retryCount + 1}/${MAX_RETRIES} in ${retryAfter}s`,
+          );
+          return retryCount < MAX_RETRIES;
+        },
+      },
+    });
+    return new OctokitGitHubApi(octokit, owner, repo);
   }
 
   private get base() {

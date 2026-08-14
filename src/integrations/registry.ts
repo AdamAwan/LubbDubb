@@ -101,7 +101,11 @@ function githubApi(ctx: IntegrationContext): { api: OctokitGitHubApi; gh: GitHub
   if (!gh?.owner || !gh?.repo) {
     throw new Error('The github provider needs a target: set `github.owner` and `github.repo` in your config.');
   }
-  return { api: OctokitGitHubApi.fromToken(token, gh.owner, gh.repo), gh };
+  // Same sink as Azure's, for the same reason: a rate limit the retry absorbs is
+  // invisible otherwise, and it is the early warning that the world read has
+  // outgrown the heartbeat.
+  const log = ctx.errors ? (message: string) => void ctx.errors!.record({ source: 'provider', message }) : undefined;
+  return { api: OctokitGitHubApi.fromToken(token, gh.owner, gh.repo, log), gh };
 }
 
 /**

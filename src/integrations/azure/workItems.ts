@@ -100,7 +100,7 @@ export class AzureDevOpsWorkItemsIntegration
         source: 'provider',
         message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
-      return { issues: this.lastGood };
+      return { issues: this.lastGood, stale: true };
     }
   }
 

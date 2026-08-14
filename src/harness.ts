@@ -380,12 +380,19 @@ export class Harness extends EventEmitter {
       for (const t of tasks) if (isActiveTask(t) && t.originRef) trackedOrigins.add(t.originRef);
       store.reconcilePriorityOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
 
-      // The dispatcher's reasoning is itself an audit record.
+      // The dispatcher's reasoning is itself an audit record — prefixed, when any
+      // provider served a fallback slice, with the fact that it was reasoning about
+      // a world that is partly old. The caveat rides on the rationale rather than
+      // only in the error log because this row is what an operator reads to work
+      // out why a cycle decided what it did, and a stale input is the first thing
+      // that would explain a decision that looks wrong.
+      const stale = world.staleSources ?? [];
+      const caveat = stale.length > 0 ? `[stale: ${stale.join(', ')}] ` : '';
       store.recordDecision({
         cycleId,
         action: { type: 'no_op', reason: 'cycle rationale' } as Action,
         outcome: 'skipped',
-        detail: `[${source}] ${plan.rationale}`,
+        detail: `[${source}] ${caveat}${plan.rationale}`,
       });
 
       const summary = await this.deps.executor.execute(cycleId, plan);
