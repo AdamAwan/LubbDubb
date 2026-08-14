@@ -254,7 +254,7 @@ several asks or a page scrolled past one. It is the same `needBody`, so it is on
 ways rather than two asks.
 
 **The demo carries no goal-less ask.** Both fixture pull requests under work are owned by a ticket
-(`#248` → PR #142, `#236` → PR #139), so every row in the demo's rail leads to a goal page. The
+(`#388` → PR #412, `#376` → PR #409), so every row in the demo's rail leads to a goal page. The
 goal-less reading is still exercised — `test/console.test.ts` builds the orphan rather than fishing
 one out of the fixtures — because what the harness does is not what a demo should teach.
 
@@ -1402,6 +1402,28 @@ demo either: the harness has no `/api/inject` route, no `config.injectable` flag
 its own. Injection lives entirely in the browser fake, reached through `injectDemoEvent` in
 `web/src/api.ts`, which folds on the same `VITE_DEMO` constant `api` does so the demo module stays out
 of the production bundle.
+
+**The fixture world is one product, and the product is Markdown Magpie** — a Git-backed Markdown
+knowledge system that indexes documents, answers with citations, clusters the weak answers into gaps and
+publishes improvements as pull requests. Every goal, pull request, plan, finding, transcript and spend
+row in `fixtures.ts` and `demoBackend.ts` is work on that one codebase, with its real file paths and its
+real vocabulary. The theme is load-bearing rather than decorative: an operator meeting the cockpit for
+the first time is trying to follow one story across nine panels, and a fixture set drawn from three
+unrelated products reads to them as a console that is showing them noise. A new fixture joins that story
+or it does not go in.
+
+**Every pickup status has a goal in the fixtures.** `issuePickupStatus` answers fourteen ways
+([06](06-issue-pickup.md)), and each answer is somebody's whole explanation of why nothing is happening
+to their ticket — so `done`, `retained`, `has_pr`, `active`, `ignored`, `container`, `unwatched`,
+`planning`, `delivered`, `assay`, `cooldown`, `escalated`, `blocked` and `eligible` are each carried by
+at least one issue, with the reason string the real gate would have written. A demo showing eight of
+them teaches an operator that the other six are a bug on the day they first appear. The roll-call is
+stated in a comment above the `issues` array, and the arithmetic around it has to hold as well: the cap
+is 3 with two agents live, so exactly one goal is `eligible` and the rest of the ready ones are
+`blocked` — a world with six eligible goals under a cap of three is one the dispatcher could not have
+produced. Twelve of the fourteen are reachable by clicking, through the backlog's four groups; `done`
+and `retained` are carried without being listed anywhere, because no surface lists a closed goal — both
+are still readings the wire ships and the goal page draws.
 
 **Schedules are real in the demo, and never fire there.** Writing a recurrence, editing it, pausing it
 and deleting it all work against the fixture state, and "run now" queues the job exactly as the launch
