@@ -137,6 +137,13 @@ export interface CockpitActions {
   openPanel(panel: ConsolePanel): void;
   /** Move the nav to a destination. A selected goal still outranks it. */
   openTab(tab: ConsoleTab): void;
+  /**
+   * Fold a backlog feature's children away, or open them again. Every feature is
+   * open until this closes one, so the argument is the state being *set* rather
+   * than a bare toggle — the caller already knows which way the chevron points,
+   * and a toggle read from stale props would fight a fold restored from the URL.
+   */
+  collapseFeature(issueNumber: number, collapsed: boolean): void;
   discussPlan(planId: string): Promise<void>;
   endPlanDiscussion(planId: string): Promise<void>;
   reorderUpNext(origins: string[]): Promise<void>;

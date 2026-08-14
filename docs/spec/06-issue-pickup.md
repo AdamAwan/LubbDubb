@@ -40,6 +40,36 @@ The cockpit's per-row toggles write the tags back through outbound capabilities 
 seam (`POST /api/prs/:n/exclude`, `POST /api/issues/:n/watch`). The issue toggle writes the pair —
 adding one label and removing the other — so the two stay mutually exclusive. These are **label writes, not dispatcher actions**.
 
+### Watching a container cascades
+
+`watchCascadeTargets(issue, issues, containerTypes)` (`src/issueRelations.ts`) is the list of items one
+watch write reaches: the item itself, and — when it is a container — every descendant beneath it,
+breadth-first and in issue number order.
+
+**Watching a Feature means watching the work it stands for.** A container is never dispatched at, so
+the tag on one alone changes nothing an operator can observe; what the click promises is about the
+stories under it. `POST /api/issues/:n/watch` therefore writes the pair on every target, and
+un-watching walks the same tree — a dropped feature that left its children tagged would go on being
+worked after the operator said to stop.
+
+The walk descends through a child **only when the world snapshot holds it as an issue of its own**,
+so an Epic reaches its features' stories while an id the provider never returned is written as a leaf
+rather than silently skipped. A `seen` set makes a cycle in the tracker's hierarchy terminate rather
+than repeat. An issue the snapshot does not carry still gets its own pair written — the toggle keeps
+working over an aged-out world — it simply has no hierarchy to walk.
+
+**A partial failure is reported, never rounded up to success.** Each write is attempted, every failure
+is recorded through `errors.record`, and the route answers `400` naming how many of how many landed
+and which numbers kept their old tags. Whatever succeeded is left standing rather than rolled back:
+an operator told "watched" while three of eight children were not is the silent version of this
+failure, and it is the one worth refusing. Only when every write fails does the route answer with the
+provider's own message alone. A clean cascade answers `{ok, watched, cascaded}`, `cascaded` being the
+number of descendants written.
+
+This is a **write to the tracker**, and the one place the harness's reading of the hierarchy turns
+into a change to it — the tags, never the links. Nothing here re-parents, links or edits a work item's
+own structure.
+
 ## `IssuePickupPolicy`
 
 Assembled once in `src/system.ts` from config and handed to whichever dispatcher is selected:
@@ -103,6 +133,10 @@ whose _why_ is recorded nowhere. `isOrphanIssue` is true only when all three of 
 provider tracks hierarchy (`parent === null`, never `undefined`), the item is not itself a container,
 and its type is one teams put under a feature (so a Task under a story is not nagged about a parent
 it never wanted).
+
+A container being unworkable is about **dispatch**, not about the operator's intent: watching one is a
+live act that cascades to its children ([above](#watching-a-container-cascades)), and the pickup gate
+still refuses the container itself.
 
 An orphan is **flagged, not blocked**. It is picked up, planned and worked exactly as any other item;
 what changes is that every agent dispatched at it is told the parent is missing, told not to invent

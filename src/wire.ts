@@ -358,6 +358,15 @@ interface CockpitConfig {
   /** `${labelPrefix}-ignore` — the tag the ignore toggle sets and that marks an item ignored. */
   ignoreLabel: string;
   /**
+   * `issueContainerTypes` — the work-item types that hold work rather than being
+   * it. Shipped because the backlog draws a container as a *heading* over its
+   * children rather than as a row beside them, and that is a decision about the
+   * item's type made before any verdict: `pickup.status` cannot answer it, since
+   * an ignored container reports `ignored` and a container under a gate-off
+   * deployment reports something else again. Read the policy, not a symptom.
+   */
+  containerTypes: string[];
+  /**
    * Whether a real tracker is configured to file into — gates "File ticket" on a
    * finding and "File a work item" on unrecorded work, off the same predicate
    * both routes refuse on.

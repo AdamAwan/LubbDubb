@@ -97,6 +97,54 @@ export function isOrphanIssue(issue: Issue, containerTypes: readonly string[] | 
   return issue.issueType !== undefined && PARENTED_TYPES.has(issue.issueType.trim().toLowerCase());
 }
 
+/**
+ * Every item a watch write on `issue` reaches: the item itself, then — when it is
+ * a container — every descendant beneath it, breadth-first and in issue order.
+ *
+ * **Watching a Feature means watching the work it stands for.** A container is
+ * never worked itself, so a tag on one alone would change nothing an operator can
+ * see; the promise the click makes is about the stories under it, and this is the
+ * list that keeps it. Un-watching walks the same tree, which is what stops a
+ * dropped feature leaving its children tagged and still being worked.
+ *
+ * The walk is over the **world**, not the relation summaries: a child is followed
+ * further only when the snapshot holds it as an issue of its own, so an Epic
+ * reaches its features' stories while an id the provider never returned is
+ * reported as a leaf rather than silently dropped. `children` on a relative names
+ * nothing further, so the recursion is finite even before the seen-set.
+ *
+ * Pure over the issue plus the world, so the route's write list and anything the
+ * cockpit says the click will do are the same list.
+ */
+export function watchCascadeTargets(
+  issue: Issue,
+  issues: readonly Issue[],
+  containerTypes: readonly string[] | undefined,
+): number[] {
+  const targets = [issue.number];
+  if (!isContainerIssue(issue, containerTypes)) return targets;
+
+  const byNumber = new Map(issues.map((i) => [i.number, i]));
+  const seen = new Set([issue.number]);
+  // Breadth-first, so a feature's own stories are written before its
+  // sub-features' — a partial failure then stops at a tree level rather than
+  // part-way down one branch.
+  const queue: Issue[] = [issue];
+  while (queue.length > 0) {
+    const next = queue.shift();
+    if (next === undefined) break;
+    const kids = [...(next.children ?? [])].sort((a, b) => a.number - b.number);
+    for (const kid of kids) {
+      if (seen.has(kid.number)) continue;
+      seen.add(kid.number);
+      targets.push(kid.number);
+      const held = byNumber.get(kid.number);
+      if (held !== undefined) queue.push(held);
+    }
+  }
+  return targets;
+}
+
 /** How much of a parent's description rides into a prompt before it is cut. */
 const PARENT_BODY_LIMIT = 4000;
 

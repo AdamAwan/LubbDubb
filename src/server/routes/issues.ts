@@ -7,6 +7,7 @@ import { ShortfallBody } from '../../delivery/shortfall.js';
 import { validationHeadline } from '../../delivery/closeOut.js';
 import { goalValidation } from '../../validation/goal.js';
 import { watchLabelsFor } from '../../watchLabels.js';
+import { watchCascadeTargets } from '../../issueRelations.js';
 import { checked, IssueNumberParams, optionalText, requiredBoolean } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -27,28 +28,69 @@ import type { RouteContext } from './context.js';
 const MAX_BUG_SUMMARY = 4000;
 
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, connector, harness, config } = system;
+  const { store, connector, harness, config, errors } = system;
   const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
 
   // Toggle an issue's watch/ignore state from the cockpit. Issues are opt-in, so
   // "watch" adds the watch tag (and clears any ignore tag) and "ignore" adds the
   // ignore tag (and clears the watch tag) — the write pair keeps the two labels
   // mutually exclusive. Provider-agnostic through the same outbound seam.
+  //
+  // **A container cascades.** Watching a Feature tags every descendant beneath it
+  // (`watchCascadeTargets`), because a container is never worked itself: a tag on
+  // one alone would be a click that changed nothing. Un-watching walks the same
+  // tree, or a dropped feature would leave its stories tagged and still worked.
+  //
+  // The cascade is a real write per item and a partial failure is *reported*, not
+  // swallowed — an operator who is told "watched" while three of eight children
+  // kept the old tag has been lied to about what the harness will pick up.
   const WatchBody = z.object({ watched: requiredBoolean('watched must be a boolean') });
   app.post(
     '/api/issues/:number/watch',
     checked({ params: IssueNumberParams, body: WatchBody }, async ({ params, body, reply }) => {
       const { number: issueNumber } = params;
       const { watched } = body;
-      try {
-        await connector.setIssueLabel({ number: issueNumber, label: watchLabel, present: watched });
-        await connector.setIssueLabel({ number: issueNumber, label: ignoreLabel, present: !watched });
-        hub.broadcast({ type: 'world:changed' });
-        await harness.runCycle('manual');
-        return { ok: true, watched };
-      } catch (err) {
-        return reply.code(400).send({ error: (err as Error).message });
+      const world = store.getWorldBaseline();
+      const issue = world?.issues.find((i) => i.number === issueNumber);
+      // An issue the snapshot does not carry still gets its own pair written — the
+      // toggle must keep working for a world that has aged out — it simply has no
+      // hierarchy to walk.
+      const targets =
+        issue === undefined
+          ? [issueNumber]
+          : watchCascadeTargets(issue, world?.issues ?? [], config.issueContainerTypes);
+
+      const failed: { number: number; message: string }[] = [];
+      for (const target of targets) {
+        try {
+          await connector.setIssueLabel({ number: target, label: watchLabel, present: watched });
+          await connector.setIssueLabel({ number: target, label: ignoreLabel, present: !watched });
+        } catch (err) {
+          const message = (err as Error).message;
+          failed.push({ number: target, message });
+          errors.record({
+            source: 'server',
+            message: `Failed to set watch tags on #${target} while ${watched ? 'watching' : 'dropping'} #${issueNumber}: ${message}`,
+          });
+        }
       }
+
+      // Whatever landed, landed — the world is now different from the one the
+      // cockpit is showing even on a partial failure, so it is republished before
+      // the refusal rather than after a success only.
+      hub.broadcast({ type: 'world:changed' });
+      if (failed.length === targets.length) {
+        return reply.code(400).send({ error: failed[0]?.message ?? 'no watch tag could be written' });
+      }
+      await harness.runCycle('manual');
+      if (failed.length > 0) {
+        return reply.code(400).send({
+          error:
+            `Tagged ${targets.length - failed.length} of ${targets.length} items; ` +
+            `#${failed.map((f) => f.number).join(', #')} kept the old tags: ${failed[0]?.message ?? ''}`,
+        });
+      }
+      return { ok: true, watched, cascaded: targets.length - 1 };
     }),
   );
 

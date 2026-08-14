@@ -34,6 +34,7 @@ import type {
 import type { WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
 import { buildDemoState, demoPlanHistory } from './fixtures.js';
+import { isContainerType } from '../issueGroups.js';
 
 type Emit = Record<string, unknown>;
 interface Conn {
@@ -407,11 +408,35 @@ class DemoServer {
     return { ok: true };
   }
 
-  /** Toggle an issue's watch/ignore tags — the demo mirror of the real write-back (opt-in). */
+  /**
+   * Toggle an issue's watch/ignore tags — the demo mirror of the real write-back
+   * (opt-in), **including the container cascade**: watching a Feature tags every
+   * descendant, as the route does, or the demo would show a click that the real
+   * cockpit turns into eight writes doing nothing.
+   */
   async setIssueWatched(issueNumber: number, watched: boolean): Promise<{ ok: true; watched: boolean }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue) {
-      issue.labels = applyWatch(issue.labels, this.state.config, watched);
+      const containerTypes = this.state.config.containerTypes;
+      const byNumber = new Map(this.state.world.issues.map((i) => [i.number, i]));
+      const targets = new Set([issueNumber]);
+      if (isContainerType(issue, containerTypes)) {
+        const queue = [issue];
+        while (queue.length > 0) {
+          const next = queue.shift();
+          if (next === undefined) break;
+          for (const kid of next.children ?? []) {
+            if (targets.has(kid.number)) continue;
+            targets.add(kid.number);
+            const held = byNumber.get(kid.number);
+            if (held !== undefined) queue.push(held);
+          }
+        }
+      }
+      for (const target of targets) {
+        const row = byNumber.get(target);
+        if (row) row.labels = applyWatch(row.labels, this.state.config, watched);
+      }
       this.addDecision(
         'no_op',
         'executed',

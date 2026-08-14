@@ -194,6 +194,7 @@ export function buildDemoState(): DemoSeed {
       heartbeatIntervalMs: 15_000,
       maxConcurrentAgents: 3,
       watchLabel: 'lubbdubb-watch',
+      containerTypes: ['Feature', 'Epic'],
       ignoreLabel: 'lubbdubb-ignore',
       // The demo world is all-fake, so the inject panel stays available — and by
       // the same token there is no tracker to file a ticket into, so that button

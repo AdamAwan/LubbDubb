@@ -265,7 +265,18 @@ dropped). 400 on a non-integer PR number, a non-boolean `excluded`, or a provide
 
 Body `{watched: boolean}`. Writes the **pair** — sets `${prefix}-watch` to `watched` and
 `${prefix}-ignore` to `!watched` — so the two labels stay mutually exclusive. Broadcasts and runs a
-cycle. Same 400s.
+cycle.
+
+**On a container it cascades.** The pair is written on every item `watchCascadeTargets` names — the
+issue itself and, for a Feature or Epic, every descendant beneath it — because a container is never
+dispatched at and a tag on one alone would change nothing
+([06](06-issue-pickup.md#watching-a-container-cascades)). Un-watching walks the same tree. On success:
+`{ok: true, watched, cascaded}`, `cascaded` being the number of descendants written.
+
+400 on a non-integer issue number or a non-boolean `watched`, and on a provider failure — including a
+**partial** one, where the error names how many of how many landed and which numbers kept their old
+tags. Every failed write is recorded on the error log. `world:changed` is broadcast either way,
+because whatever landed has already changed the world the cockpit is showing.
 
 ### `POST /api/issues/:number/conclusion`
 
@@ -936,7 +947,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 
 | Key                             | Contents                                                                                                                                                                                                                      |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config`                        | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `ignoreLabel`, `canFileTickets`.                                                                                                                                  |
+| `config`                        | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `ignoreLabel`, `containerTypes`, `canFileTickets`.                                                                                                               |
 | `control`                       | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                                                                     |
 | `worldObservedAt`               | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                                                                                 |
 | `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay`, `completion` and `spend` per issue.                                                                    |

@@ -57,3 +57,27 @@ test('ids and refs survive encoding', () => {
   assert.ok(!placeQuery(place).includes('&2=3'));
   assert.deepEqual(readPlace(placeQuery(place)), place);
 });
+
+// The backlog's folds are a place, not a `useState`: stepping back into the
+// backlog has to restore the same folded features, and a shared link has to show
+// what the sender was looking at.
+test('folded backlog features round-trip, deduplicated and sorted', () => {
+  const place = at({ tab: 'backlog', collapsed: [12, 3] });
+  assert.equal(placeQuery(place).includes('collapsed=3%2C12'), true);
+  assert.deepEqual(readPlace(placeQuery(place)).collapsed, [3, 12]);
+  // Folding A then B and B then A are one place, or the back button would have an
+  // entry that goes nowhere.
+  assert.equal(placeQuery(at({ collapsed: [3, 12] })), placeQuery(at({ collapsed: [12, 3] })));
+});
+
+// Nothing folded is the default, so it is a bare URL rather than an empty list.
+test('no folded feature writes no parameter', () => {
+  assert.equal(placeQuery(at({ collapsed: [] })), '');
+  assert.deepEqual(readPlace('?collapsed=').collapsed, []);
+});
+
+// The one input an operator can type. A `NaN` here would fold a heading that
+// does not exist, and there is nothing on screen to say why.
+test('a hand-edited fold list drops what is not an issue number', () => {
+  assert.deepEqual(readPlace('?collapsed=4,abc,-1,0,4,7.5,9').collapsed, [4, 9]);
+});

@@ -197,6 +197,7 @@ once.
 | `agent`                              | the open drawer's agent                              |
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad       |
 | `settings` / `spend` / `reliability` | the three top-bar modals                             |
+| `collapsed`                          | the backlog features folded away, as `3,12`          |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
@@ -679,12 +680,50 @@ unreadable.
 `workable` verdict blocks nothing, so a button on one would offer to change a reading that changes no
 behaviour.
 
-**A container type is disabled rather than absent** (`WatchToggle`), carrying the dispatcher's own
-refusal as its title: "cannot be picked up" is a fact about the item worth seeing. It is disabled only
-in the direction that would opt the item _in_ — that is the click whose promise the harness will not
-keep — so un-watching one still works, or a container tagged once could never be untagged from here.
-The same rule covers a deployment with the gate off (`labelPrefix: ''`): there is no tag to write in
-either direction, and a button that writes nothing is worse than one that says why.
+### Features are headings, not rows
+
+Within each group, rows are arranged under the feature they belong to by `groupByFeature`
+(`web/src/issueGroups.ts`), over the rows the group actually **draws** — a heading standing above the
+25-row cut would promise children that are in the remainder.
+
+**A container is a heading and never a row.** Nothing is ever dispatched at one, so listing a Feature
+among the items being triaged asks an operator to remember which is which on every read; drawing it
+above its children says it structurally. The heading carries the feature's own controls — its name
+opens its goal page, and its `WatchToggle` is the container's — and the work under it is indented to
+the fold gutter.
+
+Whether an item is a container is read from **`config.containerTypes`**, the operator's own policy,
+shipped on the state snapshot for this. Deliberately not `pickup.status === 'container'`: an ignored
+container reports `ignored` and a gate-off deployment reports something else again, so a
+verdict-based reading would move a Feature in and out of the heading position as its tags changed.
+
+`groupByFeature` returning **null is "draw the flat list"** — a GitHub or fake world has no tree, and
+inventing one heading over every issue would claim a hierarchy the tracker never had. The `untracked`
+group draws no heading at all; `orphans` draws a labelled one with no controls, because there is no
+item there to operate on. A feature the world holds only as some other item's `parent` — the ordinary
+case under a tag or assignee filter — draws as a plain heading that says `not in the filtered item
+list`, since there is nothing to open or tag.
+
+The heading states **both counts and only when they differ** (`groupProgress`): "3 children" above two
+rows reads as a row that failed to draw, and "2" above a feature with three hides one.
+
+**Every feature is open until the operator folds one.** The backlog's job is to show what is waiting,
+and a surface that hides it behind a click reports an empty board. A fold is `Place.collapsed`
+(`?collapsed=3,12`) rather than a `useState`, for the reason every piece of "where am I" state is:
+stepping back into the backlog has to restore the same folded features, and a shared link has to show
+what the sender was looking at. Collapsed rather than expanded is what is carried, so the default is
+the empty list and a bare URL; the list is deduplicated and sorted, so one set of folds has one
+spelling and cannot push a history entry that goes nowhere.
+
+**A container's watch toggle is live in both directions.** It was once disabled in the direction that
+would opt the item in, on the grounds that the harness would not keep that promise. It keeps it now:
+watching a Feature tags every item beneath it ([06](06-issue-pickup.md#watching-a-container-cascades)),
+which is what "work this feature" has always meant, and the button's title states the cascade with the
+number of children it will reach. The container is still never dispatched at — that is a fact about
+dispatch, and the row under it is where the work is.
+
+A deployment with the gate off (`labelPrefix: ''`) is still refused in both directions: there is no tag
+to write either way, and a button that writes nothing is worse than one that says why.
 
 Assignment filtering is a server-side concern (`workItemAssignedTo` for Azure; GitHub has no issue
 assignee filter) and is deliberately not a cockpit one — the view shows whatever the tracker returned.
