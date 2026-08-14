@@ -80,8 +80,9 @@ and unaffected by `--settings`.
 - `readDebug(key)` — the breadcrumbs, non-destructive.
 - `dispose(key)` — drops the directory.
 
-The key is minted **per spawn**, independent of the resume session id, so stream agents (which have no
-session id) still get one. It is disposed on reap, kill and `interruptAll`; a resume mints a fresh one.
+The key is minted **per spawn**, independent of the resume session id — so the `raw` runtime, which
+pins no session id, still gets one. It is disposed on reap, kill and `interruptAll`; a resume mints a
+fresh one.
 
 ### Draining and classification
 

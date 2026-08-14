@@ -113,8 +113,9 @@ export function isAgentlessCandidate(task: Task, opts: { hasAgent: boolean; boot
  *
  * Restore means re-attaching to the *same* Claude conversation (`claude --resume
  * <session id>`) in the *same* worktree, so it needs all four of: an agent to have
- * existed at all, a runtime that pins a session id (PTY only — stream-JSON resume
- * does not exist), the id itself on the row, and the worktree still on disk. The
+ * existed at all, a runtime that pins a session id (both real runtimes do — the
+ * default `stream` one included, since #318 — leaving only `raw`, which speaks no
+ * protocol), the id itself on the row, and the worktree still on disk. The
  * reason is carried rather than inferred at the UI, because "why is this button
  * missing" is exactly the question an operator asks of a screen that is blocking
  * their fleet.
@@ -129,7 +130,7 @@ export function restorability(
   if (!agent)
     return { restorable: false, blocked: 'no agent ever started for this task, so there is no session to resume' };
   if (!opts.resumable)
-    return { restorable: false, blocked: 'this agent runtime cannot resume a session (PTY runtime only)' };
+    return { restorable: false, blocked: 'this agent runtime cannot resume a session (the raw runtime keeps no id)' };
   if (!agent.sessionId) return { restorable: false, blocked: 'the agent has no Claude session id to resume' };
   if (!opts.worktreeExists) return { restorable: false, blocked: `its working directory is gone (${agent.cwd})` };
   return { restorable: true, blocked: null };

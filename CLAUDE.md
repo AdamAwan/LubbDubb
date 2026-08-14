@@ -128,6 +128,13 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   refuses `rmdir` on it — every later dispatch onto that branch fails `EBUSY`, forever, with nothing
   but rejected dispatches to show for it. Reaping _after_ the child dies finds nothing: descendants
   are resolved through the root pid. → [10](docs/spec/10-agent-runtimes.md#reaping-the-process-subtree)
+- **Both real runtimes are resumable, and a launch carries `--session-id` _or_ `--resume`, never
+  both.** Since #318 the stream launch pins an id too, so `restore` is on offer on the default
+  deployment. Write either flag only through `appendSessionFlags` in `src/agents/agentProtocol.ts`:
+  `claude` refuses `--session-id` on an id that already has a transcript — exit 1, plain stderr, and
+  **no stream event at all** — so a relaunch that carried a stored id down the mint arm reads to the
+  harness as a process that died for no reason.
+  → [10](docs/spec/10-agent-runtimes.md#launch-arguments)
 
 The **default `agentMode` is `stream`, not a PTY.** Do not assume terminal semantics on the default
 path. Everything below is PTY-only, and every one of them is a silent failure — the agent keeps
