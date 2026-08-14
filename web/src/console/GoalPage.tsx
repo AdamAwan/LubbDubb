@@ -297,6 +297,7 @@ function Validation({
       <div className="cn-vin">
         <ValidationSection
           checks={checks}
+          issueNumber={issue.number}
           resources={page.checkResources}
           refUrls={refUrls}
           buttonClass="cn-btn"
