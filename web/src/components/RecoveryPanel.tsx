@@ -1,6 +1,7 @@
 import type { OrphanedWork, RecoveryVerdict } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { refLink, relTime } from './util.js';
+import { Ref } from './refs.js';
 
 /**
  * What each verdict does, in the operator's terms. These are the whole of the
@@ -85,7 +86,11 @@ function CrashedCard({
           {DIED_LABEL[crashed.died]}
         </span>
         <strong className="crashed-title">{crashed.title}</strong>
-        {crashed.originRef && <span className="muted">{refLink(crashed.originRef, refUrls)}</span>}
+        {crashed.originRef && (
+          <span className="muted">
+            <Ref to={crashed.originRef} />
+          </span>
+        )}
         {crashed.branch && <code className="branch">{refLink(crashed.branch, refUrls)}</code>}
       </div>
 

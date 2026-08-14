@@ -5,7 +5,8 @@ import type { GoalPageView, PartGroup } from '../view/goalPage.js';
 import type { Issue, OpenPullRequest, PlanPart, PullRequest } from '../types.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { renderRichText } from '../components/richText.js';
-import { fmtUsd, refLink, relTime } from '../components/util.js';
+import { fmtUsd, relTime } from '../components/util.js';
+import { Ref } from '../components/refs.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { watchBucket } from '../worldBuckets.js';
 import { NeedsBand } from './NeedsBand.js';
@@ -55,7 +56,7 @@ export function GoalPage({
         <div className="cn-stack">
           <PlanWaves page={page} />
           <Ticket issue={page.issue} refUrls={view.state.refUrls} />
-          <PullRequests page={page} refUrls={view.state.refUrls} />
+          <PullRequests page={page} />
         </div>
         <div className="cn-stack">
           <OnThisGoal page={page} view={view} actions={actions} />
@@ -402,7 +403,12 @@ function Part({
       {part.scope !== '' && <p>{part.scope}</p>}
       <span className="cn-dep">
         {part.dependsOn.length > 0 ? `depends on ${part.dependsOn.join(', ')}` : 'depends on nothing'}
-        {part.prNumber !== null && ` · PR #${part.prNumber}`}
+        {part.prNumber !== null && (
+          <>
+            {' · '}
+            <Ref to={`pr:${part.prNumber}`} label={`PR #${part.prNumber}`} />
+          </>
+        )}
         {agentId !== null && ` · ${agentId}`}
       </span>
     </div>
@@ -438,7 +444,7 @@ function Ticket({ issue, refUrls }: { issue: Issue; refUrls: Record<string, stri
  * re-read here: a client-side second opinion about a merge is the drift that
  * outlives the change that introduces it.
  */
-function PullRequests({ page, refUrls }: { page: GoalPageView; refUrls: Record<string, string> }): JSX.Element {
+function PullRequests({ page }: { page: GoalPageView }): JSX.Element {
   const open = page.openPullRequests;
   const closed = page.closedPullRequests;
   return (
@@ -458,7 +464,7 @@ function PullRequests({ page, refUrls }: { page: GoalPageView; refUrls: Record<s
           <div className={`cn-row ${pr.attention.status === 'ignored' ? 'cn-spent' : ''}`} key={pr.number}>
             <span className="cn-grow">
               <b className="cn-name">
-                {refLink(`#${pr.number}`, refUrls)} {pr.title}
+                <Ref to={`pr:${pr.number}`} /> {pr.title}
               </b>
               <span className="cn-sub">{pr.branch}</span>
             </span>
@@ -472,7 +478,7 @@ function PullRequests({ page, refUrls }: { page: GoalPageView; refUrls: Record<s
           <div className="cn-row cn-spent" key={pr.number}>
             <span className="cn-grow">
               <b className="cn-name">
-                {refLink(`#${pr.number}`, refUrls)} {pr.title}
+                <Ref to={`pr:${pr.number}`} /> {pr.title}
               </b>
               <span className="cn-sub">{pr.branch}</span>
             </span>

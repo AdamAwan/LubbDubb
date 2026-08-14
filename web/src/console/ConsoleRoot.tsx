@@ -16,7 +16,8 @@ import { LaunchPanel } from '../components/LaunchPanel.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
 import { InjectPanel } from '../components/InjectPanel.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
-import { refLink, relTime } from '../components/util.js';
+import { relTime } from '../components/util.js';
+import { Ref } from '../components/refs.js';
 import { axisScale, productionReading, type ProductionReading, type SeriesKey } from '../view/production.js';
 
 /**
@@ -170,7 +171,7 @@ function renderPanel(view: CockpitView, actions: CockpitActions): JSX.Element | 
     if (body === null) return null;
     return (
       <Panel title={`Needs you · ${KIND_LABEL[row.kind]}`} onClose={close}>
-        <AskSubject row={row} view={view} actions={actions} />
+        <AskSubject row={row} actions={actions} />
         <div className="cn-pbody">{body}</div>
       </Panel>
     );
@@ -195,7 +196,7 @@ function renderPanel(view: CockpitView, actions: CockpitActions): JSX.Element | 
  * line blank makes it read as one, and an operator who cannot tell "no goal" from
  * "the goal did not load" answers blind.
  */
-function AskSubject({ row, view, actions }: { row: NeedRow; view: CockpitView; actions: CockpitActions }): JSX.Element {
+function AskSubject({ row, actions }: { row: NeedRow; actions: CockpitActions }): JSX.Element {
   const subject = subjectLabel(row);
   if (row.goalRef !== null) {
     const ref = row.goalRef;
@@ -219,7 +220,9 @@ function AskSubject({ row, view, actions }: { row: NeedRow; view: CockpitView; a
     <p className="cn-psub cn-noGoal">
       No linked goal ·{' '}
       {pr ? (
-        <>raised on {refLink(`#${pr[1]}`, view.state.refUrls)}, a pull request no ticket owns</>
+        <>
+          raised on <Ref to={`pr:${pr[1]}`} />, a pull request no ticket owns
+        </>
       ) : (
         'this ask stands on its own — nothing in the tracker is waiting on it'
       )}

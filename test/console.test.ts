@@ -19,6 +19,8 @@ import { KIND_LABEL } from '../web/src/console/QueueRail.js';
 const { buildDemoState } = await import('../web/src/demo/fixtures.js');
 const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
 const { Panel } = await import('../web/src/console/Panel.js');
+const { RefLinks } = await import('../web/src/components/refs.js');
+const { goalIssue } = await import('../web/src/view/goalPage.js');
 
 function view(over: Partial<CockpitView> = {}): CockpitView {
   const state = buildDemoState().state;
@@ -48,7 +50,20 @@ function view(over: Partial<CockpitView> = {}): CockpitView {
 
 const actions = new Proxy({}, { get: () => () => undefined }) as CockpitActions;
 
-const render = (v: CockpitView) => renderToStaticMarkup(createElement(ConsoleRoot, { view: v, actions }));
+/**
+ * The console as the shell mounts it — inside `RefLinks`, because every reference
+ * it draws resolves against that and a `<Ref>` outside it throws rather than
+ * quietly rendering a number with no link on it.
+ */
+const render = (v: CockpitView) =>
+  renderToStaticMarkup(
+    createElement(RefLinks, {
+      refUrls: v.state.refUrls,
+      openGoal: () => undefined,
+      hasGoal: (ref: string) => goalIssue(v.state, ref) !== undefined,
+      children: createElement(ConsoleRoot, { view: v, actions }),
+    }),
+  );
 
 /** `renderToStaticMarkup` escapes text nodes, so an assertion on fixture prose must decode first. */
 function decode(html: string): string {
@@ -386,7 +401,7 @@ function goalView(mutate: (state: CockpitView['state']) => void = () => {}, ref:
  * it; this pins that the goal page carries it too.
  */
 test('a goal can still be sent back for more work, not only marked done', () => {
-  const html = renderToStaticMarkup(createElement(ConsoleRoot, { view: goalView(), actions }));
+  const html = render(goalView());
   assert.ok(html.includes('Work left'), 'the goal page must offer the more_work verdict');
 
   const already = goalView((s) => {
@@ -394,10 +409,7 @@ test('a goal can still be sent back for more work, not only marked done', () => 
     assert.ok(issue, 'the fixture goal must be in the world');
     issue.conclusion = { ...issue.conclusion, verdict: 'more_work' };
   });
-  assert.ok(
-    !renderToStaticMarkup(createElement(ConsoleRoot, { view: already, actions })).includes('Work left'),
-    'a goal already sent back does not offer the same verdict again',
-  );
+  assert.ok(!render(already).includes('Work left'), 'a goal already sent back does not offer the same verdict again');
 });
 
 /**
@@ -628,9 +640,11 @@ test('a queued item states why it is held, in the queue’s own words', () => {
   const held = v.state.upcoming?.items.filter((i) => i.reason !== '');
   if (!held?.length) return;
   // Decoded: a queue reason quotes a part slug, and React escapes the quotes in
-  // the text node — the assertion is about the sentence, not its encoding.
-  const html = decode(render(v));
-  for (const item of held) assert.ok(html.includes(item.reason), `the queue dropped: ${item.reason}`);
+  // the text node — the assertion is about the sentence, not its encoding. Tags
+  // stripped too: a `#341` in the reason is drawn as a link, so the sentence is
+  // several text nodes on the page and one string only once the markup is gone.
+  const text = decode(render(v).replace(/<[^>]*>/g, ''));
+  for (const item of held) assert.ok(text.includes(item.reason), `the queue dropped: ${item.reason}`);
 });
 
 test('an empty rack still draws — a surface that vanishes reads as one that broke', () => {

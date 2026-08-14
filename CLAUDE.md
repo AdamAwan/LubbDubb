@@ -176,6 +176,13 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
 
 ### Cockpit
 
+- **A reference is drawn with `<Ref to={ref}/>` (`web/src/components/refs.tsx`), never as text.** A
+  surface that names a goal or a pull request and offers no way there is the cockpit's most repeated
+  bug, and it is invisible: the row reads correctly, renders correctly, and is simply a dead end. The
+  component owns where each family of ref goes; the one rule left to the call site is that a reference
+  **never goes inside a button**, since one click cannot have two destinations — a row that carries both
+  draws its name as the control and the refs beside it in a `cn-refs` group.
+  → [17](docs/spec/17-cockpit.md#links)
 - **A new piece of "where am I" state goes on `Place` (`web/src/cockpit/place.ts`), never a
   `useState` in `useCockpit`.** The cockpit's place is the query string, and a surface held outside it
   compiles, renders and works — until the back button steps over it, or a reload drops it. Both are

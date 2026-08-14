@@ -3,6 +3,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedGroup, NeedKind, NeedRow } from '../view/needsYou.js';
 import { relTime } from '../components/util.js';
+import { refLabel } from '../components/refs.js';
 
 /** One word per kind, shared with the goal page so a row and the band it opens name the ask the same. */
 export const KIND_LABEL: Record<NeedKind, string> = {
@@ -27,10 +28,14 @@ const GROUP_ORDER: NeedGroup[] = ['blocking', 'yours'];
  * pull request it was raised on (`PR #142`). Null only for an ask with neither,
  * which is the one case a surface has nothing true to name.
  *
+ * Through `refLabel`, the one function that shortens a ref: this was written
+ * three times over, and the fourth surface that wrote it printed a label with no
+ * link attached to it.
+ *
  * @public shared with the ask panel, which states the same subject in its header
  */
 export function subjectLabel(row: NeedRow): string | null {
-  if (row.goalRef !== null) return row.goalRef.replace(/^issue:/, '#');
+  if (row.goalRef !== null) return refLabel(row.goalRef);
   const pr = /^pr:(\d+)/.exec(row.originRef ?? '');
   return pr ? `PR #${pr[1]}` : null;
 }

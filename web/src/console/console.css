@@ -924,6 +924,19 @@ button.cn-grow {
   color: var(--cn-fg-dim);
   white-space: nowrap;
 }
+/* Where a row keeps the things it names — the goal it is under, the pull request
+   it is on. Beside the row's own control rather than inside it: a link nested in
+   a button is a second destination for one click, which is why these sit here at
+   all rather than in the sub-line where they read more naturally.
+   Only the box is set; the references style themselves through `styles.css`. */
+.cn-refs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  font: 12px var(--cn-mono);
+  white-space: nowrap;
+}
 
 .cn-lamp {
   width: 8px;

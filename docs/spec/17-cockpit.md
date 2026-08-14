@@ -508,6 +508,9 @@ made of. Drawn all the same: a plan reaches "no live parts" — the single-PR ar
 retired, so the sentence on its own left the operator told about a plan they could not read. The empty
 line says which case it is: no plan drawn at all, or a plan whose parts are below it.
 
+A part's row names its pull request as a way there rather than as text (`PR #412`), the one ref a wave
+carries; the goal it is under is the page it is already on.
+
 **A held part quotes the reconciler's `blockedReason` verbatim.** It is the one status nothing else in
 the world explains — a blocked part has no branch, no PR and no agent to read — so a paraphrase here
 would be the only account there is, and wrong ([08](08-planning.md#the-ref-collision-guard)).
@@ -575,6 +578,12 @@ vanishes when quiet is indistinguishable from one that broke.
   question, and the count stays in the header at zero, muted, so the way in does not move.
   The card also draws a **keyboard entry** per live desktop claim — see
   [the keyboard entry](#the-keyboard-entry).
+  **The name is the row's control and the refs sit beside it** (`cn-refs`), the backlog row's shape and
+  for its reason: a link inside a button is a second destination for one click. A row draws **two**
+  refs where there are two — the origin it was dispatched at (`pr:412`, `issue:212:part:x`), and, when
+  that origin is a pull request some ticket owns, the goal behind it, resolved through `goalOfPr`. The
+  card used to name both in text and offer a way to neither, so the two questions a fleet row raises —
+  what is it working on, and what is that — could only be answered somewhere else.
 - **Goals in flight** — every goal whose `pickup.status` says the harness has it in hand now
   (`active` / `has_pr` / `planning` / `delivered`). Read off the dispatcher's own word rather than
   re-inferred from agents, plans and pull requests, which are three inputs the server has already
@@ -586,20 +595,26 @@ vanishes when quiet is indistinguishable from one that broke.
   closed PR and an ignored backlog goal take, off `attention.status === 'ignored'` rather than a
   second reading of the labels. The chip alone left the one row nothing will happen on sitting at the
   same weight as the ones being worked, which is the whole thing the tag is meant to say.
-  A PR is joined to its goal through the **plan parts** rather than guessed from the branch name; a PR
-  nobody's plan claims is left out of that map and draws its branch instead, which is honest about what
-  is known. The toggle is **disabled rather than absent** with no ignore label configured: the gate
+  A PR is joined to its goal through **`goalOfPr`** — the server's own three-way match (a part's
+  `prNumber`, the tracker's `linkedPrNumber`, the branch convention), read backwards — and the goal is
+  drawn as a way onto its page. Through the parts alone it was drawn for almost no PR at all: a goal
+  worked _whole_ has no parts, which is the single-PR arm and most finished goals. A PR no ticket owns
+  resolves to nothing and draws nothing, which is honest about what is known. The toggle is **disabled rather than absent** with no ignore label configured: the gate
   being off is a fact about the deployment worth seeing, and a control that comes and goes with a
   config key reads as a bug in the page. The merged count is drawn only where the snapshot carries a
   closed list at all — absent means the retention window is off, which is not the claim "none merged".
 - **Up next** — the last pulse's ranked queue, each row carrying `QueueItem.reason` verbatim. The
   reason is the whole point of the card, being the direct answer to "are we working on the right
   thing", so it wraps rather than being clipped and nothing here re-words it. A held item is toned off
-  `status`, which is a fact the same sentence already states in words.
+  `status`, which is a fact the same sentence already states in words. The origin is drawn as a ref, so
+  a goal-scoped one opens its page; the reason goes through `RefText`, so the `#341` inside the
+  sentence links out.
 - **World signals** — `worldEvents` grouped by `(kind, ref)` with a count, ten rows. Three review
   comments on one pull request are one signal, not three unrelated rows. **The server's order (newest
   first) is kept**: re-sorting by count would move the row an operator is watching the moment it moves
-  again.
+  again. The row draws **the goal behind the signal** beside the sentence and never the pull request:
+  the summary's own `#412` already links out, so repeating it would be one ref twice, and what a signal
+  never offers is the way onto a goal's page.
 
 ### The keyboard entry
 
@@ -1315,21 +1330,61 @@ testimony, and rendering it would let a stray backtick or hash change what that 
 
 ## Links
 
-The cockpit never builds a provider URL. `refUrls` in the state snapshot is a `ref → URL` map, and
-`linkify` / `refLink` (`web/src/components/util.tsx`) look refs up in it. A ref the provider could not
-resolve is absent from the map and renders as plain text — which is what the `fake` provider produces.
+A surface that _names_ another thing and gives no way there is the cockpit's most repeated bug. It kept
+coming back because linking was something each site had to remember to do rather than the only way to
+draw a ref at all — so there is one component and one vocabulary, in
+**`web/src/components/refs.tsx`**.
 
-`refChip(ref, label, refUrls, title?)` is the third of them, for refs whose canonical shape is
-machinery a human does not read (`issue:12:comment:456`). It renders **nothing at all** unless the
-provider resolved the ref: a caption with no link asserts something exists while giving nobody a way to
-read it.
+**The vocabulary is the harness's own colon-form ref** — `issue:212`, `issue:212:part:writes`, `pr:412`
+— which is what tasks, queue items, findings, world events and plan parts already carry. Most call
+sites pass a value they are already holding rather than re-deriving a number.
 
-**Every reference the UI shows is routed through one of the three (#199), with no exceptions.** The
-rule is uniform: a PR/issue number links as `refLink('#'+n, refUrls)`, a colon-form origin or structured
-ref as `refLink(ref, refUrls)`, free text carrying `#n` mentions through `linkify(text, refUrls)`. So
-the goal page's pull requests, the overview's rack and up-next rows, the backlog's rows, the world
-signals, the findings panel, escalations, the plan sheet, the recovery cards, the agent drawer and the
-work-tree panel all draw links wherever the provider can resolve them.
+**The destination is the ref's own business, not the call site's.** `<Ref to={ref} />` decides:
+
+- A **goal opens its page in the cockpit**. That is the richer of the two destinations — the plan, the
+  asks, the pull requests and the ticket's own `Open ticket ↗` are all on it — and it is the one no
+  other route from a row that merely mentions the goal can reach. A part ref resolves to its goal; the
+  part has no page of its own.
+- A **goal the world does not carry links to the tracker instead**. Whether a ref has a page is
+  `goalIssue`'s answer, handed to the provider as `hasGoal`, for the reason the queue rail asks it
+  rather than guessing: `buildGoalPage` returns null for a ref the snapshot dropped, the console draws
+  the tab behind it, and a link onto one is a click that appears to do nothing.
+- A **pull request links out**. There is no PR page in the cockpit. `#412` and `pr:412` are both tried
+  against `refUrls` — which of the two the snapshot happens to carry is not a row's business.
+- **Anything the provider could not resolve renders as plain text.** A ref the provider could not
+  resolve is absent from the map, which is what the `fake` provider produces, and a link that goes
+  nowhere asserts more than a bare number does.
+
+`<RefText text={…} />` is the second of them, for prose that mentions refs — a queue reason, a world
+signal, an agent's note. Deliberately **not** routed through `<Ref>`: a bare `#412` in a sentence does
+not say whether it is a goal or a pull request, and guessing would link onto whichever of the two
+shares the number. The tracker's page answers either.
+
+`refLabel(ref)` is the third, and **the only place a ref becomes text** (`#212` from any of its forms).
+It was written three times over, and the fourth surface that wrote it printed the label with no link on
+it — which is the bug exactly: shortening a ref by hand is how a surface ends up naming a thing instead
+of pointing at it. `test/refLinks.test.ts` pins that nothing else strips a ref down to a number.
+
+**One rule a call site still has to keep: a reference never goes inside a button.** A link nested in a
+control is a second destination for one click, so a row that carries both draws its name as the control
+and the refs beside it, in a `cn-refs` group — the fleet card, the rack and the backlog row all take
+that shape. It is pinned structurally, because nesting one reads fine and renders fine.
+
+**The provider is `RefLinks`, mounted at the shell** (`App.tsx`), carrying `refUrls`, the way onto a
+goal's page (`selectGoal`) and `hasGoal`. At the shell rather than in the console because the drawer and
+the modals draw refs too and none of them is inside `ConsoleRoot`. A `<Ref>` rendered outside it
+**throws** rather than falling back to plain text: a silent fallback is the failure the module exists to
+stop, and nothing would catch it.
+
+`linkify` / `refLink` (`web/src/components/util.tsx`) are the primitives underneath, and remain in use
+where a component is already handed `refUrls` — the markdown renderers, a branch name, a comment ref.
+Nothing new reaches for them; new code draws a reference with `<Ref>`.
+
+**Every reference the UI shows is routed through one of these (#199), with no exceptions.** So the goal
+page's pull requests and its plan waves, the overview's fleet, rack, up-next and world-signal rows, the
+backlog's rows, the findings panel, escalations, the plan sheet, the recovery cards, the agent drawer,
+the spend and reliability tables and the work-tree panel all draw links wherever there is somewhere to
+go.
 
 For those link sites to resolve, five ref families the item lists do not cover are keyed on their own in
 `buildRefUrls` (see [16](16-http-api.md#the-state-snapshot)): **world-event refs** (`pr:42`, `issue:13` — the
@@ -1530,7 +1585,7 @@ structurally — a missing arm is a compile error at the call site, not dead wei
 
 ## Tests
 
-Eight files, split on what they can see:
+Nine files, split on what they can see:
 
 - `test/cockpitViewModel.test.ts` — the derivations `buildViewModel` folds, untestable while they lived
   inside a component.
@@ -1544,6 +1599,9 @@ Eight files, split on what they can see:
   their order, that figures leave unrounded, and that each caveat the panel speaks leaves as a row.
 - `test/markdown.test.ts` and `test/richText.test.ts` — the two prose renderers, and the line between
   them: agent-authored markdown never interprets HTML, tracker-authored HTML is drawn as structure.
+- `test/refLinks.test.ts` — [Links](#links): where each family of ref goes, that a goal with no page
+  links out instead, that an unresolvable ref is plain text, that `refLabel` is the only shortener, and
+  — structurally, over the rendered console — that no reference is ever drawn inside a button.
 
 The renders are wrapped in a **clock pin**, because `buildDemoState` stamps every timestamp relative to
 `Date.now()` and the rendered relative times would drift between runs otherwise.

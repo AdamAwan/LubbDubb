@@ -2,9 +2,10 @@ import { useState, type JSX } from 'react';
 import type { CockpitView, DeskRun } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { Agent, Issue, QueueItem, WorldEvent } from '../types.js';
-import { buildGoalPage, buildGoalTrack, type GoalTrack } from '../view/goalPage.js';
+import { buildGoalPage, buildGoalTrack, goalOfPr, type GoalTrack } from '../view/goalPage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
-import { elapsed, fmtUsd, linkify, refLink, relTime } from '../components/util.js';
+import { elapsed, fmtUsd, relTime } from '../components/util.js';
+import { Ref, RefText, refLabel } from '../components/refs.js';
 import { CiLadder, courtTone } from './GoalPage.js';
 
 /**
@@ -93,6 +94,23 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
   );
 }
 
+/**
+ * One agent: what it is on, and the way to each of the things it names.
+ *
+ * **The name is the button, and the refs sit beside it** — the backlog row's
+ * shape, for its reason: a link inside a button is a second destination for one
+ * click, and the row's own destination is the transcript. Before that split this
+ * card said "Fix failing CI on PR #412" under "#212" with neither of them a way
+ * anywhere, so the two questions a fleet row raises — *what is it working on* and
+ * *what is that* — could only be answered somewhere else.
+ *
+ * **Two refs, not one.** The origin is what was dispatched at (`pr:412` for a CI
+ * task, `issue:212:part:writes` for a part), and it is a pull request as often as
+ * a goal. So the goal is resolved separately through {@link goalOfPr} — the
+ * server's own three-way match, read backwards — and drawn as well whenever it is
+ * not already what the origin says. A ticketless pull request resolves to no goal
+ * and draws none, which is the honest answer rather than an invented one.
+ */
 function AgentRow({ agent, view, actions }: { agent: Agent; view: CockpitView; actions: CockpitActions }): JSX.Element {
   const task = view.taskFor(agent);
   const origin = task?.originRef ?? null;
@@ -105,22 +123,42 @@ function AgentRow({ agent, view, actions }: { agent: Agent; view: CockpitView; a
         ? 'cn-wait'
         : 'cn-run';
   return (
-    <button
-      type="button"
-      className={`cn-row ${done ? 'cn-spent' : ''}`}
-      onClick={() => actions.select(agent.id)}
-      title="Open this agent's drawer"
-    >
+    <div className={`cn-row ${done ? 'cn-spent' : ''}`}>
       <i className={`cn-lamp ${lamp}`} />
-      <span className="cn-grow">
+      <button
+        type="button"
+        className="cn-grow"
+        onClick={() => actions.select(agent.id)}
+        title="Open this agent's drawer"
+      >
         <b className="cn-name">{task?.title ?? agent.id}</b>
         <span className="cn-sub">
-          {origin !== null && `${goalLabel(origin)} · `}
           {agent.note ?? agent.status} · {elapsed(agent.startedAt, agent.endedAt, view.now)}
         </span>
-      </span>
+      </button>
+      <OnWhat origin={origin} view={view} />
       {agent.costUsd !== null && <span className="cn-num">{fmtUsd(agent.costUsd)}</span>}
-    </button>
+    </div>
+  );
+}
+
+/**
+ * What a dispatch was aimed at, as ways there: the origin itself, and the goal
+ * behind it when the origin is a pull request some ticket owns.
+ *
+ * Shared by the fleet rows and nothing else so far, and a component rather than
+ * two lines inline because "which refs does this row carry" is the decision that
+ * keeps getting made differently on each surface that lists work.
+ */
+function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }): JSX.Element | null {
+  if (origin === null) return null;
+  const pr = /^pr:(\d+)/.exec(origin);
+  const goal = pr ? goalOfPr(view.state, Number(pr[1])) : null;
+  return (
+    <span className="cn-refs">
+      <Ref to={origin} label={pr ? `PR ${refLabel(origin)}` : refLabel(origin)} />
+      {goal !== null && <Ref to={goal} />}
+    </span>
   );
 }
 
@@ -152,7 +190,7 @@ function DeskRow({ run, view }: { run: DeskRun; view: CockpitView }): JSX.Elemen
     <div
       className="cn-row cn-desk"
       title={
-        `${run.label} is running check ${run.letter} of ${goalLabel(run.originRef)} — claimed ${relTime(run.claimedAt, view.now)}. ` +
+        `${run.label} is running check ${run.letter} of ${refLabel(run.originRef)} — claimed ${relTime(run.claimedAt, view.now)}. ` +
         'Nobody dispatched it: it takes no fleet slot, and it ends when the reading lands, ' +
         'when the session closes, or when the claim ages out.'
       }
@@ -161,17 +199,15 @@ function DeskRow({ run, view }: { run: DeskRun; view: CockpitView }): JSX.Elemen
       <span className="cn-grow">
         <b className="cn-name">{run.title}</b>
         <span className="cn-sub">
-          {goalLabel(run.originRef)} · check {run.letter} · {run.label} · {elapsed(run.claimedAt, null, view.now)}
+          check {run.letter} · {run.label} · {elapsed(run.claimedAt, null, view.now)}
         </span>
+      </span>
+      <span className="cn-refs">
+        <Ref to={run.originRef} />
       </span>
       <i className="cn-chip cn-desk-chip">at a keyboard</i>
     </div>
   );
-}
-
-/** `issue:212:part:writes` → `#212`, the shortest name the rail also uses for a goal. */
-function goalLabel(ref: string): string {
-  return ref.replace(/^issue:(\d+).*$/, '#$1');
 }
 
 /**
@@ -271,11 +307,10 @@ function Track({ track }: { track: GoalTrack }): JSX.Element {
  * the same claim as none merged.
  */
 function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
-  const { refUrls, config } = view.state;
+  const { config } = view.state;
   const open = view.state.world.pullRequests;
   const closed = view.state.world.closedPullRequests;
   const merged = closed === undefined ? null : closed.filter((pr) => pr.merged).length;
-  const goalOf = goalByPr(view);
   const { ignoreLabel } = config;
 
   return (
@@ -293,18 +328,24 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
           // goal — the chip alone leaves a row the harness will never touch
           // sitting at the same weight as the ones it is working.
           const excluded = pr.attention.status === 'ignored';
-          const goal = goalOf.get(pr.number);
+          // The goal this PR is delivering, joined the server's own three ways
+          // rather than through the plan parts alone: a goal worked whole has no
+          // parts at all, which is most finished goals, and the rack drew no goal
+          // for any of them.
+          const goal = goalOfPr(view.state, pr.number);
           return (
             <div className={`cn-row ${excluded ? 'cn-spent' : ''}`} key={pr.number}>
               <span className="cn-grow">
                 <b className="cn-name">
-                  {refLink(`#${pr.number}`, refUrls)} {pr.title}
+                  <Ref to={`pr:${pr.number}`} /> {pr.title}
                 </b>
-                <span className="cn-sub">
-                  {goal !== undefined && `${goalLabel(goal)} · `}
-                  {pr.branch}
-                </span>
+                <span className="cn-sub">{pr.branch}</span>
               </span>
+              {goal !== null && (
+                <span className="cn-refs">
+                  <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />
+                </span>
+              )}
               <CiLadder pr={pr} />
               <i className={`cn-chip ${courtTone(pr)}`} title={pr.attention.reasons.join(' · ')}>
                 {pr.attention.status}
@@ -332,21 +373,6 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
 }
 
 /**
- * PR number → the goal whose plan opened it, joined through the parts rather than
- * guessed from the branch name. A PR nobody's plan claims is left out of the map
- * and draws its branch instead, which is honest about what is known.
- */
-function goalByPr(view: CockpitView): Map<number, string> {
-  const planRef = new Map((view.state.plans ?? []).map((p) => [p.id, p.originRef]));
-  const out = new Map<number, string>();
-  for (const part of view.state.planParts ?? []) {
-    const ref = planRef.get(part.planId);
-    if (part.prNumber !== null && ref !== undefined) out.set(part.prNumber, ref);
-  }
-  return out;
-}
-
-/**
  * What the last pulse ranked, each row carrying the queue's own reason verbatim.
  *
  * The reason is the whole point of the card — it is the direct answer to "are we
@@ -364,21 +390,29 @@ function UpNext({ view }: { view: CockpitView }): JSX.Element {
       <div className="cn-rows">
         {items.length === 0 && <p className="cn-empty">Nothing is queued.</p>}
         {items.map((item) => (
-          <QueueRow key={`${item.origin}|${item.rule}`} item={item} refUrls={view.state.refUrls} />
+          <QueueRow key={`${item.origin}|${item.rule}`} item={item} />
         ))}
       </div>
     </section>
   );
 }
 
-function QueueRow({ item, refUrls }: { item: QueueItem; refUrls: Record<string, string> }): JSX.Element {
+/**
+ * A queued dispatch, as a way to what it is queued against — the origin is a goal
+ * ref as often as a pull request, so it goes through `Ref` rather than out to the
+ * provider unconditionally, and the reason it quotes carries `#n` mentions of its
+ * own.
+ */
+function QueueRow({ item }: { item: QueueItem }): JSX.Element {
   return (
     <div className="cn-row">
       <span className="cn-grow">
         <b className="cn-name">
-          {refLink(item.origin, refUrls)} {item.title}
+          <Ref to={item.origin} /> {item.title}
         </b>
-        <span className={`cn-sub cn-wrap ${item.status === 'dispatching' ? '' : 'cn-held'}`}>{item.reason}</span>
+        <span className={`cn-sub cn-wrap ${item.status === 'dispatching' ? '' : 'cn-held'}`}>
+          <RefText text={item.reason} />
+        </span>
       </span>
     </div>
   );
@@ -402,10 +436,19 @@ function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
         {rows.map(({ key, event, count }) => (
           <div className="cn-row" key={key}>
             <span className="cn-grow">
-              <b className="cn-name">{linkify(event.summary, view.state.refUrls)}</b>
+              <b className="cn-name">
+                <RefText text={event.summary} />
+              </b>
               <span className="cn-sub">
                 {event.kind} · {relTime(event.createdAt, view.now)}
               </span>
+            </span>
+            {/* The goal behind the signal, beside the sentence rather than inside
+                it. The summary's own `#412` already links out to the provider, so
+                repeating the pull request here would be one ref twice — what a
+                signal never offers is the way onto the goal page. */}
+            <span className="cn-refs">
+              <Ref to={goalBehind(view, event.ref)} />
             </span>
             {count > 1 && <span className="cn-num">×{count}</span>}
           </div>
@@ -413,6 +456,18 @@ function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
       </div>
     </section>
   );
+}
+
+/**
+ * The goal a ref stands under: a goal ref names itself, a pull request resolves
+ * through the ticket that owns it, and anything else — a ticketless PR, a `job:`
+ * origin, a ref the world has forgotten — resolves to nothing and draws nothing.
+ */
+function goalBehind(view: CockpitView, ref: string | null): string | null {
+  if (ref === null) return null;
+  if (/^issue:\d+/.test(ref)) return ref;
+  const pr = /^pr:(\d+)/.exec(ref);
+  return pr ? goalOfPr(view.state, Number(pr[1])) : null;
 }
 
 interface Signal {
