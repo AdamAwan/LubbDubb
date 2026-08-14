@@ -33,6 +33,14 @@ import { ExtLink, linkify, refLink } from './util.js';
  *   `refLink` already follows: the `fake` provider resolves nothing, and a link
  *   that goes nowhere asserts more than a bare number does.
  *
+ * How each of those is *drawn* is one vocabulary of three marks, and it lives in
+ * `styles.css` rather than here: a **box** means a thing you can go to, a **fill**
+ * inside the box means the destination is in the cockpit, an **arrow** means it
+ * leaves. A `<Ref>` always stands on its own, so it always draws the box —
+ * {@link RefText}, which is the same references inside a sentence, draws the arrow
+ * alone. The exception is the last arm below: a branch name is already long, and a
+ * box around `feature/context-budget` is a shape, not a signal.
+ *
  * The one thing a call site still has to get right is *not putting a ref inside a
  * button*: a link nested in a control is a second destination for one click. The
  * rows that carry both draw the name as the control and the refs beside it — see
@@ -160,7 +168,7 @@ function ExtLinkFor({
   const url = keys.map((key) => world.refUrls[key]).find((found) => found !== undefined);
   if (url === undefined) return <>{label}</>;
   return (
-    <ExtLink href={url} title={title}>
+    <ExtLink href={url} title={title} boxed>
       {label}
     </ExtLink>
   );

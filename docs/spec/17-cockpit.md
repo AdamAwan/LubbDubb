@@ -1460,19 +1460,62 @@ It was written three times over, and the fourth surface that wrote it printed th
 it — which is the bug exactly: shortening a ref by hand is how a surface ends up naming a thing instead
 of pointing at it. `test/refLinks.test.ts` pins that nothing else strips a ref down to a number.
 
-**A reference is underlined at rest** — solid for a destination inside the cockpit, dotted for one that
-leaves it — in `--link-line`, a token of its own in `web/src/styles.css` with a `#print-sheet`
-counterpart so paper does not get a dark-theme line on white. Both classes carried that line already and
-drew it `transparent` until `:hover`, which left the whole affordance under the mouse: at rest a `#412`
-differed from the label beside it by `--blue` alone, in rows that also carry coloured dots and chips.
-Hover keeps its meaning by strengthening — the line goes to full `--blue` / `currentColor` — and both
-classes take a `:focus-visible` ring shaped like `.pm-jump`'s, since `.ref-goal` is a `<button>` reset
-to look like text and had no ring of its own. Colour is still not the distinction, and the treatment
-lives in the two shared classes, so every `<Ref>`, `ExtLink`, `refLink` and `linkify` site has it
-without knowing. Controls that already read as controls — `.esc-open`, `.pm-jump`, `.cn-tgl`, the chip
-anchors — are deliberately untouched: the failure this fixes is text that looks like text.
-`test/refLinks.test.ts` pins the resting line and the focus rule, because nothing in a render test can
-see a stylesheet.
+### How a reference is drawn
+
+**One vocabulary of three marks**, in `web/src/styles.css`:
+
+- a **box** means this is a thing you can go to, not a number in a sentence;
+- a **fill** inside the box means the destination is here, in the cockpit (`.ref-goal`, the only filled
+  form, because a goal's page is the only cockpit destination a reference has);
+- an **arrow** means it leaves for the provider (`.ext-ref`, and `.ref-out` where that leaves from a
+  standalone token).
+
+**Where a reference stands decides which of them it wears.** A reference standing on its own — a row's
+`cn-refs` group, a rack entry, a chip — is boxed; a reference _inside prose_ takes the arrow alone,
+because a boxed token per mention turns a sentence lumpy and prose refs all leave anyway, so the arrow
+is the whole distinction there. `<Ref>` always stands alone and so always boxes, through `ExtLink`'s
+`boxed`; `<RefText>`, `linkify` and `refLink` do not pass it. The one exception is a **branch name**,
+which `<Ref>` draws through `refLink` unboxed: `feature/context-budget` is already long, and a box round
+it is a shape rather than a signal.
+
+What this replaced was a 1px underline, dotted for out and solid for in. On a row that already carries
+lamps, chips and hairline rules that line read as _ruling_ rather than as a way somewhere — the same
+complaint the module exists for, one level down — and the dotted/solid pair drew a distinction nobody
+was given a legend for. **Shape carries it now, not hue or a line weight**, so the distinction survives
+the print sheet and an operator who cannot separate the colours. Hover keeps its meaning by
+strengthening: the edge goes to full `--blue`, and a dashed one goes solid.
+
+The three values are tokens of their own — `--link-line`, `--link-fill`, `--link-ink` — each restated
+once under `#print-sheet`, since a dark-theme token on white loses its edge, muddies its fill and drops
+its lettering under AA. They are separate from `--blue-line-2` / `--blue-fill`, which mean "border and
+ground of a blue-filled surface" and are set against `--panel`; a reference has to hold at 12px on four
+different grounds. Both classes take a `:focus-visible` ring shaped like `.pm-jump`'s, since `.ref-goal`
+is a `<button>` reset to look like a token and has no ring of its own. The treatment lives entirely in
+the shared classes, so every `<Ref>`, `ExtLink`, `refLink` and `linkify` site has it without knowing.
+Controls that already read as controls — `.esc-open`, `.pm-jump`, `.cn-tgl`, the chip anchors — are
+deliberately untouched: the failure this fixes is text that looks like text.
+
+**`cn-refs` is the other half, and the half no token style can do**: a ruled slot at the right of a work
+row, so a reference is findable by _position_ and not only by looking like one. The rule separates what
+a row **is** from what it **names**. It is drawn on every row of a list, **empty where the row names
+nothing** — a fleet row with no origin renders the group and puts nothing in it — because a rule that
+comes and goes reads as ragged rather than as a column; `:empty` takes the line back off so an empty
+slot is space rather than a tick. Row anatomies differ after that slot (the rack carries a CI ladder and
+two buttons, a signal carries its count), so this is a slot rather than a table column, and there is no
+header over it.
+
+**Every selector in that block doubles its class** — `.ref-goal.ref-goal`, not `.ref-goal` — and it has
+to. `console.css` resets its own markup with `.cn button` and `.cn a`, which counts as (0,1,1) and so
+outranks a single class, and the console is where most references are drawn. Under one class the reset
+won: `border: 0` took the box off a goal token and `color: inherit` took the colour off every reference
+in the console, which is how a treatment can be right in the stylesheet, green in its test, and on
+screen nowhere an operator looks. The reset is not the thing to fix — the rest of `console.css` is
+written against it, and lowering it with `:where(.cn)` restyles 66 of the 70 controls on the overview —
+so the token layer carries the weight to clear it, and `console.css` still names no shared class.
+
+`test/refLinks.test.ts` pins the box, the fill, the arrow, the token count, the focus rule, the doubled
+selectors and the slot's presence on every fleet row, because nothing in a render test can see a
+stylesheet.
 
 **One rule a call site still has to keep: a reference never goes inside a button.** A link nested in a
 control is a second destination for one click, so a row that carries both draws its name as the control

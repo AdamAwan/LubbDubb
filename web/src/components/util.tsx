@@ -3,13 +3,35 @@ import type { JSX, ReactNode } from 'react';
 /**
  * An external link that opens safely in a new tab.
  *
+ * `boxed` is the difference between the two shapes a reference takes: a token
+ * standing on its own gets the box (`.ref-out`), a reference inside a sentence
+ * gets the arrow alone. It defaults to unboxed because every caller here is prose
+ * or a chip that already has a box of its own — only `<Ref>` draws the standalone
+ * token, and it says so.
+ *
  * @public shared with `refs.tsx`, which resolves a ref against several keys
  * before it has a URL to hand over — one definition of `target`/`rel`, because a
  * second one is how a link ends up handing the opener away.
  */
-export function ExtLink({ href, title, children }: { href: string; title?: string; children: ReactNode }): JSX.Element {
+export function ExtLink({
+  href,
+  title,
+  boxed,
+  children,
+}: {
+  href: string;
+  title?: string;
+  boxed?: boolean;
+  children: ReactNode;
+}): JSX.Element {
   return (
-    <a className="ext-ref" href={href} title={title} target="_blank" rel="noopener noreferrer">
+    <a
+      className={boxed ? 'ext-ref ref-out' : 'ext-ref'}
+      href={href}
+      title={title}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
       {children}
     </a>
   );
