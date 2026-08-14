@@ -542,8 +542,21 @@ written anywhere in this repository**: every one comes off the verdict. Where th
 per-check detail at all the aggregate speaks under a generic name rather than drawing nothing, because
 missing detail is not a clean bill of health.
 
-`courtTone` and `CiLadder` are exported from `GoalPage.tsx` and drawn by the overview's rack too. Two
-readings of one verdict side by side is how the same PR comes to wear two tones nobody chose.
+`CourtChip` and `CiLadder` are exported from `GoalPage.tsx` and drawn by the overview's rack too — the
+whole chip rather than the tone lookup alone, since two readings of one verdict side by side is how
+the same PR comes to wear two tones, or two thresholds, nobody chose.
+
+**The court chip grows an age when a review has been slow.** Past `reviewReminderMs` (default 2 days)
+a PR carrying `attention.reviewWaitingSince` reads `elsewhere · 3d`, with the instant it started
+waiting in the title. Below the threshold it draws nothing, because every open PR is waiting on
+somebody and an age on all of them says nothing about any.
+
+It is an age on a row you were already looking at, and **deliberately nothing more**. It raises no
+"Needs you" row, files no human task, and does not move the PR into your court: on a team the reviewer
+is somebody else, and a queue of other people's obligations is exactly what makes an inbox stop being
+read. The threshold changes display and nothing else — the harness has no more idea than the operator
+does how to make a colleague review faster. What decides the age is
+[07](07-pull-requests.md#how-long-it-has-been-waiting-on-a-reviewer); the cockpit only draws it.
 
 **The tail** is what is left after the parts: the goal check (the delivery's or the shortfall's own
 summary), the write-up, closing the ticket, and the notepad. Each states its own author's verdict or

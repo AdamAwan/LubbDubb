@@ -372,6 +372,13 @@ interface CockpitConfig {
    * both routes refuse on.
    */
   canFileTickets: boolean;
+  /**
+   * `reviewReminderMs` — how long a pull request may sit on a reviewer before its
+   * row draws an age. Shipped rather than hard-coded in the browser for the same
+   * reason `containerTypes` is: it is a policy the operator set, and a second copy
+   * of the number here would be free to disagree with the one in the config.
+   */
+  reviewReminderMs: number;
 }
 
 /** Account-level Claude usage: the rolling cost windows, plus real limits when captured. */

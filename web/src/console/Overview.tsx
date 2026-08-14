@@ -6,7 +6,7 @@ import { buildGoalPage, buildGoalTrack, goalOfPr, type GoalTrack } from '../view
 import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
-import { CiLadder, courtTone } from './GoalPage.js';
+import { CiLadder, CourtChip } from './GoalPage.js';
 
 /**
  * What is shown when no goal is selected: five cards, rows rather than pictures.
@@ -347,9 +347,7 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
                 </span>
               )}
               <CiLadder pr={pr} />
-              <i className={`cn-chip ${courtTone(pr)}`} title={pr.attention.reasons.join(' · ')}>
-                {pr.attention.status}
-              </i>
+              <CourtChip pr={pr} reminderMs={view.state.config.reviewReminderMs} now={view.now} />
               <AsyncButton
                 className="ghost"
                 disabled={ignoreLabel === ''}

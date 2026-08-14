@@ -19,6 +19,7 @@ import { TranscriptStore } from './transcripts.js';
 import { EscalationStore } from './escalations.js';
 import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
+import { ReviewWaitStore } from './reviewWaits.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore } from './world.js';
 import { ErrorStore } from './errors.js';
@@ -117,6 +118,7 @@ export class Store {
   private readonly escalations: EscalationStore;
   private readonly landings: StackLandingStore;
   private readonly branchReaps: BranchReapStore;
+  private readonly reviewWaitStore: ReviewWaitStore;
   private readonly decisions: DecisionStore;
   private readonly world: WorldStore;
   private readonly errors: ErrorStore;
@@ -179,6 +181,7 @@ export class Store {
     this.escalations = new EscalationStore(ctx);
     this.landings = new StackLandingStore(ctx);
     this.branchReaps = new BranchReapStore(ctx);
+    this.reviewWaitStore = new ReviewWaitStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
     this.errors = new ErrorStore(ctx);
@@ -679,6 +682,15 @@ export class Store {
   }
   reapedPrs(): ReadonlySet<number> {
     return this.branchReaps.reapedPrs();
+  }
+
+  // -- Review waits (how long a PR has sat on a reviewer) -------------------
+
+  foldReviewWaits(waiting: readonly number[]): void {
+    this.reviewWaitStore.foldReviewWaits(waiting);
+  }
+  reviewWaits(): ReadonlyMap<number, string> {
+    return this.reviewWaitStore.reviewWaits();
   }
 
   // -- Decisions (audit) ---------------------------------------------------

@@ -76,6 +76,17 @@ export interface PrAttention {
   status: PrAttentionKind;
   /** Human-readable, most actionable first. Never empty — every arm says why. */
   reasons: string[];
+  /**
+   * How long this pull request has been sitting on a reviewer (ISO instant it
+   * started), on the one arm that means it. Absent everywhere else.
+   *
+   * **It does not make the PR your court.** `waiting on review` stays `elsewhere`,
+   * because on a team the reviewer is somebody else and a queue of other people's
+   * obligations is not an inbox — it is the thing that makes an inbox stop being
+   * read. This is an age on a row you were already looking at, and nothing more:
+   * no needs-you entry, no human task, no escalation.
+   */
+  reviewWaitingSince?: string;
 }
 
 /** Everything the contextual arms need. Pure over this plus the PR. */
@@ -114,6 +125,12 @@ export interface PrAttentionContext {
   ci: CiPolicy;
   /** "Now" — the world snapshot's `takenAt`, as everywhere else. */
   now: string;
+  /**
+   * PR number → when it started waiting on a reviewer (`Store.reviewWaits`).
+   * Absent means the reading is unavailable, which costs an age and never a
+   * verdict — every arm answers the same with or without it.
+   */
+  reviewWaits?: ReadonlyMap<number, string>;
 }
 
 /**
@@ -256,7 +273,10 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
     };
   }
   if (pr.ciStatus === 'pending') return { status: 'elsewhere', reasons: ['CI is still running'] };
-  if (pr.approved !== true) return { status: 'elsewhere', reasons: ['waiting on review'] };
+  if (pr.approved !== true) {
+    const since = ctx.reviewWaits?.get(pr.number);
+    return { status: 'elsewhere', reasons: ['waiting on review'], ...(since ? { reviewWaitingSince: since } : {}) };
+  }
   if (pr.mergeableState === 'blocked') {
     return { status: 'elsewhere', reasons: ['merge blocked (required checks/reviews)'] };
   }

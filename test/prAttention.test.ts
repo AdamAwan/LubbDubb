@@ -4,6 +4,8 @@ import { readFileSync, readdirSync, mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { prAttentionStatus, type PrAttentionContext } from '../src/prAttention.js';
+import { awaitingReview } from '../src/prHealth.js';
+import { Store } from '../src/store/store.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
@@ -523,3 +525,101 @@ function srcFiles(dir: string): string[] {
   }
   return out.sort();
 }
+
+// ---------------------------------------------------------------------------
+// The review wait
+// ---------------------------------------------------------------------------
+
+test('awaitingReview runs only while a reviewer could actually act', () => {
+  // Green, clean, unapproved, unstaffed — the one shape it means.
+  assert.equal(awaitingReview(pr({ approved: false }), false), true);
+
+  // Each of these is work that is not the reviewer's, and blaming them for it is
+  // exactly the wrong reading to hang a reminder on.
+  assert.equal(awaitingReview(pr({ approved: false }), true), false, 'an agent holds the branch');
+  assert.equal(awaitingReview(pr({ approved: false, ciStatus: 'failing' }), false), false, 'red CI');
+  assert.equal(
+    awaitingReview(
+      pr({ approved: false, unresolvedComments: [{ id: 'c', author: 'bob', body: 'no', handled: false }] }),
+      false,
+    ),
+    false,
+    'an unhandled comment',
+  );
+  assert.equal(awaitingReview(pr({ approved: true }), false), false, 'already approved');
+  assert.equal(awaitingReview(pr({ approved: false, merged: true }), false), false, 'not open');
+});
+
+test('a handled comment does not hold the clock', () => {
+  // `handled` is what decides everywhere else in this file, and it decides here.
+  const handled = pr({ approved: false, unresolvedComments: [{ id: 'c', author: 'bob', body: 'ok', handled: true }] });
+  assert.equal(awaitingReview(handled, false), true);
+});
+
+test('the waiting-on-review arm carries the wait, and stays elsewhere', () => {
+  const since = ago(60 * 24 * 3); // three days
+  const verdict = prAttentionStatus(pr({ approved: false }), {
+    ...ctx(),
+    reviewWaits: new Map([[7, since]]),
+  });
+  assert.equal(verdict.status, 'elsewhere');
+  assert.deepEqual(verdict.reasons, ['waiting on review']);
+  assert.equal(verdict.reviewWaitingSince, since);
+});
+
+test('no wait recorded costs the age and never the verdict', () => {
+  // The map is optional, so a store that has not folded yet — or a caller that
+  // does not pass one — must answer identically about whose court this is.
+  const withMap = prAttentionStatus(pr({ approved: false }), { ...ctx(), reviewWaits: new Map() });
+  const without = prAttentionStatus(pr({ approved: false }), ctx());
+  assert.equal(withMap.status, without.status);
+  assert.deepEqual(withMap.reasons, without.reasons);
+  assert.equal(without.reviewWaitingSince, undefined);
+});
+
+test('an arm above waiting-on-review never carries a wait', () => {
+  // The clock is deliberately a superset of the arm, so a PR whose court is the
+  // harness's has a row in the table and must still show nothing.
+  const verdict = prAttentionStatus(pr({ approved: false, ciStatus: 'failing' }), {
+    ...ctx(),
+    reviewWaits: new Map([[7, ago(60 * 24 * 5)]]),
+  });
+  assert.notEqual(verdict.status, 'elsewhere');
+  assert.equal(verdict.reviewWaitingSince, undefined);
+});
+
+test('the wait is a watermark: it survives a pulse, and clears when the wait ends', () => {
+  // A driven clock, not the system one: the assertions below are about *which*
+  // instant was kept, and two folds in one millisecond cannot tell them apart.
+  let tick = 0;
+  const store = new Store(':memory:', () => new Date(Date.parse(NOW) + tick++ * 60_000).toISOString());
+  // Two pulses with the PR still waiting. The second must not move the clock —
+  // an upsert here would read as "waiting five minutes" forever, which is the
+  // silent wrong answer this table exists to give correctly.
+  store.foldReviewWaits([7]);
+  const first = store.reviewWaits().get(7);
+  assert.ok(first);
+  store.foldReviewWaits([7]);
+  assert.equal(store.reviewWaits().get(7), first);
+
+  // It stops waiting — approved, merged, gone red, whatever. The row goes.
+  store.foldReviewWaits([]);
+  assert.equal(store.reviewWaits().get(7), undefined);
+
+  // And a later wait starts a new clock rather than resurrecting the old one:
+  // work happened in between, so the reviewer's wait began after it.
+  store.foldReviewWaits([7]);
+  assert.notEqual(store.reviewWaits().get(7), first);
+  store.close();
+});
+
+test('folding one PR does not disturb another still waiting', () => {
+  let tick = 0;
+  const store = new Store(':memory:', () => new Date(Date.parse(NOW) + tick++ * 60_000).toISOString());
+  store.foldReviewWaits([7, 8]);
+  const seven = store.reviewWaits().get(7);
+  store.foldReviewWaits([7]);
+  assert.equal(store.reviewWaits().get(7), seven);
+  assert.equal(store.reviewWaits().get(8), undefined);
+  store.close();
+});

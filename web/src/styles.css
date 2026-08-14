@@ -3437,3 +3437,12 @@ body {
   color: var(--red);
   font-weight: 600;
 }
+
+/* The age on a court chip whose pull request has been waiting on a reviewer past
+   `reviewReminderMs`. Dimmer than the status beside it on purpose: the chip's
+   claim is still *whose court this is*, and the age is a qualifier on it rather
+   than a second reading competing for the same glance. */
+.cn-chip-age {
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}

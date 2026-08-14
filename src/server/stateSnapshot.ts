@@ -254,6 +254,10 @@ export function buildStateSnapshot(
     // will act in rather than promising an agent for a check the policy holds.
     ci: config.ci,
     now: world.takenAt,
+    // Read, never written, here: the pulse folds this table and the snapshot only
+    // renders it. A write from the read path would restart every clock on
+    // whatever schedule the cockpit happened to poll on.
+    reviewWaits: store.reviewWaits(),
   };
   // The world's change history the Activity feed / Signals panels draw. Read here
   // rather than at the snapshot literal below because its entries carry structured
@@ -398,6 +402,7 @@ export function buildStateSnapshot(
       // the cockpit to infer from the provider name, so the one place that
       // decides is the one the route asks.
       canFileTickets: trackerCoordinates(config) !== null,
+      reviewReminderMs: config.reviewReminderMs,
     },
     // When the world below was actually observed — null before the first cycle,
     // when there is no baseline and the lists are empty. Shipped because the

@@ -195,3 +195,35 @@ export function isPrExcluded(pr: PullRequest, label: string): boolean {
   if (!label) return false;
   return (pr.labels ?? []).includes(label);
 }
+
+/**
+ * Could a reviewer act on this pull request right now, and have they not?
+ *
+ * The clock behind `PrAttention.reviewWaitingSince`, folded once per pulse
+ * (`Store.foldReviewWaits`). Pure over the pull request plus whether an agent
+ * holds its branch, so it is decidable inside the pulse — which is the whole
+ * requirement: the moment a pull request *becomes* reviewable is observable only
+ * as it happens, and no provider payload carries it after the fact.
+ *
+ * **Deliberately a superset of `prAttention`'s `waiting on review` arm**, and it
+ * lives here rather than there for the reason that file states about itself:
+ * nothing outside the state snapshot may import the lens, and the pulse has to
+ * fold this. That arm is reached only after seven earlier ones decline the pull
+ * request, and reproducing all seven would be a second copy of the verdict, free
+ * to drift. So the clock runs a little more eagerly and the *arm* decides whether
+ * an age is ever displayed: a pull request whose clock is running but whose court
+ * is the harness's shows nothing, which is the safe direction — an age shown for
+ * a wait the fleet caused would be a reminder pointed at the wrong person.
+ *
+ * Red CI, an unhandled comment and a staffed branch all stop it, for that same
+ * reason: a reviewer cannot be late for work that is not ready.
+ */
+export function awaitingReview(pr: PullRequest, staffed: boolean): boolean {
+  return (
+    prState(pr) === 'open' &&
+    !staffed &&
+    pr.approved !== true &&
+    pr.ciStatus !== 'failing' &&
+    !pr.unresolvedComments.some((c) => !c.handled)
+  );
+}
