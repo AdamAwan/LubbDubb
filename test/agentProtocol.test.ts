@@ -69,6 +69,47 @@ test('buildClaudeStreamArgs requests headless bidirectional stream-json', () => 
   assert.ok(args.includes('--permission-mode'));
 });
 
+test('buildClaudeStreamArgs pins a chosen session id on a fresh launch', () => {
+  const id = '550e8400-e29b-41d4-a716-446655440000';
+  const args = buildClaudeStreamArgs({ sessionId: id });
+  assert.equal(args[args.indexOf('--session-id') + 1], id);
+  assert.equal(args.includes('--resume'), false, 'a fresh headless launch mints the id, it does not re-open one');
+});
+
+test('buildClaudeStreamArgs resumes an existing session and re-appends the protocol', () => {
+  const id = '550e8400-e29b-41d4-a716-446655440000';
+  const args = buildClaudeStreamArgs({ sessionId: id, resume: true });
+  assert.equal(args[args.indexOf('--resume') + 1], id);
+  assert.equal(args.includes('--session-id'), false);
+  assert.equal(args[args.indexOf('--append-system-prompt') + 1], PROTOCOL_SYSTEM_PROMPT);
+  // Still the headless transport — resume changes the conversation, not the protocol.
+  assert.ok(args.includes('-p'));
+  assert.equal(args[args.indexOf('--output-format') + 1], 'stream-json');
+});
+
+test('buildClaudeStreamArgs ignores resume when no session id is given', () => {
+  const args = buildClaudeStreamArgs({ resume: true });
+  assert.equal(args.includes('--resume'), false);
+  assert.equal(args.includes('--session-id'), false);
+});
+
+test('neither builder ever emits --session-id and --resume together', () => {
+  // `claude` refuses --session-id on an id that already has a transcript (exit 1,
+  // plain stderr, no stream event), so the two arms must stay exclusive on both
+  // runtimes and in both directions.
+  const id = '550e8400-e29b-41d4-a716-446655440000';
+  for (const build of [buildClaudeArgs, buildClaudeStreamArgs]) {
+    for (const resume of [false, true]) {
+      const args = build({ sessionId: id, resume });
+      assert.equal(
+        Number(args.includes('--session-id')) + Number(args.includes('--resume')),
+        1,
+        `${build.name} (resume=${resume}) must carry exactly one of the two`,
+      );
+    }
+  }
+});
+
 /** Pull the single `--settings` JSON object out of an argv, or null if absent. */
 function settingsOf(args: string[]): Record<string, unknown> | null {
   const i = args.indexOf('--settings');

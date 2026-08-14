@@ -87,12 +87,13 @@ interface ClaudeArgsOptions {
   /**
    * The session id to run under. Chosen up front (`--session-id`) so we *own* the
    * id and can re-attach to this exact conversation after a restart — no scraping
-   * an id out of the terminal. Omitted for runtimes that don't support resume.
+   * an id out of the terminal. Both real runtimes pass one; only the `raw` runtime,
+   * which speaks no protocol at all, omits it.
    */
   sessionId?: string;
   /**
    * Re-attach to {@link sessionId} (`--resume <id>`) instead of starting a fresh
-   * session. Used only on boot resume of an orphaned agent.
+   * session. Used only when an orphaned agent is restored.
    */
   resume?: boolean;
   /**
@@ -181,18 +182,30 @@ function appendMcpConfig(args: string[], opts: ClaudeArgsOptions): void {
   if (opts.permissionPromptTool) args.push('--permission-prompt-tool', opts.permissionPromptTool);
 }
 
+/**
+ * Pin the conversation this launch runs as — the one piece of argv that makes an
+ * agent re-attachable, and identical on both real runtimes (issue #318).
+ *
+ * `--session-id` (mint this id) and `--resume` (re-open it) are **mutually
+ * exclusive**, and not merely as a style rule: `claude` refuses `--session-id` on
+ * an id that already has a transcript, exiting 1 with a plain-stderr
+ * `Session ID … is already in use.` and no stream event at all — so a relaunch
+ * that carried the stored id down the mint arm would look, to the harness, like a
+ * process that died for no reason. A resume must never also try to mint.
+ */
+function appendSessionFlags(args: string[], opts: ClaudeArgsOptions): void {
+  if (!opts.sessionId) return;
+  if (opts.resume) args.push('--resume', opts.sessionId);
+  else args.push('--session-id', opts.sessionId);
+}
+
 /** Build the argv for launching an interactive (PTY) `claude` agent that speaks the protocol. */
 export function buildClaudeArgs(opts: ClaudeArgsOptions = {}): string[] {
   // Re-append the protocol on every launch, including resume: `--resume` replays
   // the conversation but does not retain the original invocation's appended
   // system prompt, so waiting/done detection would break without this.
   const args: string[] = ['--append-system-prompt', protocolPrompt(opts)];
-  if (opts.sessionId) {
-    // `--session-id` (pick a new id) and `--resume` (re-open that id) are mutually
-    // exclusive — a resume must not also try to mint the id.
-    if (opts.resume) args.push('--resume', opts.sessionId);
-    else args.push('--session-id', opts.sessionId);
-  }
+  appendSessionFlags(args, opts);
   // Merge every requested settings fragment into a single `--settings` — the flag
   // has no array form, so status-line + file-events must share one JSON object.
   const settings = collectSettings(opts);
@@ -239,6 +252,16 @@ export function buildResumeMessage(): string {
  * Build the argv for the unattended streaming runtime: headless print mode with
  * bidirectional stream-JSON. No TUI, structured events, stays alive across turns
  * so the waiting/answer loop works. This is the production agent launch.
+ *
+ * It carries the same `--session-id` / `--resume` pair as the PTY launch, verified
+ * against `claude` 2.1.223 rather than assumed (issue #318): headless honours a
+ * pinned id (every event echoes it, and the transcript lands under
+ * `~/.claude/projects/<slug>/<id>.jsonl`), `--resume` re-opens *that* file and
+ * appends to it rather than forking a new id, and a resumed headless session stays
+ * alive across turns exactly as a fresh one does. Crucially it also **replays
+ * nothing**: a resume emits `system`/`init`, the assistant turn for the new input,
+ * then `result` — no prior-turn events — so {@link StreamJsonSession} needs no
+ * swallow and the drawer's transcript continues instead of repeating.
  */
 export function buildClaudeStreamArgs(opts: ClaudeArgsOptions = {}): string[] {
   const args: string[] = [
@@ -251,6 +274,7 @@ export function buildClaudeStreamArgs(opts: ClaudeArgsOptions = {}): string[] {
     '--append-system-prompt',
     protocolPrompt(opts),
   ];
+  appendSessionFlags(args, opts);
   // The status line never renders headless, but PostToolUse hooks and permission
   // rules do apply — so file-events capture and the operator allow-list are wired
   // here too (unlike the PTY-only status line, which collectSettings skips when

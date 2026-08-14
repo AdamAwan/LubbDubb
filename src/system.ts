@@ -233,8 +233,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         env: spec.env,
         waitingPatterns: spec.waitingPatterns,
         submitDelayMs: config.agentSubmitDelayMs,
-        // Needs a pinned session id to name the transcript file; only the resumable
-        // PTY runtime has one, which is exactly the mode that needs it.
+        // Needs a pinned session id to name the transcript file. Both real runtimes
+        // now carry one, but only the TUI needs its screen read back out of a file —
+        // stream mode builds its transcript from the events themselves.
         sessionTranscript:
           claudeTui && spec.sessionId
             ? { root: sessionRoot, sessionId: spec.sessionId, startAtEof: spec.resume === true }
@@ -275,25 +276,30 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   type ArgsBuilder = (opts: { sessionId: string; resume: boolean; mcpConfigPath: string | null }) => string[];
   const agentSetup = {
     stream: {
-      // Stream-JSON resume is out of scope; ignore the session id.
-      buildArgs: (({ mcpConfigPath }) =>
+      // Resumable like the PTY runtime, and for the same reason: the id is pinned up
+      // front so a restart can re-open *this* conversation. Headless `claude` honours
+      // both flags (issue #318) — which is what puts `restore` on the recovery desk
+      // for the default deployment instead of requeue-or-remove.
+      buildArgs: (({ sessionId, resume, mcpConfigPath }) =>
         buildClaudeStreamArgs({
           permissionMode: perm,
           extraArgs,
           allowedTools,
           additionalDirectories,
+          sessionId,
+          resume,
           fileEvents: true,
           mcpConfigPath,
           permissionPromptTool,
         })) as ArgsBuilder,
       factory: streamFactory,
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
-      resumeInput: undefined,
+      resumeInput: buildResumeMessage,
       promptDelayMs: 0, // stdin is ready immediately; no TUI to wait for
-      resumable: false,
+      resumable: true,
     },
     pty: {
-      // The one resumable runtime: pin the session id up front, `--resume` it later.
+      // Pin the session id up front, `--resume` it later.
       buildArgs: (({ sessionId, resume, mcpConfigPath }) =>
         buildClaudeArgs({
           permissionMode: perm,
