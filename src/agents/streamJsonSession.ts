@@ -51,6 +51,11 @@ const defaultSpawner: Spawner = (command, args, opts) => {
  *   - DONE seen                 -> the agent finished the whole task
  *   - WAITING seen              -> it needs a human; escalate, then send the answer
  *   - turn ended with neither   -> treated as waiting (it stopped without finishing)
+ *
+ * One turn ending is not a sentinel question at all: an account whose usage limit
+ * is exhausted. That ends the turn — and usually the process — with nothing the
+ * agent did wrong, so it emits `limited` rather than `waiting` or `failed`; see
+ * {@link RateLimitPark}.
  */
 export class StreamJsonSession extends EventEmitter implements AgentSession {
   private child: StreamChild | null = null;
@@ -58,6 +63,16 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
   private stdoutBuf = '';
   /** Assistant text accumulated within the current turn, for sentinel scanning. */
   private turnText = '';
+  /**
+   * The exhaustion the last `rate_limit_event` reported, or null while the account
+   * is inside its limits. Held rather than acted on immediately because the event
+   * rides *beside* the turn: `claude` emits it as the limit changes and then ends
+   * the turn (or dies) of its own accord, and a park declared before the turn ended
+   * would race the `result` that carries the turn's usage.
+   */
+  private limit: RateLimitPark | null = null;
+  /** Whether the limit park has already been announced, so exit doesn't repeat it. */
+  private limitParked = false;
 
   constructor(
     private readonly spec: AgentSessionSpec,
@@ -181,6 +196,14 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
       return;
     }
 
+    if (ev.type === 'rate_limit_event') {
+      // Latest reading wins, including the one that says the limit cleared: a
+      // five-hour window can reset mid-run, and a stale rejection would then park
+      // an agent that is allowed to work.
+      this.limit = rateLimitPark(ev.rate_limit_info);
+      return;
+    }
+
     if (ev.type === 'result') {
       // Surface the usage metadata riding on the turn-end event (cumulative
       // cost/tokens/turns) before the status transition, so listeners persist
@@ -190,6 +213,11 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
       // End of a turn: decide done vs waiting from the sentinels the agent printed.
       if (this.turnText.includes(DONE_SENTINEL)) {
         this.finish('done');
+      } else if (this.limit) {
+        // Ordered after the done sentinel deliberately: an agent that finished the
+        // work and *then* hit the limit is finished, and parking it would resurrect
+        // a settled ending.
+        this.parkOnLimit();
       } else {
         const reason =
           extractWaitingReason(this.turnText) ?? 'Agent ended its turn without finishing; awaiting direction.';
@@ -205,9 +233,31 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     this.emit('waiting', reason);
   }
 
+  /**
+   * Announce that the account, not the agent, is what stopped. Emitted at most once
+   * per session: the exhaustion typically ends the turn *and* kills the process, and
+   * the two must not read as two events.
+   */
+  private parkOnLimit(): void {
+    if (this.limitParked || this._status === 'done' || this._status === 'killed') return;
+    this.limitParked = true;
+    // Straight to `waiting` rather than through {@link setWaiting}, whose `waiting`
+    // event is the harness's "ask a human a question" transition. This is a park with
+    // no question in it.
+    this.setStatus('waiting');
+    this.emit('limited', this.limit);
+  }
+
   private onExit(code: number | null): void {
     this.emit('exit', code ?? 0);
     if (this._status === 'killed' || this._status === 'done') return;
+    // An exhausted account is why `claude` exits non-zero here, and calling that a
+    // failure settles the agent row and its task over something no one did wrong.
+    // The park stands instead, and the operator resumes it once the limit clears.
+    if (this.limit) {
+      this.parkOnLimit();
+      return;
+    }
     this.finish(code === 0 ? 'done' : 'failed');
   }
 
@@ -229,10 +279,67 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
   }
 }
 
+/**
+ * What `claude` says about the account's usage limits, as it ships it on the
+ * `rate_limit_event` stream event.
+ *
+ * Declared from the CLI's own payload schema (`claude` 2.1.223, the binary this
+ * deployment launches), not from a guess: `status` and `overageStatus` are the
+ * enum `["allowed","allowed_warning","rejected"]`, `resetsAt` is whole unix
+ * seconds, and `rateLimitType` is one of `five_hour`, `seven_day`,
+ * `seven_day_opus`, `seven_day_sonnet`, `seven_day_overage_included`, `overage`.
+ * Every field but `status` is optional there, so every field is optional here —
+ * a park must survive a payload that names no window and no reset.
+ *
+ * Kept as `string` rather than re-declared unions: this is someone else's wire
+ * format and a narrower type here would turn a value the CLI adds tomorrow into
+ * a parse that quietly reads as "not exhausted".
+ */
+interface RateLimitInfo {
+  status?: string;
+  resetsAt?: number;
+  rateLimitType?: string;
+  overageStatus?: string;
+  isUsingOverage?: boolean;
+}
+
+/** An account limit that is spent, as the harness carries it. */
+export interface RateLimitPark {
+  /** Which window ran out (`five_hour`, `seven_day`…) verbatim, or null when unstated. */
+  limitType: string | null;
+  /** When it resets, ISO, or null when `claude` did not say. */
+  resetsAt: string | null;
+  /** Whether it was the account's *overage* allowance that ran out rather than the plan window. */
+  overage: boolean;
+}
+
+/**
+ * Read an exhaustion off a `rate_limit_event`, or null while there is room left.
+ *
+ * `rejected` is the only spelling of "spent" in the CLI's enum — `allowed_warning`
+ * is the near-the-line warning and must **not** park an agent that can still work.
+ * The overage arm is separate because an account running on overage credit reports
+ * `status: "allowed"` with the exhaustion in `overageStatus`, so reading `status`
+ * alone would miss the one that actually stops the turn.
+ */
+function rateLimitPark(info: RateLimitInfo | undefined): RateLimitPark | null {
+  if (!info) return null;
+  const overage = info.isUsingOverage === true && info.overageStatus === 'rejected';
+  if (info.status !== 'rejected' && !overage) return null;
+  return {
+    limitType: info.rateLimitType ?? null,
+    // Whole seconds since the epoch, per the CLI's schema.
+    resetsAt: typeof info.resetsAt === 'number' ? new Date(info.resetsAt * 1000).toISOString() : null,
+    overage,
+  };
+}
+
 interface StreamEvent {
   type: string;
   subtype?: string;
   message?: { content?: ContentBlock[] | string };
+  /** Present on `rate_limit_event` only. */
+  rate_limit_info?: RateLimitInfo;
   // `result`-event usage metadata, all cumulative across the session.
   total_cost_usd?: number;
   num_turns?: number;

@@ -2,6 +2,7 @@ import type { JSX, ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedRow } from '../view/needsYou.js';
+import { AsyncButton } from '../components/AsyncButton.js';
 import { EscalationCard } from '../components/EscalationCard.js';
 import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
@@ -83,6 +84,35 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
             onDone={(id) => actions.completeHumanTask(id)}
             onDecline={(id, note) => actions.declineHumanTask(id, note)}
           />
+        </div>
+      </>
+    );
+  }
+  // A usage-limit park (issue #318). The row's id *is* the agent, because there is
+  // no escalation under it: nothing was asked, so the only verdict is "the limit has
+  // cleared, carry on" — and the transcript, which is where an operator decides
+  // whether it is worth carrying on at all.
+  if (row.kind === 'limit') {
+    const agent = row.agentId ? view.agentById.get(row.agentId) : undefined;
+    if (!agent || !view.limitParked.has(agent.id)) return null;
+    return (
+      <>
+        <p>{agent.waitingReason ?? 'This account has no usage allowance left right now.'}</p>
+        <p className="cn-tick">
+          Nothing failed and nothing is lost: the branch, the worktree and the conversation are as the agent left them.
+          Resuming re-opens that conversation where it stopped.
+        </p>
+        <div className="cn-acts">
+          <AsyncButton
+            className="cn-btn cn-primary"
+            onClick={() => actions.resumeAgent(agent.id)}
+            pendingLabel="Resuming…"
+          >
+            Resume
+          </AsyncButton>
+          <button type="button" className="cn-btn" onClick={() => actions.select(agent.id)}>
+            Open transcript
+          </button>
         </div>
       </>
     );

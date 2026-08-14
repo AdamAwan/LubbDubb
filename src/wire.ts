@@ -476,6 +476,19 @@ export interface CockpitState {
    */
   schedules: JobSchedule[];
   agents: Agent[];
+  /**
+   * The ids of agents parked because the *account's* usage limit is spent, rather
+   * than because they asked anything (issue #318). They are ordinary `waiting` rows
+   * in {@link agents} — the reason is on the row — and this is what tells the two
+   * parks apart, so the cockpit offers "resume" where a reply box would be a dead
+   * end: nobody can answer a limit, and the session is usually gone with it.
+   *
+   * A list of ids rather than a field on the row, because the park is a fact about
+   * the *fleet this process is holding*, not about the row: a restart drops every
+   * one of them, at which point the same rows are the recovery desk's question and
+   * resuming them is its verdict, not this button.
+   */
+  parkedOnLimit: string[];
   /** Artifacts agents surfaced mid-run, grouped by agentId in the UI. */
   flags: AgentFlag[];
   /**

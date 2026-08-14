@@ -895,6 +895,22 @@ resumed on the next boot and its worktree is kept.
 
 409 when the agent is not live. Sends raw `\x03`. Mutates no status.
 
+### `POST /api/agents/:id/resume`
+
+The one way out of a usage-limit park (issue #318, [10](10-agent-runtimes.md#the-limit-park)). Takes no
+body: there is no question and nothing to type, and the session is usually gone, since `claude` exits
+with the exhausted account. Re-opens **that** conversation in **that** worktree and tells the agent to
+carry on, then broadcasts `dirty` — the row, the fleet's live count and the park chip all ride the
+snapshot rather than a frame of their own.
+
+Not `respond`, and the 409 says which of the two ways it was reached: an agent parked on a question of
+its own is _answered_, and one whose park a restart has already handed to the recovery desk is decided
+there instead. The refusal is the manager's own sentence rather than a flat "not live", because those
+are different situations with different next steps.
+
+`POST /api/agents/:id/kill` stays available on a park — it is the only other verdict — and settles it
+the way it settles any other agent.
+
 ### Static SPA
 
 When `web/dist` exists it is served statically, with a not-found handler that returns `index.html` for
@@ -947,7 +963,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 
 | Key                             | Contents                                                                                                                                                                                                                      |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config`                        | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `ignoreLabel`, `containerTypes`, `canFileTickets`.                                                                                                               |
+| `config`                        | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `ignoreLabel`, `containerTypes`, `canFileTickets`.                                                                                                                |
 | `control`                       | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                                                                     |
 | `worldObservedAt`               | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                                                                                 |
 | `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay`, `completion` and `spend` per issue.                                                                    |

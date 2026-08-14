@@ -3,8 +3,8 @@ import { z } from 'zod';
 import { checked, IdParams } from '../validation.js';
 import type { RouteContext } from './context.js';
 
-/** The fleet: one agent's transcript, and the four things an operator can say to a live one. */
-export function register(app: FastifyInstance, { system }: RouteContext): void {
+/** The fleet: one agent's transcript, and the five things an operator can say to one. */
+export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store, agents } = system;
 
   app.get(
@@ -44,6 +44,27 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     checked({ params: IdParams }, async ({ params, reply }) => {
       const ok = agents.complete(params.id);
       return ok ? { ok: true } : reply.code(409).send({ error: 'agent not live' });
+    }),
+  );
+
+  // "The limit has cleared, carry on" — the one way out of a usage-limit park
+  // (issue #318). It is not `respond`: there is no question and nothing to type,
+  // and the session is usually gone, since `claude` exits with the exhausted
+  // account. Resuming re-opens *that* conversation in *that* worktree.
+  //
+  // The refusal is the manager's own sentence rather than a flat "not live",
+  // because the two ways to reach it are worth telling apart: an agent parked on a
+  // question is not resumable this way, and one whose park a restart has already
+  // handed to the recovery desk is answered there instead.
+  app.post(
+    '/api/agents/:id/resume',
+    checked({ params: IdParams }, async ({ params, reply }) => {
+      const result = agents.resumeParked(params.id);
+      if (!result.ok) return reply.code(409).send({ error: result.error });
+      // The row, the fleet's live count and the park chip all move together, and all
+      // three ride the snapshot rather than a frame of their own.
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true };
     }),
   );
 

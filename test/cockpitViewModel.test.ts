@@ -17,6 +17,7 @@ function stateWith(over: Partial<AppState>): AppState {
     config: { heartbeatIntervalMs: 60_000 },
     control: { cap: 4, paused: false },
     agents: [],
+    parkedOnLimit: [],
     tasks: [],
     escalations: [],
     decisions: [],
