@@ -389,6 +389,10 @@ export function buildStateSnapshot(
       // set and how to render an item's effective watched/ignored state.
       watchLabel,
       ignoreLabel,
+      // The container policy itself, because the backlog draws a container as a
+      // heading over its children rather than as a row beside them — a question
+      // about the item's type that no per-item verdict answers.
+      containerTypes: [...config.issueContainerTypes],
       // Whether a finding can be filed as a ticket at all — there is nowhere to
       // file one under the `fake` provider. Shipped as a flag rather than left to
       // the cockpit to infer from the provider name, so the one place that

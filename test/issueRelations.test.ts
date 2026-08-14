@@ -6,6 +6,7 @@ import {
   isContainerIssue,
   isOrphanIssue,
   relatedWorkNote,
+  watchCascadeTargets,
   DEFAULT_CONTAINER_TYPES,
 } from '../src/issueRelations.js';
 import { isIssuePickupEligible, issuePickupStatus } from '../src/dispatcher/issuePickup.js';
@@ -407,4 +408,46 @@ test('a Feature in the snapshot carries its stories as children', async () => {
     [101],
   );
   assert.equal(containerPickupReason(issues[0]!, DEFAULT_CONTAINER_TYPES) !== null, true);
+});
+
+// --------------------------------------------------------------------------
+// The watch cascade
+// --------------------------------------------------------------------------
+
+test('watchCascadeTargets is the item alone when it is not a container', () => {
+  const story = issue({ number: 5, issueType: 'User Story', children: [relative({ number: 6 })] });
+  assert.deepEqual(watchCascadeTargets(story, [story], DEFAULT_CONTAINER_TYPES), [5]);
+});
+
+test('watchCascadeTargets reaches a container’s children, in issue order', () => {
+  const feature = issue({
+    number: 1,
+    issueType: 'Feature',
+    children: [relative({ number: 30 }), relative({ number: 12 })],
+  });
+  assert.deepEqual(watchCascadeTargets(feature, [feature], DEFAULT_CONTAINER_TYPES), [1, 12, 30]);
+});
+
+test('watchCascadeTargets descends through a child the world holds, not through a relation summary', () => {
+  // The epic names the feature; the feature is an issue of its own, so its own
+  // children are reached. #99 is named only as a relative, so it is a leaf here.
+  const story = issue({ number: 20, issueType: 'User Story' });
+  const feature = issue({
+    number: 10,
+    issueType: 'Feature',
+    children: [relative({ number: 20 }), relative({ number: 99 })],
+  });
+  const epic = issue({ number: 1, issueType: 'Epic', children: [relative({ number: 10 })] });
+  assert.deepEqual(watchCascadeTargets(epic, [epic, feature, story], DEFAULT_CONTAINER_TYPES), [1, 10, 20, 99]);
+});
+
+test('watchCascadeTargets terminates on a cycle rather than walking it twice', () => {
+  const a = issue({ number: 1, issueType: 'Feature', children: [relative({ number: 2 })] });
+  const b = issue({ number: 2, issueType: 'Feature', children: [relative({ number: 1 })] });
+  assert.deepEqual(watchCascadeTargets(a, [a, b], DEFAULT_CONTAINER_TYPES), [1, 2]);
+});
+
+test('watchCascadeTargets is the item alone on a flat tracker', () => {
+  const bare = issue({ number: 7 });
+  assert.deepEqual(watchCascadeTargets(bare, [bare], DEFAULT_CONTAINER_TYPES), [7]);
 });

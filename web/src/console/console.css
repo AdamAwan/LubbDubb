@@ -704,6 +704,48 @@
   font-size: 11.5px;
   color: var(--cn-fg-faint);
 }
+/* A feature heading inside a backlog group: the container the rows beneath it
+   deliver. Heavier than a row and lighter than a group name, because it sits
+   between the two — it is a heading, but one that carries its own controls. */
+.cn-subhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  background: var(--cn-panel-2);
+  min-width: 0;
+}
+/* Air above a heading that follows another feature's rows, so the fold boundary
+   reads as one. The first heading in a card needs none — the card edge is it. */
+.cn-subhead-gap {
+  border-top: 1px solid var(--cn-line);
+  margin-top: 6px;
+}
+.cn-subhead .cn-grow {
+  min-width: 0;
+  flex: 1;
+}
+/* The fold control. Sized to the row rather than the glyph so the click target
+   is the whole gutter the indent below lines up with. */
+.cn-fold {
+  width: 18px;
+  flex: none;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--cn-fg-dim);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.cn-fold:hover {
+  color: var(--cn-fg);
+}
+/* Work under a feature, indented to the fold gutter — the indent is the whole
+   statement that these rows belong to the heading above them. */
+.cn-nested {
+  padding-left: 41px;
+}
 .cn-tgl {
   border: 1px solid var(--cn-line);
   background: var(--cn-panel-2);

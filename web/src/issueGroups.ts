@@ -24,7 +24,7 @@ import type { Issue, IssueRelative } from './types.js';
 type IssueGroupKind = 'feature' | 'orphans' | 'untracked';
 
 /** One feature and the visible items under it. */
-interface IssueGroup {
+export interface IssueGroup {
   kind: IssueGroupKind;
   /**
    * The feature these items hang under, or null for the trailing group of items
@@ -117,6 +117,22 @@ export function groupByFeature(issues: readonly Issue[], isContainer: (issue: Is
     ...features,
     ...trailing.filter((g) => g.kind === 'orphans'),
   ];
+}
+
+/**
+ * Is this item a container under the operator's own policy — the cockpit's half
+ * of `isContainerIssue`, reading the `containerTypes` the state snapshot ships.
+ *
+ * It asks the **type**, deliberately, and not `pickup.status === 'container'`: an
+ * ignored container reports `ignored` and a gate-off deployment reports something
+ * else again, so a verdict-based reading would move a Feature in and out of the
+ * heading position as its tags changed. Case-insensitive, because a process
+ * template's type names are display strings.
+ */
+export function isContainerType(issue: Issue, containerTypes: readonly string[]): boolean {
+  if (issue.issueType === undefined) return false;
+  const needle = issue.issueType.trim().toLowerCase();
+  return containerTypes.some((t) => t.trim().toLowerCase() === needle);
 }
 
 /**

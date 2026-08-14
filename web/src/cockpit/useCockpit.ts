@@ -176,6 +176,12 @@ export function useCockpit(): CockpitStatus {
       selectGoal: (ref) => go({ goal: ref }),
       openPanel: (panel) => go({ panel }),
       openTab: (next) => go({ tab: next }),
+      collapseFeature: (issueNumber, collapsed) =>
+        go((current) => ({
+          collapsed: collapsed
+            ? [...current.collapsed, issueNumber]
+            : current.collapsed.filter((n) => n !== issueNumber),
+        })),
       discussPlan: (planId) => then(api.discussPlan(planId)),
       endPlanDiscussion: (planId) => then(api.endPlanDiscussion(planId)),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
@@ -225,6 +231,7 @@ export function useCockpit(): CockpitStatus {
       selectedGoal: place.goal,
       consolePanel: place.panel,
       tab: place.tab,
+      collapsed: place.collapsed,
     }),
   };
 }

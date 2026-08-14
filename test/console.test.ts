@@ -718,22 +718,66 @@ test('a backlog group with nothing in it is muted, never removed', () => {
   assert.deepEqual(groupHeadings(html), BACKLOG_GROUPS, 'a group that vanishes when quiet reads as one that broke');
 });
 
-test('a container type is disabled rather than absent — “cannot be picked up” is worth seeing', () => {
+test('a feature is a heading over its work, never a row beside it', () => {
+  const v = view({ tab: 'backlog' });
+  const container = v.state.world.issues.find((i) => i.pickup.status === 'container');
+  assert.ok(container, 'the demo fixtures must carry a container');
+  const html = render(v);
+
+  // The feature's own line is the heading, and the fold beside it is what makes a
+  // long one collapsible to that line.
+  const headings = [...html.matchAll(/<div class="cn-subhead[^"]*">/g)];
+  assert.ok(headings.length > 0, 'a tracker with a tree draws feature headings');
+  assert.ok(html.includes('aria-expanded="true"'), 'every feature is open until the operator folds one');
+
+  // …and it is not also drawn as an ordinary row, which is the whole complaint:
+  // an item nothing is ever dispatched at, sitting in the list being triaged.
+  const rows = [...html.matchAll(/<div class="cn-row[^"]*">/g)].length;
+  const nested = [...html.matchAll(/<div class="cn-row[^"]*cn-nested[^"]*">/g)].length;
+  assert.ok(nested > 0, 'the work under a feature is indented to it');
+  assert.ok(nested <= rows);
+});
+
+test('folding a feature hides its work and keeps its heading', () => {
+  const v = view({ tab: 'backlog' });
+  const container = v.state.world.issues.find((i) => i.pickup.status === 'container');
+  assert.ok(container);
+  // A child the world holds as an issue of its own — the rows the fold hides are
+  // those, not the relation summaries the feature merely names.
+  const child = v.state.world.issues.find((i) => i.parent?.number === container.number && i.state === 'open');
+  assert.ok(child, 'the demo fixtures must carry an open item under that container');
+
+  const open = render(v);
+  const folded = render({ ...v, collapsedFeatures: new Set([container.number]) });
+
+  assert.ok(decode(open).includes(child.title), 'open by default — a surface that hides the backlog reports none');
+  assert.ok(!decode(folded).includes(child.title), 'folding puts the work away');
+  assert.ok(decode(folded).includes(container.title), 'and leaves the heading, or there is nothing to unfold');
+  assert.ok(folded.includes('aria-expanded="false"'));
+});
+
+test('a container is a heading over its work, and watching it says what it will cascade to', () => {
   const v = view({ tab: 'backlog' });
   const container = v.state.world.issues.find((i) => i.pickup.status === 'container');
   assert.ok(container, 'the demo fixtures must carry an item the harness refuses as a container');
-  const reason = container.pickup.reasons[0];
-  assert.ok(reason, 'the server says why it refuses one — the button quotes that and invents nothing');
 
   // Untagged, so it falls into the triage group, which is the group that draws a
   // Watch button at all. The fixture's container carries the watch label.
   const issues = v.state.world.issues.map((i) => (i.number === container.number ? { ...i, labels: [] } : i));
   const html = render({ ...v, state: { ...v.state, world: { ...v.state.world, issues } } });
 
-  // Deliberately not `html.includes('disabled')`: the console draws other
-  // disabled buttons (the rack's ignore toggle, with no ignore label configured),
-  // so that assertion passes with no container on the page at all.
-  assert.match(buttonWith(html, 'is a container'), / disabled=""/, 'the button is drawn, and refuses');
+  // The container is live in both directions now: watching a Feature tags every
+  // item beneath it, which is what "work this feature" has always meant, so the
+  // click the toggle offers is one the harness keeps.
+  const toggle = buttonWith(html, `Tag #${container.number}`);
+  assert.doesNotMatch(toggle, / disabled=""/, 'watching a feature is a real act, not a refused one');
+  const kids = container.children?.length ?? 0;
+  assert.ok(kids > 0, 'the demo fixtures must carry a container with work under it');
+  assert.match(
+    toggle,
+    new RegExp(`and its ${kids} child item`),
+    'the title states the cascade — a click writing eight tags must say eight',
+  );
 
   const open = v.state.world.issues.find((i) => i.pickup.status === 'unwatched');
   assert.ok(open, 'the demo fixtures must carry an open item nobody has opted in');

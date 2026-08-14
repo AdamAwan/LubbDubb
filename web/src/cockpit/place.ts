@@ -29,6 +29,16 @@ export interface Place {
   settings: boolean;
   spend: boolean;
   reliability: boolean;
+  /**
+   * The backlog's feature headings that are **collapsed**, by issue number.
+   *
+   * Collapsed rather than expanded, so the default — every feature open — is the
+   * empty list and a bare URL. It is a place rather than a `useState` for the
+   * usual reason: folding three features away and stepping back into the backlog
+   * has to restore the same three, and a reload of a shared link has to show what
+   * the sender was looking at.
+   */
+  collapsed: number[];
 }
 
 /** The cockpit with nothing open: the overview, which is what a bare URL means. */
@@ -43,6 +53,7 @@ export const NOWHERE: Place = {
   settings: false,
   spend: false,
   reliability: false,
+  collapsed: [],
 };
 
 const TABS: readonly ConsoleTab[] = ['overview', 'backlog', 'work'];
@@ -82,7 +93,25 @@ export function readPlace(search: string): Place {
     settings: query.has('settings'),
     spend: query.has('spend'),
     reliability: query.has('reliability'),
+    collapsed: readNumbers(param(query, 'collapsed')),
   };
+}
+
+/**
+ * A comma-separated issue-number list, validated the way every other parameter
+ * here is: anything that is not a positive integer is dropped rather than
+ * carried, because a hand-edited `?collapsed=` is an input an operator can type
+ * and a `NaN` in this list would fold a heading that does not exist. Deduplicated
+ * and sorted so one set of folded features has one spelling.
+ */
+function readNumbers(value: string | null): number[] {
+  if (value === null) return [];
+  const seen = new Set<number>();
+  for (const part of value.split(',')) {
+    const n = Number(part);
+    if (Number.isInteger(n) && n > 0) seen.add(n);
+  }
+  return [...seen].sort((a, b) => a - b);
 }
 
 /**
@@ -109,6 +138,11 @@ export function placeQuery(place: Place): string {
   if (place.settings) query.set('settings', '1');
   if (place.spend) query.set('spend', '1');
   if (place.reliability) query.set('reliability', '1');
+  // Sorted on the way out as on the way in, so folding A then B and folding B
+  // then A are one place rather than two history entries.
+  if (place.collapsed.length > 0) {
+    query.set('collapsed', [...place.collapsed].sort((a, b) => a - b).join(','));
+  }
   const encoded = query.toString();
   return encoded === '' ? '' : `?${encoded}`;
 }

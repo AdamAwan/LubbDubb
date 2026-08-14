@@ -55,6 +55,12 @@ export interface CockpitView {
   consolePanel: ConsolePanel;
   /** Where the nav is. A selected goal outranks it, so this is not what is drawn. */
   tab: ConsoleTab;
+  /**
+   * The backlog features whose children are folded away. A set rather than the
+   * list the place carries, because the backlog asks it once per heading and
+   * membership is the only question it asks.
+   */
+  collapsedFeatures: ReadonlySet<number>;
 
   /** The agent whose drawer is open, if any. */
   selectedAgent: Agent | null;
@@ -185,6 +191,12 @@ interface ViewInputs {
   consolePanel: ConsolePanel;
   /** Where the nav is. */
   tab: ConsoleTab;
+  /**
+   * The backlog features whose children are folded away, by issue number.
+   * Optional because "nothing folded" is the real default rather than a stand-in
+   * for one — it is what the empty place carries and what a bare URL means.
+   */
+  collapsed?: readonly number[];
 }
 
 function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefined): Map<string, T[]> {
@@ -234,6 +246,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     goalPage: input.selectedGoal ? buildGoalPage(state, input.selectedGoal, needsYou) : null,
     consolePanel: input.consolePanel,
     tab: input.tab,
+    collapsedFeatures: new Set(input.collapsed ?? []),
 
     selectedAgent: state.agents.find((a) => a.id === selected) ?? null,
     selectedOutput: selected ? input.liveOutput.get(selected) : undefined,

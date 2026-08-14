@@ -4,6 +4,7 @@ import type { CockpitActions } from '../cockpit/actions.js';
 import type { Issue } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { watchBucket } from '../worldBuckets.js';
+import { groupByFeature, groupProgress, isContainerType, type IssueGroup } from '../issueGroups.js';
 
 /**
  * The backlog: every open item the tracker returned, in the one group that says
@@ -127,8 +128,13 @@ function Group({
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
+  const { containerTypes } = view.state.config;
   const shown = issues.slice(0, GROUP_LIMIT);
   const rest = issues.length - shown.length;
+  // The tree is arranged over the rows this group *draws*, not over the whole
+  // group: a heading standing above the limit's cut would promise children that
+  // are in the remainder, and the count beside it already says how many there are.
+  const tree = groupByFeature(shown, (issue) => isContainerType(issue, containerTypes));
   return (
     <>
       <div className="cn-grpname">
@@ -139,12 +145,126 @@ function Group({
       <section className="cn-card">
         <div className="cn-rows">
           {issues.length === 0 && <p className="cn-empty">{GROUP_EMPTY[group]}</p>}
-          {shown.map((issue) => (
-            <Row key={issue.id} issue={issue} group={group} view={view} actions={actions} />
-          ))}
+          {tree === null
+            ? shown.map((issue) => <Row key={issue.id} issue={issue} group={group} view={view} actions={actions} />)
+            : tree.map((treeGroup, i) => (
+                <FeatureBlock
+                  // A headless group has no feature to key on, and there is at
+                  // most one of each kind, so the kind is the key there.
+                  key={treeGroup.feature?.number ?? treeGroup.kind}
+                  block={treeGroup}
+                  group={group}
+                  view={view}
+                  actions={actions}
+                  first={i === 0}
+                />
+              ))}
           {rest > 0 && <p className="cn-empty">…{rest} more</p>}
         </div>
       </section>
+    </>
+  );
+}
+
+/**
+ * One feature and the work under it, or one headless run of rows.
+ *
+ * **A feature is a heading, never a row.** Nothing is ever dispatched at a
+ * container, so listing one among the items an operator is triaging asks them to
+ * remember which is which on every read; drawing it above its children says it
+ * structurally, and the fold makes a long feature collapsible to that one line.
+ *
+ * **Open by default.** The backlog's job is to show what is waiting, and a
+ * surface that hides it until clicked reports an empty board. Folding is the
+ * operator's own act, and it is remembered in the address bar rather than in this
+ * component, so the back button and a reload both restore it.
+ *
+ * The two headless kinds draw no heading at all. `untracked` is a flat tracker's
+ * every issue — filing those under a heading would claim a hierarchy the provider
+ * never had — and `orphans` is the one gap worth naming, so it gets a label and
+ * no controls, because there is no item there to operate on.
+ */
+function FeatureBlock({
+  block,
+  group,
+  view,
+  actions,
+  first,
+}: {
+  block: IssueGroup;
+  group: BacklogGroup;
+  view: CockpitView;
+  actions: CockpitActions;
+  first: boolean;
+}): JSX.Element {
+  const rows = block.issues.map((issue) => (
+    <Row key={issue.id} issue={issue} group={group} view={view} actions={actions} nested={block.kind === 'feature'} />
+  ));
+
+  if (block.kind === 'untracked') return <>{rows}</>;
+  if (block.kind === 'orphans') {
+    return (
+      <>
+        <div className={`cn-subhead ${first ? '' : 'cn-subhead-gap'}`}>
+          <b className="cn-name">No parent feature</b>
+          <span className="cn-sub">Nothing records why these are being done · link them in the tracker</span>
+        </div>
+        {rows}
+      </>
+    );
+  }
+
+  const feature = block.feature;
+  const featureIssue = block.featureIssue;
+  const collapsed = feature !== null && view.collapsedFeatures.has(feature.number);
+  const { shown, children } = groupProgress(block);
+  // Both numbers, and only when they differ: "3 children" above two rows reads as
+  // a row that failed to draw, and "2" above a feature with three hides one.
+  const count = children !== null && children !== shown ? `${shown} of ${children} shown` : `${shown} shown`;
+
+  return (
+    <>
+      <div className={`cn-subhead ${first ? '' : 'cn-subhead-gap'}`}>
+        <button
+          type="button"
+          className="cn-fold"
+          aria-expanded={!collapsed}
+          onClick={() => feature !== null && actions.collapseFeature(feature.number, !collapsed)}
+          title={collapsed ? 'Show the work under this feature' : 'Fold this feature away'}
+        >
+          {collapsed ? '▸' : '▾'}
+        </button>
+        {featureIssue === null ? (
+          // A feature the world does not hold as an issue of its own — the usual
+          // case under a tag or assignee filter. It is a label reconstructed from
+          // a child's `parent`, so there is nothing here to open or to tag.
+          <span className="cn-grow cn-goal-row">
+            <b className="cn-name">
+              #{feature?.number} {feature?.title}
+            </b>
+            <span className="cn-sub">
+              {feature?.issueType} · {feature?.workItemState} · not in the filtered item list · {count}
+            </span>
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="cn-grow cn-goal-row"
+            onClick={() => actions.selectGoal(`issue:${featureIssue.number}`)}
+            title="Open this feature's page — its children, its plan and anything it is asking you"
+          >
+            <b className="cn-name">
+              #{featureIssue.number} {featureIssue.title}
+            </b>
+            <span className="cn-sub">
+              {featureIssue.issueType} · {featureIssue.workItemState ?? featureIssue.state} · {count}
+            </span>
+          </button>
+        )}
+        {featureIssue !== null && <WatchToggle issue={featureIssue} group={group} view={view} actions={actions} />}
+      </div>
+      {!collapsed && rows}
+      {!collapsed && rows.length === 0 && <p className="cn-empty cn-nested">Nothing under it in this group.</p>}
     </>
   );
 }
@@ -169,11 +289,14 @@ function Row({
   group,
   view,
   actions,
+  nested = false,
 }: {
   issue: Issue;
   group: BacklogGroup;
   view: CockpitView;
   actions: CockpitActions;
+  /** Indented under a feature heading, rather than sitting flush in a flat list. */
+  nested?: boolean;
 }): JSX.Element {
   const { config } = view.state;
   const assay = issue.assay;
@@ -186,7 +309,7 @@ function Row({
   const labels = issue.labels.filter((label) => label !== config.watchLabel && label !== config.ignoreLabel);
 
   return (
-    <div className={`cn-row ${group === 'ignored' ? 'cn-spent' : ''}`}>
+    <div className={`cn-row ${group === 'ignored' ? 'cn-spent' : ''} ${nested ? 'cn-nested' : ''}`}>
       {group === 'intake' && <i className="cn-lamp cn-wait" />}
       <button
         type="button"
@@ -223,20 +346,21 @@ function Row({
 }
 
 /**
- * The one control on a row, and what it costs. `setIssueWatched` writes *both*
- * tags — watching clears the ignore tag, un-watching adds it — so the titles say
- * what the click does rather than what the label reads.
+ * The one control on a row or a feature heading, and what it costs.
+ * `setIssueWatched` writes *both* tags — watching clears the ignore tag,
+ * un-watching adds it — so the titles say what the click does rather than what
+ * the label reads.
  *
- * A **container type is disabled rather than absent**, carrying the dispatcher's
- * own refusal as its title: "cannot be picked up" is a fact about the item worth
- * seeing, and a control that comes and goes reads as a bug in the page. It is
- * disabled only in the direction that would opt the item *in* — that is the click
- * whose promise the harness will not keep. Un-watching one still works, or a
- * container tagged once could never be untagged from here.
+ * **On a container it cascades**, and the title says so with the number it will
+ * write. A container is still never dispatched at, but watching one is no longer
+ * the empty click it once was: the tags go on every descendant, which is what
+ * "work this feature" has always meant, and un-watching walks the same tree. That
+ * is why the control is live in both directions here, where it used to be
+ * disabled in the direction that would opt the item in.
  *
- * The same rule covers a deployment with the gate off (`labelPrefix: ''`): there
- * is no tag to write in either direction, and a button that writes nothing is
- * worse than one that says why.
+ * A deployment with the gate off (`labelPrefix: ''`) is still refused: there is
+ * no tag to write in either direction, and a button that writes nothing is worse
+ * than one that says why.
  */
 function WatchToggle({
   issue,
@@ -249,25 +373,27 @@ function WatchToggle({
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
-  const { watchLabel, ignoreLabel } = view.state.config;
+  const { watchLabel, ignoreLabel, containerTypes } = view.state.config;
   const watched = group === 'watched' || group === 'intake';
-  const held =
-    !watched && issue.pickup.status === 'container'
-      ? (issue.pickup.reasons[0] ?? 'A container type — its children are the work, never it')
-      : null;
   const off = watchLabel === '' ? 'No watch label configured — the watch/ignore gate is off' : null;
+  // The heading's own children, which is what the cascade reaches first. The
+  // server walks the whole tree; the count here is the one the operator can see,
+  // and it is stated as "and its N children" rather than as a total the row
+  // cannot back up.
+  const kids = isContainerType(issue, containerTypes) ? (issue.children?.length ?? 0) : 0;
+  const also = kids === 0 ? '' : ` and its ${kids} child item${kids === 1 ? '' : 's'}`;
 
   const label = watched ? 'Watching' : group === 'ignored' ? 'Un-ignore' : 'Watch';
   const title = watched
-    ? `Drop #${issue.number}: remove "${watchLabel}" and tag it "${ignoreLabel}", so the harness leaves it alone`
-    : `Tag #${issue.number} "${watchLabel}" so the harness picks it up${group === 'ignored' ? `, and drop "${ignoreLabel}"` : ''}`;
+    ? `Drop #${issue.number}${also}: remove "${watchLabel}" and tag "${ignoreLabel}", so the harness leaves it alone`
+    : `Tag #${issue.number}${also} "${watchLabel}" so the harness picks it up${group === 'ignored' ? `, and drop "${ignoreLabel}"` : ''}`;
 
   return (
     <AsyncButton
       className="ghost"
-      disabled={held !== null || off !== null}
+      disabled={off !== null}
       onClick={() => actions.setIssueWatched(issue.number, !watched)}
-      title={held ?? off ?? title}
+      title={off ?? title}
     >
       {label}
     </AsyncButton>

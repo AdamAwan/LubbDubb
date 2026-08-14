@@ -22,7 +22,18 @@ import { NOWHERE, placeQuery, readPlace, type Place } from './place.js';
  * A move that changes nothing pushes nothing: clicking the tab you are on is
  * not somewhere to go back from.
  */
-export function useNavigation(): { place: Place; go: (patch: Partial<Place>) => void } {
+/**
+ * A move, either stated outright or derived from where you already are.
+ *
+ * The updater arm exists for the moves that *edit* a place rather than replace
+ * one — folding a backlog feature adds to a list the place already holds. It is
+ * handed `pending.current` rather than the rendered `place`, so two folds in a
+ * tick compose instead of the second dropping the first, which is the same
+ * guarantee the patch arm already had.
+ */
+type PlacePatch = Partial<Place> | ((place: Place) => Partial<Place>);
+
+export function useNavigation(): { place: Place; go: (patch: PlacePatch) => void } {
   // `location` is simply undefined under node, which is how the cockpit's
   // modules are imported by the tests — the same reason `readToken` guards.
   const [place, setPlace] = useState<Place>(() =>
@@ -48,8 +59,8 @@ export function useNavigation(): { place: Place; go: (patch: Partial<Place>) => 
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
-  const go = useCallback((patch: Partial<Place>) => {
-    const next = { ...pending.current, ...patch };
+  const go = useCallback((patch: PlacePatch) => {
+    const next = { ...pending.current, ...(typeof patch === 'function' ? patch(pending.current) : patch) };
     pending.current = next;
     setPlace(next);
     if (scheduled.current) return;
