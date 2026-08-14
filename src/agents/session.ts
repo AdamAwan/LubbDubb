@@ -25,7 +25,11 @@ import type { EventEmitter } from 'node:events';
  * The stream runtime
  * additionally emits 'usage'(AgentUsage) at each turn end — cumulative
  * cost/tokens/turns off the `result` event; the PTY runtime has no such channel
- * and never emits it. A legible PTY session (agentMode 'pty') may also emit
+ * and never emits it. It alone also emits 'limited'(RateLimitPark) when the
+ * account's usage limit is spent: a fourth ending, neither a question nor a
+ * failure, which parks the agent until an operator resumes it. The PTY runtime
+ * never emits it — the same exhaustion there arrives as screen text, and a park
+ * off a scraped sentence is a park an ordinary line of prose can forge. A legible PTY session (agentMode 'pty') may also emit
  * 'transcript'(text): a full replacement of all prior output after an in-place
  * TUI rewrite.
  */

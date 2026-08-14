@@ -634,6 +634,26 @@ body {
   color: var(--muted);
   font-size: 12px;
 }
+/* The one thing a limit-parked agent's drawer says instead of a reply box: why it
+   stopped, and the button that ends it. Amber rather than red — nothing failed. */
+.park-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 8px 0 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--amber-line);
+  background: var(--amber-fill);
+  border-radius: 4px;
+  font-size: 13px;
+}
+.park-notice b {
+  color: var(--amber);
+}
+.park-notice button {
+  margin-left: auto;
+}
 .drawer-files {
   padding: 4px 0 2px;
 }
@@ -1282,6 +1302,13 @@ body {
   border: 1px solid var(--amber-line);
   border-radius: var(--r-md);
   color: var(--amber);
+  font-size: 12px;
+}
+/* Quieter than the reason above it: what the run launched on is context, not the
+   thing an operator opened the drawer to read. */
+.dispatch-model {
+  margin-top: 4px;
+  color: var(--muted);
   font-size: 12px;
 }
 .dispatch-reason-label {

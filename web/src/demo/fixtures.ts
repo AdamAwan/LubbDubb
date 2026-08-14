@@ -1589,6 +1589,10 @@ export function buildDemoState(): DemoSeed {
         resumedAt: null,
       },
     ],
+    // Nobody in the demo world is out of account limit. The key is here rather
+    // than absent because the wire always ships it, and a surface that has never
+    // seen the empty case is one that renders it wrong the first time it happens.
+    parkedOnLimit: [],
     // The act behind the drafted-reply escalation below. It is what turns that
     // card from "type something" into "approve & send / reject": the draft was
     // written, and nothing goes out until you say so.

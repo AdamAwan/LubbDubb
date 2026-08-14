@@ -8,13 +8,18 @@ import { goalIssue, goalOfPr } from './goalPage.js';
  * free text. Drawing them as one kind is how a surface ends up offering the
  * wrong control.
  */
-export type NeedKind = 'recovery' | 'escalation' | 'permission' | 'proposal' | 'bench' | 'close_out';
+export type NeedKind = 'recovery' | 'escalation' | 'permission' | 'proposal' | 'bench' | 'close_out' | 'limit';
 
 /**
  * Who is stopped. `blocking` means an agent is parked and cannot proceed;
  * `yours` means the obligation is the operator's and nothing is waiting inside
- * the fleet. Red/amber, and the split is strict — red means an agent is parked on
- * a question only you can answer, and nothing else.
+ * the fleet. Red/amber, and the split is strict — red means an agent is parked
+ * and only you can un-park it, and nothing else.
+ *
+ * A usage-limit park (issue #318) is `blocking` for that reason and not by
+ * analogy: the agent is stopped, its worktree and its slot are held, and the
+ * harness will not resume it on its own. What differs from a question is only
+ * *what* the operator does — wait for the window to turn over, then resume.
  */
 export type NeedGroup = 'blocking' | 'yours';
 
@@ -166,6 +171,30 @@ export function buildNeedsYou(state: AppState): NeedRow[] {
       agentId: e.agentId,
       holding: holdingForEscalation(e, state),
       raisedAt: e.createdAt,
+    });
+  }
+
+  // Agents the account's usage limit stopped. Keyed on the agent id, which is
+  // also what the row's control resumes — there is no escalation underneath one
+  // of these, because there is no question in it to answer.
+  for (const agentId of state.parkedOnLimit) {
+    const agent = state.agents.find((a) => a.id === agentId);
+    if (!agent) continue;
+    const originRef = state.tasks.find((t) => t.id === agent.taskId)?.originRef ?? null;
+    const goalRef = goalOf(originRef, state);
+    rows.push({
+      id: agentId,
+      kind: 'limit',
+      group: 'blocking',
+      title: agent.waitingReason ?? 'Parked: this account has no usage allowance left right now.',
+      goalRef,
+      originRef,
+      opens: opensAt(goalRef, state),
+      agentId,
+      holding: 0,
+      // The park has no row of its own to be stamped, so the agent's own clock is
+      // the honest reading: it is the last thing that happened to it.
+      raisedAt: agent.startedAt,
     });
   }
 

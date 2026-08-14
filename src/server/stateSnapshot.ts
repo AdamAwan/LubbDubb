@@ -62,7 +62,7 @@ export function buildStateSnapshot(
   system: System,
   opts?: { artifactSigner?: (flagId: string) => string; attachmentSigner?: (attachmentId: string) => string },
 ): CockpitState {
-  const { store, connector, config, runtimeControl, harness, recovery } = system;
+  const { store, connector, config, runtimeControl, harness, recovery, agents: fleet } = system;
   const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
   const baseline = store.getWorldBaseline();
   const world: WorldSnapshot = baseline ?? {
@@ -509,6 +509,11 @@ export function buildStateSnapshot(
     // a disabled one, which is invisible everywhere else in the harness.
     schedules: store.listJobSchedules(),
     agents,
+    // Which of those rows are parked on a spent account limit rather than on a
+    // question. Asked of the fleet, not derived from the rows: both parks are
+    // `waiting` with a reason, and a cockpit that told them apart by reading the
+    // sentence would be one wording change away from offering the wrong control.
+    parkedOnLimit: fleet.limitedAgentIds(),
     // Artifacts agents surfaced mid-run (design docs, reports, links). The
     // cockpit groups these by agentId onto the fleet card / drawer.
     flags,

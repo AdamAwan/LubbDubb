@@ -155,6 +155,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   permission: 'An agent wants a command',
   bench: 'Work only you can do',
   close_out: 'A delivered goal needs closing',
+  limit: 'An agent is out of account limit',
 };
 
 /** Reduce a snapshot to what {@link notifiableChanges} compares. */

@@ -9,6 +9,7 @@ import { DEFAULT_ASSAY, type AssayPolicy } from './intake/assay.js';
 import { DEFAULT_RETROSPECTIVE, type RetrospectivePolicy } from './retro/retro.js';
 import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
+import { validateAgentModels, type AgentModels } from './agents/modelPolicy.js';
 
 /** Operator control over the MCP tool channel. See {@link Config.mcp}. */
 interface McpPolicy {
@@ -261,6 +262,23 @@ export interface Config {
   sessionTranscriptRoot?: string;
   /** Passed to `claude --permission-mode` so unattended tool calls don't hang the agent. */
   agentPermissionMode: string;
+  /**
+   * Which model each kind of work runs on, keyed on the dispatch rule that
+   * proposed it (issue #321) — see {@link AgentModels}.
+   *
+   * Read at boot like {@link agentMode} and {@link claudeArgs}: config file only,
+   * no runtime mutation and no cockpit editing, because a second mutation path
+   * would need a second answer to "what did this run actually launch on". The
+   * resolved model string is stored on the task at dispatch, so a run is
+   * auditable after the fact and a resumed agent re-launches on what it started
+   * on.
+   *
+   * Optional as a whole. Omitted, no launch anywhere carries `--model` and argv
+   * is exactly what it was before the key existed. Unlike the policy blocks
+   * below it merges whole rather than field by field, so an override that sets it
+   * replaces it — which is what lets one *remove* an assignment.
+   */
+  agentModels?: AgentModels;
   /**
    * Tool allow rules handed to every agent as a `permissions.allow` fragment in
    * `--settings` (issue #130). `acceptEdits` auto-accepts *file edits only*, so a
@@ -782,6 +800,11 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // A typo'd policy kind would otherwise be silently ignored, and the operator
   // would watch a check they believed they had configured behave as if they had not.
   if (merged.azureDevOps?.policyChecks) validatePolicyCheckModes(merged.azureDevOps.policyChecks);
+
+  // Same argument for the model policy: a profile name that resolves to nothing,
+  // or a rule id that can never match, would both run as if the operator had
+  // configured nothing at all.
+  validateAgentModels(merged.agentModels);
 
   // The one configuration that is never what anyone means. Turning auth off is a
   // supported local choice (it is how the test suite runs); binding a routable

@@ -85,6 +85,18 @@ interface ClaudeArgsOptions {
   /** Any additional operator-supplied args appended after ours. */
   extraArgs?: string[];
   /**
+   * The model this launch runs on (`--model`), resolved from the operator's
+   * `agentModels` policy at *dispatch* and carried on the task (issue #321).
+   * Unset leaves the flag off entirely, which is what a deployment configuring no
+   * policy gets — argv identical to before the option existed.
+   *
+   * Pushed **before** {@link extraArgs} for the reason `--allowedTools` is: an
+   * operator's `claudeArgs` are appended last and still have the last word.
+   * Never validated here — only the installed `claude` knows the valid set, so a
+   * bad alias fails at spawn as a failed agent, not at boot.
+   */
+  model?: string;
+  /**
    * The session id to run under. Chosen up front (`--session-id`) so we *own* the
    * id and can re-attach to this exact conversation after a restart — no scraping
    * an id out of the terminal. Both real runtimes pass one; only the `raw` runtime,
@@ -212,6 +224,7 @@ export function buildClaudeArgs(opts: ClaudeArgsOptions = {}): string[] {
   if (settings) args.push('--settings', settings);
   appendMcpConfig(args, opts);
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
+  if (opts.model) args.push('--model', opts.model);
   if (opts.extraArgs?.length) args.push(...opts.extraArgs);
   return args;
 }
@@ -283,6 +296,7 @@ export function buildClaudeStreamArgs(opts: ClaudeArgsOptions = {}): string[] {
   if (settings) args.push('--settings', settings);
   appendMcpConfig(args, opts);
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
+  if (opts.model) args.push('--model', opts.model);
   if (opts.extraArgs?.length) args.push(...opts.extraArgs);
   return args;
 }

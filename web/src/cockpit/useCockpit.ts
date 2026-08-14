@@ -170,6 +170,7 @@ export function useCockpit(): CockpitStatus {
       // and the `dirty` the server emits brings the new state along anyway.
       interruptAgent: (id) => api.interruptAgent(id).then(() => undefined),
       respondAgent: (id, text) => api.respondAgent(id, text).then(() => undefined),
+      resumeAgent: (id) => then(api.resumeAgent(id)),
 
       answerEscalation: (id, text) => then(api.answerEscalation(id, text)),
       answerQuestions: (id, answers) => then(api.answerQuestions(id, answers)),

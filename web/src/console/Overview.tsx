@@ -115,6 +115,7 @@ function AgentRow({ agent, view, actions }: { agent: Agent; view: CockpitView; a
   const task = view.taskFor(agent);
   const origin = task?.originRef ?? null;
   const done = agent.endedAt !== null;
+  const limited = view.limitParked.has(agent.id);
   const lamp = view.escalationByAgent.has(agent.id)
     ? 'cn-ask'
     : done
@@ -133,10 +134,26 @@ function AgentRow({ agent, view, actions }: { agent: Agent; view: CockpitView; a
       >
         <b className="cn-name">{task?.title ?? agent.id}</b>
         <span className="cn-sub">
-          {agent.note ?? agent.status} · {elapsed(agent.startedAt, agent.endedAt, view.now)}
+          {/* A limit park says so on the row itself. The note underneath is whatever
+              the agent last said it was doing, which on a parked row reads as though
+              it still is. */}
+          {limited ? 'Out of account limit' : (agent.note ?? agent.status)} ·{' '}
+          {elapsed(agent.startedAt, agent.endedAt, view.now)}
         </span>
       </button>
       <OnWhat origin={origin} view={view} />
+      {/* The way out of the park, where the park is shown — beside the name rather
+          than inside it, since the row's own click opens the transcript. */}
+      {limited && (
+        <AsyncButton
+          className="cn-btn"
+          onClick={() => actions.resumeAgent(agent.id)}
+          title={agent.waitingReason ?? 'Resume this agent now the limit has cleared'}
+          pendingLabel="Resuming…"
+        >
+          Resume
+        </AsyncButton>
+      )}
       {agent.costUsd !== null && <span className="cn-num">{fmtUsd(agent.costUsd)}</span>}
     </div>
   );
