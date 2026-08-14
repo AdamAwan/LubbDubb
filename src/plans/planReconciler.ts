@@ -297,7 +297,7 @@ export class PlanReconciler {
     // threaded down from the caller because it is the same one living body: a
     // check marked off changes what the ticket says, so it has to reach the
     // memoisation below or the edit is never written.
-    const body = renderPlanComment(plan, parts, this.deps.store.listValidationChecks(plan.id));
+    const body = renderPlanComment(plan, parts, this.deps.store.listValidationChecks(plan.originRef));
     // The parts arm gates on observed news before it gets here; the single-PR arm
     // has no such signal — its body is the verdict, which only a replan changes — so
     // the body itself is the signal. Memoised rather than stored: a restart costs

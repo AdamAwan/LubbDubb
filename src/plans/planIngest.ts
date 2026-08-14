@@ -142,7 +142,7 @@ export function ingestPlanDocument(
   // produces plans without one, and treating that as "the planner withdrew every
   // check" would supersede a validation plan somebody is halfway through.
   if (doc.validation) {
-    store.ingestValidation(plan.id, {
+    store.ingestValidation(originRef, {
       checks: validationCheckInputs(
         doc.validation,
         written.map((p) => p.slug),
@@ -153,7 +153,7 @@ export function ingestPlanDocument(
     });
     // A resource the planner says it cannot produce is an ask, not a check that
     // mysteriously never runs.
-    fileResourceAsks(store, plan.id, originRef);
+    fileResourceAsks(store, originRef);
   }
 
   // An amended plan is what *ends* a discussion — the agent has said its piece and

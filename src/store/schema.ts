@@ -641,8 +641,9 @@ CREATE TABLE IF NOT EXISTS issue_runs (
 );
 
 -- How anyone checks that the *goal* was met: the executable form of the plan's
--- plan's verification narrative. Per goal rather than per part — a check usually spans
--- parts, and the question it answers is whether the thing works.
+-- verification narrative. Per goal rather than per part — a check usually spans
+-- parts, and the question it answers is whether the thing works — and keyed on the
+-- goal for the same reason, rather than on whichever plan of the work declared it.
 --
 -- The id is author-chosen and stable, so an amended plan merges onto these rows;
 -- the letter is assigned at ingestion and never reused, so the handle a person
@@ -650,7 +651,7 @@ CREATE TABLE IF NOT EXISTS issue_runs (
 -- than a table: a check has exactly one current reading, and the trail of how it
 -- got there is the record beside it.
 CREATE TABLE IF NOT EXISTS validation_checks (
-  plan_id     TEXT NOT NULL,
+  origin_ref  TEXT NOT NULL,          -- the goal, issue:<n> — not the plan; validation is per goal
   id          TEXT NOT NULL,          -- author-chosen kebab-case slug; the merge key
   letter      TEXT NOT NULL,          -- A, B, C… — the handle a person types
   seq         INTEGER NOT NULL,       -- declaration order, for rendering; never the letter
@@ -676,7 +677,7 @@ CREATE TABLE IF NOT EXISTS validation_checks (
   amend_note  TEXT,                   -- why it changed, in the amender's words
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,
-  PRIMARY KEY (plan_id, id)
+  PRIMARY KEY (origin_ref, id)
 );
 
 -- What a check needs that is not in the repository: a seeded fixture, a reference
@@ -685,13 +686,13 @@ CREATE TABLE IF NOT EXISTS validation_checks (
 -- three different strings, and a stored absolute one is wrong for two of them the
 -- moment the configured validation root moves.
 CREATE TABLE IF NOT EXISTS validation_resources (
-  plan_id  TEXT NOT NULL,
+  origin_ref TEXT NOT NULL,           -- the goal, as above
   name     TEXT NOT NULL,
   kind     TEXT,                      -- fixture | access | reference | data; null = unstated
   note     TEXT,
   provided INTEGER NOT NULL DEFAULT 1, -- 0 is the planner asking for something it cannot produce
   human_task_id TEXT,                 -- the ask filed for an unprovided one, so a replan files it once
-  PRIMARY KEY (plan_id, name)
+  PRIMARY KEY (origin_ref, name)
 );
 
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
@@ -707,7 +708,7 @@ CREATE INDEX IF NOT EXISTS idx_human_tasks_part ON human_tasks(part_id);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_kind_origin ON human_tasks(kind, origin_ref);
 CREATE INDEX IF NOT EXISTS idx_plans_origin ON plans(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_plan_parts_plan ON plan_parts(plan_id);
-CREATE INDEX IF NOT EXISTS idx_validation_checks_plan ON validation_checks(plan_id);
+CREATE INDEX IF NOT EXISTS idx_validation_checks_goal ON validation_checks(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_proposals_ref ON proposals(ref);
 CREATE INDEX IF NOT EXISTS idx_decisions_cycle ON decisions(cycle_id);
 CREATE INDEX IF NOT EXISTS idx_world_events_created ON world_events(created_at);

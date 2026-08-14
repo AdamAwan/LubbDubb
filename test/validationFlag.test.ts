@@ -49,7 +49,7 @@ function build(): System {
 
 function check(over: Partial<ValidationCheck> = {}): ValidationCheck {
   return {
-    planId: 'plan',
+    originRef: 'issue:12',
     id: 'a',
     letter: 'A',
     seq: 1,
@@ -185,11 +185,9 @@ function plan(system: System, checks: Record<string, unknown>[]): string {
   });
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
   const doc: PlanDocument = parsed.document;
-  return ingestPlanDocument(system.store, {
-    doc,
-    originRef: 'issue:12',
-    title: 'Ship it',
-  }).plan.id;
+  ingestPlanDocument(system.store, { doc, originRef: 'issue:12', title: 'Ship it' });
+  // The goal, which is what the checks are keyed on.
+  return 'issue:12';
 }
 
 const CHECK = { id: 'a', title: 'It works', do: 'Run it.', expect: 'It works.' };

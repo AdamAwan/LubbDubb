@@ -45,28 +45,26 @@ export interface DesktopSession {
   /** The label claims are taken under, as it appears in the cockpit. */
   label: string;
   /** The check this connection claimed, or null. Set by `validation_claim`. */
-  held: { planId: string; checkId: string } | null;
+  held: { originRef: string; checkId: string } | null;
 }
 
 type DesktopToolFactory = (deps: DesktopToolDeps, session: DesktopSession) => Omit<McpTool, 'name'>;
 
-/** The goal's plan, or the reason there isn't one to work from. */
+/** The goal's validation plan, or the reason there isn't one to work from. */
 function planFor(
   deps: DesktopToolDeps,
   issue: number,
-): { ok: true; planId: string; root: string } | { ok: false; error: string } {
+): { ok: true; originRef: string; root: string } | { ok: false; error: string } {
   const origin = issueOrigin(issue);
-  const plan = deps.store.getPlanByOrigin(origin);
-  if (!plan) {
+  if (deps.store.listValidationChecks(origin).length === 0) {
     return {
       ok: false,
       error:
-        `Issue #${issue} has no plan, so it has no validation checks. Either the goal was never planned or ` +
-        `planning is off in this deployment — in both cases there is nothing here to run, and saying so is the ` +
-        `whole answer.`,
+        `Issue #${issue} has no validation checks. Either nothing has been planned for it yet or the plan ` +
+        `declared none — in both cases there is nothing here to run, and saying so is the whole answer.`,
     };
   }
-  return { ok: true, planId: plan.id, root: validationGoalDir(deps.validationRoot, origin) };
+  return { ok: true, originRef: origin, root: validationGoalDir(deps.validationRoot, origin) };
 }
 
 const validationRead: DesktopToolFactory = (deps) => ({
@@ -94,7 +92,7 @@ const validationRead: DesktopToolFactory = (deps) => ({
     if (!plan.ok) return toolError(plan.error);
 
     const now = deps.now();
-    const checks = liveChecks(deps.store.listValidationChecks(plan.planId));
+    const checks = liveChecks(deps.store.listValidationChecks(plan.originRef));
     const summaries = checks.map((c) => desktopCheckSummary(c, now, deps.claimMinutes));
     if (typeof args.check !== 'string') {
       return toolJson({ issue: ref.issue, resourceRoot: plan.root, checks: summaries, next: READ_NEXT });
@@ -142,7 +140,7 @@ const validationClaim: DesktopToolFactory = (deps, session) => ({
     const plan = planFor(deps, ref.ref.issue);
     if (!plan.ok) return toolError(plan.error);
 
-    const checks = liveChecks(deps.store.listValidationChecks(plan.planId));
+    const checks = liveChecks(deps.store.listValidationChecks(plan.originRef));
     const wanted = findCheckByRef(checks, ref.ref.check);
     if (!wanted) {
       return toolError(
@@ -165,7 +163,7 @@ const validationClaim: DesktopToolFactory = (deps, session) => ({
 
     const label = typeof args.as === 'string' && args.as.trim() ? args.as.trim() : session.label;
     const staleBefore = claimStaleBefore(deps.now(), deps.claimMinutes);
-    const claim = deps.store.claimValidationCheck(plan.planId, wanted.id, label, staleBefore);
+    const claim = deps.store.claimValidationCheck(plan.originRef, wanted.id, label, staleBefore);
     if (!claim.ok) {
       if (claim.reason === 'gone') {
         return toolError(
@@ -181,7 +179,7 @@ const validationClaim: DesktopToolFactory = (deps, session) => ({
       );
     }
 
-    session.held = { planId: plan.planId, checkId: wanted.id };
+    session.held = { originRef: plan.originRef, checkId: wanted.id };
     return toolJson({
       claimed: `${claim.check.letter}. ${claim.check.id}`,
       as: label,
@@ -240,7 +238,7 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
           'already hold is not a conflict.',
       );
     }
-    const check = deps.store.getValidationCheck(held.planId, held.checkId);
+    const check = deps.store.getValidationCheck(held.originRef, held.checkId);
     if (!check) {
       session.held = null;
       return toolError(
@@ -253,7 +251,7 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
     const { result, note } = parsed.report;
 
     if (result === 'handback') {
-      const next = deps.store.recordValidationHandback(held.planId, check.id, handbackReason(note, 'desktop'));
+      const next = deps.store.recordValidationHandback(held.originRef, check.id, handbackReason(note, 'desktop'));
       session.held = null;
       return toolJson({
         reported: 'handback',
@@ -267,7 +265,7 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
       });
     }
 
-    const next = deps.store.recordValidationResult(held.planId, check.id, {
+    const next = deps.store.recordValidationResult(held.originRef, check.id, {
       state: result,
       note,
       // Neither `operator` nor `agent`: nobody dispatched this, and nobody

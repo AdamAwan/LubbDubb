@@ -94,19 +94,18 @@ function planWith(
     validation: { checks, resources },
   });
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
-  return ingestPlanDocument(system.store, {
-    doc: parsed.document,
-    originRef: 'issue:12',
-    title: 'Ship it',
-  }).plan.id;
+  ingestPlanDocument(system.store, { doc: parsed.document, originRef: 'issue:12', title: 'Ship it' });
+  // The **goal**, which is what the checks are keyed on — the plan id is not a
+  // handle anything about validation takes any more.
+  return 'issue:12';
 }
 
-function checksOf(system: System, planId: string): ValidationCheck[] {
-  return system.store.listValidationChecks(planId);
+function checksOf(system: System, goal: string): ValidationCheck[] {
+  return system.store.listValidationChecks(goal);
 }
 
-function byId(system: System, planId: string, id: string): ValidationCheck {
-  const found = checksOf(system, planId).find((c) => c.id === id);
+function byId(system: System, goal: string, id: string): ValidationCheck {
+  const found = checksOf(system, goal).find((c) => c.id === id);
   assert.ok(found, `check ${id} exists`);
   return found;
 }

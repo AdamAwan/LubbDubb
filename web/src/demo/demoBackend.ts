@@ -445,14 +445,15 @@ class DemoServer {
 
   /**
    * One validation check's current reading — the demo mirror of the four routes
-   * under `/api/plans/:id/validation/:checkId`.
+   * under `/api/issues/:number/validation/:checkId`.
    *
    * Everything the last reading left behind is cleared here too, because that is
    * the property worth mirroring: a demo that left a deferral's reason standing
    * under a "passed" chip would teach the control wrong.
    */
-  async setValidation(planId: string, checkId: string, act: ValidationAct): Promise<{ ok: true }> {
-    const check = (this.state.validationChecks ?? []).find((c) => c.planId === planId && c.id === checkId);
+  async setValidation(issueNumber: number, checkId: string, act: ValidationAct): Promise<{ ok: true }> {
+    const origin = `issue:${issueNumber}`;
+    const check = (this.state.validationChecks ?? []).find((c) => c.originRef === origin && c.id === checkId);
     if (check && check.supersededReason === null) {
       // The hand-over writes who runs it, never a reading — mirrored separately
       // because folding it into the branch below would have the demo record a
@@ -1865,8 +1866,8 @@ export const demoApi = {
   getPlanHistory: (planId: string) => Promise.resolve(demoPlanHistory(planId)),
   setAcceptance: (planId: string, slug: string, criterion: string, met: boolean) =>
     getServer().setAcceptance(planId, slug, criterion, met),
-  setValidation: (planId: string, checkId: string, act: ValidationAct) =>
-    getServer().setValidation(planId, checkId, act),
+  setValidation: (issueNumber: number, checkId: string, act: ValidationAct) =>
+    getServer().setValidation(issueNumber, checkId, act),
   abandonPlan: (planId: string) => getServer().abandonPlan(planId),
   discussPlan: (planId: string) => getServer().discussPlan(planId),
   endPlanDiscussion: (planId: string) => getServer().endPlanDiscussion(planId),

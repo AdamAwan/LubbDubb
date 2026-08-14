@@ -40,10 +40,8 @@ export function validateCheck(s: StageContext): void {
     // most expensive kind of wrong result this feature can produce.
     if (!s.deliveryParked(issue)) continue;
     const origin = issueOrigin(issue.number);
-    const plan = s.plansByOrigin.get(origin);
-    if (!plan) continue;
 
-    for (const check of liveChecks(s.validationChecks.get(plan.id) ?? [])) {
+    for (const check of liveChecks(s.validationChecks.get(origin) ?? [])) {
       // Two facts, and both are somebody's decision rather than the harness's:
       // the operator handed this check over, and nobody has recorded a reading
       // against it. A check that is `passed`, `failed`, `waived` or `deferred`

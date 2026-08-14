@@ -152,25 +152,21 @@ export function buildStateSnapshot(
     acceptanceCriteria: acceptanceCriteria(part),
     outsideScope: drift.get(part.id) ?? [],
   }));
-  // The validation plan, read once and joined two ways: to a plan by id for the
-  // sheet, and to a goal by the plan's origin for the chip and the flag. Keyed
-  // through the plan rather than stored against the origin because a plan *is*
-  // the per-goal record — the same join `planPartsOf` makes one line up.
+  // The validation plan, read once and grouped by the goal it belongs to — which
+  // is what it is keyed on, so the sheet, the chip and the flag all read one map
+  // with no join through the plan to get wrong.
   const validationChecks = store.listAllValidationChecks();
-  const checksByPlan = new Map<string, typeof validationChecks>();
+  const checksByGoal = new Map<string, typeof validationChecks>();
   for (const check of validationChecks) {
-    const list = checksByPlan.get(check.planId);
+    const list = checksByGoal.get(check.originRef);
     if (list) list.push(check);
-    else checksByPlan.set(check.planId, [check]);
+    else checksByGoal.set(check.originRef, [check]);
   }
-  const planByOrigin = new Map(plans.map((p) => [p.originRef, p]));
   // Resolved here rather than in the browser: the path is `validationRoot` joined
   // with the goal's directory, which is config the cockpit does not hold, and
   // "is it there" is a filesystem question only this side can answer.
-  const originByPlan = new Map(plans.map((p) => [p.id, p.originRef]));
   const wireValidationResources: ValidationResourceView[] = store.listAllValidationResources().map((resource) => {
-    const origin = originByPlan.get(resource.planId) ?? resource.planId;
-    const path = validationResourcePath(config.validationRoot, origin, resource.name);
+    const path = validationResourcePath(config.validationRoot, resource.originRef, resource.name);
     return { ...resource, path, present: existsSync(path) };
   });
   // Standing "is this issue finished" verdicts, keyed on the issue origin — the
@@ -322,8 +318,7 @@ export function buildStateSnapshot(
   // conclusion verdicts are computed here rather than in the browser apply to both,
   // and two enrichment paths would drift exactly on a finished goal.
   const validationChecksFor = (origin: string): ReturnType<typeof validationVerdict> | null => {
-    const plan = planByOrigin.get(origin);
-    const checks = plan ? (checksByPlan.get(plan.id) ?? []) : [];
+    const checks = checksByGoal.get(origin) ?? [];
     return checks.length === 0 ? null : validationVerdict(checks);
   };
   const enrichIssue = (issue: Issue) => {

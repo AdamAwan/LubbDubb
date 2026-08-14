@@ -1507,7 +1507,17 @@ export type ValidationCheckResultBy = 'operator' | 'agent' | 'desktop';
  * ValidationCheck.covers} only lets it say which parts it exercises.
  */
 export interface ValidationCheck {
-  planId: string;
+  /**
+   * The **goal** this check belongs to, as `issue:<n>` — the same `originRef` a
+   * plan carries.
+   *
+   * Keyed on the goal rather than on the plan because that is what validation is
+   * about. A plan is 1:1 with a goal today, which is what let `plan_id` stand in
+   * for this, but it is the wrong key wearing the right key's clothes: a check
+   * outlives any one plan of the work, and nothing about it is a property of the
+   * decomposition.
+   */
+  originRef: string;
   /**
    * The author's own kebab-case slug, and **the merge key**: an amended plan
    * merges onto this row rather than replacing it, so it has to survive a replan
@@ -1722,7 +1732,8 @@ export type ValidationResourceKind = 'fixture' | 'access' | 'reference' | 'data'
  * absolute path is wrong for two of them the moment `validationRoot` moves.
  */
 export interface ValidationResource {
-  planId: string;
+  /** The goal it belongs to, as `issue:<n>` — {@link ValidationCheck.originRef}. */
+  originRef: string;
   name: string;
   kind: ValidationResourceKind | null;
   note: string | null;

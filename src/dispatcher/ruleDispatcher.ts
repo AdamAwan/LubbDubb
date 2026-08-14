@@ -369,12 +369,12 @@ export class RuleDispatcher implements Dispatcher {
       );
     }
 
-    // The validation plans, grouped by the plan they hang off.
+    // The validation plans, grouped by the goal they belong to.
     const validationChecks = new Map<string, ValidationCheck[]>();
     for (const check of ctx.validationChecks ?? []) {
-      const group = validationChecks.get(check.planId);
+      const group = validationChecks.get(check.originRef);
       if (group) group.push(check);
-      else validationChecks.set(check.planId, [check]);
+      else validationChecks.set(check.originRef, [check]);
     }
 
     // Throttle a persistent concern: a finished agent that didn't clear its origin

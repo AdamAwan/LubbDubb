@@ -12,7 +12,7 @@ import type {
   ValidationResourceKind,
   ValidationRevision,
 } from '../types.js';
-import type { ColumnMigrations } from './migrate.js';
+import type { ColumnMigrations, TableRebuild } from './migrate.js';
 import type { StoreContext } from './context.js';
 
 /**
@@ -49,6 +49,46 @@ export const VALIDATION_COLUMNS: ColumnMigrations = {
 };
 
 /**
+ * Both tables were keyed on `plan_id` and are now keyed on the goal's
+ * `origin_ref`, which is not a change any `ALTER TABLE` can make.
+ *
+ * The old key resolves through the plans table, and every check has one to
+ * resolve through: the funnel is unconditional, so a goal that has checks has a
+ * plan ([08](../../docs/spec/08-planning.md)). A row whose plan is *gone* is
+ * dropped by the join rather than carried under a made-up key — it can no longer
+ * name a goal, and a check keyed on nothing is worse than one that is not there.
+ *
+ * **`id` and `letter` come across untouched**, which is the whole risk in this
+ * rebuild. They are the merge key and the handle a person types; renumbering
+ * either would silently invalidate every amendment that names a check and every
+ * reading already recorded against one.
+ */
+export const VALIDATION_REBUILDS: readonly TableRebuild[] = [
+  {
+    table: 'validation_checks',
+    keyedOn: 'plan_id',
+    copy: (old) => `
+      INSERT INTO validation_checks
+        (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers, fleet_candidate,
+         candidate_why, actor, handback_note, claimed_by, claimed_at, state, result_note, result_by,
+         result_at, defer_until, superseded_reason, revision, amended_at, amend_note, created_at, updated_at)
+      SELECT p.origin_ref, c.id, c.letter, c.seq, c.title, c.check_do, c.check_expect, c.uses, c.covers,
+             c.fleet_candidate, c.candidate_why, c.actor, c.handback_note, c.claimed_by, c.claimed_at,
+             c.state, c.result_note, c.result_by, c.result_at, c.defer_until, c.superseded_reason,
+             c.revision, c.amended_at, c.amend_note, c.created_at, c.updated_at
+        FROM ${old} c JOIN plans p ON p.id = c.plan_id`,
+  },
+  {
+    table: 'validation_resources',
+    keyedOn: 'plan_id',
+    copy: (old) => `
+      INSERT INTO validation_resources (origin_ref, name, kind, note, provided, human_task_id)
+      SELECT p.origin_ref, r.name, r.kind, r.note, r.provided, r.human_task_id
+        FROM ${old} r JOIN plans p ON p.id = r.plan_id`,
+  },
+];
+
+/**
  * The `validation_checks` and `validation_resources` tables: how anyone checks
  * that a *goal* was met, and what they need in order to.
  *
@@ -79,7 +119,7 @@ export class ValidationStore {
   constructor(private readonly ctx: StoreContext) {}
 
   /**
-   * Fold a document's validation block onto a plan's rows, **merging on check
+   * Fold a document's validation block onto a goal's rows, **merging on check
    * id** — the same discipline `upsertPlanParts` applies to a part's slug, for
    * the same reason: an amendment must be able to re-declare a check without
    * withdrawing what somebody already recorded about it.
@@ -88,7 +128,7 @@ export class ValidationStore {
    * silently:
    *
    * - **A letter is assigned once and never reused.** New checks take the next
-   *   free letter over every letter this plan has ever issued, superseded ones
+   *   free letter over every letter this goal has ever issued, superseded ones
    *   included, so `284:C` names the same check for the life of the goal.
    * - **A reworded check loses its result.** `acceptanceCriteria`'s rule exactly:
    *   an amendment that changes what a pass means has withdrawn the thing that
@@ -99,7 +139,7 @@ export class ValidationStore {
    *   retired rather than removed — and it is what keeps its letter taken.
    */
   ingestValidation(
-    planId: string,
+    originRef: string,
     input: {
       checks: ValidationCheckInput[];
       resources: ValidationResourceInput[];
@@ -109,7 +149,7 @@ export class ValidationStore {
     },
   ): ValidationCheck[] {
     const ts = this.ctx.now();
-    const existing = this.listValidationChecks(planId);
+    const existing = this.listValidationChecks(originRef);
     const byId = new Map(existing.map((c) => [c.id, c]));
     const taken = existing.map((c) => c.letter);
     const declared = new Set(input.checks.map((c) => c.id));
@@ -122,7 +162,7 @@ export class ValidationStore {
       const prev = byId.get(check.id);
       const letter = prev?.letter ?? nextCheckLetter(taken);
       if (!prev) taken.push(letter);
-      return this.mergeCheck({ planId, prev, input: check, letter, ts, amendNote });
+      return this.mergeCheck({ originRef, prev, input: check, letter, ts, amendNote });
     });
 
     const write = this.ctx.db.transaction((all: ValidationCheck[]) => {
@@ -130,17 +170,17 @@ export class ValidationStore {
       for (const check of existing) {
         if (declared.has(check.id) || check.supersededReason !== null) continue;
         this.ctx.db
-          .prepare(`UPDATE validation_checks SET superseded_reason=?, updated_at=? WHERE plan_id=? AND id=?`)
-          .run(input.supersededReason, ts, planId, check.id);
+          .prepare(`UPDATE validation_checks SET superseded_reason=?, updated_at=? WHERE origin_ref=? AND id=?`)
+          .run(input.supersededReason, ts, originRef, check.id);
       }
     });
     write(rows);
-    this.replaceValidationResources(planId, input.resources);
+    this.replaceValidationResources(originRef, input.resources);
     return rows;
   }
 
   /**
-   * Apply one agent's correction to a plan's validation block.
+   * Apply one agent's correction to a goal's validation block.
    *
    * **Nothing is withdrawn by omission.** That is the one rule, and it is what
    * makes this safe to hand to an agent that has not read the whole plan: a
@@ -154,9 +194,9 @@ export class ValidationStore {
    * supersedes rather than deletes for `ingestValidation`'s reason: **an agent
    * that cannot pass a check must not be able to make it disappear.**
    */
-  amendValidation(planId: string, amendment: ValidationAmendment): ValidationAmendResult {
+  amendValidation(originRef: string, amendment: ValidationAmendment): ValidationAmendResult {
     const ts = this.ctx.now();
-    const existing = this.listValidationChecks(planId);
+    const existing = this.listValidationChecks(originRef);
     const byId = new Map(existing.map((c) => [c.id, c]));
     const taken = existing.map((c) => c.letter);
     const declared = new Set(amendment.checks.map((c) => c.id));
@@ -172,7 +212,7 @@ export class ValidationStore {
       // two-check correction at the top of a nine-check plan.
       const seq = prev?.seq ?? (lastSeq += 1);
       const row = this.mergeCheck({
-        planId,
+        originRef,
         prev,
         input: { ...check, seq },
         letter,
@@ -203,14 +243,14 @@ export class ValidationStore {
         this.ctx.db
           .prepare(
             `UPDATE validation_checks SET superseded_reason=?, amend_note=?, amended_at=?, updated_at=?
-             WHERE plan_id=? AND id=?`,
+             WHERE origin_ref=? AND id=?`,
           )
-          .run(reason, amendment.note, ts, ts, planId, id);
+          .run(reason, amendment.note, ts, ts, originRef, id);
         result.withdrawn.push(id);
       }
     });
     write();
-    this.upsertValidationResources(planId, amendment.resources);
+    this.upsertValidationResources(originRef, amendment.resources);
     return result;
   }
 
@@ -222,14 +262,14 @@ export class ValidationStore {
    * plan's opening declaration from banding every check it contains.
    */
   private mergeCheck(args: {
-    planId: string;
+    originRef: string;
     prev: ValidationCheck | undefined;
     input: ValidationCheckInput;
     letter: string;
     ts: string;
     amendNote: string | null;
   }): ValidationCheck {
-    const { planId, prev, input, letter, ts, amendNote } = args;
+    const { originRef, prev, input, letter, ts, amendNote } = args;
     const reworded = prev !== undefined && isReworded(prev, input);
     const keep = prev !== undefined && !reworded;
     // What the operator is owed a word about: a check that appeared, one that came
@@ -239,7 +279,7 @@ export class ValidationStore {
     const changed = prev === undefined || reworded || prev.supersededReason !== null;
     const band = amendNote !== null && changed;
     return {
-      planId,
+      originRef,
       id: input.id,
       letter,
       seq: input.seq,
@@ -286,7 +326,7 @@ export class ValidationStore {
   }
 
   /**
-   * Replace a plan's declared resources wholesale.
+   * Replace a goal's declared resources wholesale.
    *
    * A replace rather than a merge, unlike the checks above, because a resource
    * carries nothing an operator recorded — it is a declaration and only a
@@ -294,12 +334,12 @@ export class ValidationStore {
    * unprovided one, and that is carried across by name so a replan does not file
    * the same request twice.
    */
-  private replaceValidationResources(planId: string, resources: ValidationResourceInput[]): void {
-    const existing = new Map(this.listValidationResources(planId).map((r) => [r.name, r]));
+  private replaceValidationResources(originRef: string, resources: ValidationResourceInput[]): void {
+    const existing = new Map(this.listValidationResources(originRef).map((r) => [r.name, r]));
     const write = this.ctx.db.transaction(() => {
-      this.ctx.db.prepare(`DELETE FROM validation_resources WHERE plan_id=?`).run(planId);
+      this.ctx.db.prepare(`DELETE FROM validation_resources WHERE origin_ref=?`).run(originRef);
       for (const resource of resources) {
-        this.writeResource(planId, resource, existing.get(resource.name)?.humanTaskId ?? null);
+        this.writeResource(originRef, resource, existing.get(resource.name)?.humanTaskId ?? null);
       }
     });
     write();
@@ -312,27 +352,27 @@ export class ValidationStore {
    * would be dropped out from under whichever *other* check still lists it in
    * `uses`, and that check would then render with no fixture and no explanation.
    */
-  private upsertValidationResources(planId: string, resources: ValidationResourceInput[]): void {
+  private upsertValidationResources(originRef: string, resources: ValidationResourceInput[]): void {
     if (resources.length === 0) return;
-    const existing = new Map(this.listValidationResources(planId).map((r) => [r.name, r]));
+    const existing = new Map(this.listValidationResources(originRef).map((r) => [r.name, r]));
     const write = this.ctx.db.transaction(() => {
       for (const resource of resources) {
-        this.writeResource(planId, resource, existing.get(resource.name)?.humanTaskId ?? null);
+        this.writeResource(originRef, resource, existing.get(resource.name)?.humanTaskId ?? null);
       }
     });
     write();
   }
 
-  private writeResource(planId: string, resource: ValidationResourceInput, humanTaskId: string | null): void {
+  private writeResource(originRef: string, resource: ValidationResourceInput, humanTaskId: string | null): void {
     this.ctx.db
       .prepare(
-        `INSERT INTO validation_resources (plan_id, name, kind, note, provided, human_task_id)
-         VALUES (@planId, @name, @kind, @note, @provided, @humanTaskId)
-         ON CONFLICT(plan_id, name) DO UPDATE SET kind=excluded.kind, note=excluded.note,
+        `INSERT INTO validation_resources (origin_ref, name, kind, note, provided, human_task_id)
+         VALUES (@originRef, @name, @kind, @note, @provided, @humanTaskId)
+         ON CONFLICT(origin_ref, name) DO UPDATE SET kind=excluded.kind, note=excluded.note,
            provided=excluded.provided, human_task_id=excluded.human_task_id`,
       )
       .run({
-        planId,
+        originRef,
         name: resource.name,
         kind: resource.kind,
         note: resource.note,
@@ -342,24 +382,24 @@ export class ValidationStore {
   }
 
   /** Remember the ask filed for an unprovided resource, so a replan does not file it twice. */
-  linkValidationResourceTask(planId: string, name: string, humanTaskId: string): void {
+  linkValidationResourceTask(originRef: string, name: string, humanTaskId: string): void {
     this.ctx.db
-      .prepare(`UPDATE validation_resources SET human_task_id=? WHERE plan_id=? AND name=?`)
-      .run(humanTaskId, planId, name);
+      .prepare(`UPDATE validation_resources SET human_task_id=? WHERE origin_ref=? AND name=?`)
+      .run(humanTaskId, originRef, name);
   }
 
-  /** A plan's checks in declaration order, superseded ones included — the record is the point. */
-  listValidationChecks(planId: string): ValidationCheck[] {
+  /** A goal's checks in declaration order, superseded ones included — the record is the point. */
+  listValidationChecks(originRef: string): ValidationCheck[] {
     const rows = this.ctx.db
-      .prepare(`SELECT * FROM validation_checks WHERE plan_id=? ORDER BY seq ASC, letter ASC`)
-      .all(planId) as ValidationCheckRow[];
+      .prepare(`SELECT * FROM validation_checks WHERE origin_ref=? ORDER BY seq ASC, letter ASC`)
+      .all(originRef) as ValidationCheckRow[];
     return rows.map(rowToCheck);
   }
 
-  /** Every check of every plan — what the snapshot and the close-out sweep both fold. */
+  /** Every check of every goal — what the snapshot and the close-out sweep both fold. */
   listAllValidationChecks(): ValidationCheck[] {
     const rows = this.ctx.db
-      .prepare(`SELECT * FROM validation_checks ORDER BY plan_id ASC, seq ASC`)
+      .prepare(`SELECT * FROM validation_checks ORDER BY origin_ref ASC, seq ASC`)
       .all() as ValidationCheckRow[];
     return rows.map(rowToCheck);
   }
@@ -372,10 +412,10 @@ export class ValidationStore {
    * Live only, on {@link ValidationStore.recordValidationResult}'s terms: a check
    * its plan has withdrawn is not one to hand over, run or report on.
    */
-  getValidationCheck(planId: string, checkId: string): ValidationCheck | null {
+  getValidationCheck(originRef: string, checkId: string): ValidationCheck | null {
     const row = this.ctx.db
-      .prepare(`SELECT * FROM validation_checks WHERE plan_id=? AND id=? AND superseded_reason IS NULL`)
-      .get(planId, checkId) as ValidationCheckRow | undefined;
+      .prepare(`SELECT * FROM validation_checks WHERE origin_ref=? AND id=? AND superseded_reason IS NULL`)
+      .get(originRef, checkId) as ValidationCheckRow | undefined;
     return row ? rowToCheck(row) : null;
   }
 
@@ -390,8 +430,8 @@ export class ValidationStore {
    * standing beside a check that is now in flight would describe the wrong
    * attempt.
    */
-  setValidationActor(planId: string, checkId: string, actor: ValidationCheckActor): ValidationCheck | null {
-    const current = this.getValidationCheck(planId, checkId);
+  setValidationActor(originRef: string, checkId: string, actor: ValidationCheckActor): ValidationCheck | null {
+    const current = this.getValidationCheck(originRef, checkId);
     if (!current) return null;
     const next: ValidationCheck = {
       ...current,
@@ -413,8 +453,8 @@ export class ValidationStore {
    * having a third answer: without it the only ways to end a dispatch are a lie
    * and silence.
    */
-  recordValidationHandback(planId: string, checkId: string, note: string): ValidationCheck | null {
-    const current = this.getValidationCheck(planId, checkId);
+  recordValidationHandback(originRef: string, checkId: string, note: string): ValidationCheck | null {
+    const current = this.getValidationCheck(originRef, checkId);
     if (!current) return null;
     const ts = this.ctx.now();
     const next: ValidationCheck = {
@@ -435,7 +475,7 @@ export class ValidationStore {
   /**
    * Take the one live desktop claim for a check, or say who already holds it.
    *
-   * **One claim at a time, across every plan.** Not a lock per check: the
+   * **One claim at a time, across every goal.** Not a lock per check: the
    * operator's constraint is that they can only run one branch at once, so a
    * second check claimed while the first is live is two things reaching for the
    * same working copy. The refusal names the check that holds it, which is the
@@ -450,7 +490,7 @@ export class ValidationStore {
    * socket close reported.
    */
   claimValidationCheck(
-    planId: string,
+    originRef: string,
     checkId: string,
     holder: string,
     staleBefore: string,
@@ -458,10 +498,10 @@ export class ValidationStore {
     | { ok: true; check: ValidationCheck; tookOverFrom: string | null }
     | { ok: false; reason: 'gone' }
     | { ok: false; reason: 'held'; by: ValidationCheck } {
-    const target = this.getValidationCheck(planId, checkId);
+    const target = this.getValidationCheck(originRef, checkId);
     if (!target) return { ok: false, reason: 'gone' };
     const live = this.liveClaims(staleBefore);
-    const other = live.find((c) => c.planId !== planId || c.id !== checkId);
+    const other = live.find((c) => c.originRef !== originRef || c.id !== checkId);
     if (other) return { ok: false, reason: 'held', by: other };
     // Re-claiming what you already hold is not a conflict, and saying so beats
     // refusing: a session whose bridge reconnected mid-run would otherwise be
@@ -474,8 +514,8 @@ export class ValidationStore {
   }
 
   /** Give a claimed check back, whoever holds it. Idempotent — releasing an unclaimed check is a no-op. */
-  releaseValidationClaim(planId: string, checkId: string): ValidationCheck | null {
-    const current = this.getValidationCheck(planId, checkId);
+  releaseValidationClaim(originRef: string, checkId: string): ValidationCheck | null {
+    const current = this.getValidationCheck(originRef, checkId);
     if (!current || current.claimedBy === null) return current;
     const next: ValidationCheck = { ...current, claimedBy: null, claimedAt: null, updatedAt: this.ctx.now() };
     this.writeCheck(next);
@@ -499,16 +539,16 @@ export class ValidationStore {
     return rows.map(rowToCheck);
   }
 
-  listValidationResources(planId: string): ValidationResource[] {
+  listValidationResources(originRef: string): ValidationResource[] {
     const rows = this.ctx.db
-      .prepare(`SELECT * FROM validation_resources WHERE plan_id=? ORDER BY name ASC`)
-      .all(planId) as ValidationResourceRow[];
+      .prepare(`SELECT * FROM validation_resources WHERE origin_ref=? ORDER BY name ASC`)
+      .all(originRef) as ValidationResourceRow[];
     return rows.map(rowToResource);
   }
 
   listAllValidationResources(): ValidationResource[] {
     const rows = this.ctx.db
-      .prepare(`SELECT * FROM validation_resources ORDER BY plan_id ASC, name ASC`)
+      .prepare(`SELECT * FROM validation_resources ORDER BY origin_ref ASC, name ASC`)
       .all() as ValidationResourceRow[];
     return rows.map(rowToResource);
   }
@@ -533,7 +573,7 @@ export class ValidationStore {
    * there is nothing left to report about.
    */
   recordValidationResult(
-    planId: string,
+    originRef: string,
     checkId: string,
     input: {
       state: ValidationCheckState;
@@ -542,7 +582,7 @@ export class ValidationStore {
       until?: string | null;
     },
   ): ValidationCheck | null {
-    const current = this.getValidationCheck(planId, checkId);
+    const current = this.getValidationCheck(originRef, checkId);
     if (!current) return null;
     const ts = this.ctx.now();
     const next: ValidationCheck = {
@@ -581,15 +621,15 @@ export class ValidationStore {
         // `check_do` rather than `do`: DO is a SQLite keyword (UPSERT), and an
         // unquoted column named for one is a syntax error at prepare time.
         // `check_expect` follows it so the pair reads as a pair.
-        `INSERT INTO validation_checks (plan_id, id, letter, seq, title, check_do, check_expect, uses, covers,
+        `INSERT INTO validation_checks (origin_ref, id, letter, seq, title, check_do, check_expect, uses, covers,
            fleet_candidate, candidate_why, actor, handback_note, claimed_by, claimed_at, state, result_note,
            result_by, result_at, defer_until, superseded_reason, revision, amended_at, amend_note, created_at,
            updated_at)
-         VALUES (@planId, @id, @letter, @seq, @title, @do, @expect, @uses, @covers,
+         VALUES (@originRef, @id, @letter, @seq, @title, @do, @expect, @uses, @covers,
            @fleetCandidate, @candidateWhy, @actor, @handbackNote, @claimedBy, @claimedAt, @state, @resultNote,
            @resultBy, @resultAt, @deferUntil, @supersededReason, @revision, @amendedAt, @amendNote, @createdAt,
            @updatedAt)
-         ON CONFLICT(plan_id, id) DO UPDATE SET letter=excluded.letter, seq=excluded.seq, title=excluded.title,
+         ON CONFLICT(origin_ref, id) DO UPDATE SET letter=excluded.letter, seq=excluded.seq, title=excluded.title,
            check_do=excluded.check_do, check_expect=excluded.check_expect, uses=excluded.uses,
            covers=excluded.covers, fleet_candidate=excluded.fleet_candidate,
            candidate_why=excluded.candidate_why, actor=excluded.actor,
@@ -642,7 +682,7 @@ function priorWording(prev: ValidationCheck): ValidationRevision {
 }
 
 interface ValidationCheckRow {
-  plan_id: string;
+  origin_ref: string;
   id: string;
   letter: string;
   seq: number;
@@ -674,7 +714,7 @@ interface ValidationCheckRow {
 }
 
 interface ValidationResourceRow {
-  plan_id: string;
+  origin_ref: string;
   name: string;
   kind: string | null;
   note: string | null;
@@ -684,7 +724,7 @@ interface ValidationResourceRow {
 
 function rowToCheck(r: ValidationCheckRow): ValidationCheck {
   return {
-    planId: r.plan_id,
+    originRef: r.origin_ref,
     id: r.id,
     letter: r.letter,
     seq: r.seq,
@@ -749,7 +789,7 @@ function resourceKindOf(raw: string | null): ValidationResourceKind | null {
 
 function rowToResource(r: ValidationResourceRow): ValidationResource {
   return {
-    planId: r.plan_id,
+    originRef: r.origin_ref,
     name: r.name,
     kind: resourceKindOf(r.kind),
     note: r.note,

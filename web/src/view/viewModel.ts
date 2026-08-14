@@ -141,24 +141,16 @@ export interface DeskRun {
   claimedAt: string;
 }
 
-/**
- * Every live claim, joined through the plan to the goal it is a check of.
- *
- * A check whose plan the snapshot does not carry is left out rather than drawn
- * against its plan id: the entry's whole subject is *which goal somebody is
- * checking*, and a row that cannot say is not worth a slot in the fleet list.
- */
+/** Every live claim. The check names its own goal, so there is nothing to join. */
 function buildDeskRuns(state: AppState): DeskRun[] {
-  const originByPlan = new Map((state.plans ?? []).map((p) => [p.id, p.originRef]));
   return (state.validationChecks ?? []).flatMap((check) => {
-    const originRef = originByPlan.get(check.planId);
-    if (check.claimedBy === null || check.claimedAt === null || originRef === undefined) return [];
+    if (check.claimedBy === null || check.claimedAt === null) return [];
     return [
       {
         checkId: check.id,
         letter: check.letter,
         title: check.title,
-        originRef,
+        originRef: check.originRef,
         label: check.claimedBy,
         claimedAt: check.claimedAt,
       },

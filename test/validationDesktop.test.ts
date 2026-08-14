@@ -107,11 +107,10 @@ const CHECKS = [
 function planWith(system: System, checks: Record<string, unknown>[] = CHECKS): string {
   const parsed = validatePlanDocument({ version: 1, verdict: 'single', reason: 'One fix.', validation: { checks } });
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
-  return ingestPlanDocument(system.store, {
-    doc: parsed.document,
-    originRef: 'issue:12',
-    title: 'Ship it',
-  }).plan.id;
+  ingestPlanDocument(system.store, { doc: parsed.document, originRef: 'issue:12', title: 'Ship it' });
+  // The **goal**, which is what the checks are keyed on — the plan id is not a
+  // handle anything about validation takes any more.
+  return 'issue:12';
 }
 
 async function call(
@@ -127,8 +126,8 @@ async function call(
   return { isError: result.isError === true, text, json: () => JSON.parse(text) as Record<string, unknown> };
 }
 
-function byId(system: System, planId: string, id: string): ValidationCheck {
-  const found = system.store.listValidationChecks(planId).find((c) => c.id === id);
+function byId(system: System, goal: string, id: string): ValidationCheck {
+  const found = system.store.listValidationChecks(goal).find((c) => c.id === id);
   assert.ok(found, `check ${id} exists`);
   return found;
 }
@@ -473,7 +472,7 @@ function plan(): Plan {
 
 function handedOver(over: Partial<ValidationCheck> = {}): ValidationCheck {
   return {
-    planId: 'plan-12',
+    originRef: 'issue:12',
     id: 'csv-opens',
     letter: 'A',
     seq: 1,

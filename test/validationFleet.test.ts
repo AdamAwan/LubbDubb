@@ -70,11 +70,10 @@ const CHECK = { id: 'csv-opens', title: 'The export opens in Excel', do: 'Export
 function planWith(system: System, checks: Record<string, unknown>[]): string {
   const parsed = validatePlanDocument({ version: 1, verdict: 'single', reason: 'One fix.', validation: { checks } });
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
-  return ingestPlanDocument(system.store, {
-    doc: parsed.document,
-    originRef: 'issue:12',
-    title: 'Ship it',
-  }).plan.id;
+  ingestPlanDocument(system.store, { doc: parsed.document, originRef: 'issue:12', title: 'Ship it' });
+  // The **goal**, which is what the checks are keyed on — the plan id is not a
+  // handle anything about validation takes any more.
+  return 'issue:12';
 }
 
 /** One check as `amendValidation` takes it — the document's shape, already parsed. */
@@ -82,8 +81,8 @@ function amendment(over: Partial<ValidationCheckAmendment> = {}): ValidationChec
   return [{ ...CHECK, uses: [], covers: [], fleetCandidate: false, candidateWhy: null, ...over }];
 }
 
-function byId(system: System, planId: string, id: string): ValidationCheck {
-  const found = system.store.listValidationChecks(planId).find((c) => c.id === id);
+function byId(system: System, goal: string, id: string): ValidationCheck {
+  const found = system.store.listValidationChecks(goal).find((c) => c.id === id);
   assert.ok(found, `check ${id} exists`);
   return found;
 }
@@ -161,7 +160,7 @@ function plan(): Plan {
 
 function check(over: Partial<ValidationCheck> = {}): ValidationCheck {
   return {
-    planId: 'plan-12',
+    originRef: 'issue:12',
     id: 'csv-opens',
     letter: 'A',
     seq: 1,
@@ -410,26 +409,27 @@ test('a check withdrawn while an agent was running it is said plainly, and nothi
 
 test('handing over is an operator act, and a settled check is refused rather than silently ignored', async () => {
   const system = build();
-  const planId = planWith(system, [CHECK]);
+  const goal = planWith(system, [CHECK]);
   const { app } = await buildApp(system);
-  const url = `/api/plans/${planId}/validation/csv-opens/handover`;
+  // Keyed on the goal, not the plan: `:number` is the issue the check belongs to.
+  const url = `/api/issues/12/validation/csv-opens/handover`;
 
   const handed = await app.inject({ method: 'POST', url, payload: { to: 'fleet' } });
   assert.equal(handed.statusCode, 200);
-  assert.equal(byId(system, planId, 'csv-opens').actor, 'fleet');
+  assert.equal(byId(system, goal, 'csv-opens').actor, 'fleet');
 
   // Taking it back is always allowed — it stops something from happening.
   const back = await app.inject({ method: 'POST', url, payload: { to: 'human' } });
   assert.equal(back.statusCode, 200);
-  assert.equal(byId(system, planId, 'csv-opens').actor, 'human');
+  assert.equal(byId(system, goal, 'csv-opens').actor, 'human');
 
   // The rule only ever runs an `unrun` check, so handing over a settled one would
   // take and then never move. Refused instead, pointing at the undo.
-  system.store.recordValidationResult(planId, 'csv-opens', { state: 'passed', note: 'it opened', by: 'operator' });
+  system.store.recordValidationResult(goal, 'csv-opens', { state: 'passed', note: 'it opened', by: 'operator' });
   const settled = await app.inject({ method: 'POST', url, payload: { to: 'fleet' } });
   assert.equal(settled.statusCode, 400);
   assert.match(settled.body, /reset it first/);
-  assert.equal(byId(system, planId, 'csv-opens').actor, 'human');
+  assert.equal(byId(system, goal, 'csv-opens').actor, 'human');
 });
 
 test('a rewording withdraws the hand-over; a word-for-word re-declaration keeps it', async () => {
@@ -473,21 +473,21 @@ test('the next reading answers a hand-back, exactly as it answers an amendment',
 
 test('the close-out line says who owes the check, and the ticket says who recorded it', async () => {
   const system = build();
-  const planId = planWith(system, [CHECK, { ...CHECK, id: 'pdf-prints', title: 'The PDF prints' }]);
-  system.store.setValidationActor(planId, 'csv-opens', 'fleet');
-  system.store.recordValidationHandback(planId, 'pdf-prints', 'the printer is not reachable from here');
+  const goal = planWith(system, [CHECK, { ...CHECK, id: 'pdf-prints', title: 'The PDF prints' }]);
+  system.store.setValidationActor(goal, 'csv-opens', 'fleet');
+  system.store.recordValidationHandback(goal, 'pdf-prints', 'the printer is not reachable from here');
 
-  const lines = outstandingChecks(system.store.listValidationChecks(planId));
+  const lines = outstandingChecks(system.store.listValidationChecks(goal));
   // Without these, both render as a bare `unrun` — the same word for "nobody has
   // got to it", "an agent is about to" and "an agent tried and could not".
   assert.match(lines.join('\n'), /handed to the fleet/);
   assert.match(lines.join('\n'), /handed this back.*printer is not reachable/);
 
-  system.store.recordValidationResult(planId, 'csv-opens', { state: 'passed', note: 'it opened', by: 'agent' });
+  system.store.recordValidationResult(goal, 'csv-opens', { state: 'passed', note: 'it opened', by: 'agent' });
   const comment = renderPlanComment(
-    system.store.getPlan(planId) as Plan,
+    system.store.getPlanByOrigin(goal) as Plan,
     [],
-    system.store.listValidationChecks(planId),
+    system.store.listValidationChecks(goal),
   );
   // The reader of the ticket next month is deciding how much the tick is worth.
   assert.match(comment, /recorded by an agent/);

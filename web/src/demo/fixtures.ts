@@ -59,7 +59,7 @@ function demoCheck(
   seed: Partial<ValidationCheck> & Pick<ValidationCheck, 'id' | 'letter' | 'seq' | 'title' | 'createdAt' | 'updatedAt'>,
 ): ValidationCheck {
   return {
-    planId: 'plan-231',
+    originRef: 'issue:231',
     do: '',
     expect: '',
     uses: [],

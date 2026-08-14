@@ -476,7 +476,7 @@ vanishes when quiet is indistinguishable from one that broke.
 A validation check a desktop session is holding is **in flight**, and the Fleet card draws it beside
 the dispatched agents — that card is where an operator looks to find out what is happening, and a
 person at their own keyboard running a check is part of the answer. `buildViewModel` synthesises it
-from the claim (`DeskRun`), joined through the plan to the goal; it never becomes an `Agent`. Nobody
+from the claim (`DeskRun`), which names its own goal; it never becomes an `Agent`. Nobody
 dispatched it, so there is no task, no branch, no worktree, no transcript and no spend — a row in
 `agents` would be a fiction, and one every counter of live agents would then have to be taught to
 filter back out, including the next counter somebody adds.
