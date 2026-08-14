@@ -38,16 +38,16 @@ test('an overridden value is marked, and only it', () => {
 
 /**
  * A nested block is expanded to leaves, so setting one member of it does not
- * make the other three read as chosen. `planning` is the case that matters:
- * `loadConfig` deep-merges it, so `{enabled: true}` alone leaves three defaults
- * behind that an operator must be able to tell apart from their own choice.
+ * make the other two read as chosen. `planning` is the case that matters:
+ * `loadConfig` deep-merges it, so one member alone leaves the rest defaulted, and
+ * an operator must be able to tell those apart from their own choice.
  */
 test('a nested override marks the leaf, not the block', () => {
-  // `enabled: false` is the override now that the funnel defaults on — the test
-  // is about which row is marked, so it needs a value that differs from the default.
-  const config = loadConfig({ planning: { enabled: false } as Config['planning'] });
-  assert.equal(entry(config, 'planning.enabled')?.isDefault, false);
-  assert.equal(entry(config, 'planning.requireApproval')?.isDefault, true);
+  // `requireApproval: false` is the override — the test is about which row is
+  // marked, so it needs a value that differs from the default.
+  const config = loadConfig({ planning: { requireApproval: false } as Config['planning'] });
+  assert.equal(entry(config, 'planning.requireApproval')?.isDefault, false);
+  assert.equal(entry(config, 'planning.gitFetchIntervalMs')?.isDefault, true);
   assert.equal(entry(config, 'planning.maxConcurrentPartsPerIssue')?.isDefault, true);
   assert.equal(entry(config, 'planning')?.value, undefined, 'the block itself must not also be listed');
 });

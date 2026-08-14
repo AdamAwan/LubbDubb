@@ -89,7 +89,7 @@ export interface CockpitActions {
    */
   setAcceptance(planId: string, slug: string, criterion: string, met: boolean): Promise<void>;
   /** One validation check's current reading — see `api.setValidation`. */
-  setValidation(planId: string, checkId: string, act: ValidationAct): Promise<void>;
+  setValidation(issueNumber: number, checkId: string, act: ValidationAct): Promise<void>;
   /**
    * Which plan's modal is open. UI state, on the seam for the same reason
    * `select` is: the console cannot own it (the modal is shared and the triggers

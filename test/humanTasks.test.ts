@@ -40,7 +40,7 @@ function testConfig(overrides: Record<string, unknown> = {}) {
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 5,
-    planning: { ...DEFAULT_PLANNING, enabled: true, requireApproval: false },
+    planning: { ...DEFAULT_PLANNING, requireApproval: false },
     ...overrides,
   });
 }

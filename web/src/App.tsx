@@ -80,8 +80,8 @@ export function App() {
       key={viewedPlan.id}
       plan={viewedPlan}
       parts={(state.planParts ?? []).filter((p) => p.planId === viewedPlan.id).sort((a, b) => a.seq - b.seq)}
-      checks={(state.validationChecks ?? []).filter((c) => c.planId === viewedPlan.id)}
-      resources={(state.validationResources ?? []).filter((r) => r.planId === viewedPlan.id)}
+      checks={(state.validationChecks ?? []).filter((c) => c.originRef === viewedPlan.originRef)}
+      resources={(state.validationResources ?? []).filter((r) => r.originRef === viewedPlan.originRef)}
       upcoming={state.upcoming?.items ?? []}
       proposal={(state.proposals ?? []).find((p) => p.kind === 'plan' && p.ref === `${viewedPlan.originRef}:plan`)}
       agent={state.agents.find(
@@ -105,7 +105,7 @@ export function App() {
       onOpenAgent={(id) => status.actions.select(id)}
       onRespond={(id, text) => status.actions.respondAgent(id, text)}
       onAcceptance={(id, slug, criterion, met) => status.actions.setAcceptance(id, slug, criterion, met)}
-      onValidation={(id, checkId, act) => status.actions.setValidation(id, checkId, act)}
+      onValidation={(number, checkId, act) => status.actions.setValidation(number, checkId, act)}
     />
   ) : null;
 

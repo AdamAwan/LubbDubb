@@ -114,8 +114,8 @@ export class RuleDispatcher implements Dispatcher {
   private readonly assessment: AssessmentPolicy;
   private readonly assay: AssayPolicy;
   private readonly retrospective: RetrospectivePolicy;
-  /** Only the two fields any rule reads — see the constructor's narrowing below. */
-  private readonly validation: Pick<ValidationPolicy, 'enabled' | 'desktopClaimMinutes'>;
+  /** Only the one field any rule reads — see the constructor's narrowing below. */
+  private readonly validation: Pick<ValidationPolicy, 'desktopClaimMinutes'>;
   private readonly validationRoot: string;
   private readonly ci: CiPolicy;
 
@@ -128,9 +128,9 @@ export class RuleDispatcher implements Dispatcher {
    * `templates` supplies the agent/escalation prompt bodies; omitted => the
    * built-in defaults (the composition root loads operator overrides).
    * `defaultBranch` names the base a PR is assumed to target when the provider
-   * doesn't report one, and only phrases the base-update prompt. `planning` turns
-   * the plan funnel on; omitted/disabled leaves `issue-pickup` un-narrowed and
-   * behaviour exactly as it is without plans. `assessment` turns `issue-assess`
+   * doesn't report one, and only phrases the base-update prompt. `planning` carries
+   * the funnel's two knobs — the part-concurrency cap and `requireApproval`;
+   * omitted means their defaults, never an absent funnel. `assessment` turns `issue-assess`
    * on; omitted/disabled means no assessor fires and no issue is ever parked as
    * delivered, so pickup behaves exactly as it does today. `ci` decides
    * `pr-ci-failing` per failing check; omitted/empty means every failure is acted
@@ -164,16 +164,15 @@ export class RuleDispatcher implements Dispatcher {
     this.assay = { enabled: assay.enabled ?? false };
     this.retrospective = { enabled: retrospective.enabled ?? false };
     this.validation = {
-      enabled: validation.enabled ?? false,
-      // Not `?? false`'s treatment: an omitted *duration* is not a feature being
-      // switched off, and zero would expire every claim the instant it was taken.
+      // Not the `?? false` the optional funnels take: an omitted *duration* is not
+      // a feature being switched off, and zero would expire every claim the
+      // instant it was taken.
       desktopClaimMinutes: validation.desktopClaimMinutes ?? DEFAULT_VALIDATION.desktopClaimMinutes,
     };
     this.validationRoot = validationRoot;
     this.defaultBranch = defaultBranch;
     this.ci = { checks: ci.checks ?? [] };
     this.planning = {
-      enabled: planning.enabled ?? false,
       maxConcurrentPartsPerIssue: planning.maxConcurrentPartsPerIssue ?? DEFAULT_PLANNING.maxConcurrentPartsPerIssue,
       requireApproval: planning.requireApproval ?? DEFAULT_PLANNING.requireApproval,
       // Reconciliation's knob, not the dispatcher's; carried so the policy stays one object.
@@ -209,11 +208,9 @@ export class RuleDispatcher implements Dispatcher {
     // keep in step, and nothing renders a position, so inserting one renumbers
     // nothing.
     const conditions: RuleConditions = {
-      planning: this.planning.enabled,
       assessment: this.assessment.enabled,
       assay: this.assay.enabled,
       retrospective: this.retrospective.enabled,
-      validation: this.validation.enabled,
       workItemStates: s.workItemStates !== null,
     };
     for (const rule of DISPATCH_PIPELINE) {
@@ -357,15 +354,12 @@ export class RuleDispatcher implements Dispatcher {
     // Which arm of the plan funnel each eligible issue is on. Resolved once, from
     // the persisted plan plus the plan origin's own cooldown verdict, and shared by
     // `issue-plan` and `issue-pickup` so the two can never disagree about an issue.
-    // With planning disabled every issue routes to `single`, so `issue-pickup` is
-    // un-narrowed.
     const routes = new Map<number, PlanRouteVerdict>();
     for (const { issue } of eligibleIssues) {
       const plan = plansByOrigin.get(issueOrigin(issue.number)) ?? null;
       routes.set(
         issue.number,
         resolvePlanRoute({
-          planning: this.planning,
           plan,
           verdict: plannerVerdict(issue.number, plan, now, ctx.recentDecisions, this.cooldown),
           // A replan that spends its attempts falls back to the decomposition the
@@ -375,16 +369,12 @@ export class RuleDispatcher implements Dispatcher {
       );
     }
 
-    // The validation plans, grouped by the plan they hang off. Built only when
-    // the feature is on: with it off `validate-check` never runs, and grouping a
-    // table nothing will read would be a fold per pulse for nobody.
+    // The validation plans, grouped by the goal they belong to.
     const validationChecks = new Map<string, ValidationCheck[]>();
-    if (this.validation.enabled) {
-      for (const check of ctx.validationChecks ?? []) {
-        const group = validationChecks.get(check.planId);
-        if (group) group.push(check);
-        else validationChecks.set(check.planId, [check]);
-      }
+    for (const check of ctx.validationChecks ?? []) {
+      const group = validationChecks.get(check.originRef);
+      if (group) group.push(check);
+      else validationChecks.set(check.originRef, [check]);
     }
 
     // Throttle a persistent concern: a finished agent that didn't clear its origin
@@ -439,7 +429,6 @@ export class RuleDispatcher implements Dispatcher {
        * nothing.
        */
       partsPlanFor: (issueNumber: number) => {
-        if (!this.planning.enabled) return null;
         const plan = plansByOrigin.get(issueOrigin(issueNumber));
         if (!plan || (plan.status !== 'active' && plan.status !== 'complete')) return null;
         const parts = (ctx.planParts ?? []).filter((p) => p.planId === plan.id);

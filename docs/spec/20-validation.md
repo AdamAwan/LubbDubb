@@ -1,8 +1,10 @@
 # 20 — Validation
 
-`src/validation/`. On by default (`validation.enabled: true`); off leaves the surface out entirely —
-no checks are ingested, the plan sheet draws no section, no goal is ever flagged, and behaviour is
-exactly what it is without validation.
+`src/validation/`. **Always on** — there is no switch. It spends no agent and gates nothing, so there
+was never much to weigh in turning it off, and the cost of the switch was a branch at every call site
+that read it plus a `validationEnabled` threaded through four layers to say "yes". A config file
+still setting `validation.enabled` is warned about and ignored
+([02](02-configuration.md#retired-keys)).
 
 A plan says what is wrong, what will be done, and what makes each part done. It does not say **how
 anyone checks the goal was met**. `verification` — one optional narrative field, "how anyone will
@@ -25,7 +27,15 @@ re-litigated:
 
 ## The check
 
-One row per check, keyed on `(plan, id)` — `src/store/validation.ts`.
+One row per check, keyed on `(goal, id)` — the goal's `origin_ref` (`issue:<n>`), `src/store/validation.ts`.
+
+**Keyed on the goal, not the plan**, which is what this document has said validation _is_ since the
+first line of it. A plan is 1:1 with a goal, which is what let `plan_id` stand in for the goal for two
+changes; it was the wrong key wearing the right key's clothes, and it got more expensive to change
+with every check row recorded against it. A check outlives any one plan of the work, and nothing about
+it is a property of the decomposition. Databases written under the old key are rebuilt onto the new
+one at boot, `id` and `letter` untouched
+([14](14-persistence.md#rebuilding-a-table-whose-key-changed)).
 
 | Field            | What it is                                                                                          |
 | ---------------- | --------------------------------------------------------------------------------------------------- |
@@ -169,9 +179,9 @@ is the same problem:
 - **A config key**, so a deployment wanting a tmpfs or a per-tenant path can say so.
 
 Every launched agent is granted read access to the whole root via `permissions.additionalDirectories`
-for the life of the launch — whether or not `validation.enabled`, because a grant that came and went
-with a policy flag would make an agent's readable set depend on config it cannot see. That is a real
-widening, and it is the same one attachments already make.
+for the life of the launch, because a grant that came and went with a policy flag would make an
+agent's readable set depend on config it cannot see. That is a real widening, and it is the same one
+attachments already make.
 
 A resource declared `"provided": false` is the planner saying it needs something it cannot produce: a
 reference screenshot, an account, a sample file from a colleague. Ingestion files a `human_tasks` row
@@ -249,9 +259,9 @@ origin comes off the credential, so an agent working goal A cannot amend goal B 
 block, and two ways to say one thing that disagree about what an omission means is the drift the
 split exists to prevent.
 
-Two shapes are refused for reasons that are not the caller's fault, and say so plainly:
-`validation.enabled` off, and a goal with **no plan** — the checks hang off the plan row, so a
-deployment running without the planning funnel has nowhere to put one.
+One shape is refused for a reason that is not the caller's fault, and says so plainly: a goal with
+**no plan** — `covers` names live part slugs, which is a property of the plan, and a goal whose
+planner has not written one has no check set to amend either.
 
 ### The band
 
@@ -524,13 +534,13 @@ be no way out that costs nothing to say.
 ([16](16-http-api.md)). Every handler is wrapped in `checked(schemas, handler)`; a refusal is a
 returned value, never a throw.
 
-| Route                                              | Does                                               |
-| -------------------------------------------------- | -------------------------------------------------- |
-| `POST /api/plans/:id/validation/:checkId/result`   | `{result: passed｜failed, note}`.                  |
-| `POST /api/plans/:id/validation/:checkId/defer`    | `{reason, until?}`.                                |
-| `POST /api/plans/:id/validation/:checkId/waive`    | `{reason}`.                                        |
-| `POST /api/plans/:id/validation/:checkId/reset`    | Back to `unrun`; the undo for all three.           |
-| `POST /api/plans/:id/validation/:checkId/handover` | `{to: fleet｜human}` — the only writer of `actor`. |
+| Route                                                   | Does                                               |
+| ------------------------------------------------------- | -------------------------------------------------- |
+| `POST /api/issues/:number/validation/:checkId/result`   | `{result: passed｜failed, note}`.                  |
+| `POST /api/issues/:number/validation/:checkId/defer`    | `{reason, until?}`.                                |
+| `POST /api/issues/:number/validation/:checkId/waive`    | `{reason}`.                                        |
+| `POST /api/issues/:number/validation/:checkId/reset`    | Back to `unrun`; the undo for all three.           |
+| `POST /api/issues/:number/validation/:checkId/handover` | `{to: fleet｜human}` — the only writer of `actor`. |
 
 Handing a **settled** check to the fleet is refused with a 400 pointing at `reset`, rather than
 accepted and silently doing nothing: the rule only ever runs an `unrun` check, so it would otherwise
@@ -538,7 +548,7 @@ look like it took and then never move — and refusing also protects the reading
 re-running a check behind the person who settled it would overwrite their answer. Taking one back is
 always allowed; it stops something from happening.
 
-`:checkId` is the check's id, never its letter — the letter is what a person types, the id is what
+`:number` is the goal and `:checkId` is the check's id, never its letter — the letter is what a person types, the id is what
 the store is keyed on. A check whose plan has superseded it answers **409**, not 404: the commonest
 cause is not a typo but an amendment landing between the sheet being drawn and the click.
 
@@ -550,14 +560,14 @@ saying nothing.
 `src/store/validation.ts`, the only module touching these tables, taking a `StoreContext` and
 delegated to under the same method names ([14](14-persistence.md#shape)).
 
-- **`validation_checks`** — `plan_id`, `id`, `letter`, `seq`, `title`, `check_do`, `check_expect`,
+- **`validation_checks`** — `origin_ref`, `id`, `letter`, `seq`, `title`, `check_do`, `check_expect`,
   `uses`, `covers`, `fleet_candidate`, `candidate_why`, `actor`, `handback_note`, `claimed_by`,
   `claimed_at`, `state`, `result_note`, `result_by`,
   `result_at`, `defer_until`, `superseded_reason`, `created_at`, `updated_at`. `check_do` rather than
   `do` because DO is a SQLite keyword; `check_expect` follows it so the pair reads as a pair.
   `revision` is JSON — the wording an amendment replaced and the reading it withdrew, kept as one
   record because it is read as one.
-- **`validation_resources`** — `plan_id`, `name`, `kind`, `note`, `provided`, `human_task_id`.
+- **`validation_resources`** — `origin_ref`, `name`, `kind`, `note`, `provided`, `human_task_id`.
 
 Both tables shipped as fresh `CREATE TABLE`s and both declared an **empty `ColumnMigrations`
 anyway**, on the argument that a table being new once does not keep it exempt. The band collected
@@ -590,10 +600,10 @@ then work, then how anyone knows it worked. Each row draws its letter in the gut
 sequence number sits, because it is the same kind of handle.
 
 Three markers say who, and each exists because its absence would be read as something else: **with
-the fleet** on a handed-over check, **running at ‹label›** while a desktop session holds a claim (the
-timestamp on the hover, because a claim sitting there since yesterday has expired and only the
-operator is placed to notice), and beside a reading, **recorded by an agent** or **recorded from a
-desktop session**. A reading by a person draws nothing, because that is what a checklist already
+the fleet** on a handed-over check, **running at ‹label›** while a desktop session holds a **live**
+claim (the timestamp on the hover; an expired claim is not shipped at all, so the chip and the fleet
+list's keyboard entry go together), and beside a reading, **recorded by an agent** or **recorded from
+a desktop session**. A reading by a person draws nothing, because that is what a checklist already
 means.
 
 Every control writes an operator's reading and derives nothing: there is no "mark all", and no state

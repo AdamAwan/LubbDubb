@@ -403,10 +403,9 @@ out rather than being an absent `DELETE`.
 
 Every gate above asks about **policy**: the watch tag, the workflow state, the cooldown, the attempt
 cap, headroom, `resolvePlanRoute`. None of them asks whether the ticket says anything an agent could
-act on. So a vague, self-contradictory or already-obsolete issue goes straight into the funnel — with
-`planning.enabled` the planner decomposes the vagueness and an operator is asked to approve the
-decomposition of a question nobody could answer; with it off, rule `issue-pickup` puts an agent on it directly —
-and the first signal that anything was wrong is an agent spending its attempt cap and escalating in a
+act on. So a vague, self-contradictory or already-obsolete issue goes straight into the funnel — the planner
+decomposes the vagueness and an operator is asked to approve the decomposition of a question nobody
+could answer — and the first signal that anything was wrong is an agent spending its attempt cap and escalating in a
 way that reads as its own failure.
 
 The goal assay (issue #158, `src/intake/assay.ts`, config `assay.enabled`, **on by default**) is

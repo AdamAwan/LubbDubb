@@ -216,7 +216,6 @@ function systemFor(): System {
       // The funnel and its neighbours are pinned off: this file is about what a
       // *pickup* agent is handed, and an extra agent in front of the issue would
       // change which task these assertions read.
-      planning: { enabled: false } as never,
       assessment: { enabled: false } as never,
       assay: { enabled: false } as never,
       retrospective: { enabled: false } as never,

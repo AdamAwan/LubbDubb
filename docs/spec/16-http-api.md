@@ -723,22 +723,24 @@ criterion loses its tick. Broadcasts `dirty` and **runs no cycle**: a reviewer's
 work schedules nothing, and a pulse per checkbox is a pulse per checkbox. Returns `{ ok: true, part }`.
 → [08](08-planning.md#acceptance-ticked)
 
-### `POST /api/plans/:id/validation/:checkId/{result,defer,waive,reset}`
+### `POST /api/issues/:number/validation/:checkId/{result,defer,waive,reset}`
 
 Four routes, one write. `result` takes `{result: 'passed'|'failed', note}`, `defer` takes
 `{reason, until?}`, `waive` takes `{reason}`, and `reset` takes no body and undoes any of them. The
 note is **required and non-empty on all three that carry one**, `/decline`'s discipline: a reading an
 operator acts on in a month must not be a state with no account of itself.
 
-`:checkId` is the check's author-chosen id, never its letter — the letter is what a person types, the
-id is what the store is keyed on. **409** when the plan has no such check _or has superseded it_: the
-commonest cause is not a typo but an amendment landing between the sheet being drawn and the click.
+`:number` is the **goal**, not a plan: a check belongs to the goal, and the plan was only ever standing
+in for it ([20](20-validation.md)). `:checkId` is the check's author-chosen id, never its letter — the
+letter is what a person types, the id is what the store is keyed on. **409** when the goal has no such
+check _or an amendment has superseded it_: the commonest cause is not a typo but an amendment landing
+between the sheet being drawn and the click.
 
 Each writes the check's whole current reading, clearing whatever the last one left behind, and
 broadcasts `world:changed`. **None of them runs a cycle** — nothing here schedules work, and a pulse
 per checkbox is a pulse per checkbox. Returns `{ ok: true, check }`. → [20](20-validation.md)
 
-### `POST /api/plans/:id/validation/:checkId/handover`
+### `POST /api/issues/:number/validation/:checkId/handover`
 
 Body `{to: 'fleet' | 'human'}`, and **the only writer of a check's `actor`**. Handing a check to the
 fleet is an operator act by construction: no plan document, no amendment and no agent reaches this

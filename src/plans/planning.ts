@@ -3,14 +3,11 @@ import { dispatchVerdict, type CooldownPolicy, type DispatchVerdict } from '../d
 
 /**
  * The planning funnel: every watched, open issue passes a planning agent that
- * emits one of two verdicts — `single` (today's one-agent / one-PR path) or
- * `parts` (a decomposition into stacked PRs). On by default; off leaves the
- * funnel out entirely: every issue routes straight to `single`, so rule `issue-pickup` is
- * un-narrowed and behaviour is exactly what it is today.
+ * emits one of two verdicts — `single` (the one-agent / one-PR path) or `parts`
+ * (a decomposition into stacked PRs). **Always on**: every watched issue is
+ * routed by a planner, and there is no deployment in which one is not.
  */
 export interface PlanningPolicy {
-  /** Master switch. On by default (`src/config.ts`); an omitted policy means off. */
-  enabled: boolean;
   /**
    * How many parts of one plan may have agents at once. A cap rather than fanning
    * the whole graph out the moment dependencies are satisfied: manual stacking
@@ -20,10 +17,9 @@ export interface PlanningPolicy {
   maxConcurrentPartsPerIssue: number;
   /**
    * Put a planner's verdict to a human before anything is scheduled from it
-   * (issue #109 phase 3). **On by default** — which changes nothing for a
-   * deployment that has not enabled the funnel, because `enabled` is still off.
-   * It only decides what happens once they do, and the thing being defaulted is
-   * whether a planner's decision about how an issue is worked starts itself.
+   * (issue #109 phase 3). **On by default.** The funnel itself is not a choice —
+   * every goal is planned — so the thing being defaulted is only whether a
+   * planner's decision about how an issue is worked starts itself.
    *
    * On, ingestion persists the verdict as `awaiting_approval`, rule
    * `plan-approval` puts it to the operator once, and nothing is scheduled until
@@ -52,7 +48,6 @@ export interface PlanningPolicy {
 }
 
 export const DEFAULT_PLANNING: PlanningPolicy = {
-  enabled: true,
   maxConcurrentPartsPerIssue: 2,
   requireApproval: true,
   gitFetchIntervalMs: 60_000,
@@ -110,7 +105,6 @@ export type PlanRouteVerdict =
   | { route: 'planning'; planner: 'dispatch' | 'cooldown' };
 
 interface PlanRouteInput {
-  planning: PlanningPolicy;
   /** The persisted plan for this issue, or null when the planner hasn't spoken. */
   plan: Plan | null;
   /** The plan origin's cooldown verdict — {@link plannerVerdict}. */
@@ -178,7 +172,6 @@ export function plannerVerdict(
  * carrying on with the plan it already had.
  */
 export function resolvePlanRoute(input: PlanRouteInput): PlanRouteVerdict {
-  if (!input.planning.enabled) return { route: 'single', failedOpen: false };
   const plan = input.plan;
   if (plan) {
     // The shape, not a status: a plan being delivered with no live parts *is* the

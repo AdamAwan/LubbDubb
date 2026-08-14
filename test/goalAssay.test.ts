@@ -17,6 +17,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Agent, Decision, Issue, IssueAssay, Plan, Task, WorldEvent, WorldSnapshot } from '../src/types.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { singlePlan } from './support/plans.js';
 
 // Rule `issue-assay` — the goal assay. The one gate in front of an issue that asks about its
 // *content*. What makes it fire, what it must never do (park an issue for good),
@@ -132,9 +133,9 @@ test('a fresh issue is assayed before anything is dispatched against it', async 
   assert.equal(dispatch.originSummary, 'the thing should be better');
 });
 
-test('with the flag off nothing changes — the issue is picked up exactly as today', async () => {
+test('with the flag off nothing changes — the issue goes straight into the funnel', async () => {
   const { actions } = await new RuleDispatcher().decide(ctx());
-  assert.deepEqual(origins(actions), ['issue:12'], 'off by default, so nothing in front of an issue moves');
+  assert.deepEqual(origins(actions), ['issue:12:plan'], 'off by default, so nothing this rule does moves');
 });
 
 test('assay and pickup never both fire for one issue', async () => {
@@ -145,7 +146,7 @@ test('assay and pickup never both fire for one issue', async () => {
 });
 
 test('the planner is suppressed too — decomposing an unanswerable question is the point of this rule', async () => {
-  const d = new RuleDispatcher({}, {}, undefined, 'main', { enabled: true }, {}, {}, { enabled: true });
+  const d = new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, { enabled: true });
   const { actions } = await d.decide(ctx());
   assert.deepEqual(origins(actions), ['issue:12:assay'], 'ranked ahead of the planner, and standing it down');
 });
@@ -219,7 +220,7 @@ test('a spent attempt cap returns the issue to the funnel, with no escalation', 
   // Narrowing pickup without this makes the assay the most effective way to stop
   // the harness working — issue #158's own first decision.
   const { actions } = await assayer().decide(ctx({ recentDecisions: spentCap('issue:12:assay', 'assay/issue/12') }));
-  assert.deepEqual(origins(actions), ['issue:12'], 'the issue falls through to ordinary pickup');
+  assert.deepEqual(origins(actions), ['issue:12:plan'], 'the issue falls through into the funnel');
   assert.ok(
     !actions.some((a) => a.type === 'escalate_to_human'),
     'no escalation: an assay that did not happen tells a human nothing they cannot see on the issue',
@@ -258,14 +259,18 @@ test('a cooling assayer still suppresses pickup for that cycle, and stays visibl
 // -- the hold, and the two things that end it --------------------------------
 
 test('an unclear verdict holds the issue out of pickup and planning alike', async () => {
-  const d = new RuleDispatcher({}, {}, undefined, 'main', { enabled: true }, {}, {}, { enabled: true });
+  const d = new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, { enabled: true });
   const { actions } = await d.decide(ctx({ assays: [assay()] }));
   assert.deepEqual(origins(actions), [], 'no pickup, no planner, and not re-asked either');
 });
 
 test('a workable verdict releases the issue into the funnel and holds nothing', async () => {
   const { actions } = await assayer().decide(ctx({ assays: [assay({ verdict: 'workable' })] }));
-  assert.deepEqual(origins(actions), ['issue:12'], 'saying yes schedules nothing itself — it un-blocks pickup');
+  assert.deepEqual(
+    origins(actions),
+    ['issue:12:plan'],
+    'saying yes schedules nothing itself — it un-blocks the funnel',
+  );
   assert.equal(assayHold(assay({ verdict: 'workable' }), issue()), null);
 });
 
@@ -375,12 +380,15 @@ test('the chip reports the pending case too, so a waiting issue is not an idle f
 });
 
 test('the chip says eligible exactly when the rule would dispatch — cap spent, and off', () => {
+  // Planned as one pull request in both, so what is being read is the assay's
+  // effect on pickup rather than the funnel in front of it.
+  const planned = { plans: [singlePlan(12)] };
   const capped = issuePickupStatus(
     issue(),
-    pickupCtx({ recentDecisions: spentCap('issue:12:assay', 'assay/issue/12') }),
+    pickupCtx({ ...planned, recentDecisions: spentCap('issue:12:assay', 'assay/issue/12') }),
   );
   assert.equal(capped.status, 'eligible', 'the fail-open is reported as the pickup it actually becomes');
-  assert.equal(issuePickupStatus(issue(), pickupCtx({ assay: { enabled: false } })).status, 'eligible');
+  assert.equal(issuePickupStatus(issue(), pickupCtx({ ...planned, assay: { enabled: false } })).status, 'eligible');
 });
 
 test('an unwatched issue is reported as unwatched, never as awaiting an assay it will never get', () => {

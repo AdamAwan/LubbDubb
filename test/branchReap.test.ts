@@ -143,7 +143,6 @@ function build(over: Record<string, unknown> = {}) {
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
-    planning: { enabled: false } as never,
     assessment: { enabled: false } as never,
     assay: { enabled: false } as never,
     retrospective: { enabled: false } as never,

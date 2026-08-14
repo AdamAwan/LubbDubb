@@ -107,7 +107,6 @@ test('approval is on by default, in both places that default it', () => {
 test('the funnel names the awaiting arm, so the chip and the rules read one verdict', () => {
   const route = (status: Plan['status'], existingParts = 1): string =>
     resolvePlanRoute({
-      planning: { ...DEFAULT_PLANNING, enabled: true },
       plan: { ...planRow(), status },
       verdict: { kind: 'dispatch' } as DispatchVerdict,
       existingParts,
@@ -228,7 +227,7 @@ test('both transports honour the gate, so a verdict lands the same way whichever
       agentMode: 'raw',
       deskRoot: join(dir, 'desk'),
       worktreeRoot: join(dir, 'wt'),
-      planning: { enabled: true, requireApproval: true } as never,
+      planning: { requireApproval: true } as never,
       heartbeatIntervalMs: 999_999,
     }),
     { backend: new FakePtyBackend(), errorMirror: () => {} },
@@ -662,7 +661,7 @@ function plannedSystem(opts: { requireApproval?: boolean; verdict?: 'single' | '
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     repoRoot,
-    planning: { enabled: true, requireApproval: opts.requireApproval ?? true } as never,
+    planning: { requireApproval: opts.requireApproval ?? true } as never,
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
   });

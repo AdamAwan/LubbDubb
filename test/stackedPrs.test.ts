@@ -407,12 +407,11 @@ test('a replan that spends its attempts falls back to the existing parts, never 
   const spent = { kind: 'hold' } as const;
   // Failing open to `single` here would point rule `issue-pickup` at the flat `issue/12`
   // branch, which git cannot create beside the existing `issue/12/<slug>` refs.
-  assert.deepEqual(
-    resolvePlanRoute({ planning: enabled, plan: plan({ status: 'planning' }), verdict: spent, existingParts: 2 }),
-    { route: 'parts' },
-  );
+  assert.deepEqual(resolvePlanRoute({ plan: plan({ status: 'planning' }), verdict: spent, existingParts: 2 }), {
+    route: 'parts',
+  });
   // With nothing to fall back to, the original fail-open still applies.
-  assert.deepEqual(resolvePlanRoute({ planning: enabled, plan: null, verdict: spent }), {
+  assert.deepEqual(resolvePlanRoute({ plan: null, verdict: spent }), {
     route: 'single',
     failedOpen: true,
   });
@@ -429,7 +428,6 @@ test('a complete plan says how to get out of it, rather than reading as still in
     openPrs: [],
     plans: [plan({ status: 'complete' })],
     planParts: parts,
-    planning: enabled,
     headroom: 5,
     paused: false,
   };
@@ -439,7 +437,6 @@ test('a complete plan says how to get out of it, rather than reading as still in
   // And replan really is the way out: the same plan back in `planning` owes a planner.
   assert.equal(
     resolvePlanRoute({
-      planning: enabled,
       plan: plan({ status: 'planning' }),
       verdict: { kind: 'dispatch' },
       existingParts: 2,
@@ -480,7 +477,6 @@ function systemWithPlans(): { system: System; repoRoot: string } {
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     repoRoot,
-    planning: { enabled: true } as never,
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
   });

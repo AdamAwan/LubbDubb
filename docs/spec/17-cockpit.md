@@ -443,6 +443,8 @@ vanishes when quiet is indistinguishable from one that broke.
   operator, the two disagree in exactly that case, and the ask wins. **Ended shifts are behind a
   disclosure in the card's own head**, not a second card: they are the same rows read for a different
   question, and the count stays in the header at zero, muted, so the way in does not move.
+  The card also draws a **keyboard entry** per live desktop claim — see
+  [the keyboard entry](#the-keyboard-entry).
 - **Goals in flight** — every goal whose `pickup.status` says the harness has it in hand now
   (`active` / `has_pr` / `planning` / `delivered`). Read off the dispatcher's own word rather than
   re-inferred from agents, plans and pull requests, which are three inputs the server has already
@@ -468,6 +470,39 @@ vanishes when quiet is indistinguishable from one that broke.
   comments on one pull request are one signal, not three unrelated rows. **The server's order (newest
   first) is kept**: re-sorting by count would move the row an operator is watching the moment it moves
   again.
+
+### The keyboard entry
+
+A validation check a desktop session is holding is **in flight**, and the Fleet card draws it beside
+the dispatched agents — that card is where an operator looks to find out what is happening, and a
+person at their own keyboard running a check is part of the answer. `buildViewModel` synthesises it
+from the claim (`DeskRun`), which names its own goal; it never becomes an `Agent`. Nobody
+dispatched it, so there is no task, no branch, no worktree, no transcript and no spend — a row in
+`agents` would be a fiction, and one every counter of live agents would then have to be taught to
+filter back out, including the next counter somebody adds.
+
+**It takes no fleet slot.** `view.live` excludes it, so the cap readout and the header's `N out` are
+untouched; the entry is stated beside that count as `· 1 at a keyboard` rather than added to it.
+
+Four differences from an agent row are drawn rather than left to be inferred, because the check
+cannot be killed, injected into or opened as a transcript: the row is a **`div`, not a button**, so it
+offers no way in at all; its lamp is **hollow and violet**, where an agent's is filled and wears a
+status tone; it carries **no cost column**, since a `$0.00` would read as "cheap" rather than "not
+ours to count"; and its left edge is **dashed**, the same grammar as the lamp. A card wearing an
+agent's affordances with none of them working is worse than one that never offered them. The hover
+carries the two facts a glance cannot: that it takes no slot, and that it ends by itself — when the
+reading lands, when the session closes, or when the claim ages out.
+
+**The claim it draws is live by construction.** The snapshot maps every check through `withLiveClaim`
+(`src/validation/desktop.ts`), so `claimedBy` on the wire is a claim `claimIsLive`
+([20](20-validation.md#the-claim)) still holds — the same definition rule `validate-check` and the
+desktop tools read. The entry therefore leaves the fleet list at the same instant the claim stops
+blocking a dispatch, and the sheet's **running at ‹label›** chip appears and goes with it. Off
+`claimedBy` alone, a claim whose session died would stand in the list forever while the rule had long
+since stopped honouring it.
+
+The demo backend holds its own clock and reports the claim two beats after load, so the ending — the
+entry leaving with nobody having pressed anything — is visible in the Pages build.
 
 ## The backlog
 
@@ -1042,8 +1077,10 @@ the one sentence saying what a person can do that an agent could not.
 Three chips and two markers say **who**, and each is there because its absence would be read as
 something else. **with the fleet** on a handed-over check, ahead of the planner's nomination about it
 — one is what will happen, the other is an argument. **running at ‹label›** while a desktop session
-holds the check, with the timestamp on the hover rather than the chip, because a claim sitting there
-since yesterday has expired and the operator is the only one placed to notice. And beside a reading,
+holds the check, with the timestamp on the hover rather than the chip. Only a **live** claim gets
+here — the snapshot projects every check through `withLiveClaim` — so this chip and the fleet list's
+[keyboard entry](#the-keyboard-entry) appear and go together, and neither outlives what
+`validate-check` reads. And beside a reading,
 **recorded by an agent** or **recorded from a desktop session**. A reading a person took draws
 nothing at all, because that is already what a validation checklist means — the markers are the
 exceptions, which is exactly what a reader deciding how much a tick is worth needs.

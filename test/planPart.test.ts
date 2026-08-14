@@ -403,7 +403,6 @@ test('the cockpit chip reports plan progress, not whichever part opened a PR las
     ],
     plans: [plan()],
     planParts: parts,
-    planning: enabled,
     headroom: 5,
     paused: false,
   };
@@ -465,7 +464,7 @@ function systemWithParts(): { system: System; repoRoot: string } {
     repoRoot,
     // Pinned off: `requireApproval` now defaults on, and this test asserts the
     // ungated path (an `active` plan releases work with no proposal written).
-    planning: { enabled: true, requireApproval: false } as never,
+    planning: { requireApproval: false } as never,
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
   });

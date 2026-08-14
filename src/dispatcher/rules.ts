@@ -53,11 +53,9 @@ type RuleKind = 'rule' | 'admission' | 'terminal';
  * which is a property of `IssuePickupPolicy` rather than a switch of its own.
  */
 export interface RuleConditions {
-  planning: boolean;
   assessment: boolean;
   assay: boolean;
   retrospective: boolean;
-  validation: boolean;
   workItemStates: boolean;
 }
 
@@ -169,8 +167,7 @@ const RULES = [
     kind: 'rule',
     name: 'Issue needs a plan',
     description:
-      'A watched open issue with no plan yet gets a planning agent first: it reads the repository and decides whether the work is one pull request or several, biasing hard toward one. Planners rank ahead of pickups because a planner unblocks work. The same rule fires for a *replan* (an operator sent an existing plan back), with the planner primed with the current plan and part states so it amends rather than re-derives. Turning the funnel off leaves `issue-pickup` un-narrowed and every issue a single pull request. A planner that never produces a plan fails open to the single-PR path after the attempt cap — or, for a replan, back to the decomposition the issue already had — so a failure can never park an issue.',
-    enabled: (c) => c.planning,
+      'A watched open issue with no plan yet gets a planning agent first: it reads the repository and decides whether the work is one pull request or several, biasing hard toward one. Planners rank ahead of pickups because a planner unblocks work. The same rule fires for a *replan* (an operator sent an existing plan back), with the planner primed with the current plan and part states so it amends rather than re-derives. A planner that never produces a plan fails open to the single-PR path after the attempt cap — or, for a replan, back to the decomposition the issue already had — so a failure can never park an issue.',
   },
   {
     id: 'issue-assess',
@@ -185,7 +182,7 @@ const RULES = [
     kind: 'rule',
     name: 'Assessment says the goal was missed',
     description:
-      'An assessor read the delivered work and said the issue’s goal is still not reached. This is the one consumer of that verdict, and it routes it by what the assessor said fell short rather than sending everything to a replan: a wrong decomposition goes back to a planner, one part that missed its own scope gets a follow-up part appended (the part itself is untouched — its branch is spent), and a wrong or ambiguous goal goes to a human, because no planner or agent can fix one. The first two spend agents, so they are proposed for your approval rather than taken; the third is only ever a question. With the planning funnel off both plan-shaped arms degrade to the one that asks a person, since accepting either would park the issue on a transition nothing consumes.',
+      'An assessor read the delivered work and said the issue’s goal is still not reached. This is the one consumer of that verdict, and it routes it by what the assessor said fell short rather than sending everything to a replan: a wrong decomposition goes back to a planner, one part that missed its own scope gets a follow-up part appended (the part itself is untouched — its branch is spent), and a wrong or ambiguous goal goes to a human, because no planner or agent can fix one. The first two spend agents, so they are proposed for your approval rather than taken; the third is only ever a question.',
   },
   {
     id: 'issue-retro',
@@ -203,7 +200,6 @@ const RULES = [
     name: 'Plan needs your approval',
     description:
       'With `planning.requireApproval` on, **every** planner verdict is a proposal rather than work: the plan lands as `awaiting_approval`, this rule puts it to you once, and nothing is scheduled until you accept — `plan-part` holds a decomposition\'s parts, `issue-pickup` holds a single verdict\'s issue. Accepting releases the plan, to `active` for a decomposition or to `single` for one pull request. Rejecting a decomposition retires the parts nothing has started for and falls the issue back to a single pull request; rejecting a single verdict sends the plan back to a planner with your reason, since the single-PR route is what a rejected decomposition already falls back to. Either way a "no" leaves the issue a route instead of parking it. A replan asks again — the amended verdict is a new proposal, and the old one cannot release it. Without the flag a verdict commits the moment the planner writes it. A `single` verdict the harness *overruled* — parts are already in flight — is never asked about: the collapse was refused, so there is no decision in it.',
-    enabled: (c) => c.planning,
   },
   {
     id: 'plan-blocked',
@@ -211,7 +207,6 @@ const RULES = [
     name: 'Approved plan is going nowhere',
     description:
       'Every part of a released plan is blocked, so no agent has been dispatched for it and none will be. The only thing that blocks a part is the ref collision — a flat `issue/<n>` branch, which git will not let the part branches sit beneath — and a branch does not clear itself. No agent is dispatched, because none could help; a human is asked once, and told the two ways out: clear the branch, or abandon the decomposition and work the issue as one pull request. Only released plans, since an unapproved one is already in front of you with the same warning on the ask.',
-    enabled: (c) => c.planning,
   },
   {
     id: 'plan-part',
@@ -219,7 +214,6 @@ const RULES = [
     name: 'Plan part ready',
     description:
       "One part of a multi-PR plan whose dependency has pushed a branch worth stacking on, and which has no agent, gets a code agent on `issue/<n>/<slug>` — based on that dependency's branch while it is still open, on the default branch once it merged. Parts rank after planners and ahead of one-shot pickups, bottom of a stack first, and `maxConcurrentPartsPerIssue` caps how many parts of one plan may have agents at once: a human stacks safely because they hold the decomposition in their head, and N concurrent agents do not. A part held by that cap is queued as `capped` rather than skipped, so the limit is visible instead of looking like nothing happened.",
-    enabled: (c) => c.planning,
   },
 
   // ---- The unplanned path, last: everything above narrows it. ---------------
@@ -228,7 +222,7 @@ const RULES = [
     kind: 'rule',
     name: 'Open issue without a PR',
     description:
-      'An open, pickup-eligible issue with no *open* PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority. Gating on an open PR (rather than on any PR ever having been linked) is what lets an issue take more than one PR. With the planning funnel on, this fires only for an issue whose plan says `single`; its behaviour for such an issue is otherwise unchanged.',
+      'An open, pickup-eligible issue with no *open* PR gets a code agent to resolve it into a PR — the front of the issue → PR → merge loop, ordered by label-encoded priority. Gating on an open PR (rather than on any PR ever having been linked) is what lets an issue take more than one PR. It fires only for an issue whose plan says `single`; its behaviour for such an issue is otherwise unchanged.',
   },
 
   // ---- Last, deliberately: it must never take a slot from work. -------------
@@ -238,7 +232,6 @@ const RULES = [
     name: 'Handed-over validation check',
     description:
       'A validation check on a delivered goal that the **operator** handed to the fleet, and which nobody has recorded a reading against, gets a code agent to run it on a throwaway branch cut from the default branch and report what it saw. The hand-over is the entire gate: a planner’s `fleetCandidate` nomination dispatches nothing, because whether an agent can run a check depends on what logins and browsers this deployment has, which a planner reading the repository cannot know. It ranks **last of every rule**, below even one-shot pickup, because validation’s standing promise is that it blocks nothing — a check that could take the final slot from a blocked part or a red build would make the one feature that gates nothing the reason something else did not run. An agent that finds it cannot do the work hands the check back with its reason instead of recording a failure, which returns it to the operator; one that crashes or spends its attempt cap leaves the check exactly as it was, `unrun` and still flagged, with no escalation — the flag is already the ask.',
-    enabled: (c) => c.validation,
   },
 
   // ---- Not stages. Position here is display order only. ---------------------

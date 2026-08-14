@@ -190,3 +190,39 @@ test('taskFor tolerates an agent whose task is gone', () => {
   assert.equal(view.taskFor(view.state.agents[0]!)?.id, 't1');
   assert.equal(view.taskFor(view.state.agents[1]!), null);
 });
+
+/**
+ * A desktop claim is in flight and is **not** an agent: it is synthesised from
+ * the claim on the check, so nothing that counts a live agent can reach it.
+ *
+ * The cap is the assertion worth having. A claim that ever landed in `live` would
+ * take a slot from work, which is the one thing validation promises never to do —
+ * and it would do so through the fleet cap, which is read in three places.
+ */
+test('a claimed check becomes a keyboard entry, and never a live agent', () => {
+  const state = stateWith({
+    agents: [AGENT({ id: 'a1' })],
+    validationChecks: [
+      {
+        originRef: 'issue:12',
+        id: 'csv-opens',
+        letter: 'B',
+        title: 'The export opens',
+        claimedBy: 'desktop (studio)',
+        claimedAt: '2026-01-01T00:00:00.000Z',
+      },
+      { originRef: 'issue:12', id: 'pdf-prints', letter: 'C', title: 'The PDF prints', claimedBy: null },
+    ] as never,
+  });
+  const view = build(state);
+  assert.deepEqual(
+    view.deskRuns.map((d) => [d.originRef, d.checkId, d.letter, d.label]),
+    [['issue:12', 'csv-opens', 'B', 'desktop (studio)']],
+    'one entry per live claim, and nothing for a check nobody holds',
+  );
+  assert.deepEqual(
+    view.live.map((a) => a.id),
+    ['a1'],
+    'the fleet is the dispatched agents alone — this is what the cap counts',
+  );
+});

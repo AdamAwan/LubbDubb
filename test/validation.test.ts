@@ -4,6 +4,10 @@ import { validatePlanDocument, type PlanDocument } from '../src/plans/planDocume
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { nextCheckLetter } from '../src/validation/checkDocument.js';
 import { Store } from '../src/store/store.js';
+import Database from 'better-sqlite3';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 /**
  * The validation plan as it becomes rows: the schema's refusals, the letters, and
@@ -35,8 +39,10 @@ function check(over: Record<string, unknown> = {}): Record<string, unknown> {
   };
 }
 
+/** Ingest, and hand back the **goal** — what the checks are keyed on. */
 function ingest(store: Store, document: PlanDocument, originRef = 'issue:12'): string {
-  return ingestPlanDocument(store, { doc: document, originRef, title: 'Issue', validationEnabled: true }).plan.id;
+  ingestPlanDocument(store, { doc: document, originRef, title: 'Issue' });
+  return originRef;
 }
 
 // -- the schema --------------------------------------------------------------
@@ -102,7 +108,7 @@ test('a resource name is a file name — a path is refused rather than sanitised
 
 test('an unknown resource or part reference is dropped, never a refusal', () => {
   const store = new Store(':memory:');
-  const planId = ingest(
+  const goal = ingest(
     store,
     doc({
       verdict: 'parts',
@@ -113,7 +119,7 @@ test('an unknown resource or part reference is dropped, never a refusal', () => 
       },
     }),
   );
-  const [stored] = store.listValidationChecks(planId);
+  const [stored] = store.listValidationChecks(goal);
   // The prose is worth more than the bibliography: a planner that mistyped a
   // reference has still written a runnable check.
   assert.deepEqual(stored!.uses, ['fixture.tar.gz']);
@@ -122,7 +128,7 @@ test('an unknown resource or part reference is dropped, never a refusal', () => 
 
 test('a nomination keeps its reason, and a check without one keeps none', () => {
   const store = new Store(':memory:');
-  const planId = ingest(
+  const goal = ingest(
     store,
     doc({
       validation: {
@@ -135,7 +141,7 @@ test('a nomination keeps its reason, and a check without one keeps none', () => 
       },
     }),
   );
-  const checks = store.listValidationChecks(planId);
+  const checks = store.listValidationChecks(goal);
   assert.equal(checks.find((c) => c.id === 'a')!.candidateWhy, 'runs git; no login');
   assert.equal(checks.find((c) => c.id === 'b')!.candidateWhy, null);
 });
@@ -151,27 +157,17 @@ test('a resource the planner cannot provide files an ask, once', () => {
       checks: [check()],
     },
   });
-  const planId = ingest(store, document);
+  const goal = ingest(store, document);
   const asks = store.listHumanTasks();
   assert.equal(asks.length, 1, 'only the unprovided one is an ask');
   assert.match(asks[0]!.title, /test-env login/);
   assert.match(asks[0]!.detail ?? '', /read-only account on staging/);
-  assert.equal(store.listValidationResources(planId).find((r) => !r.provided)!.humanTaskId, asks[0]!.id);
+  assert.equal(store.listValidationResources(goal).find((r) => !r.provided)!.humanTaskId, asks[0]!.id);
 
   // A replan re-declaring the same resource must not file it twice — the
   // `recordHumanTask` refresh, carried across by name.
   ingest(store, document);
   assert.equal(store.listHumanTasks().length, 1);
-});
-
-test('validation.enabled off ingests nothing at all', () => {
-  const store = new Store(':memory:');
-  const plan = ingestPlanDocument(store, {
-    doc: doc({ validation: { checks: [check()] } }),
-    originRef: 'issue:12',
-    title: 'Issue',
-  });
-  assert.deepEqual(store.listValidationChecks(plan.plan.id), []);
 });
 
 // -- letters -----------------------------------------------------------------
@@ -191,8 +187,8 @@ test('nextCheckLetter walks A..Z and then AA, skipping what is taken', () => {
 
 test('letters are assigned in declaration order and survive a reordering amendment', () => {
   const store = new Store(':memory:');
-  const planId = ingest(store, doc({ validation: { checks: [check({ id: 'first' }), check({ id: 'second' })] } }));
-  const before = new Map(store.listValidationChecks(planId).map((c) => [c.id, c.letter]));
+  const goal = ingest(store, doc({ validation: { checks: [check({ id: 'first' }), check({ id: 'second' })] } }));
+  const before = new Map(store.listValidationChecks(goal).map((c) => [c.id, c.letter]));
   assert.deepEqual(
     [...before],
     [
@@ -207,7 +203,7 @@ test('letters are assigned in declaration order and survive a reordering amendme
     store,
     doc({ validation: { checks: [check({ id: 'second' }), check({ id: 'third' }), check({ id: 'first' })] } }),
   );
-  const after = new Map(store.listValidationChecks(planId).map((c) => [c.id, c.letter]));
+  const after = new Map(store.listValidationChecks(goal).map((c) => [c.id, c.letter]));
   assert.equal(after.get('first'), 'A');
   assert.equal(after.get('second'), 'B');
   assert.equal(after.get('third'), 'C');
@@ -217,9 +213,9 @@ test('letters are assigned in declaration order and survive a reordering amendme
 
 test('a re-declared check keeps its result; a reworded one loses it', () => {
   const store = new Store(':memory:');
-  const planId = ingest(store, doc({ validation: { checks: [check({ id: 'a' }), check({ id: 'b' })] } }));
-  store.recordValidationResult(planId, 'a', { state: 'passed', note: 'opened fine', by: 'operator' });
-  store.recordValidationResult(planId, 'b', { state: 'passed', note: 'opened fine', by: 'operator' });
+  const goal = ingest(store, doc({ validation: { checks: [check({ id: 'a' }), check({ id: 'b' })] } }));
+  store.recordValidationResult(goal, 'a', { state: 'passed', note: 'opened fine', by: 'operator' });
+  store.recordValidationResult(goal, 'b', { state: 'passed', note: 'opened fine', by: 'operator' });
 
   ingest(
     store,
@@ -234,7 +230,7 @@ test('a re-declared check keeps its result; a reworded one loses it', () => {
       },
     }),
   );
-  const checks = new Map(store.listValidationChecks(planId).map((c) => [c.id, c]));
+  const checks = new Map(store.listValidationChecks(goal).map((c) => [c.id, c]));
   assert.equal(checks.get('a')!.state, 'passed');
   // An amendment that changes what a pass means has withdrawn the thing that was
   // confirmed — `acceptanceCriteria`'s rule, one layer up.
@@ -245,39 +241,39 @@ test('a re-declared check keeps its result; a reworded one loses it', () => {
 
 test('a check an amendment drops is superseded, not deleted — and keeps its letter', () => {
   const store = new Store(':memory:');
-  const planId = ingest(store, doc({ validation: { checks: [check({ id: 'a' }), check({ id: 'b' })] } }));
+  const goal = ingest(store, doc({ validation: { checks: [check({ id: 'a' }), check({ id: 'b' })] } }));
   ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
 
-  const checks = store.listValidationChecks(planId);
+  const checks = store.listValidationChecks(goal);
   assert.equal(checks.length, 2, 'the record survives the amendment');
   const dropped = checks.find((c) => c.id === 'b')!;
   assert.match(dropped.supersededReason!, /no longer includes this check/);
 
   // A new check takes C, not B: the letter is retired with the row.
   ingest(store, doc({ validation: { checks: [check({ id: 'a' }), check({ id: 'c' })] } }));
-  assert.equal(store.listValidationChecks(planId).find((c) => c.id === 'c')!.letter, 'C');
+  assert.equal(store.listValidationChecks(goal).find((c) => c.id === 'c')!.letter, 'C');
 });
 
 test('a re-declared check comes back out of supersession', () => {
   const store = new Store(':memory:');
-  const planId = ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
+  const goal = ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
   ingest(store, doc({ validation: { checks: [] } }));
-  assert.ok(store.listValidationChecks(planId)[0]!.supersededReason);
+  assert.ok(store.listValidationChecks(goal)[0]!.supersededReason);
   ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
-  const back = store.listValidationChecks(planId)[0]!;
+  const back = store.listValidationChecks(goal)[0]!;
   assert.equal(back.supersededReason, null);
   assert.equal(back.letter, 'A', 'and under the handle it always had');
 });
 
 test('an amendment with no validation block leaves the checks exactly as they are', () => {
   const store = new Store(':memory:');
-  const planId = ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
-  store.recordValidationResult(planId, 'a', { state: 'passed', note: 'fine', by: 'operator' });
+  const goal = ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
+  store.recordValidationResult(goal, 'a', { state: 'passed', note: 'fine', by: 'operator' });
   // An operator override that never learned the block produces plans without one,
   // and reading that as "the planner withdrew every check" would supersede a plan
   // somebody is halfway through.
   ingest(store, doc());
-  const [only] = store.listValidationChecks(planId);
+  const [only] = store.listValidationChecks(goal);
   assert.equal(only!.state, 'passed');
   assert.equal(only!.supersededReason, null);
 });
@@ -286,23 +282,23 @@ test('an amendment with no validation block leaves the checks exactly as they ar
 
 test('a new reading clears what the last one left behind', () => {
   const store = new Store(':memory:');
-  const planId = ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
-  store.recordValidationResult(planId, 'a', {
+  const goal = ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
+  store.recordValidationResult(goal, 'a', {
     state: 'deferred',
     note: 'the test environment is rebuilt on Thursday',
     by: 'operator',
     until: '2026-09-03',
   });
-  const deferred = store.listValidationChecks(planId)[0]!;
+  const deferred = store.listValidationChecks(goal)[0]!;
   assert.equal(deferred.deferUntil, '2026-09-03');
 
-  const passed = store.recordValidationResult(planId, 'a', { state: 'passed', note: 'ran it', by: 'operator' })!;
+  const passed = store.recordValidationResult(goal, 'a', { state: 'passed', note: 'ran it', by: 'operator' })!;
   // Otherwise the sheet renders "passed — the test environment is rebuilt on
   // Thursday", which is two readings wearing one row.
   assert.equal(passed.resultNote, 'ran it');
   assert.equal(passed.deferUntil, null);
 
-  const reset = store.recordValidationResult(planId, 'a', { state: 'unrun', note: null, by: null })!;
+  const reset = store.recordValidationResult(goal, 'a', { state: 'unrun', note: null, by: null })!;
   assert.equal(reset.resultNote, null);
   assert.equal(reset.resultBy, null);
   assert.equal(reset.resultAt, null, 'an unrun check carrying a timestamp reads as one that was run and forgotten');
@@ -310,7 +306,71 @@ test('a new reading clears what the last one left behind', () => {
 
 test('a superseded check refuses a result — its plan has withdrawn it', () => {
   const store = new Store(':memory:');
-  const planId = ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
+  const goal = ingest(store, doc({ validation: { checks: [check({ id: 'a' })] } }));
   ingest(store, doc({ validation: { checks: [] } }));
-  assert.equal(store.recordValidationResult(planId, 'a', { state: 'passed', note: 'n', by: 'operator' }), null);
+  assert.equal(store.recordValidationResult(goal, 'a', { state: 'passed', note: 'n', by: 'operator' }), null);
+});
+
+// -- the re-key: a database written before validation moved onto the goal ------
+
+/**
+ * The rebuild, on a database whose `validation_checks` and `validation_resources`
+ * are still keyed on `plan_id`.
+ *
+ * **`id` and `letter` surviving is the whole assertion.** They are the merge key
+ * and the handle a person types: a rebuild that renumbered either would silently
+ * invalidate every amendment that names a check and every reading recorded
+ * against one, with nothing failing to say so.
+ */
+test('an old database is rebuilt onto the goal, and the merge keys come through unchanged', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-rekey-'));
+  const path = join(dir, 'old.db');
+  const db = new Database(path);
+  db.exec(`
+    CREATE TABLE plans (id TEXT PRIMARY KEY, origin_ref TEXT NOT NULL, title TEXT NOT NULL,
+      status TEXT NOT NULL, reason TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE validation_checks (
+      plan_id TEXT NOT NULL, id TEXT NOT NULL, letter TEXT NOT NULL, seq INTEGER NOT NULL,
+      title TEXT NOT NULL, check_do TEXT NOT NULL, check_expect TEXT NOT NULL, uses TEXT NOT NULL,
+      covers TEXT NOT NULL, fleet_candidate INTEGER NOT NULL DEFAULT 0, candidate_why TEXT,
+      actor TEXT, handback_note TEXT, claimed_by TEXT, claimed_at TEXT, state TEXT NOT NULL,
+      result_note TEXT, result_by TEXT, result_at TEXT, defer_until TEXT, superseded_reason TEXT,
+      revision TEXT, amended_at TEXT, amend_note TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+      PRIMARY KEY (plan_id, id));
+    CREATE TABLE validation_resources (
+      plan_id TEXT NOT NULL, name TEXT NOT NULL, kind TEXT, note TEXT,
+      provided INTEGER NOT NULL DEFAULT 1, human_task_id TEXT, PRIMARY KEY (plan_id, name));
+    INSERT INTO plans VALUES ('plan_7', 'issue:7', 'Ship it', 'active', 'One PR.', '2026-01-01', '2026-01-01');
+    INSERT INTO validation_checks VALUES
+      ('plan_7', 'csv-opens', 'B', 1, 'The export opens', 'Export it.', 'It opens', '[]', '[]', 0, NULL,
+       'fleet', NULL, NULL, NULL, 'passed', 'ran it', 'operator', '2026-01-02', NULL, NULL, NULL, NULL, NULL,
+       '2026-01-01', '2026-01-02');
+    INSERT INTO validation_resources VALUES ('plan_7', 'fixture.tar.gz', 'fixture', 'seeded', 0, 'task_1');
+    INSERT INTO validation_checks VALUES
+      ('plan_gone', 'orphan', 'A', 1, 'Nobody''s check', 'x', 'y', '[]', '[]', 0, NULL, NULL, NULL, NULL, NULL,
+       'unrun', NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, '2026-01-01', '2026-01-01');
+  `);
+  db.close();
+
+  const store = new Store(path);
+  const [check] = store.listValidationChecks('issue:7');
+  assert.ok(check, 'the check came across, keyed on the goal its plan named');
+  assert.equal(check.id, 'csv-opens', 'the merge key is untouched');
+  assert.equal(check.letter, 'B', 'and so is the handle a person types');
+  assert.equal(check.state, 'passed');
+  assert.equal(check.resultNote, 'ran it');
+  assert.equal(check.actor, 'fleet', 'the hand-over survives too — it is an operator decision');
+  const [resource] = store.listValidationResources('issue:7');
+  assert.equal(resource?.name, 'fixture.tar.gz');
+  assert.equal(resource?.humanTaskId, 'task_1', 'the ask already filed for it is still joined');
+  // A row whose plan is gone can no longer name a goal, so it goes rather than
+  // being carried under a key made up for it.
+  assert.equal(store.listAllValidationChecks().length, 1);
+
+  // Idempotent: the second boot finds the new shape and rebuilds nothing.
+  store.close();
+  const again = new Store(path);
+  assert.equal(again.listValidationChecks('issue:7').length, 1);
+  again.close();
+  rmSync(dir, { recursive: true, force: true });
 });

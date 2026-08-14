@@ -64,7 +64,6 @@ export class PlanReconciler {
   constructor(private readonly deps: PlanReconcilerDeps) {}
 
   async reconcile(world: WorldSnapshot): Promise<void> {
-    if (!this.deps.planning.enabled) return; // off means off, including for a stale DB
     // `awaiting_approval` is reconciled too. It dispatches nothing, but readiness
     // is what the "Up next" queue renders as held — an unreconciled plan's parts
     // are all still `pending`, so the operator would be asked to approve a
@@ -298,7 +297,7 @@ export class PlanReconciler {
     // threaded down from the caller because it is the same one living body: a
     // check marked off changes what the ticket says, so it has to reach the
     // memoisation below or the edit is never written.
-    const body = renderPlanComment(plan, parts, this.deps.store.listValidationChecks(plan.id));
+    const body = renderPlanComment(plan, parts, this.deps.store.listValidationChecks(plan.originRef));
     // The parts arm gates on observed news before it gets here; the single-PR arm
     // has no such signal — its body is the verdict, which only a replan changes — so
     // the body itself is the signal. Memoised rather than stored: a restart costs

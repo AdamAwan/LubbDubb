@@ -195,14 +195,14 @@ function CheckBlock({
             </span>
           )}
           {/* Somebody is running this *now*, which is a different fact from who
-              is expected to and is drawn ahead of both. The timestamp is on the
-              hover rather than the chip because a claim that has been sitting
-              there since yesterday has expired, and the operator is the only one
-              in a position to notice that from a glance. */}
+              is expected to and is drawn ahead of both. Only a **live** claim
+              reaches here — the server projects the row through `claimIsLive` —
+              so this chip and the fleet list's keyboard entry appear and go
+              together, and neither outlives what the rule reads. */}
           {check.claimedBy !== null && (
             <span
               className="chip small warn"
-              title={`Claimed by a desktop session at ${check.claimedAt ?? 'an unknown time'} — the fleet will not run it while this stands`}
+              title={`Claimed by a desktop session at ${check.claimedAt ?? 'an unknown time'} — the fleet will not run it while this stands, and it is drawn in the fleet list too`}
             >
               running at {check.claimedBy}
             </span>

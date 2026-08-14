@@ -28,6 +28,12 @@ export interface CockpitView {
   crashed: OrphanedWork[];
   /** Agents with a live process behind them. */
   live: Agent[];
+  /**
+   * Checks a desktop session is running at somebody's keyboard. In flight, and
+   * deliberately *not* in {@link live}: these consume no fleet capacity, so
+   * nothing that counts a slot may reach them. See {@link DeskRun}.
+   */
+  deskRuns: DeskRun[];
   /** Terminal agents, newest first as the server ordered them. */
   past: Agent[];
   /** Inbox items still awaiting an answer. */
@@ -104,6 +110,53 @@ export interface CockpitView {
 
 const LIVE_STATUSES = ['starting', 'running', 'waiting'];
 
+/**
+ * A validation check the operator's own Claude Code is running right now, drawn
+ * in the fleet list beside the dispatched agents.
+ *
+ * **Synthesised from the claim on the check, not read off an agent row.** Nobody
+ * dispatched it: there is no task, no branch, no worktree, no transcript and no
+ * spend, so a row in `agents` would be a fiction — and one that every counter of
+ * live agents would then have to be taught to filter back out, including the
+ * next counter somebody adds.
+ *
+ * **`claimedBy` on the wire is already a live claim.** The server projects it
+ * through `claimIsLive` (`withLiveClaim`), which is the single definition of
+ * "claimed" — the rule, the desktop tools, the sheet's chip and this entry all
+ * read the one answer, so a claim past its expiry leaves the fleet list at the
+ * same instant it stops blocking `validate-check`.
+ */
+export interface DeskRun {
+  /** The check's stable id — the row's key, and what the claim is keyed on. */
+  checkId: string;
+  /** The human-typeable handle, `A`, `B`, `C`… */
+  letter: string;
+  title: string;
+  /** The goal it validates, as `issue:<n>`. */
+  originRef: string;
+  /** Who holds it, hostname and all: `desktop (studio)`. */
+  label: string;
+  /** When the claim was taken — the only elapsed time this entry has. */
+  claimedAt: string;
+}
+
+/** Every live claim. The check names its own goal, so there is nothing to join. */
+function buildDeskRuns(state: AppState): DeskRun[] {
+  return (state.validationChecks ?? []).flatMap((check) => {
+    if (check.claimedBy === null || check.claimedAt === null) return [];
+    return [
+      {
+        checkId: check.id,
+        letter: check.letter,
+        title: check.title,
+        originRef: check.originRef,
+        label: check.claimedBy,
+        claimedAt: check.claimedAt,
+      },
+    ];
+  });
+}
+
 interface ViewInputs {
   state: AppState;
   now: number;
@@ -169,6 +222,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
 
     crashed,
     live,
+    deskRuns: buildDeskRuns(state),
     past,
     openEscalations,
     openFindingCount: (state.findings ?? []).filter((f) => f.status === 'open').length,

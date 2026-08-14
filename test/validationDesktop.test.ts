@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSystem, type System } from '../src/system.js';
+import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -15,7 +16,7 @@ import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { validatePlanDocument } from '../src/plans/planDocument.js';
 import { DESKTOP_SKILL, installDesktopSkill } from '../src/validation/desktopSkill.js';
-import { claimIsLive } from '../src/validation/desktop.js';
+import { claimIsLive, claimStaleBefore, withLiveClaim } from '../src/validation/desktop.js';
 import type { Issue, IssueDelivery, Plan, ValidationCheck } from '../src/types.js';
 
 /**
@@ -74,12 +75,11 @@ function build(overrides: Record<string, unknown> = {}): System {
 /** A live desktop server on throwaway paths — never the operator's real home directory. */
 async function desk(
   system: System,
-  over: Partial<{ claimMinutes: number; validationEnabled: boolean; now: () => string; socketPath: string }> = {},
+  over: Partial<{ claimMinutes: number; now: () => string; socketPath: string }> = {},
 ): Promise<{ server: McpDesktopServer; dir: string }> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-cred-'));
   const server = new McpDesktopServer({
     store: system.store,
-    validationEnabled: over.validationEnabled ?? true,
     claimMinutes: over.claimMinutes ?? 60,
     validationRoot: '/srv/validation',
     now: over.now ?? ((): string => new Date().toISOString()),
@@ -108,12 +108,10 @@ const CHECKS = [
 function planWith(system: System, checks: Record<string, unknown>[] = CHECKS): string {
   const parsed = validatePlanDocument({ version: 1, verdict: 'single', reason: 'One fix.', validation: { checks } });
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
-  return ingestPlanDocument(system.store, {
-    doc: parsed.document,
-    originRef: 'issue:12',
-    title: 'Ship it',
-    validationEnabled: true,
-  }).plan.id;
+  ingestPlanDocument(system.store, { doc: parsed.document, originRef: 'issue:12', title: 'Ship it' });
+  // The **goal**, which is what the checks are keyed on — the plan id is not a
+  // handle anything about validation takes any more.
+  return 'issue:12';
 }
 
 async function call(
@@ -129,8 +127,8 @@ async function call(
   return { isError: result.isError === true, text, json: () => JSON.parse(text) as Record<string, unknown> };
 }
 
-function byId(system: System, planId: string, id: string): ValidationCheck {
-  const found = system.store.listValidationChecks(planId).find((c) => c.id === id);
+function byId(system: System, goal: string, id: string): ValidationCheck {
+  const found = system.store.listValidationChecks(goal).find((c) => c.id === id);
   assert.ok(found, `check ${id} exists`);
   return found;
 }
@@ -193,7 +191,6 @@ test('two harnesses do not fight over the stable socket', async () => {
   const socketPath = join(dir, 'desktop.sock');
   const second = new McpDesktopServer({
     store: system.store,
-    validationEnabled: true,
     claimMinutes: 60,
     validationRoot: '/srv/validation',
     now: () => NOW,
@@ -251,28 +248,6 @@ test('validation_read hands back the whole plan, or one check’s full procedure
     system.store.close();
   }
 });
-
-test('with validation off the three tools say so rather than half-working', async () => {
-  const system = build();
-  planWith(system);
-  const { server } = await desk(system, { validationEnabled: false });
-  try {
-    for (const [name, args] of [
-      ['validation_read', { issue: 12 }],
-      ['validation_claim', { issue: 12, check: 'A' }],
-      ['validation_report', { result: 'passed', note: 'saw it' }],
-    ] as const) {
-      const refused = await call(server, 'c1', name, args);
-      assert.ok(refused.isError);
-      assert.match(refused.text, /Validation plans are off/);
-    }
-  } finally {
-    await server.close();
-    system.store.close();
-  }
-});
-
-// -- the claim ---------------------------------------------------------------
 
 test('one check is claimed at a time, and the refusal names what holds it', async () => {
   const system = build();
@@ -498,7 +473,7 @@ function plan(): Plan {
 
 function handedOver(over: Partial<ValidationCheck> = {}): ValidationCheck {
   return {
-    planId: 'plan-12',
+    originRef: 'issue:12',
     id: 'csv-opens',
     letter: 'A',
     seq: 1,
@@ -554,7 +529,7 @@ function runner(): RuleDispatcher {
     {},
     {},
     {},
-    { enabled: true, desktopClaimMinutes: 60 },
+    { desktopClaimMinutes: 60 },
     '/srv/validation',
   );
 }
@@ -638,4 +613,31 @@ test('the skill installs, and says what it is for without restating the procedur
   // The three answers, and the one that is easiest to leave out.
   assert.match(written, /handback/);
   assert.match(written, /Do not report `passed` from evidence you did not gather/);
+});
+
+/**
+ * What the cockpit is shipped, and why it is a projection rather than the row.
+ *
+ * `claimIsLive` is the single definition of "claimed", so a claim past its expiry
+ * has to stop being drawn at the same instant it stops blocking `validate-check`.
+ * Otherwise the fleet list shows somebody running a check the rule has already
+ * decided nobody is running — two answers to one question, which is the whole
+ * thing one definition exists to prevent.
+ */
+test('the snapshot ships a live claim, and `withLiveClaim` drops an expired one', () => {
+  const system = build();
+  const goal = planWith(system);
+  const now = new Date().toISOString();
+  system.store.claimValidationCheck(goal, 'csv-opens', 'desktop (studio)', claimStaleBefore(now, 60));
+
+  const shipped = buildStateSnapshot(system).validationChecks.find((c) => c.id === 'csv-opens')!;
+  assert.equal(shipped.claimedBy, 'desktop (studio)', 'a live claim reaches the cockpit');
+
+  // The other arm, at the function the snapshot maps every check through: the row
+  // still carries the label an hour later, and what the cockpit is handed does not.
+  const later = new Date(new Date(shipped.claimedAt ?? now).getTime() + 61 * 60_000).toISOString();
+  const expired = withLiveClaim(shipped, later, 60);
+  assert.equal(expired.claimedBy, null, 'and an expired one is not drawn at all');
+  assert.equal(expired.claimedAt, null, 'neither half, so nothing can read a claim back out of it');
+  system.store.close();
 });

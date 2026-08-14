@@ -5,6 +5,7 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { issuePickupStatus } from '../src/dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import type { Issue, IssueDelivery, WorldEvent } from '../src/types.js';
+import { singlePlan } from './support/plans.js';
 
 // The pure hold predicate: what a `delivered` verdict holds, and what ends it.
 // No store, no world snapshot — the two arms are decidable from a row, an issue
@@ -156,6 +157,9 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
     queuedJobs: [],
     recentDecisions: [],
     agentHeadroom: 3,
+    // Planned as one pull request: this is about the park standing pickup down,
+    // and an unplanned issue would be the planner's before pickup is reached.
+    plans: [singlePlan(12)],
     deliveries: [delivery()],
   });
   // Idleness is still a decision, so the cycle records a no_op — what must not be
@@ -175,6 +179,7 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
     queuedJobs: [],
     recentDecisions: [],
     agentHeadroom: 3,
+    plans: [singlePlan(12)],
     deliveries: [delivery()],
     deliverySignals: [event()],
   });
@@ -192,6 +197,7 @@ test('the chip and the rule answer the same question', () => {
     openPrs: [],
     headroom: 3,
     paused: false,
+    plans: [singlePlan(12)],
   };
 
   const parked = issuePickupStatus(issue(), { ...base, deliveries: [delivery()] });

@@ -500,7 +500,7 @@ async function buildTestApp(): Promise<{ system: System; app: FastifyInstance }>
     // `test/planDiscussion.test.ts` for why a plan test must never point the real
     // worktree manager at the checkout the suite is running in.
     repoRoot: gitRepo(),
-    planning: { enabled: true, requireApproval: true } as never,
+    planning: { requireApproval: true } as never,
     heartbeatIntervalMs: 999_999,
   });
   const system = buildSystem(config, {

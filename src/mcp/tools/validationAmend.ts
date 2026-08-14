@@ -92,27 +92,18 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
     required: ['note'],
   },
   handler: (args) => {
-    // Off means off: a deployment without validation plans must not accumulate
-    // checks nothing draws, and an agent told its correction landed when the
-    // surface is disabled would carry on writing them.
-    if (!deps.validationEnabled) {
-      return toolError(
-        'Validation plans are off in this deployment, so there is no check set to amend. Say what you would ' +
-          'have wanted checked in your progress note or your conclusion instead.',
-      );
-    }
     const goal = validationAmendIssue(task.originRef);
     if (!goal.ok) return toolError(goal.error);
     const origin = issueOrigin(goal.issueNumber);
     const plan = deps.store.getPlanByOrigin(origin);
     if (!plan) {
-      // The checks hang off the plan row, so a goal that never went through the
-      // planning funnel has nowhere to put one. Said plainly rather than dressed
-      // up as a permission problem, because it is neither the agent's fault nor
-      // something it can fix.
+      // `covers` names live part slugs, which is a property of the plan — and a
+      // goal whose planner has not written one yet has no check set to amend
+      // either. Said plainly rather than dressed up as a permission problem,
+      // because it is neither the agent's fault nor something it can fix.
       return toolError(
-        `Issue #${goal.issueNumber} has no plan, so it has no validation plan to amend. This deployment runs ` +
-          'without the planning funnel; say what should be checked in your conclusion instead.',
+        `Issue #${goal.issueNumber} has no plan yet, so it has no validation plan to amend. Say what should be ` +
+          'checked in your conclusion instead.',
       );
     }
     const parsed = validateAmendment(args);
@@ -126,9 +117,9 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
     // against a fixture the planner already declared has named a real resource.
     const resources = validationResourceInputs(amendment.resources);
     const known = [
-      ...new Set([...deps.store.listValidationResources(plan.id).map((r) => r.name), ...resources.map((r) => r.name)]),
+      ...new Set([...deps.store.listValidationResources(origin).map((r) => r.name), ...resources.map((r) => r.name)]),
     ];
-    const result = deps.store.amendValidation(plan.id, {
+    const result = deps.store.amendValidation(origin, {
       checks: validationCheckAmendments(
         amendment.checks,
         known,
@@ -138,7 +129,7 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
       resources,
       note: amendmentNote(amendment.note),
     });
-    fileResourceAsks(deps.store, plan.id, origin);
+    fileResourceAsks(deps.store, origin);
 
     // The letters go back, because they are what a person types and what the
     // agent should use if it refers to a check in its conclusion.

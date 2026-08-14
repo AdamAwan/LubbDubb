@@ -139,6 +139,7 @@ class DemoServer {
   private chatterTimer: ReturnType<typeof setInterval> | null = null;
   private beatTimer: ReturnType<typeof setInterval> | null = null;
   private chatterIdx = 0;
+  private deskBeats = 0;
   private seq = 1000;
 
   private id(prefix: string): string {
@@ -444,14 +445,15 @@ class DemoServer {
 
   /**
    * One validation check's current reading — the demo mirror of the four routes
-   * under `/api/plans/:id/validation/:checkId`.
+   * under `/api/issues/:number/validation/:checkId`.
    *
    * Everything the last reading left behind is cleared here too, because that is
    * the property worth mirroring: a demo that left a deferral's reason standing
    * under a "passed" chip would teach the control wrong.
    */
-  async setValidation(planId: string, checkId: string, act: ValidationAct): Promise<{ ok: true }> {
-    const check = (this.state.validationChecks ?? []).find((c) => c.planId === planId && c.id === checkId);
+  async setValidation(issueNumber: number, checkId: string, act: ValidationAct): Promise<{ ok: true }> {
+    const origin = `issue:${issueNumber}`;
+    const check = (this.state.validationChecks ?? []).find((c) => c.originRef === origin && c.id === checkId);
     if (check && check.supersededReason === null) {
       // The hand-over writes who runs it, never a reading — mirrored separately
       // because folding it into the branch below would have the demo record a
@@ -1168,6 +1170,7 @@ class DemoServer {
       this.beatTimer = setInterval(() => {
         // A pulse is what observes the world, so the stamp moves with the beat.
         this.state.worldObservedAt = new Date().toISOString();
+        this.tickDesktopClaim();
         this.emit({ type: 'cycle:end', cycleId: this.id('cycle'), rationale: 'heartbeat' });
       }, beat);
     }
@@ -1178,6 +1181,34 @@ class DemoServer {
     if (this.beatTimer) clearInterval(this.beatTimer);
     this.chatterTimer = null;
     this.beatTimer = null;
+  }
+
+  /**
+   * The desktop claim ending by itself — the whole point of drawing it as an
+   * in-flight entry rather than a control.
+   *
+   * Of the three endings a claim has, this is the one a demo can show: the
+   * reading lands, so the run is over. The other two need a terminal to be
+   * closed and an hour of wall clock to pass. Nobody presses anything: two beats
+   * in, the check carries a `desktop` reading, the claim clears, and the entry
+   * leaves the fleet list on its own.
+   */
+  private tickDesktopClaim(): void {
+    const held = (this.state.validationChecks ?? []).find((c) => c.claimedBy !== null);
+    if (!held) return;
+    this.deskBeats++;
+    if (this.deskBeats < 2) return;
+    held.state = 'passed';
+    held.resultNote =
+      'Copied the artifact URL, flipped one character of the signature and requested it: 403, and the file was not served.';
+    held.resultBy = 'desktop';
+    held.resultAt = new Date().toISOString();
+    held.claimedBy = null;
+    held.claimedAt = null;
+    held.updatedAt = held.resultAt;
+    // No world event and no decision: the world did not move and the harness did
+    // not act. That is the fact this whole entry exists to draw.
+    this.dirty();
   }
 
   // Stream a line of progress into every running agent so the fleet looks alive.
@@ -1835,8 +1866,8 @@ export const demoApi = {
   getPlanHistory: (planId: string) => Promise.resolve(demoPlanHistory(planId)),
   setAcceptance: (planId: string, slug: string, criterion: string, met: boolean) =>
     getServer().setAcceptance(planId, slug, criterion, met),
-  setValidation: (planId: string, checkId: string, act: ValidationAct) =>
-    getServer().setValidation(planId, checkId, act),
+  setValidation: (issueNumber: number, checkId: string, act: ValidationAct) =>
+    getServer().setValidation(issueNumber, checkId, act),
   abandonPlan: (planId: string) => getServer().abandonPlan(planId),
   discussPlan: (planId: string) => getServer().discussPlan(planId),
   endPlanDiscussion: (planId: string) => getServer().endPlanDiscussion(planId),

@@ -136,9 +136,8 @@ export interface StageContext {
    */
   routes: Map<number, PlanRouteVerdict>;
   /**
-   * Every plan's validation checks, keyed by plan id — read by `validate-check`
-   * and nothing else. Empty with validation off, which is also what the rule's
-   * `enabled` condition switches it out on.
+   * Every goal's validation checks, keyed by the goal's origin ref — read by
+   * `validate-check` and nothing else.
    */
   validationChecks: Map<string, ValidationCheck[]>;
   /** Issues `issue-assay` claimed this cycle. Written by it, read after it — see the class doc. */

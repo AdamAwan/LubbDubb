@@ -19,6 +19,7 @@ import { overridePath } from '../web/src/components/PromptsTab.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { WorldSnapshot } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { singlePlan } from './support/plans.js';
 
 function tmpDir(): string {
   return mkdtempSync(join(tmpdir(), 'lubbdubb-prompts-'));
@@ -207,7 +208,7 @@ test('GET /api/prompts serves the book the dispatcher renders from, overrides an
   }
 });
 
-function ctx(world: Partial<WorldSnapshot>): DispatchContext {
+function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
   return {
     world: { takenAt: 'now', pullRequests: [], issues: [], ...world },
     tasks: [],
@@ -216,6 +217,7 @@ function ctx(world: Partial<WorldSnapshot>): DispatchContext {
     queuedJobs: [],
     recentDecisions: [],
     agentHeadroom: 3,
+    ...over,
   };
 }
 
@@ -225,9 +227,12 @@ test('a custom template flows through the dispatcher into the dispatched prompt'
     writeFileSync(join(dir, 'issue-pickup.md'), 'Handle #{number} on {branch}.');
     const d = new RuleDispatcher({}, {}, loadPromptTemplates(dir));
     const { actions } = await d.decide(
-      ctx({
-        issues: [{ id: 'i1', number: 12, title: 'T', body: 'B', state: 'open', labels: [], linkedPrNumber: null }],
-      }),
+      ctx(
+        { issues: [{ id: 'i1', number: 12, title: 'T', body: 'B', state: 'open', labels: [], linkedPrNumber: null }] },
+        // Planned as one pull request, so the rule under test is the pickup
+        // rather than the planner in front of it.
+        { plans: [singlePlan(12)] },
+      ),
     );
     assert.equal(actions[0]?.type, 'dispatch_code_agent');
     assert.equal((actions[0] as { prompt: string }).prompt, 'Handle #12 on issue/12.');

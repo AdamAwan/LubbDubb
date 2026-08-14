@@ -32,6 +32,7 @@ import { assaySignalQuery } from '../intake/assay.js';
 import { classifyCiFailures } from '../ci/ciPolicy.js';
 import { validationVerdict } from '../validation/verdict.js';
 import { validationResourcePath } from '../validation/resources.js';
+import { withLiveClaim } from '../validation/desktop.js';
 import { watchLabelsFor } from '../watchLabels.js';
 
 /**
@@ -152,25 +153,28 @@ export function buildStateSnapshot(
     acceptanceCriteria: acceptanceCriteria(part),
     outsideScope: drift.get(part.id) ?? [],
   }));
-  // The validation plan, read once and joined two ways: to a plan by id for the
-  // sheet, and to a goal by the plan's origin for the chip and the flag. Keyed
-  // through the plan rather than stored against the origin because a plan *is*
-  // the per-goal record — the same join `planPartsOf` makes one line up.
-  const validationChecks = store.listAllValidationChecks();
-  const checksByPlan = new Map<string, typeof validationChecks>();
+  // The validation plan, read once and grouped by the goal it belongs to — which
+  // is what it is keyed on, so the sheet, the chip and the flag all read one map
+  // with no join through the plan to get wrong.
+  // Read through `withLiveClaim`, never off the row: a claim past its expiry
+  // holds nothing, and the cockpit must stop drawing it at the same instant it
+  // stops blocking `validate-check`. `claimIsLive` is the one definition of that,
+  // and this is where the cockpit gets it.
+  const claimNow = new Date().toISOString();
+  const validationChecks = store
+    .listAllValidationChecks()
+    .map((check) => withLiveClaim(check, claimNow, config.validation.desktopClaimMinutes));
+  const checksByGoal = new Map<string, typeof validationChecks>();
   for (const check of validationChecks) {
-    const list = checksByPlan.get(check.planId);
+    const list = checksByGoal.get(check.originRef);
     if (list) list.push(check);
-    else checksByPlan.set(check.planId, [check]);
+    else checksByGoal.set(check.originRef, [check]);
   }
-  const planByOrigin = new Map(plans.map((p) => [p.originRef, p]));
   // Resolved here rather than in the browser: the path is `validationRoot` joined
   // with the goal's directory, which is config the cockpit does not hold, and
   // "is it there" is a filesystem question only this side can answer.
-  const originByPlan = new Map(plans.map((p) => [p.id, p.originRef]));
   const wireValidationResources: ValidationResourceView[] = store.listAllValidationResources().map((resource) => {
-    const origin = originByPlan.get(resource.planId) ?? resource.planId;
-    const path = validationResourcePath(config.validationRoot, origin, resource.name);
+    const path = validationResourcePath(config.validationRoot, resource.originRef, resource.name);
     return { ...resource, path, present: existsSync(path) };
   });
   // Standing "is this issue finished" verdicts, keyed on the issue origin — the
@@ -214,7 +218,6 @@ export function buildStateSnapshot(
     // the funnel rather than claiming it's eligible for a pickup that won't fire.
     plans,
     planParts,
-    planning: config.planning,
     // The harness's own park, read the same way `Harness.runCycle` reads it — the
     // event query is null (and no read happens) until an issue has been assessed.
     deliveries,
@@ -323,8 +326,7 @@ export function buildStateSnapshot(
   // conclusion verdicts are computed here rather than in the browser apply to both,
   // and two enrichment paths would drift exactly on a finished goal.
   const validationChecksFor = (origin: string): ReturnType<typeof validationVerdict> | null => {
-    const plan = planByOrigin.get(origin);
-    const checks = plan ? (checksByPlan.get(plan.id) ?? []) : [];
+    const checks = checksByGoal.get(origin) ?? [];
     return checks.length === 0 ? null : validationVerdict(checks);
   };
   const enrichIssue = (issue: Issue) => {

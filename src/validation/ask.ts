@@ -1,7 +1,7 @@
 import type { Store } from '../store/store.js';
 
 /**
- * File the bench row for every resource a plan's validation block says it needs
+ * File the bench row for every resource a goal's validation block says it needs
  * and cannot produce — a seeded fixture, a reference screenshot, an account on an
  * environment.
  *
@@ -17,8 +17,8 @@ import type { Store } from '../store/store.js';
  * which cannot be run yet is a stated fact rather than one that mysteriously
  * never runs.
  */
-export function fileResourceAsks(store: Store, planId: string, originRef: string): void {
-  for (const resource of store.listValidationResources(planId)) {
+export function fileResourceAsks(store: Store, originRef: string): void {
+  for (const resource of store.listValidationResources(originRef)) {
     if (resource.provided) continue;
     const { task } = store.recordHumanTask({
       title: `Provide "${resource.name}" for validating ${originRef}`,
@@ -27,7 +27,7 @@ export function fileResourceAsks(store: Store, planId: string, originRef: string
       agentId: null,
       taskId: null,
     });
-    store.linkValidationResourceTask(planId, resource.name, task.id);
+    store.linkValidationResourceTask(originRef, resource.name, task.id);
   }
 }
 

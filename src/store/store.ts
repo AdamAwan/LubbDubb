@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { SCHEMA } from './schema.js';
 import { systemClock, type Clock, type StoreContext } from './context.js';
-import { ensureColumns } from './migrate.js';
+import { ensureColumns, rebuildTables } from './migrate.js';
 import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
@@ -11,7 +11,7 @@ import { PriorityStore } from './priority.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, PlanStore, PLAN_COLUMNS } from './plans.js';
-import { ValidationStore, VALIDATION_COLUMNS } from './validation.js';
+import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './validation.js';
 import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS } from './issueVerdicts.js';
 import { ScratchStore } from './scratch.js';
 import { AgentStore, AGENT_COLUMNS } from './agents.js';
@@ -129,7 +129,11 @@ export class Store {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
     this.db.pragma('foreign_keys = ON');
-    this.db.exec(SCHEMA);
+    // Before the schema, and around it: a table whose *key* changed is renamed
+    // out of the way so `SCHEMA`'s own definition creates the new shape, then its
+    // rows are copied across resolving the old key into the new one. All in one
+    // transaction — a crash halfway leaves the old table exactly as it was.
+    rebuildTables(this.db, VALIDATION_REBUILDS, () => this.db.exec(SCHEMA));
     // Before any module is constructed, let alone reads: a domain module reading
     // a migrated column on a database created by an older build reads `undefined`.
     for (const columns of [

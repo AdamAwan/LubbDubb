@@ -32,23 +32,14 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     required: ['result', 'note'],
   },
   handler: (args) => {
-    if (!deps.validationEnabled) {
-      return toolError(
-        'Validation plans are off in this deployment, so there is no check to report on. Say what you found in ' +
-          'your progress note instead.',
-      );
-    }
     const target = validationReportTarget(task.originRef);
     if (!target.ok) return toolError(target.error);
-    const plan = deps.store.getPlanByOrigin(issueOrigin(target.issueNumber));
-    // Both of these are "the world moved under a dispatch that is still running":
-    // a plan deleted, or an amendment that withdrew the check between the agent
-    // being sent and it reporting. Said plainly rather than as a refusal, because
-    // neither is the agent's fault and neither is something it can fix.
-    if (!plan) {
-      return toolError(`Issue #${target.issueNumber} no longer has a plan, so this check has nowhere to be recorded.`);
-    }
-    const check = deps.store.getValidationCheck(plan.id, target.checkId);
+    const origin = issueOrigin(target.issueNumber);
+    // "The world moved under a dispatch that is still running": an amendment
+    // withdrew the check between the agent being sent and it reporting. Said
+    // plainly rather than as a refusal, because it is neither the agent's fault
+    // nor something it can fix.
+    const check = deps.store.getValidationCheck(origin, target.checkId);
     if (!check) {
       return toolError(
         `Check "${target.checkId}" is no longer part of issue #${target.issueNumber}'s validation plan — an ` +
@@ -61,7 +52,7 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     const { result, note } = parsed.report;
 
     if (result === 'handback') {
-      const next = deps.store.recordValidationHandback(plan.id, check.id, handbackReason(note, 'agent'));
+      const next = deps.store.recordValidationHandback(origin, check.id, handbackReason(note, 'agent'));
       return ok({
         reported: 'handback',
         check: `${check.letter}. ${check.id}`,
@@ -74,7 +65,7 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
       });
     }
 
-    const next = deps.store.recordValidationResult(plan.id, check.id, {
+    const next = deps.store.recordValidationResult(origin, check.id, {
       state: result,
       note,
       // Attributed to the fleet, not to a person, and drawn everywhere the

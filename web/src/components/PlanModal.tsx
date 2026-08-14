@@ -97,7 +97,7 @@ export function PlanModal({
   onRespond: (agentId: string, text: string) => Promise<unknown> | unknown;
   onAcceptance: (planId: string, slug: string, criterion: string, met: boolean) => Promise<unknown> | unknown;
   onValidation: (
-    planId: string,
+    issueNumber: number,
     checkId: string,
     act:
       | { kind: 'result'; result: 'passed' | 'failed'; note: string }
@@ -371,16 +371,27 @@ export function PlanModal({
                   sections.current.validation = el;
                 }}
               >
-                <ValidationSection
-                  checks={checks}
-                  resources={resources}
-                  refUrls={refUrls}
-                  onResult={(checkId, result, note) => onValidation(plan.id, checkId, { kind: 'result', result, note })}
-                  onDefer={(checkId, reason) => onValidation(plan.id, checkId, { kind: 'defer', reason })}
-                  onWaive={(checkId, reason) => onValidation(plan.id, checkId, { kind: 'waive', reason })}
-                  onReset={(checkId) => onValidation(plan.id, checkId, { kind: 'reset' })}
-                  onHandover={(checkId, to) => onValidation(plan.id, checkId, { kind: 'handover', to })}
-                />
+                {/* Every control here writes against the *goal* — that is what a
+                    check belongs to now — so a plan whose origin is not an issue
+                    ref has nothing to write against and draws the record alone. */}
+                {issueNumber === null ? (
+                  <p className="empty">
+                    This plan does not hang off a goal, so its checks cannot be recorded against one.
+                  </p>
+                ) : (
+                  <ValidationSection
+                    checks={checks}
+                    resources={resources}
+                    refUrls={refUrls}
+                    onResult={(checkId, result, note) =>
+                      onValidation(issueNumber, checkId, { kind: 'result', result, note })
+                    }
+                    onDefer={(checkId, reason) => onValidation(issueNumber, checkId, { kind: 'defer', reason })}
+                    onWaive={(checkId, reason) => onValidation(issueNumber, checkId, { kind: 'waive', reason })}
+                    onReset={(checkId) => onValidation(issueNumber, checkId, { kind: 'reset' })}
+                    onHandover={(checkId, to) => onValidation(issueNumber, checkId, { kind: 'handover', to })}
+                  />
+                )}
               </section>
 
               <section

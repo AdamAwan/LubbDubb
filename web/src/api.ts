@@ -237,7 +237,7 @@ const realApi = {
   // methods because there is one thing being said: this is the check's current
   // reading, and the server clears whatever the last one left behind.
   setValidation: (
-    planId: string,
+    issueNumber: number,
     checkId: string,
     act:
       | { kind: 'result'; result: 'passed' | 'failed'; note: string }
@@ -246,7 +246,7 @@ const realApi = {
       | { kind: 'reset' }
       | { kind: 'handover'; to: 'fleet' | 'human' },
   ) => {
-    const base = `/api/plans/${planId}/validation/${encodeURIComponent(checkId)}`;
+    const base = `/api/issues/${issueNumber}/validation/${encodeURIComponent(checkId)}`;
     if (act.kind === 'result') return post<{ ok: true }>(`${base}/result`, { result: act.result, note: act.note });
     if (act.kind === 'defer') return post<{ ok: true }>(`${base}/defer`, { reason: act.reason });
     if (act.kind === 'waive') return post<{ ok: true }>(`${base}/waive`, { reason: act.reason });

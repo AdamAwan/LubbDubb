@@ -15,6 +15,7 @@ import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { foldWorkGraph } from '../src/graph/workGraph.js';
 import type { Agent, Decision, Issue, IssueDelivery, Plan, PlanPart, Task } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { singlePlan } from './support/plans.js';
 
 // Rule `issue-assess` — the assessor. What makes it fire, what makes it stand down, and the
 // one thing it must never do: let a second agent onto an issue it is judging.
@@ -56,6 +57,10 @@ function task(over: Partial<Task> = {}): Task {
 function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   return {
     world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
+    // Every issue here has already been planned as one pull request — see
+    // `singlePlan`. Without a row the planner is what fires, not the rule under
+    // test.
+    plans: [singlePlan(12)],
     tasks: [task()],
     agents: [],
     openEscalations: [],
@@ -83,7 +88,7 @@ function planningAssessor(): RuleDispatcher {
     {},
     undefined,
     'main',
-    { enabled: true },
+    {},
     { enabled: true },
     {},
     { enabled: false },
