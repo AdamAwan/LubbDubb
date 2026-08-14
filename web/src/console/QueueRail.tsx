@@ -13,6 +13,7 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   proposal: 'Plan',
   bench: 'Bench',
   close_out: 'Close-out',
+  limit: 'Usage limit',
 };
 
 // The mockup's two railsub headings, in the order they're drawn — 'blocking'

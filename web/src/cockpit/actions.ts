@@ -63,6 +63,12 @@ export interface CockpitActions {
   completeAgent(agentId: string): Promise<void>;
   interruptAgent(agentId: string): Promise<void>;
   respondAgent(agentId: string, text: string): Promise<void>;
+  /**
+   * End a usage-limit park (issue #318) — the one control a parked-on-a-limit
+   * agent has, since there is no question to answer and its process is usually
+   * gone. Refetches: the row moves back to running and leaves `parkedOnLimit`.
+   */
+  resumeAgent(agentId: string): Promise<void>;
 
   answerEscalation(id: string, text: string): Promise<void>;
   /** Answer a multi-question ask; positional against the escalation's questions. */

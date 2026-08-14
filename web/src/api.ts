@@ -313,6 +313,9 @@ const realApi = {
   killAgent: (id: string) => post(`/api/agents/${id}/kill`),
   completeAgent: (id: string) => post(`/api/agents/${id}/complete`),
   interruptAgent: (id: string) => post(`/api/agents/${id}/interrupt`),
+  // End a usage-limit park: re-opens the agent's own conversation in its own
+  // worktree and tells it to carry on. 409s for an agent parked on anything else.
+  resumeAgent: (id: string) => post(`/api/agents/${id}/resume`),
 };
 
 /**

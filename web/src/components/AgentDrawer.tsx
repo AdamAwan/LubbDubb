@@ -113,11 +113,13 @@ export function AgentDrawer({
   flags,
   artifactUrls,
   files,
+  limitParked,
   onClose,
   onRespond,
   onKill,
   onComplete,
   onInterrupt,
+  onResume,
 }: {
   agent: Agent;
   task: Task | null;
@@ -126,12 +128,16 @@ export function AgentDrawer({
   flags?: AgentFlag[];
   artifactUrls: Record<string, string>;
   files?: AgentFile[];
+  /** Parked because the account's usage limit is spent, not because it asked anything. */
+  limitParked: boolean;
   onClose: () => void;
   onRespond: (text: string) => Promise<unknown>;
   onKill: () => Promise<unknown> | unknown;
   /** Declare the work finished: the clean terminal an agent reaches with a done sentinel. */
   onComplete: () => Promise<unknown> | unknown;
   onInterrupt: () => Promise<unknown> | unknown;
+  /** End a usage-limit park: re-open the conversation and carry on. */
+  onResume: () => Promise<unknown> | unknown;
 }) {
   const [seed, setSeed] = useState('');
   const [text, setText] = useState('');
@@ -206,7 +212,10 @@ export function AgentDrawer({
     setBehind(false);
   }, []);
 
-  const canRespond = agent.status === 'waiting' || agent.status === 'running';
+  // A limit park takes the reply box away rather than leaving one that cannot send:
+  // the process is usually gone with the limit, so typing here would reach nothing —
+  // and there is no question on the other end of it to answer.
+  const canRespond = !limitParked && (agent.status === 'waiting' || agent.status === 'running');
   const isLive = agent.status === 'running' || agent.status === 'waiting' || agent.status === 'starting';
 
   return (
@@ -274,6 +283,15 @@ export function AgentDrawer({
           <div className="drawer-flags">
             <span className="drawer-flags-label">Artifacts</span>
             <FlagChips flags={flags} artifactUrls={artifactUrls} />
+          </div>
+        )}
+        {limitParked && (
+          <div className="park-notice">
+            <b>Parked on a usage limit.</b>{' '}
+            {agent.waitingReason ?? 'This account has no usage allowance left right now.'}
+            <AsyncButton className="primary" onClick={onResume} pendingLabel="Resuming…">
+              Resume
+            </AsyncButton>
           </div>
         )}
         <FilesList files={files} />
