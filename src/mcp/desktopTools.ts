@@ -29,8 +29,6 @@ import { toolError, toolJson, type McpTool } from './protocol.js';
  */
 export interface DesktopToolDeps {
   store: Store;
-  /** `validation.enabled` — off, the three tools say so rather than half-working. */
-  validationEnabled: boolean;
   /** `validation.desktopClaimMinutes`. */
   claimMinutes: number;
   /** `config.validationRoot` — where a goal's fixtures live, which the session has to be told. */
@@ -90,7 +88,6 @@ const validationRead: DesktopToolFactory = (deps) => ({
     required: ['issue'],
   },
   handler: (args) => {
-    if (!deps.validationEnabled) return toolError(VALIDATION_OFF);
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);
     const plan = planFor(deps, ref.issue);
@@ -140,7 +137,6 @@ const validationClaim: DesktopToolFactory = (deps, session) => ({
     required: ['issue', 'check'],
   },
   handler: (args) => {
-    if (!deps.validationEnabled) return toolError(VALIDATION_OFF);
     const ref = desktopCheckRef(args);
     if (!ref.ok) return toolError(ref.error);
     const plan = planFor(deps, ref.ref.issue);
@@ -231,7 +227,6 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
     required: ['result', 'note'],
   },
   handler: (args) => {
-    if (!deps.validationEnabled) return toolError(VALIDATION_OFF);
     // The check is not an argument here either — it is whatever this session
     // claimed. The fleet's version takes it from the origin it was dispatched on;
     // both are the same rule, that which check a report is about is decided
@@ -299,9 +294,6 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
     });
   },
 });
-
-const VALIDATION_OFF =
-  'Validation plans are off in this deployment, so there are no checks to read, claim or report on.';
 
 const READ_NEXT =
   'Claim the one you are going to run with validation_claim before you start, then report it with ' +

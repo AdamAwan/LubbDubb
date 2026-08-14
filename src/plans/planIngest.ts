@@ -75,13 +75,6 @@ export function ingestPlanDocument(
      * operator's policy, so neither can persist a verdict the other wouldn't.
      */
     requireApproval?: boolean;
-    /**
-     * `validation.enabled` — whether the document's validation block becomes
-     * rows at all. Carried in rather than read from a config here for
-     * {@link requireApproval}'s reason: ingestion is store-only, and both
-     * transports pass their own operator's policy.
-     */
-    validationEnabled?: boolean;
   },
 ): PlanIngestResult {
   const { doc, originRef, title } = input;
@@ -148,7 +141,7 @@ export function ingestPlanDocument(
   // the only honest reading: an operator override that never learned the block
   // produces plans without one, and treating that as "the planner withdrew every
   // check" would supersede a validation plan somebody is halfway through.
-  if ((input.validationEnabled ?? false) && doc.validation) {
+  if (doc.validation) {
     store.ingestValidation(plan.id, {
       checks: validationCheckInputs(
         doc.validation,

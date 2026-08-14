@@ -19,6 +19,7 @@ import { proposalHold } from '../src/proposals/proposals.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { parsePlanDocument } from '../src/plans/planDocument.js';
 import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
+import { singlePlan } from './support/plans.js';
 import type {
   Agent,
   Issue,
@@ -101,6 +102,9 @@ test('an issue carrying a shortfall is pickup-eligible, and the chip says so', (
     // No delivery row: writing a shortfall clears one, in the store.
     deliveries: [],
     deliverySignals: [],
+    // Planned as one pull request — the shortfall releases the issue *into*
+    // pickup, which is a claim about what happens after the funnel, not before.
+    plans: [singlePlan(12)],
     headroom: 3,
     paused: false,
   });
@@ -260,12 +264,12 @@ test('the escalate arm asks once — deduped on the inbox and on the audit log a
   assert.equal(viaLog.actions.filter((a) => a.type === 'escalate_to_human').length, 0);
 });
 
-test('with the funnel off both plan-shaped arms degrade rather than parking the issue', async () => {
-  // A replan needs rule `issue-plan` to pick the `planning` plan up and a follow-up part
-  // needs rule `plan-part` to schedule it. With planning off, accepting either would park
-  // the issue on a transition nothing consumes.
+test('with no plan row both plan-shaped arms degrade rather than parking the issue', async () => {
+  // A replan needs a plan for rule `issue-plan` to pick up and a follow-up part
+  // needs one for rule `plan-part` to append to. Without a plan, accepting either
+  // would park the issue on a transition nothing consumes.
   const { actions } = await new RuleDispatcher({}, {}, undefined, 'main').decide(
-    ctx({ shortfalls: [shortfallRow({ cause: 'plan' })], plans: [planRow()] }),
+    ctx({ shortfalls: [shortfallRow({ cause: 'plan' })], plans: [] }),
   );
   assert.equal(actions.filter((a) => a.type === 'propose_shortfall').length, 0);
   assert.equal(actions.filter((a) => a.type === 'escalate_to_human').length, 1);
@@ -660,9 +664,8 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   };
 }
 
-/** The dispatcher with the funnel on, which is what both routable arms need. */
 function dispatcher(): RuleDispatcher {
-  return new RuleDispatcher({ ignoreLabel: 'lubbdubb-ignore' }, {}, undefined, 'main', { enabled: true });
+  return new RuleDispatcher({ ignoreLabel: 'lubbdubb-ignore' }, {}, undefined, 'main');
 }
 
 async function decide(context: DispatchContext): Promise<{ actions: { type: string; [k: string]: unknown }[] }> {

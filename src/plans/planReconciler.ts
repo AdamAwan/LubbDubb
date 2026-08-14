@@ -64,7 +64,6 @@ export class PlanReconciler {
   constructor(private readonly deps: PlanReconcilerDeps) {}
 
   async reconcile(world: WorldSnapshot): Promise<void> {
-    if (!this.deps.planning.enabled) return; // off means off, including for a stale DB
     // `awaiting_approval` is reconciled too. It dispatches nothing, but readiness
     // is what the "Up next" queue renders as held — an unreconciled plan's parts
     // are all still `pending`, so the operator would be asked to approve a

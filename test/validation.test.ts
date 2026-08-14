@@ -36,7 +36,7 @@ function check(over: Record<string, unknown> = {}): Record<string, unknown> {
 }
 
 function ingest(store: Store, document: PlanDocument, originRef = 'issue:12'): string {
-  return ingestPlanDocument(store, { doc: document, originRef, title: 'Issue', validationEnabled: true }).plan.id;
+  return ingestPlanDocument(store, { doc: document, originRef, title: 'Issue' }).plan.id;
 }
 
 // -- the schema --------------------------------------------------------------
@@ -162,16 +162,6 @@ test('a resource the planner cannot provide files an ask, once', () => {
   // `recordHumanTask` refresh, carried across by name.
   ingest(store, document);
   assert.equal(store.listHumanTasks().length, 1);
-});
-
-test('validation.enabled off ingests nothing at all', () => {
-  const store = new Store(':memory:');
-  const plan = ingestPlanDocument(store, {
-    doc: doc({ validation: { checks: [check()] } }),
-    originRef: 'issue:12',
-    title: 'Issue',
-  });
-  assert.deepEqual(store.listValidationChecks(plan.plan.id), []);
 });
 
 // -- letters -----------------------------------------------------------------

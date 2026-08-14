@@ -32,12 +32,6 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     required: ['result', 'note'],
   },
   handler: (args) => {
-    if (!deps.validationEnabled) {
-      return toolError(
-        'Validation plans are off in this deployment, so there is no check to report on. Say what you found in ' +
-          'your progress note instead.',
-      );
-    }
     const target = validationReportTarget(task.originRef);
     if (!target.ok) return toolError(target.error);
     const plan = deps.store.getPlanByOrigin(issueOrigin(target.issueNumber));

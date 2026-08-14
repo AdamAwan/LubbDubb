@@ -98,7 +98,6 @@ function planWith(
     doc: parsed.document,
     originRef: 'issue:12',
     title: 'Ship it',
-    validationEnabled: true,
   }).plan.id;
 }
 
@@ -433,20 +432,10 @@ test('an amendment adds resources and removes none, and an unprovided one become
 
 // -- the two ways it can be off ----------------------------------------------
 
-test('with validation off, and with no plan, the tool refuses rather than pretending', async () => {
-  const off = build({ validation: { enabled: false } });
-  planWith(off, [check()]);
-  const disabled = await callTool(off, spawnAgent(off, 'issue:12'), 'validation_amend', {
-    note: 'n',
-    checks: [check({ id: 'x' })],
-  });
-  assert.equal(disabled.isError, true);
-  assert.match(disabled.text, /off in this deployment/);
-
-  // The `planning.enabled: false` shape: the checks hang off the plan row, so a
-  // goal that never went through the funnel has nowhere to put one. Said plainly
-  // rather than dressed up as a permission problem — it is neither the agent's
-  // fault nor something it can fix.
+test('with no plan the tool refuses rather than pretending', async () => {
+  // The checks hang off the plan row, so a goal whose planner has not written one
+  // yet has nowhere to put a check. Said plainly rather than dressed up as a
+  // permission problem — it is neither the agent's fault nor something it can fix.
   const system = build();
   const noPlan = await callTool(system, spawnAgent(system, 'issue:12'), 'validation_amend', {
     note: 'n',

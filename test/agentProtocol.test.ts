@@ -14,6 +14,7 @@ import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Task } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { planAsSingle } from './support/plans.js';
 
 test('buildClaudeArgs injects the protocol system prompt and permission mode', () => {
   const args = buildClaudeArgs({ permissionMode: 'acceptEdits', extraArgs: ['--model', 'x'] });
@@ -129,7 +130,6 @@ function claudeModeConfig() {
     heartbeatIntervalMs: 999_999,
     // The funnel in front of pickup defaults **on**; these tests are about the
     // agent transport, so pin it off and let rule `issue-pickup` dispatch directly.
-    planning: { enabled: false } as never,
     assessment: { enabled: false } as never,
     assay: { enabled: false } as never,
     retrospective: { enabled: false } as never,
@@ -141,6 +141,8 @@ test('claude-mode agents launch with protocol args and get the task typed in', a
   const system = buildSystem(claudeModeConfig(), { worktrees: new FakeWorktreeManager(), backend });
 
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
+
+  planAsSingle(system.store, 901);
   await system.harness.runCycle('manual');
 
   // Spawned with our injected system prompt.
@@ -161,6 +163,7 @@ test('claude-mode still detects the protocol sentinels from real output', async 
   const backend = new FakePtyBackend();
   const system = buildSystem(claudeModeConfig(), { worktrees: new FakeWorktreeManager(), backend });
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'X' });
+  planAsSingle(system.store, 902);
   await system.harness.runCycle('manual');
 
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;

@@ -21,7 +21,7 @@ async function main(): Promise<void> {
   // The desktop channel, on the same terms. `listen()` is the only thing that
   // binds the stable socket or writes into the operator's home directory, which
   // is why it is behind an explicitly-off-by-default flag rather than a default.
-  const desktopReady = config.validation.enabled && config.validation.desktop ? await system.desktop.listen() : false;
+  const desktopReady = config.validation.desktop ? await system.desktop.listen() : false;
   if (desktopReady && config.validation.desktopSkill) {
     installDesktopSkill(config.validation.desktopSkillPath, system.errors);
   }

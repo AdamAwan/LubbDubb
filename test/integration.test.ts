@@ -8,6 +8,7 @@ import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Escalation } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
+import { planAsSingle } from './support/plans.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -22,11 +23,11 @@ function testConfig() {
     repoRoot: gitRepo(),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
-    // The funnel, the assessor and the assay are pinned off: they default **on**
-    // now, and this file is about something else — leaving them on would put an
-    // extra agent in front of every issue these assertions dispatch. Each has its
-    // own tests.
-    planning: { enabled: false } as never,
+    // The assessor and the assay are pinned off: they default **on**, and this
+    // file is about something else — leaving them on would put an extra agent in
+    // front of every issue these assertions dispatch. Each has its own tests.
+    // (The planning funnel cannot be pinned off; a goal is planned by writing the
+    // `single` verdict the planner would have written — `planAsSingle`.)
     assessment: { enabled: false } as never,
     assay: { enabled: false } as never,
     retrospective: { enabled: false } as never,
@@ -39,6 +40,7 @@ async function agentWithOpenEscalation(
   backend: FakePtyBackend,
 ): Promise<{ agentId: string; escalationId: string }> {
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Needs a call' });
+  planAsSingle(system.store, 901);
   await system.harness.runCycle('manual');
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
   backend.last().emit('@@LUBBDUBB_WAITING:Which provider should I use?@@');
@@ -53,6 +55,7 @@ test('full desk-task loop: inject -> dispatch -> agent waits -> escalate -> answ
   // The funnel is off above, so an open issue with no PR is exactly one `issue-pickup`
   // pickup — one agent, on the issue's own branch.
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add login' });
+  planAsSingle(system.store, 902);
   await system.harness.runCycle('manual');
 
   // An agent should now be live.
@@ -99,7 +102,10 @@ test('the watch gate gates dispatch at the buildSystem seam; untagged issues sta
   const system = buildSystem(config, { backend });
 
   system.connector.inject({ kind: 'new_issue', number: 101, title: 'tagged', labels: ['agent-watch'] });
+
+  planAsSingle(system.store, 101);
   system.connector.inject({ kind: 'new_issue', number: 102, title: 'untagged', labels: ['bug'] });
+  planAsSingle(system.store, 102);
   await system.harness.runCycle('manual');
 
   // Only the labelled issue starts an agent...
@@ -125,6 +131,8 @@ test('whitelisted waiting prompts are auto-answered without escalating', async (
   const system = buildSystem(config, { backend });
 
   system.connector.inject({ kind: 'new_issue', number: 903, title: 'Trivial' });
+
+  planAsSingle(system.store, 903);
   await system.harness.runCycle('manual');
 
   backend.last().emit('@@LUBBDUBB_WAITING:Allow running tests?@@');
@@ -168,6 +176,7 @@ test('boot detection parks an orphaned agent for a decision instead of burying i
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { backend });
   system.connector.inject({ kind: 'new_issue', number: 904, title: 'Work' });
+  planAsSingle(system.store, 904);
   await system.harness.runCycle('manual');
 
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;

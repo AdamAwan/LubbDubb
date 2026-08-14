@@ -74,7 +74,6 @@ function planWith(system: System, checks: Record<string, unknown>[]): string {
     doc: parsed.document,
     originRef: 'issue:12',
     title: 'Ship it',
-    validationEnabled: true,
   }).plan.id;
 }
 
@@ -207,9 +206,8 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   };
 }
 
-/** The dispatcher with validation on — everything else default. */
-function runner(enabled = true): RuleDispatcher {
-  return new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, {}, {}, { enabled }, '/srv/validation');
+function runner(): RuleDispatcher {
+  return new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, {}, {}, {}, '/srv/validation');
 }
 
 function validateDispatches(actions: { type: string }[]): string[] {
@@ -293,11 +291,6 @@ test('two handed-over checks get two origins and two worktrees', async () => {
     .map((a) => (a as unknown as { branch: string }).branch)
     .filter((b) => b.startsWith('validate/'));
   assert.deepEqual(branches, ['validate/issue/12/csv-opens', 'validate/issue/12/pdf-prints']);
-});
-
-test('with validation off, no handed-over check is ever dispatched', async () => {
-  const off = await runner(false).decide(ctx({ validationChecks: [check({ actor: 'fleet' })] }));
-  assert.deepEqual(validateDispatches(off.actions), []);
 });
 
 test('it ranks last: a check never takes the slot a pickup wanted', async () => {

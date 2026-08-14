@@ -214,7 +214,6 @@ export function buildStateSnapshot(
     // the funnel rather than claiming it's eligible for a pickup that won't fire.
     plans,
     planParts,
-    planning: config.planning,
     // The harness's own park, read the same way `Harness.runCycle` reads it — the
     // event query is null (and no read happens) until an issue has been assessed.
     deliveries,

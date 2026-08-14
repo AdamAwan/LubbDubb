@@ -10,6 +10,7 @@ import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import { decisionAttribution } from '../web/src/components/util.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Agent, Decision, Issue, PullRequest, Task } from '../src/types.js';
+import { singlePlan } from './support/plans.js';
 
 // The decision row's two columns: `rule` names what **proposed** an act,
 // `admission` what **became** of it. One column answering both is what made a
@@ -79,6 +80,8 @@ test('only admission-kind ids are ever emitted into the admission field', async 
   const { actions } = await d.decide(
     ctx({
       world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
+      // Planned as one pull request, so what the cap throttles is the pickup.
+      plans: [singlePlan(12)],
       recentDecisions: spentCap('issue:12', 'issue-pickup'),
     }),
   );
@@ -96,6 +99,8 @@ test('a throttled pickup names issue-pickup as its proposer, not the cap that st
   const { actions } = await d.decide(
     ctx({
       world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
+      // Planned as one pull request, so what the cap throttles is the pickup.
+      plans: [singlePlan(12)],
       recentDecisions: spentCap('issue:12', 'issue-pickup'),
     }),
   );

@@ -323,7 +323,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     configDir: defaultConfigDir(),
     socketPath: defaultSocketPath(),
     requirePlanApproval: config.planning.requireApproval,
-    validationEnabled: config.validation.enabled,
     // Lazy for the same reason as `agents`: the desk is built after this server
     // (it needs the escalation inbox). Off entirely when the operator disabled the
     // backstop, so `request_permission` denies rather than blocks.
@@ -347,7 +346,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // is off by default and `main.ts` reads it before calling.
   const desktop = new McpDesktopServer({
     store,
-    validationEnabled: config.validation.enabled,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,
     now: () => new Date().toISOString(),
@@ -373,7 +371,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // The `plan.json` transport's half of the approval gate — the tool transport
     // gets the same flag above, so a verdict lands identically either way.
     requirePlanApproval: config.planning.requireApproval,
-    validationEnabled: config.validation.enabled,
     // So `link_ticket` can move a blueprint's images off the filing job and onto
     // the ticket it just created (issue #249) — the same instance the launch route
     // wrote them with, since both halves must agree about the root.

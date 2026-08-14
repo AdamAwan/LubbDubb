@@ -103,7 +103,7 @@ function setup(): Harness {
     store,
     git,
     sink,
-    planning: { ...DEFAULT_PLANNING, enabled: true },
+    planning: DEFAULT_PLANNING,
     defaultBranch: 'main',
     errors: { record: (entry) => (errors.push(entry), {}) as ErrorLogEntry },
   });
@@ -248,7 +248,7 @@ test('a plan being delivered whole writes its status comment too', async () => {
     store,
     git: new FakeGitObserver(),
     sink,
-    planning: { ...DEFAULT_PLANNING, enabled: true },
+    planning: DEFAULT_PLANNING,
     defaultBranch: 'main',
   });
 
@@ -277,7 +277,7 @@ test('an unapproved plan announces nothing, on either shape', async () => {
     store,
     git: new FakeGitObserver(),
     sink,
-    planning: { ...DEFAULT_PLANNING, enabled: true },
+    planning: DEFAULT_PLANNING,
     defaultBranch: 'main',
   });
 
@@ -327,37 +327,6 @@ test('an existing issue/<n> branch blocks the parts, and says so', async () => {
     [null, null],
     'and stops claiming a collision that has been resolved',
   );
-});
-
-test('reconciliation is inert with the funnel off', async () => {
-  const store = new Store(':memory:');
-  const { sink, comments } = recordingSink();
-  const plan = store.upsertPlan({ originRef: 'issue:12', title: 'Big thing', status: 'active', reason: null });
-  store.upsertPlanParts(plan.id, [
-    {
-      slug: 'a',
-      seq: 1,
-      title: 'A',
-      scope: 'src/',
-      dependsOn: [],
-      rationale: null,
-      acceptance: null,
-      touches: [],
-      size: null,
-      expectedKind: null,
-    },
-  ]);
-  const reconciler = new PlanReconciler({
-    store,
-    git: new FakeGitObserver(),
-    sink,
-    planning: { ...DEFAULT_PLANNING, enabled: false },
-    defaultBranch: 'main',
-  });
-  await reconciler.reconcile(world());
-  assert.equal(store.listPlanParts(plan.id)[0]?.status, 'pending');
-  assert.equal(comments.length, 0);
-  store.close();
 });
 
 test('the rendered comment reports progress and the PR numbers', () => {
@@ -486,7 +455,7 @@ function rejoinSetup(): Harness {
     store,
     git,
     sink,
-    planning: { ...DEFAULT_PLANNING, enabled: true },
+    planning: DEFAULT_PLANNING,
     defaultBranch: 'main',
     errors: { record: (entry) => (errors.push(entry), {}) as ErrorLogEntry },
   });

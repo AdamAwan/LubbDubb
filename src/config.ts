@@ -615,6 +615,41 @@ const REMOVED_KEYS: Readonly<Record<string, string>> = {
   steeringPriorities: 'it was only ever injected into the removed "claude" dispatcher\'s prompt and now steers nothing',
 };
 
+/**
+ * Nested keys that used to be switches and are not any more, each with the reason.
+ *
+ * These **warn and are dropped**, where {@link REMOVED_KEYS} refuses — and the
+ * difference is what the operator's file is asking for. A removed top-level key
+ * names behaviour that no longer exists either way, so refusing is the only
+ * honest answer. `planning.enabled` and `validation.enabled` named subsystems
+ * that are now unconditional, so a file setting either is asking for something
+ * the harness either already does or will never do again: refusing would take a
+ * running deployment down at boot over one stale line. Dropped rather than left
+ * to merge into nothing, so the value cannot survive on the policy object and be
+ * read by something later.
+ *
+ * A file asking for `false` is the case the warning is for: that deployment is
+ * getting the funnel it switched off, and it has to hear so from the boot log
+ * rather than from the fleet's behaviour. The entries are permanent — a config
+ * written before the removal outlives the release that made it.
+ */
+const RETIRED_NESTED_KEYS: Readonly<Record<string, string>> = {
+  'planning.enabled': 'the planning funnel is always on — every goal is planned',
+  'validation.enabled': 'validation plans are always on',
+};
+
+function dropRetiredKeys(fromFile: Partial<Config>, filePath: string): void {
+  for (const [path, why] of Object.entries(RETIRED_NESTED_KEYS)) {
+    const [block, key] = path.split('.') as [keyof Config, string];
+    const nested: unknown = fromFile[block];
+    if (typeof nested !== 'object' || nested === null || !Object.hasOwn(nested, key)) continue;
+    delete (nested as Record<string, unknown>)[key];
+    console.warn(
+      `[lubbdubb] ${filePath} sets "${path}", which no longer exists — ${why}. Ignoring it; delete the key.`,
+    );
+  }
+}
+
 function refuseRemovedKeys(fromFile: object, filePath: string): void {
   for (const [key, why] of Object.entries(REMOVED_KEYS)) {
     if (!Object.hasOwn(fromFile, key)) continue;
@@ -677,6 +712,7 @@ export function loadDeploymentConfig(overrides: Partial<Config> = {}): Config {
     }
     if (typeof parsed === 'object' && parsed !== null) refuseRemovedKeys(parsed, filePath);
     fromFile = parsed as Partial<Config>;
+    dropRetiredKeys(fromFile, filePath);
   }
   const fromEnv: Partial<Config> = {};
   if (process.env.PORT) fromEnv.port = Number(process.env.PORT);

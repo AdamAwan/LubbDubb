@@ -92,15 +92,6 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
     required: ['note'],
   },
   handler: (args) => {
-    // Off means off: a deployment without validation plans must not accumulate
-    // checks nothing draws, and an agent told its correction landed when the
-    // surface is disabled would carry on writing them.
-    if (!deps.validationEnabled) {
-      return toolError(
-        'Validation plans are off in this deployment, so there is no check set to amend. Say what you would ' +
-          'have wanted checked in your progress note or your conclusion instead.',
-      );
-    }
     const goal = validationAmendIssue(task.originRef);
     if (!goal.ok) return toolError(goal.error);
     const origin = issueOrigin(goal.issueNumber);

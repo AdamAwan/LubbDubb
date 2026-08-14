@@ -12,6 +12,7 @@ import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { Store } from '../src/store/store.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { planAsSingle, singlePlan } from './support/plans.js';
 
 // The "Up next" queue (issue #69): the dispatcher's ordered pickup plan with the
 // headroom cut — above-cut candidates dispatch this cycle, below-cut ones wait
@@ -20,6 +21,10 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
   return {
     world: { takenAt: 'now', pullRequests: [], issues: [], ...world },
+    // Every issue in these worlds has already been planned as one pull request:
+    // the funnel is unconditional, so an issue with no plan row is one a planner
+    // is owed, and nothing downstream of pickup would fire for it.
+    plans: (world.issues ?? []).map((i) => singlePlan(i.number)),
     tasks: [],
     agents: [],
     openEscalations: [],
@@ -312,7 +317,6 @@ function testConfig(over: Record<string, unknown> = {}) {
     // Pinned off: all four default **on** now, and this file is about the queue —
     // a planner ahead of each pickup would change every origin these assertions
     // read. Each has its own tests.
-    planning: { enabled: false } as never,
     assessment: { enabled: false } as never,
     assay: { enabled: false } as never,
     retrospective: { enabled: false } as never,
@@ -327,7 +331,9 @@ test('buildStateSnapshot ships the last cycle plan as upcoming', async () => {
     backend: new FakePtyBackend(),
   });
   system.connector.inject({ kind: 'new_issue', number: 7101, title: 'A' });
+  planAsSingle(system.store, 7101);
   system.connector.inject({ kind: 'new_issue', number: 7102, title: 'B' });
+  planAsSingle(system.store, 7102);
 
   const before = await buildStateSnapshot(system);
   assert.equal(before.upcoming, null, 'no plan before the first cycle');
@@ -363,7 +369,6 @@ test('a priority override holds after the next pulse and after a restart', async
       startPaused: true,
       // Pinned off, as in this file's other config: they default on, and each
       // would add a queue item in front of the two pickups under test.
-      planning: { enabled: false } as never,
       assessment: { enabled: false } as never,
       assay: { enabled: false } as never,
       retrospective: { enabled: false } as never,
@@ -371,7 +376,9 @@ test('a priority override holds after the next pulse and after a restart', async
 
   const system = buildSystem(cfg(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 8101, title: 'A' });
+  planAsSingle(system.store, 8101);
   system.connector.inject({ kind: 'new_issue', number: 8102, title: 'B' });
+  planAsSingle(system.store, 8102);
   await system.harness.runCycle('manual');
   // Natural order is by issue number: 8101 then 8102.
   let snap = await buildStateSnapshot(system);

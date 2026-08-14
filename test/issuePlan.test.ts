@@ -18,7 +18,7 @@ import { gitRepo } from './support/gitRepo.js';
 
 // -- the pure route ----------------------------------------------------------
 
-const enabled = { ...DEFAULT_PLANNING, enabled: true };
+const enabled = DEFAULT_PLANNING;
 
 function plan(status: Plan['status']): Plan {
   return {
@@ -73,47 +73,36 @@ function part(slug: string, seq: number, overrides: Partial<PlanPart> = {}): Pla
   };
 }
 
-test('the funnel is out entirely when planning is disabled', () => {
-  // Off must mean off: no plan row, no cooldown state and a spent attempt cap all
-  // route straight to `single`, so rule `issue-pickup` is un-narrowed and today's path holds.
-  for (const verdict of [{ kind: 'dispatch' }, { kind: 'cooldown' }, { kind: 'hold' }] as const) {
-    assert.deepEqual(resolvePlanRoute({ planning: { ...DEFAULT_PLANNING, enabled: false }, plan: null, verdict }), {
-      route: 'single',
-      failedOpen: false,
-    });
-  }
-});
-
 test('a persisted verdict decides the route; an unplanned issue awaits a planner', () => {
   const v = { kind: 'dispatch' } as const;
-  assert.deepEqual(resolvePlanRoute({ planning: enabled, plan: null, verdict: v }), {
+  assert.deepEqual(resolvePlanRoute({ plan: null, verdict: v }), {
     route: 'planning',
     planner: 'dispatch',
   });
-  assert.deepEqual(resolvePlanRoute({ planning: enabled, plan: null, verdict: { kind: 'cooldown' } }), {
+  assert.deepEqual(resolvePlanRoute({ plan: null, verdict: { kind: 'cooldown' } }), {
     route: 'planning',
     planner: 'cooldown',
   });
   // The single arm is a plan being delivered with no live parts — the shape, read
   // off the graph rather than off a status that could only ever be one or the other.
-  assert.deepEqual(resolvePlanRoute({ planning: enabled, plan: plan('active'), verdict: v, existingParts: 0 }), {
+  assert.deepEqual(resolvePlanRoute({ plan: plan('active'), verdict: v, existingParts: 0 }), {
     route: 'single',
     failedOpen: false,
   });
   for (const status of ['active', 'complete', 'abandoned'] as const) {
-    assert.deepEqual(resolvePlanRoute({ planning: enabled, plan: plan(status), verdict: v, existingParts: 2 }), {
+    assert.deepEqual(resolvePlanRoute({ plan: plan(status), verdict: v, existingParts: 2 }), {
       route: 'parts',
     });
   }
   // A row back in `planning` is a replan in flight — a planner is owed again.
-  assert.equal(resolvePlanRoute({ planning: enabled, plan: plan('planning'), verdict: v }).route, 'planning');
+  assert.equal(resolvePlanRoute({ plan: plan('planning'), verdict: v }).route, 'planning');
 });
 
 test('a planner that spends its attempt cap fails the issue open to single', () => {
   // Without this, narrowing rule `issue-pickup` turns any planner crash into a permanently
   // parked issue. `failedOpen` marks how it got there.
   for (const verdict of [{ kind: 'escalate', attempts: 3 }, { kind: 'hold' }] as const) {
-    assert.deepEqual(resolvePlanRoute({ planning: enabled, plan: null, verdict }), {
+    assert.deepEqual(resolvePlanRoute({ plan: null, verdict }), {
       route: 'single',
       failedOpen: true,
     });
@@ -201,10 +190,12 @@ test('rule `issue-pickup` fires only for a `single` plan, and is unchanged for o
     'the parts issue is left to the part scheduler; the single one is picked up as before',
   );
 
-  // Byte-for-byte: the action a `single` plan produces is what today's dispatcher
-  // produces for the same issue with no funnel at all.
-  const today = await new RuleDispatcher().decide(context([issue(7)]));
-  assert.deepEqual(planned.actions, today.actions);
+  // Byte-for-byte: what a `single` plan produces is the plain pickup, unchanged
+  // by the funnel having routed the issue there.
+  const plain = await new RuleDispatcher().decide(
+    context([issue(7)], { plans: [{ ...plan('active'), id: 'plan_7', originRef: 'issue:7' }] }),
+  );
+  assert.deepEqual(planned.actions, plain.actions);
 });
 
 test('a spent planner attempt cap lets pickup run as it does today', async () => {
@@ -246,10 +237,7 @@ function pickupCtx(extra: Partial<IssuePickupContext> = {}): IssuePickupContext 
 }
 
 test('the pickup verdict explains an issue parked in the funnel', () => {
-  // Funnel off: unchanged.
-  assert.equal(issuePickupStatus(issue(12), pickupCtx()).status, 'eligible');
-
-  const on = { planning: enabled };
+  const on = {};
   assert.deepEqual(issuePickupStatus(issue(12), pickupCtx(on)), {
     eligible: false,
     status: 'planning',
@@ -291,7 +279,7 @@ test('the pickup verdict explains an issue parked in the funnel', () => {
 
 // -- end to end --------------------------------------------------------------
 
-function systemWithPlanning(planningEnabled: boolean): System {
+function systemWithPlanning(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
     labelPrefix: '',
@@ -300,7 +288,6 @@ function systemWithPlanning(planningEnabled: boolean): System {
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     repoRoot: gitRepo(),
-    planning: { enabled: planningEnabled } as never,
     // Pinned off: all three default **on** now, and this file is about something
     // else — an extra agent in front of each issue would change what these
     // assertions see. Each has its own tests.
@@ -314,17 +301,8 @@ function systemWithPlanning(planningEnabled: boolean): System {
   return buildSystem(config, { backend: new FakePtyBackend(), errorMirror: () => {} });
 }
 
-test('an injected issue routes through the planner when the funnel is on, straight to pickup when off', async () => {
-  const off = systemWithPlanning(false);
-  off.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
-  await off.harness.runCycle('manual');
-  assert.deepEqual(
-    off.store.listTasks().map((t) => t.branch),
-    ['issue/1'],
-  );
-  off.store.close();
-
-  const on = systemWithPlanning(true);
+test('an injected issue routes through the planner, and its verdict hands the issue back to pickup', async () => {
+  const on = systemWithPlanning();
   on.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
   await on.harness.runCycle('manual');
   const planTask = on.store.listTasks()[0];

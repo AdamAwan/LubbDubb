@@ -97,8 +97,6 @@ export interface McpToolDeps {
   agents: AgentToolTarget;
   /** `planning.requireApproval` — see `ingestPlanDocument`. */
   requirePlanApproval?: boolean;
-  /** `validation.enabled` — see `ingestPlanDocument`. */
-  validationEnabled?: boolean;
   /**
    * The permission backstop (issue #130 phase B). Present when
    * `mcp.permissionEscalation` is on; the `request_permission` tool blocks on it.

@@ -1,8 +1,10 @@
 # 20 — Validation
 
-`src/validation/`. On by default (`validation.enabled: true`); off leaves the surface out entirely —
-no checks are ingested, the plan sheet draws no section, no goal is ever flagged, and behaviour is
-exactly what it is without validation.
+`src/validation/`. **Always on** — there is no switch. It spends no agent and gates nothing, so there
+was never much to weigh in turning it off, and the cost of the switch was a branch at every call site
+that read it plus a `validationEnabled` threaded through four layers to say "yes". A config file
+still setting `validation.enabled` is warned about and ignored
+([02](02-configuration.md#retired-keys)).
 
 A plan says what is wrong, what will be done, and what makes each part done. It does not say **how
 anyone checks the goal was met**. `verification` — one optional narrative field, "how anyone will
@@ -169,9 +171,9 @@ is the same problem:
 - **A config key**, so a deployment wanting a tmpfs or a per-tenant path can say so.
 
 Every launched agent is granted read access to the whole root via `permissions.additionalDirectories`
-for the life of the launch — whether or not `validation.enabled`, because a grant that came and went
-with a policy flag would make an agent's readable set depend on config it cannot see. That is a real
-widening, and it is the same one attachments already make.
+for the life of the launch, because a grant that came and went with a policy flag would make an
+agent's readable set depend on config it cannot see. That is a real widening, and it is the same one
+attachments already make.
 
 A resource declared `"provided": false` is the planner saying it needs something it cannot produce: a
 reference screenshot, an account, a sample file from a colleague. Ingestion files a `human_tasks` row
@@ -249,9 +251,9 @@ origin comes off the credential, so an agent working goal A cannot amend goal B 
 block, and two ways to say one thing that disagree about what an omission means is the drift the
 split exists to prevent.
 
-Two shapes are refused for reasons that are not the caller's fault, and say so plainly:
-`validation.enabled` off, and a goal with **no plan** — the checks hang off the plan row, so a
-deployment running without the planning funnel has nowhere to put one.
+One shape is refused for a reason that is not the caller's fault, and says so plainly: a goal with
+**no plan** — the checks hang off the plan row, so a goal whose planner has not written one yet has
+nowhere to put a check.
 
 ### The band
 

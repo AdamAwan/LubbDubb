@@ -14,14 +14,7 @@ import { deliveryHold } from '../delivery/delivery.js';
 import { containerPickupReason, isContainerIssue } from '../issueRelations.js';
 import { assayHold, assayOrigin, hasWorkStarted, isAssayed, type AssayPolicy } from '../intake/assay.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
-import {
-  DEFAULT_PLANNING,
-  issueOrigin,
-  planOrigin,
-  plannerVerdict,
-  resolvePlanRoute,
-  type PlanningPolicy,
-} from '../plans/planning.js';
+import { issueOrigin, planOrigin, plannerVerdict, resolvePlanRoute } from '../plans/planning.js';
 import { liveParts, planProgress } from '../plans/parts.js';
 import { isActiveTask } from '../tasks.js';
 
@@ -238,13 +231,6 @@ export interface IssuePickupContext {
   /** Every plan's parts, so a `parts` verdict can report progress rather than a flat string. */
   planParts?: PlanPart[];
   /**
-   * Omitted means the funnel is **out**, matching `RuleDispatcher`'s own fallback
-   * for an unnamed policy — the chip and the rule have to disagree about nothing,
-   * and the operator default (on, in `src/config.ts`) reaches both through the
-   * composition root rather than through either of these fallbacks.
-   */
-  planning?: PlanningPolicy;
-  /**
    * Standing `delivered` verdicts and the world transitions that may have ended
    * one — the same two lists rule `issue-pickup` gates on, so the chip predicts it. Absent =
    * nothing parked, which is every deployment until an issue is assessed.
@@ -315,7 +301,6 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
   const plan = ctx.plans?.find((p) => p.originRef === issueOrigin(issue.number)) ?? null;
   const parts = plan ? (ctx.planParts ?? []).filter((p) => p.planId === plan.id) : [];
   const planVerdict = resolvePlanRoute({
-    planning: ctx.planning ?? { ...DEFAULT_PLANNING, enabled: false },
     plan,
     verdict: plannerVerdict(issue.number, plan, ctx.now, ctx.recentDecisions, ctx.cooldown),
     existingParts: liveParts(parts).length,

@@ -11,23 +11,12 @@ import { join } from 'node:path';
 
 export interface ValidationPolicy {
   /**
-   * **On by default**, unlike `planning` and `assessment`, because it spends no
-   * agent and gates nothing: a planner is asked for checks it may decline to
-   * write, a person marks them off by hand, and the only thing that ever happens
-   * as a result is that closing a goal with checks outstanding says so.
-   *
-   * Off leaves the surface out entirely — no checks are ingested, the plan sheet
-   * draws no section, no goal is flagged at close-out, and behaviour is exactly
-   * what it is without validation.
-   */
-  enabled: boolean;
-  /**
    * The desktop channel: a second MCP socket the operator's *own* Claude Code
    * connects to, so a check that needs a browser and a login the fleet does not
    * have can be run at their keyboard and reported back through the same rows.
    *
-   * **Off by default**, unlike {@link ValidationPolicy.enabled}, and for the
-   * opposite reason: this one has a footprint outside the harness. It writes a
+   * **Off by default**, unlike the rest of validation, and for a reason none of
+   * the rest has: this one has a footprint outside the harness. It writes a
    * credential into the operator's home directory, installs a skill into their
    * Claude Code, and binds a socket at a fixed path. None of that should happen
    * because a deployment took the defaults.
@@ -76,7 +65,6 @@ export interface ValidationPolicy {
 }
 
 export const DEFAULT_VALIDATION: ValidationPolicy = {
-  enabled: true,
   desktop: false,
   desktopClaimMinutes: 60,
   desktopSkill: true,

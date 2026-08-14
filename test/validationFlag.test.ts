@@ -189,7 +189,6 @@ function plan(system: System, checks: Record<string, unknown>[]): string {
     doc,
     originRef: 'issue:12',
     title: 'Ship it',
-    validationEnabled: true,
   }).plan.id;
 }
 

@@ -249,7 +249,7 @@ async function buildTestApp(): Promise<{ system: System; app: FastifyInstance }>
     // resolvable — a CI checkout is detached and shallow, so `resolveCommit` throws,
     // the dispatch is audited as rejected, and the planner task never gets an agent.
     repoRoot: gitRepo(),
-    planning: { enabled: true, requireApproval: true } as never,
+    planning: { requireApproval: true } as never,
     heartbeatIntervalMs: 999_999,
   });
   const system = buildSystem(config, {

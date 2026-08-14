@@ -74,12 +74,11 @@ function build(overrides: Record<string, unknown> = {}): System {
 /** A live desktop server on throwaway paths — never the operator's real home directory. */
 async function desk(
   system: System,
-  over: Partial<{ claimMinutes: number; validationEnabled: boolean; now: () => string; socketPath: string }> = {},
+  over: Partial<{ claimMinutes: number; now: () => string; socketPath: string }> = {},
 ): Promise<{ server: McpDesktopServer; dir: string }> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-cred-'));
   const server = new McpDesktopServer({
     store: system.store,
-    validationEnabled: over.validationEnabled ?? true,
     claimMinutes: over.claimMinutes ?? 60,
     validationRoot: '/srv/validation',
     now: over.now ?? ((): string => new Date().toISOString()),
@@ -112,7 +111,6 @@ function planWith(system: System, checks: Record<string, unknown>[] = CHECKS): s
     doc: parsed.document,
     originRef: 'issue:12',
     title: 'Ship it',
-    validationEnabled: true,
   }).plan.id;
 }
 
@@ -193,7 +191,6 @@ test('two harnesses do not fight over the stable socket', async () => {
   const socketPath = join(dir, 'desktop.sock');
   const second = new McpDesktopServer({
     store: system.store,
-    validationEnabled: true,
     claimMinutes: 60,
     validationRoot: '/srv/validation',
     now: () => NOW,
@@ -251,28 +248,6 @@ test('validation_read hands back the whole plan, or one check’s full procedure
     system.store.close();
   }
 });
-
-test('with validation off the three tools say so rather than half-working', async () => {
-  const system = build();
-  planWith(system);
-  const { server } = await desk(system, { validationEnabled: false });
-  try {
-    for (const [name, args] of [
-      ['validation_read', { issue: 12 }],
-      ['validation_claim', { issue: 12, check: 'A' }],
-      ['validation_report', { result: 'passed', note: 'saw it' }],
-    ] as const) {
-      const refused = await call(server, 'c1', name, args);
-      assert.ok(refused.isError);
-      assert.match(refused.text, /Validation plans are off/);
-    }
-  } finally {
-    await server.close();
-    system.store.close();
-  }
-});
-
-// -- the claim ---------------------------------------------------------------
 
 test('one check is claimed at a time, and the refusal names what holds it', async () => {
   const system = build();
@@ -554,7 +529,7 @@ function runner(): RuleDispatcher {
     {},
     {},
     {},
-    { enabled: true, desktopClaimMinutes: 60 },
+    { desktopClaimMinutes: 60 },
     '/srv/validation',
   );
 }

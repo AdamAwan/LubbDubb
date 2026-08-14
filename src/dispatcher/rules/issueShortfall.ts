@@ -37,13 +37,12 @@ export function issueShortfall(s: StageContext): void {
     if (!issue || issue.state !== 'open') continue;
     if (issueWatchGateReason(issue, s.pickup) !== null) continue;
     const plan = s.plansByOrigin.get(issueOrigin(issueNumber)) ?? null;
-    // Both plan-shaped arms are performed by rules that only exist with the
-    // funnel on — a replan needs `issue-plan` to pick the `planning` plan up, and
-    // a follow-up part needs `plan-part` to schedule it. With planning off,
-    // accepting either would park the issue on a transition nothing consumes, so
-    // the arm degrades to the one that asks a person. Same fail-safe direction as
-    // the planner's and the assessor's.
-    const routable = plan !== null && s.planning.enabled;
+    // Both plan-shaped arms need a plan row to amend: a replan needs `issue-plan`
+    // to pick the `planning` plan up, and a follow-up part needs `plan-part` to
+    // schedule it. Without one, accepting either would park the issue on a
+    // transition nothing consumes, so the arm degrades to the one that asks a
+    // person. Same fail-safe direction as the planner's and the assessor's.
+    const routable = plan !== null;
     const arm = shortfallArm(shortfall.cause, routable);
     // Nothing was named beyond "the work is not finished", so there is nothing to
     // route. The verdict still stands and `resolveIssueConclusion` still reads it

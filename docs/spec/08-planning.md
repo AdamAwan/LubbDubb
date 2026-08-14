@@ -1,11 +1,14 @@
 # 08 — The planning funnel
 
-`src/plans/`. On by default (`planning.enabled: true`); off leaves the funnel out entirely:
-every issue routes straight to `single`, rule `issue-pickup` is un-narrowed, no planner is ever dispatched, and
-behaviour is exactly what it is without plans. Only the `rule` dispatcher implements it.
+`src/plans/`. **Always on** — there is no switch, and no deployment in which an issue reaches an
+implementation agent without a plan row saying how it is being worked. Only the `rule` dispatcher
+implements it.
 
-On, every watched open issue passes a planning agent before any implementation work — a real change in
-what the fleet spends its slots on, which is why it is opt-in where `mcp` is opt-out.
+Every watched open issue passes a planning agent before any implementation work. The funnel was a
+switch while it was new; keeping one meant every gate that read it was a branch to reason about and
+test, and the off arm — `issue-pickup` un-narrowed, no plan row anywhere — is not a configuration
+anything else in the harness is written for any more. A config file still setting `planning.enabled`
+is warned about and ignored ([02](02-configuration.md#retired-keys)).
 
 ## The four arms
 
@@ -207,7 +210,7 @@ about must not erase a narrative some other write put there.
 
 ## Ingestion
 
-`ingestPlanDocument(store, {doc, originRef, title, requireApproval, validationEnabled})` in
+`ingestPlanDocument(store, {doc, originRef, title, requireApproval})` in
 `src/plans/planIngest.ts` is
 the **one** place a plan document becomes plan rows, so the file path and the tool path cannot drift
 into two subtly different writes. `requireApproval` is `planning.requireApproval`, passed in by each
@@ -234,8 +237,8 @@ For an amendment:
 3. `store.upsertPlan`, then retire, then `store.upsertPlanParts` (which merges on slug and never
    deletes).
 4. `store.ingestValidation`, on the same terms one layer down: merged on the check id, letters
-   assigned once, and a check the amendment stopped declaring superseded rather than deleted. Gated on
-   `validationEnabled`, carried in exactly as `requireApproval` is and for its reason.
+   assigned once, and a check the amendment stopped declaring superseded rather than deleted. Written
+   whenever the document carries a validation block, which is the only condition there is.
    → [20](20-validation.md)
 
 An overridden `single` is reported rather than silently applied — asked of the parts
@@ -460,10 +463,9 @@ would be a question with no answer. That is also why `overriddenSingle` keys on 
 than on the status: an honoured single verdict is `active` too, and `awaiting_approval` is the verdict
 honoured and waiting, not overridden.
 
-**The default changes nothing for a deployment that has not turned the funnel on**, because
-`planning.enabled` is still `false` by default — this only decides what happens once an operator
-enables it, which is the honest place for the safe default: the thing being defaulted is whether a
-decomposition into N branches and N agents starts itself the moment a planner writes it.
+**What is being defaulted is only how a verdict lands**, not whether the funnel runs: whether a
+decomposition into N branches and N agents starts itself the moment a planner writes it, or waits for
+somebody to say yes.
 Both polarities are asserted, and separately: `test/planApproval.test.ts` asserts the default **does**
 write a proposal — on each arm, and that accepting it releases the arm's own status — while
 `test/planPart.test.ts` pins `requireApproval: false` and asserts that path writes none. So the two

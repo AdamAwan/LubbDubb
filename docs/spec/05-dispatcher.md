@@ -604,10 +604,10 @@ the inner one, so `assess → propose → replan → work → assess` is bounded
 counter already in the code. Nothing new counts it: a second counter claiming to bound the same loop
 would be two answers to one question.
 
-**With the funnel off, both plan-shaped arms degrade to arm C** rather than being taken. A replan
-needs rule `issue-plan` to pick the `planning` plan up and a follow-up needs rule `plan-part` to schedule it, so
-accepting either with planning disabled would park the issue on a transition nothing consumes — the
-same fail-safe direction as the planner's and the assessor's.
+**With no plan row, both plan-shaped arms degrade to arm C** rather than being taken. A replan needs
+a plan for rule `issue-plan` to pick up and a follow-up needs one for rule `plan-part` to append to, so
+accepting either without one would park the issue on a transition nothing consumes — the same
+fail-safe direction as the planner's and the assessor's.
 
 Rejecting acts on nothing and **leaves the row standing**: the verdict is still true, you declined to
 act on it, and the cockpit chip should keep saying so. That is the asymmetry with `refusePlan`, which
@@ -667,8 +667,7 @@ tracker and nothing is scheduled from what it says.
 
 ## `validate-check` — running a handed-over check
 
-`validation.enabled` (**on by default**) puts a code agent on one validation check the operator
-handed to the fleet. Everything about what a check _is_ is [20](20-validation.md); the dispatcher's
+`validate-check` puts a code agent on one validation check the operator handed to the fleet. Everything about what a check _is_ is [20](20-validation.md); the dispatcher's
 half is:
 
 - A **code** agent — a check runs things — on branch `validate/issue/<n>/<checkId>`, origin

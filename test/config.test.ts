@@ -47,9 +47,8 @@ test('autoSend is deep-merged: a partial override keeps the other defaults', () 
   assert.deepEqual(cfg.autoSend.allowedActions, ['reply_on_pr']);
 });
 
-test('the funnel, the assessor, the assay and the retrospective are on by default', () => {
+test('the assessor, the assay and the retrospective are on by default', () => {
   const cfg = loadConfig();
-  assert.equal(cfg.planning.enabled, true);
   assert.equal(cfg.assessment.enabled, true);
   assert.equal(cfg.assay.enabled, true);
   assert.equal(cfg.retrospective.enabled, true);
@@ -61,19 +60,16 @@ test('the funnel, the assessor, the assay and the retrospective are on by defaul
 
 test('the planning funnel is deep-merged when overridden', () => {
   assert.deepEqual(loadConfig().planning, {
-    enabled: true,
     maxConcurrentPartsPerIssue: 2,
-    // On by default (issue #109 phase 3): a deployment that never turns the
-    // funnel on sees no difference, since `enabled` gates the whole thing —
-    // but the moment it is turned on, a decomposition is put to a human first.
+    // On by default (issue #109 phase 3): a decomposition is put to a human
+    // before anything is scheduled from it.
     requireApproval: true,
     gitFetchIntervalMs: 60_000,
   });
-  const cfg = loadConfig({ planning: { enabled: false } as never });
-  assert.equal(cfg.planning.enabled, false);
-  assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 2, 'untouched fields keep their defaults');
-  // Turning the funnel on must not also change how a verdict lands: this default
-  // is carried over unmerged, the same as the other untouched fields above.
+  const cfg = loadConfig({ planning: { maxConcurrentPartsPerIssue: 4 } as never });
+  assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 4);
+  // Setting one field must not also change how a verdict lands: this default is
+  // carried over unmerged, the same as the other untouched fields above.
   assert.equal(cfg.planning.requireApproval, true);
   assert.equal(cfg.planning.gitFetchIntervalMs, 60_000);
 });
@@ -209,6 +205,46 @@ test('a config file naming a removed key is refused, with the key named', async 
 });
 
 /**
+ * Somebody has a file with `"planning": {"enabled": false}` in it. That key named
+ * a switch that no longer exists, so it can neither be honoured nor refused: the
+ * behaviour it asked for is gone, and refusing would take their harness down at
+ * boot over one stale line. It warns, drops the key, and boots.
+ */
+test('a config file setting a retired switch warns and boots rather than refusing', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  const warnings: string[] = [];
+  const realWarn = console.warn;
+  console.warn = (msg: string): void => void warnings.push(msg);
+  t.after(() => {
+    console.warn = realWarn;
+    process.chdir(cwd);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  writeFileSync(
+    join(dir, 'lubbdubb.config.json'),
+    JSON.stringify({
+      planning: { enabled: false, maxConcurrentPartsPerIssue: 4 },
+      validation: { enabled: false, desktopClaimMinutes: 30 },
+    }),
+    'utf8',
+  );
+
+  const cfg = loadDeploymentConfig();
+  assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 4, 'the rest of the block is still honoured');
+  assert.equal(cfg.validation.desktopClaimMinutes, 30);
+  // Dropped rather than merged into nothing: a value left on the policy object
+  // is one something later can read.
+  assert.ok(!Object.hasOwn(cfg.planning, 'enabled'));
+  assert.ok(!Object.hasOwn(cfg.validation, 'enabled'));
+  assert.equal(warnings.length, 2, 'and the operator hears about both, by name');
+  assert.ok(warnings.some((w) => w.includes('planning.enabled')));
+  assert.ok(warnings.some((w) => w.includes('validation.enabled')));
+});
+
+/**
  * The isolation the split exists for. The suite runs in a working copy of this
  * repo, so an operator's own `lubbdubb.config.json` sitting beside it would
  * otherwise merge into every test that builds a config — silently, and
@@ -225,17 +261,17 @@ test('loadConfig ignores a config file in the launch directory; loadDeploymentCo
 
   writeFileSync(
     join(dir, 'lubbdubb.config.json'),
-    JSON.stringify({ maxConcurrentAgents: 42, planning: { enabled: false } }),
+    JSON.stringify({ maxConcurrentAgents: 42, planning: { maxConcurrentPartsPerIssue: 5 } }),
     'utf8',
   );
 
   const pure = loadConfig();
   assert.equal(pure.maxConcurrentAgents, 3, 'the file is not a layer loadConfig knows about');
-  assert.equal(pure.planning.enabled, true);
+  assert.equal(pure.planning.maxConcurrentPartsPerIssue, 2);
 
   const deployed = loadDeploymentConfig();
   assert.equal(deployed.maxConcurrentAgents, 42);
-  assert.equal(deployed.planning.enabled, false);
+  assert.equal(deployed.planning.maxConcurrentPartsPerIssue, 5);
   assert.equal(deployed.planning.gitFetchIntervalMs, 60_000, 'a nested block from the file still deep-merges');
 });
 
@@ -255,11 +291,11 @@ test('an explicit nested override deep-merges over the config file, not replacin
 
   writeFileSync(
     join(dir, 'lubbdubb.config.json'),
-    JSON.stringify({ planning: { enabled: false, maxConcurrentPartsPerIssue: 7 } }),
+    JSON.stringify({ planning: { requireApproval: false, maxConcurrentPartsPerIssue: 7 } }),
     'utf8',
   );
 
-  const cfg = loadDeploymentConfig({ planning: { enabled: true } as never });
-  assert.equal(cfg.planning.enabled, true, 'the explicit layer wins the field it sets');
+  const cfg = loadDeploymentConfig({ planning: { requireApproval: true } as never });
+  assert.equal(cfg.planning.requireApproval, true, 'the explicit layer wins the field it sets');
   assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 7, "the file's other fields survive");
 });

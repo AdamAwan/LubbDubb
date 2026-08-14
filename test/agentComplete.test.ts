@@ -8,6 +8,7 @@ import { buildSystem } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { gitRepo } from './support/gitRepo.js';
+import { planAsSingle } from './support/plans.js';
 
 /**
  * Operator-declared done (`AgentManager.complete`). An agent reaches the clean
@@ -33,11 +34,11 @@ function build() {
     repoRoot: gitRepo(),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
-    // The funnel, the assessor and the assay are pinned off: they default **on**
-    // now, and this file is about something else — leaving them on would put an
-    // extra agent in front of every issue these assertions dispatch. Each has its
-    // own tests.
-    planning: { enabled: false } as never,
+    // The assessor and the assay are pinned off: they default **on**, and this
+    // file is about something else — leaving them on would put an extra agent in
+    // front of every issue these assertions dispatch. Each has its own tests.
+    // (The planning funnel cannot be pinned off; a goal is planned by writing the
+    // `single` verdict the planner would have written — `planAsSingle`.)
     assessment: { enabled: false } as never,
     assay: { enabled: false } as never,
     retrospective: { enabled: false } as never,
@@ -50,6 +51,7 @@ function build() {
 /** Dispatch a code agent for an injected issue; returns its task (whose worktree now exists). */
 async function codeAgent(sys: ReturnType<typeof build>['system'], issueNumber: number) {
   sys.connector.inject({ kind: 'new_issue', number: issueNumber, title: `Bug ${issueNumber}` });
+  planAsSingle(sys.store, issueNumber);
   await sys.harness.runCycle('manual');
   const task = sys.store.listTasks().find((t) => t.kind === 'code' && t.branch === `issue/${issueNumber}`);
   assert.ok(task, 'a code task should have been dispatched');

@@ -9,6 +9,7 @@ import {
 } from '../src/dispatcher/issuePickup.js';
 import type { IssuePickupPolicy, IssuePickupContext } from '../src/dispatcher/issuePickup.js';
 import type { Decision, Issue, IssueRun, PullRequest, Task } from '../src/types.js';
+import { singlePlan } from './support/plans.js';
 
 const SCHEME: IssuePickupPolicy = {
   priorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
@@ -235,6 +236,10 @@ function ctx(over: Partial<IssuePickupContext> = {}): IssuePickupContext {
     tasks: [],
     recentDecisions: [],
     openPrs: [],
+    // The planner has spoken and said one pull request. Without a plan row the
+    // issue is one a planner is owed, which is what the funnel — always on —
+    // narrows pickup away from; every case below is about what happens after.
+    plans: [singlePlan(1)],
     headroom: 2,
     paused: false,
     ...over,
