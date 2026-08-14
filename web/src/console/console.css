@@ -46,6 +46,13 @@
   font: 13px/1.45 var(--cn-ui);
   -webkit-font-smoothing: antialiased;
 }
+/* The console's reset for its own markup. It counts as (0,1,1) — stronger than a
+   single class — which the rest of this sheet is written against: `.cn-read`,
+   `.btn.ghost` and most of the console's controls take their chrome from a class
+   that only wins because it is more specific than this. Lowering it with
+   `:where(.cn)` restyles 66 of the 70 controls on the overview alone, so it stays
+   as it is; what has to clear it is the shared reference treatment, which does so
+   in `styles.css` rather than by being named here. */
 .cn button {
   font: inherit;
   color: inherit;
@@ -928,14 +935,31 @@ button.cn-grow {
    it is on. Beside the row's own control rather than inside it: a link nested in
    a button is a second destination for one click, which is why these sit here at
    all rather than in the sub-line where they read more naturally.
+   A ruled slot of its own, rather than references sitting loose at the end of the
+   row's own words: a token treatment answers "is this a way somewhere", and only a
+   position answers "where do I look for one". The rule is what separates what a
+   row *is* from what it *names*.
+
+   The slot is drawn whether or not the row has references to put in it — a fleet
+   row with no origin renders the group empty rather than dropping it — because a
+   rule that appears on some rows and not others reads as ragged rather than as a
+   column. `:empty` takes the line back off, so an empty slot is space, not a tick.
+
    Only the box is set; the references style themselves through `styles.css`. */
 .cn-refs {
   display: flex;
   align-items: center;
-  gap: 8px;
+  justify-content: flex-end;
+  gap: 6px;
   flex: none;
+  min-width: 92px;
+  padding-left: 10px;
+  border-left: 1px solid var(--cn-line);
   font: 12px var(--cn-mono);
   white-space: nowrap;
+}
+.cn-refs:empty {
+  border-left-color: transparent;
 }
 
 .cn-lamp {

@@ -166,14 +166,17 @@ function AgentRow({ agent, view, actions }: { agent: Agent; view: CockpitView; a
  * Shared by the fleet rows and nothing else so far, and a component rather than
  * two lines inline because "which refs does this row carry" is the decision that
  * keeps getting made differently on each surface that lists work.
+ *
+ * A dispatch with no origin still draws the group, empty: `cn-refs` is a ruled
+ * slot in the row, and a slot that disappears on the rows that have nothing to put
+ * in it leaves the list ragged rather than columned.
  */
-function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }): JSX.Element | null {
-  if (origin === null) return null;
-  const pr = /^pr:(\d+)/.exec(origin);
+function OnWhat({ origin, view }: { origin: string | null; view: CockpitView }): JSX.Element {
+  const pr = origin === null ? null : /^pr:(\d+)/.exec(origin);
   const goal = pr ? goalOfPr(view.state, Number(pr[1])) : null;
   return (
     <span className="cn-refs">
-      <Ref to={origin} label={pr ? `PR ${refLabel(origin)}` : refLabel(origin)} />
+      {origin !== null && <Ref to={origin} label={pr ? `PR ${refLabel(origin)}` : refLabel(origin)} />}
       {goal !== null && <Ref to={goal} />}
     </span>
   );
@@ -358,11 +361,11 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
                 </b>
                 <span className="cn-sub">{pr.branch}</span>
               </span>
-              {goal !== null && (
-                <span className="cn-refs">
+              <span className="cn-refs">
+                {goal !== null && (
                   <Ref to={goal} title={`Open the goal this pull request is delivering — ${refLabel(goal)}`} />
-                </span>
-              )}
+                )}
+              </span>
               <CiLadder pr={pr} />
               <CourtChip pr={pr} reminderMs={view.state.config.reviewReminderMs} now={view.now} />
               <AsyncButton

@@ -35,11 +35,16 @@
   --accent-fill: #33230d;
   --blue-line: #2a4a5e;
   --blue-line-2: #37607a;
-  /* The line under every reference, at rest. Its own token rather than a reuse of
-     `--blue-line-2` — that one means "tinted border of a blue-filled surface" and
-     is dim on `--panel`; this one has to be legible under 12px text without the
-     rows reading as ruled, and is the one value to argue about if it lands wrong. */
+  /* The three values a reference is drawn from: the edge of its box, the fill of
+     the one that stays in the cockpit, and its lettering. Their own tokens rather
+     than reuses of `--blue-line-2` / `--blue-fill` — those mean "tinted border and
+     ground of a blue-filled surface" and are set against `--panel`, where a
+     reference has to hold at 12px on four different grounds. These are the values
+     to argue about if the treatment lands wrong, and the ones `#print-sheet`
+     restates so paper does not get a dark-theme token on white. */
   --link-line: #4a7794;
+  --link-fill: #17242c;
+  --link-ink: #7fb8dc;
   --blue-fill: #17242c;
   --green-fill: #16240f;
   /* Ink on a light or warm fill: the ground colour, not near-black — a panel's
@@ -514,40 +519,83 @@ body {
   color: var(--muted);
 }
 
-/* External references (issues, PRs, branches) — underlined at rest, so a reference
-   is clickable at a glance and not only under the mouse. The line was here already
-   and was `transparent` until hover; a hue shift alone, on a token as short as
-   `#412` in a row that also carries coloured chips, is not a signal. */
-.ext-ref {
-  color: var(--blue);
+/* References, in one vocabulary of three marks:
+     - a **box** means this is a thing you can go to, not a number in a sentence;
+     - a **fill** inside that box means the destination is here, in the cockpit;
+     - an **arrow** means it leaves for the provider.
+   A ref standing on its own — a row's `cn-refs` group, a chip, a rack entry — gets
+   the box. A ref *inside prose* gets the arrow alone (`.ext-ref`, below): a boxed
+   token per mention turns a sentence lumpy, and prose refs all leave anyway, so
+   the arrow is the whole distinction there.
+
+   What this replaces is a 1px underline, dotted for out and solid for in. At 12px
+   mono on a row that already carries lamps, chips and hairline rules, that line
+   read as ruling rather than as an affordance, and the dotted/solid pair drew a
+   distinction nobody was given a legend for. Shape carries it now, so it survives
+   the print sheet and an operator who cannot separate the hues.
+
+   **Every selector here doubles its class**, which is the one thing to keep when
+   editing this block. `console.css` resets its own markup with `.cn button` and
+   `.cn a` — (0,1,1), stronger than a single class — and the console is where most
+   references are drawn. Under a single class the reset won: `border: 0` took the
+   box off a goal token and `color: inherit` took the colour off every reference in
+   the console, which is how a treatment can be correct in the stylesheet, pass its
+   test and still not be on screen anywhere an operator looks. The reset is not
+   wrong to be there — the rest of `console.css` is written against it, and lowering
+   it restyles 66 of the 70 controls on the overview — so the token layer, which is
+   a contract shared components rely on, carries the weight to clear it instead. */
+.ext-ref.ext-ref {
+  color: var(--link-ink);
   text-decoration: none;
-  border-bottom: 1px dotted var(--link-line);
 }
-.ext-ref:hover {
-  border-bottom-color: var(--blue);
+.ext-ref.ext-ref::before {
+  content: '↗';
+  margin-right: 3px;
+  font-size: 0.85em;
+  color: var(--muted);
 }
-/* A reference that stays in the cockpit — a goal's own page. It reads as a link
-   because it is one; what separates it from `.ext-ref` is the solid underline
-   against a dotted one, and the title on every reference says where it goes in
-   words. Colour is not the distinction: two link colours in one row is a legend
-   nobody is given. */
-.ref-goal {
-  border: 0;
-  background: none;
-  padding: 0;
-  font: inherit;
-  color: var(--blue);
+.ext-ref.ext-ref:hover {
+  color: var(--text);
+}
+.ext-ref.ext-ref:hover::before {
+  color: var(--link-ink);
+}
+/* The boxed forms. `.ref-goal` is the cockpit's own destination — a goal's page —
+   and is the only filled one: it is the richer place to land and the one no other
+   route from a row that merely mentions the goal reaches. `.ref-out` is the same
+   token, unfilled and dashed, for a ref that leaves; it composes onto `.ext-ref`,
+   so it keeps the arrow and adds the box. */
+.ref-goal.ref-goal,
+.ref-out.ref-out {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  border: 1px solid var(--link-line);
+  line-height: 1.5;
   cursor: pointer;
-  border-bottom: 1px solid var(--link-line);
 }
-.ref-goal:hover {
-  border-bottom-color: currentColor;
+.ref-goal.ref-goal {
+  font: inherit;
+  color: var(--link-ink);
+  background: var(--link-fill);
 }
-/* `.ref-goal` is a `<button>` stripped of border and background, so the UA ring it
-   would otherwise draw is largely gone — tabbing a row landed nowhere visible.
-   Shaped like `.pm-jump`'s, offset outward so the ring clears the underline. */
-.ext-ref:focus-visible,
-.ref-goal:focus-visible {
+.ref-out.ref-out {
+  border-style: dashed;
+  background: none;
+}
+.ref-goal.ref-goal:hover,
+.ref-out.ref-out:hover {
+  border-color: var(--blue);
+  color: var(--text);
+}
+.ref-out.ref-out:hover {
+  border-style: solid;
+}
+/* `.ref-goal` is a `<button>` reset to look like a token, so the UA ring it would
+   otherwise draw is gone — tabbing a row landed nowhere visible. Shaped like
+   `.pm-jump`'s, offset outward so the ring clears the box. */
+.ext-ref.ext-ref:focus-visible,
+.ref-goal.ref-goal:focus-visible {
   outline: 1px solid var(--blue);
   outline-offset: 2px;
 }
@@ -834,8 +882,12 @@ body {
     --cn-fg-faint: #7c8085;
     --cn-line: #dcdee0;
     --cn-line-soft: #eceef0;
-    /* A dark-theme line on white prints as a smudge under the text it belongs to. */
+    /* A dark-theme reference on white prints as a smudge: the edge disappears, the
+       fill goes muddy and the lettering drops under AA on paper. Restated for the
+       ground it is actually on. */
     --link-line: #7ba3bf;
+    --link-fill: #eaf1f7;
+    --link-ink: #1f5b80;
     background: #fff;
     color: #16181a;
     /* The bars and the plot lines *are* the reading. A browser dropping them to

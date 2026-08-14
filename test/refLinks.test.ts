@@ -196,12 +196,14 @@ test('a part row links the pull request that carries it', () => {
  * something instead of pointing at it.
  */
 /**
- * The affordance, which no render test can see: both link classes drew their
- * underline in `transparent` and coloured it only on `:hover`, so at rest a
- * reference and the label beside it differed by hue alone — the complaint. Read
- * the stylesheet, because that is where the resting state lives.
+ * The affordance, which no render test can see. It was a 1px underline — dotted
+ * for a ref that leaves, solid for one that stays — which on a row that already
+ * carries lamps, chips and hairline rules read as ruling rather than as a way
+ * somewhere. The vocabulary is three marks now: a box for a thing you can go to, a
+ * fill for a destination inside the cockpit, an arrow for one that leaves. Read the
+ * stylesheet, because that is where all three live.
  */
-test('a reference is underlined at rest, and shows a ring when it takes focus', () => {
+test('a reference is drawn as a token at rest, and shows a ring when it takes focus', () => {
   const css = readFileSync(fileURLToPath(new URL('../web/src/styles.css', import.meta.url)), 'utf8');
   const rule = (selector: string): string => {
     const at = css.indexOf(`\n${selector} {`);
@@ -209,16 +211,73 @@ test('a reference is underlined at rest, and shows a ring when it takes focus', 
     return css.slice(at, css.indexOf('}', at));
   };
 
-  for (const selector of ['.ext-ref', '.ref-goal']) {
-    const body = rule(selector);
-    assert.match(body, /border-bottom: 1px (dotted|solid) var\(--link-line\)/, `${selector} rests underlined`);
-    assert.doesNotMatch(body, /border-bottom:[^;]*transparent/, `${selector} must not hide its line until hover`);
-  }
-  assert.match(css, /--link-line:/, 'the resting line is one token, not a literal at each class');
+  // The box, and the fill that separates the two destinations. Shape rather than
+  // hue, so the distinction survives the print sheet and an operator who cannot
+  // separate the colours.
   assert.match(
     css,
-    /\.ext-ref:focus-visible,\s*\.ref-goal:focus-visible \{[^}]*outline: 1px solid var\(--blue\)/,
+    /\.ref-goal\.ref-goal,\s*\.ref-out\.ref-out \{[^}]*border: 1px solid var\(--link-line\)/,
+    'a standalone reference rests inside a box',
+  );
+  assert.match(
+    rule('.ref-goal.ref-goal'),
+    /background: var\(--link-fill\)/,
+    'the cockpit’s own destination is the filled one',
+  );
+  assert.match(
+    css,
+    /\n\.ref-out\.ref-out \{[^}]*border-style: dashed/,
+    'a reference that leaves is unfilled and dashed',
+  );
+
+  // The arrow, which is the whole treatment for a reference inside a sentence: a
+  // boxed token per mention turns prose lumpy, and prose refs all leave anyway.
+  assert.match(rule('.ext-ref.ext-ref::before'), /content: '↗'/, 'a reference that leaves says so in prose too');
+
+  // Every selector doubles its class, and this is why: `console.css` resets its own
+  // markup with `.cn button` / `.cn a`, which outranks a single class and is where
+  // most references are drawn. Under one class the reset stripped the box off a
+  // goal token and the colour off every reference in the console — a treatment
+  // correct in the stylesheet, green in this test, and on screen nowhere.
+  for (const single of [/\n\.ext-ref \{/, /\n\.ref-goal \{/, /\n\.ref-out \{/, /\n\.ref-goal,/]) {
+    assert.doesNotMatch(css, single, 'a single-class reference selector loses to the console’s own reset');
+  }
+
+  for (const token of ['--link-line:', '--link-fill:', '--link-ink:']) {
+    assert.equal(css.split(token).length - 1, 2, `${token} is one token, restated once for #print-sheet`);
+  }
+  assert.match(
+    css,
+    /\.ext-ref\.ext-ref:focus-visible,\s*\.ref-goal\.ref-goal:focus-visible \{[^}]*outline: 1px solid var\(--blue\)/,
     '`.ref-goal` is a reset <button> — without this, tab moves the ring nowhere visible',
+  );
+});
+
+/**
+ * The second half of the treatment, and the half a token style cannot do: a
+ * reference is findable by *position*, not only by looking like one. `cn-refs` is a
+ * ruled slot, and it is drawn on every row of a list — empty where a row names
+ * nothing — because a rule that comes and goes reads as ragged rather than as a
+ * column.
+ */
+test('the references slot is a column, drawn on rows that have nothing to put in it', () => {
+  const css = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
+  const at = css.indexOf('\n.cn-refs {');
+  const body = css.slice(at, css.indexOf('}', at));
+  assert.match(body, /border-left: 1px solid var\(--cn-line\)/, 'the slot is ruled off the row’s own words');
+  assert.match(body, /min-width:/, 'a slot with no width is not a column');
+  assert.match(css, /\.cn-refs:empty \{[^}]*border-left-color: transparent/, 'an empty slot is space, not a tick');
+
+  // The fleet row is the one that had a conditional group. A dispatch with no
+  // origin must still draw the slot.
+  const html = render(view());
+  const fleet = html.slice(html.indexOf('>Fleet'), html.indexOf('Goals in flight'));
+  const rows = fleet.match(/<div class="cn-row[ "]/g) ?? [];
+  assert.ok(rows.length > 0, 'the demo fixtures must carry fleet rows');
+  assert.equal(
+    (fleet.match(/class="cn-refs"/g) ?? []).length,
+    rows.length,
+    'every row in a work list draws the slot, whether or not it has references for it',
   );
 });
 
