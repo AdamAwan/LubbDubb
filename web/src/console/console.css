@@ -157,9 +157,10 @@
   flex-wrap: nowrap;
   flex: 0 0 auto;
 }
-/* `button`, where the mockup wrote `a`: navigating the console changes no URL —
-   there is no router — so an anchor would be a link to nowhere with a keyboard
-   behaviour it cannot honour. */
+/* `button`, where the mockup wrote `a`: a destination is a query string the
+   console writes itself (`cockpit/place.ts`), not a document the server has a
+   path for — so an anchor would have to duplicate the encoding to name an href,
+   and open-in-new-tab would hand out a URL built by the wrong half. */
 .cn-nav a,
 .cn-nav button,
 .cn-nav span {
