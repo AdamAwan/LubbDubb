@@ -554,6 +554,9 @@ export class Store {
   setAgentResumed(id: string, at: string | null): void {
     this.agents.setAgentResumed(id, at);
   }
+  countAgentResumeAttempt(id: string): number {
+    return this.agents.countAgentResumeAttempt(id);
+  }
   getAgent(id: string): Agent | null {
     return this.agents.getAgent(id);
   }

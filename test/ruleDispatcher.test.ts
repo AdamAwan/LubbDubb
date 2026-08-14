@@ -671,6 +671,7 @@ const runningAgent = (id: string) => ({
   note: null,
   notedAt: null,
   resumedAt: null,
+  resumeAttempts: 0,
 });
 const branchTask = (branch: string, originRef: string, agentId: string) => ({
   id: 't1',

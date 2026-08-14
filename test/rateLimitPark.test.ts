@@ -111,7 +111,7 @@ function recordingSpawner(): { spawner: Spawner; children: FakeChild[] } {
   return { spawner, children };
 }
 
-function streamConfig(dir: string): Config {
+function streamConfig(dir: string, patch: Record<string, unknown> = {}): Config {
   return loadConfig({
     labelPrefix: '',
     dbPath: ':memory:',
@@ -126,14 +126,15 @@ function streamConfig(dir: string): Config {
     assay: { enabled: false } as never,
     retrospective: { enabled: false } as never,
     auth: { enabled: false } as never,
+    ...patch,
   });
 }
 
 /** A stream-mode system with one dispatched agent, and the fake `claude` behind it. */
-async function fleet(issue = 701) {
+async function fleet(issue = 701, patch: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-limit-'));
   const { spawner, children } = recordingSpawner();
-  const system = buildSystem(streamConfig(dir), {
+  const system = buildSystem(streamConfig(dir, patch), {
     worktrees: new FakeWorktreeManager(),
     streamSpawner: spawner,
     errorMirror: () => {},
@@ -185,13 +186,32 @@ test('the process dying with the limit keeps the park rather than becoming a fai
   system.store.close();
 });
 
-test('an agent whose process dies with no limit is still a failure', async () => {
-  const { system, agent, child } = await fleet();
+test('an agent whose process dies with no limit is no park, and fails once resume is spent', async () => {
+  // `agentResumeAttempts: 0` is the pre-#318 crash path: a death mid-run settles the
+  // agent. Pinned here because this file is about the *park*, and what it has to show
+  // is that a crash with no limit reading behind it never becomes one — with the
+  // auto-resume that now stands between a crash and `failed` taken out of the way.
+  const { system, agent, child } = await fleet(701, { agentResumeAttempts: 0 });
   child.speak('Working.');
   child.exit(1);
 
   assert.equal(system.store.getAgent(agent.id)!.status, 'failed', 'the ordinary crash path is untouched');
   assert.equal(system.agents.limitedAgentIds().length, 0);
+  system.store.close();
+});
+
+test('a crash with no limit is a resume, not a park', async () => {
+  // The same death on the default deployment, where #318 re-attaches it: still not a
+  // park either way — the limit machinery is what must stay out of a plain crash.
+  const { system, agent, child } = await fleet();
+  child.speak('Working.');
+  child.exit(1);
+
+  const row = system.store.getAgent(agent.id)!;
+  assert.equal(row.status, 'running', 're-attached rather than settled');
+  assert.equal(row.resumeAttempts, 1);
+  assert.equal(system.agents.limitedAgentIds().length, 0, 'and nothing about it reads as a limit');
+  assert.equal(row.waitingReason, null, 'no park reason on a crash nobody rate-limited');
   system.store.close();
 });
 

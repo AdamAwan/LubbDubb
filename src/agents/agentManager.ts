@@ -1,6 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { basename, isAbsolute, join, relative } from 'node:path';
 import type { Store } from '../store/store.js';
 import type { ErrorRecorder } from '../errorLog.js';
@@ -118,6 +118,12 @@ interface AgentManagerOptions {
    * agents without a session id, so boot reconciliation falls back to interrupting.
    */
   resumable?: boolean;
+  /**
+   * `agentResumeAttempts` — how many times a live agent whose process dies mid-run
+   * is re-attached before it is settled as failed. Unset or 0 means a mid-run death
+   * is terminal, which is also what every unresumable runtime gets regardless.
+   */
+  resumeAttempts?: number;
   /**
    * Per-session path the PTY status-line capture writes its payload to,
    * exported to the spawned process as LUBBDUBB_STATUS_FILE. Only meaningful
@@ -1370,7 +1376,71 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       this.maybeReap(agentId, task.id);
     });
     session.on('done', () => this.handleTerminal(agentId, task.id, 'done'));
-    session.on('failed', () => this.handleTerminal(agentId, task.id, 'failed'));
+    session.on('failed', () => {
+      const attempts = this.autoResume(session, agentId, task);
+      if (attempts === null) return; // re-attached; the row and the task stay live
+      this.handleTerminal(
+        agentId,
+        task.id,
+        'failed',
+        'agent',
+        attempts > 0 ? `after ${attempts} automatic resume${attempts === 1 ? '' : 's'}` : undefined,
+      );
+    });
+  }
+
+  /**
+   * A live agent's process died mid-run: re-open its own conversation rather than
+   * settling the task (issue #318).
+   *
+   * The death of the process is not the death of the session. On a resumable
+   * runtime the transcript is on disk and `--resume` picks it up in the same
+   * worktree with everything the agent had learned — so failing the task throws
+   * away a run that is recoverable, and `requeue` (which exists, and starts over)
+   * is not the same thing. What makes that safe rather than a crash loop is the
+   * budget: {@link AgentManagerOptions.resumeAttempts}, counted on the agent row so
+   * it spans restarts, with the `N+1`th death settling as `failed` naming the count.
+   *
+   * Returns null when it re-attached, else how many resumes had been spent — which
+   * the caller puts in the error, so a loop reads as a loop instead of as a crash.
+   *
+   * **The teardown is the load-bearing part.** {@link resume} was written for boot,
+   * where the in-memory maps are empty; here they are not, and it neither drops the
+   * dead session (so its own `sessions.has` guard would return a silent no-op
+   * success) nor disposes what the dead process held — it would `set` straight over
+   * the spool key and the MCP token, leaking a spool directory and, worse, leaving a
+   * bearer credential bound and live with nothing left to revoke it.
+   */
+  private autoResume(session: AgentSession, agentId: string, task: Task): number | null {
+    const limit = this.opts.resumeAttempts ?? 0;
+    // A session that is no longer the agent's is one the harness already ended —
+    // a cockpit `kill` or an operator `complete`. Those are decided endings, and
+    // resurrecting one is precisely what the recovery path must not do.
+    if (limit <= 0 || !this.opts.resumable || this.sessions.get(agentId) !== session) return 0;
+    const agent = this.store.getAgent(agentId);
+    if (!agent?.sessionId) return agent?.resumeAttempts ?? 0;
+    // Nothing to resume *into*: the worktree is the session's cwd, and `claude`
+    // finds no transcript for the id once it is gone.
+    if (!existsSync(agent.cwd)) return agent.resumeAttempts;
+    if (agent.resumeAttempts >= limit) return agent.resumeAttempts;
+
+    // Counted before the relaunch, not after it: a resume that dies during
+    // `start()` must still have cost a life, or the budget never runs down.
+    const attempts = this.store.countAgentResumeAttempt(agentId);
+    this.disposeFileEvents(agentId); // fold the dead run's last writes in, then drop its dir
+    this.releaseMcp(agentId); // revoke the credential the dead process held
+    this.sessions.delete(agentId);
+    this.exitCodes.delete(agentId); // belongs to the launch that died, not the next one
+    this.exited.delete(agentId); // ...and this agent has not been reaped: it is coming back
+    debugLog('agent', `auto-resume agent=${agentId} attempt=${attempts}/${limit}`);
+    try {
+      // `resume` reads `waitingReason` off the row, so an agent that crashed while
+      // parked comes back parked on the same still-open escalation.
+      if (this.resume({ ...agent, resumeAttempts: attempts }, task)) return null;
+    } catch (err) {
+      this.store.appendTranscript(agentId, `\nResume after crash failed: ${(err as Error).message}\n`);
+    }
+    return attempts;
   }
 
   /**
@@ -1559,6 +1629,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     taskId: string,
     status: 'done' | 'failed',
     by: 'agent' | 'operator' = 'agent',
+    /** Appended to the recorded failure, e.g. how many automatic resumes were spent. */
+    failureNote?: string,
   ): void {
     this.drainFileEvents(agentId); // catch a report written just before finishing
     this.parked.delete(agentId);
@@ -1575,7 +1647,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       // from the Errors panel without digging through the transcript.
       this.opts.errors?.record({
         source: 'agent',
-        message: `Agent ${agentId} failed (task ${taskId})${exitCode !== undefined ? `, exit code ${exitCode}` : ''}`,
+        message:
+          `Agent ${agentId} failed (task ${taskId})` +
+          `${exitCode !== undefined ? `, exit code ${exitCode}` : ''}${failureNote ? `, ${failureNote}` : ''}`,
         detail: recentOutputExcerpt(this.store.getTranscript(agentId)) || null,
       });
     }
