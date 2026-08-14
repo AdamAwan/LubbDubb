@@ -209,6 +209,18 @@ export interface AzPolicyEvaluation {
   buildDefinitionName?: string;
   /** queued | running | approved | rejected | notApplicable | broken | null. */
   status: string | null;
+  /**
+   * `context.isExpired` on a build-validation evaluation: the last build ran
+   * against commits this branch has since moved past, so the evaluation is
+   * `queued` with **nothing in flight**. It never resolves until a build is
+   * queued for the current head.
+   *
+   * Carried because it is the one thing that distinguishes that state from a
+   * build genuinely running, which Azure reports with the same `status`. Dropping
+   * it at this boundary is what parked pull requests reading "CI is still
+   * running" indefinitely.
+   */
+  isExpired?: boolean;
   /** True when the policy blocks completion — i.e. a *required* check. */
   isBlocking: boolean;
   /** False when the policy is disabled; a disabled policy's evaluation is noise. */

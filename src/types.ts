@@ -60,6 +60,25 @@ export interface CiCheck {
    * cannot be lost by forgetting a line of config.
    */
   advisory?: boolean;
+  /**
+   * The check is `pending` with **nothing in flight**: its last run is stale
+   * against the branch's current commits, so it never resolves until somebody
+   * queues a new one. Absent on every check whose provider does not report the
+   * distinction, which reads as "pending, and possibly still running".
+   *
+   * Only ever set alongside `status: 'pending'` — an expired result that has
+   * already been superseded by a verdict is that verdict, not a wait. Azure's
+   * build-validation policies are the case it exists for: they go `queued` with
+   * `context.isExpired` after a push, indistinguishable from a running build in
+   * `status` alone, and a pull request whose only obstacle is one sat unclaimed
+   * by every rule while `prAttentionStatus` reported "CI is still running".
+   *
+   * `CiStatus` is untouched by it — the check is not failing and the PR may still
+   * be completable — so it moves exactly one thing: `classifyWatchedChecks`
+   * watches it without a `ci.checks` rule having to name it
+   * (`src\ci\ciPolicy.ts`).
+   */
+  expired?: boolean;
 }
 
 /** GitHub's `mergeable_state`, normalised to the values the harness reacts to. */

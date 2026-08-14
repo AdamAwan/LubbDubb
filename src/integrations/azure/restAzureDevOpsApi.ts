@@ -174,8 +174,11 @@ interface RawWorkItemUpdate {
 
 interface RawPolicyEvaluation {
   status?: string | null;
-  /** Build-validation evaluations carry the definition they ran here. */
-  context?: { buildDefinitionName?: string } | null;
+  /**
+   * Build-validation evaluations carry the definition they ran here — and
+   * whether that run is expired, i.e. superseded by later commits on the branch.
+   */
+  context?: { buildDefinitionName?: string; isExpired?: boolean } | null;
   configuration?: {
     isBlocking?: boolean;
     isEnabled?: boolean;
@@ -486,6 +489,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       typeName: e.configuration?.type?.displayName ?? '',
       buildDefinitionName: e.context?.buildDefinitionName,
       status: e.status ?? null,
+      isExpired: e.context?.isExpired,
       isBlocking: e.configuration?.isBlocking ?? false,
       isEnabled: e.configuration?.isEnabled ?? false,
     }));

@@ -164,6 +164,7 @@ Behaviour worth knowing:
 
   Both arms, and a missing resolution read, fail toward a thread staying **open** — an agent
   dispatched for a comment already dealt with is visible and cheap, where a dropped review is neither.
+
 - Auth is `GITHUB_TOKEN` only; `github.owner`/`github.repo` are required. See [02](02-configuration.md).
 
 ## The `azure` provider
@@ -197,6 +198,18 @@ Behaviour worth knowing:
   (non-blocking) policies too: such a check really does fail and an agent really can fix it, so the
   harness dispatches for it while `aggregatePolicyCiStatus` stays frozen on the required ones. A
   disabled policy is dropped whatever else is true of it.
+- **An expired build policy is `pending` with `expired: true`, not a status of its own.** A branch
+  that takes commits after its last policy build leaves the evaluation `status: "queued"` with
+  `context.isExpired` — no build is in flight and none starts on its own, so the policy never
+  resolves until one is queued. Azure reports a build that _is_ running with the same `status`, which
+  is why `checkStatusOf` cannot tell them apart and why the flag is read from `context` and carried
+  onto the check. It is not folded into `aggregatePolicyCiStatus` and it is not mapped to `failing`:
+  a build that has not run is not a broken one, and saying otherwise would claim the pull request
+  cannot merge and send an agent the CI-fix prompt to investigate a failure that does not exist. The
+  one thing it moves is `classifyWatchedChecks`, which watches an expired check with no `ci.checks`
+  rule naming it, so rule `pr-ci-gate` dispatches an agent to queue the build
+  ([07](07-pull-requests.md#ci-checks), [05](05-dispatcher.md#pr-ci-gate-a-check-that-waits-rather-than-fails)).
+  Before it, such a pull request read `elsewhere` / "CI is still running" indefinitely.
 - **Merging is Azure "complete PR"**, which needs the head commit. The provider caches each PR's
   `lastMergeSourceCommit` from the last snapshot, so a `merge_pr` only works on a PR seen in a prior
   cycle.
@@ -206,13 +219,13 @@ Behaviour worth knowing:
   open/closed), which is what drives the two state-based dispatcher knobs. `System.WorkItemType`
   rides alongside on `Issue.issueType` and drives the container gate.
 - **The hierarchy is read and hydrated, never written.** `Hierarchy-Reverse`/`-Forward` relations
-  give the parent and child *ids*; the ids are then read back as items through the batched
+  give the parent and child _ids_; the ids are then read back as items through the batched
   `getWorkItems`, because the item list is narrowed by tag/assignee so a parent Feature is usually not
   in it — and a bare id is not context an agent can use. Two batched reads per snapshot at most: the
   parents and children first, then the parents' **other** children, which is where siblings come from
   and which nothing in the first round names. A board with no hierarchy costs no request at all.
   `errorPolicy: 'omit'` keeps one unreadable id from faulting a batch, and an id that comes back
-  unread is dropped rather than rendered as a number — but an unreadable *parent* leaves
+  unread is dropped rather than rendered as a number — but an unreadable _parent_ leaves
   `Issue.parent` `undefined`, never `null`, so it cannot be mistaken for an orphan
   ([03](03-world-model.md#relations)). A hydration failure is recorded through `errors` and then
   dropped: the issues still ship without relations, because losing the annotation is cheaper than
@@ -232,7 +245,7 @@ Behaviour worth knowing:
 the pure `azureRefUrl`. `CompositeConnector.resolveRefUrl` routes to the first resolver.
 
 **A real provider that is not `RefResolvable` renders every ref as plain text, silently** — an
-unresolvable ref is *meant* to be omitted (that is the `fake` provider's correct behaviour), so
+unresolvable ref is _meant_ to be omitted (that is the `fake` provider's correct behaviour), so
 there is nothing to see but missing links. Both integrations of a provider implement it, and both
 answer every ref shape, because the composite routes to the first resolvable integration rather
 than to the one whose capability matches the ref.

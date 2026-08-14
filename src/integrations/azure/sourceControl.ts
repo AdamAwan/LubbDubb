@@ -346,6 +346,15 @@ export function aggregatePolicyCiStatus(evals: AzPolicyEvaluation[]): CiStatus {
  * A policy with *two* names carries the second as an alias, which a `ci.checks`
  * glob matches as readily as the name — the status policy's case, where the label
  * on the pull request page is not the key the check is stored under.
+ *
+ * An **expired** build-validation evaluation carries `expired: true` beside its
+ * `pending` status rather than a status of its own. It is genuinely pending —
+ * no verdict, and the moment a build is queued it becomes an ordinary one — so
+ * mapping it to `failing` would have {@link aggregatePolicyCiStatus} claim the
+ * pull request cannot merge over a build that has not run, and would send an
+ * agent the CI-fix prompt to investigate a failure that does not exist. What
+ * changes is one thing: `classifyWatchedChecks` watches it with no `ci.checks`
+ * rule naming it, so rule `pr-ci-gate` dispatches. → `src\ci\ciPolicy.ts`
  */
 export function listPolicyCiChecks(evals: AzPolicyEvaluation[], modes?: PolicyCheckModes): CiCheck[] {
   const checks: CiCheck[] = [];
@@ -360,12 +369,28 @@ export function listPolicyCiChecks(evals: AzPolicyEvaluation[], modes?: PolicyCh
     // would be a field that reads as meaningful and never is.
     if (e.displayAliases && e.displayAliases.length > 0) check.aliases = [...e.displayAliases];
     if (mode === 'advisory') check.advisory = true;
+    // An expired evaluation is a *pending* one that nothing is working on, so the
+    // flag rides beside the status rather than replacing it. Guarded on `pending`
+    // because the flag only says anything about a check that has not resolved:
+    // whatever `isExpired` reads beside an `approved` or `rejected` status, the
+    // verdict is in and there is nothing left to wait for.
+    if (status === 'pending' && e.isExpired) check.expired = true;
     checks.push(check);
   }
   return checks;
 }
 
-/** A policy evaluation status as a {@link CiCheck} status, or null for no signal. */
+/**
+ * A policy evaluation status as a {@link CiCheck} status, or null for no signal.
+ *
+ * `queued` and `running` collapse onto `pending` because the difference is about
+ * the build agent's queue, not about the pull request: both mean a verdict is
+ * coming and nothing is owed by anyone. Whether one is *actually* coming is a
+ * separate question the status cannot answer — `context.isExpired` does, and is
+ * carried as a flag on the check by {@link listPolicyCiChecks} rather than as a
+ * fourth status here, so every merge-facing reader of {@link CiStatus} is
+ * untouched by it.
+ */
 function checkStatusOf(status: string | null): CiCheck['status'] | null {
   if (status === 'rejected' || status === 'broken') return 'failing';
   if (status === 'queued' || status === 'running') return 'pending';
