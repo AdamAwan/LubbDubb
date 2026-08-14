@@ -257,7 +257,7 @@ export function AgentDrawer({
             </button>
           </div>
         </div>
-        {task && (task.originTitle || task.originSummary || task.dispatchReason) && (
+        {task && (task.originTitle || task.originSummary || task.dispatchReason || task.model) && (
           <div className="origin-context">
             {task.originTitle && (
               <div className="origin-title">
@@ -275,6 +275,13 @@ export function AgentDrawer({
             {task.dispatchReason && (
               <div className="dispatch-reason">
                 <span className="dispatch-reason-label">Dispatched because</span> {task.dispatchReason}
+              </div>
+            )}
+            {/* What this run was launched on — the `agentModels` profile its rule
+                resolved to at dispatch, so reading a run says what it cost on. */}
+            {task.model && (
+              <div className="dispatch-model">
+                <span className="dispatch-reason-label">Model</span> {task.model}
               </div>
             )}
           </div>

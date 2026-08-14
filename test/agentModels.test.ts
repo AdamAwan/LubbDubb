@@ -1,0 +1,167 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { loadConfig, type Config } from '../src/config.js';
+import { buildSystem } from '../src/system.js';
+import { buildClaudeArgs, buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
+import { resolveAgentModel } from '../src/agents/modelPolicy.js';
+import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { planAsSingle } from './support/plans.js';
+
+const PROFILES = { fast: 'haiku', standard: 'sonnet', deep: 'opus' };
+
+// -- resolution ---------------------------------------------------------------
+
+test('a rule with an assignment resolves to that profile', () => {
+  const models = { profiles: PROFILES, default: 'standard', byRule: { 'issue-plan': 'deep' } };
+  assert.equal(resolveAgentModel(models, 'issue-plan'), 'opus');
+});
+
+test('a rule with no assignment falls through to the default, as does a dispatch with no rule', () => {
+  const models = { profiles: PROFILES, default: 'standard', byRule: { 'issue-plan': 'deep' } };
+  assert.equal(resolveAgentModel(models, 'pr-ci-failing'), 'sonnet');
+  assert.equal(resolveAgentModel(models, null), 'sonnet');
+});
+
+test('no policy at all, or a policy with no default, resolves to no model', () => {
+  assert.equal(resolveAgentModel(undefined, 'issue-plan'), null);
+  // A block that assigns one rule and nothing else leaves every other kind of
+  // work exactly where it is today: no flag.
+  assert.equal(resolveAgentModel({ profiles: PROFILES, byRule: { 'issue-plan': 'deep' } }, 'pr-ci-failing'), null);
+});
+
+test('a rule mapped explicitly to the default profile resolves the same as falling through', () => {
+  const models = { profiles: PROFILES, default: 'standard', byRule: { 'issue-plan': 'standard' } };
+  assert.equal(resolveAgentModel(models, 'issue-plan'), 'sonnet');
+  assert.equal(resolveAgentModel(models, 'issue-assay'), 'sonnet');
+});
+
+// -- what the loader refuses --------------------------------------------------
+
+/** `loadConfig`, never `loadDeploymentConfig` — the latter reads this machine's own file. */
+function load(agentModels: Config['agentModels']) {
+  return loadConfig({ dbPath: ':memory:', agentModels });
+}
+
+test('config load rejects a default naming a profile that does not exist', () => {
+  assert.throws(() => load({ profiles: PROFILES, default: 'quick' }), /agentModels\.default names profile "quick"/);
+});
+
+test('config load rejects a byRule entry naming a profile that does not exist', () => {
+  assert.throws(
+    () => load({ profiles: PROFILES, byRule: { 'issue-plan': 'thorough' } }),
+    /agentModels\.byRule\."issue-plan" names profile "thorough"/,
+  );
+});
+
+test('config load rejects a byRule key that is not a dispatch rule id', () => {
+  // A typo'd id would silently never match, which is the whole failure class.
+  assert.throws(() => load({ profiles: PROFILES, byRule: { 'issue-planning': 'deep' } }), /"issue-planning"/);
+  // And an id that exists but can never appear on a dispatched action — the
+  // registry carries admission and terminal entries too.
+  assert.throws(() => load({ profiles: PROFILES, byRule: { 'cooldown-escalate': 'deep' } }), /"cooldown-escalate"/);
+});
+
+test('an omitted block loads, and a well-formed one survives the loader', () => {
+  assert.equal(load(undefined).agentModels, undefined);
+  const models = { profiles: PROFILES, default: 'standard', byRule: { 'issue-plan': 'deep' } };
+  assert.deepEqual(load(models).agentModels, models);
+});
+
+// -- argv ---------------------------------------------------------------------
+
+test('both launch builders omit --model entirely when no model is set', () => {
+  assert.equal(buildClaudeArgs({ permissionMode: 'acceptEdits' }).includes('--model'), false);
+  assert.equal(buildClaudeStreamArgs({ permissionMode: 'acceptEdits' }).includes('--model'), false);
+});
+
+test('both launch builders put --model before the operator args, which keep the last word', () => {
+  for (const build of [buildClaudeArgs, buildClaudeStreamArgs]) {
+    const args = build({ model: 'opus', extraArgs: ['--model', 'sonnet'] });
+    assert.equal(args.indexOf('--model') < args.lastIndexOf('--model'), true, 'ours is pushed first');
+    assert.equal(args[args.lastIndexOf('--model') + 1], 'sonnet', "the operator's claudeArgs still win");
+    assert.equal(args[args.indexOf('--model') + 1], 'opus');
+  }
+});
+
+// -- the whole wiring, at the buildSystem seam --------------------------------
+
+/** Fake claude stream-JSON process — enough to be spawned and read back. */
+class FakeChild extends EventEmitter implements StreamChild {
+  pid = 555;
+  private out = new EventEmitter();
+  stdout = { on: (ev: string, cb: (d: string) => void) => this.out.on(ev, cb) } as unknown as NodeJS.ReadableStream;
+  stderr = null;
+  stdin = { write: () => {}, end: () => {} } as unknown as NodeJS.WritableStream;
+  override on(event: 'exit', cb: (code: number | null) => void): this {
+    return super.on(event, cb);
+  }
+  kill(): void {
+    this.emit('exit', 143);
+  }
+}
+
+function streamConfig(agentModels: Config['agentModels']) {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-models-'));
+  return loadConfig({
+    labelPrefix: '',
+    dbPath: ':memory:',
+    agentMode: 'stream',
+    deskRoot: join(dir, 'desk'),
+    worktreeRoot: join(dir, 'wt'),
+    heartbeatIntervalMs: 999_999,
+    claudeArgs: ['--operator-arg'],
+    agentModels,
+    assessment: { enabled: false } as never,
+    assay: { enabled: false } as never,
+    retrospective: { enabled: false } as never,
+  });
+}
+
+/** Run one cycle that dispatches a code agent for issue `n`, and read the launch back. */
+async function dispatch(agentModels: Config['agentModels'], n: number) {
+  const launches: string[][] = [];
+  const spawner: Spawner = (_command, args) => {
+    launches.push(args);
+    return new FakeChild();
+  };
+  const system = buildSystem(streamConfig(agentModels), {
+    worktrees: new FakeWorktreeManager(),
+    streamSpawner: spawner,
+  });
+  system.connector.inject({ kind: 'new_issue', number: n, title: 'Add login' });
+  planAsSingle(system.store, n);
+  await system.harness.runCycle('manual');
+  const task = system.store.getTask(system.store.listAgentsByStatus('starting', 'running')[0]!.taskId)!;
+  system.store.close();
+  return { args: launches[0]!, task };
+}
+
+test('an assigned rule launches on its profile, and the task row records what it ran on', async () => {
+  const { args, task } = await dispatch(
+    { profiles: PROFILES, default: 'fast', byRule: { 'issue-pickup': 'deep' } },
+    931,
+  );
+  assert.equal(task.rule, 'issue-pickup');
+  assert.equal(task.model, 'opus', 'the resolved string is persisted, not the profile name');
+  // The regression guard for the system.ts wiring: the ArgsBuilder must forward
+  // the field, or the flag silently never ships.
+  assert.equal(args[args.indexOf('--model') + 1], 'opus');
+  assert.equal(args.indexOf('--model') < args.indexOf('--operator-arg'), true, 'before the operator args');
+});
+
+test('a rule with no assignment launches on the policy default', async () => {
+  const { args, task } = await dispatch({ profiles: PROFILES, default: 'fast', byRule: { 'issue-plan': 'deep' } }, 932);
+  assert.equal(task.model, 'haiku');
+  assert.equal(args[args.indexOf('--model') + 1], 'haiku');
+});
+
+test('with no policy configured, no launch carries --model and no task records one', async () => {
+  const { args, task } = await dispatch(undefined, 933);
+  assert.equal(task.model, null);
+  assert.equal(args.includes('--model'), false);
+});

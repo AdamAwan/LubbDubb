@@ -1225,6 +1225,14 @@ half-parse — and rendered separately so streaming text is still shown while it
 **No xterm remains anywhere.** The browser-side `@xterm/xterm` and `@xterm/addon-fit` went first, and
 `@xterm/headless` went with the server-side screen-scraping it existed to do.
 
+Under the origin block, the drawer shows **why this run was dispatched** and, when the operator
+configured a model policy, **what it was launched on** — the `agentModels` profile the run's rule
+resolved to at dispatch, read off `task.model` rather than re-derived from config, so what is shown is
+what argv actually carried (issue #321). Drawn quieter than the dispatch reason, because it is context
+rather than the thing the drawer was opened to read, and absent entirely on a deployment that assigns
+no models. The policy itself is visible in the running-config panel, under **Agents** —
+[02](02-configuration.md#model-assignment-by-rule).
+
 The drawer also shows the artifact chips, the **files changed** list from `files`, and offers respond,
 interrupt and kill.
 
