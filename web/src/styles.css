@@ -518,6 +518,23 @@ body {
 .ext-ref:hover {
   border-bottom-color: var(--blue);
 }
+/* A reference that stays in the cockpit — a goal's own page. It reads as a link
+   because it is one; what separates it from `.ext-ref` is the solid underline
+   against a dotted one, and the title on every reference says where it goes in
+   words. Colour is not the distinction: two link colours in one row is a legend
+   nobody is given. */
+.ref-goal {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: var(--blue);
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+}
+.ref-goal:hover {
+  border-bottom-color: currentColor;
+}
 .small {
   font-size: 12px;
 }

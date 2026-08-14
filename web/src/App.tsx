@@ -8,6 +8,8 @@ import { PlanModal } from './components/PlanModal.js';
 import { SettingsModal } from './components/SettingsModal.js';
 import { ReliabilityModal } from './components/ReliabilityModal.js';
 import { SpendModal } from './components/SpendModal.js';
+import { RefLinks } from './components/refs.js';
+import { goalIssue } from './view/goalPage.js';
 
 /**
  * What the cockpit shows when the harness refuses its credential. Worth a screen
@@ -57,6 +59,12 @@ function LockedOut({ error }: { error: UnauthorizedError }) {
  * it is read once at boot and cannot change while the harness is up, so it has
  * its own route and no place in the view-model. It rides in the settings modal,
  * which *is* the shell's, for the reason below.
+ *
+ * `RefLinks` wraps the lot, which is why it is here and not in the console: the
+ * drawer and the modals draw references too, and a provider inside `ConsoleRoot`
+ * would leave every one of them throwing. It carries the two things a reference
+ * needs and no surface should have to be handed — the provider's URLs, and the
+ * way onto a goal's page.
  *
  * `AgentDrawer` and the modals are here because each is *overlaid* rather than
  * placed: which one is open is cockpit state — the drawer's subscription is tied
@@ -111,7 +119,14 @@ export function App() {
   const openAgent = status.view.selectedAgent;
 
   return (
-    <>
+    <RefLinks
+      refUrls={state.refUrls}
+      openGoal={(ref) => status.actions.selectGoal(ref)}
+      // Whether a ref has a page, asked the one way the queue rail asks it: a
+      // link onto a goal the snapshot does not carry opens a surface that draws
+      // nothing, and the tracker's page is the honest destination for one.
+      hasGoal={(ref) => goalIssue(state, ref) !== undefined}
+    >
       <ConsoleRoot view={status.view} actions={status.actions} />
       {planModal}
       {openAgent && (
@@ -141,6 +156,6 @@ export function App() {
       )}
       {status.view.spendOpen && <SpendModal onClose={() => status.actions.openSpend(false)} />}
       {status.view.reliabilityOpen && <ReliabilityModal onClose={() => status.actions.openReliability(false)} />}
-    </>
+    </RefLinks>
   );
 }

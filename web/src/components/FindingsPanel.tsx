@@ -2,6 +2,7 @@ import type { Finding } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 import { linkify, refLink, relTime } from './util.js';
+import { Ref } from './refs.js';
 
 /** What each kind means, in the operator's terms — the chip's tooltip. */
 const KIND_HELP: Record<Finding['kind'], string> = {
@@ -138,7 +139,7 @@ function FindingCard({
             while doing something else, and "who, while working on what" is most of
             how an operator judges it. */}
         <span className="muted">
-          found while working {finding.originRef ? refLink(finding.originRef, refUrls) : 'an untracked task'}
+          found while working {finding.originRef ? <Ref to={finding.originRef} /> : 'an untracked task'}
         </span>
         {isOpen && (
           <span className="finding-actions">

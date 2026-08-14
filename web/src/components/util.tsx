@@ -1,9 +1,15 @@
 import type { JSX, ReactNode } from 'react';
 
-/** An external link that opens safely in a new tab. */
-function ExtLink({ href, children }: { href: string; children: ReactNode }): JSX.Element {
+/**
+ * An external link that opens safely in a new tab.
+ *
+ * @public shared with `refs.tsx`, which resolves a ref against several keys
+ * before it has a URL to hand over — one definition of `target`/`rel`, because a
+ * second one is how a link ends up handing the opener away.
+ */
+export function ExtLink({ href, title, children }: { href: string; title?: string; children: ReactNode }): JSX.Element {
   return (
-    <a className="ext-ref" href={href} target="_blank" rel="noopener noreferrer">
+    <a className="ext-ref" href={href} title={title} target="_blank" rel="noopener noreferrer">
       {children}
     </a>
   );

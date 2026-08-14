@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Agent, AgentFile, AgentFlag, Task } from '../types.js';
 import { api } from '../api.js';
-import { statusDot, linkify, refLink, agentUsageLine } from './util.js';
+import { statusDot, linkify, agentUsageLine } from './util.js';
+import { Ref } from './refs.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { FlagChips } from './FlagChips.js';
@@ -251,7 +252,13 @@ export function AgentDrawer({
           <div className="origin-context">
             {task.originTitle && (
               <div className="origin-title">
-                {task.originRef && <span className="chip small">{refLink(task.originRef, refUrls)}</span>}
+                {/* The way back to what this agent was sent at — a goal's page,
+                    or the pull request when no ticket owns the work. */}
+                {task.originRef && (
+                  <span className="chip small">
+                    <Ref to={task.originRef} />
+                  </span>
+                )}
                 <span>{task.originTitle}</span>
               </div>
             )}

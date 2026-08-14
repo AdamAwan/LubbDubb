@@ -11,6 +11,7 @@ import type {
 import { api } from '../api.js';
 import { Downloads, toCsv } from './Downloads.js';
 import { fmtTokens, fmtUsd, relTime } from './util.js';
+import { Ref } from './refs.js';
 
 /**
  * The spend breakdown: where the money on the cost gauges actually went.
@@ -554,7 +555,10 @@ function Goals({
           <tr key={g.originRef}>
             <td>
               <span className="nm">
-                <b>#{g.issueNumber}</b> {g.title ?? <i className="sp-gone">no longer in the world</i>}
+                <b>
+                  <Ref to={`issue:${g.issueNumber}`} />
+                </b>{' '}
+                {g.title ?? <i className="sp-gone">no longer in the world</i>}
               </span>
             </td>
             <td className="n b">{fmtUsd(g.costUsd)}</td>
@@ -721,7 +725,9 @@ function Runs({ runs, rankedFrom }: { runs: readonly SpendRun[]; rankedFrom: num
             <tr key={r.agentId}>
               <td>
                 <span className="nm">{r.title ?? r.originRef ?? r.agentId}</span>
-                <span className="bl mono">{r.originRef ?? 'no origin'}</span>
+                <span className="bl mono">
+                  {r.originRef === null ? 'no origin' : <Ref to={r.originRef} label={r.originRef} />}
+                </span>
               </td>
               <td>
                 <span className="sw" style={{ background: `var(--sp-${r.phase})` }} />

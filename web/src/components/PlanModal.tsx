@@ -19,6 +19,7 @@ import { renderMarkdown } from './markdown.js';
 import { PlanMap } from './PlanMap.js';
 import { ValidationDigest } from './ValidationSection.js';
 import { partOriginOf, planIssueOf, refLink, relTime } from './util.js';
+import { Ref } from './refs.js';
 
 /**
  * The plan sheet — the whole plan, in one scroll, as the record of what was agreed.
@@ -151,7 +152,10 @@ export function PlanModal({
     <div className="plan-modal-backdrop" onClick={onClose}>
       <div className="plan-sheet" onClick={(e) => e.stopPropagation()}>
         <div className="pm-head">
-          {issueNumber !== null && refLink(`#${issueNumber}`, refUrls)}
+          {/* The goal the plan hangs off, as the way onto its page: the sheet is
+              opened from several surfaces and is the one place a plan is read, so
+              a number here that led nowhere was the longest way back. */}
+          <Ref to={plan.originRef} />
           <span className="pm-title">{plan.title}</span>
           <span className={`chip small${plan.status === 'complete' ? ' ok' : decidable ? ' warn' : ''}`}>
             {plan.discussing ? 'discussing' : plan.status.replace(/_/g, ' ')}
@@ -341,7 +345,6 @@ export function PlanModal({
                           part={part}
                           seq={idx + 1}
                           queue={queued.get(originOf(part.slug))}
-                          refUrls={refUrls}
                           focused={part.slug === focused}
                           pin={pins[part.slug]}
                           pinnable={decidable !== null}
@@ -794,7 +797,6 @@ function PartBlock({
   part,
   seq,
   queue,
-  refUrls,
   focused,
   pin,
   pinnable,
@@ -804,7 +806,6 @@ function PartBlock({
   part: PlanPartView;
   seq: number;
   queue: QueueItem | undefined;
-  refUrls: Record<string, string>;
   focused: boolean;
   pin: Pin | undefined;
   /** Pins are offered only while there is a verdict for them to ride on. */
@@ -836,7 +837,11 @@ function PartBlock({
               {part.size.toUpperCase()}
             </span>
           )}
-          {part.prNumber !== null && <span className="chip small">{refLink(`#${part.prNumber}`, refUrls)}</span>}
+          {part.prNumber !== null && (
+            <span className="chip small">
+              <Ref to={`pr:${part.prNumber}`} />
+            </span>
+          )}
           {queue && (
             <span
               className={`chip small${

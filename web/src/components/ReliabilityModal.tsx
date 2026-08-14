@@ -3,6 +3,7 @@ import type { CiHealth, CiSubject, ReliabilityInsights, RunOutcomeTotal, RunPhas
 import { api } from '../api.js';
 import { Downloads, toCsv } from './Downloads.js';
 import { fmtUsd, relTime } from './util.js';
+import { Ref } from './refs.js';
 
 /**
  * The reliability breakdown: whether the work finished, and whether it went green.
@@ -576,7 +577,7 @@ function Flakiest({ ci }: { ci: CiHealth }): JSX.Element {
           {ci.flakiest.map((s: CiSubject) => (
             <tr key={s.ref}>
               <td>
-                <span className="nm">{s.prNumber === null ? s.ref : `#${s.prNumber}`}</span>
+                <span className="nm">{s.prNumber === null ? <Ref to={s.ref} /> : <Ref to={`pr:${s.prNumber}`} />}</span>
                 <span className="bl mono">{s.ref}</span>
               </td>
               <td className="n b">{s.reds}</td>
@@ -636,7 +637,9 @@ function Repeats({
             <tr key={r.originRef}>
               <td>
                 <span className="nm">{r.title ?? r.originRef}</span>
-                <span className="bl mono">{r.originRef}</span>
+                <span className="bl mono">
+                  <Ref to={r.originRef} label={r.originRef} />
+                </span>
               </td>
               <td className="n b">{r.runs}</td>
               <td className="n">{r.lost || '—'}</td>
