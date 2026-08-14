@@ -167,6 +167,13 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
   You should rarely need it: `agentAllowedTools` plus the permission backstop complete a task
   unattended under the default `acceptEdits`.
 
+### Cockpit
+
+- **A new piece of "where am I" state goes on `Place` (`web/src/cockpit/place.ts`), never a
+  `useState` in `useCockpit`.** The cockpit's place is the query string, and a surface held outside it
+  compiles, renders and works — until the back button steps over it, or a reload drops it. Both are
+  silent, and neither is a thing `npm run check` can see. → [17](docs/spec/17-cockpit.md#the-address-bar)
+
 ### Git and worktrees
 
 - **`WorktreeManager.ensure(branch, base)` is reuse-first, so an existing worktree or local branch

@@ -4,7 +4,8 @@ import type { WsClient } from '../api.js';
 import type { AppState } from '../types.js';
 import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
-import type { CockpitActions, ConsolePanel, ConsoleTab } from './actions.js';
+import { useNavigation } from './useNavigation.js';
+import type { CockpitActions } from './actions.js';
 
 /**
  * How long a refetch waits so a burst of live signals collapses into one request.
@@ -29,16 +30,10 @@ export function useCockpit(): CockpitStatus {
   const [state, setState] = useState<AppState | null>(null);
   const [denied, setDenied] = useState<UnauthorizedError | null>(null);
   const [connected, setConnected] = useState(false);
-  const [selected, setSelected] = useState<string | null>(null);
-  const [viewingPlan, setViewingPlan] = useState<string | null>(null);
-  const [viewingRetro, setViewingRetro] = useState<string | null>(null);
-  const [viewingScratchpad, setViewingScratchpad] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [spendOpen, setSpendOpen] = useState(false);
-  const [reliabilityOpen, setReliabilityOpen] = useState(false);
-  const [selectedGoal, setSelectedGoal] = useState<string | null>(null);
-  const [consolePanel, setConsolePanel] = useState<ConsolePanel>(null);
-  const [tab, setTab] = useState<ConsoleTab>('overview');
+  // Where the operator is, held in the address bar rather than in a state each —
+  // see `useNavigation`. Everything below reads off it; nothing else moves it.
+  const { place, go } = useNavigation();
+  const selected = place.agent;
   // Live per-agent output accumulated from WS deltas (only for subscribed agents).
   const liveOutput = useRef<Map<string, string>>(new Map());
   // Last output line per agent, fed by compact `agent:tail` frames — used for
@@ -151,7 +146,7 @@ export function useCockpit(): CockpitStatus {
       refresh,
       pulse: () => then(api.pulse()),
       clearErrors: () => then(api.clearErrors()),
-      select: (agentId) => setSelected(agentId),
+      select: (agentId) => go({ agent: agentId }),
 
       killAgent: (id) => then(api.killAgent(id)),
       completeAgent: (id) => then(api.completeAgent(id)),
@@ -172,15 +167,15 @@ export function useCockpit(): CockpitStatus {
       abandonPlan: (planId) => then(api.abandonPlan(planId)),
       setAcceptance: (planId, slug, criterion, met) => then(api.setAcceptance(planId, slug, criterion, met)),
       setValidation: (issueNumber, checkId, act) => then(api.setValidation(issueNumber, checkId, act)),
-      viewPlan: (planId) => setViewingPlan(planId),
-      viewRetro: (issueRef) => setViewingRetro(issueRef),
-      viewScratchpad: (issueRef) => setViewingScratchpad(issueRef),
-      openSettings: (open) => setSettingsOpen(open),
-      openSpend: (open) => setSpendOpen(open),
-      openReliability: (open) => setReliabilityOpen(open),
-      selectGoal: (ref) => setSelectedGoal(ref),
-      openPanel: (panel) => setConsolePanel(panel),
-      openTab: (next) => setTab(next),
+      viewPlan: (planId) => go({ plan: planId }),
+      viewRetro: (issueRef) => go({ retro: issueRef }),
+      viewScratchpad: (issueRef) => go({ scratchpad: issueRef }),
+      openSettings: (open) => go({ settings: open }),
+      openSpend: (open) => go({ spend: open }),
+      openReliability: (open) => go({ reliability: open }),
+      selectGoal: (ref) => go({ goal: ref }),
+      openPanel: (panel) => go({ panel }),
+      openTab: (next) => go({ tab: next }),
       discussPlan: (planId) => then(api.discussPlan(planId)),
       endPlanDiscussion: (planId) => then(api.endPlanDiscussion(planId)),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
@@ -204,7 +199,7 @@ export function useCockpit(): CockpitStatus {
       // because it must not be pulled along by the state poll.
       fetchWorkSubtree: (ref) => api.getWorkSubtree(ref),
     };
-  }, [refresh]);
+  }, [refresh, go]);
 
   if (denied) return { kind: 'denied', error: denied };
   if (!state) return { kind: 'loading' };
@@ -221,15 +216,15 @@ export function useCockpit(): CockpitStatus {
       liveOutput: liveOutput.current,
       tails: tails.current,
       lastPulseAt: lastPulse.current,
-      viewingPlan,
-      viewingRetro,
-      viewingScratchpad,
-      settingsOpen,
-      spendOpen,
-      reliabilityOpen,
-      selectedGoal,
-      consolePanel,
-      tab,
+      viewingPlan: place.plan,
+      viewingRetro: place.retro,
+      viewingScratchpad: place.scratchpad,
+      settingsOpen: place.settings,
+      spendOpen: place.spend,
+      reliabilityOpen: place.reliability,
+      selectedGoal: place.goal,
+      consolePanel: place.panel,
+      tab: place.tab,
     }),
   };
 }

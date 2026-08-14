@@ -16,11 +16,11 @@ and that `src/wire.ts` is the only server module the SPA names at all. See
 
 The cockpit is three layers, split so that how it _looks_ stays separable from how it behaves:
 
-| Layer        | Path               | Job                                                                                            |
-| ------------ | ------------------ | ---------------------------------------------------------------------------------------------- |
-| Wiring       | `web/src/cockpit/` | fetch, websocket, coalesced refresh, which drawer is open, the bound `CockpitActions`. No JSX. |
-| Derivation   | `web/src/view/`    | the pure `buildViewModel` → `CockpitView`, and the derivations it folds. No React.             |
-| Presentation | `web/src/console/` | the console — the whole drawn surface, rooted at `ConsoleRoot`.                                |
+| Layer        | Path               | Job                                                                                                                        |
+| ------------ | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Wiring       | `web/src/cockpit/` | fetch, websocket, coalesced refresh, the [place in the address bar](#the-address-bar), the bound `CockpitActions`. No JSX. |
+| Derivation   | `web/src/view/`    | the pure `buildViewModel` → `CockpitView`, and the derivations it folds. No React.                                         |
+| Presentation | `web/src/console/` | the console — the whole drawn surface, rooted at `ConsoleRoot`.                                                            |
 
 `App.tsx` is only the shell: acquire state, hand the console a finished `CockpitView`. **The console
 owns its whole layout.** It is given the view-model and renders whatever tree it likes rather than
@@ -173,6 +173,55 @@ scrolling plan is the failure this layout is a reaction to.
 
 **Document order is reading order.** No card carries a CSS `order`; a section moved in `Overview.tsx`
 or `GoalPage.tsx` moves on screen, which is the point.
+
+## The address bar
+
+Where the operator is lives in the URL's **query string**, so the browser's back button, a reload, a
+bookmark and a second tab all mean what they say. `web/src/cockpit/place.ts` holds the whole of it:
+one `Place` record, a `readPlace` that parses one out of a query string and a `placeQuery` that
+writes one back.
+
+`Place` is every piece of state that answers _what am I looking at_ — the tab, the selected goal, the
+panel in front, the open drawer, the plan sheet, the retrospective, the notepad, and the three top-bar
+modals — and nothing that answers _what is true_. It replaced ten independent `useState`s in
+`useCockpit`, and one record rather than ten is the load-bearing part: a drawer opened over a goal
+page on the backlog tab is **one** place, and stepping back out of it has to restore all three at
+once.
+
+| Parameter                            | Carries                                              |
+| ------------------------------------ | ---------------------------------------------------- |
+| `tab`                                | `backlog` / `work`; the overview is the absent value |
+| `goal`                               | the open goal page, as `issue:<n>`                   |
+| `panel`                              | `findings` / `faults` / `output` / `launch`          |
+| `ask`                                | the queue row a `{ ask }` panel is showing           |
+| `agent`                              | the open drawer's agent                              |
+| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad       |
+| `settings` / `spend` / `reliability` | the three top-bar modals                             |
+
+**The query string rather than the path**, for three reasons that are one reason — nothing else has to
+agree with the console about where it is served from. The token arrives in the fragment and is
+stripped to `pathname + search` ([tokens](#tokens)), the demo is published wherever it is published,
+and the harness's SPA fallback answers every non-`/api` path with `index.html`.
+
+**Defaults are omitted**, so the overview with nothing open is a bare URL and each place has exactly
+one spelling. That is what makes the comparison in `useNavigation` sound: it pushes nothing when the
+query is unchanged, and two spellings of one place would be a history entry that goes nowhere —
+clicking the tab you are on is not somewhere to go back from.
+
+**A move made in one tick is one history entry.** Several surfaces navigate twice on a single click:
+the nav clears the goal and then sets the tab, an ask closes its panel and then opens the goal page.
+Two entries there would put a state nobody was ever on between the operator and the back button, so
+`useNavigation` applies each patch to a ref immediately — the second `go` of a tick sees the first —
+and pushes once, in a microtask, from wherever the place ended up.
+
+**Every value is validated back into its type on the way in**, because this is the one input to the
+cockpit an operator can type. An unrecognised tab or panel is not an error worth a screen; it is a
+place that does not exist, and the answer to that is the overview. The entry the cockpit boots on is
+normalised with `replaceState` for the same reason the push is skipped: a URL saying something the
+console does not would make the first real move look like a change when it is not.
+
+`test/cockpitPlace.test.ts` pins the codec — the round trip for every destination, the bare URL, the
+single spelling, an unknown value reading as the overview, and an ask id surviving encoding.
 
 ## The queue rail — "Needs you"
 
@@ -372,7 +421,7 @@ claim something is waiting while offering no way to answer it.
 `ValidationSection` (`web/src/components/`) — how anyone checks the _goal_ was met, and what anybody
 concluded from running each check. **The plan defines the checks; the goal manages them**, and those
 are two jobs. The plan sheet writes them and amends them and still renders them
-([the digest](#the-validation-digest)); running one is work against the *delivered* goal, done days
+([the digest](#the-validation-digest)); running one is work against the _delivered_ goal, done days
 after the plan was approved and usually by somebody with no reason to open it. A control reachable
 only from inside the document that proposed it is a control nobody finds.
 
@@ -1442,7 +1491,7 @@ structurally — a missing arm is a compile error at the call site, not dead wei
 
 ## Tests
 
-Seven files, split on what they can see:
+Eight files, split on what they can see:
 
 - `test/cockpitViewModel.test.ts` — the derivations `buildViewModel` folds, untestable while they lived
   inside a component.
@@ -1450,6 +1499,8 @@ Seven files, split on what they can see:
 - `test/goalPage.test.ts` — the page's assembly: which parts, PRs, agents and decisions belong to a
   goal, and the prefix trap `issue:14` versus `issue:1`.
 - `test/console.test.ts` — the structural rules and the renders, against the demo fixtures.
+- `test/cockpitPlace.test.ts` — the [address bar](#the-address-bar)'s codec: the round trip, the one
+  spelling per place, and what a hand-typed URL that names nothing reads as.
 - `test/insightExport.test.ts` — the [exports](#exporting-a-reading): the CSV quoting, the sections and
   their order, that figures leave unrounded, and that each caveat the panel speaks leaves as a row.
 - `test/markdown.test.ts` and `test/richText.test.ts` — the two prose renderers, and the line between
