@@ -26,6 +26,7 @@ import { StatusFileRateLimits } from './agents/statusLine.js';
 import { FileEventsSpool } from './agents/fileEvents.js';
 import { AttachmentFiles } from './jobs/attachmentFiles.js';
 import type { SessionFactory } from './agents/session.js';
+import { killProcessTree, type ProcessReaper } from './agents/processTree.js';
 import { EscalationInbox } from './escalation/escalationInbox.js';
 import { ProposalDesk } from './proposals/proposalDesk.js';
 import { StackLandingDesk } from './stacks/landingDesk.js';
@@ -147,6 +148,12 @@ interface BuildOptions {
   /** Inject a fake process spawner (tests) for the stream-JSON runtime. */
   streamSpawner?: Spawner;
   /**
+   * Override how a killed agent's process *subtree* is taken down (tests inject a
+   * recorder). Defaulted below, and defaulted to a no-op whenever a fake transport
+   * is injected — see the wiring for why that pairing is not optional.
+   */
+  reapProcessTree?: ProcessReaper;
+  /**
    * Override the git observer plan reconciliation reads branch reality through
    * (tests inject `FakeGitObserver`). Injecting one also turns the reconciler's
    * `git fetch` off — a scripted observer has no remote to refresh.
@@ -202,6 +209,21 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // that no chrome filter can undo), and an active exit-on-done — the REPL never
   // ends a session by itself, so without it the process and its worktree leak (#66).
   const sessionRoot = config.sessionTranscriptRoot ?? defaultSessionRoot();
+  // How a stopped agent's *descendants* die with it (issue: a Bash-tool shell
+  // outliving its agent pins the worktree cwd, and Windows then refuses rmdir on
+  // it forever). See {@link ProcessReaper}.
+  //
+  // **The real reaper is wired only alongside the real transports.** It signals
+  // whatever pid it is handed, and an injected `backend`/`streamSpawner` scripts a
+  // process whose pid belongs to something else entirely on the host — so with a
+  // fake in place the default must be, and is, a no-op. A test that wants to
+  // observe the reap injects its own recorder.
+  const realTransport = opts.backend === undefined && opts.streamSpawner === undefined;
+  const reapTree: ProcessReaper =
+    opts.reapProcessTree ??
+    (realTransport
+      ? (pid) => killProcessTree(pid, (message) => errors.record({ source: 'agent', message }))
+      : () => {});
   const ptyFactory = (claudeTui: boolean): SessionFactory => {
     return (spec) =>
       new PtySession(backend, {
@@ -222,9 +244,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         // Real-TUI only: raw/mock sessions are line-oriented and legitimately
         // silent between steps, so idle means nothing there.
         idleWaitMs: claudeTui ? config.agentIdleWaitMs : 0,
+        reap: reapTree,
       });
   };
-  const streamFactory: SessionFactory = (spec) => new StreamJsonSession(spec, opts.streamSpawner);
+  const streamFactory: SessionFactory = (spec) => new StreamJsonSession(spec, opts.streamSpawner, reapTree);
 
   // Blueprint attachments (issue #249): one canonical file per image under the
   // config'd root, outside every worktree. Every launch is granted read access to

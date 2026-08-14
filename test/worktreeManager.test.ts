@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -183,6 +183,38 @@ test('a registered worktree standing on the target path is never reclaimed', asy
   await assert.rejects(() => wt.ensure('feature-x'), /already exists/);
   assert.ok(existsSync(join(live, 'work-in-progress.txt')), "a live agent's checkout must survive");
   assert.equal(await wt.findExisting('feature/x'), live);
+});
+
+test('a reclaim held up by a live process says so, rather than reporting an errno', async (t) => {
+  // Windows only, and not as a convenience: the failure *is* a Windows rule — a
+  // directory that is a live process's cwd cannot be removed. POSIX allows it, so
+  // there is nothing here to reproduce, and a skip is the honest result.
+  if (process.platform !== 'win32') return t.skip('EBUSY on a live process cwd is a Windows rule');
+
+  const repo = initRepo();
+  const root = join(repo, '.wt');
+  const dir = join(root, 'issue-35174');
+  mkdirSync(dir, { recursive: true });
+  // The two-day wedge, reproduced: an agent's task was interrupted, its process
+  // died, and the shell it had started with the Bash tool survived with its cwd
+  // still inside the worktree.
+  const squatter = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], { cwd: dir, stdio: 'ignore' });
+  t.after(() => squatter.kill());
+  await new Promise((r) => setTimeout(r, 200)); // let it actually be running in there
+
+  const wt = new WorktreeManager(repo, root);
+  await assert.rejects(
+    () => wt.ensure('issue/35174'),
+    (err: Error) => {
+      // What the operator needs is the *cause*, because their next move is to go
+      // find that process. `EBUSY: resource busy or locked, rmdir '<dir>'` is a
+      // true statement of the syscall and a dead end as a report.
+      assert.match(err.message, /held open by another process/);
+      assert.match(err.message, /retries/, 'and that it was not a moment of contention');
+      assert.ok(err.message.includes(dir), 'naming the directory that is stuck');
+      return true;
+    },
+  );
 });
 
 test('an omitted base still forks from HEAD', async () => {

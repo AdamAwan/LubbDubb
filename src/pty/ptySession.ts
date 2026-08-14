@@ -12,6 +12,7 @@ import {
 import { stripAnsi } from '../agents/streamTranscript.js';
 import { excise, holdFrom, scanSentinels, type SentinelSpec } from './sentinelScanner.js';
 import type { AgentSession, AgentSessionStatus } from '../agents/session.js';
+import type { ProcessReaper } from '../agents/processTree.js';
 
 type PtySessionStatus = AgentSessionStatus;
 
@@ -93,6 +94,16 @@ interface PtySessionOptions {
    * window — the same reason `submitDelayMs` and `pollMs` are settable.
    */
   sentinelBackstopMs?: number;
+  /**
+   * How a kill reaches the agent's *descendants* (see {@link ProcessReaper}).
+   *
+   * Defaults to doing nothing rather than to `killProcessTree`, and that pairing
+   * is deliberate: the default reap must match the default *backend*, and a
+   * session driven by {@link FakePtyBackend} has a scripted process whose pid
+   * names some unrelated process on the host. The composition root wires the real
+   * reaper alongside the real backend; nothing else constructs this.
+   */
+  reap?: ProcessReaper;
 }
 
 /**
@@ -233,6 +244,7 @@ export class PtySession extends EventEmitter implements AgentSession {
       sentinelBackstopMs: DEFAULTS.sentinelBackstopMs,
       sessionTranscript: undefined,
       onWarning: () => {},
+      reap: () => {},
       ...options,
     };
     this.spec = {
@@ -391,12 +403,21 @@ export class PtySession extends EventEmitter implements AgentSession {
     this.proc.write(data);
   }
 
+  /**
+   * Stop the terminal — **and everything the agent started in it**. A Bash-tool
+   * shell left running holds the worktree cwd open long after `claude` is gone,
+   * which on Windows wedges the branch for good; see {@link ProcessReaper}.
+   */
   kill(signal = 'SIGTERM'): void {
     if (this.proc && (this._status === 'running' || this._status === 'waiting' || this._status === 'starting')) {
       // Mark killed *before* signalling: the resulting exit must not be
       // reclassified as a failure. handleExit early-returns on 'killed', so the
       // ordering matters when the exit arrives synchronously.
       this.setStatus('killed');
+      // Between the two, and for the same ordering reason applied to the tree: the
+      // reap resolves descendants *through* the root pid, so a dead root leaves
+      // nothing to find. It cannot throw, so `proc.kill` always follows.
+      this.opts.reap(this.proc.pid);
       this.proc.kill(signal);
     }
   }
@@ -640,7 +661,13 @@ export class PtySession extends EventEmitter implements AgentSession {
       this.teardownTimers.push(t);
     };
     settimer(this.opts.submitDelayMs, () => proc.write('\r'));
-    settimer(this.opts.exitGraceMs, () => proc.kill('SIGTERM'));
+    settimer(this.opts.exitGraceMs, () => {
+      // The forced arm is a harness-initiated termination like {@link kill}, so it
+      // takes the subtree with it — a REPL that ignored `/exit` is exactly the one
+      // likely to be sitting behind a child process that never ended.
+      this.opts.reap(proc.pid);
+      proc.kill('SIGTERM');
+    });
   }
 
   private handleExit(code: number): void {

@@ -127,6 +127,26 @@ still going on). That predicate is stated once, in `src/store/jobs.ts`, and aske
 The origin is claimable again the moment the requeued job's task ends — the requeue holds the work,
 it does not retire it.
 
+#### Why a requeue never stands in for a _queued_ job
+
+The gate is transitive, and that is what makes it dangerous in one specific shape. A job's dispatch
+task carries origin `job:<N>`, so a requeue of that task files a job whose `originRef` is `job:<N>` —
+and if job N is **itself still queued**, job N+1 now stands in for it and `manual-job` skips N for as
+long as N+1 sits in the queue. Repeat the failure and the queue grows a chain
+(`Requeued: Requeued: Requeued: …`) in which only the newest link can ever be tried, and no older one
+can run or expire. Observed on one branch for two days.
+
+The gate is right and is not weakened. The chain is prevented one step upstream, in
+`RecoveryDesk.decide`: a job leaves the queue only through `markJobDispatched`, which runs after the
+spawn succeeds, so a predecessor still `queued` means **no agent ever ran and the queue already holds
+the request**. There is nothing to redo. The verdict files nothing and hands that job back as the
+requeue — see [10](10-agent-runtimes.md#the-three-verdicts). A `dispatched` predecessor still gets a
+real new job, and locks nothing: no rule dispatches a dispatched job, and the requeue is reached under
+its own `job:<N+1>` origin, which nothing stands in for.
+
+A chain already written to a database predates the collapse and stays locked until its newest link is
+cancelled.
+
 ### The branch invariant
 
 Rule `manual-job` is the **one** dispatch path where origin and branch are not 1:1, so it is the one that needs

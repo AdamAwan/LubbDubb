@@ -122,6 +122,13 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
 
 ### Agent runtimes
 
+- **A new agent-termination path must reap the process _subtree_, before it signals the child.**
+  `session.kill()` does this via the injected `ProcessReaper`; a path that calls a process's `kill`
+  directly leaves the agent's Bash-tool shells alive with the worktree as their cwd, and Windows then
+  refuses `rmdir` on it — every later dispatch onto that branch fails `EBUSY`, forever, with nothing
+  but rejected dispatches to show for it. Reaping *after* the child dies finds nothing: descendants
+  are resolved through the root pid. → [10](docs/spec/10-agent-runtimes.md#reaping-the-process-subtree)
+
 The **default `agentMode` is `stream`, not a PTY.** Do not assume terminal semantics on the default
 path. Everything below is PTY-only, and every one of them is a silent failure — the agent keeps
 running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-edges)

@@ -273,6 +273,10 @@ Tests: `test/ptyExitOnDone.test.ts`, `test/worktreeCleanup.test.ts`.
 
 - **`kill()` sets status `killed` _before_ signalling the process.** A synchronously-delivered exit
   would otherwise be reclassified as `failed`, firing a terminal event.
+- **`kill()` reaps the process _subtree_, and does it before the root is signalled.** Signalling the
+  direct child alone leaves a Bash-tool shell holding the worktree cwd, which on Windows wedges the
+  branch for every later dispatch; reaping after the root is gone finds nothing, because descendants
+  are resolved through it. See [Reaping the process subtree](#reaping-the-process-subtree).
 - **`send()` writes the text and its submitting carriage return as two separate writes**,
   `agentSubmitDelayMs` apart (default 60ms). The claude TUI coalesces a single input burst into a
   paste and treats a trailing CR as a literal newline, so a glued-on CR leaves the message sitting in
@@ -386,6 +390,48 @@ exited marker, so a killed agent is never `reaped` and its worktree stays.
 `interruptAll` is used on **server shutdown**: agents are left in the resumable `interrupted` state and
 `waitingReason` and the task status are **preserved** as the signal for how to resume.
 
+### Reaping the process subtree
+
+**Stopping an agent stops everything it started.** That is the invariant, it holds for both runtimes,
+and it is not what "kill the process" gives you: an agent that ran
+`until az pipelines runs show …; do sleep 45; done` with the Bash tool leaves that shell and its
+`sleep` behind when `claude` dies, with their cwd still set to the worktree. Windows refuses `rmdir`
+on any live process's cwd, so from that moment every dispatch onto the branch fails `EBUSY` in
+`WorktreeManager.reclaim` — one branch stayed wedged for two days and 100+ rejected dispatches that
+way, and nothing in the harness could have said why.
+
+`ProcessReaper` (`src/agents/processTree.ts`) is the seam; `killProcessTree` is the implementation:
+
+- **Windows** — `taskkill /pid <pid> /T /F`, run with `spawnSync`. There is no process group to
+  signal, so the tree is walked through the parent-pid links instead. Exit status 128 (`not found`)
+  is success: the tree is already gone.
+- **POSIX** — `kill(-pid)`, the process **group**. The group exists because the spawners make one:
+  `defaultSpawner` passes `detached: true`, and node-pty's `forkpty` calls `setsid`. `ESRCH`/`EPERM`
+  falls back to the bare pid.
+
+Two things about it are load-bearing:
+
+- **It runs before the root is signalled.** Both mechanisms resolve descendants *through* the root
+  pid, so reaping after `child.kill()` finds a tree that no longer has a root — the children have been
+  reparented and cannot be reached from here. In `PtySession.kill` this sits between the `killed`
+  status and `proc.kill`, inside the ordering rule above.
+- **It never throws.** A failed reap must not take a kill path down with it — the agent still has to
+  be marked, the transcript flushed and the credential released — so failures go to the error log and
+  the caller carries on.
+
+Reached from `kill`, `complete`, `interruptAll`, and the PTY `exitOnDone` teardown's forced arm: every
+path by which the *harness* stops an agent. **An agent that exits by itself is not covered** and
+cannot be — once the root pid is gone there is nothing left to walk from. That residue is why
+`reclaim` must survive a held directory and say so rather than treat the lock as permanent
+([09](09-execution.md#reclaiming-an-orphaned-directory)).
+
+The reaper is **injected**, in the composition root, and wired to the real implementation **only
+alongside the real transports**: it signals whatever pid it is handed, and an injected `backend` or
+`streamSpawner` scripts a process whose pid belongs to something else entirely on the host running the
+suite. With a fake transport in place the default is a no-op, and a test that wants to observe the
+reap injects its own recorder (`buildSystem`'s `reapProcessTree`). Tests:
+`test/agentSubtreeReap.test.ts`.
+
 ## Crash recovery
 
 A restart kills every agent. What happens to those agents is **an operator's decision, not the
@@ -472,7 +518,7 @@ thing every candidate has; `OrphanedWork.agentId` is null for an orphan that nev
 | Verdict   | Effect                                                                                                                |
 | --------- | --------------------------------------------------------------------------------------------------------------------- |
 | `restore` | `agents.resume(agent, task)` — re-attach to the same session in the same worktree. Offered only when `restorable`.    |
-| `requeue` | Retire agent (`interrupted`) and task (`interrupted`), dismiss its escalations, and file a **job** carrying the work. |
+| `requeue` | Retire agent (`interrupted`) and task (`interrupted`), dismiss its escalations, and file a **job** carrying the work — unless the job it came from never left the queue, below. |
 | `remove`  | Retire agent and task, dismiss its escalations. Nothing is queued; the branch and worktree are kept.                  |
 
 Settling the **task** is the load-bearing half of the last two, and the only half an agentless orphan
@@ -510,6 +556,15 @@ is live, so the rule that produced the original does not staff the same work a s
 it, a requeued retro and a freshly dispatched `issue:249:retro` ran at once (#249). See
 [13](13-jobs-and-findings.md#standing-in-for-another-origin) for the predicate and its two readers.
 The preamble still names the origin in words, because a fresh agent needs to know it is redoing work.
+
+**A requeue of work behind a still-queued job files nothing**, and hands that job back instead. A job
+leaves the queue only through `markJobDispatched`, which runs after the spawn succeeds — so a
+predecessor still `queued` means no agent ever ran and the queue is already holding the request
+unchanged. A second job for it would not be a requeue but a duplicate, and a duplicate that locks the
+queue: its `originRef` is the task's `job:<predecessor>`, which makes it *stand in* for the
+predecessor and skips it in `manual-job` for as long as the duplicate is queued. Chains of three were
+observed. See [13](13-jobs-and-findings.md#why-a-requeue-never-stands-in-for-a-queued-job) for the
+gate this protects and why it is not the thing being changed.
 
 `prior` is the agent that was on the task, or **null** when none ever ran, and the two arms say
 materially different things: after a crash the branch may carry commits a fresh agent must read first
