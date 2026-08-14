@@ -120,12 +120,11 @@ const LIVE_STATUSES = ['starting', 'running', 'waiting'];
  * live agents would then have to be taught to filter back out, including the
  * next counter somebody adds.
  *
- * Drawn under `view.demo` alone for now, `InjectPanel`'s reason inverted: the
- * snapshot carries `claimedBy` but no reading of whether the claim is still
- * *live*, and `claimIsLive` is the single definition of that. Off `claimedBy`
- * alone, a claim whose session died would stand in the fleet list forever — at
- * the same instant it stops blocking `validate-check`, which is precisely the
- * disagreement the one definition exists to prevent.
+ * **`claimedBy` on the wire is already a live claim.** The server projects it
+ * through `claimIsLive` (`withLiveClaim`), which is the single definition of
+ * "claimed" — the rule, the desktop tools, the sheet's chip and this entry all
+ * read the one answer, so a claim past its expiry leaves the fleet list at the
+ * same instant it stops blocking `validate-check`.
  */
 export interface DeskRun {
   /** The check's stable id — the row's key, and what the claim is keyed on. */
@@ -223,7 +222,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
 
     crashed,
     live,
-    deskRuns: input.demo ? buildDeskRuns(state) : [],
+    deskRuns: buildDeskRuns(state),
     past,
     openEscalations,
     openFindingCount: (state.findings ?? []).filter((f) => f.status === 'open').length,

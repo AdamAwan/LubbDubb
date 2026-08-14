@@ -142,7 +142,10 @@ function AgentRow({ agent, view, actions }: { agent: Agent; view: CockpitView; a
  *   from a dispatch.
  *
  * The hover carries the two things a glance cannot: that it takes no slot, and
- * that it ends on its own.
+ * that it ends on its own. It leaves the list by itself when the reading lands,
+ * when the session closes, or when the claim ages out — the entry is drawn off a
+ * claim the server has already put through `claimIsLive`, so it goes at the same
+ * instant the claim stops blocking `validate-check`.
  */
 function DeskRow({ run, view }: { run: DeskRun; view: CockpitView }): JSX.Element {
   return (

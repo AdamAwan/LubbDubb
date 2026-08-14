@@ -29,7 +29,7 @@ re-litigated:
 
 One row per check, keyed on `(goal, id)` — the goal's `origin_ref` (`issue:<n>`), `src/store/validation.ts`.
 
-**Keyed on the goal, not the plan**, which is what this document has said validation *is* since the
+**Keyed on the goal, not the plan**, which is what this document has said validation _is_ since the
 first line of it. A plan is 1:1 with a goal, which is what let `plan_id` stand in for the goal for two
 changes; it was the wrong key wearing the right key's clothes, and it got more expensive to change
 with every check row recorded against it. A check outlives any one plan of the work, and nothing about
@@ -534,8 +534,8 @@ be no way out that costs nothing to say.
 ([16](16-http-api.md)). Every handler is wrapped in `checked(schemas, handler)`; a refusal is a
 returned value, never a throw.
 
-| Route                                              | Does                                               |
-| -------------------------------------------------- | -------------------------------------------------- |
+| Route                                                   | Does                                               |
+| ------------------------------------------------------- | -------------------------------------------------- |
 | `POST /api/issues/:number/validation/:checkId/result`   | `{result: passed｜failed, note}`.                  |
 | `POST /api/issues/:number/validation/:checkId/defer`    | `{reason, until?}`.                                |
 | `POST /api/issues/:number/validation/:checkId/waive`    | `{reason}`.                                        |
@@ -600,10 +600,10 @@ then work, then how anyone knows it worked. Each row draws its letter in the gut
 sequence number sits, because it is the same kind of handle.
 
 Three markers say who, and each exists because its absence would be read as something else: **with
-the fleet** on a handed-over check, **running at ‹label›** while a desktop session holds a claim (the
-timestamp on the hover, because a claim sitting there since yesterday has expired and only the
-operator is placed to notice), and beside a reading, **recorded by an agent** or **recorded from a
-desktop session**. A reading by a person draws nothing, because that is what a checklist already
+the fleet** on a handed-over check, **running at ‹label›** while a desktop session holds a **live**
+claim (the timestamp on the hover; an expired claim is not shipped at all, so the chip and the fleet
+list's keyboard entry go together), and beside a reading, **recorded by an agent** or **recorded from
+a desktop session**. A reading by a person draws nothing, because that is what a checklist already
 means.
 
 Every control writes an operator's reading and derives nothing: there is no "mark all", and no state

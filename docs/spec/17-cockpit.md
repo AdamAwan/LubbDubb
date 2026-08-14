@@ -443,7 +443,7 @@ vanishes when quiet is indistinguishable from one that broke.
   operator, the two disagree in exactly that case, and the ask wins. **Ended shifts are behind a
   disclosure in the card's own head**, not a second card: they are the same rows read for a different
   question, and the count stays in the header at zero, muted, so the way in does not move.
-  Under **`view.demo` alone** the card also draws a **keyboard entry** per live desktop claim — see
+  The card also draws a **keyboard entry** per live desktop claim — see
   [the keyboard entry](#the-keyboard-entry).
 - **Goals in flight** — every goal whose `pickup.status` says the harness has it in hand now
   (`active` / `has_pr` / `planning` / `delivered`). Read off the dispatcher's own word rather than
@@ -493,13 +493,16 @@ agent's affordances with none of them working is worse than one that never offer
 carries the two facts a glance cannot: that it takes no slot, and that it ends by itself — when the
 reading lands, when the session closes, or when the claim ages out.
 
-**Drawn under `view.demo` alone**, `InjectPanel`'s gate for the opposite reason. The snapshot carries
-`claimedBy` but no reading of whether the claim is still _live_, and `claimIsLive`
-([20](20-validation.md#the-claim)) is the single definition of that; off `claimedBy` alone a claim
-whose session died would stand in the fleet list forever, at the same instant it stops blocking
-`validate-check`. The demo backend holds its own clock, so it reports the claim two beats after load
-and the entry leaves with nobody having pressed anything — which is the ending the entry exists to
-draw.
+**The claim it draws is live by construction.** The snapshot maps every check through `withLiveClaim`
+(`src/validation/desktop.ts`), so `claimedBy` on the wire is a claim `claimIsLive`
+([20](20-validation.md#the-claim)) still holds — the same definition rule `validate-check` and the
+desktop tools read. The entry therefore leaves the fleet list at the same instant the claim stops
+blocking a dispatch, and the sheet's **running at ‹label›** chip appears and goes with it. Off
+`claimedBy` alone, a claim whose session died would stand in the list forever while the rule had long
+since stopped honouring it.
+
+The demo backend holds its own clock and reports the claim two beats after load, so the ending — the
+entry leaving with nobody having pressed anything — is visible in the Pages build.
 
 ## The backlog
 
@@ -1074,8 +1077,10 @@ the one sentence saying what a person can do that an agent could not.
 Three chips and two markers say **who**, and each is there because its absence would be read as
 something else. **with the fleet** on a handed-over check, ahead of the planner's nomination about it
 — one is what will happen, the other is an argument. **running at ‹label›** while a desktop session
-holds the check, with the timestamp on the hover rather than the chip, because a claim sitting there
-since yesterday has expired and the operator is the only one placed to notice. And beside a reading,
+holds the check, with the timestamp on the hover rather than the chip. Only a **live** claim gets
+here — the snapshot projects every check through `withLiveClaim` — so this chip and the fleet list's
+[keyboard entry](#the-keyboard-entry) appear and go together, and neither outlives what
+`validate-check` reads. And beside a reading,
 **recorded by an agent** or **recorded from a desktop session**. A reading a person took draws
 nothing at all, because that is already what a validation checklist means — the markers are the
 exceptions, which is exactly what a reader deciding how much a tick is worth needs.

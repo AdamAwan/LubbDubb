@@ -32,6 +32,7 @@ import { assaySignalQuery } from '../intake/assay.js';
 import { classifyCiFailures } from '../ci/ciPolicy.js';
 import { validationVerdict } from '../validation/verdict.js';
 import { validationResourcePath } from '../validation/resources.js';
+import { withLiveClaim } from '../validation/desktop.js';
 import { watchLabelsFor } from '../watchLabels.js';
 
 /**
@@ -155,7 +156,14 @@ export function buildStateSnapshot(
   // The validation plan, read once and grouped by the goal it belongs to — which
   // is what it is keyed on, so the sheet, the chip and the flag all read one map
   // with no join through the plan to get wrong.
-  const validationChecks = store.listAllValidationChecks();
+  // Read through `withLiveClaim`, never off the row: a claim past its expiry
+  // holds nothing, and the cockpit must stop drawing it at the same instant it
+  // stops blocking `validate-check`. `claimIsLive` is the one definition of that,
+  // and this is where the cockpit gets it.
+  const claimNow = new Date().toISOString();
+  const validationChecks = store
+    .listAllValidationChecks()
+    .map((check) => withLiveClaim(check, claimNow, config.validation.desktopClaimMinutes));
   const checksByGoal = new Map<string, typeof validationChecks>();
   for (const check of validationChecks) {
     const list = checksByGoal.get(check.originRef);

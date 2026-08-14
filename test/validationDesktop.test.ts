@@ -4,6 +4,7 @@ import { mkdtempSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSystem, type System } from '../src/system.js';
+import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -15,7 +16,7 @@ import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { validatePlanDocument } from '../src/plans/planDocument.js';
 import { DESKTOP_SKILL, installDesktopSkill } from '../src/validation/desktopSkill.js';
-import { claimIsLive } from '../src/validation/desktop.js';
+import { claimIsLive, claimStaleBefore, withLiveClaim } from '../src/validation/desktop.js';
 import type { Issue, IssueDelivery, Plan, ValidationCheck } from '../src/types.js';
 
 /**
@@ -612,4 +613,31 @@ test('the skill installs, and says what it is for without restating the procedur
   // The three answers, and the one that is easiest to leave out.
   assert.match(written, /handback/);
   assert.match(written, /Do not report `passed` from evidence you did not gather/);
+});
+
+/**
+ * What the cockpit is shipped, and why it is a projection rather than the row.
+ *
+ * `claimIsLive` is the single definition of "claimed", so a claim past its expiry
+ * has to stop being drawn at the same instant it stops blocking `validate-check`.
+ * Otherwise the fleet list shows somebody running a check the rule has already
+ * decided nobody is running — two answers to one question, which is the whole
+ * thing one definition exists to prevent.
+ */
+test('the snapshot ships a live claim, and `withLiveClaim` drops an expired one', () => {
+  const system = build();
+  const goal = planWith(system);
+  const now = new Date().toISOString();
+  system.store.claimValidationCheck(goal, 'csv-opens', 'desktop (studio)', claimStaleBefore(now, 60));
+
+  const shipped = buildStateSnapshot(system).validationChecks.find((c) => c.id === 'csv-opens')!;
+  assert.equal(shipped.claimedBy, 'desktop (studio)', 'a live claim reaches the cockpit');
+
+  // The other arm, at the function the snapshot maps every check through: the row
+  // still carries the label an hour later, and what the cockpit is handed does not.
+  const later = new Date(new Date(shipped.claimedAt ?? now).getTime() + 61 * 60_000).toISOString();
+  const expired = withLiveClaim(shipped, later, 60);
+  assert.equal(expired.claimedBy, null, 'and an expired one is not drawn at all');
+  assert.equal(expired.claimedAt, null, 'neither half, so nothing can read a claim back out of it');
+  system.store.close();
 });

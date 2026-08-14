@@ -101,6 +101,21 @@ export function claimIsLive(check: ValidationCheck, now: string, minutes: number
   return check.claimedAt > claimStaleBefore(now, minutes);
 }
 
+/**
+ * A check as everything outside the store should see its claim: held only while
+ * the claim is **live**.
+ *
+ * `claimIsLive` is the single definition of "claimed" — the rule reads it, the
+ * desktop tools read it, and the cockpit gets this. Without it a claim whose
+ * session died would go on being drawn as somebody running a check at the same
+ * instant it stopped blocking `validate-check`, which is the one disagreement
+ * having a single definition exists to prevent.
+ */
+export function withLiveClaim(check: ValidationCheck, now: string, minutes: number): ValidationCheck {
+  if (check.claimedBy === null || claimIsLive(check, now, minutes)) return check;
+  return { ...check, claimedBy: null, claimedAt: null };
+}
+
 /** How a check reads in a list an operator's Claude is choosing from. */
 interface DesktopCheckSummary {
   letter: string;
