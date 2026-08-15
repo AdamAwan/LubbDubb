@@ -288,6 +288,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     resume: boolean;
     mcpConfigPath: string | null;
     model: string | null;
+    effort: string | null;
   }) => string[];
   const agentSetup = {
     stream: {
@@ -295,7 +296,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       // front so a restart can re-open *this* conversation. Headless `claude` honours
       // both flags (issue #318) — which is what puts `restore` on the recovery desk
       // for the default deployment instead of requeue-or-remove.
-      buildArgs: (({ sessionId, resume, mcpConfigPath, model }) =>
+      buildArgs: (({ sessionId, resume, mcpConfigPath, model, effort }) =>
         buildClaudeStreamArgs({
           permissionMode: perm,
           extraArgs,
@@ -307,6 +308,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           mcpConfigPath,
           permissionPromptTool,
           model: model ?? undefined,
+          effort: effort ?? undefined,
         })) as ArgsBuilder,
       factory: streamFactory,
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
@@ -316,7 +318,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     },
     pty: {
       // Pin the session id up front, `--resume` it later.
-      buildArgs: (({ sessionId, resume, mcpConfigPath, model }) =>
+      buildArgs: (({ sessionId, resume, mcpConfigPath, model, effort }) =>
         buildClaudeArgs({
           permissionMode: perm,
           extraArgs,
@@ -329,6 +331,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           mcpConfigPath,
           permissionPromptTool,
           model: model ?? undefined,
+          effort: effort ?? undefined,
         })) as ArgsBuilder,
       factory: ptyFactory(true),
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),

@@ -7,7 +7,7 @@ import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { StackLandingDesk } from '../stacks/landingDesk.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { AutoSendConfig } from '../config.js';
-import { resolveAgentModel, type AgentModels } from '../agents/modelPolicy.js';
+import { resolveAgentProfile, type AgentModels } from '../agents/modelPolicy.js';
 import type { RuntimeControl } from '../runtimeControl.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { ValidatedAction } from '../dispatcher/actions.js';
@@ -835,10 +835,11 @@ export class ActionExecutor {
     const prompt = [note, action.prompt, evidence, guidance, outstanding, prior, briefing, attachments]
       .filter(Boolean)
       .join('\n\n');
-    // The model this kind of work runs on, resolved once and stored — so a resumed
-    // agent re-launches on what it started on rather than on whatever config says
-    // by then, and so the run's cost is readable against what it ran on.
-    const model = resolveAgentModel(this.deps.agentModels, action.rule);
+    // The model this kind of work runs on and the depth it runs at, resolved once
+    // as one profile and stored — so a resumed agent re-launches on what it
+    // started on rather than on whatever config says by then, and so the run's
+    // cost is readable against what it ran on.
+    const profile = resolveAgentProfile(this.deps.agentModels, action.rule);
     if (action.type === 'dispatch_code_agent')
       return store.createTask({
         kind: 'code',
@@ -854,7 +855,8 @@ export class ActionExecutor {
         // to the agent, so it can say a rule fired and never what that cost.
         rule: action.rule,
         ciChecks: action.ciChecks ?? null,
-        model,
+        model: profile?.model ?? null,
+        effort: profile?.effort ?? null,
       });
     return store.createTask({
       kind: 'desk',
@@ -866,7 +868,8 @@ export class ActionExecutor {
       originSummary: action.originSummary,
       dispatchReason: action.reason,
       rule: action.rule,
-      model,
+      model: profile?.model ?? null,
+      effort: profile?.effort ?? null,
     });
   }
 

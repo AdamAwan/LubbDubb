@@ -270,7 +270,7 @@ reading the file is not the same as knowing the policy.
 | `claudeCommand`         | `string`                        | `'claude'`              | The command spawned for an agent.                                                                                                                                                                                                                                                                                                                                                                                                |
 | `claudeArgs`            | `string[]`                      | `[]`                    | Extra args, appended **after** the harness's own, so an explicit flag there has the last word.                                                                                                                                                                                                                                                                                                                                   |
 | `agentPermissionMode`   | `string`                        | `'acceptEdits'`         | Passed to `--permission-mode`. `acceptEdits` auto-accepts file edits only. `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under root.                                                                                                                                                                                                                                                      |
-| `agentModels`           | `AgentModels` (optional)        | unset                   | Which model each kind of work runs on, keyed on the dispatch rule that proposed it (issue #321). Named profiles, a `default` and per-rule assignments; resolved once at dispatch and stored on the task. Omitted, no launch carries `--model`. See [Model assignment](#model-assignment-by-rule) below and [10](10-agent-runtimes.md#launch-arguments).                                                                             |
+| `agentModels`           | `AgentModels` (optional)        | unset                   | Which model each kind of work runs on and how hard, keyed on the dispatch rule that proposed it (issue #321). Named profiles, a `default` and per-rule assignments; resolved once at dispatch and stored on the task. Omitted, no launch carries `--model` or `--effort`. See [Model assignment](#model-assignment-by-rule) below and [10](10-agent-runtimes.md#launch-arguments).                                                                             |
 | `agentAllowedTools`     | `string[]`                      | JS toolchain + git + gh | Tool allow rules merged into `--settings` as `permissions.allow` (Claude Code syntax, e.g. `Bash(npm:*)`). Pre-approves the mechanical validate/commit/push commands so the default config completes a task unattended without `bypassPermissions`. Never on `--allowedTools` (that carries the MCP grants). Default: `Bash(npm:*)`, `Bash(npx:*)`, `Bash(pnpm:*)`, `Bash(yarn:*)`, `Bash(node:*)`, `Bash(git:*)`, `Bash(gh:*)`. |
 | `agentPromptDelayMs`    | `number`                        | `1200`                  | Delay before the first message is delivered, giving an interactive REPL time to boot. Stream mode uses `0`.                                                                                                                                                                                                                                                                                                                      |
 | `agentSubmitDelayMs`    | `number`                        | `60`                    | PTY only: gap between writing message text and writing the submitting carriage return.                                                                                                                                                                                                                                                                                                                                           |
@@ -290,9 +290,13 @@ a model per _kind_ of work:
 ```json
 {
   "agentModels": {
-    "profiles": { "fast": "haiku", "standard": "sonnet", "deep": "opus" },
-    "default": "standard",
-    "byRule": { "issue-plan": "deep", "issue-assay": "fast", "pr-ci-failing": "standard" }
+    "profiles": {
+      "fast": { "model": "haiku" },
+      "standard": { "model": "sonnet", "effort": "medium" },
+      "deep": { "model": "opus", "effort": "medium" }
+    },
+    "default": "deep",
+    "byRule": { "pr-ci-gate": "fast", "issue-retro": "fast", "issue-assess": "standard" }
   }
 }
 ```
@@ -300,24 +304,44 @@ a model per _kind_ of work:
 - **The key is a `DISPATCH_RULES` id.** That id is already persisted on `Task.rule` and is already the
   axis `src/taskTypeSpend.ts` prices work by, so config, spend and the decision log share one
   vocabulary rather than growing a second. → [05](05-dispatcher.md#the-rule-book)
-- **A rule points at a named profile, and a profile is a model string and nothing else.** The
+- **A rule points at a named profile, and a profile is a model and the depth it runs at.** The
   indirection buys a name (`deep`, `fast`) that survives a model being replaced: when a new model
   ships, one profile value changes and every rule pointing at it follows. A profile deliberately
-  carries no permission mode and no extra args — `claudeArgs` stays the single global escape hatch,
-  which structurally removes the risk of a profile's args clobbering the `--allowedTools` MCP grants.
+  carries nothing else — no permission mode, no extra args. `claudeArgs` stays the single global
+  escape hatch, which structurally removes the risk of a profile's args clobbering the
+  `--allowedTools` MCP grants; both fields a profile does carry are flags the harness emits itself,
+  which is what keeps them out of that argument.
+- **The two fields resolve together, as one profile.** A lookup that fell back for the model and not
+  the effort could pair a cheap model with a depth chosen for an expensive one, so `resolveAgentProfile`
+  returns a whole profile or nothing.
+- **`effort` is optional, and omitting it is not the middle setting.** `claude --effort` takes
+  `low`/`medium`/`high`/`xhigh`/`max`, and the CLI's own default is the top of that ladder — so an
+  unassigned rule is the *expensive* one, not the neutral one. This is the argument for setting
+  `default`: a policy that covers only some rules leaves the rest at the CLI's default depth.
+  A profile that omits `effort` passes no flag, which is what the smallest models need — they refuse
+  the flag outright, so a cheap model and a shallow depth are alternative levers, not composable ones.
+- **The model string and the effort level are both unvalidated.** Only the installed `claude` knows
+  which models exist and which of them accept `--effort`, so either being wrong fails at _spawn_ — as
+  a failed agent — rather than at boot.
 - **`default` covers every rule with no `byRule` entry, and every run dispatched outside a rule.** An
   operator who sets only this has moved the whole fleet with one line. Omitted, an unassigned rule
-  carries no `--model` at all.
-- **The whole block is optional.** Omitted, no `--model` flag is ever passed and argv is exactly what
-  it was before the key existed.
-- **The model string itself is never validated.** Only the installed `claude` knows the valid set, so
-  a profile holding a bad alias fails at _spawn_ — as a failed agent — rather than at boot.
+  carries neither flag.
+- **The whole block is optional.** Omitted, neither flag is ever passed and argv is exactly what it
+  was before the key existed.
 - **It merges whole**, not field by field like the policy blocks: an override that sets `agentModels`
-  replaces it, which is what lets one _remove_ an assignment rather than only add to it.
+  replaces it, which is what lets one _remove_ an assignment rather than only add to it. It also means
+  a partial block is the whole policy — an operator who writes only `profiles` and `default` has
+  cleared every `byRule` entry they were copying from, rather than adding to them.
 
-Two things are refused at load, both by `validateAgentModels` in `src/agents/modelPolicy.ts` — a pure
-function called from `loadConfig` (not only `loadDeploymentConfig`, or no test could reach it):
+Every rejection at load is by `validateAgentModels`, in `src/agents/modelPolicy.ts` — a pure function called
+from `loadConfig` (not only `loadDeploymentConfig`, or no test could reach it):
 
+- a profile written as a bare model string — the shape before profiles carried an effort. Accepting
+  both would leave one config key with two spellings, which is the drift the named profile exists to
+  end; refusing it by name stops a deployment on the old shape at boot, with the fix in the message,
+  rather than starting it with a profile the resolver reads as having no model;
+- an `effort` that is not one of the five levels, which would otherwise reach the CLI as a flag value
+  it rejects — at spawn, per agent, rather than once at boot;
 - a `default` or `byRule` value naming a profile that is not in `profiles`, which would otherwise
   launch with no flag and read as working;
 - a `byRule` key that is not a **pipeline** rule id. Validated against `DISPATCH_PIPELINE` rather than
@@ -325,8 +349,26 @@ function called from `loadConfig` (not only `loadDeploymentConfig`, or no test c
   `action.rule`, so accepting one as a key would make the typo check weaker than it looks. A key that
   can never match is the failure class the config rejections exist to prevent.
 
-Resolution happens **once, at dispatch** (`ActionExecutor.recordDispatchTask`), and the resolved model
-_string_ is stored on the task — see [10](10-agent-runtimes.md#launch-arguments) and
+#### No policy ships, and unset is not a default model
+
+The harness ships **no `agentModels` block**. `lubbdubb.config.example.json` carries a worked one —
+that file is the discovery surface for every other knob, and a mechanism nobody is told about is the
+defect issue #335 opened on — but it is an example to copy and edit, not a default in force.
+
+The reason is that a shipped default would have to name model strings, and the harness cannot check
+one: only the installed `claude` knows which models this deployment has. A wrong alias in a shipped
+default fails at **spawn**, as a failed agent on a deployment that configured nothing and changed
+nothing — precisely the invisible failure class the rest of this document exists to avoid. An
+operator who copies the example is choosing those strings, and owns them.
+
+So `resolveAgentProfile` returning `null` is a **meaningful value**, and it is not "the default
+model". It means _pass no flag_, and leave the choice to the CLI. The two are different in a way that
+matters for cost: the CLI's own effort default is the top of the ladder, so an unconfigured fleet is
+not sitting in the middle of the range — it is at the expensive end of it, which is the observation
+that motivates configuring the block at all.
+
+Resolution happens **once, at dispatch** (`ActionExecutor.recordDispatchTask`), and the resolved
+_strings_ — not the profile name — are stored on the task as `model` and `effort` — see [10](10-agent-runtimes.md#launch-arguments) and
 [14](14-persistence.md).
 
 ### Provider targets

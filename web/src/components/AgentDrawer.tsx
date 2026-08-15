@@ -278,10 +278,13 @@ export function AgentDrawer({
               </div>
             )}
             {/* What this run was launched on — the `agentModels` profile its rule
-                resolved to at dispatch, so reading a run says what it cost on. */}
+                resolved to at dispatch, so reading a run says what it cost on.
+                Model and effort are one profile's two halves and read as one line;
+                an effort with no model is not a state the resolver can produce. */}
             {task.model && (
               <div className="dispatch-model">
                 <span className="dispatch-reason-label">Model</span> {task.model}
+                {task.effort && ` · ${task.effort} effort`}
               </div>
             )}
           </div>

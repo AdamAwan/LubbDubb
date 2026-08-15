@@ -455,6 +455,21 @@ export interface Task {
    * written before the column existed reads unchanged.
    */
   model?: string | null;
+  /**
+   * The reasoning depth this run launches at (`claude --effort`), resolved from
+   * the same profile as {@link model} and at the same moment.
+   *
+   * Stored beside the model rather than folded into it because they are read
+   * back separately: two runs of one rule on one model can still cost very
+   * differently, and a spend figure that cannot say which depth produced it
+   * explains nothing. Null means the launch carried no `--effort` — which is the
+   * CLI's own default, not a low setting.
+   *
+   * A plain string for {@link rule}'s reason: a domain type does not reach into
+   * `src/agents/` for the level union, and a level the harness no longer knows
+   * still reads back as what the run actually used.
+   */
+  effort?: string | null;
   status: TaskStatus;
   agentId: string | null;
   createdAt: string;
