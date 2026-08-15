@@ -365,7 +365,9 @@ re-emits them for the server to broadcast.
 ### Spawn
 
 1. Mint a session id (`randomUUID`) **only** when the runtime is resumable — both real runtimes are,
-   leaving only `raw`, which speaks no protocol and pins nothing.
+   leaving only `raw`, which speaks no protocol and pins nothing. A spawn handed a
+   `resumeSessionId` takes that id instead of minting one: see
+   [Inheriting a conversation on re-dispatch](#inheriting-a-conversation-on-re-dispatch).
 2. Mint a file-events spool key — independent of the session id, and minted per spawn either way.
 3. Mint an MCP credential (`mcp.open()`), before the session, so the launch config exists to point
    `--mcp-config` at.
@@ -380,6 +382,43 @@ A synchronous spawn failure calls `failSpawn`: the session is dropped, the error
 the transcript and flushed, agent and task are marked `failed`, the failure is recorded, and the throw
 is re-raised so the executor audits it as a rejected dispatch rather than leaving a mystery agent stuck
 in `starting`.
+
+### Inheriting a conversation on re-dispatch
+
+`spawn(task, cwd, resumeSessionId?)` re-dispatches an origin **into the conversation its last agent
+had** rather than a cold one (issue #333). The cooldown allows three attempts per origin; every one of
+them used to mint a fresh session id, so attempt two re-read the repository and `CLAUDE.md` to
+re-derive what attempt one had already worked out. Which origins qualify is
+[the dispatcher's](05-dispatcher.md#a-re-dispatch-inherits-the-last-agents-conversation) — this is
+only the launch.
+
+The launch differs from a cold one in exactly three places: the session id is the inherited one rather
+than a minted one, `resume` is true so `appendSessionFlags` writes `--resume` and not `--session-id`,
+and — nothing else. The spool key and the MCP credential are minted per spawn as always, and the
+initial message is the task's prompt as always, because the retry note **is** the prompt the executor
+stored on the row.
+
+A runtime that cannot resume ignores the argument and launches cold, which is what makes it safe to
+pass unconditionally. The caller learns what happened by reading `sessionId` back off the returned
+row rather than by asking whether it asked.
+
+**This is `spawn`, not [`resume`](#auto-resume-on-a-mid-run-crash), and the difference is why it is
+here.** `resume` reuses the agent row, so `sessions`, `eventsKeys` and `mcpTokens` already hold
+entries under that id and a caller must tear the dead launch down first or leak a spool directory and
+leave an MCP bearer token bound with nothing to revoke it. A retry gets a **new agent row**: all three
+maps are keyed by agent id, so there is nothing to write over and nothing to tear down, and the
+previous agent's teardown already ran when it was reaped.
+
+Two agent rows then share one `sessionId`. That is correct rather than tolerated — `--resume` appends
+to that transcript instead of forking a new id, so the id names the *conversation* and the rows name
+the *attempts* that spoke into it. Nothing keys on the id being unique per agent, and the one place
+that could collide cannot: `isRecoveryCandidate` gates on the task being outstanding, and attempt
+one's is settled before attempt two exists.
+
+The launch cwd is load-bearing and is checked, not assumed. `claude --resume` resolves the transcript
+inside the launch directory's project dir, so a retry that lands anywhere else finds nothing to
+re-attach to — and fails as a run that died for no visible reason. The executor compares the resolved
+cwd against the previous agent's and drops the inheritance if they differ.
 
 ### Events emitted
 

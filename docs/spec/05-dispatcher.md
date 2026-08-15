@@ -428,6 +428,55 @@ happened, and the agent it falls back to gets the origin's full budget. "Now" is
 snapshot's `takenAt`. An `escalate` verdict emits `escalate_to_human` carrying the throttled rule as
 its `rule` and `cooldown-escalate` as its `admission`, and claims no headroom.
 
+### A re-dispatch inherits the last agent's conversation
+
+The cooldown stops a _loop_; it never stopped a _repeat_. Its three attempts were three cold sessions,
+each re-paying discovery and each walking the same path because nothing told it the path had been
+walked. `src/executor/retryResume.ts` decides, per dispatch, whether to continue the previous agent's
+conversation instead — [10](10-agent-runtimes.md#inheriting-a-conversation-on-re-dispatch) is the
+launch this produces.
+
+`retryResumeFor(originRef, store)` returns the agent to inherit from, or null for a cold start.
+**Only a `done` agent qualifies**, which is narrower than it looks by accident: `done` is precisely
+the population this cooldown was written for — an agent that finishes without clearing its concern —
+and every other ending already has an owner a re-attach would race or override.
+
+| Status                            | Why not                                                              |
+| --------------------------------- | -------------------------------------------------------------------- |
+| `starting` / `running` / `waiting` | Live. A concern reaching a live agent is `respond_to_agent`.          |
+| `crashed`                         | A recovery verdict is outstanding; the desk offers a wider choice.    |
+| `killed` / `interrupted`          | _Decided_ endings. Resurrecting one is what `autoResume` refuses too. |
+| `failed`                          | Has just spent its `resumeAttempts` budget crashing.                  |
+
+**A conversation is inherited at most once.** Stated as a property of the transcript — two agent rows
+already carrying the id — rather than as an attempt number, so it needs no view of the cooldown policy
+and holds however an operator sets `maxAttempts`. The first attempt mints the id, the second inherits
+it, the third finds it twice-held and goes cold. That is the deliberate hedge that a conversation
+which has failed twice may be worse than a clean one; under the default three attempts it lands on the
+final one.
+
+Attempt accounting is untouched. A resumed attempt is still an attempt, still counts toward
+`maxAttempts` and still escalates at the cap: this changes what an attempt _costs_ and _knows_, not
+how many there are. Identity is untouched too — a retry writes a **new task row and a new agent row**,
+so `withCaller`'s `token → agent → task → origin` resolution and every spend view that joins agent to
+task keep working, and each attempt's cost stays readable against the same origin. Reusing either row
+would break one of those; re-pointing `agent.taskId` would migrate attempt one's usage onto attempt
+two's task.
+
+The dispatch prompt gains one block, `retryNote`, ahead of the rendered template rather than after it:
+the agent must know it is on ground it has covered before it reads the restated concern, or the
+restatement is simply a second task. It says which attempt this is, that the previous turn ended
+without clearing the concern, that the restatement below is the world as it reports itself _now_, and
+— for a code dispatch — that the worktree was removed at reap and recreated from the branch, so
+uncommitted edits it remembers are gone. It is deliberately not `buildResumeMessage`'s "you were
+resumed after a server restart": nothing restarted, and an agent that believes otherwise re-reads its
+branch looking for work it did itself minutes ago.
+
+A desk retry keeps the previous scratch directory; a code retry goes through `ensure`, which recreates
+the removed worktree at the same deterministic path. Either way the executor checks the resolved cwd
+against the previous agent's and starts cold if they differ, because that is where the transcript
+lives.
+
 ## One agent per branch
 
 For a PR whose branch already has an active task, `resolveBranchAgent` returns:

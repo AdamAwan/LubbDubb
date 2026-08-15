@@ -144,6 +144,12 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   the agent comes back either way, so nothing is red.
   → [10](docs/spec/10-agent-runtimes.md#auto-resume-on-a-mid-run-crash)
 
+- **A _re-dispatch_ re-attaches through `spawn`'s `resumeSessionId`, never `resume`.** It writes a new
+  agent row, so the maps that make `resume` dangerous hold nothing under that id and there is nothing
+  to tear down. Routing it through `resume` instead would reuse the dead row and reintroduce the leak
+  above — and, because two agent rows sharing one `sessionId` is the _correct_ shape here, nothing
+  about it looks wrong. → [10](docs/spec/10-agent-runtimes.md#inheriting-a-conversation-on-re-dispatch)
+
 The **default `agentMode` is `stream`, not a PTY.** Do not assume terminal semantics on the default
 path. Everything below is PTY-only, and every one of them is a silent failure — the agent keeps
 running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-edges)

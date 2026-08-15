@@ -33,6 +33,7 @@ import { padTestimony, retroDossier } from '../retro/dossier.js';
 import { priorWorkBriefing } from '../briefing/priorWork.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
 import { padOriginFor } from '../scratch/pad.js';
+import { retryNote, retryResumeFor, type RetryResume } from './retryResume.js';
 import { isActiveTask } from '../tasks.js';
 import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
 
@@ -193,9 +194,29 @@ export class ActionExecutor {
             // is the prompt the agent gets — a later append would leave the
             // cockpit showing something the agent never saw.
             const evidence = action.type === 'dispatch_code_agent' ? await this.ciEvidenceFor(action) : '';
-            task = this.recordDispatchTask(action, evidence);
-            const cwd = await this.workingDirectory(task, action);
-            this.deps.agents.spawn(task, cwd);
+            // Whether this dispatch continues the last agent's conversation or starts
+            // cold (issue #333). Decided before the row is written, because the note it
+            // produces is part of the prompt the row stores.
+            const retry = retryResumeFor(origin, store);
+            task = this.recordDispatchTask(action, evidence, retry);
+            // A desk retry keeps the previous scratch directory; every other dispatch
+            // gets the directory its own task names. A *code* retry still goes through
+            // `ensure` — a cleanly finished agent's worktree is removed when it is
+            // reaped and has to come back — and lands on the same deterministic path.
+            const cwd =
+              retry && action.type === 'dispatch_desk_agent'
+                ? retry.previous.cwd
+                : await this.workingDirectory(task, action);
+            // `claude --resume` resolves the transcript inside the *launch cwd's*
+            // project directory, so a retry that would land anywhere else has nothing
+            // to re-attach to. Checked rather than assumed: this is the one failure
+            // that costs a whole attempt and reports nothing but a cold-looking run.
+            const inherit = retry && retry.previous.cwd === cwd ? retry.previous.sessionId : null;
+            const agent = this.deps.agents.spawn(task, cwd, inherit);
+            // Read back off the row rather than from the request: a non-resumable
+            // runtime silently declines the inheritance, and the audit line must say
+            // what happened rather than what was asked for.
+            const resumed = inherit !== null && agent.sessionId === inherit;
             liveCount += 1;
             // An operator-launched job leaves the queue only once its agent is
             // actually running — so a deferred (capped/paused) dispatch keeps it
@@ -205,9 +226,12 @@ export class ActionExecutor {
             // held must leave the part `ready` for a later cycle, not claim it started.
             if (action.type === 'dispatch_code_agent' && action.partId)
               store.markPartDispatched(action.partId, task.id, action.branch);
+            const kind = action.type === 'dispatch_code_agent' ? 'code' : 'desk';
             record(
               'executed',
-              `Spawned ${action.type === 'dispatch_code_agent' ? 'code' : 'desk'} agent for task ${task.id} in ${cwd}.`,
+              resumed
+                ? `Resumed the previous agent's conversation for a ${kind} agent on task ${task.id} in ${cwd}.`
+                : `Spawned ${kind} agent for task ${task.id} in ${cwd}.`,
             );
           } catch (err) {
             if (task) this.abandonUnstarted(task);
@@ -769,6 +793,7 @@ export class ActionExecutor {
   private recordDispatchTask(
     action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
     evidence: string,
+    retry: RetryResume | null,
   ): Task {
     const { store } = this.deps;
     // The origin *and* the signals folded under it: a review-comment dispatch
@@ -800,7 +825,14 @@ export class ActionExecutor {
     // reason the four notes above are, and scoped to the *goal* rather than the
     // exact origin — see `attachmentsFor`.
     const attachments = attachmentsFor(action.originRef, store);
-    const prompt = [action.prompt, evidence, guidance, outstanding, prior, briefing, attachments]
+    // The retry note when this dispatch inherits the last agent's conversation
+    // (issue #333), and it is the one block that goes *ahead* of the rendered
+    // prompt: the agent must know it is on ground it has covered before it reads
+    // the restatement, or the restatement is simply a second task. A code retry
+    // says the worktree was recreated; a desk retry keeps its scratch dir, so it
+    // does not.
+    const note = retry ? retryNote(retry.priorAttempts + 1, action.type === 'dispatch_code_agent') : null;
+    const prompt = [note, action.prompt, evidence, guidance, outstanding, prior, briefing, attachments]
       .filter(Boolean)
       .join('\n\n');
     // The model this kind of work runs on, resolved once and stored — so a resumed
