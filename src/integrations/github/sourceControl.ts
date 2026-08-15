@@ -2,6 +2,7 @@ import type { ErrorRecorder } from '../../errorLog.js';
 import type {
   BranchDeleteInput,
   PrBaseInput,
+  PrBaseUpdateInput,
   PrCreateInput,
   PrLabelInput,
   PrMergeInput,
@@ -15,6 +16,7 @@ import type {
   Capability,
   Integration,
   PrBaseCapable,
+  PrBaseUpdateCapable,
   PrCreateCapable,
   PrLabelCapable,
   PrMergeCapable,
@@ -72,6 +74,7 @@ export class GitHubSourceControlIntegration
     PrCreateCapable,
     PrTitleCapable,
     PrBaseCapable,
+    PrBaseUpdateCapable,
     BranchDeleteCapable,
     RefResolvable
 {
@@ -229,6 +232,18 @@ export class GitHubSourceControlIntegration
   async setPullBase(input: PrBaseInput): Promise<SendResult> {
     await this.opts.api.setPullBase(input.prNumber, input.base);
     return { ok: true };
+  }
+
+  /**
+   * Bring a pull request up to date with its base, server-side (issue #332).
+   * Nothing is cloned, checked out or pushed from here — GitHub merges the base in
+   * on its own machines, which is the whole saving over the code agent this
+   * replaces. Always `ok: true`: the endpoint throws rather than declining, and a
+   * throw is what sends the concern back to an agent.
+   */
+  async updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {
+    await this.opts.api.updatePullBranch(input.prNumber);
+    return { ok: true, ref: input.base };
   }
 }
 

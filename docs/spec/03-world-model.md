@@ -165,13 +165,18 @@ cockpit's link map.
 | ---------------------------- | --------------------------------------------------- | -------------------------- |
 | `pr:<n>`                     | A pull request (world events, link map)             | —                          |
 | `pr:<n>:ci`                  | A PR's failing-CI concern                           | the PR's own `branch`      |
-| `pr:<n>:mergeable`           | A PR's base-update / conflict concern               | the PR's own `branch`      |
+| `pr:<n>:mergeable`           | A PR's base-update / conflict concern¹              | the PR's own `branch`      |
 | `pr:<n>:comments`            | A PR's unhandled review threads, together           | the PR's own `branch`      |
 | `pr:<n>:comment:<commentId>` | One review thread (a signal, not a dispatch origin) | the PR's own `branch`      |
 | `issue:<n>`                  | An issue, and its plan row's `origin_ref`           | `issue/<n>`                |
 | `issue:<n>:plan`             | A planning agent for that issue                     | `plan/issue/<n>`           |
 | `issue:<n>:part:<slug>`      | One part of a decomposed issue                      | `issue/<n>/<slug>`         |
 | `job:<id>`                   | An operator-launched job                            | `job.branch` or `job/<id>` |
+
+¹ Also the origin of the agentless base merge (`update_pr_branch`), which is why its attempts count
+against the same cooldown a dispatch on this origin would
+([05](05-dispatcher.md#pr-base-update--two-arms)). The branch column still answers for the arm that
+dispatches.
 
 **Origin and branch are 1:1 for every world-driven rule.** That is why the origin de-duplication gate
 already functions as a branch gate. Rule `manual-job` (`job:<id>`) is the one dispatch path where the property

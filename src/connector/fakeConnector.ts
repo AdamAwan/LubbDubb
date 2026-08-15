@@ -5,6 +5,7 @@ import type {
   IssueCommentInput,
   IssueLabelInput,
   PrBaseInput,
+  PrBaseUpdateInput,
   PrCreateInput,
   PrLabelInput,
   PrMergeInput,
@@ -81,6 +82,10 @@ export class FakeConnector implements Connector, ActionSink {
 
   setPullBase(input: PrBaseInput): Promise<SendResult> {
     return this.composite.setPullBase(input);
+  }
+
+  updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {
+    return this.composite.updatePrBranch(input);
   }
 
   deleteBranch(input: BranchDeleteInput): Promise<SendResult> {

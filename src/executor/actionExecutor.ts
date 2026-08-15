@@ -9,6 +9,7 @@ import type { ActionSink } from '../sink/actionSink.js';
 import type { AutoSendConfig } from '../config.js';
 import { resolveAgentModel, type AgentModels } from '../agents/modelPolicy.js';
 import type { RuntimeControl } from '../runtimeControl.js';
+import type { ErrorRecorder } from '../errorLog.js';
 import type { ValidatedAction } from '../dispatcher/actions.js';
 import type { DispatchResult } from '../dispatcher/dispatcher.js';
 import {
@@ -63,6 +64,13 @@ interface ExecutorDeps {
   defaultBranch: string;
   /** Live cap + pause flag, read by reference each cycle (never a frozen copy). */
   runtime: RuntimeControl;
+  /**
+   * The one error-recording path. Reached by the acts the executor performs
+   * itself rather than through a proposal: a decision row says an act did not
+   * happen, and the Errors panel is where a *provider* failure has to surface
+   * beside the others.
+   */
+  errors: ErrorRecorder;
 }
 
 export interface ExecutionSummary {
@@ -314,6 +322,68 @@ export class ActionExecutor {
             `Proposed a response to the failed assessment of ${action.originRef}: ${esc.id} / ${proposal.id}. ` +
               `Accepting ${action.cause === 'plan' ? 'sends the plan back to a planner' : `appends a follow-up part for "${action.partSlug}"`}; nothing happens until then.`,
           );
+          break;
+        }
+
+        case 'update_pr_branch': {
+          // The `behind` arm of rule `pr-base-update`, performed rather than
+          // dispatched (issue #332). Not authorized and not proposed, for
+          // `set_work_item_state`'s reason and one more: this is a write to a
+          // branch the harness owns, of a merge the provider has already said is
+          // clean, and the agent path took it without asking anyone. Making the
+          // cheap path ask a human what the expensive one never did would be a new
+          // gate wearing an optimisation's clothes.
+          //
+          // The branch gate again, for the reason the dispatch path re-checks it:
+          // every path reaching the executor must be covered, not only the one
+          // that checked first. An agent holding the branch has a worktree cut
+          // from a commit this merge would move out from under it — the rule
+          // proposes this only for a free branch, and this is what makes that
+          // true of the moment it runs. **Deferred, not skipped**: the collision
+          // is transient, and `skipped` is the word the next cycle reads as "the
+          // cheap path is unavailable here" and falls back to an agent on.
+          const staffed = store.findActiveTaskByBranch(action.branch);
+          if (staffed) {
+            record(
+              'deferred',
+              `Deferred: branch ${action.branch} is held by active task ${staffed.id}; ` +
+                `merging ${action.base} in under it would move the commit its worktree was cut from. ` +
+                `Will retry when it frees.`,
+            );
+            break;
+          }
+          try {
+            const res = await this.deps.sink.updatePrBranch({ prNumber: action.prNumber, base: action.base });
+            // `ok: false` is the provider saying it has no such operation (Azure
+            // DevOps), which is a configuration rather than a failure — so it is
+            // audited and *not* recorded as an error. Either way the row is what
+            // the next cycle's rule reads to fall back to a code agent, so the PR
+            // is never left sitting behind its base.
+            if (!res.ok) {
+              record(
+                'skipped',
+                `This provider cannot merge ${action.base} into PR #${action.prNumber} itself; ` +
+                  `a code agent will be dispatched to do it.`,
+              );
+              break;
+            }
+            record(
+              'executed',
+              `Brought PR #${action.prNumber} up to date with ${action.base} — no agent spent.${res.ref ? ` ref=${res.ref}` : ''}`,
+            );
+          } catch (err) {
+            const message = (err as Error).message;
+            this.deps.errors.record({
+              source: 'provider',
+              message: `Updating PR #${action.prNumber} from ${action.base} failed: ${message}`,
+              detail: 'Rule pr-base-update will dispatch a code agent to merge the base in instead.',
+            });
+            record(
+              'rejected',
+              `Failed to merge ${action.base} into PR #${action.prNumber}: ${message}. ` +
+                `A code agent will be dispatched to do it.`,
+            );
+          }
           break;
         }
 

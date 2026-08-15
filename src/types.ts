@@ -2254,6 +2254,7 @@ type ActionType =
   | 'merge_pr'
   | 'propose_plan'
   | 'propose_shortfall'
+  | 'update_pr_branch'
   | 'set_work_item_state'
   | 'no_op';
 

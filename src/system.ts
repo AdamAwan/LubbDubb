@@ -460,6 +460,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     deskRoot: config.deskRoot,
     defaultBranch: config.defaultBranch,
     runtime: runtimeControl,
+    errors,
   });
 
   // The accept/reject surface for acts the auto-send gate refused to perform on

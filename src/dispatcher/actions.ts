@@ -198,6 +198,37 @@ const ActionSchema = z.discriminatedUnion('type', [
     prompt: z.string().min(1),
     ...base,
   }),
+  /**
+   * Bring a pull request that is merely **behind** its base up to date, without
+   * spending a code agent on two git commands (issue #332).
+   *
+   * Emitted only by rule `pr-base-update`'s `behind` arm — the case the provider
+   * has already said merges cleanly — and never for a conflict, which is
+   * judgement and keeps its agent. It claims no headroom and is pushed straight
+   * through, like `merge_pr` and `set_work_item_state`; the executor performs it
+   * against the sink and audits the outcome under `originRef`, which is what keeps
+   * the origin's cooldown and attempt accounting whole.
+   */
+  z.object({
+    type: z.literal('update_pr_branch'),
+    prNumber: z.number().int(),
+    /** The base branch being merged in — for the audit line, not for the provider. */
+    base: z.string().min(1),
+    /**
+     * The PR's own branch — the thing being written to. Carried so the executor
+     * can re-check the branch gate it re-checks for a dispatch, and for the same
+     * reason: the rule only proposes this for a free branch, but every path that
+     * reaches the executor must be covered, not just the one that checked first.
+     */
+    branch: z.string().min(1),
+    /**
+     * `pr:<n>:mergeable`, the concern's own origin. Required rather than
+     * defaulted: it is the key the attempt counter and the next cycle's fallback
+     * both read, and an act that carried none would be invisible to both.
+     */
+    originRef: z.string().min(1),
+    ...base,
+  }),
   z.object({
     type: z.literal('set_work_item_state'),
     /** The work item / issue number to transition. */

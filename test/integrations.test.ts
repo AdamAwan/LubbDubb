@@ -174,6 +174,30 @@ test('mergePr throws when no PrMergeCapable integration is enabled', async () =>
   store.close();
 });
 
+test('updatePrBranch routes to the sourceControl provider and the PR stops being behind', async () => {
+  const { store, connector } = build();
+  connector.inject({ kind: 'new_pr', number: 7, title: 'X', branch: 'b' });
+  connector.inject({ kind: 'pr_mergeable', prNumber: 7, mergeable: true, mergeableState: 'behind' });
+
+  const result = await connector.updatePrBranch({ prNumber: 7, base: 'main' });
+  assert.equal(result.ok, true);
+  assert.equal((await connector.getState()).pullRequests[0]!.mergeableState, 'clean');
+  store.close();
+});
+
+test('updatePrBranch answers ok:false — never throws — when no provider can do it', async () => {
+  // The one outbound act with a second way to get done, so an absent capability
+  // (Azure DevOps has no update-branch endpoint) is a configuration rather than a
+  // fault: the caller reads `ok: false` and falls back to a code agent.
+  const store = new Store(':memory:');
+  const integrations = buildIntegrations(FAKES, { store, config: loadConfig(), now: FIXED }).filter(
+    (i) => i.capability !== 'sourceControl',
+  );
+  const connector = new CompositeConnector(integrations, FIXED);
+  assert.deepEqual(await connector.updatePrBranch({ prNumber: 1, base: 'main' }), { ok: false });
+  store.close();
+});
+
 test('setPrLabel routes to the sourceControl provider and tags the PR', async () => {
   const { store, connector } = build();
   connector.inject({ kind: 'new_pr', number: 7, title: 'X', branch: 'b' });

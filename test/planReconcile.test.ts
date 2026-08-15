@@ -26,6 +26,7 @@ function recordingSink(): { sink: ActionSink; comments: IssueCommentInput[] } {
       createPullRequest: unused,
       setPullTitle: unused,
       setPullBase: unused,
+      updatePrBranch: unused,
       deleteBranch: unused,
       async upsertIssueComment(input): Promise<SendResult> {
         comments.push(input);

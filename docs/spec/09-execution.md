@@ -6,12 +6,12 @@ reason, so "why did (or didn't) this happen" is always answerable.
 
 ## Outcomes
 
-| Outcome    | Meaning                                                                                     |
-| ---------- | --------------------------------------------------------------------------------------------- |
-| `executed` | The effect happened.                                                                        |
-| `deferred` | Deliberately not now; the same action will be re-planned next cycle.                        |
-| `rejected` | Malformed, or the effect failed.                                                            |
-| `skipped`  | Not needed — the work is already being done, or the target is gone.                         |
+| Outcome    | Meaning                                                              |
+| ---------- | -------------------------------------------------------------------- |
+| `executed` | The effect happened.                                                 |
+| `deferred` | Deliberately not now; the same action will be re-planned next cycle. |
+| `rejected` | Malformed, or the effect failed.                                     |
+| `skipped`  | Not needed — the work is already being done, or the target is gone.  |
 
 `ExecutionSummary` counts `executed`, `deferred` and `rejected` (skips are recorded but not counted).
 
@@ -30,7 +30,7 @@ For `dispatch_code_agent` and `dispatch_desk_agent`, in this exact order:
 ### 1. Origin gate — `skipped`
 
 `store.findActiveTaskByOrigin(originRef)`. If an active task already holds the origin, the action is
-skipped: *this work is already being done.*
+skipped: _this work is already being done._
 
 ### 2. Branch gate — `deferred` (code dispatches only)
 
@@ -53,7 +53,7 @@ row per cycle. An operator who does not want to wait cancels it.
 
 The same predicate is asked earlier, at queue time, by `POST /api/jobs`, which **409s** a colliding
 branch. Two call sites, one predicate — that is what keeps them from disagreeing. They differ only in
-*when*, which is why the earlier one refuses (nothing has been promised yet) and the later one defers
+_when_, which is why the earlier one refuses (nothing has been promised yet) and the later one defers
 (a queued job the operator is entitled to have retried).
 
 ### 3. Pause gate — `deferred`
@@ -148,14 +148,14 @@ verdict governs **before** the gate is asked, so it applies regardless of which 
 next. Refs are `pr:<n>:merge` and `pr:<n>:comment:<id>` (or `pr:<n>:reply` when untargeted), so one
 PR can be the subject of a merge and a reply at once without the two holding each other.
 
-| Standing verdict | Held for |
-| ---------------- | -------- |
-| `pending` | Until answered. Asking again is the duplicate that filled the inbox. |
-| `rejected` | Until something happens to the world item (below). |
-| `accepted` | `SETTLE_WINDOW_MS` (15 min, deliberately `DEFAULT_COOLDOWN` — the same statement), then it stops, so a *failed* act is re-proposed while a successful one is not re-proposed before the world reflects it. |
+| Standing verdict | Held for                                                                                                                                                                                                   |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pending`        | Until answered. Asking again is the duplicate that filled the inbox.                                                                                                                                       |
+| `rejected`       | Until something happens to the world item (below).                                                                                                                                                         |
+| `accepted`       | `SETTLE_WINDOW_MS` (15 min, deliberately `DEFAULT_COOLDOWN` — the same statement), then it stops, so a _failed_ act is re-proposed while a successful one is not re-proposed before the world reflects it. |
 
 Rule `pr-merge-ready` suppresses itself off the same predicate, so on the default path the question is asked once —
-but it is repeated here because it must hold for *every* path that reaches the executor, the LLM
+but it is repeated here because it must hold for _every_ path that reaches the executor, the LLM
 dispatcher's prose-composed `reply_on_pr` included. Two call sites, one predicate.
 
 ### 2. The gate — `autoSendVerdict(gate, actionType, confidence)`
@@ -178,7 +178,7 @@ which is exactly what a pending proposal already says.
 ### 3. Either a decider or an ask
 
 - **Authorized** → `store.createProposal(…)`, then `decideProposal(id, 'accepted', verdict.note,
-  'auto_send')`, then `runAuthorized(accepted, cycleId)`. No escalation: nothing is being asked of
+'auto_send')`, then `runAuthorized(accepted, cycleId)`. No escalation: nothing is being asked of
   anyone. One appears only if the act then fails.
 - **Blocked** → an escalation (`approve_change` for a merge, `review_reply` carrying the draft) plus a
   **pending** proposal hanging off it, audited `executed` with the blocking reason — an escalation did
@@ -187,17 +187,17 @@ which is exactly what a pending proposal already says.
 ## Performing an authorized act
 
 `ActionExecutor.runAuthorized(proposal, pulseCycleId?)` is the one place an accepted proposal becomes
-its effect *and* its audit row. `ProposalDesk.accept` calls it with no cycle id; `authorize` calls it
+its effect _and_ its audit row. `ProposalDesk.accept` calls it with no cycle id; `authorize` calls it
 with the pulse's.
 
 `readProposedAct(proposal)` re-reads the stored action into one of three `ProposedAct`s, re-checking
 the fields the effect is about to be handed rather than trusting a round trip through JSON and SQLite:
 
-| Act | Effect |
-| --- | ------ |
-| `merge` | `sink.mergePr({prNumber, method})` |
-| `reply_draft` | `sink.postPrReply({prNumber, commentId, body})` |
-| `plan` | `releasePlan(store, planId, originRef)` — publishes nothing; see [08](08-planning.md#the-approval-gate) |
+| Act           | Effect                                                                                                  |
+| ------------- | ------------------------------------------------------------------------------------------------------- |
+| `merge`       | `sink.mergePr({prNumber, method})`                                                                      |
+| `reply_draft` | `sink.postPrReply({prNumber, commentId, body})`                                                         |
+| `plan`        | `releasePlan(store, planId, originRef)` — publishes nothing; see [08](08-planning.md#the-approval-gate) |
 
 `plan` is checked **before** the PR number, or an approved decomposition audits as "names no PR
 number". A malformed payload is reported, never guessed at.
@@ -205,18 +205,18 @@ number". A malformed payload is reported, never guessed at.
 `authorityOf(proposal, pulseCycleId)` decides the whole decider → cycle id → wording chain at once,
 because the three are a chain and not three facts:
 
-| Decider | Cycle id | Reads as |
-| ------- | -------- | -------- |
-| `human` | `human:<proposal id>` — a decision made outside the pulse, like `agent-lifecycle` | `authorized by you` |
-| `auto_send` | the pulse's own cycle id | `authorized by auto-send (confidence 0.90 ≥ 0.85 threshold)` |
+| Decider     | Cycle id                                                                          | Reads as                                                     |
+| ----------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| `human`     | `human:<proposal id>` — a decision made outside the pulse, like `agent-lifecycle` | `authorized by you`                                          |
+| `auto_send` | the pulse's own cycle id                                                          | `authorized by auto-send (confidence 0.90 ≥ 0.85 threshold)` |
 
-Auto-send accepts *inside* a cycle, so its row stays grouped with the pulse that produced the action
+Auto-send accepts _inside_ a cycle, so its row stays grouped with the pulse that produced the action
 and **cannot** carry the `human:` prefix the cockpit badges "you · accepted" off. An auto-sent row is
 deliberately left unbadged — that is the harness acting on its own — with the authority in the detail.
 
 **The failure path is one path for both deciders.** A send that throws creates the same
 `autoSendFailed` / `autoMergeFailed` escalation as before and audits `rejected` (the act did not go
-out). The proposal stays `accepted` — it *was* accepted — and once its settle window lapses the gate
+out). The proposal stays `accepted` — it _was_ accepted — and once its settle window lapses the gate
 re-proposes if the world still warrants it. That is the recovery; it needs no new state.
 
 ## A rejection expires on signal
@@ -229,7 +229,7 @@ failure mirrored.
 A rejection therefore stands until the **world item it concerns** changes, and then stops standing.
 
 - **What counts.** Any `WorldEvent` on the item, `createdAt` strictly after `decidedAt`. A proposal
-  names an *act* (`pr:42:merge`) and an event names an *object* (`pr:42`), so `proposalWorldRef` maps
+  names an _act_ (`pr:42:merge`) and an event names an _object_ (`pr:42`), so `proposalWorldRef` maps
   one to the other — in one place, used both to match events and to ask for them, because two matchers
   over two views is the bug class this repo has fixed twice. Any transition rather than a per-kind
   list: the rules that would re-propose re-evaluate on exactly these events, so a filter here would be
@@ -237,8 +237,8 @@ A rejection therefore stands until the **world item it concerns** changes, and t
 - **No timer arm.** A time-only expiry re-asks a question the world has not changed its answer to,
   which is "not this second" under a longer name. If both existed signal would dominate anyway, so a
   timer could only ever delay an expiry the signal already granted. The asymmetry with the `accepted`
-  window is intended: an accepted act waits on the world to *reflect* something done (a duration), a
-  rejected one waits on it to *become* something else (an event).
+  window is intended: an accepted act waits on the world to _reflect_ something done (a duration), a
+  rejected one waits on it to _become_ something else (an event).
 - **It cannot flood.** Expiring only un-holds the rule; the rule's own preconditions still decide, and
   the fresh pending proposal holds the ref again. So the act is re-proposed **once**, not once per
   pulse — and the most common signal on a refused PR, a new review comment, un-holds rule `pr-merge-ready` and then
@@ -254,14 +254,14 @@ A rejection therefore stands until the **world item it concerns** changes, and t
 - **`planProposalHold` does not inherit it**, and could not: it holds on `pending` only, so there is no
   rejected hold for a signal to end. See [08](08-planning.md#the-approval-gate).
 
-Expiry governs re-*asking*, not the verdict: the row stays `rejected`, and the operator's reason keeps
+Expiry governs re-_asking_, not the verdict: the row stays `rejected`, and the operator's reason keeps
 being delivered (below).
 
 ## A rejection's reason reaches the next agent
 
 `rejectionGuidance(originRef, proposals)` is the second half of "a rejection is usable signal". The
 reason was already captured, rendered into a hold string and written to the audit line — and read by
-no agent at all, so refusing a draft with *"too defensive — just fix the lint"* left the next agent on
+no agent at all, so refusing a draft with _"too defensive — just fix the lint"_ left the next agent on
 `pr:<n>:comment:<id>` starting from the prompt that produced the draft you refused.
 
 `recordDispatchTask` appends it to the dispatch prompt when the standing verdict for the action's
@@ -270,15 +270,15 @@ no agent at all, so refusing a draft with *"too defensive — just fix the lint"
 - **In the executor, not the dispatcher.** Every dispatch passes here whatever composed it, so the
   note reaches an agent whether the act was proposed by a rule or authorized outside the pulse.
 - **Appended, not filled in.** Prompt templates are operator-overridable and the loader only rejects
-  *unknown* placeholders, so an override that omitted a new `{rejection}` token would silently drop a
+  _unknown_ placeholders, so an override that omitted a new `{rejection}` token would silently drop a
   human's words — on exactly the deployments that customised the prompt most. Appending has no
   fallback to get wrong.
-- **Exact ref, not the world item.** A rejected `reply_draft`'s ref *is* rule `pr-review-comment`'s dispatch origin, so
-  this is a lookup. Widening it to the PR would put a refusal to *merge* in front of an agent fixing
+- **Exact ref, not the world item.** A rejected `reply_draft`'s ref _is_ rule `pr-review-comment`'s dispatch origin, so
+  this is a lookup. Widening it to the PR would put a refusal to _merge_ in front of an agent fixing
   CI, as guidance it can neither act on nor tell apart from its own task — so a rejected merge reaches
   no agent, because no agent's job is to hear about it.
 - **Attributed, and quoted.** The note is free text a human typed, passed through verbatim and framed
-  as *their* words about what was refused, never as the harness's own instruction, because an agent
+  as _their_ words about what was refused, never as the harness's own instruction, because an agent
   will act on it. An **empty note appends nothing**: the prompt is byte-identical to one with no
   rejection behind it.
 
@@ -351,6 +351,39 @@ operator's own filename as a label.
     the alternative is guessing which part an image is "about", which the harness has no basis for.
 - **The label is quoted as the operator's**, never as an instruction — a filename is not a directive,
   and it is never used to build a path.
+
+## `update_pr_branch` — the base merge without an agent
+
+The `behind` arm of rule `pr-base-update` ([05](05-dispatcher.md#pr-base-update--two-arms)), performed
+here rather than dispatched. `sink.updatePrBranch({prNumber, base})` asks the provider to merge the
+base branch in on its own machines: no worktree, no model, no cold read of the repository, for a merge
+the provider itself reported as clean.
+
+Not authorized and not proposed, which is deliberate on both counts. It is mechanical in
+`set_work_item_state`'s sense, and beyond that it is a write to a branch the harness owns that the
+agent path took without asking anyone — a cheap path that asked a human what the expensive one never
+did would be a new gate wearing an optimisation's clothes.
+
+It re-checks the **branch gate** first, for the reason the dispatch path re-checks it: every path
+reaching the executor must be covered, not only the one that checked first. An agent holding the
+branch has a worktree cut from a commit this merge would move out from under it. That is a
+`deferred` — the collision is transient — and deliberately not a `skipped`, which is the word the next
+pulse reads as "the cheap path is unavailable here".
+
+Then three outcomes, and the difference between the last two is the whole reason the sink answers
+rather than throwing:
+
+| Result      | Decision   | Error log | Meaning                                                                 |
+| ----------- | ---------- | --------- | ----------------------------------------------------------------------- |
+| `ok: true`  | `executed` | —         | The base is merged in; the next snapshot stops reporting the PR behind. |
+| `ok: false` | `skipped`  | —         | This provider has no such operation (Azure DevOps). A configuration.    |
+| _throws_    | `rejected` | recorded  | The provider has it and would not do it.                                |
+
+Either unperformed row is the dispatcher's memory on the next pulse: it reads them back out of
+`recentDecisions` and builds the concern as the code agent it always was, so the PR is never left
+sitting behind its base. The error entry is `source: 'provider'` and carries what happens next in its
+detail, because a failure the harness recovers from on its own must still be visible as a failure
+([18](18-observability.md)).
 
 ## `set_work_item_state` — not authorized, just done
 
@@ -459,7 +492,7 @@ process's cwd, so there is nothing there to reproduce).
 - the task has a branch, **and**
 - no other active task shares that branch.
 
-Sequencing matters: `reaped` fires only once the process has *actually exited*, because a live process
+Sequencing matters: `reaped` fires only once the process has _actually exited_, because a live process
 pins the worktree cwd. A removal failure is recorded to the error log.
 
 ## Git
@@ -473,7 +506,7 @@ pins the worktree cwd. A removal failure is recorded to the error log.
   `refs/heads/<ref>`, then `<ref>^{commit}`. **`origin/` wins over the local ref**: the harness's clone
   never checks the integration branch out, so its `refs/heads/main` is frozen at clone time while the
   remote-tracking ref moves. It returns a SHA rather than a ref name on purpose — handing
-  `git worktree add -b` a remote-tracking ref would set the new branch's *upstream* to it, so a later
+  `git worktree add -b` a remote-tracking ref would set the new branch's _upstream_ to it, so a later
   bare `git push` would aim at the base.
 - **`GitObserver`** (`gitObserver.ts`) — the read-only seam: `presence(branch)`,
   `divergence(branch, base)`, `hasCommitsBeyond(branch, base)`. Deliberately **fetch-free**; how often

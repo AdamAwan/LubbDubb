@@ -7,6 +7,7 @@ import type {
   IssueCommentInput,
   IssueLabelInput,
   PrBaseInput,
+  PrBaseUpdateInput,
   PrCreateInput,
   PrLabelInput,
   PrMergeInput,
@@ -150,6 +151,24 @@ export interface PrBaseCapable {
 
 export function isPrBaseCapable(x: Integration): x is Integration & PrBaseCapable {
   return typeof (x as Partial<PrBaseCapable>).setPullBase === 'function';
+}
+
+/**
+ * An integration that can bring a pull request up to date with its base
+ * server-side — the provider's own "update branch" (issue #332).
+ *
+ * Separate from {@link PrBaseCapable}, which *retargets* a pull request: one
+ * changes which branch is merged into, the other merges it in. GitHub has both;
+ * Azure DevOps has only the first, which is precisely why this is its own
+ * capability rather than a method on a widened one — an integration says what it
+ * can do, and the composite answers `ok: false` when nothing can.
+ */
+export interface PrBaseUpdateCapable {
+  updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult>;
+}
+
+export function isPrBaseUpdateCapable(x: Integration): x is Integration & PrBaseUpdateCapable {
+  return typeof (x as Partial<PrBaseUpdateCapable>).updatePrBranch === 'function';
 }
 
 /** An integration that can delete a branch — the reap after a pull request merges. */

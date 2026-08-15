@@ -54,6 +54,12 @@ export interface PrBaseInput {
   base: string;
 }
 
+export interface PrBaseUpdateInput {
+  prNumber: number;
+  /** The base branch being merged in. Not sent to the provider — it names the act in the audit line. */
+  base: string;
+}
+
 export interface BranchDeleteInput {
   /** The branch to delete, plain — each provider adds its own `refs/heads/` prefix. */
   branch: string;
@@ -136,6 +142,20 @@ export interface ActionSink {
    * Idempotent: callers skip a write whose base is already right. Throws if it fails.
    */
   setPullBase(input: PrBaseInput): Promise<SendResult>;
+  /**
+   * Merge the base branch into a pull request that is merely **behind** it —
+   * server-side, with no worktree and no agent (issue #332). Only ever called for
+   * a PR the provider itself reported as `behind`, i.e. one it has already said
+   * merges cleanly; the conflicted case is judgement and keeps its agent.
+   *
+   * **`ok: false` is "this provider cannot do it", not a failure.** GitHub has
+   * `PUT /pulls/{n}/update-branch`; Azure DevOps has no equivalent, and that is a
+   * legitimate configuration rather than a wiring fault — so the composite answers
+   * `ok: false` instead of throwing, and the caller falls back to the code agent
+   * that did this work before. Throws only when the provider *has* the operation
+   * and it failed, which is the case worth an error entry.
+   */
+  updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult>;
   /**
    * Delete a branch on the remote — the branch behind a pull request that has
    * merged. Mechanical bookkeeping like {@link setPullTitle}, so it is not auto-send

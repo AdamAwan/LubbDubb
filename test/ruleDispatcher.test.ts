@@ -1,8 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
-import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
-import type { WorldSnapshot } from '../src/types.js';
+import type { DispatchContext, DispatchResult } from '../src/dispatcher/dispatcher.js';
+import type { Action, Decision, DecisionOutcome, PullRequest, WorldSnapshot } from '../src/types.js';
 import { singlePlan } from './support/plans.js';
 
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
@@ -427,50 +427,98 @@ test('a dirty PR is dispatched to a code agent to resolve conflicts', async () =
   assert.match((actions[0] as { prompt: string }).prompt, /resolve the conflicts/i);
 });
 
-test('a behind PR gets a clean base-update dispatch, not conflict framing', async () => {
+/** The one PR shape the base-update rule's `behind` arm fires on. */
+function behindPr(over: Partial<PullRequest> = {}): PullRequest {
+  return {
+    id: 'p',
+    number: 42,
+    title: 'X',
+    branch: 'feat',
+    baseBranch: 'main',
+    ciStatus: 'passing',
+    unresolvedComments: [],
+    mergeable: true,
+    mergeableState: 'behind',
+    ...over,
+  };
+}
+
+/** One recorded decision, as the audit log hands it back to the next cycle. */
+function pastDecision(action: Action, outcome: DecisionOutcome, createdAt = '2026-01-01T00:00:00.000Z'): Decision {
+  return { id: `d_${outcome}`, cycleId: 'c1', action, outcome, detail: '', rule: null, admission: null, createdAt };
+}
+
+test('a behind PR is merged up to date through the provider, with no agent spent', async () => {
   const d = new RuleDispatcher();
-  const { actions } = await d.decide(
-    ctx({
-      pullRequests: [
-        {
-          id: 'p',
-          number: 42,
-          title: 'X',
-          branch: 'feat',
-          baseBranch: 'main',
-          ciStatus: 'passing',
-          unresolvedComments: [],
-          mergeable: true,
-          mergeableState: 'behind',
-        },
-      ],
-    }),
-  );
-  assert.equal(actions[0]?.type, 'dispatch_code_agent');
+  const { actions } = await d.decide(ctx({ pullRequests: [behindPr()] }));
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0]?.type, 'update_pr_branch');
   assert.equal((actions[0] as { originRef: string }).originRef, 'pr:42:mergeable');
-  assert.match((actions[0] as { prompt: string }).prompt, /up to date/i);
-  assert.doesNotMatch((actions[0] as { prompt: string }).prompt, /resolve the conflicts/i);
+  assert.equal((actions[0] as { base: string }).base, 'main');
+  assert.equal((actions[0] as { rule: string }).rule, 'pr-base-update');
+});
+
+test('a base update the provider could not perform falls back to a code agent', async () => {
+  // The audit row is the whole memory: a `skipped` (no such endpoint — Azure
+  // DevOps) or `rejected` (had it, refused) direct update means the PR still
+  // needs merging and only an agent is left to do it.
+  const d = new RuleDispatcher();
+  for (const outcome of ['skipped', 'rejected'] as const) {
+    const { actions } = await d.decide(
+      ctx(
+        { pullRequests: [behindPr()] },
+        {
+          recentDecisions: [
+            pastDecision(
+              { type: 'update_pr_branch', reason: 'r', prNumber: 42, base: 'main', originRef: 'pr:42:mergeable' },
+              outcome,
+            ),
+          ],
+        },
+      ),
+    );
+    assert.equal(actions[0]?.type, 'dispatch_code_agent', `a ${outcome} update must fall back to an agent`);
+    assert.equal((actions[0] as { originRef: string }).originRef, 'pr:42:mergeable');
+    assert.match((actions[0] as { prompt: string }).prompt, /up to date/i);
+    assert.doesNotMatch((actions[0] as { prompt: string }).prompt, /resolve the conflicts/i);
+  }
+});
+
+test("a direct base update keeps the origin's cooldown and attempt cap", async () => {
+  // The accounting is the origin's, not the agent's: an act that runs and leaves
+  // the PR behind is the same loop a dispatch that leaves it behind is.
+  const d = new RuleDispatcher();
+  const attempt = (at: string): Decision =>
+    pastDecision(
+      { type: 'update_pr_branch', reason: 'r', prNumber: 42, base: 'main', originRef: 'pr:42:mergeable' },
+      'executed',
+      at,
+    );
+
+  // Cooldown arithmetic is against the snapshot's own clock, so this world needs
+  // a real one — the shared `ctx` helper's `takenAt` is deliberately unparseable.
+  const cycle = (recentDecisions: Decision[]): Promise<DispatchResult> => {
+    const c = ctx({ pullRequests: [behindPr()] }, { recentDecisions });
+    return d.decide({ ...c, world: { ...c.world, takenAt: '2026-01-01T00:01:00.000Z' } });
+  };
+
+  const cooling = await cycle([attempt('2026-01-01T00:00:00.000Z')]);
+  assert.equal(cooling.actions[0]?.type, 'no_op', 'updated a moment ago — nothing this cycle');
+
+  const spent = await cycle([
+    attempt('2025-12-31T00:00:00.000Z'),
+    attempt('2025-12-31T01:00:00.000Z'),
+    attempt('2025-12-31T02:00:00.000Z'),
+  ]);
+  assert.equal(spent.actions[0]?.type, 'escalate_to_human');
+  assert.equal((spent.actions[0] as { rule: string }).rule, 'pr-base-update');
+  assert.equal((spent.actions[0] as { admission: string }).admission, 'cooldown-escalate');
 });
 
 test('a PR with no reported base falls back to the configured defaultBranch', async () => {
   const d = new RuleDispatcher({}, {}, undefined, 'trunk');
-  const { actions } = await d.decide(
-    ctx({
-      pullRequests: [
-        {
-          id: 'p',
-          number: 42,
-          title: 'X',
-          branch: 'feat',
-          ciStatus: 'passing',
-          unresolvedComments: [],
-          mergeable: true,
-          mergeableState: 'behind',
-        },
-      ],
-    }),
-  );
-  assert.match((actions[0] as { prompt: string }).prompt, /trunk/);
+  const { actions } = await d.decide(ctx({ pullRequests: [behindPr({ baseBranch: undefined })] }));
+  assert.equal((actions[0] as { base: string }).base, 'trunk');
   assert.match((actions[0] as { reason: string }).reason, /behind trunk/);
 });
 
@@ -518,7 +566,7 @@ test('a behind but otherwise-ready PR is updated, not merged', async () => {
     }),
   );
   assert.ok(!actions.some((a) => a.type === 'merge_pr'), 'behind PR must not merge yet');
-  assert.equal(actions[0]?.type, 'dispatch_code_agent');
+  assert.equal(actions[0]?.type, 'update_pr_branch');
 });
 
 test('a conflicted PR is dispatched ahead of a new issue under headroom 1', async () => {

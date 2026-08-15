@@ -3,6 +3,7 @@ import type { InjectableEvent } from '../../connector/connector.js';
 import type {
   BranchDeleteInput,
   PrBaseInput,
+  PrBaseUpdateInput,
   PrCreateInput,
   PrLabelInput,
   PrMergeInput,
@@ -17,6 +18,7 @@ import type {
   Injectable,
   Integration,
   PrBaseCapable,
+  PrBaseUpdateCapable,
   PrCreateCapable,
   PrLabelCapable,
   PrMergeCapable,
@@ -53,6 +55,7 @@ export class FakeGitHubIntegration
     PrCreateCapable,
     PrTitleCapable,
     PrBaseCapable,
+    PrBaseUpdateCapable,
     BranchDeleteCapable,
     Injectable
 {
@@ -219,6 +222,26 @@ export class FakeGitHubIntegration
       mutatePr(world, input.prNumber, (pr) => (pr.baseBranch = input.base));
     });
     return { ok: true, ref: `fake-base_${nanoid(6)}` };
+  }
+
+  /**
+   * The outbound side of the base update (issue #332): "merges" the base in by
+   * reflecting the result back into the fake world — the pull request stops being
+   * behind — so the loop settles exactly as it does after a fake merge. A real
+   * GitHub sink calls the update-branch endpoint here.
+   *
+   * `clean` rather than `unknown`, because that is what the provider reports after
+   * the merge lands: the state the update was for is gone, and leaving it unknown
+   * would have the merge rule read a pull request it can no longer say is ready.
+   */
+  async updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {
+    this.world.mutate((world) =>
+      mutatePr(world, input.prNumber, (pr) => {
+        pr.mergeableState = 'clean';
+        pr.mergeable = true;
+      }),
+    );
+    return { ok: true, ref: `fake-base-update_${nanoid(6)}` };
   }
 
   /**
