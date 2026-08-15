@@ -16,6 +16,7 @@ import type {
   SendResult,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
+import type { CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import type { WorldSnapshot } from '../types.js';
 
 /**
@@ -178,6 +179,29 @@ export interface BranchDeleteCapable {
 
 export function isBranchDeleteCapable(x: Integration): x is Integration & BranchDeleteCapable {
   return typeof (x as Partial<BranchDeleteCapable>).deleteBranch === 'function';
+}
+
+/**
+ * An integration that can fetch the **failing output** of a red CI check, so a
+ * CI-fix dispatch carries the assertion rather than only the check's name.
+ *
+ * Listed among the outbound capabilities for want of a better home, and it is
+ * worth being clear that it is not one: this reads, it changes nothing. It is
+ * kept off {@link Integration.snapshot} deliberately — the snapshot runs every
+ * pulse for every open pull request, and a log fetch there would be paid on every
+ * pulse and used on almost none of them (see the request-budget note in
+ * `docs/spec/15-integrations.md`). This is asked once per actual dispatch.
+ *
+ * A provider answers only for the checks it wrote an {@link CiCheck.evidenceRef}
+ * for, and returns fewer entries than it was asked about — or none — rather than
+ * throwing. → [`src/ci/ciEvidence.ts`]
+ */
+export interface CiEvidenceCapable {
+  readCiFailureEvidence(prNumber: number, checks: CiEvidenceTarget[]): Promise<CiFailureEvidence[]>;
+}
+
+export function isCiEvidenceCapable(x: Integration): x is Integration & CiEvidenceCapable {
+  return typeof (x as Partial<CiEvidenceCapable>).readCiFailureEvidence === 'function';
 }
 
 /** An integration that can add/remove a label on an issue / work item — the watch/ignore toggle. */

@@ -123,6 +123,8 @@ function fakeApi(evals: AzPolicyEvaluation[], pulls: AzPull[] = [pull()]): Azure
     setPullTitle: unused('setPullTitle'),
     setPullBase: unused('setPullBase'),
     deleteBranch: unused('deleteBranch'),
+    getBuildTimeline: unused('getBuildTimeline'),
+    getBuildLog: unused('getBuildLog'),
   };
 }
 

@@ -179,6 +179,8 @@ function ghApi(closed: GhClosedPull[], recorded: string[]): GitHubApi {
     throw new Error('not used by this test');
   };
   return {
+    getJobLog: unused,
+    listCheckRunAnnotations: unused,
     async viewerLogin() {
       return 'bot';
     },
@@ -290,6 +292,8 @@ function azApi(closed: AzClosedPull[], recorded: string[]): AzureDevOpsApi {
     throw new Error('not used by this test');
   };
   return {
+    getBuildTimeline: unused,
+    getBuildLog: unused,
     async viewerUniqueName() {
       return 'bot@acme.com';
     },

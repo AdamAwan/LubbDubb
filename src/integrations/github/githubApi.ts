@@ -54,6 +54,26 @@ export interface GitHubApi {
   getCombinedStatus(sha: string): Promise<GhCombinedStatus>;
   /** Check-runs for a head SHA (the Checks API). */
   listCheckRuns(sha: string): Promise<GhCheckRun[]>;
+  /**
+   * A check run's failure **annotations** — the `{path, line, message}` triples
+   * GitHub renders beside the diff. The cheap half of CI evidence: already
+   * extracted, small, and one request.
+   *
+   * Empty for the large set of jobs that emit no `::error` and carry no problem
+   * matcher, which is why {@link getJobLog} exists behind it rather than instead
+   * of it. → [`src/ci/ciEvidence.ts`]
+   */
+  listCheckRunAnnotations(checkRunId: number): Promise<GhAnnotation[]>;
+  /**
+   * An Actions job's log, as text.
+   *
+   * **The whole log.** The endpoint answers with a redirect to a blob and honours
+   * no line range, so a "tail" is a full download that is then mostly discarded —
+   * the reason the annotation read above is tried first. Callers take the tail
+   * themselves. Throws when the job has expired out of retention (GitHub keeps
+   * logs far less long than it keeps the check run that names them).
+   */
+  getJobLog(jobId: number): Promise<string>;
 
   /** Open issues, optionally narrowed to a label. Includes PRs — caller filters them out. */
   listOpenIssues(label?: string): Promise<GhIssue[]>;
@@ -185,6 +205,33 @@ export interface GhCheckRun {
   status: string;
   /** success | failure | neutral | cancelled | timed_out | action_required | skipped | stale | null */
   conclusion: string | null;
+  /**
+   * The check run's own id — what {@link GitHubApi.listCheckRunAnnotations}
+   * addresses. Optional in the same sense as {@link GhCombinedStatus.statuses}:
+   * the real API always sends one, and a fixture that predates evidence does
+   * not. Absent means no {@link CiCheck.evidenceRef}, i.e. today's prompt.
+   */
+  id?: number;
+  /**
+   * `details_url`. Carried for one reason: an Actions check run's log lives under
+   * a **job** id, which is not this check run's id and appears nowhere else in the
+   * payload — only in this URL's `/job/<id>` segment. A check run from any other
+   * app points somewhere with no log API at all, which is why parsing it is
+   * allowed to fail and yield no log rather than being treated as an error.
+   */
+  detailsUrl?: string | null;
+}
+
+/** One failure annotation on a check run — the extracted assertion, with its place. */
+export interface GhAnnotation {
+  /** Repo-relative file the annotation is on, or `.github` for a workflow-level one. */
+  path: string;
+  startLine: number;
+  /** failure | warning | notice — callers keep the failures. */
+  level: string;
+  message: string;
+  /** The check's own short label for the annotation (e.g. the rule id). May be empty. */
+  title: string;
 }
 
 export interface GhIssue {

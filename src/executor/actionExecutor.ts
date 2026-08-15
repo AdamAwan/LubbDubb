@@ -31,6 +31,7 @@ import { attachmentsNote } from '../jobs/attachments.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { padTestimony, retroDossier } from '../retro/dossier.js';
 import { priorWorkBriefing } from '../briefing/priorWork.js';
+import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
 import { padOriginFor } from '../scratch/pad.js';
 import { isActiveTask } from '../tasks.js';
 import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
@@ -71,6 +72,16 @@ interface ExecutorDeps {
    * beside the others.
    */
   errors: ErrorRecorder;
+  /**
+   * What the failing CI checks reported, fetched at dispatch (issue #334).
+   *
+   * Optional, and absent it changes nothing: a CI-fix dispatch is composed
+   * exactly as it was before this existed. Read **here** rather than in the
+   * dispatcher because the rule pipeline is synchronous and pure over the world
+   * snapshot, and rather than in the world read because that runs every pulse
+   * for every open pull request and would pay for a log nobody dispatches on.
+   */
+  ciEvidence?: CiEvidenceReader;
 }
 
 export interface ExecutionSummary {
@@ -178,7 +189,11 @@ export class ActionExecutor {
           // behind — see {@link ActionExecutor.abandonUnstarted}.
           let task: Task | null = null;
           try {
-            task = this.recordDispatchTask(action);
+            // Fetched before the row is written so the prompt stored on the task
+            // is the prompt the agent gets — a later append would leave the
+            // cockpit showing something the agent never saw.
+            const evidence = action.type === 'dispatch_code_agent' ? await this.ciEvidenceFor(action) : '';
+            task = this.recordDispatchTask(action, evidence);
             const cwd = await this.workingDirectory(task, action);
             this.deps.agents.spawn(task, cwd);
             liveCount += 1;
@@ -709,7 +724,52 @@ export class ActionExecutor {
    * drop a human's words — and it would drop them on exactly the deployments that
    * customised the prompt most. Appending has no fallback to get wrong.
    */
-  private recordDispatchTask(action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' }): Task {
+  /**
+   * The failing output of the checks this dispatch is about, ready to append —
+   * or `''`, which composes the prompt exactly as it was before this existed.
+   *
+   * Scoped to `pr-ci-failing` and nothing else. Rule `pr-ci-gate` is deliberately
+   * out: a waiting check has produced no failure to excerpt, and an **expired**
+   * one's last run is against commits the branch has moved past, so its output
+   * would point an agent at code that no longer exists — worse than no excerpt.
+   *
+   * The checks come from the dispatch (names, decided by the CI policy) joined to
+   * the world baseline (refs, written by the provider). The baseline is this
+   * cycle's world — `recordWorldChanges` writes it before the dispatcher runs —
+   * so this is the same reading the decision was made on, not a second one.
+   */
+  private async ciEvidenceFor(action: ValidatedAction & { type: 'dispatch_code_agent' }): Promise<string> {
+    const reader = this.deps.ciEvidence;
+    if (!reader || action.rule !== 'pr-ci-failing') return '';
+    const names = action.ciChecks ?? [];
+    if (names.length === 0) return '';
+    const prNumber = Number(/^pr:(\d+):/.exec(action.originRef ?? '')?.[1]);
+    if (!Number.isInteger(prNumber)) return '';
+
+    const pr = this.deps.store.getWorldBaseline()?.pullRequests.find((p) => p.number === prNumber);
+    const targets: CiEvidenceTarget[] = (pr?.ciChecks ?? [])
+      .filter((c) => c.evidenceRef !== undefined && names.includes(c.name))
+      .map((c) => ({ name: c.name, evidenceRef: c.evidenceRef! }));
+    if (targets.length === 0) return '';
+
+    try {
+      return ciEvidenceNote(await reader.readCiFailureEvidence(prNumber, targets));
+    } catch (err) {
+      // The reader is documented not to throw; this is the backstop that keeps
+      // that a documentation bug rather than a failed dispatch.
+      this.deps.errors.record({
+        source: 'provider',
+        message: `Could not read CI evidence for PR #${prNumber}: ${(err as Error).message}`,
+        detail: 'The CI-fix agent was dispatched without it.',
+      });
+      return '';
+    }
+  }
+
+  private recordDispatchTask(
+    action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
+    evidence: string,
+  ): Task {
     const { store } = this.deps;
     // The origin *and* the signals folded under it: a review-comment dispatch
     // names the PR's whole review, while a refused reply draft is filed against
@@ -740,7 +800,9 @@ export class ActionExecutor {
     // reason the four notes above are, and scoped to the *goal* rather than the
     // exact origin — see `attachmentsFor`.
     const attachments = attachmentsFor(action.originRef, store);
-    const prompt = [action.prompt, guidance, outstanding, prior, briefing, attachments].filter(Boolean).join('\n\n');
+    const prompt = [action.prompt, evidence, guidance, outstanding, prior, briefing, attachments]
+      .filter(Boolean)
+      .join('\n\n');
     // The model this kind of work runs on, resolved once and stored — so a resumed
     // agent re-launches on what it started on rather than on whatever config says
     // by then, and so the run's cost is readable against what it ran on.
