@@ -667,6 +667,8 @@ const runningAgent = (id: string) => ({
   costUsd: null,
   inputTokens: null,
   outputTokens: null,
+  cacheReadTokens: null,
+  cacheCreationTokens: null,
   numTurns: null,
   note: null,
   notedAt: null,

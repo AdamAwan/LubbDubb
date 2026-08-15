@@ -27,6 +27,8 @@ function agent(id: string, over: Partial<Agent> = {}): Agent {
     costUsd: 1,
     inputTokens: 1000,
     outputTokens: 100,
+    cacheReadTokens: null,
+    cacheCreationTokens: null,
     numTurns: 3,
     note: null,
     notedAt: null,
@@ -234,6 +236,35 @@ test('a run that reported nothing is counted as unmeasured and priced nowhere', 
   assert.equal(insights.totals.unmeasuredRuns, 1);
   assert.equal(insights.goals[0]?.agents, 1, 'the goal counts the runs its figures are over, not every run');
   assert.equal(insights.runs.length, 1, 'and an unmeasured run cannot rank in a table of costs');
+});
+
+/**
+ * The cached split is a *part* of the input, and the fraction it forms is over
+ * the runs that reported one — never over the fleet's whole input. A run from
+ * before the split was recorded measured a gross figure and nothing about its
+ * cache share; folded into the denominator it would read as a cache miss, which
+ * is the one wrong answer this figure can give and the reason the denominator is
+ * shipped beside it rather than assumed.
+ */
+test('the cached split sums only over runs that reported one, and carries its own denominator', () => {
+  const insights = build({
+    agents: [
+      agent('a1', { costUsd: 2, inputTokens: 10_000, cacheReadTokens: 8000, cacheCreationTokens: 500 }),
+      agent('a2', { costUsd: 1, inputTokens: 4000, cacheReadTokens: 0, cacheCreationTokens: 0 }),
+      // Measured for money, silent about caching: an agents row from before the
+      // columns existed.
+      agent('a3', { costUsd: 3, inputTokens: 90_000 }),
+    ],
+    tasks: [task('a1', 'issue:12'), task('a2', 'issue:12'), task('a3', 'issue:12')],
+  });
+
+  const { totals } = insights;
+  assert.equal(totals.inputTokens, 104_000, 'the gross input is every measured run, as it always was');
+  assert.equal(totals.cacheReadTokens, 8000);
+  assert.equal(totals.cacheCreationTokens, 500);
+  assert.equal(totals.cacheMeasuredInputTokens, 14_000, 'and the denominator is only the two runs that reported');
+  assert.equal(totals.measuredRuns, 3, 'the silent run is still measured — it reported money');
+  assert.equal(totals.unmeasuredRuns, 0);
 });
 
 /** Goals rank by cost, and a goal the world has forgotten still gets its row. */

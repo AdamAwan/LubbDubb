@@ -720,6 +720,21 @@ export interface Agent {
   costUsd: number | null;
   inputTokens: number | null;
   outputTokens: number | null;
+  /**
+   * The cached share of {@link Agent.inputTokens} — a *part* of it, never a
+   * sibling total. `inputTokens` stays the gross figure (fresh + written + read),
+   * so nothing that already sums it changes meaning; fresh input is the
+   * subtraction. Both are null on a run that reported no usage at all, and zero
+   * on one that reported usage with no caching.
+   *
+   * They are stored because the cache is the one thing an operator can act on
+   * that the gross figure cannot show: a read bills at a fraction of a fresh
+   * token and a write at a premium, so a fleet at a 90% hit rate and one at 0%
+   * report identical `inputTokens` and wildly different bills. Without the split
+   * there is no reading that says which fleet this is.
+   */
+  cacheReadTokens: number | null;
+  cacheCreationTokens: number | null;
   numTurns: number | null;
   /**
    * The agent's own one-line answer to "what are you doing right now", from the
@@ -1949,6 +1964,9 @@ export interface AgentUsage {
   costUsd: number | null;
   inputTokens: number | null;
   outputTokens: number | null;
+  /** The cached share of {@link AgentUsage.inputTokens} — see {@link Agent.cacheReadTokens}. */
+  cacheReadTokens: number | null;
+  cacheCreationTokens: number | null;
   numTurns: number | null;
 }
 

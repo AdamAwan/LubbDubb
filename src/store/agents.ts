@@ -9,6 +9,8 @@ export const AGENT_COLUMNS: ColumnMigrations = {
     cost_usd: 'REAL',
     input_tokens: 'INTEGER',
     output_tokens: 'INTEGER',
+    cache_read_tokens: 'INTEGER',
+    cache_creation_tokens: 'INTEGER',
     num_turns: 'INTEGER',
     note: 'TEXT',
     noted_at: 'TEXT',
@@ -49,6 +51,8 @@ export class AgentStore {
       costUsd: null,
       inputTokens: null,
       outputTokens: null,
+      cacheReadTokens: null,
+      cacheCreationTokens: null,
       numTurns: null,
       note: null,
       notedAt: null,
@@ -125,11 +129,15 @@ export class AgentStore {
       costUsd: usage.costUsd ?? existing.costUsd,
       inputTokens: usage.inputTokens ?? existing.inputTokens,
       outputTokens: usage.outputTokens ?? existing.outputTokens,
+      cacheReadTokens: usage.cacheReadTokens ?? existing.cacheReadTokens,
+      cacheCreationTokens: usage.cacheCreationTokens ?? existing.cacheCreationTokens,
       numTurns: usage.numTurns ?? existing.numTurns,
     };
     this.ctx.db
       .prepare(
-        `UPDATE agents SET cost_usd=@costUsd, input_tokens=@inputTokens, output_tokens=@outputTokens, num_turns=@numTurns WHERE id=@id`,
+        `UPDATE agents SET cost_usd=@costUsd, input_tokens=@inputTokens, output_tokens=@outputTokens,
+                cache_read_tokens=@cacheReadTokens, cache_creation_tokens=@cacheCreationTokens,
+                num_turns=@numTurns WHERE id=@id`,
       )
       .run({ id, ...next });
     // Clamp: a cumulative total should never regress, but a restarted CLI would
@@ -303,6 +311,8 @@ interface AgentRow {
   cost_usd: number | null;
   input_tokens: number | null;
   output_tokens: number | null;
+  cache_read_tokens: number | null;
+  cache_creation_tokens: number | null;
   num_turns: number | null;
   note: string | null;
   noted_at: string | null;
@@ -340,6 +350,12 @@ function rowToAgent(r: AgentRow): Agent {
     costUsd: r.cost_usd,
     inputTokens: r.input_tokens,
     outputTokens: r.output_tokens,
+    // Null on every row written before the columns existed, which is the truth
+    // there: those runs measured a gross figure and nothing about its cache
+    // share. Not defaulted to 0 — that would report a 0% hit rate for history
+    // that was never measured.
+    cacheReadTokens: r.cache_read_tokens,
+    cacheCreationTokens: r.cache_creation_tokens,
     numTurns: r.num_turns,
     note: r.note,
     notedAt: r.noted_at,

@@ -739,8 +739,9 @@ Two mode-specific sources. They are not interchangeable.
 
 - **Stream mode** — each `result` event's cumulative `total_cost_usd` / `usage` / `num_turns` becomes
   a `usage` event. `Store.recordAgentUsage` writes the cumulative values onto the `agents` row (cache
-  tokens folded into input) **and** the cost _delta_ as a timestamped `usage_events` row, so rolling
-  5h/7d cost windows are a plain `SUM` over the window.
+  tokens folded into input, and the read/write split kept apart beside it —
+  [18](18-observability.md#the-cached-share-is-stored-not-inferred)) **and** the cost _delta_ as a
+  timestamped `usage_events` row, so rolling 5h/7d cost windows are a plain `SUM` over the window.
 - **PTY mode** — reports no per-turn usage. Instead it captures the **account rate limits**: the
   Pro/Max `rate_limits` in the status-line payload, which is the one programmatic surface for them.
   `buildClaudeArgs({statusLine: true})` wires a `--settings` status command that atomically dumps each
