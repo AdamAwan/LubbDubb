@@ -83,7 +83,8 @@ interface AgentManagerOptions {
    * Builds the argv for a launch. `sessionId` is the id the agent runs under and
    * `resume` re-attaches to it (`claude --resume`) instead of starting fresh.
    * `mcpConfigPath` wires that launch's tool channel, or is null for none.
-   * `model` is the task's resolved `--model` value, or null to pass no flag.
+   * `model` and `effort` are the task's resolved `--model` / `--effort` values,
+   * either null to pass no flag.
    * Runtimes that don't support session ids (mock/stream) ignore the first two.
    */
   buildArgs: (opts: {
@@ -91,6 +92,7 @@ interface AgentManagerOptions {
     resume: boolean;
     mcpConfigPath: string | null;
     model: string | null;
+    effort: string | null;
   }) => string[];
   whitelistedApprovals: WhitelistRule[];
   /** Builds the underlying runtime (PTY or stream-JSON) for a launch spec. */
@@ -338,9 +340,10 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         // stream event at all if a pinned id already has a transcript.
         resume: inherited !== null,
         mcpConfigPath: mcp?.configPath ?? null,
-        // Decided at dispatch and stored on the row, so this forwards a string and
-        // never re-derives one from config.
+        // Decided at dispatch and stored on the row, so this forwards two strings
+        // and never re-derives either from config.
         model: task.model ?? null,
+        effort: task.effort ?? null,
       }),
       cwd,
       env: {
@@ -417,9 +420,10 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         sessionId: agent.sessionId,
         resume: true,
         mcpConfigPath: mcp?.configPath ?? null,
-        // The stored value, which is why a restart cannot move a half-finished
-        // conversation onto a different model.
+        // The stored values, which is why a restart cannot move a half-finished
+        // conversation onto a different model or a different depth.
         model: task.model ?? null,
+        effort: task.effort ?? null,
       }),
       cwd: agent.cwd,
       env: {

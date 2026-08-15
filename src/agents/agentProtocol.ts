@@ -97,6 +97,17 @@ interface ClaudeArgsOptions {
    */
   model?: string;
   /**
+   * The reasoning depth this launch runs at (`--effort`), from the same profile
+   * as {@link model} and carried the same way. Unset leaves the flag off, and the
+   * CLI applies its own default — which is the top of the ladder, so "unset" is
+   * the expensive end rather than the middle.
+   *
+   * Pushed before {@link extraArgs} for {@link model}'s reason, and unvalidated
+   * for it too: the levels a model accepts are the installed CLI's business, and
+   * the smaller models refuse the flag outright.
+   */
+  effort?: string;
+  /**
    * The session id to run under. Chosen up front (`--session-id`) so we *own* the
    * id and can re-attach to this exact conversation after a restart — no scraping
    * an id out of the terminal. Both real runtimes pass one; only the `raw` runtime,
@@ -225,6 +236,7 @@ export function buildClaudeArgs(opts: ClaudeArgsOptions = {}): string[] {
   appendMcpConfig(args, opts);
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
   if (opts.model) args.push('--model', opts.model);
+  if (opts.effort) args.push('--effort', opts.effort);
   if (opts.extraArgs?.length) args.push(...opts.extraArgs);
   return args;
 }
@@ -297,6 +309,7 @@ export function buildClaudeStreamArgs(opts: ClaudeArgsOptions = {}): string[] {
   appendMcpConfig(args, opts);
   if (opts.permissionMode) args.push('--permission-mode', opts.permissionMode);
   if (opts.model) args.push('--model', opts.model);
+  if (opts.effort) args.push('--effort', opts.effort);
   if (opts.extraArgs?.length) args.push(...opts.extraArgs);
   return args;
 }
