@@ -114,8 +114,19 @@ export interface StageContext {
   partsPlanFor: (issueNumber: number) => Plan | null;
   /** Is a standing `delivered` verdict parking this issue? */
   deliveryParked: (issue: Issue) => boolean;
-  /** Is a standing `unclear` goal assay parking this issue? */
+  /** Is a standing goal assay parking this issue — refused, or awaiting a profile answer? */
   assayParked: (issue: Issue) => boolean;
+  /**
+   * The profile a dispatch on this origin is pinned to, or null to leave it to
+   * the rule (issue #342).
+   *
+   * Built once from the world's tags and the plans' parts, and applied in exactly
+   * one place — where a candidate becomes a dispatched action — rather than by
+   * each rule that composes one. A rule that had to remember to stamp it would be
+   * a rule that could forget, and a forgotten pin is invisible: the agent runs,
+   * does the work, and only the bill says which profile it was.
+   */
+  pinFor: (originRef: string | null) => string | null;
   /**
    * Open, watched, un-parked issues with no open PR, in label-encoded priority
    * order. Derived once and shared by every issue-side rule that wants the

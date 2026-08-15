@@ -186,7 +186,29 @@ export interface Issue extends WorldIssue {
      * exists while giving nobody a way to read it.
      */
     commentRef: string | null;
+    /**
+     * The model profile the assayer proposed for this goal's work (#342), and
+     * whether it is still waiting on an answer. Null profile = it named none,
+     * which is every `unclear` verdict and every deployment with no profiles.
+     *
+     * `awaiting` is the gate itself, shipped as a fact rather than re-derived in
+     * the browser: it is the difference between a chip that explains why nothing
+     * is being dispatched and a row that silently sits still.
+     */
+    proposedProfile: string | null;
+    awaitingProfileAnswer: boolean;
   } | null;
+  /**
+   * The profile this goal's work is pinned to (#342) — the tag on its ticket —
+   * and any model tags on it that name nothing.
+   *
+   * Null profile is "not pinned", which is not a synonym for the default: the
+   * cockpit draws an unpinned goal as running on its rules, and a pinned one as
+   * carrying a decision somebody made. `ignoredTags` is what a mistyped label
+   * looks like from here — the pin falls back to the rule rather than parking
+   * anything, so the only way it is not silent is being drawn.
+   */
+  modelPin: { profile: string | null; ignoredTags: string[] };
   /** The run's own write-up — the *reading*; the document is fetched on open. */
   retrospective: { summary: string; hasDocument: boolean; updatedAt: string } | null;
   /** The shared pad — how much is there and when, never the trail itself. */
@@ -357,6 +379,22 @@ interface CockpitConfig {
   watchLabel: string;
   /** `${labelPrefix}-ignore` — the tag the ignore toggle sets and that marks an item ignored. */
   ignoreLabel: string;
+  /**
+   * The model profiles a goal or a part may be pinned to (#342), cheapest first,
+   * with what each is for.
+   *
+   * Shipped for `containerTypes`' reason: the order is a policy the operator set
+   * (`rank`), and the cockpit re-deriving one would be a second opinion about
+   * which profile is deeper. Empty turns every profile control off — a deployment
+   * with no `agentModels` has nothing to choose between, which is not the same as
+   * a choice with no options.
+   */
+  profiles: { name: string; description: string }[];
+  /**
+   * `agentModels.default` — what an unpinned dispatch falls back to, so a pin can
+   * be drawn as the departure from it that it is. Null when none is configured.
+   */
+  defaultProfile: string | null;
   /**
    * `issueContainerTypes` — the work-item types that hold work rather than being
    * it. Shipped because the backlog draws a container as a *heading* over its

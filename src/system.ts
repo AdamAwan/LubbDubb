@@ -48,6 +48,8 @@ import { loadPromptTemplates, type PromptTemplates } from './dispatcher/promptTe
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { watchLabelsFor } from './watchLabels.js';
+import { resolveModelTag } from './modelLabels.js';
+import { orderedProfiles } from './agents/modelPolicy.js';
 import { Harness } from './harness.js';
 import { RuntimeControl } from './runtimeControl.js';
 import { ErrorLog } from './errorLog.js';
@@ -374,6 +376,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     configDir: defaultConfigDir(),
     socketPath: defaultSocketPath(),
     requirePlanApproval: config.planning.requireApproval,
+    // What the assayer is offered when it proposes a profile for a goal.
+    profiles: orderedProfiles(config.agentModels),
     // Lazy for the same reason as `agents`: the desk is built after this server
     // (it needs the escalation inbox). Off entirely when the operator disabled the
     // backstop, so `request_permission` denies rather than blocks.
@@ -409,6 +413,24 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     command: config.claudeCommand,
     buildArgs: agentSetup.buildArgs,
     whitelistedApprovals: config.whitelistedApprovals,
+    // What a goal's work runs on today, so `recordAssay` can tell an agreeing
+    // proposal from a diverging one. Read off the world baseline rather than a
+    // live provider call: it is the same snapshot `world_read` serves an agent,
+    // so the assayer and the harness are comparing against one reading. Absent
+    // when either half of a pin is unconfigured, and then no proposal is stored.
+    goalProfile:
+      config.labelPrefix && config.agentModels
+        ? {
+            effective: (issueOrigin: string): string | null => {
+              const models = config.agentModels;
+              const number = Number(/^issue:(\d+)$/.exec(issueOrigin)?.[1]);
+              const issue = Number.isFinite(number)
+                ? store.getWorldBaseline()?.issues.find((i) => i.number === number)
+                : undefined;
+              return resolveModelTag(issue?.labels, config.labelPrefix, models).profile ?? models?.default ?? null;
+            },
+          }
+        : undefined,
     createSession: agentSetup.factory,
     initialInput: agentSetup.initialInput,
     resumeInput: agentSetup.resumeInput,
@@ -591,6 +613,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
     runtime: runtimeControl,
     prIgnoreLabel: ignoreLabel,
+    // Only when both halves exist: pins are labels naming profiles, so a
+    // deployment with no `labelPrefix` has nowhere to write one and a deployment
+    // with no `agentModels` has nothing for one to name.
+    modelPins:
+      config.labelPrefix && config.agentModels
+        ? { labelPrefix: config.labelPrefix, models: config.agentModels }
+        : undefined,
     upNextOverrideTtlMs: config.upNextOverrideTtlMs,
   });
 

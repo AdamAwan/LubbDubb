@@ -10,6 +10,8 @@ import { rankByPriorityOverride } from './priorityOverride.js';
 import { deliveryHold } from '../delivery/delivery.js';
 import { candidateParents } from '../issueRelations.js';
 import { assayHold, type AssayPolicy } from '../intake/assay.js';
+import { resolveModelTag } from '../modelLabels.js';
+import { pinnedProfileFor } from '../profilePin.js';
 import { type RetrospectivePolicy } from '../retro/retro.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from '../validation/policy.js';
 import { type AssessmentPolicy } from '../delivery/assessment.js';
@@ -236,7 +238,12 @@ export class RuleDispatcher implements Dispatcher {
       if (c.held) {
         upcoming.push({ origin, rule, title, kind, branch, status: c.held, reason });
       } else if (headroom > 0) {
-        s.raw.push(c.action);
+        // The one place a pin is stamped onto a dispatch. Every agent dispatch
+        // routes through the candidate list — an inline `raw.push` of a
+        // `dispatch_*` action bypasses the headroom cut and the Up next queue
+        // already — so stamping here covers all of them and cannot be forgotten
+        // by a new rule.
+        s.raw.push(pinAction(c.action, s.pinFor(c.origin)));
         s.activeOrigins.add(origin);
         headroom -= 1;
         upcoming.push({ origin, rule, title, kind, branch, status: 'dispatching', reason });
@@ -436,6 +443,23 @@ export class RuleDispatcher implements Dispatcher {
       },
       deliveryParked,
       assayParked,
+      // The pins, resolved from the world's own tags and the plans' own parts.
+      // Both lookups are total and both answer null when this deployment has no
+      // `agentModels` — see `pinnedProfileFor`.
+      pinFor: (originRef: string | null) =>
+        pinnedProfileFor(originRef, {
+          goal: (issueNumber) =>
+            resolveModelTag(
+              ctx.world.issues.find((i) => i.number === issueNumber)?.labels,
+              ctx.modelPins?.labelPrefix ?? '',
+              ctx.modelPins?.models,
+            ).profile,
+          part: (issueNumber, slug) => {
+            const plan = plansByOrigin.get(issueOrigin(issueNumber));
+            if (!plan) return null;
+            return (ctx.planParts ?? []).find((p) => p.planId === plan.id && p.slug === slug)?.profile ?? null;
+          },
+        }),
       eligibleIssues,
       // Derived from the whole world rather than the eligible subset: a feature an
       // orphan could hang off is a feature whether or not it is workable itself,
@@ -469,6 +493,17 @@ export class RuleDispatcher implements Dispatcher {
 }
 
 /** Agent+origin pairs we've already notified, from executed respond_to_agent decisions. */
+/**
+ * Carry the origin's pin onto the action about to be dispatched.
+ *
+ * Absent rather than null when there is no pin, so an unpinned dispatch produces
+ * exactly the action it produced before pins existed and no test asserting on a
+ * whole action object has to learn about a field it does not care about.
+ */
+function pinAction(action: RawAction, profile: string | null): RawAction {
+  return profile === null ? action : { ...action, profile };
+}
+
 function notifiedOriginsByAgent(decisions: Decision[]): Set<string> {
   const set = new Set<string>();
   for (const d of decisions) {

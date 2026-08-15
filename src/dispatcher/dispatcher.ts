@@ -17,6 +17,7 @@ import type {
   WorldEvent,
   WorldSnapshot,
 } from '../types.js';
+import type { AgentModels } from '../agents/modelPolicy.js';
 import type { ParseResult } from './actions.js';
 import type { QueueStatus } from './admission.js';
 import type { DispatchRuleId } from './rules.js';
@@ -44,6 +45,16 @@ export interface DispatchContext {
    * empty means every issue in the world came from the connector.
    */
   retainedIssues?: number[];
+  /**
+   * What a dispatch needs to resolve its pinned profile (issue #342): the prefix
+   * the goal tags are derived from, and the profiles those tags may name.
+   *
+   * Absent — no `agentModels`, no `labelPrefix`, or a caller that has not wired
+   * it — means no dispatch is ever pinned and every one resolves on its rule,
+   * which is exactly the behaviour before pins existed. That is the safe absence:
+   * the other direction would have an unwired caller silently repricing the fleet.
+   */
+  modelPins?: { labelPrefix: string; models: AgentModels };
   /** Current fleet: running / waiting / recently-finished tasks and their agents. */
   tasks: Task[];
   agents: Agent[];

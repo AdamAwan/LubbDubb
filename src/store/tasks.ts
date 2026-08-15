@@ -17,6 +17,10 @@ export const TASK_COLUMNS: ColumnMigrations = {
     model: 'TEXT',
     /** The resolved `claude --effort` level for this run — see {@link Task.effort}. */
     effort: 'TEXT',
+    /** Which profile that pair came from — see {@link Task.profile}. */
+    profile: 'TEXT',
+    /** Which level of the precedence chain named it — see {@link Task.profileSource}. */
+    profile_source: 'TEXT',
   },
 };
 
@@ -47,6 +51,8 @@ export class TaskStore {
       | 'ciChecks'
       | 'model'
       | 'effort'
+      | 'profile'
+      | 'profileSource'
     > & {
       status?: Task['status'];
       // Origin context is optional at creation (issue #17): the rule dispatcher
@@ -63,6 +69,11 @@ export class TaskStore {
       // caller with no policy to consult has neither.
       model?: string | null;
       effort?: string | null;
+      // Which profile that pair came from, and which level of the precedence
+      // chain named it. Optional on the same terms, and stored rather than
+      // re-derived: config moves, and a run has to keep saying what it launched on.
+      profile?: string | null;
+      profileSource?: string | null;
     },
   ): Task {
     const ts = this.ctx.now();
@@ -84,11 +95,13 @@ export class TaskStore {
       ciChecks: input.ciChecks ?? null,
       model: input.model ?? null,
       effort: input.effort ?? null,
+      profile: input.profile ?? null,
+      profileSource: input.profileSource ?? null,
     };
     this.ctx.db
       .prepare(
-        `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, origin_title, origin_summary, dispatch_reason, rule, ci_checks, model, effort, status, agent_id, created_at, updated_at)
-         VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @rule, @ciChecks, @model, @effort, @status, @agentId, @createdAt, @updatedAt)`,
+        `INSERT INTO tasks (id, kind, title, prompt, branch, origin_ref, origin_title, origin_summary, dispatch_reason, rule, ci_checks, model, effort, profile, profile_source, status, agent_id, created_at, updated_at)
+         VALUES (@id, @kind, @title, @prompt, @branch, @originRef, @originTitle, @originSummary, @dispatchReason, @rule, @ciChecks, @model, @effort, @profile, @profileSource, @status, @agentId, @createdAt, @updatedAt)`,
       )
       // The array is the only field the row shape and the domain shape disagree
       // about, so it is serialised here rather than the whole task being mapped.
@@ -168,6 +181,9 @@ interface TaskRow {
   ci_checks: string | null;
   model: string | null;
   effort: string | null;
+  /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
+  profile: string | null;
+  profile_source: string | null;
   status: string;
   agent_id: string | null;
   created_at: string;
@@ -267,6 +283,8 @@ function rowToTask(r: TaskRow): Task {
     ciChecks: parseChecks(r.ci_checks),
     model: r.model,
     effort: r.effort,
+    profile: r.profile ?? null,
+    profileSource: r.profile_source ?? null,
     status: r.status as Task['status'],
     agentId: r.agent_id,
     createdAt: r.created_at,

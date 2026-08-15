@@ -17,6 +17,7 @@ import { api } from '../api.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 import { PlanMap } from './PlanMap.js';
+import { ProfilePicker } from './ProfilePicker.js';
 import { ValidationDigest } from './ValidationSection.js';
 import { partOriginOf, planIssueOf, refLink, relTime } from './util.js';
 import { Ref } from './refs.js';
@@ -67,6 +68,9 @@ export function PlanModal({
   onOpenGoal,
   onRespond,
   onAcceptance,
+  onPartProfile,
+  profiles,
+  defaultProfile,
 }: {
   plan: Plan;
   parts: PlanPartView[];
@@ -95,6 +99,11 @@ export function PlanModal({
   onOpenGoal: (issueRef: string) => void;
   onRespond: (agentId: string, text: string) => Promise<unknown> | unknown;
   onAcceptance: (planId: string, slug: string, criterion: string, met: boolean) => Promise<unknown> | unknown;
+  /** Override which profile one part runs on, or clear it back to inheriting the goal's pin (#342). */
+  onPartProfile: (planId: string, slug: string, profile: string | null) => Promise<unknown> | unknown;
+  /** The profiles a part may be pinned to, cheapest first, and what an unpinned one falls back to. */
+  profiles: { name: string; description: string }[];
+  defaultProfile: string | null;
 }) {
   const [view, setView] = useState<'plan' | 'history'>('plan');
   const [note, setNote] = useState('');
@@ -350,6 +359,9 @@ export function PlanModal({
                           pinnable={decidable !== null}
                           onPin={(pin) => setPins({ ...pins, [part.slug]: pin })}
                           onAcceptance={(criterion, met) => onAcceptance(plan.id, part.slug, criterion, met)}
+                          onPartProfile={(profile) => onPartProfile(plan.id, part.slug, profile)}
+                          profiles={profiles}
+                          defaultProfile={defaultProfile}
                         />
                       </div>
                     ))}
@@ -802,6 +814,9 @@ function PartBlock({
   pinnable,
   onPin,
   onAcceptance,
+  onPartProfile,
+  profiles,
+  defaultProfile,
 }: {
   part: PlanPartView;
   seq: number;
@@ -812,6 +827,9 @@ function PartBlock({
   pinnable: boolean;
   onPin: (pin: Pin) => void;
   onAcceptance: (criterion: string, met: boolean) => Promise<unknown> | unknown;
+  onPartProfile: (profile: string | null) => Promise<unknown> | unknown;
+  profiles: { name: string; description: string }[];
+  defaultProfile: string | null;
 }) {
   return (
     <div className={`pm-part${focused ? ' on' : ''}`}>
@@ -837,6 +855,17 @@ function PartBlock({
               {part.size.toUpperCase()}
             </span>
           )}
+          {/* Which model profile this part runs on (#342) — the planner's own
+              sizing of the part it just cut, edited. Beside the size chip because
+              they are the same judgement about the same thing: how much this part
+              is going to take. */}
+          <ProfilePicker
+            profiles={profiles}
+            value={part.profile ?? null}
+            defaultProfile={defaultProfile}
+            inheritLabel="Inherit"
+            onPick={(profile) => void onPartProfile(profile)}
+          />
           {part.prNumber !== null && (
             <span className="chip small">
               <Ref to={`pr:${part.prNumber}`} />

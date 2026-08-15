@@ -217,6 +217,11 @@ function followupSlug(slug: string): string {
 export function followupPartInput(part: PlanPart, summary: string, seq: number): PlanPartInput {
   return {
     slug: followupSlug(part.slug),
+    // The part it follows up was priced by the planner that declared it, and this
+    // is the same work finishing — so it inherits that price rather than falling
+    // back to the goal's, which would quietly downgrade the one part somebody had
+    // already decided needed more.
+    profile: part.profile,
     seq,
     title: `Finish "${part.title}"`,
     // The assessor's own words are the scope: it read the delivered state and said

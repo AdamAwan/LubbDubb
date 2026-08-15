@@ -39,6 +39,12 @@ interface McpBridgeServerOptions {
    */
   requirePlanApproval?: boolean;
   /**
+   * This deployment's model profiles, cheapest first, for `assay_issue` to offer
+   * an assayer (issue #342). Absent/empty = no `agentModels`, and then no
+   * profile is asked for and none is stored.
+   */
+  profiles?: { name: string; description: string }[];
+  /**
    * The permission backstop (issue #130 phase B), resolved lazily for the same
    * reason as {@link agents}: it is built after this server (it needs the
    * escalation inbox, which needs the fleet). The `request_permission` tool reaches
@@ -237,6 +243,7 @@ export class McpBridgeServer {
         store: this.opts.store,
         agents: this.opts.agents(),
         requirePlanApproval: this.opts.requirePlanApproval,
+        profiles: this.opts.profiles,
         permissions: this.opts.permissions?.(),
         openPr: this.opts.openPr?.(),
         errors: this.opts.errors,

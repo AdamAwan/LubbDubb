@@ -7,6 +7,7 @@ import { ShortfallBody } from '../../delivery/shortfall.js';
 import { validationHeadline } from '../../delivery/closeOut.js';
 import { goalValidation } from '../../validation/goal.js';
 import { watchLabelsFor } from '../../watchLabels.js';
+import { modelLabelsFor } from '../../modelLabels.js';
 import { watchCascadeTargets } from '../../issueRelations.js';
 import { checked, IssueNumberParams, optionalText, requiredBoolean } from '../validation.js';
 import type { RouteContext } from './context.js';
@@ -91,6 +92,68 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         });
       }
       return { ok: true, watched, cascaded: targets.length - 1 };
+    }),
+  );
+
+  // Pin this issue's work to a model profile, or clear the pin (issue #342).
+  //
+  // The write is a **label on the ticket**, through the same seam and for the same
+  // reasons as the watch toggle above: it is visible where a human already looks,
+  // it survives the harness's database, and Azure DevOps needs no separate answer.
+  // Writing one profile clears the others, exactly as watch clears ignore — with
+  // more than two names the pair-write becomes a sweep, but the property is the
+  // same one, that the ticket carries at most one answer.
+  //
+  // It also **settles any standing proposal**, whichever way the operator went.
+  // That is the click the gate is waiting for, and it is why "keep mine" works:
+  // the tag deliberately goes on disagreeing with the assayer, so a gate that
+  // re-read the disagreement would ask the same question for ever. What is stored
+  // is that the question was answered, never what it was answered with — that is
+  // the tag, and a second copy of it here would be free to drift.
+  //
+  // Unlike a hand-typed label, this cannot name a profile the deployment does not
+  // have: config is refused at boot by name, and this is refused at the boundary
+  // by name, which are the two halves of the same rule.
+  // Absent or empty clears the pin, which is the same shape every other optional
+  // text body in this file uses — and the right one here: "no profile" is the
+  // state a ticket starts in, not a third value.
+  const ProfileBody = z.object({ profile: optionalText('profile') });
+  app.post(
+    '/api/issues/:number/profile',
+    checked({ params: IssueNumberParams, body: ProfileBody }, async ({ params, body, reply }) => {
+      const { number: issueNumber } = params;
+      const wanted = body.profile ?? null;
+      const labels = modelLabelsFor(config.labelPrefix, config.agentModels);
+      if (labels.length === 0)
+        return reply
+          .code(400)
+          .send({ error: 'This deployment configures no agentModels.profiles, so there is nothing to pin to.' });
+      if (wanted !== null && !labels.some((l) => l.profile === wanted))
+        return reply.code(400).send({
+          error: `"${wanted}" is not one of this deployment's profiles: ${labels.map((l) => l.profile).join(', ')}.`,
+        });
+
+      try {
+        for (const { profile, label } of labels)
+          await connector.setIssueLabel({ number: issueNumber, label, present: profile === wanted });
+      } catch (err) {
+        const message = (err as Error).message;
+        errors.record({ source: 'server', message: `Failed to set the model tag on #${issueNumber}: ${message}` });
+        // Republished before the refusal for the watch route's reason: a partial
+        // sweep has already changed the world the cockpit is showing.
+        hub.broadcast({ type: 'world:changed' });
+        return reply.code(400).send({ error: message });
+      }
+
+      // The answer, if a proposal was waiting on one. Keyed on the row's own
+      // fingerprint so it settles the question the operator was actually shown.
+      const origin = issueConclusionOrigin(issueNumber);
+      const assay = store.getAssay(origin);
+      const answered = assay !== null && store.answerAssayProfile(origin, assay.goalRef);
+
+      hub.broadcast({ type: 'world:changed' });
+      await harness.runCycle('manual');
+      return { ok: true, profile: wanted, answered };
     }),
   );
 

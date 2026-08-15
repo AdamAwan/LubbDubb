@@ -149,6 +149,8 @@ test('the prose behind each standing verdict is carried, with who cast it', () =
       summary: 'the goal names a concrete table',
       goalRef: 'fingerprint',
       by: 'assayer',
+      proposedProfile: null,
+      profileAnsweredAt: null,
       agentId: 'a1',
       taskId: 't1',
       commentRef: null,

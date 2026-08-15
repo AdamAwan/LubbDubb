@@ -25,6 +25,18 @@ import type { StoreContext } from './context.js';
 export const ISSUE_VERDICT_COLUMNS: ColumnMigrations = {
   issue_deliveries: { detail: 'TEXT' },
   issue_shortfalls: { detail: 'TEXT' },
+  issue_assays: {
+    /** The profile the assayer proposed — see {@link IssueAssay.proposedProfile}. */
+    proposed_profile: 'TEXT',
+    /**
+     * When the profile question was settled — see {@link IssueAssay.profileAnsweredAt}.
+     *
+     * Null on every row written before this existed, which is the right reading
+     * for them and costs nothing: those rows also have no `proposed_profile`, and
+     * the gate needs both.
+     */
+    profile_answered_at: 'TEXT',
+  },
 };
 
 /**
@@ -329,15 +341,30 @@ export class IssueVerdictStore {
     by: AssayAuthor;
     agentId?: string | null;
     taskId?: string | null;
+    /** The profile proposed for this goal's work, or null when none was named. */
+    proposedProfile?: string | null;
+    /**
+     * Whether the proposal needs a human answer before the funnel moves. The
+     * caller decides it, because deciding it needs the ticket's tag and the
+     * operator's config — neither of which the store has, and both of which are
+     * in hand exactly once, where the proposal is written.
+     */
+    profileDiverges?: boolean;
   }): IssueAssay {
     const ts = this.ctx.now();
     const prev = this.getAssay(input.originRef);
+    const proposedProfile = input.proposedProfile ?? null;
     const row: IssueAssay = {
       originRef: input.originRef,
       verdict: input.verdict,
       summary: input.summary,
       goalRef: input.goalRef,
       by: input.by,
+      proposedProfile,
+      // Settled on arrival unless it diverges: agreement is not a question, so it
+      // must not cost a click. A proposal that *does* diverge is stored unanswered
+      // and `assayHold` holds the funnel on exactly this field being null.
+      profileAnsweredAt: proposedProfile !== null && input.profileDiverges === true ? null : ts,
       agentId: input.agentId ?? null,
       taskId: input.taskId ?? null,
       // Kept only while the verdict is about the same text: a comment written for
@@ -349,11 +376,13 @@ export class IssueVerdictStore {
     };
     return this.recordVerdict(
       'assay',
-      `INSERT INTO issue_assays (origin_ref, verdict, summary, goal_ref, by, agent_id, task_id, comment_ref, decided_at, updated_at)
-       VALUES (@originRef, @verdict, @summary, @goalRef, @by, @agentId, @taskId, @commentRef, @decidedAt, @updatedAt)
+      `INSERT INTO issue_assays (origin_ref, verdict, summary, goal_ref, by, proposed_profile, profile_answered_at, agent_id, task_id, comment_ref, decided_at, updated_at)
+       VALUES (@originRef, @verdict, @summary, @goalRef, @by, @proposedProfile, @profileAnsweredAt, @agentId, @taskId, @commentRef, @decidedAt, @updatedAt)
        ON CONFLICT(origin_ref) DO UPDATE SET
          verdict=excluded.verdict, summary=excluded.summary, goal_ref=excluded.goal_ref,
-         by=excluded.by, agent_id=excluded.agent_id, task_id=excluded.task_id,
+         by=excluded.by, proposed_profile=excluded.proposed_profile,
+         profile_answered_at=excluded.profile_answered_at,
+         agent_id=excluded.agent_id, task_id=excluded.task_id,
          comment_ref=excluded.comment_ref, updated_at=excluded.updated_at`,
       row,
     );
@@ -376,6 +405,31 @@ export class IssueVerdictStore {
   listAssays(): IssueAssay[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM issue_assays`).all() as IssueAssayRow[];
     return rows.map(rowToAssay);
+  }
+
+  /**
+   * Settle the profile question for this goal — the operator's one click, whether
+   * they took the assayer's proposal or kept their own.
+   *
+   * Stamps the answer rather than storing what was chosen, because what was
+   * chosen is the tag on the ticket and a second copy here would be free to drift
+   * from it. That is also what makes "keep mine" work: the tag goes on diverging
+   * from the proposal deliberately, and a gate that re-read the divergence would
+   * ask the same question again for ever.
+   *
+   * Scoped to the row the operator was looking at: a re-assay writes a new
+   * `goal_ref` and its own unanswered proposal, so answering a superseded one
+   * cannot release a question nobody has seen.
+   */
+  answerAssayProfile(originRef: string, goalRef: string): boolean {
+    const ts = this.ctx.now();
+    return (
+      this.ctx.db
+        .prepare(
+          `UPDATE issue_assays SET profile_answered_at=?, updated_at=? WHERE origin_ref=? AND goal_ref=? AND profile_answered_at IS NULL`,
+        )
+        .run(ts, ts, originRef, goalRef).changes > 0
+    );
   }
 
   /** Remember the comment this verdict maintains on the ticket, so the next write edits it. */
@@ -433,6 +487,9 @@ interface IssueAssayRow {
   summary: string;
   goal_ref: string;
   by: string;
+  /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
+  proposed_profile: string | null;
+  profile_answered_at: string | null;
   agent_id: string | null;
   task_id: string | null;
   comment_ref: string | null;
@@ -487,6 +544,12 @@ function rowToAssay(r: IssueAssayRow): IssueAssay {
     summary: r.summary,
     goalRef: r.goal_ref,
     by: r.by as AssayAuthor,
+    // `?? null` rather than trusted: a row written before the columns existed
+    // reads `undefined`, which would reach the wire as a missing key — and, for
+    // `profile_answered_at`, would make an old row look like an unanswered
+    // proposal and park an issue nobody had proposed anything for.
+    proposedProfile: r.proposed_profile ?? null,
+    profileAnsweredAt: r.profile_answered_at ?? null,
     agentId: r.agent_id,
     taskId: r.task_id,
     commentRef: r.comment_ref,

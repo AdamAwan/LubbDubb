@@ -3,6 +3,8 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView, PartGroup } from '../view/goalPage.js';
 import type { Issue, OpenPullRequest, PlanPart, PullRequest } from '../types.js';
+import { AsyncButton } from '../components/AsyncButton.js';
+import { ProfilePicker } from '../components/ProfilePicker.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { renderRichText } from '../components/richText.js';
 import { fmtUsd, relTime } from '../components/util.js';
@@ -48,6 +50,7 @@ export function GoalPage({
   return (
     <div className="cn-goal">
       <Header page={page} view={view} actions={actions} />
+      <ProfileGate issue={page.issue} view={view} actions={actions} />
       {page.needs.map((row) => (
         <NeedsBand key={row.id} row={row} view={view} actions={actions} />
       ))}
@@ -63,6 +66,72 @@ export function GoalPage({
           <Spend issue={page.issue} />
           <Tail issue={page.issue} actions={actions} />
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The assayer proposed a different profile from the one standing, and nothing is
+ * dispatched for this goal until somebody answers (#342).
+ *
+ * A band rather than a chip because it is a **gate**: the goal is not moving, and
+ * a reading tucked in beside the others would explain a stall nobody had noticed.
+ * It draws two ways out and no third — take the proposal, or keep what is
+ * standing — because a gate whose escape hatch is "ignore it" is a park.
+ *
+ * Both buttons go through the same write, which is the whole reason "keep mine"
+ * works: the pin is re-affirmed and the question is settled in one act, so the
+ * tag is left deliberately disagreeing with the assayer rather than being re-read
+ * as an unanswered disagreement for ever.
+ */
+function ProfileGate({
+  issue,
+  view,
+  actions,
+}: {
+  issue: Issue;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element | null {
+  const { assay, modelPin } = issue;
+  if (assay === null || !assay.awaitingProfileAnswer || assay.proposedProfile === null) return null;
+  const { config } = view.state;
+  const standing = modelPin.profile ?? config.defaultProfile;
+  const described = config.profiles.find((p) => p.name === assay.proposedProfile)?.description;
+  return (
+    <div className="cn-needs cn-soft">
+      <header>
+        <strong>The goal assay wants this run on &ldquo;{assay.proposedProfile}&rdquo;</strong>
+        <span>
+          {standing === null
+            ? 'nothing is pinned to it yet'
+            : `${modelPin.profile === null ? 'it would otherwise run on' : 'you pinned it to'} “${standing}”`}
+        </span>
+      </header>
+      <p>
+        {described ?? assay.summary} Nothing is dispatched for this goal until you say which to use — that is one click
+        either way, and it is not a rejection.
+      </p>
+      <div className="cn-row">
+        <AsyncButton
+          className="cn-tgl"
+          onClick={() => actions.setIssueProfile(issue.number, assay.proposedProfile)}
+          title={`Pin this goal to “${assay.proposedProfile}” and let the funnel move`}
+        >
+          Use &ldquo;{assay.proposedProfile}&rdquo;
+        </AsyncButton>
+        <AsyncButton
+          className="cn-tgl"
+          onClick={() => actions.setIssueProfile(issue.number, modelPin.profile)}
+          title={
+            modelPin.profile === null
+              ? 'Leave this goal unpinned, so each rule runs on its own profile'
+              : `Keep “${modelPin.profile}” and let the funnel move`
+          }
+        >
+          {modelPin.profile === null ? 'Leave it unpinned' : `Keep “${modelPin.profile}”`}
+        </AsyncButton>
       </div>
     </div>
   );
@@ -179,6 +248,17 @@ function Header({
         >
           {watched === 'watched' ? 'Watching' : 'Watch'}
         </button>
+        {/* Which profile this goal's work runs on (#342). Beside the watch toggle
+            because it is the same kind of statement about the same object — "work
+            this" and "work this at this depth" — and because an operator who has
+            just read a hard ticket is already here. */}
+        <ProfilePicker
+          profiles={config.profiles}
+          value={issue.modelPin.profile}
+          defaultProfile={config.defaultProfile}
+          inheritLabel="Not pinned"
+          onPick={(profile) => void actions.setIssueProfile(issue.number, profile)}
+        />
         <button
           type="button"
           className="cn-tgl"

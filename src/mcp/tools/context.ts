@@ -72,7 +72,16 @@ export interface AgentToolTarget {
     agentId: string,
     verdict: GoalAssayVerdictName,
     summary: string,
-  ): { ok: true; issueOrigin: string; verdict: GoalAssayVerdictName } | { ok: false; error: string };
+    profile: string | null,
+  ):
+    | {
+        ok: true;
+        issueOrigin: string;
+        verdict: GoalAssayVerdictName;
+        /** Whether the proposal diverged and is now holding the funnel on a human. */
+        profileHeld: boolean;
+      }
+    | { ok: false; error: string };
   recordPartOutcome(
     agentId: string,
     kind: PartOutcomeKind,
@@ -95,6 +104,13 @@ export interface AgentToolTarget {
 export interface McpToolDeps {
   store: Store;
   agents: AgentToolTarget;
+  /**
+   * This deployment's model profiles, cheapest first, as `assay_issue` presents
+   * them to an assayer (issue #342). Absent or empty for a deployment with no
+   * `agentModels`, which is what turns the whole proposal off: no argument is
+   * offered, none is required, and every dispatch resolves on its rule alone.
+   */
+  profiles?: { name: string; description: string }[];
   /** `planning.requireApproval` — see `ingestPlanDocument`. */
   requirePlanApproval?: boolean;
   /**

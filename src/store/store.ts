@@ -381,6 +381,9 @@ export class Store {
   updatePlanPart(id: string, patch: Parameters<PlanStore['updatePlanPart']>[1]): PlanPart | null {
     return this.plans.updatePlanPart(id, patch);
   }
+  setPartProfile(id: string, profile: string | null): PlanPart | null {
+    return this.plans.setPartProfile(id, profile);
+  }
   setPartAcceptanceMet(id: string, criteria: string[]): PlanPart | null {
     return this.plans.setPartAcceptanceMet(id, criteria);
   }
@@ -514,6 +517,9 @@ export class Store {
   }
   listAssays(): IssueAssay[] {
     return this.verdicts.listAssays();
+  }
+  answerAssayProfile(originRef: string, goalRef: string): boolean {
+    return this.verdicts.answerAssayProfile(originRef, goalRef);
   }
   setAssayComment(originRef: string, commentRef: string): void {
     this.verdicts.setAssayComment(originRef, commentRef);

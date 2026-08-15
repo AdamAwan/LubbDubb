@@ -61,6 +61,7 @@ test('parsePlanDocument accepts a single verdict and a parts verdict', () => {
       touches: [],
       size: null,
       expectedKind: null,
+      profile: null,
     },
     {
       slug: 'reader',
@@ -73,6 +74,7 @@ test('parsePlanDocument accepts a single verdict and a parts verdict', () => {
       touches: [],
       size: null,
       expectedKind: null,
+      profile: null,
     },
   ]);
 });

@@ -184,13 +184,47 @@ function assayWorldRef(originRef: string): string | null {
  *
  * Expiry lifts the hold; it does not retract the verdict. On a re-assay the row is
  * overwritten, so what the operator reads is always the latest thing said.
+ *
+ * ## The second arm: an unanswered profile proposal (issue #342)
+ *
+ * The assayer also proposes which model profile this goal's work should run on,
+ * and a proposal that differs from what is already standing holds the funnel
+ * until a human answers it. Blocking rather than informing, for the same reason
+ * the `unclear` arm blocks: informing is what the cockpit already does for every
+ * verdict, and the dispatch the gate exists to price correctly would happen
+ * anyway. What makes it safe is what makes the first arm safe — **an absent
+ * proposal holds nothing**, so an assayer that crashes, is killed, spends its
+ * attempt cap, or simply names no profile leaves the issue to the funnel it
+ * would have entered anyway, on its rule's own entry.
+ *
+ * Agreement holds nothing either, and costs no click: the divergence is decided
+ * once, where the proposal is written and the tag and config are both in hand,
+ * and a proposal that matched what was standing is stored already answered. So
+ * the question this arm asks is a two-field read, with no config threaded into
+ * it and no caller able to forget a lookup and gate the whole fleet by accident.
+ *
+ * Unlike the first arm it does **not** expire on world signal. A comment or a
+ * link is how a human answers "I could not act on this goal"; it is not how they
+ * authorise spending more money than the rule allows, and treating it as one
+ * would release the gate without anyone deciding anything. Three things end it:
+ * the operator answering, the ticket being rewritten (a new fingerprint, so a
+ * re-assay proposes against the current text), and the row being cleared.
  */
 export function assayHold(assay: IssueAssay | null, issue: Issue, ctx: AssayHoldContext = {}): string | null {
-  if (!assay || assay.verdict !== 'unclear') return null;
-  // The ticket was rewritten: whatever the assayer read, it is not this.
+  if (!assay) return null;
+  // The ticket was rewritten: whatever the assayer read, it is not this. Applies
+  // to both arms — a proposal is a judgement about a text too.
   if (assay.goalRef !== goalFingerprint(issue.title, issue.body)) return null;
-  if (expiringSignal(assay, ctx.signals ?? [])) return null;
 
+  if (assay.verdict === 'unclear' && !expiringSignal(assay, ctx.signals ?? [])) return unclearHold(assay);
+  // Asked after the refusal, so an issue that is both refused and unpriced reads
+  // as refused: there is no point pricing work that is not going to start.
+  if (assay.proposedProfile !== null && assay.profileAnsweredAt === null)
+    return `the goal assay proposes running this on "${assay.proposedProfile}"`;
+  return null;
+}
+
+function unclearHold(assay: IssueAssay): string {
   const by = assay.by === 'operator' ? 'you' : 'the goal assay';
   // The verdict's own words and the time it was reached are **not** in here, and
   // deliberately: this is one reason among several on a row that already carries
@@ -218,9 +252,11 @@ function expiringSignal(assay: IssueAssay, signals: WorldEvent[]): WorldEvent | 
  * is unbounded, so a count-bounded event read would judge an old verdict against
  * events it cannot see and hold it forever.
  *
- * Narrowed to the **`unclear`** rows, because a `workable` verdict holds nothing
- * and expiring it would only cost a re-assay. Null when none is standing, which is
- * every deployment until an issue is refused: no query, no read.
+ * Narrowed to the **`unclear`** rows, because they are the only arm of
+ * {@link assayHold} that reads signal at all: an unanswered profile proposal is
+ * ended by the operator answering it, never by a transition on the ticket, so
+ * widening this would fetch events nothing consults. Null when none is standing,
+ * which is every deployment until an issue is refused: no query, no read.
  */
 export function assaySignalQuery(assays: IssueAssay[]): { since: string; refs: string[] } | null {
   const refs = new Set<string>();
