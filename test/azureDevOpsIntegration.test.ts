@@ -31,6 +31,7 @@ import type {
   AzCommentRef,
   AzMergeResult,
   AzPolicyEvaluation,
+  AzTimelineRecord,
   AzPull,
   AzThread,
   AzWorkItem,
@@ -52,7 +53,11 @@ interface Script {
   /** Items reachable only by id — the parents, children and siblings of the listed ones. */
   relatedWorkItems?: AzWorkItem[];
   updates?: Record<number, AzWorkItemUpdate[]>;
-  throwOn?: 'listActivePullRequests' | 'listOpenWorkItems';
+  throwOn?: 'listActivePullRequests' | 'listOpenWorkItems' | 'getBuildTimeline';
+  /** Build timelines by build id — the structured half of CI evidence. */
+  timeline?: Record<number, AzTimelineRecord[]>;
+  /** Build logs keyed `<buildId>/<logId>` — the fallback half. */
+  buildLogs?: Record<string, string[]>;
   createdPullNumber?: number;
   /** Branches the remote says are already gone — `deleteBranch` reports false for these. */
   missingBranches?: string[];
@@ -72,6 +77,8 @@ interface Recorded {
   tagSets: Array<{ id: number; tag: string; present: boolean }>;
   comments: Array<{ id: number; commentId: number | null; text: string }>;
   closedSince: string[];
+  timelineReads: number[];
+  logReads: Array<{ buildId: number; logId: number }>;
   createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
   titleSets: Array<{ id: number; title: string }>;
   baseSets: Array<{ id: number; base: string }>;
@@ -92,6 +99,8 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     tagSets: [],
     comments: [],
     closedSince: [],
+    timelineReads: [],
+    logReads: [],
     createdPulls: [],
     titleSets: [],
     baseSets: [],
@@ -111,6 +120,15 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     async deleteBranch(branch) {
       recorded.deletedBranches.push(branch);
       return script.missingBranches?.includes(branch) !== true;
+    },
+    async getBuildTimeline(buildId) {
+      recorded.timelineReads.push(buildId);
+      if (script.throwOn === 'getBuildTimeline') throw new Error('boom');
+      return script.timeline?.[buildId] ?? [];
+    },
+    async getBuildLog(buildId, logId) {
+      recorded.logReads.push({ buildId, logId });
+      return script.buildLogs?.[`${buildId}/${logId}`] ?? [];
     },
     async viewerUniqueName() {
       return script.viewer ?? 'bot@acme.com';

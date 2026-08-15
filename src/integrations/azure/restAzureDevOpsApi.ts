@@ -9,6 +9,7 @@ import type {
   AzPolicyEvaluation,
   AzPull,
   AzThread,
+  AzTimelineRecord,
   AzWorkItem,
   AzWorkItemCommentRef,
   AzWorkItemUpdate,
@@ -172,13 +173,22 @@ interface RawWorkItemUpdate {
   fields?: Record<string, { oldValue?: string; newValue?: string }>;
 }
 
+/** The timeline fields we read; Azure's record carries far more. */
+interface RawTimelineRecord {
+  type?: string;
+  name?: string;
+  result?: string | null;
+  log?: { id?: number } | null;
+  issues?: Array<{ type?: string; message?: string }>;
+}
+
 interface RawPolicyEvaluation {
   status?: string | null;
   /**
    * Build-validation evaluations carry the definition they ran here — and
    * whether that run is expired, i.e. superseded by later commits on the branch.
    */
-  context?: { buildDefinitionName?: string; isExpired?: boolean } | null;
+  context?: { buildDefinitionName?: string; isExpired?: boolean; buildId?: number } | null;
   configuration?: {
     isBlocking?: boolean;
     isEnabled?: boolean;
@@ -488,11 +498,36 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       displayAliases: policyDisplayAliases(e),
       typeName: e.configuration?.type?.displayName ?? '',
       buildDefinitionName: e.context?.buildDefinitionName,
+      buildId: e.context?.buildId,
       status: e.status ?? null,
       isExpired: e.context?.isExpired,
       isBlocking: e.configuration?.isBlocking ?? false,
       isEnabled: e.configuration?.isEnabled ?? false,
     }));
+  }
+
+  async getBuildTimeline(buildId: number): Promise<AzTimelineRecord[]> {
+    const data = await this.request<{ records?: RawTimelineRecord[] }>(
+      this.withApiVersion(`${this.projectUrl}/_apis/build/builds/${buildId}/timeline`),
+    );
+    return (data.records ?? []).map((r) => ({
+      type: r.type ?? '',
+      name: r.name ?? '',
+      result: r.result ?? null,
+      logId: r.log?.id ?? null,
+      issues: (r.issues ?? []).map((i) => ({ type: i.type ?? '', message: i.message ?? '' })),
+    }));
+  }
+
+  async getBuildLog(buildId: number, logId: number): Promise<string[]> {
+    // Asked as JSON — the same `Accept` every other read here sends — because the
+    // endpoint answers a `{count, value: [...lines]}` envelope for it and raw
+    // text otherwise, and `request` parses JSON. The `value` guard covers a
+    // deployment that answers text anyway: no lines beats a thrown dispatch.
+    const data = await this.request<{ value?: string[] }>(
+      this.withApiVersion(`${this.projectUrl}/_apis/build/builds/${buildId}/logs/${logId}`),
+    );
+    return Array.isArray(data?.value) ? data.value : [];
   }
 
   async listPullLabels(pullRequestId: number): Promise<string[]> {

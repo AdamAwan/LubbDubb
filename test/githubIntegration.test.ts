@@ -10,6 +10,7 @@ import {
 import { GitHubIssuesIntegration, linkedPrFromTimeline, viewerAddedLabels } from '../src/integrations/github/issues.js';
 import { resolvePullDetail } from '../src/integrations/github/octokitGitHubApi.js';
 import type {
+  GhAnnotation,
   GhCheckRun,
   GhClosedPull,
   GhCombinedStatus,
@@ -39,7 +40,11 @@ interface Script {
   checkRuns?: Record<string, GhCheckRun[]>;
   issues?: GhIssue[];
   timeline?: Record<number, GhTimelineEvent[]>;
-  throwOn?: 'listOpenPulls' | 'listOpenIssues' | 'listPullReviewThreads' | 'updatePullBranch';
+  throwOn?: 'listOpenPulls' | 'listOpenIssues' | 'listPullReviewThreads' | 'updatePullBranch' | 'getJobLog';
+  /** Check-run annotations by check-run id — the structured half of CI evidence. */
+  annotations?: Record<number, GhAnnotation[]>;
+  /** Actions job logs by job id — the fallback half. */
+  jobLogs?: Record<number, string>;
   createdPullNumber?: number;
   /** Branches the remote says are already gone — `deleteBranch` reports false for these. */
   missingBranches?: string[];
@@ -53,6 +58,8 @@ interface Recorded {
   issueLabelQueries: Array<string | undefined>;
   labelSets: Array<{ number: number; label: string; present: boolean }>;
   closedSince: string[];
+  annotationReads: number[];
+  jobLogReads: number[];
   createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
   titleSets: Array<{ number: number; title: string }>;
   baseSets: Array<{ number: number; base: string }>;
@@ -70,6 +77,8 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     issueLabelQueries: [],
     labelSets: [],
     closedSince: [],
+    annotationReads: [],
+    jobLogReads: [],
     createdPulls: [],
     titleSets: [],
     baseSets: [],
@@ -77,6 +86,15 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     deletedBranches: [],
   };
   const api: GitHubApi = {
+    async listCheckRunAnnotations(checkRunId) {
+      recorded.annotationReads.push(checkRunId);
+      return script.annotations?.[checkRunId] ?? [];
+    },
+    async getJobLog(jobId) {
+      recorded.jobLogReads.push(jobId);
+      if (script.throwOn === 'getJobLog') throw new Error('log expired');
+      return script.jobLogs?.[jobId] ?? '';
+    },
     async createPull(input) {
       recorded.createdPulls.push(input);
       return { number: script.createdPullNumber ?? 77 };

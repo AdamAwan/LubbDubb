@@ -41,6 +41,27 @@ export interface AzureDevOpsApi {
    * actually apply to this PR, and mark which are `isBlocking` (i.e. required).
    */
   listPolicyEvaluations(pullRequestId: number): Promise<AzPolicyEvaluation[]>;
+  /**
+   * A build's timeline: one record per stage/phase/job/task, each carrying its
+   * result, its log id, and — the useful part — the `issues` the task raised.
+   *
+   * The cheap half of CI evidence, and the reason a failing Azure build rarely
+   * needs its log at all: a task that failed an assertion reports it here as an
+   * `error` issue, already extracted. → [`src/ci/ciEvidence.ts`]
+   */
+  getBuildTimeline(buildId: number): Promise<AzTimelineRecord[]>;
+  /**
+   * One build log's lines — the log of a single **task**, not of the whole build.
+   *
+   * That scoping is why no line range is asked for here even though the endpoint
+   * offers one: a range needs a total line count to take a *tail* from, which
+   * costs a second request, and one failed step's log is small enough that
+   * fetching it whole and tailing locally is the cheaper of the two. The
+   * per-task granularity is the real saving over GitHub, whose smallest unit is
+   * the entire job.
+   */
+  getBuildLog(buildId: number, logId: number): Promise<string[]>;
+
   /** Label names on a PR — the exclusion-tag signal. */
   listPullLabels(pullRequestId: number): Promise<string[]>;
 
@@ -210,6 +231,17 @@ export interface AzPolicyEvaluation {
   /** queued | running | approved | rejected | notApplicable | broken | null. */
   status: string | null;
   /**
+   * `context.buildId` on a build-validation evaluation: the build whose failure a
+   * CI-fix agent is being sent to fix, and the handle its timeline and logs are
+   * read through ({@link AzureDevOpsApi.getBuildTimeline}).
+   *
+   * Only build-validation policies have one. A **status** policy names an
+   * external system through an arbitrary URL and has no build, no timeline and
+   * no log — the same permanent absence a GitHub commit status has, rather than
+   * something left unwired. → [`src/ci/ciEvidence.ts`]
+   */
+  buildId?: number;
+  /**
    * `context.isExpired` on a build-validation evaluation: the last build ran
    * against commits this branch has since moved past, so the evaluation is
    * `queued` with **nothing in flight**. It never resolves until a build is
@@ -225,6 +257,27 @@ export interface AzPolicyEvaluation {
   isBlocking: boolean;
   /** False when the policy is disabled; a disabled policy's evaluation is noise. */
   isEnabled: boolean;
+}
+
+/** One node of a build's timeline — a stage, phase, job or task. */
+export interface AzTimelineRecord {
+  /** Stage | Phase | Job | Task — callers keep the tasks, which are what fail. */
+  type: string;
+  /** The step's display name, e.g. "Run tests". */
+  name: string;
+  /** succeeded | failed | canceled | skipped | succeededWithIssues | null (still running). */
+  result: string | null;
+  /** `log.id` — the handle {@link AzureDevOpsApi.getBuildLogLines} reads. Null when the step wrote none. */
+  logId: number | null;
+  /** The errors and warnings this step raised. Callers keep the errors. */
+  issues: AzTimelineIssue[];
+}
+
+/** One error or warning a build step raised, as Azure already extracted it. */
+interface AzTimelineIssue {
+  /** error | warning. */
+  type: string;
+  message: string;
 }
 
 export interface AzWorkItem {

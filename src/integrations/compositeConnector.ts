@@ -15,8 +15,10 @@ import type {
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { WorldSnapshot } from '../types.js';
+import type { CiEvidenceReader, CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import {
   isBranchDeleteCapable,
+  isCiEvidenceCapable,
   isInjectable,
   isIssueCommentCapable,
   isIssueLabelCapable,
@@ -42,7 +44,7 @@ import {
  *   handle it (by capability), not to a hard-coded provider.
  * - Inject (fake-only): route an injected event to the fake that owns its kind.
  */
-export class CompositeConnector implements Connector, ActionSink {
+export class CompositeConnector implements Connector, ActionSink, CiEvidenceReader {
   constructor(
     private readonly integrations: Integration[],
     private readonly now: () => string = () => new Date().toISOString(),
@@ -62,6 +64,23 @@ export class CompositeConnector implements Connector, ActionSink {
       issues: slices.flatMap(({ slice }) => slice.issues ?? []),
       ...(staleSources.length > 0 ? { staleSources } : {}),
     };
+  }
+
+  /**
+   * The failing output of these checks, or `[]`.
+   *
+   * **The one routed method that answers rather than throwing when nothing can
+   * handle it.** Every outbound method below throws, and rightly: an act the
+   * operator asked for that no provider can perform is a fault worth surfacing.
+   * This is the opposite — it enriches a dispatch that is going out regardless,
+   * so "no provider has logs" is an ordinary answer, and raising it would turn a
+   * missing nicety into a failed dispatch on the `fake` provider and on every
+   * deployment whose checks are all third-party statuses.
+   */
+  async readCiFailureEvidence(prNumber: number, checks: CiEvidenceTarget[]): Promise<CiFailureEvidence[]> {
+    const handler = this.integrations.find(isCiEvidenceCapable);
+    if (!handler) return [];
+    return handler.readCiFailureEvidence(prNumber, checks);
   }
 
   async postPrReply(input: PrReplyInput): Promise<SendResult> {

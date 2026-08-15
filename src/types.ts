@@ -79,6 +79,25 @@ export interface CiCheck {
    * (`src\ci\ciPolicy.ts`).
    */
   expired?: boolean;
+  /**
+   * How the provider that reported this check finds its **failure output** —
+   * a GitHub check-run id, an Azure build id (see `src/ci/ciEvidence.ts`).
+   *
+   * **Opaque above the integration that wrote it.** Nothing outside
+   * `src/integrations/<provider>/` parses it, compares it or renders it: it is
+   * handed straight back to the same provider's {@link CiEvidenceCapable} read,
+   * which is the only code entitled to know what its own string means. That is
+   * what lets two providers with entirely different job models — check runs and
+   * build timelines — share one field without a discriminated union that every
+   * reader would have to widen.
+   *
+   * Absent whenever there is nothing to fetch, which is a large and permanent
+   * set rather than a legacy gap: a GitHub **commit status** and an Azure
+   * **status policy** both name a third-party system the harness has no log API
+   * for. Absent therefore reads as "no evidence available", and the dispatch
+   * prompt is composed exactly as it was before this existed.
+   */
+  evidenceRef?: string;
 }
 
 /** GitHub's `mergeable_state`, normalised to the values the harness reacts to. */

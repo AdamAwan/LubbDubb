@@ -5,6 +5,7 @@ import { Store } from './store/store.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
 import { buildIntegrations } from './integrations/registry.js';
 import type { ActionSink } from './sink/actionSink.js';
+import type { CiEvidenceReader } from './ci/ciEvidence.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
 import { defaultSessionRoot } from './agents/sessionTranscript.js';
 import { WorktreeManager, type Worktrees } from './worktree/worktreeManager.js';
@@ -145,6 +146,12 @@ interface BuildOptions {
   backend?: PtyBackend;
   /** Override the outbound sink (tests). Defaults to the FakeConnector. */
   sink?: ActionSink;
+  /**
+   * Override where a CI-fix dispatch's failing output comes from (tests inject a
+   * provider integration built on a scripted `*Api`). Defaults to the composite,
+   * which answers `[]` unless the selected provider can supply any.
+   */
+  ciEvidence?: CiEvidenceReader;
   /** Inject a fake process spawner (tests) for the stream-JSON runtime. */
   streamSpawner?: Spawner;
   /**
@@ -461,6 +468,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     defaultBranch: config.defaultBranch,
     runtime: runtimeControl,
     errors,
+    // The composite, never `opts.sink`: this is a *read* of the provider, and a
+    // test that swaps the outbound sink is not saying anything about where CI
+    // evidence comes from. It answers `[]` when no integration can supply any,
+    // so the fake provider composes exactly the prompt it always did.
+    ciEvidence: opts.ciEvidence ?? connector,
   });
 
   // The accept/reject surface for acts the auto-send gate refused to perform on

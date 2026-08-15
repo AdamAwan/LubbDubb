@@ -111,6 +111,8 @@ function fakeApi(evals: AzPolicyEvaluation[]): AzureDevOpsApi {
     setPullTitle: unused('setPullTitle'),
     setPullBase: unused('setPullBase'),
     deleteBranch: unused('deleteBranch'),
+    getBuildTimeline: unused('getBuildTimeline'),
+    getBuildLog: unused('getBuildLog'),
   };
 }
 

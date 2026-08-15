@@ -816,6 +816,36 @@ leaves an unmatched token untouched.
 
 `docs/prompt-templates/` holds ready-to-copy samples of the current defaults, one file per id.
 
+### What a CI-fix dispatch carries
+
+`pr-ci-fix` renders five lines naming the pull request and its branch. Appended after it, never
+interpolated into it, are two things:
+
+- **`ciFailureNote`** — the operator's per-check `guidance`, which checks are non-blocking, and which
+  are failing but held (`src/ci/ciPolicy.ts`).
+- **`ciEvidenceNote`** — what those checks actually reported: the check-run annotations or build-
+  timeline errors where the provider extracted any, otherwise the tail of the failing job's log
+  (`src/ci/ciEvidence.ts`, [15](15-integrations.md#outbound-is-many-small-interfaces-not-one-fat-one)).
+
+The evidence is fetched in the **executor**, at dispatch, not in the rule. The rule pipeline is
+synchronous and pure over the world snapshot, and the world read is per pulse — so the only place a
+per-dispatch network read belongs is where the task row is written. It joins the check *names* the
+CI policy decided on to the `evidenceRef`s the provider wrote onto `CiCheck`, reading the pull
+request out of the world baseline, which `recordWorldChanges` has already set to this cycle's world.
+
+Three properties hold, and each is the answer to a way this fails silently:
+
+- **A fetch that fails changes nothing.** No provider capability, a 404, a timeout, a token without
+  scope: the prompt is byte-identical to the one composed before evidence existed, and the failure is
+  recorded through `errors.record`. A dispatch never fails because a log could not be read.
+- **The cap is per prompt, not per check**, and names what it dropped. Three red checks split one
+  budget rather than taking one each, and a trimmed excerpt says so — an agent that reads a partial
+  log as a whole one concludes from an absence this code manufactured.
+- **Rule `pr-ci-gate` gets none of it.** A waiting check has produced no failure to excerpt, and an
+  **expired** one's last run is against commits the branch has moved past, so its output would point
+  an agent at code that no longer exists. What a gate is waiting for is the operator's `guidance`,
+  which `ciWatchNote` already carries.
+
 ### What an escalation prompt may be
 
 **An escalation's `prompt` opens with a one-line lede, and never carries text the harness is quoting

@@ -11,9 +11,11 @@ import type {
   SendResult,
 } from '../../sink/actionSink.js';
 import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
+import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
   BranchDeleteCapable,
   Capability,
+  CiEvidenceCapable,
   Integration,
   PrBaseCapable,
   PrBaseUpdateCapable,
@@ -27,6 +29,7 @@ import type {
 } from '../integration.js';
 import { closedWindowStart } from '../closedWindow.js';
 import type {
+  GhAnnotation,
   GhCheckRun,
   GhClosedPull,
   GhCombinedStatus,
@@ -76,6 +79,7 @@ export class GitHubSourceControlIntegration
     PrBaseCapable,
     PrBaseUpdateCapable,
     BranchDeleteCapable,
+    CiEvidenceCapable,
     RefResolvable
 {
   readonly id = 'sourceControl:github';
@@ -245,6 +249,96 @@ export class GitHubSourceControlIntegration
     await this.opts.api.updatePullBranch(input.prNumber);
     return { ok: true, ref: input.base };
   }
+
+  /**
+   * What the red checks reported, annotations first and the log tail behind them.
+   *
+   * Per check rather than in one batch because the two reads are per check at the
+   * API, and **each check is isolated**: one that 404s (a log aged out of
+   * retention, a token without `actions:read`) costs its own excerpt and not the
+   * others'. Everything is recorded and nothing is rethrown — this enriches a
+   * dispatch that is going out either way, so a failure here must leave the
+   * prompt as it was rather than take the dispatch down with it.
+   */
+  async readCiFailureEvidence(prNumber: number, checks: CiEvidenceTarget[]): Promise<CiFailureEvidence[]> {
+    const found: CiFailureEvidence[] = [];
+    for (const check of checks) {
+      const ids = parseEvidenceRef(check.evidenceRef);
+      if (!ids) continue;
+      try {
+        const annotations = await this.opts.api.listCheckRunAnnotations(ids.checkRunId);
+        const failures = annotations.filter((a) => a.level === 'failure');
+        if (failures.length > 0) {
+          found.push({ check: check.name, kind: 'errors', lines: failures.map(annotationLine) });
+          continue;
+        }
+        // No structured error — the common case for a bare test command. Fall
+        // through to the log, which for GitHub means downloading it whole.
+        if (ids.jobId === null) continue;
+        const log = await this.opts.api.getJobLog(ids.jobId);
+        const all = log.split('\n').filter((l) => l.trim() !== '');
+        const tail = all.slice(-EVIDENCE_LOG_TAIL_LINES);
+        if (tail.length === 0) continue;
+        found.push({
+          check: check.name,
+          kind: 'log',
+          lines: tail.map(stripLogTimestamp),
+          ...(all.length > tail.length ? { droppedBefore: all.length - tail.length } : {}),
+        });
+      } catch (err) {
+        this.opts.errors?.record({
+          source: 'provider',
+          message: `${this.id} could not read CI evidence for "${check.name}" on PR #${prNumber}: ${(err as Error).message}`,
+          detail: 'The CI-fix agent was dispatched without the failing output; it will reproduce the failure instead.',
+        });
+      }
+    }
+    return found;
+  }
+}
+
+/**
+ * The evidence ref for a failing check run: its own id, and the Actions **job**
+ * id when one can be recovered from `details_url`.
+ *
+ * Two ids because the two reads take different ones — annotations are addressed
+ * by check run, logs by job — and the job id exists nowhere in the check-run
+ * payload but that URL. A check run from a non-Actions app yields the first and
+ * not the second, which is exactly right: it has annotations and no log.
+ */
+function checkEvidenceRef(run: GhCheckRun): string | undefined {
+  if (run.id === undefined) return undefined;
+  const jobId = run.detailsUrl?.match(/\/job\/(\d+)/)?.[1];
+  return jobId ? `${run.id}/${jobId}` : String(run.id);
+}
+
+/** Read back what {@link checkEvidenceRef} wrote. Anything else yields null and no fetch. */
+function parseEvidenceRef(ref: string): { checkRunId: number; jobId: number | null } | null {
+  const [check, job] = ref.split('/');
+  const checkRunId = Number(check);
+  if (!Number.isInteger(checkRunId) || checkRunId <= 0) return null;
+  const jobId = job !== undefined && /^\d+$/.test(job) ? Number(job) : null;
+  return { checkRunId, jobId };
+}
+
+/** One annotation as a line an agent can act on: the place, then what is wrong there. */
+function annotationLine(a: GhAnnotation): string {
+  const where = a.startLine > 0 ? `${a.path}:${a.startLine}` : a.path;
+  const title = a.title && !a.message.startsWith(a.title) ? `${a.title}: ` : '';
+  // Annotations wrap their own message across lines; flattened so one annotation
+  // is one line and the cap's line arithmetic stays honest.
+  return `${where}: ${title}${a.message.replace(/\s*\n\s*/g, ' ').trim()}`;
+}
+
+/**
+ * Drop the ISO timestamp GitHub prefixes to every log line.
+ *
+ * Not cosmetic: it is 29 characters on every line of an excerpt with a character
+ * budget, so keeping it would spend something like a fifth of the evidence on
+ * telling an agent what time the build ran.
+ */
+function stripLogTimestamp(line: string): string {
+  return line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s?/, '');
 }
 
 /**
@@ -329,11 +423,23 @@ export function aggregateCiStatus(checkRuns: GhCheckRun[], status: GhCombinedSta
 export function listCiChecks(checkRuns: GhCheckRun[], status: GhCombinedStatus): CiCheck[] {
   const checks: CiCheck[] = [];
   for (const run of checkRuns) {
+    // Only a failing run gets an evidence ref. A passing one has no failure to
+    // fetch, and a pending one's last output is about an older commit — handing
+    // that to an agent would point it at code the branch has moved past, which is
+    // worse than handing it nothing.
+    const ref =
+      run.status === 'completed' && run.conclusion && FAILING_CONCLUSIONS.has(run.conclusion)
+        ? checkEvidenceRef(run)
+        : undefined;
+    const evidence = ref ? { evidenceRef: ref } : {};
     if (run.status !== 'completed') checks.push({ name: run.name, status: 'pending' });
     else if (run.conclusion && FAILING_CONCLUSIONS.has(run.conclusion))
-      checks.push({ name: run.name, status: 'failing' });
+      checks.push({ name: run.name, status: 'failing', ...evidence });
     else checks.push({ name: run.name, status: 'passing' });
   }
+  // Commit statuses get no evidence ref, permanently. A status names a
+  // third-party system by `target_url` and GitHub has no log API for it — there
+  // is nothing to fetch, as opposed to something not yet wired up.
   for (const s of status.statuses ?? []) {
     if (s.state === 'failure' || s.state === 'error') checks.push({ name: s.context, status: 'failing' });
     else if (s.state === 'pending') checks.push({ name: s.context, status: 'pending' });

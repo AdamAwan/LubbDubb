@@ -43,7 +43,8 @@ providers share one `FakeWorldStore` so their world stays coherent.
 
 `PrReplyCapable`, `PrMergeCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
 `PrBaseCapable`, `PrBaseUpdateCapable`, `BranchDeleteCapable`, `IssueLabelCapable`,
-`WorkItemStateCapable`, `IssueCommentCapable`, `RefResolvable`, and the fake-only `Injectable`.
+`WorkItemStateCapable`, `IssueCommentCapable`, `CiEvidenceCapable`, `RefResolvable`, and the
+fake-only `Injectable`.
 
 `BranchDeleteCapable` deletes a branch outright — the reap after a pull request merges. Both
 providers implement it, and both report **already gone as success**: GitHub's "automatically delete
@@ -58,6 +59,25 @@ costs no agent ([05](05-dispatcher.md#pr-base-update--two-arms)). GitHub impleme
 implement it**, which is exactly the asymmetry a per-capability interface exists for. Note that it is
 _not_ `PrBaseCapable`: one changes which branch a pull request merges into, the other merges that
 branch in.
+
+`CiEvidenceCapable` is the one that reads rather than writes, and it is here because it is asked per
+act rather than per pulse. It fetches the **failing output** of a red check so a CI-fix dispatch
+carries the assertion instead of only the check's name — see
+[05](05-dispatcher.md#what-a-ci-fix-dispatch-carries) for what is done with it, and `src/ci/ciEvidence.ts`
+for why the excerpt is shaped the way it is. Both providers implement it, and both cover their own
+job system and not their third-party status channel:
+
+| | Structured errors | Raw fallback | Never covered |
+| --- | --- | --- | --- |
+| GitHub | check-run annotations | the Actions job log, downloaded whole | commit statuses (`target_url` names a system with no log API) |
+| Azure | the build timeline's `issues` | the failing task's log | status policies (no build, no timeline, no log) |
+
+Two asymmetries are worth knowing before touching either arm. GitHub's job-log endpoint redirects to
+a blob and honours no line range, so a "tail" is a full download that is then discarded; Azure's log
+is per **task** rather than per job, which makes the same tail cheap without a range at all. And
+Azure's build reads need **Build (read)** on the token — a scope an operator granting code and
+work-item access does not think to add, so it 403s while every other read succeeds. Both failures are
+recorded and neither is rethrown: the dispatch goes out with today's prompt.
 
 The PR-write capabilities are deliberately separate rather than one `PrWriteCapable`, because a
 provider may genuinely have one and not the others: GitHub retargets a stack itself when a rung
@@ -354,3 +374,9 @@ fleet is absorbing is the early warning that its read has outgrown its heartbeat
 Neither retry is a substitute for reading less. The GitHub world read costs on the order of one
 request per open issue plus six per open pull request, every pulse, and nothing caches or conditions
 those reads — a repository open enough will exhaust an hourly budget that no retry can restore.
+
+**CI evidence is deliberately not part of that budget.** The failing output of a red check is fetched
+when a CI-fix agent is actually dispatched — one or two requests per failing check, once, in the
+executor — rather than in the snapshot. Reading it per pulse would put it on exactly the path this
+section warns about, and almost every fetch would be discarded: a red check is red for many pulses
+and dispatched for once.

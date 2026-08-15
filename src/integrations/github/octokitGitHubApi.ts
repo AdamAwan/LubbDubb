@@ -4,6 +4,7 @@ import { throttling } from '@octokit/plugin-throttling';
 import type { MergeMethod } from '../../sink/actionSink.js';
 import { withinClosedWindow } from '../closedWindow.js';
 import type {
+  GhAnnotation,
   GhCheckRun,
   GhClosedPull,
   GhCombinedStatus,
@@ -314,7 +315,37 @@ export class OctokitGitHubApi implements GitHubApi {
       ref: sha,
       per_page: 100,
     });
-    return runs.map((run) => ({ name: run.name, status: run.status, conclusion: run.conclusion }));
+    return runs.map((run) => ({
+      name: run.name,
+      status: run.status,
+      conclusion: run.conclusion,
+      id: run.id,
+      detailsUrl: run.details_url ?? null,
+    }));
+  }
+
+  async listCheckRunAnnotations(checkRunId: number): Promise<GhAnnotation[]> {
+    const annotations = await this.octokit.paginate(this.octokit.checks.listAnnotations, {
+      ...this.base,
+      check_run_id: checkRunId,
+      per_page: 100,
+    });
+    return annotations.map((a) => ({
+      path: a.path,
+      startLine: a.start_line,
+      level: a.annotation_level ?? '',
+      message: a.message ?? '',
+      title: a.title ?? '',
+    }));
+  }
+
+  async getJobLog(jobId: number): Promise<string> {
+    // Octokit follows the 302 to the blob and hands back the body. Typed `unknown`
+    // because the generated types call this endpoint's response `never` — it is
+    // declared as a redirect rather than as content, so the string it actually
+    // resolves to has to be asserted here rather than inferred.
+    const res = await this.octokit.actions.downloadJobLogsForWorkflowRun({ ...this.base, job_id: jobId });
+    return typeof res.data === 'string' ? res.data : String(res.data ?? '');
   }
 
   async listOpenIssues(label?: string): Promise<GhIssue[]> {

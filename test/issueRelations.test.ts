@@ -323,6 +323,8 @@ function relationApi(
     setPullTitle: unused,
     setPullBase: unused,
     deleteBranch: unused,
+    getBuildTimeline: unused,
+    getBuildLog: unused,
   };
 }
 

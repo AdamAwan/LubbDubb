@@ -11,9 +11,11 @@ import type {
   SendResult,
 } from '../../sink/actionSink.js';
 import type { CiCheck, CiStatus, MergeableState, PrComment, PullRequest } from '../../types.js';
+import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence } from '../../ci/ciEvidence.js';
 import type {
   BranchDeleteCapable,
   Capability,
+  CiEvidenceCapable,
   Integration,
   PrBaseCapable,
   PrCreateCapable,
@@ -25,7 +27,7 @@ import type {
   WorldSlice,
 } from '../integration.js';
 import { closedWindowStart } from '../closedWindow.js';
-import type { AzClosedPull, AzPolicyEvaluation, AzThread, AzureDevOpsApi } from './azureDevOpsApi.js';
+import type { AzClosedPull, AzPolicyEvaluation, AzThread, AzTimelineRecord, AzureDevOpsApi } from './azureDevOpsApi.js';
 import { azureRefUrl } from './refUrl.js';
 import { policyCheckMode, policyKindOf, type PolicyCheckModes } from './policyKinds.js';
 
@@ -73,6 +75,7 @@ export class AzureDevOpsSourceControlIntegration
     PrTitleCapable,
     PrBaseCapable,
     BranchDeleteCapable,
+    CiEvidenceCapable,
     RefResolvable
 {
   readonly id = 'sourceControl:azure';
@@ -217,6 +220,74 @@ export class AzureDevOpsSourceControlIntegration
     await this.opts.api.setPullBase(input.prNumber, input.base);
     return { ok: true };
   }
+
+  /**
+   * What the failed build actually reported: the timeline's own `issues` where
+   * the steps raised any, the failing step's log tail where they did not.
+   *
+   * The timeline is one request and usually the whole answer — Azure extracts a
+   * failing task's errors into it, so most builds need no log read at all. Only
+   * **task** records are considered: a failed Job or Stage is an aggregate of the
+   * task that actually broke, and reporting both would tell the agent the same
+   * thing two or three times at the top of its budget.
+   *
+   * Isolated and silent per check, for the reason the GitHub reader states. The
+   * failure worth calling out here is a **PAT without Build (read)** scope: the
+   * work-item and code scopes an operator naturally grants do not cover
+   * `_apis/build`, so this 403s while every other read succeeds. It records and
+   * moves on, and the dispatch goes out exactly as it did before.
+   */
+  async readCiFailureEvidence(prNumber: number, checks: CiEvidenceTarget[]): Promise<CiFailureEvidence[]> {
+    const found: CiFailureEvidence[] = [];
+    for (const check of checks) {
+      const buildId = Number(check.evidenceRef);
+      if (!Number.isInteger(buildId) || buildId <= 0) continue;
+      try {
+        const timeline = await this.opts.api.getBuildTimeline(buildId);
+        const failedTasks = timeline.filter((r) => r.type.toLowerCase() === 'task' && r.result === 'failed');
+        const errors = failedTasks.flatMap((r) =>
+          r.issues.filter((i) => i.type.toLowerCase() === 'error').map((i) => taskIssueLine(r, i.message)),
+        );
+        if (errors.length > 0) {
+          found.push({ check: check.name, kind: 'errors', lines: errors });
+          continue;
+        }
+        const withLog = failedTasks.find((r) => r.logId !== null);
+        if (!withLog?.logId) continue;
+        const all = (await this.opts.api.getBuildLog(buildId, withLog.logId)).filter((l) => l.trim() !== '');
+        const tail = all.slice(-EVIDENCE_LOG_TAIL_LINES);
+        if (tail.length === 0) continue;
+        found.push({
+          check: check.name,
+          kind: 'log',
+          lines: tail.map(stripLogTimestamp),
+          ...(all.length > tail.length ? { droppedBefore: all.length - tail.length } : {}),
+        });
+      } catch (err) {
+        this.opts.errors?.record({
+          source: 'provider',
+          message: `${this.id} could not read CI evidence for "${check.name}" on PR #${prNumber}: ${(err as Error).message}`,
+          detail:
+            'The CI-fix agent was dispatched without the failing output; it will reproduce the failure instead. ' +
+            'A 403 here usually means the token lacks Build (read) scope.',
+        });
+      }
+    }
+    return found;
+  }
+}
+
+/** One timeline error, named by the step that raised it — "which task broke" is half the answer. */
+function taskIssueLine(record: AzTimelineRecord, message: string): string {
+  return `${record.name}: ${message.replace(/\s*\n\s*/g, ' ').trim()}`;
+}
+
+/**
+ * Drop the ISO timestamp Azure prefixes to every build-log line — 29 characters
+ * on every line of an excerpt with a character budget.
+ */
+function stripLogTimestamp(line: string): string {
+  return line.replace(/^\d{4}-\d{2}-\d{2}T[\d:.]+Z\s?/, '');
 }
 
 /**
@@ -365,6 +436,10 @@ export function listPolicyCiChecks(evals: AzPolicyEvaluation[], modes?: PolicyCh
     const status = checkStatusOf(e.status);
     if (!status) continue;
     const check: CiCheck = { name: e.displayName, status, blocking: e.isBlocking };
+    // Only a failing build has evidence to fetch. A status policy carries no
+    // build id at all — it names an external system Azure has no log for — and a
+    // pending build's last output is about commits this branch has moved past.
+    if (status === 'failing' && e.buildId !== undefined) check.evidenceRef = String(e.buildId);
     // Only when the provider reported one: an empty array on every other check
     // would be a field that reads as meaningful and never is.
     if (e.displayAliases && e.displayAliases.length > 0) check.aliases = [...e.displayAliases];
