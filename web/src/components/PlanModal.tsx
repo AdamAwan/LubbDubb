@@ -60,7 +60,6 @@ export function PlanModal({
   refUrls,
   onClose,
   onReplan,
-  onAbandon,
   onDiscuss,
   onEndDiscussion,
   onDecide,
@@ -90,7 +89,6 @@ export function PlanModal({
   refUrls: Record<string, string>;
   onClose: () => void;
   onReplan: (planId: string) => Promise<unknown> | unknown;
-  onAbandon: (planId: string) => Promise<unknown> | unknown;
   onDiscuss: (planId: string) => Promise<unknown> | unknown;
   onEndDiscussion: (planId: string) => Promise<unknown> | unknown;
   onDecide: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
@@ -119,11 +117,6 @@ export function PlanModal({
   // Both terminals — a part can finish as a write-up or a determination, and
   // counting only merges would show a finished plan as still in flight.
   const settled = live.filter((p) => p.status === 'merged' || p.status === 'concluded').length;
-  // Mirrors `partHasWork` on the server, which is what the abandon route refuses
-  // on — the same relationship `partProgress` has to `partSettled`, and gating the
-  // control here is the rule the Discuss button already follows: a control must
-  // not offer what the route refuses.
-  const started = live.some((p) => ['dispatched', 'in_review', 'merged', 'concluded'].includes(p.status));
   const liveChecks = checks.filter((c) => c.supersededReason === null);
   const settledChecks = liveChecks.filter((c) => c.state === 'passed' || c.state === 'waived').length;
   const issueNumber = planIssueOf(plan.originRef);
@@ -317,24 +310,17 @@ export function PlanModal({
                 }}
               >
                 {live.length === 0 ? (
-                  <>
-                    {shapeNote !== null && plan.status !== 'planning' && (
-                      <div className="pm-shape">One pull request because: {shapeNote}</div>
-                    )}
-                    <p className="empty">
-                      {/* No live parts *is* the single-PR arm — the shape is the rows,
-                          not the status. Only a plan still being written has none for
-                          the other reason. */}
-                      {plan.status === 'planning'
-                        ? 'No parts declared yet.'
-                        : 'One pull request — this issue goes through ordinary pickup.'}
-                    </p>
-                  </>
+                  <p className="empty">
+                    {/* Every plan declares at least one part, so the only plan with
+                        none is one still being written — or one whose every part an
+                        amendment retired. */}
+                    {plan.status === 'planning' ? 'No parts declared yet.' : 'Every part of this plan was retired.'}
+                  </p>
                 ) : (
                   <>
                     <span className="pm-section-label">
                       {live.length} part{live.length === 1 ? '' : 's'}, in dispatch order
-                      {live.length === 1 && shapeNote !== null ? ` — ${shapeNote}` : ''}
+                      {shapeNote !== null ? ` — ${shapeNote}` : ''}
                     </span>
                     {live.map((part, idx) => (
                       <div
@@ -493,14 +479,10 @@ export function PlanModal({
                   <>
                     <AsyncButton
                       className="ghost"
-                      title={
-                        live.length > 0
-                          ? 'Retires the parts nothing has started for and works the issue as a single pull request'
-                          : 'Sends it back to the planner — a refused single verdict has nowhere to fall back to'
-                      }
+                      title="Sends it back to the planner with your note. Parts nothing has started for are retired."
                       onClick={() => onDecide(decidable.id, 'reject', composeNote(pins, live, note))}
                     >
-                      {live.length > 0 ? 'Reject — work it as one PR' : 'Reject — send it back to the planner'}
+                      Reject — send it back to the planner
                     </AsyncButton>
                     <AsyncButton
                       className="ghost"
@@ -528,9 +510,9 @@ export function PlanModal({
                   </span>
                 )}
                 <span className="spacer" />
-                {/* The route 409s outside `awaiting_approval` (discussing a `single` or
-                    `active` plan manufactures or reopens an approval gate it never had),
-                    so the button must not offer what the route refuses. */}
+                {/* The route 409s outside `awaiting_approval` (discussing a released
+                    plan reopens an approval gate it has already been through), so the
+                    button must not offer what the route refuses. */}
                 {plan.status === 'awaiting_approval' && !decidable && (
                   <AsyncButton
                     className="ghost"
@@ -547,19 +529,6 @@ export function PlanModal({
                 >
                   Replan
                 </AsyncButton>
-                {/* The way out of a plan approved onto a branch git will not let its
-                    parts sit beneath: once released, Reject is gone (it settles an
-                    `awaiting_approval` plan) and a replan fails back to `parts`, so
-                    without this the only exit is the database. */}
-                {plan.status === 'active' && live.length > 0 && !started && (
-                  <AsyncButton
-                    className="ghost"
-                    title="Retire the parts and work this issue as one pull request. Offered only while no part has started."
-                    onClick={() => onAbandon(plan.id)}
-                  >
-                    Abandon decomposition
-                  </AsyncButton>
-                )}
               </div>
             </>
           )}
@@ -1038,12 +1007,12 @@ function HistoryView({ history, now }: { history: PlanHistory | null; now: numbe
       <div className="pm-revs">
         {revisions.map((rev) => (
           <span className={`chip small${rev === latest ? ' ok' : ''}`} key={rev.id} title={rev.narrative.reason ?? ''}>
-            v{rev.seq} · {rev.verdict === 'parts' ? `${rev.parts.length} parts` : 'one PR'} · {relTime(rev.at, now)}
+            v{rev.seq} · {rev.parts.length} part{rev.parts.length === 1 ? '' : 's'} · {relTime(rev.at, now)}
           </span>
         ))}
       </div>
       {diff === null ? (
-        <p className="empty">One verdict, never amended — there is nothing to compare it to.</p>
+        <p className="empty">One plan, never amended — there is nothing to compare it to.</p>
       ) : (
         <DiffBody diff={diff} />
       )}
@@ -1060,7 +1029,6 @@ function DiffBody({ diff }: { diff: PlanDiff }) {
         <span className="pm-section-label">
           v{diff.seq} against v{diff.againstSeq}
         </span>
-        {diff.verdictChanged && <span className="chip small warn">the verdict itself changed</span>}
         {moved.length === 0 && <span className="chip small">no part changed</span>}
         {unchanged > 0 && <span className="chip small">{unchanged} unchanged</span>}
       </div>

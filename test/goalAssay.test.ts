@@ -17,7 +17,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Agent, Decision, Issue, IssueAssay, Plan, Task, WorldEvent, WorldSnapshot } from '../src/types.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { singlePlan } from './support/plans.js';
+import { spentPlannerAttempts } from './support/plans.js';
 
 // Rule `issue-assay` — the goal assay. The one gate in front of an issue that asks about its
 // *content*. What makes it fire, what it must never do (park an issue for good),
@@ -84,7 +84,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: [],
+    recentDecisions: spentPlannerAttempts(12),
     agentHeadroom: 3,
     ...over,
   };
@@ -136,7 +136,7 @@ test('a fresh issue is assayed before anything is dispatched against it', async 
 });
 
 test('with the flag off nothing changes — the issue goes straight into the funnel', async () => {
-  const { actions } = await new RuleDispatcher().decide(ctx());
+  const { actions } = await new RuleDispatcher().decide(ctx({ recentDecisions: [] }));
   assert.deepEqual(origins(actions), ['issue:12:plan'], 'off by default, so nothing this rule does moves');
 });
 
@@ -267,7 +267,7 @@ test('an unclear verdict holds the issue out of pickup and planning alike', asyn
 });
 
 test('a workable verdict releases the issue into the funnel and holds nothing', async () => {
-  const { actions } = await assayer().decide(ctx({ assays: [assay({ verdict: 'workable' })] }));
+  const { actions } = await assayer().decide(ctx({ assays: [assay({ verdict: 'workable' })], recentDecisions: [] }));
   assert.deepEqual(
     origins(actions),
     ['issue:12:plan'],
@@ -346,7 +346,9 @@ function pickupCtx(over: Partial<Parameters<typeof issuePickupStatus>[1]> = {}) 
     cooldown: DEFAULT_COOLDOWN,
     now: NOW,
     tasks: [],
-    recentDecisions: [],
+    // The funnel has failed open, so pickup is reachable at all — every case here
+    // is about the assay in front of it, not about the planner in front of that.
+    recentDecisions: spentPlannerAttempts(12),
     openPrs: [],
     headroom: 3,
     paused: false,
@@ -382,15 +384,14 @@ test('the chip reports the pending case too, so a waiting issue is not an idle f
 });
 
 test('the chip says eligible exactly when the rule would dispatch — cap spent, and off', () => {
-  // Planned as one pull request in both, so what is being read is the assay's
-  // effect on pickup rather than the funnel in front of it.
-  const planned = { plans: [singlePlan(12)] };
   const capped = issuePickupStatus(
     issue(),
-    pickupCtx({ ...planned, recentDecisions: spentCap('issue:12:assay', 'assay/issue/12') }),
+    pickupCtx({
+      recentDecisions: [...spentPlannerAttempts(12), ...spentCap('issue:12:assay', 'assay/issue/12')],
+    }),
   );
   assert.equal(capped.status, 'eligible', 'the fail-open is reported as the pickup it actually becomes');
-  assert.equal(issuePickupStatus(issue(), pickupCtx({ ...planned, assay: { enabled: false } })).status, 'eligible');
+  assert.equal(issuePickupStatus(issue(), pickupCtx({ assay: { enabled: false } })).status, 'eligible');
 });
 
 test('an unwatched issue is reported as unwatched, never as awaiting an assay it will never get', () => {

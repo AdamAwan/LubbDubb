@@ -542,7 +542,6 @@ test('plan_submit persists the verdict and hands the agent its status back', asy
   const agent = spawnAgent(system, 'issue:12:plan');
 
   const res = await callTool(system, agent, 'plan_submit', {
-    verdict: 'parts',
     reason: 'Schema before reader.',
     parts: [
       { slug: 'schema', title: 'Add the table', scope: 'src/store' },
@@ -582,7 +581,6 @@ test('a malformed plan_submit returns the reason and leaves no partial rows', as
 
   // A cycle: rejected by the same schema the file path uses.
   const res = await callTool(system, agent, 'plan_submit', {
-    verdict: 'parts',
     reason: 'Circular.',
     parts: [
       { slug: 'a', title: 'A', scope: 'x', dependsOn: ['b'] },
@@ -598,7 +596,7 @@ test('a malformed plan_submit returns the reason and leaves no partial rows', as
 
   // ...and the retry, corrected, lands.
   const fixed = await callTool(system, agent, 'plan_submit', {
-    verdict: 'single',
+    parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
     reason: 'Small after all.',
   });
   assert.equal(fixed.isError, false);
@@ -616,7 +614,6 @@ test('plan_submit accepts and persists the widened document', async () => {
   const agent = spawnAgent(system, 'issue:231:plan');
 
   const res = await callTool(system, agent, 'plan_submit', {
-    verdict: 'parts',
     reason: 'the signer must exist first',
     risks: 'part 2 briefly serves artifacts unguarded',
     outOfScope: 'capability revocation',
@@ -654,7 +651,6 @@ test('plan_submit carries the validation block, on the verdict as well as the pa
   assert.ok(schema.properties.validation, 'the tool offers the block the file path accepts');
 
   const res = await callTool(system, agent, 'plan_submit', {
-    verdict: 'parts',
     reason: 'the reap writer must land before anything reads it',
     verification: 'no stale refs survive a squash merge',
     parts: [{ slug: 'reap-writer', title: 'Delete the branch', scope: 'src/git', touches: [] }],
@@ -708,7 +704,7 @@ test('plan_submit hands back the reason for a malformed check, and writes nothin
   // believe it had assigned work. The tool's whole advantage over the file is that
   // the planner hears this in the same turn.
   const res = await callTool(system, agent, 'plan_submit', {
-    verdict: 'single',
+    parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
     reason: 'one PR',
     validation: {
       checks: [{ id: 'a-check', title: 'T', do: 'D', expect: 'E', actor: 'fleet' }],
@@ -720,7 +716,10 @@ test('plan_submit hands back the reason for a malformed check, and writes nothin
 
   // And an omitted block is not an empty one: it leaves whatever is there alone,
   // which is what makes a replan that says nothing about validation safe.
-  const fixed = await callTool(system, agent, 'plan_submit', { verdict: 'single', reason: 'one PR' });
+  const fixed = await callTool(system, agent, 'plan_submit', {
+    parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
+    reason: 'one PR',
+  });
   assert.equal(fixed.isError, false);
   assert.deepEqual(system.store.listValidationChecks('issue:285'), []);
   system.store.close();
@@ -733,14 +732,20 @@ test('identity is structural: an agent cannot submit a plan for work it was not 
   // own is not a planning origin.
   const worker = spawnAgent(system, 'issue:12');
 
-  const res = await callTool(system, worker, 'plan_submit', { verdict: 'single', reason: 'Mine now.' });
+  const res = await callTool(system, worker, 'plan_submit', {
+    parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
+    reason: 'Mine now.',
+  });
   assert.equal(res.isError, true);
   assert.match(res.text, /only available to a planning agent/);
   assert.equal(system.store.getPlanByOrigin('issue:12'), null);
 
   // A planner on a *different* issue writes only its own issue, for the same reason.
   const planner = spawnAgent(system, 'issue:41:plan');
-  await callTool(system, planner, 'plan_submit', { verdict: 'single', reason: 'Just one.' });
+  await callTool(system, planner, 'plan_submit', {
+    parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
+    reason: 'Just one.',
+  });
   assert.ok(system.store.getPlanByOrigin('issue:41'));
   assert.equal(system.store.getPlanByOrigin('issue:12'), null, 'no cross-origin write');
   system.store.close();
@@ -754,7 +759,10 @@ test('a revoked credential can no longer call tools', async () => {
   system.agents.kill(agent.id); // the cockpit kill path revokes the credential
 
   assert.equal(system.mcp.session(agent.id), null, 'no fresh session for a dead agent');
-  const stale = (await session.call('plan_submit', { verdict: 'single', reason: 'x' })) as ToolResultText;
+  const stale = (await session.call('plan_submit', {
+    parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
+    reason: 'x',
+  })) as ToolResultText;
   assert.equal(stale.isError, true, 'and the bridge that already held one is refused');
   assert.match(stale.content[0]!.text, /unknown or revoked/);
   assert.equal(system.store.getPlanByOrigin('issue:12'), null);
@@ -899,7 +907,6 @@ test('reading an issue carries the plan graph, which lives only in the store', a
   system.store.setWorldBaseline(fakeWorld({ issues: [fakeIssue(12, { body: 'Split me.' })] }));
   const planner = spawnAgent(system, 'issue:12:plan');
   await callTool(system, planner, 'plan_submit', {
-    verdict: 'parts',
     reason: 'Schema before reader.',
     parts: [
       { slug: 'schema', title: 'Add the table', scope: 'src/store' },
@@ -1559,7 +1566,10 @@ test('a bridge connection handshakes, lists tools and calls one over a real sock
       jsonrpc: '2.0',
       id: 3,
       method: 'tools/call',
-      params: { name: 'plan_submit', arguments: { verdict: 'single', reason: 'One PR is right.' } },
+      params: {
+        name: 'plan_submit',
+        arguments: { parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }], reason: 'One PR is right.' },
+      },
     }),
   ]);
 

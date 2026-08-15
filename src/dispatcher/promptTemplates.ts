@@ -64,16 +64,18 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Issue #{number} ("{title}") needs a delivery plan before any code is written.\n\n{body}\n\n' +
       'Read the repository first, and plan from what is actually there. Every field below is worth having ' +
       'from someone who has read the code and worth nothing from someone who has read only the ticket.\n\n' +
-      '## The verdict: one pull request or several\n\n' +
-      'Bias hard toward one. Splitting is the exception, and turning a twenty-minute fix into three PRs costs ' +
-      'far more than it saves. Split only when the work genuinely cannot land as a single reviewable PR — for ' +
-      'example when a schema or interface change must merge before the code that consumes it.\n\n' +
+      '## How much to cut it into\n\n' +
+      'A plan is a list of parts, and one part is a perfectly ordinary plan — most work is one pull request, and ' +
+      'saying so is not a lesser answer or a special case. Nothing downstream treats a one-part plan differently ' +
+      'from an eight-part one, so spend your judgement on whether the parts are *right*, not on getting the ' +
+      'count low. Add a part when a piece has to merge before the next can be written, when two pieces would be ' +
+      'reviewed by different people, or when one of them is genuinely independent work. Do not add one to make ' +
+      'the plan look thorough: a twenty-minute fix cut into three parts costs far more than it saves.\n\n' +
       '## How to submit it\n\n' +
       'Use the **plan_submit** tool if you have it: it validates on the spot and hands back the reason if it ' +
       'refuses, so you can fix and call again in the same turn. Otherwise write the same JSON to {planFile} in ' +
-      'this worktree, creating the directory if needed. One shape, both verdicts — on "single" the parts are ' +
-      'ignored, on "parts" at least one is required:\n\n' +
-      '  {"version": 1, "verdict": "single" | "parts",\n' +
+      'this worktree, creating the directory if needed. At least one part is required:\n\n' +
+      '  {"version": 1,\n' +
       '   "diagnosis": "...", "approach": "...", "reason": "...", "verification": "...",\n' +
       '   "alternatives": "...", "openQuestions": "...", "risks": "...", "outOfScope": "...",\n' +
       '   "evidence": [{"path": "src/store/plans.ts", "line": 118, "note": "what to look at here"}],\n' +
@@ -108,10 +110,10 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'one that can be checked in four seconds is worth far more than one that is merely well argued.\n' +
       '- **verification** — how anyone will know the *whole* thing worked once every part has landed. Not per ' +
       'part (that is "acceptance"), and not "the tests pass" unless the tests genuinely settle it.\n' +
-      '- **reason** — the narrow question of shape: why one PR, or why these parts. Not the fix, not the root ' +
-      'cause. One or two sentences.\n' +
-      '- **risks** and **outOfScope** — what could go wrong with this split, and what you deliberately left ' +
-      'alone. Both are read as caveats on the verdict, so keep them to things that would change a mind.\n\n' +
+      '- **reason** — the narrow question of shape: why these parts. Not the fix, not the root cause. One or ' +
+      'two sentences, and on a one-part plan it is usually one.\n' +
+      '- **risks** and **outOfScope** — what could go wrong with this plan, and what you deliberately left ' +
+      'alone. Both are read as caveats on the plan, so keep them to things that would change a mind.\n\n' +
       '## Per part\n\n' +
       'Slugs are short, lowercase, kebab-case and unique — and stable: a replan merges on them. "scope" names ' +
       'the files or areas that part owns in a sentence; **"touches"** is the same claim as repository paths, ' +
@@ -160,7 +162,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'work should check. Markdown, and written for the person deciding.\n\n' +
       'Do not implement anything and do not open a pull request. Writing the plan is the whole job — you are ' +
       'on branch {branch} only so you have the repository to read.',
-    doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule `issue-plan`). The agent writes its verdict to the plan file; nothing else it does is read. Most of its length is spent on *what a good plan says* rather than on JSON shape, since `plan_submit` validates and returns its own reasons: the headline four (`diagnosis`, `approach`, `alternatives`, `openQuestions`), the four that make them checkable (`evidence`, `verification`, `reason`, `risks`/`outOfScope`), and per-part `touches`/`size`/`acceptance`/`rationale`. All optional, so an older override that omits them still validates. Placeholders: {number} {title} {body} {branch} {planFile}.',
+    doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule `issue-plan`). The agent writes its plan to the plan file; nothing else it does is read. Every plan is a list of parts and at least one is required — work that is one pull request is a one-part plan, not a separate shape. Most of its length is spent on *what a good plan says* rather than on JSON shape, since `plan_submit` validates and returns its own reasons: the headline four (`diagnosis`, `approach`, `alternatives`, `openQuestions`), the four that make them checkable (`evidence`, `verification`, `reason`, `risks`/`outOfScope`), and per-part `touches`/`size`/`acceptance`/`rationale`. All optional, so an older override that omits them still validates. Placeholders: {number} {title} {body} {branch} {planFile}.',
   },
   'issue-replan': {
     placeholders: ['number', 'title', 'body', 'branch', 'planFile', 'current'],
@@ -170,7 +172,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Read the repository and the state above, then submit the amended plan with the plan_submit tool if you ' +
       'have it (it validates on the spot and tells you why if it rejects), otherwise write it to {planFile} in ' +
       'this worktree. Either way it is the same document as the original:\n\n' +
-      '  {"version": 1, "verdict": "single" | "parts",\n' +
+      '  {"version": 1,\n' +
       '   "diagnosis": "...", "approach": "...", "reason": "...", "verification": "...",\n' +
       '   "alternatives": "...", "openQuestions": "...", "risks": "...", "outOfScope": "...",\n' +
       '   "evidence": [{"path": "src/...", "line": 120, "note": "..."}], "document": "...",\n' +
@@ -190,7 +192,9 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '- New parts may be added, and dependencies rewired. "dependsOn" names the sibling slugs a part needs: none, ' +
       'one (it stacks on that branch and starts once that sibling has pushed), or several (the lanes rejoin — it ' +
       'starts only once every one of them has merged, and is cut from the integration branch). A cycle is refused.\n' +
-      '- A "single" verdict is only honoured while no part has a branch or a pull request yet.\n' +
+      '- **The part count is not the point.** Amending an eight-part plan down to one part, or one part up to ' +
+      'three, is an ordinary amendment either way — a plan with one part is a plan. Change the split because the ' +
+      'work wants a different split, not to move the number.\n' +
       '- **Validation check ids are a merge key too.** Re-use the exact "id" of every check you are keeping. A ' +
       'check you leave out is *superseded*, not deleted — it stays on the record, greyed, with its letter ' +
       'retired. Rewording a check\u2019s "title", "do" or "expect" withdraws whatever result it had, which is ' +
@@ -223,8 +227,9 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       "the ones worth arguing about, and starting anywhere else wastes the operator's first reply. If it has " +
       'none, say what you understand the plan to be and what you think is most worth questioning about it. ' +
       'Escalating parks you until they reply; their reply arrives as your next turn.\n' +
-      '- Answer honestly. If they are right that a split is wrong, say so. If they are wrong, say that too and ' +
-      'explain why — you have read the code and they may not have.\n' +
+      '- Answer honestly. If they are right that the plan is wrong, say so. If they are wrong, say that too and ' +
+      'explain why — you have read the code and they may not have. A plan that ends up with one part is a fine ' +
+      'outcome of a conversation, and so is one that ends up with five.\n' +
       '- Escalate again each time you need them, and keep going until they are satisfied.\n' +
       '- When they are, submit the amended plan with the plan_submit tool (or write it to {planFile}), exactly as ' +
       'a replan would: slugs are the merge key, re-declare every part that is already merged, dispatched or in ' +
@@ -263,10 +268,10 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
     placeholders: ['number', 'title', 'parts', 'reason', 'list'],
     template:
       'There is a plan for issue #{number} ("{title}") and nothing is scheduled until you approve it — {parts} ' +
-      'pull request(s) of work.\n\nWhy this shape: {reason}\n\n' +
-      'Open the full plan for the split, what it cites and what it leaves out. If you want a different one, use ' +
+      'part(s) of work.\n\nWhy this shape: {reason}\n\n' +
+      'Open the full plan for the parts, what it cites and what it leaves out. If you want a different one, use ' +
       'Replan there: that asks the planner again and comes back here.',
-    doc: "Put to a human when `planning.requireApproval` is on and a planner's verdict has landed — either arm, a decomposition or a single pull request (rule `plan-approval`). It is a proposal, not a question: the accept/reject buttons settle it, and free text cannot. What the planner diagnosed and what it will do about it is *not* templated — it is carried beside this as the escalation's `detail` and rendered as the body of the card, so an override cannot bury it in a paragraph. What approving and rejecting *this* verdict do is appended by the rule for the same reason. {list} is the decomposition in dispatch order; the built-in template no longer uses it (the split is one click away in the plan panel, drawn) but it is still rendered, so an override written around it keeps working. Placeholders: {number} {title} {parts} (the pull requests the plan produces — 1 on a single verdict) {reason} {list}.",
+    doc: "Put to a human when `planning.requireApproval` is on and a plan has landed, whatever its size (rule `plan-approval`). It is a proposal, not a question: the accept/reject buttons settle it, and free text cannot. What the planner diagnosed and what it will do about it is *not* templated — it is carried beside this as the escalation's `detail` and rendered as the body of the card, so an override cannot bury it in a paragraph. What approving and rejecting do is appended by the rule for the same reason. {list} is the parts in dispatch order; the built-in template no longer uses it (they are one click away in the plan panel, drawn) but it is still rendered, so an override written around it keeps working. Placeholders: {number} {title} {parts} (how many parts the plan has) {reason} {list}.",
   },
   'issue-shortfall': {
     placeholders: ['number', 'title', 'consequence'],

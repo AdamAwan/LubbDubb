@@ -4,7 +4,6 @@ import { orderedProfiles } from '../../agents/modelPolicy.js';
 import { planProposalRef } from '../../proposals/proposals.js';
 import { planOrigin } from '../../plans/planning.js';
 import { acceptanceCriteria, planIssueNumber } from '../../plans/parts.js';
-import { abandonDecomposition } from '../../plans/planApproval.js';
 import { latestPlanDiff } from '../../plans/planDiff.js';
 import type { PlanHistory } from '../../wire.js';
 import { AcceptanceBody, checked, IdParams, optionalText } from '../validation.js';
@@ -148,33 +147,6 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Abandon a released decomposition and work the issue as one pull request.
-  //
-  // The escape hatch for a plan approved into a wall: its parts blocked instantly
-  // on the ref collision, `refusePlan` compare-and-sets against
-  // `awaiting_approval` so the fall-back-to-`single` arm is gone once approved,
-  // and `resolvePlanRoute` fails a spent replan back to `parts` rather than open
-  // to `single`. Without this the only remaining exit is editing the database.
-  //
-  // The operator's own act, taken immediately rather than proposed: a proposal is a
-  // standing verdict a rule re-reads, and this is one status write the person
-  // clicking has already decided on. The guard that matters is `partHasWork`,
-  // inside `abandonDecomposition`, so a decomposition with real work behind it is
-  // refused here rather than silently collapsed.
-  app.post(
-    '/api/plans/:id/abandon',
-    checked({ params: IdParams }, async ({ params, reply }) => {
-      const { id } = params;
-      const plan = store.getPlan(id);
-      if (!plan) return reply.code(404).send({ error: 'plan not found' });
-      const settled = abandonDecomposition(store, id, plan.originRef);
-      if (!settled.ok) return reply.code(409).send({ error: settled.detail });
-      hub.broadcast({ type: 'world:changed' });
-      await harness.runCycle('manual');
-      return { ok: true, detail: settled.detail, plan: store.getPlan(id) };
-    }),
-  );
-
   // Discuss a plan with an agent instead of accepting, rejecting or replanning it.
   //
   // Deliberately *a replan with a different prompt*, not a new mechanism: the plan
@@ -189,17 +161,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   //
   // **409 unless the plan is `awaiting_approval`.** Every framing of Discuss — the
   // design, this spec, the `discuss-plan` prompt itself ("before approving it") —
-  // only ever contemplates talking through a verdict that is still a pending
+  // only ever contemplates talking through a plan that is still a pending
   // question. A *released* one is not, and starting from there manufactures a gate
-  // the plan has already been through: on a `single` plan the discussion's own end
-  // would write `awaiting_approval` back over an issue an operator already
-  // authorised being worked whole, re-asking a question they answered; on an
-  // `active` one it reopens the gate rule `plan-part` already cleared and stops
-  // scheduling the remaining parts, which is exactly what `/discuss/end`'s own 409
-  // exists to prevent on the way back out. (A `single` verdict *awaiting* approval
-  // is a pending question like any other, and is discussable — `releasePlan` puts
-  // it back to `single`, not `active`, so the empty-plan parking this guard used
-  // to be about cannot happen either way.)
+  // the plan has already been through: the discussion's own end writes
+  // `awaiting_approval` back over a plan an operator already authorised, reopening
+  // the gate rule `plan-part` had cleared and stopping the remaining parts being
+  // scheduled — which is exactly what `/discuss/end`'s own 409 exists to prevent
+  // on the way back out.
   app.post(
     '/api/plans/:id/discuss',
     checked({ params: IdParams }, async ({ params, reply }) => {

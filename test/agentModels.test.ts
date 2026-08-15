@@ -10,7 +10,7 @@ import { buildClaudeArgs, buildClaudeStreamArgs } from '../src/agents/agentProto
 import { resolveAgentProfile } from '../src/agents/modelPolicy.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { planAsSingle } from './support/plans.js';
+import { failPlanningOpen } from './support/plans.js';
 
 const PROFILES = {
   fast: { model: 'haiku', rank: 1, description: 'mechanical work' },
@@ -193,7 +193,7 @@ async function dispatch(agentModels: Config['agentModels'], n: number) {
     streamSpawner: spawner,
   });
   system.connector.inject({ kind: 'new_issue', number: n, title: 'Add login' });
-  planAsSingle(system.store, n);
+  failPlanningOpen(system.store, n);
   await system.harness.runCycle('manual');
   const task = system.store.getTask(system.store.listAgentsByStatus('starting', 'running')[0]!.taskId)!;
   system.store.close();

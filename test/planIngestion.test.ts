@@ -31,16 +31,29 @@ test('isPlanFile matches only the reserved path, separator-agnostically', () => 
 
 // -- document validation (the zod boundary) ----------------------------------
 
-test('parsePlanDocument accepts a single verdict and a parts verdict', () => {
-  const single = parsePlanDocument('{"version":1,"verdict":"single","reason":"One small fix."}');
-  assert.equal(single.ok, true);
-  assert.equal(single.ok && single.document.verdict, 'single');
-  assert.deepEqual(single.ok && single.document.parts, []); // defaulted
+test('a plan needs at least one part, and one part is an ordinary plan', () => {
+  // The refusal that replaces the `single` verdict. A document declaring no parts
+  // used to be the *commonest* plan there was — "one pull request" meant zero
+  // rows — and is now the one shape the schema will not take. Refused rather than
+  // defaulted, so an operator override written against the old shape is corrected
+  // on its first submission instead of quietly ingesting as something else.
+  const none = parsePlanDocument('{"version":1,"verdict":"single","reason":"One small fix."}');
+  assert.equal(none.ok, false);
+  assert.match(none.ok ? '' : none.error, /at least one part/);
+
+  const one = parsePlanDocument(
+    JSON.stringify({
+      version: 1,
+      reason: 'One reviewable change.',
+      parts: [{ slug: 'whole', title: 'The change', scope: 'src/cache.ts' }],
+    }),
+  );
+  assert.equal(one.ok, true, 'one part is a plan, not a special case');
+  assert.equal(one.ok && one.document.parts.length, 1);
 
   const parts = parsePlanDocument(
     JSON.stringify({
       version: 1,
-      verdict: 'parts',
       reason: 'Schema must land before the reader.',
       parts: [
         { slug: 'schema', title: 'Add the table', scope: 'src/store', dependsOn: [] },
@@ -86,11 +99,13 @@ test('parsePlanDocument rejects malformed plans with a reason, never throwing', 
     return result.ok ? '' : result.error;
   };
   assert.match(bad('{'), /not valid JSON/);
-  assert.match(bad('{"version":2,"verdict":"single","reason":"x"}'), /version/);
-  assert.match(bad('{"version":1,"verdict":"maybe","reason":"x"}'), /verdict/);
-  assert.match(bad('{"version":1,"verdict":"single"}'), /reason/);
-  // A parts verdict must actually carry parts.
-  assert.match(bad('{"version":1,"verdict":"parts","reason":"x","parts":[]}'), /at least one part/);
+  const one = '[{"slug":"a","title":"A","scope":"s"}]';
+  assert.match(bad(`{"version":2,"reason":"x","parts":${one}}`), /version/);
+  assert.match(bad(`{"version":1,"parts":${one}}`), /reason/);
+  // Every plan must actually carry parts, and this is the one refusal an operator
+  // override written against the retired `verdict` field will meet.
+  assert.match(bad('{"version":1,"reason":"x","parts":[]}'), /at least one part/);
+  assert.match(bad('{"version":1,"verdict":"single","reason":"x"}'), /at least one part/);
   // Structural integrity: unique slugs, resolvable and non-self dependencies.
   const part = (slug: string, dependsOn: string[]): Record<string, unknown> => ({
     slug,
@@ -98,7 +113,7 @@ test('parsePlanDocument rejects malformed plans with a reason, never throwing', 
     scope: 's',
     dependsOn,
   });
-  const doc = (parts: unknown[]): string => JSON.stringify({ version: 1, verdict: 'parts', reason: 'x', parts });
+  const doc = (parts: unknown[]): string => JSON.stringify({ version: 1, reason: 'x', parts });
   assert.match(bad(doc([part('a', []), part('a', [])])), /duplicate slug "a"/);
   assert.match(bad(doc([part('a', ['a'])])), /depends on itself/);
   assert.match(bad(doc([part('a', ['ghost'])])), /unknown part "ghost"/);
@@ -238,7 +253,7 @@ function writeThroughHook(system: System, agent: Agent, relPath: string, body: s
   system.agents.drainFileEvents(agent.id);
 }
 
-test('a planner writing plan.json persists the verdict at drain time, for both outcomes', () => {
+test('a planner writing plan.json persists the plan at drain time, one part or many', () => {
   const system = buildSystem(planningConfig(), {
     worktrees: new FakeWorktreeManager(),
     backend: new FakePtyBackend(),
@@ -254,7 +269,6 @@ test('a planner writing plan.json persists the verdict at drain time, for both o
     PLAN_FILE,
     JSON.stringify({
       version: 1,
-      verdict: 'parts',
       reason: 'Schema first.',
       parts: [
         { slug: 'schema', title: 'Schema', scope: 'src/store', dependsOn: [] },
@@ -275,14 +289,27 @@ test('a planner writing plan.json persists the verdict at drain time, for both o
     ['schema', 'reader'],
   );
 
-  // A `single` verdict is a first-class row too — without it the planner would
-  // re-run on the same issue every cycle. It lands `active` with no parts: the
-  // status is the plan's life, the parts are its shape.
+  // A one-part plan is a first-class row on exactly the same terms — one part, one
+  // branch, one pull request, and no second write path to get there. A document
+  // carrying no parts at all is refused by the schema, so nothing reaches ingestion
+  // claiming to be a plan without saying what the work is.
   const b = plannerAgent(system, 'issue:13:plan');
-  writeThroughHook(system, b, PLAN_FILE, '{"version":1,"verdict":"single","reason":"One PR is plenty."}');
-  const single = system.store.getPlanByOrigin('issue:13')!;
-  assert.equal(single.status, 'active');
-  assert.deepEqual(system.store.listPlanParts(single.id), []);
+  writeThroughHook(
+    system,
+    b,
+    PLAN_FILE,
+    JSON.stringify({
+      version: 1,
+      reason: 'One PR is plenty.',
+      parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
+    }),
+  );
+  const one = system.store.getPlanByOrigin('issue:13')!;
+  assert.equal(one.status, 'active');
+  assert.deepEqual(
+    system.store.listPlanParts(one.id).map((p) => p.slug),
+    ['whole'],
+  );
 
   system.store.close();
 });
@@ -324,7 +351,12 @@ test('the plan file is tracked as a written file but never promoted to an artifa
     errorMirror: () => {},
   });
   const agent = plannerAgent(system, 'issue:12:plan');
-  writeThroughHook(system, agent, PLAN_FILE, '{"version":1,"verdict":"single","reason":"One PR."}');
+  writeThroughHook(
+    system,
+    agent,
+    PLAN_FILE,
+    '{"version":1,"reason":"One PR.","parts":[{"slug":"whole","title":"A","scope":"s"}]}',
+  );
 
   assert.deepEqual(
     system.store.listFiles(agent.id).map((f) => f.path),
@@ -385,7 +417,6 @@ test('the widened plan document round-trips through ingestion', () => {
   const parsed = parsePlanDocument(
     JSON.stringify({
       version: 1,
-      verdict: 'parts',
       reason: 'the signer must exist before the route verifies one',
       diagnosis: 'the route sits inside the prefix guard, and a navigation cannot carry the header',
       approach: 'move it out and gate it on a signed capability minted into the snapshot',
@@ -434,7 +465,6 @@ test('a document from an older planner still validates, and reads as absent', ()
   const parsed = parsePlanDocument(
     JSON.stringify({
       version: 1,
-      verdict: 'parts',
       reason: 'unchanged',
       parts: [{ slug: 'only', title: 'One', scope: 'src/', dependsOn: [] }],
     }),
@@ -457,8 +487,8 @@ test('an over-long write-up is trimmed and stored, never refused', () => {
   const parsed = parsePlanDocument(
     JSON.stringify({
       version: 1,
-      verdict: 'single',
       reason: 'one PR',
+      parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
       document: 'x'.repeat(MAX_PLAN_DOCUMENT_CHARS + 500),
     }),
   );
@@ -469,7 +499,6 @@ test('an over-long write-up is trimmed and stored, never refused', () => {
 test('a part may declare an expected outcome kind, and a bad one is refused at the boundary', () => {
   const ok = validatePlanDocument({
     version: 1,
-    verdict: 'parts',
     reason: 'investigate, then fix',
     parts: [{ slug: 'probe', title: 'Investigate', scope: 'src/', expectedKind: 'report' }],
   });
@@ -479,7 +508,6 @@ test('a part may declare an expected outcome kind, and a bad one is refused at t
   // Synchronously, through plan_submit, rather than a pulse later.
   const bad = validatePlanDocument({
     version: 1,
-    verdict: 'parts',
     reason: 'x',
     parts: [{ slug: 'probe', title: 'Investigate', scope: 'src/', expectedKind: 'writeup' }],
   });
@@ -489,7 +517,6 @@ test('a part may declare an expected outcome kind, and a bad one is refused at t
   // as unstated — which everything downstream treats as `code`.
   const older = validatePlanDocument({
     version: 1,
-    verdict: 'parts',
     reason: 'x',
     parts: [{ slug: 'probe', title: 'Investigate', scope: 'src/' }],
   });
@@ -501,7 +528,6 @@ test('a parts verdict may be entirely non-code', () => {
   // honestly instead of the planner inventing pull requests it can never merge.
   const result = validatePlanDocument({
     version: 1,
-    verdict: 'parts',
     reason: 'this is an investigation, not a build',
     parts: [
       { slug: 'measure', title: 'Measure', scope: 'ci/', expectedKind: 'report' },

@@ -14,7 +14,6 @@ import {
   partIsHuman,
   partSettled,
   planIssueNumber,
-  planShape,
 } from './parts.js';
 import type { PlanningPolicy } from './planning.js';
 
@@ -107,25 +106,15 @@ export class PlanReconciler {
     const issueNumber = planIssueNumber(plan.originRef);
     if (issueNumber === null) return;
     const parts = store.listPlanParts(plan.id);
-    // The single-PR arm. There is no part to fold reality onto and no flat-branch
-    // collision to check for — that branch is the one this arm *wants* — but the
-    // plan is being delivered, and it still owes the tracker its status comment.
-    // This used to return, back when the arm was a `single` plan status that never
-    // reached the loop at all: the issue was worked whole and the tracker was never
-    // told anything about it.
-    if (planShape(parts) === 'single') {
-      if (plan.status === 'awaiting_approval') return; // nothing to report until a human answers
-      await this.writeStatusComment(plan, [], issueNumber);
-      return;
-    }
 
     // `refs/heads/issue/12` and `refs/heads/issue/12/<slug>` cannot coexist — git
-    // stores refs as files, so the flat branch blocks the directory. An issue worked
-    // as `single` first and replanned to `parts` has exactly that branch, and every
+    // stores refs as files, so the flat branch blocks the directory. An issue picked
+    // up unplanned first and planned afterwards has exactly that branch, and every
     // part branch would fail to create with a git error nobody can act on. Say it
     // once, plainly, and park the parts that haven't been cut yet.
-    const flat = await this.deps.git.presence(issueBranch(issueNumber));
-    const collision = flat.local || flat.remote;
+    const flat = issueBranch(issueNumber);
+    const presence = await this.deps.git.presence(flat);
+    const flatTaken = presence.local || presence.remote;
 
     // The backing rows for this plan's human steps. Read once per plan rather than
     // per part, and *not* filtered to open ones: `declined` is precisely the state
@@ -164,19 +153,28 @@ export class PlanReconciler {
     const observed = parts.map((p) => ({ ...p, ...next.get(p.slug) }) as PlanPart);
     const index = bySlug(observed);
 
+    // A part whose branch *is* the flat one does not collide with it — it is what
+    // is on it. That is the shape a plan backfilled onto an issue the funnel had
+    // already picked up unplanned has (`backfillWholePlanParts`), and blocking it
+    // against its own branch would wedge exactly the plans the backfill exists to
+    // keep moving.
+    const collidesWith = (part: PlanPart): boolean =>
+      flatTaken && (part.branch ?? partBranch(issueNumber, part.slug)) !== flat;
+
     for (const part of observed) {
       if (part.status !== 'pending' && part.status !== 'ready' && part.status !== 'blocked') continue;
       // Two things block a part, and the collision is asked first because it is
-      // the wider fact: when git cannot cut any branch for this plan, a declined
-      // step is not the reason the operator needs to read.
+      // the wider fact: when git cannot cut this part's branch, a declined step is
+      // not the reason the operator needs to read.
       const refused = declined.has(part.id);
+      const collision = collidesWith(part);
       const status = collision || refused ? 'blocked' : await this.readiness(part, index, issueNumber);
       // The reason travels with the status, so a part that is still blocked on a
       // pulse where nothing flipped can still say why — and one that is no longer
       // blocked stops claiming a collision that has been resolved. `differs` keeps
       // both writes to real transitions.
       const blockedReason = collision
-        ? refCollisionReason(issueNumber, flat)
+        ? refCollisionReason(issueNumber, presence)
         : refused
           ? declinedStepReason(part.title)
           : null;
@@ -194,10 +192,10 @@ export class PlanReconciler {
     // Still only on a flip: the Errors panel is a feed, and a line per pulse for a
     // standing condition is how a feed stops being read. What the operator needs
     // on every later pulse is on the part rows above.
-    if (changed && collision) {
+    if (changed && observed.some(collidesWith)) {
       this.deps.errors?.record({
         source: 'cycle',
-        message: `Plan for issue #${issueNumber} is blocked: ${refCollisionReason(issueNumber, flat)}`,
+        message: `Plan for issue #${issueNumber} is blocked: ${refCollisionReason(issueNumber, presence)}`,
       });
     }
 
@@ -209,10 +207,9 @@ export class PlanReconciler {
     // auto-send gate: it's mechanical bookkeeping, not authored prose.
     //
     // Not while the plan is awaiting approval: the comment is the plan's progress
-    // channel, and an unapproved decomposition has no progress to report — posting
-    // it would announce a commitment on the tracker that the operator has not made,
-    // and a refusal would then leave that announcement standing (a refused plan is
-    // `single`, which this loop never revisits).
+    // channel, and an unapproved plan has no progress to report — posting it would
+    // announce a commitment on the tracker that the operator has not made, and a
+    // refusal would then leave that announcement standing.
     if (current.status !== 'awaiting_approval' && (current.statusCommentRef === null || changed || rolled)) {
       await this.writeStatusComment(current, store.listPlanParts(plan.id), issueNumber);
     }
@@ -298,11 +295,10 @@ export class PlanReconciler {
     // check marked off changes what the ticket says, so it has to reach the
     // memoisation below or the edit is never written.
     const body = renderPlanComment(plan, parts, this.deps.store.listValidationChecks(plan.originRef));
-    // The parts arm gates on observed news before it gets here; the single-PR arm
-    // has no such signal — its body is the verdict, which only a replan changes — so
-    // the body itself is the signal. Memoised rather than stored: a restart costs
-    // one idempotent edit, and a column would be a copy of the comment we already
-    // have a ref to.
+    // The caller gates on observed news before it gets here; this is the second
+    // guard, and the one that makes a re-render free. Memoised rather than stored:
+    // a restart costs one idempotent edit, and a column would be a copy of the
+    // comment we already have a ref to.
     if (this.lastComment.get(plan.id) === body) return;
     try {
       const result = await this.deps.sink.upsertIssueComment({

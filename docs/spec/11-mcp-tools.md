@@ -57,12 +57,11 @@ plan is progressing.
 
 ### `plan_submit`
 
-Arguments `{verdict: 'single'|'parts', reason, parts?, validation?}` plus the narrative fields.
+Arguments `{parts, reason, validation?}` plus the narrative fields. At least one part is required — work that is one pull request is a one-part plan, not a shape of its own.
 Refused unless the caller's origin is a planning origin (`planOriginIssue(task.originRef)`). Validated
 with the **same** `PlanDocumentSchema` the file path uses; on rejection the reason is returned and
 **nothing is written**, so the caller retries against an unchanged plan graph. On success it routes
-through the shared `ingestPlanDocument`, and reports `{accepted, status, retired}` plus a `warning`
-when a `single` verdict was overridden.
+through the shared `ingestPlanDocument`, and reports `{accepted, status, retired}`.
 
 **Every field of the document is on the schema, and the handler passes each one through.** The
 handler builds the document field by field rather than forwarding `args`, which is what keeps the
@@ -367,7 +366,7 @@ identity structural as everywhere else — no issue argument, the origin resolve
   question by starting, and an `unclear` from it would park an issue it is mid-way through — so the
   refusal tells it to **escalate** instead, which reaches a human who can actually answer.
 - **The verdict is stored for both outcomes.** `workable` gates nothing; it exists so the assay is
-  not asked again for the same text — the planner's reason for persisting a `single` verdict.
+  not asked again for the same text — the planner's reason for persisting a plan whatever its size.
 - **`unclear` is a question, not a rejection**, and the tool description and response both say so:
   nothing is closed, and the hold ends by itself when the ticket is edited or anything happens on it.
 - The verdict is fingerprinted against the title and body **the agent was dispatched with**, read off

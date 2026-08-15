@@ -1578,17 +1578,13 @@ export interface PlanNarrative {
  * kept (because work had started) appears as dropped here and as live on the plan,
  * and both readings are true.
  */
-/** What a planner decided about shape: one pull request, or several. */
-export type PlanVerdict = 'single' | 'parts';
-
 export interface PlanRevision {
   id: string;
   planId: string;
-  /** 1-based. v1 is the first verdict ever ingested for this plan. */
+  /** 1-based. v1 is the first plan ever ingested for this plan row. */
   seq: number;
-  verdict: PlanVerdict;
   narrative: PlanNarrative;
-  /** The parts as declared, in document order. Empty on a `single` verdict. */
+  /** The parts as declared, in document order. Never empty — a plan declares at least one. */
   parts: PlanPartInput[];
   at: string;
 }

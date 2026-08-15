@@ -81,13 +81,6 @@ export interface CockpitActions {
 
   replan(planId: string): Promise<void>;
   /**
-   * Abandon a released decomposition and work the issue as one pull request. The
-   * route refuses (409) unless the plan is `active` with no part started, which is
-   * the escape hatch for a plan approved onto an issue whose flat branch was
-   * already taken — its parts block instantly and nothing else can free them.
-   */
-  abandonPlan(planId: string): Promise<void>;
-  /**
    * A reviewer's confirmation that one of a part's acceptance criteria holds.
    * Keyed on the criterion's text, which is what the server stores — an index
    * would move under a re-worded list and carry the tick onto something nobody

@@ -110,7 +110,6 @@ const PartSchema = z.object({
 const PlanDocumentSchema = z
   .object({
     version: z.literal(1),
-    verdict: z.enum(['single', 'parts']),
     reason: z.string().min(1),
     /**
      * The root cause, and what is going to be done about it. Optional for the
@@ -166,19 +165,29 @@ const PlanDocumentSchema = z
     /**
      * How anyone checks the *goal* was met, as steps rather than as a paragraph —
      * {@link verification}'s executable form. Optional for the reason every field
-     * added after v1 is, and read on **both** verdicts: a goal delivered as one
-     * pull request needs validating exactly as much as a decomposed one.
+     * added after v1 is. A goal delivered as one part needs validating exactly as
+     * much as one delivered as eight.
      * → `src/validation/checkDocument.ts`
      */
     validation: ValidationSchema.optional(),
   })
   .superRefine((doc, ctx) => {
-    if (doc.verdict === 'single') return; // parts are ignored on a single verdict
+    // **Every plan declares parts**, and that is the whole shape of the schema:
+    // there is no `single` verdict beside a `parts` one, because a goal delivered
+    // as one pull request is a plan with one part and nothing else about it is
+    // different. The verdict field it replaced encoded "one PR" as *zero parts*,
+    // which made the commonest plan the one with no rows — no branch of its own,
+    // no acceptance criteria, no scope to drift from, and a second scheduling path
+    // (rule `issue-pickup` on the flat `issue/<n>` branch) for every consumer to
+    // remember. A document still carrying `verdict` is not refused for carrying it
+    // — zod strips it — but one carrying no parts is, with the sentence below, so
+    // an operator override written against the old shape is corrected on its first
+    // submission rather than silently accepted as something else.
     if (doc.parts.length === 0) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         path: ['parts'],
-        message: 'a "parts" verdict needs at least one part',
+        message: 'a plan needs at least one part — work that is one pull request is a plan with one part',
       });
       return;
     }
@@ -211,7 +220,7 @@ const PlanDocumentSchema = z
     }
     // A cycle deadlocks every part in it — none is ever ready, and the issue
     // silently stops progressing. Reject the document instead: the planner is
-    // retried and eventually fails the issue open to `single`.
+    // retried and eventually fails the issue open to unplanned pickup.
     const cycle = findDependencyCycle(doc.parts);
     if (cycle) {
       ctx.addIssue({

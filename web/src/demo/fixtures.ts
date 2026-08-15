@@ -2177,7 +2177,6 @@ export function demoPlanHistory(planId: string): PlanHistory {
       id: 'rev-395-1',
       planId,
       seq: 1,
-      verdict: 'parts',
       at: at(40),
       narrative: narrative({
         reason: 'The signer has to exist before the route can verify one, and the guard change touches every route.',
@@ -2221,7 +2220,6 @@ export function demoPlanHistory(planId: string): PlanHistory {
       id: 'rev-395-2',
       planId,
       seq: 2,
-      verdict: 'parts',
       at: at(12),
       narrative: narrative({
         reason:
@@ -2262,7 +2260,6 @@ export function demoPlanHistory(planId: string): PlanHistory {
     diff: {
       seq: 2,
       againstSeq: 1,
-      verdictChanged: false,
       parts: [
         { slug: 'signer', kind: 'unchanged', title: 'Add the download capability signer', fields: [] },
         {

@@ -68,7 +68,12 @@ function build(overrides: Record<string, unknown> = {}): System {
 const CHECK = { id: 'csv-opens', title: 'The export opens in Excel', do: 'Export a report.', expect: 'It opens.' };
 
 function planWith(system: System, checks: Record<string, unknown>[]): string {
-  const parsed = validatePlanDocument({ version: 1, verdict: 'single', reason: 'One fix.', validation: { checks } });
+  const parsed = validatePlanDocument({
+    version: 1,
+    reason: 'One fix.',
+    parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
+    validation: { checks },
+  });
   assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
   ingestPlanDocument(system.store, { doc: parsed.document, originRef: 'issue:12', title: 'Ship it' });
   // The **goal**, which is what the checks are keyed on — the plan id is not a

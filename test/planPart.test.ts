@@ -32,6 +32,7 @@ import { renderPlanComment } from '../src/plans/planComment.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Decision, Issue, Plan, PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
+import { spentPlannerAttempts } from './support/plans.js';
 
 const enabled = { ...DEFAULT_PLANNING, enabled: true };
 
@@ -267,18 +268,20 @@ test('a part stacks on its dependency while that dependency is still open', asyn
 });
 
 test('parts rank after planners, before pickups, bottom of the stack first', async () => {
-  // #7 needs a planner, #9 is decomposed, #14 is a plain `single` pickup. One
+  // #7 needs a planner, #9 has a two-part plan, #14 is an unplanned pickup. One
   // ranked list: planner, then the plan bottom, then its dependent, then pickup.
-  const plans: Plan[] = [
-    { ...plan(), id: 'plan_9', originRef: 'issue:9' },
-    { ...plan(), id: 'plan_14', originRef: 'issue:14', status: 'active' },
-  ];
+  const plans: Plan[] = [{ ...plan(), id: 'plan_9', originRef: 'issue:9' }];
   const parts = [
     { ...part('b', 2, { dependsOn: ['a'] }), id: 'plan_9:b', planId: 'plan_9' },
     { ...part('a', 1), id: 'plan_9:a', planId: 'plan_9' },
   ];
   const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
-    context([issue(7), issue(9), issue(14)], { plans, planParts: parts, agentHeadroom: 0 }),
+    context([issue(7), issue(9), issue(14)], {
+      plans,
+      planParts: parts,
+      agentHeadroom: 0,
+      recentDecisions: spentPlannerAttempts(14),
+    }),
   );
   assert.deepEqual(
     result.upcoming?.map((q) => [q.rule, q.origin]),
@@ -727,7 +730,7 @@ test('every part blocked asks a human once, and dispatches nobody', async () => 
   // The reason is quoted off the part rows, and both ways out are named — the
   // harness will not choose between them.
   assert.match(prompt, /The branch issue\/12 exists/);
-  assert.match(prompt, /abandon the decomposition/);
+  assert.match(prompt, /Replan from the plan sheet/);
 });
 
 test('the wedge is asked once — an open item or a recent one both settle it', async () => {

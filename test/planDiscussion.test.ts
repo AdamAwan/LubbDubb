@@ -177,7 +177,6 @@ test('an amended plan ends the discussion and comes back as a fresh proposal', a
   const parsed = parsePlanDocument(
     JSON.stringify({
       version: 1,
-      verdict: 'parts',
       reason: 'amended after discussion',
       document: '# Amended\n\nmint no longer stacks on route.',
       parts: [
@@ -267,7 +266,6 @@ function seedAwaitingApprovalPlan(system: System): Plan {
   const doc = parsePlanDocument(
     JSON.stringify({
       version: 1,
-      verdict: 'parts',
       reason: 'Schema first.',
       parts: [
         { slug: 'schema', title: 'Schema', scope: 'src/store', dependsOn: [] },

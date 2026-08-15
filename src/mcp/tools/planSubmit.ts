@@ -1,5 +1,5 @@
 import { validatePlanDocument } from '../../plans/planDocument.js';
-import { ingestPlanDocument, overriddenSingleMessage } from '../../plans/planIngest.js';
+import { ingestPlanDocument } from '../../plans/planIngest.js';
 import { issueOrigin, planOriginIssue } from '../../plans/planning.js';
 import type { Task } from '../../types.js';
 import { toolError } from '../protocol.js';
@@ -29,16 +29,15 @@ function plannerIssue(task: Task): { ok: true; number: number } | { ok: false; e
   return { ok: true, number };
 }
 
-export const planSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
+export const planSubmit: ToolFactory = ({ deps, task, ok }) => ({
   description:
-    'Submit your decomposition verdict for the issue you were dispatched to plan. ' +
-    'Use verdict "single" when one pull request is the right shape, or "parts" with an ordered ' +
-    'list of independently reviewable pieces. Validated immediately: on rejection you get the ' +
-    'reason back and can fix and resubmit in this same turn. Replaces writing .lubbdubb/plan.json.',
+    'Submit the delivery plan for the issue you were dispatched to plan, as an ordered list of ' +
+    'independently reviewable parts. Work that is one pull request is one part — there is no separate ' +
+    'shape for it. Validated immediately: on rejection you get the reason back and can fix and resubmit ' +
+    'in this same turn. Replaces writing .lubbdubb/plan.json.',
   inputSchema: {
     type: 'object',
     properties: {
-      verdict: { type: 'string', enum: ['single', 'parts'], description: 'One PR, or several.' },
       diagnosis: {
         type: 'string',
         description:
@@ -98,7 +97,7 @@ export const planSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
       },
       parts: {
         type: 'array',
-        description: 'Required when verdict is "parts"; ignored otherwise.',
+        description: 'The parts, in order. At least one is required — one part is a plan, not a special case.',
         items: {
           type: 'object',
           properties: {
@@ -142,7 +141,7 @@ export const planSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
         description:
           'How anyone checks the goal was met, as steps rather than as a paragraph — "verification" is the ' +
           'sentence, this is the procedure. Declare it whenever there is something a person or an agent could ' +
-          'actually run against the delivered goal, on either verdict: one pull request needs validating as much ' +
+          'actually run against the delivered goal, whatever its size: a one-part plan needs validating as much ' +
           'as a decomposed one.',
         properties: {
           resources: {
@@ -207,7 +206,7 @@ export const planSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
         },
       },
     },
-    required: ['verdict', 'reason'],
+    required: ['parts', 'reason'],
   },
   handler: (args) => {
     const planner = plannerIssue(task);
@@ -217,7 +216,6 @@ export const planSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
     // hand the reason back instead of burning an attempt to discover it.
     const parsed = validatePlanDocument({
       version: 1,
-      verdict: args.verdict,
       reason: args.reason,
       diagnosis: args.diagnosis,
       approach: args.approach,
@@ -246,13 +244,6 @@ export const planSubmit: ToolFactory = ({ deps, agent, task, ok }) => ({
       title: task.originTitle ?? task.title,
       requireApproval: deps.requirePlanApproval,
     });
-    if (result.overriddenSingle) {
-      const message = overriddenSingleMessage(issueOrigin(planner.number), result.overriddenSingle.liveParts);
-      deps.errors?.record({ source: 'agent', message: `Agent ${agent.id}: ${message}` });
-      // Told to the agent too, not just the operator — it asked for something
-      // the world no longer allows and would otherwise assume it landed.
-      return ok({ accepted: true, status: result.status, retired: result.retired, warning: message });
-    }
     // Said out loud rather than left to be read off the status string: a
     // planner that thinks its parts are being worked would otherwise sit
     // waiting for siblings that will not start until a human clicks accept.

@@ -11,7 +11,6 @@ import type {
   PlanPartInput,
   PlanRevision,
   PlanStatus,
-  PlanVerdict,
 } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
@@ -135,18 +134,15 @@ export class PlanStore {
   }
 
   /**
-   * Record the verdict a document carried, as its own revision.
+   * Record the plan a document carried, as its own revision.
    *
    * Append-only, and numbered off what is already there rather than off the plan —
    * a plan re-planned three times has three revisions whatever its status has done
    * in between. Called from {@link ingestPlanDocument} alone, which is the one
-   * place a document becomes rows, so a revision cannot exist for a verdict that
-   * was never persisted or be missing for one that was.
+   * place a document becomes rows, so a revision cannot exist for a plan that was
+   * never persisted or be missing for one that was.
    */
-  recordPlanRevision(
-    planId: string,
-    input: { verdict: PlanVerdict; narrative: PlanNarrative; parts: PlanPartInput[] },
-  ): PlanRevision {
+  recordPlanRevision(planId: string, input: { narrative: PlanNarrative; parts: PlanPartInput[] }): PlanRevision {
     const at = this.ctx.now();
     const row = this.ctx.db.prepare(`SELECT MAX(seq) AS seq FROM plan_revisions WHERE plan_id=?`).get(planId) as
       | { seq: number | null }
@@ -155,7 +151,6 @@ export class PlanStore {
       id: `rev_${nanoid(10)}`,
       planId,
       seq: (row?.seq ?? 0) + 1,
-      verdict: input.verdict,
       narrative: input.narrative,
       parts: input.parts,
       at,
@@ -167,6 +162,10 @@ export class PlanStore {
       )
       .run({
         ...revision,
+        // Vestigial: the column is `NOT NULL` on every existing database and every
+        // plan is a `parts` plan now, so it is written and never read back. Dropping
+        // it would be a table reshape for a value no reader consults.
+        verdict: 'parts',
         narrative: JSON.stringify(revision.narrative),
         parts: JSON.stringify(revision.parts),
       });
@@ -518,6 +517,86 @@ export function absorbSinglePlanStatus(db: Database.Database): void {
   db.prepare(`UPDATE plans SET status='active' WHERE status='single'`).run();
 }
 
+/**
+ * Give every partless plan the one part it always was.
+ *
+ * A plan delivering one pull request used to carry **no parts at all** — that was
+ * the encoding of "single", and rule `issue-pickup` worked the issue whole on the
+ * flat `issue/<n>` branch instead. Every plan has parts now, so those rows would
+ * otherwise be scheduled by nothing: rule `issue-pickup` no longer looks at them
+ * (the route is `parts`), rule `plan-part` finds no part to dispatch, and the
+ * issue stops dead with no error anywhere. That silence is the whole reason this
+ * exists — the migration is not a tidy-up, it is what stops a live goal parking
+ * itself on the deploy that ships this.
+ *
+ * The backfilled part is an ordinary one in every respect but its branch:
+ *
+ * - **`branch` is the flat `issue/<n>`** for a plan that was already being
+ *   delivered, because that is where the work is. Every reader resolves a part's
+ *   branch as `part.branch ?? partBranch(n, slug)`, so pointing the column at the
+ *   existing branch is enough to carry an open PR, a pushed commit and a running
+ *   agent onto the part — the reconciler's `foldPr` picks the PR up on the next
+ *   pulse and writes `in_review` or `merged` without being told. It also keeps the
+ *   ref-collision guard quiet, which reads a part on the flat branch as being what
+ *   is on it rather than as colliding with it.
+ * - **`branch` is null before anything was scheduled** (`awaiting_approval`,
+ *   `planning`), where no branch exists yet and the part should be cut in the
+ *   normal namespace like any other.
+ * - **`merged`** on a `complete` plan, so the roll-up that already decided the
+ *   plan was finished still agrees; **`ready`** otherwise, so the part is picked
+ *   up on the next pulse. A `ready` part on a branch an unplanned pickup is still
+ *   working is held by the executor's existing branch lock rather than doubled.
+ *
+ * `abandoned` plans are skipped: nothing schedules them, so there is no silence to
+ * fix, and inventing a part for work somebody stopped would put a row in the graph
+ * claiming the opposite.
+ *
+ * A data migration rather than an `ensureColumns` entry — no column changes, the
+ * rows in one do. Idempotent: a plan with any part row, retired ones included, is
+ * left alone, so a second boot backfills nothing.
+ */
+export function backfillWholePlanParts(db: Database.Database, now: string): void {
+  const orphans = db
+    .prepare(
+      `SELECT id, origin_ref, title, status FROM plans
+        WHERE status <> 'abandoned'
+          AND id NOT IN (SELECT DISTINCT plan_id FROM plan_parts)`,
+    )
+    .all() as { id: string; origin_ref: string; title: string; status: string }[];
+  const insert = db.prepare(
+    `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, touches, rationale, acceptance,
+       acceptance_met, size, expected_kind, profile, outcome_kind, outcome_ref, outcome_summary,
+       depends_on, branch, pr_number, status, blocked_reason, task_id, created_at, updated_at)
+     VALUES (@id, @planId, @slug, 1, @title, @scope, '[]', NULL, NULL,
+       '[]', NULL, NULL, NULL, NULL, NULL, NULL,
+       '[]', @branch, NULL, @status, NULL, NULL, @at, @at)`,
+  );
+  for (const plan of orphans) {
+    const issueNumber = Number(/^issue:(\d+)$/.exec(plan.origin_ref)?.[1]);
+    // A plan whose origin is not an issue has no flat branch to inherit and no
+    // scheduler either; leaving it alone is the honest answer.
+    if (!Number.isFinite(issueNumber)) continue;
+    const started = plan.status === 'active' || plan.status === 'complete';
+    insert.run({
+      id: `${plan.id}:${WHOLE_PART_SLUG}`,
+      planId: plan.id,
+      slug: WHOLE_PART_SLUG,
+      title: plan.title,
+      scope: 'The whole issue — this plan was written before a plan had parts.',
+      branch: started ? `issue/${issueNumber}` : null,
+      status: plan.status === 'complete' ? 'merged' : 'ready',
+      at: now,
+    });
+  }
+}
+
+/**
+ * The slug a backfilled part gets. Fixed rather than derived so a plan the
+ * migration touched is recognisable, and short enough to read in a branch name if
+ * one is ever cut for it.
+ */
+const WHOLE_PART_SLUG = 'whole';
+
 interface PlanRow {
   id: string;
   origin_ref: string;
@@ -703,7 +782,6 @@ function rowToRevision(r: PlanRevisionRow): PlanRevision {
     id: r.id,
     planId: r.plan_id,
     seq: r.seq,
-    verdict: r.verdict === 'parts' ? 'parts' : 'single',
     narrative: parseNarrative(r.narrative),
     parts: parseRevisionParts(r.parts),
     at: r.at,

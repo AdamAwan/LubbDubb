@@ -12,7 +12,7 @@ import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { Store } from '../src/store/store.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { planAsSingle, singlePlan } from './support/plans.js';
+import { failPlanningOpen, spentPlannerAttempts } from './support/plans.js';
 
 // The "Up next" queue (issue #69): the dispatcher's ordered pickup plan with the
 // headroom cut — above-cut candidates dispatch this cycle, below-cut ones wait
@@ -21,15 +21,15 @@ import { planAsSingle, singlePlan } from './support/plans.js';
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
   return {
     world: { takenAt: 'now', pullRequests: [], issues: [], ...world },
-    // Every issue in these worlds has already been planned as one pull request:
-    // the funnel is unconditional, so an issue with no plan row is one a planner
-    // is owed, and nothing downstream of pickup would fire for it.
-    plans: (world.issues ?? []).map((i) => singlePlan(i.number)),
+    plans: [],
     tasks: [],
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: [],
+    // The funnel has failed open on every issue in these worlds: it is
+    // unconditional, so an issue it is still working is one pickup is narrowed
+    // away from, and nothing downstream of pickup would fire for it.
+    recentDecisions: (world.issues ?? []).flatMap((i) => spentPlannerAttempts(i.number)),
     agentHeadroom: 3,
     ...over,
   };
@@ -274,6 +274,7 @@ test('an override re-orders a held item but never un-holds it', async () => {
         // Pin the cooling-down PR to the very top.
         priorityOverrides: [{ origin: 'pr:42:mergeable', rank: 0 }],
         recentDecisions: [
+          ...spentPlannerAttempts(5),
           {
             id: 'd1',
             cycleId: 'c',
@@ -331,9 +332,9 @@ test('buildStateSnapshot ships the last cycle plan as upcoming', async () => {
     backend: new FakePtyBackend(),
   });
   system.connector.inject({ kind: 'new_issue', number: 7101, title: 'A' });
-  planAsSingle(system.store, 7101);
+  failPlanningOpen(system.store, 7101);
   system.connector.inject({ kind: 'new_issue', number: 7102, title: 'B' });
-  planAsSingle(system.store, 7102);
+  failPlanningOpen(system.store, 7102);
 
   const before = await buildStateSnapshot(system);
   assert.equal(before.upcoming, null, 'no plan before the first cycle');
@@ -376,9 +377,9 @@ test('a priority override holds after the next pulse and after a restart', async
 
   const system = buildSystem(cfg(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 8101, title: 'A' });
-  planAsSingle(system.store, 8101);
+  failPlanningOpen(system.store, 8101);
   system.connector.inject({ kind: 'new_issue', number: 8102, title: 'B' });
-  planAsSingle(system.store, 8102);
+  failPlanningOpen(system.store, 8102);
   await system.harness.runCycle('manual');
   // Natural order is by issue number: 8101 then 8102.
   let snap = await buildStateSnapshot(system);

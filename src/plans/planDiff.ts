@@ -47,7 +47,6 @@ export interface PlanDiff {
   seq: number;
   /** The revision it is a diff *against* — always `seq - 1` as things stand. */
   againstSeq: number;
-  verdictChanged: boolean;
   parts: PartChange[];
   narrative: NarrativeChange[];
 }
@@ -55,7 +54,7 @@ export interface PlanDiff {
 /**
  * Diff the last two revisions of a plan, or null when there is only one.
  *
- * Null rather than a diff against nothing: a first verdict is not an amendment,
+ * Null rather than a diff against nothing: a first plan is not an amendment,
  * and drawing every part of it as "added" would be a change log for a plan nobody
  * had seen before.
  */
@@ -71,7 +70,6 @@ function diffPlanRevisions(prev: PlanRevision, next: PlanRevision): PlanDiff {
   return {
     seq: next.seq,
     againstSeq: prev.seq,
-    verdictChanged: prev.verdict !== next.verdict,
     parts: diffParts(prev.parts, next.parts),
     narrative: diffNarrative(prev.narrative, next.narrative),
   };

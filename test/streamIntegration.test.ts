@@ -8,7 +8,7 @@ import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { planAsSingle } from './support/plans.js';
+import { failPlanningOpen } from './support/plans.js';
 
 /** Fake claude stream-JSON process, shared across the harness wiring. */
 class FakeChild extends EventEmitter implements StreamChild {
@@ -57,7 +57,7 @@ test('stream-mode: persisted transcript is clean and structured (no leaked senti
 
   system.connector.inject({ kind: 'new_issue', number: 901, title: 'Add login' });
 
-  planAsSingle(system.store, 901);
+  failPlanningOpen(system.store, 901);
   await system.harness.runCycle('manual');
   const child = children[0]!;
   const agentId = system.store.listAgentsByStatus('starting', 'running')[0]!.id;
@@ -97,7 +97,7 @@ test('stream-mode: task typed in, WAITING escalates, answer continues, DONE comp
 
   system.connector.inject({ kind: 'new_issue', number: 902, title: 'Add login' });
 
-  planAsSingle(system.store, 902);
+  failPlanningOpen(system.store, 902);
   await system.harness.runCycle('manual');
 
   // One agent launched; the task was sent to it as a JSON user message.

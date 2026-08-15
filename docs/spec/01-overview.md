@@ -59,7 +59,7 @@ action are written to the `decisions` table, so an idle cycle is as explainable 
 | **Action**      | One item of the dispatcher's bounded output vocabulary                                          |
 | **Decision**    | One executed/deferred/rejected/skipped action, persisted with its reason                        |
 | **Escalation**  | A question parked for a human                                                                   |
-| **Plan**        | One issue's delivery verdict — one PR (no parts) or several (`parts`)                           |
+| **Plan**        | How one issue is being delivered: an ordered list of parts, one or many                        |
 | **Finding**     | Something an agent noticed outside its own task                                                 |
 
 ## Task kinds

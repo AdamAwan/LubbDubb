@@ -198,7 +198,7 @@ chip.
 | ----------- | ---------------------------------------------------------------------------------- |
 | `done`      | Closed, and the harness holds no run at it.                                        |
 | `retained`  | Closed, but its run lives until the operator dismisses it.                         |
-| `planning`  | In the plan funnel — a verdict is owed, or the issue split into parts.             |
+| `planning`  | In the plan funnel — a plan is owed, or the issue has one and its parts are running. |
 | `has_pr`    | An open PR resolves it; the PR rules own it now.                                   |
 | `active`    | A task on this origin is queued / running / waiting on you.                        |
 | `ignored`   | Carries the explicit ignore tag.                                                   |
@@ -252,7 +252,7 @@ An issue is picked up when:
 2. `openPrForIssue(issue, allOpenPrs) === null`, and
 3. `isIssuePickupEligible(issue, policy).eligible`, and no standing `unclear` goal assay holds it
    (see below), and
-4. its plan route resolves to `single` (always true with planning off), and
+4. its plan route resolves to `unplanned` — the funnel failed open on it, which is the only arm this rule works — and
 5. no active task holds `issue:<n>`, and
 6. `dispatchVerdict` says `dispatch`.
 
@@ -272,22 +272,23 @@ harness keeps its own record of whether an issue is finished.
 1. **The operator's toggle** (`POST /api/issues/:number/conclusion`), which wins over everything,
    including a plan roll-up.
 2. **A standing shortfall** — the assessor's "worked, and the goal is not reached".
-3. **A plan in flight**: `planning`, `awaiting_approval`, or `active` **with live parts** → `more_work`.
+3. **A plan in flight**: `planning`, `awaiting_approval` or `active` → `more_work`.
 4. **The agent's declaration**, via the `conclude_work` tool.
 5. **A `complete` plan** → `done`.
-6. Otherwise `undeclared`. The single-PR arm and `abandoned` derive nothing — one pull request
+6. Otherwise `undeclared`. An `abandoned` plan derives nothing — an abandoned plan
    describes the delivery's _shape_, not whether it has happened, so the issue waits on its agent to
    declare exactly as an unplanned one does.
 
-The parts are passed in because the shape is not in the status: an `active` plan with no live parts is
-being delivered whole ([08](08-planning.md#shape-is-the-parts)). Reading arm 3 off the status alone
-would make every single-PR issue say `more_work` for ever.
+Arm 3 is read off the status alone, and the part count has no say in it. It had to consult the parts
+while a plan delivering one pull request carried none and was scheduled by rule `issue-pickup`:
+`active` did not then mean the plan was working the issue, so an unguarded read made every issue
+worked whole say `more_work` for ever ([08](08-planning.md#the-status-is-the-plans-life-and-only-that)).
 
 **Arm 3 sits above the declaration because ownership does.** The rule this module states — _the
 verdict is asked of whoever owns the whole issue_ — used to be enforced by making the two arms
 unreachable together: `conclusionOrigin` refuses the part agent, the planner and the assessor, so a
 decomposed issue had no declaration to rank. A **replan is the one path that breaks that**. An issue
-worked `single` has one agent, that agent declares `done`, and an accepted shortfall then flips its
+worked through unplanned pickup has one agent, that agent declares `done`, and an accepted shortfall then flips its
 plan to `planning` ([rule `issue-shortfall`](05-dispatcher.md#issue-shortfall--routing-a-failed-assessment)) — and with the
 declaration ranked first, a spent verdict outranked the plan that had just taken the issue back. A
 `complete` plan stays _below_ the declaration: an agent saying work remains on an issue whose parts

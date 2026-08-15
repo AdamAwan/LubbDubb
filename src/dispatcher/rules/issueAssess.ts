@@ -42,18 +42,11 @@ export function issueAssess(s: StageContext): void {
     if (!hasPriorWork(issue.number, ctx.tasks)) continue;
     // A plan that still schedules something owns the issue — a decomposition in
     // flight is not a finished one, and an unapproved one is not even decided.
-    // `planInFlight`, not a status list: an `active` plan with no live parts is
-    // the single-PR arm, whose one PR having been worked is exactly the case this
-    // rule exists for.
+    // `planInFlight`, not a status list inlined here: the one reading of "the
+    // plan owns this issue", shared with the conclusion resolver so the two
+    // cannot drift into disagreeing about it.
     const plan = s.plansByOrigin.get(issueOrigin(issue.number));
-    if (
-      plan &&
-      planInFlight(
-        plan,
-        (ctx.planParts ?? []).filter((p) => p.planId === plan.id),
-      )
-    )
-      continue;
+    if (plan && planInFlight(plan)) continue;
     // Anything live under the issue — a pickup agent, a planner, a part — means
     // the answer is not yet knowable.
     const root = issueOrigin(issue.number);

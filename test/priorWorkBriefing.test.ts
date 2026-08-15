@@ -8,6 +8,7 @@ import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { priorWorkBriefing, type PriorWorkInput } from '../src/briefing/priorWork.js';
 import { gitRepo } from './support/gitRepo.js';
+import { planWithOnePart } from './support/plans.js';
 import type { Plan, ScratchEntry } from '../src/types.js';
 
 // -- the pure briefing -------------------------------------------------------
@@ -215,9 +216,9 @@ function systemFor(): System {
       deskRoot: join(dir, 'desk'),
       worktreeRoot: join(dir, 'wt'),
       repoRoot: gitRepo(),
-      // The funnel and its neighbours are pinned off: this file is about what a
-      // *pickup* agent is handed, and an extra agent in front of the issue would
-      // change which task these assertions read.
+      // The funnel's neighbours are pinned off: this file is about what a working
+      // agent is handed, and an extra agent in front of the issue would change
+      // which task these assertions read.
       assessment: { enabled: false } as never,
       assay: { enabled: false } as never,
       retrospective: { enabled: false } as never,
@@ -228,9 +229,13 @@ function systemFor(): System {
   );
 }
 
-test('a pickup agent is handed what the earlier agents on its issue wrote down', async () => {
+test("a part's agent is handed what the earlier agents on its issue wrote down", async () => {
   const system = systemFor();
   try {
+    // A one-part plan, which is where a goal delivered as one pull request now
+    // goes: its part is dispatched by rule `plan-part`, and the briefing rides on
+    // that dispatch exactly as it does on a stacked part's.
+    const plan = planWithOnePart(system.store, 1, 'Ship the thing');
     system.store.upsertPlan({
       originRef: 'issue:1',
       title: 'Ship the thing',
@@ -238,6 +243,7 @@ test('a pickup agent is handed what the earlier agents on its issue wrote down',
       reason: 'One PR.',
       document: 'The registry is the only place that knows about the tag.',
     });
+    assert.ok(plan);
     system.store.appendScratchEntry({
       padRef: 'issue:1',
       authorOriginRef: 'issue:1:plan',
@@ -249,8 +255,8 @@ test('a pickup agent is handed what the earlier agents on its issue wrote down',
     system.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
     await system.harness.runCycle('manual');
 
-    const task = system.store.listTasks().find((t) => t.originRef === 'issue:1');
-    assert.ok(task, 'the issue was picked up');
+    const task = system.store.listTasks().find((t) => t.originRef === 'issue:1:part:whole');
+    assert.ok(task, "the plan's part was dispatched");
     assert.match(task.prompt, /Ship the thing/, 'the rendered template is still first');
     assert.match(task.prompt, /the registry is the only place/i, "the planner's write-up came with it");
     assert.match(task.prompt, /labelsAddedByViewer/, 'so did the pad');

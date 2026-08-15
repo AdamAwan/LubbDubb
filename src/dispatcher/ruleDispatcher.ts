@@ -24,7 +24,7 @@ import {
   type PlanningPolicy,
   type PlanRouteVerdict,
 } from '../plans/planning.js';
-import { liveParts, planShape } from '../plans/parts.js';
+import { liveParts } from '../plans/parts.js';
 import { isActive, type Candidate, type RawAction, type StageContext } from './rules/context.js';
 import { manualJob } from './rules/manualJob.js';
 import { prCiFailing } from './rules/prCiFailing.js';
@@ -428,18 +428,19 @@ export class RuleDispatcher implements Dispatcher {
       liveIssue: (issueNumber: number) =>
         retained.has(issueNumber) ? null : (ctx.world.issues.find((i) => i.number === issueNumber) ?? null),
       /**
-       * Is this issue decomposed — i.e. owned by the part scheduler, not by pickup?
+       * Is this issue planned — i.e. owned by the part scheduler, not by pickup?
        *
-       * The parts answer it, not the status: a plan being delivered as one pull
-       * request is `active` too, and reading that as decomposed would park its
-       * work item in the review state for the life of a plan that schedules
-       * nothing.
+       * The status answers it on its own. It briefly had to consult the parts as
+       * well, back when a plan delivering one pull request carried none and was
+       * scheduled by rule `issue-pickup`: an `active` plan could then be scheduling
+       * nothing, and reading it as owned parked the work item in the review state
+       * for the life of a plan with no parts to finish. Every plan has parts now,
+       * so the second reading is gone with the shape that needed it.
        */
       partsPlanFor: (issueNumber: number) => {
         const plan = plansByOrigin.get(issueOrigin(issueNumber));
         if (!plan || (plan.status !== 'active' && plan.status !== 'complete')) return null;
-        const parts = (ctx.planParts ?? []).filter((p) => p.planId === plan.id);
-        return planShape(parts) === 'parts' ? plan : null;
+        return plan;
       },
       deliveryParked,
       assayParked,

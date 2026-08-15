@@ -113,17 +113,17 @@ test('a complete plan derives done; an in-flight one derives more_work', () => {
 // The single-PR arm and an abandoned plan are both statements about shape, not
 // about whether the PR has been written — deriving either verdict from one would
 // be a guess.
-test('a single-PR or abandoned plan derives nothing', () => {
+test('an abandoned plan derives nothing, and every live one speaks', () => {
   assert.equal(resolve(null, plan('abandoned')).verdict, 'undeclared');
-  // The regression this guards: the single arm used to be its own plan *status*,
-  // which this resolver simply did not list as in flight. Folded into `active`, an
-  // unguarded read makes every issue worked whole say `more_work` for ever —
-  // parking its work item on the way back to pickup and drawing the goal unfinished
-  // however plainly its agent declared otherwise. The shape is the parts.
-  assert.equal(resolve(null, plan('active'), null, []).verdict, 'undeclared');
-  assert.equal(resolve(stored({ verdict: 'done' }), plan('active'), null, []).by, 'agent');
-  // A *gated* single verdict is still in flight: nothing has been worked at all
-  // until a human answers, so this arm is the status, not the shape.
+  // The status is the whole reading, and the part count has no say in it. It used
+  // to: a plan delivering one pull request carried *no parts* and was scheduled by
+  // rule `issue-pickup`, so `active` did not mean the plan was working the issue,
+  // and an unguarded read made every issue worked whole say `more_work` for ever.
+  // One rule schedules every plan now, so an `active` plan owns its issue whether
+  // it has one part or eight.
+  assert.equal(resolve(null, plan('active'), null, []).verdict, 'more_work');
+  assert.equal(resolve(null, plan('active'), null, [partRow()]).verdict, 'more_work');
+  // Nothing has been worked at all until a human answers a gated plan.
   assert.equal(resolve(null, plan('awaiting_approval'), null, []).verdict, 'more_work');
 });
 

@@ -357,8 +357,8 @@ const DISMISS_HINT: Record<string, string> = {
 /**
  * What each verdict does, per kind. Spelled out because they differ in a way the
  * word "reject" hides: refusing an outbound act is refusing to *do* something,
- * whereas refusing a plan reassigns the issue to the single-PR path — the button
- * has to say so before it is pressed.
+ * whereas refusing a plan sends it back to a planner — the button has to say so
+ * before it is pressed.
  */
 const ACCEPT_LABEL: Record<string, string> = {
   merge: 'Approve merge',
@@ -373,7 +373,7 @@ const ACCEPT_HINT: Record<string, string> = {
 const REJECT_HINT: Record<string, string> = {
   merge: "Nothing goes out, and the harness won't ask again",
   reply_draft: "Nothing goes out, and the harness won't ask again",
-  plan: 'Retires the parts nothing has started for and works the issue as a single PR instead',
+  plan: 'Sends the plan back to a planner with your note; parts nothing has started for are retired',
 };
 
 /**

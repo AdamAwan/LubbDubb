@@ -16,13 +16,7 @@ import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import { issuePickupStatus, type IssuePickupContext } from '../src/dispatcher/issuePickup.js';
 import { basePrOf, inheritedCiFailure, prHealth } from '../src/prHealth.js';
 import { DEFAULT_PLANNING, resolvePlanRoute, plannerVerdict } from '../src/plans/planning.js';
-import {
-  amendedPlanStatus,
-  currentPlanSummary,
-  partsToRetire,
-  planProgress,
-  singleOverruled,
-} from '../src/plans/parts.js';
+import { currentPlanSummary, ingestedPlanStatus, partsToRetire, planProgress } from '../src/plans/parts.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Decision, Issue, Plan, PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
@@ -319,15 +313,13 @@ test('an amended plan retires what it dropped, but never what has work in the wo
   assert.deepEqual(partsToRetire([part('e', 5, { status: 'retired' })], []), []);
 });
 
-test('a `single` verdict only collapses a plan while nothing has left the harness', () => {
-  // The collapse is the *parts* — ingestion retires the ones nothing was started
-  // for, and `singleOverruled` is what says the world refused it. The status is
-  // `active` throughout: it is the plan's life, not its shape.
-  assert.equal(singleOverruled('single', [part('a', 1, { status: 'pending' })]), false);
-  assert.equal(singleOverruled('single', [part('a', 1, { status: 'in_review', prNumber: 40 })]), true);
-  assert.equal(singleOverruled('parts', [part('a', 1, { status: 'in_review', prNumber: 40 })]), false);
-  assert.equal(amendedPlanStatus('single', [part('a', 1, { status: 'in_review', prNumber: 40 })]), 'active');
-  assert.equal(amendedPlanStatus('parts', [part('a', 1, { status: 'merged' })]), 'active');
+test('an amendment lands on the same status whatever it does to the part count', () => {
+  // What an amendment does to work already in flight is `partsToRetire`'s job
+  // (above), and it is a question about *work*, not about shape. The status write
+  // asks nothing else — there is no arm here for a plan collapsing to one part,
+  // because a plan of one part is a plan.
+  assert.equal(ingestedPlanStatus(), 'active');
+  assert.equal(ingestedPlanStatus(true), 'awaiting_approval');
 });
 
 test('retired parts drop out of the progress count but stay in the graph', () => {
@@ -407,18 +399,15 @@ test('an attempt stamped in the same millisecond as the replan request is the *p
   assert.equal(plannerVerdict(12, requested, at, [attempt], DEFAULT_COOLDOWN).kind, 'dispatch');
 });
 
-test('a replan that spends its attempts falls back to the existing parts, never to `single`', () => {
+test('a replan that spends its attempts falls back to the existing parts, never to unplanned', () => {
   const spent = { kind: 'hold' } as const;
-  // Failing open to `single` here would point rule `issue-pickup` at the flat `issue/12`
+  // Failing open here would point rule `issue-pickup` at the flat `issue/12`
   // branch, which git cannot create beside the existing `issue/12/<slug>` refs.
   assert.deepEqual(resolvePlanRoute({ plan: plan({ status: 'planning' }), verdict: spent, existingParts: 2 }), {
     route: 'parts',
   });
   // With nothing to fall back to, the original fail-open still applies.
-  assert.deepEqual(resolvePlanRoute({ plan: null, verdict: spent }), {
-    route: 'single',
-    failedOpen: true,
-  });
+  assert.deepEqual(resolvePlanRoute({ plan: null, verdict: spent }), { route: 'unplanned' });
 });
 
 test('a complete plan says how to get out of it, rather than reading as still in flight', () => {

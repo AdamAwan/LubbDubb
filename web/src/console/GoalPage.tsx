@@ -412,12 +412,11 @@ const GROUP_LABEL: Record<PartGroup, string> = {
  * and no agent to read — so a paraphrase here would be the only account there is,
  * and wrong.
  *
- * **Retired parts are drawn too, in a column of their own.** "The plan has no live
- * parts" is the single-PR arm, and a plan reaches it by having *proposed* a
- * decomposition that was then retired — so the sentence alone leaves the operator
- * told about a plan they cannot read. They sit outside the four groups because
- * they are outside every count on this page: what the plan proposed is not what
- * the goal is made of.
+ * **Retired parts are drawn too, in a column of their own.** What an amendment
+ * dropped is half of what the plan's record is for: without them a goal whose part
+ * list shrank between two readings has simply lost rows, with nothing saying so.
+ * They sit outside the four groups because they are outside every count on this
+ * page: what the plan proposed is not what the goal is made of.
  */
 function PlanWaves({ page }: { page: GoalPageView }): JSX.Element {
   const groups = GROUP_ORDER.map((group) => ({
@@ -440,7 +439,7 @@ function PlanWaves({ page }: { page: GoalPageView }): JSX.Element {
             {page.plan === null
               ? 'No plan has been drawn for this goal.'
               : retired.length > 0
-                ? 'The plan has no live parts — this goal is worked as one pull request. What it proposed is below.'
+                ? 'Every part of this plan was retired. What it proposed is below.'
                 : 'The plan has no live parts.'}
           </p>
         )}

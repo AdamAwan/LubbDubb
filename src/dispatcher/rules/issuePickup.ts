@@ -9,9 +9,11 @@ import type { Candidate, RawAction, StageContext } from './context.js';
  */
 export function issuePickup(s: StageContext): void {
   for (const { issue } of s.eligibleIssues) {
-    // Narrowed by the funnel: an issue is picked up only once its plan says one
-    // PR will do. Everything below is byte-for-byte what it was before the gate.
-    if (s.routes.get(issue.number)?.route !== 'single') continue;
+    // Narrowed by the funnel to the **unplanned** arm alone: every planned issue,
+    // whether its plan has one part or eight, is scheduled by rule `plan-part`, so
+    // what reaches here is only an issue the funnel gave up on. Everything below is
+    // byte-for-byte what it was before the gate.
+    if (s.routes.get(issue.number)?.route !== 'unplanned') continue;
     const origin = `issue:${issue.number}`;
     // An agent already on this issue owns it — don't throttle/escalate over a
     // live attempt; the active-task de-dup handles it.

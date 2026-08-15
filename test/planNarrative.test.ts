@@ -36,7 +36,6 @@ function store(): Store {
 
 const DOC = {
   version: 1 as const,
-  verdict: 'parts' as const,
   reason: 'The schema has to land before the reader.',
   diagnosis: 'The cache key is written from the old value in `src/cache.ts`.',
   approach: 'Key the write off the new value and add the regression test.',
@@ -99,7 +98,9 @@ test('the v2 fields round-trip through the schema and onto the plan row', () => 
 });
 
 test('a v1 document still validates, and reads back with the v2 fields empty', () => {
-  const parsed = parsePlanDocument('{"version":1,"verdict":"single","reason":"One small fix."}');
+  const parsed = parsePlanDocument(
+    '{"version":1,"reason":"One small fix.","parts":[{"slug":"whole","title":"The fix","scope":"src/"}]}',
+  );
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
   const s = store();
@@ -139,7 +140,6 @@ test('every ingestion records a revision, numbered in order', () => {
     revisions.map((r) => r.seq),
     [1, 2],
   );
-  assert.equal(revisions[0]?.verdict, 'parts');
   assert.equal(revisions[0]?.narrative.diagnosis, DOC.diagnosis);
   assert.equal(revisions[0]?.parts.length, 2);
   // The declaration is stored whole, so a replan can be read as a change to it.
@@ -370,7 +370,6 @@ function revision(seq: number, parts: Declared[], narrative: Partial<PlanRevisio
     id: `rev-${seq}`,
     planId: 'p1',
     seq,
-    verdict: 'parts',
     at: '2026-08-01T00:00:00.000Z',
     parts: parts.map((p) => ({ rationale: null, acceptance: null, expectedKind: null, ...p })),
     narrative: {
