@@ -1,16 +1,18 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { orderedProfiles } from '../../agents/modelPolicy.js';
 import { planProposalRef } from '../../proposals/proposals.js';
 import { planOrigin } from '../../plans/planning.js';
 import { acceptanceCriteria, planIssueNumber } from '../../plans/parts.js';
 import { abandonDecomposition } from '../../plans/planApproval.js';
 import { latestPlanDiff } from '../../plans/planDiff.js';
 import type { PlanHistory } from '../../wire.js';
-import { AcceptanceBody, checked, IdParams } from '../validation.js';
+import { AcceptanceBody, checked, IdParams, optionalText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 /** The four ways out of a plan verdict an operator does not want to simply accept or reject, plus its history. */
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store, harness, agents, proposals } = system;
+  const { store, harness, agents, proposals, config } = system;
 
   // Every verdict this plan has had, and the last amendment read as a change.
   //
@@ -104,6 +106,44 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       hub.broadcast({ type: 'world:changed' });
       // No cycle: a reviewer's note about finished work schedules nothing, and
       // running one would be a pulse per checkbox.
+      return { ok: true, part: updated };
+    }),
+  );
+
+  // Override which model profile one part's work runs on (issue #342).
+  //
+  // The planner's claim, edited: it sized the part it had just cut, and an
+  // operator reading the decomposition may know better. Clearing it (an absent or
+  // empty `profile`) is its own answer rather than a synonym for the goal's
+  // profile — a cleared part inherits, so re-pinning the goal later moves it too.
+  //
+  // Refused by name against the configured profiles, the same way the goal pin is
+  // and for the same reason: this is the surface that cannot produce a bad value,
+  // as distinct from a plan document, which is agent-authored and falls back
+  // instead.
+  const PartProfileBody = z.object({ slug: z.string().min(1), profile: optionalText('profile') });
+  app.post(
+    '/api/plans/:id/part-profile',
+    checked({ params: IdParams, body: PartProfileBody }, async ({ params, body, reply }) => {
+      const plan = store.getPlan(params.id);
+      if (!plan) return reply.code(404).send({ error: 'plan not found' });
+      const part = store.listPlanParts(plan.id).find((p) => p.slug === body.slug);
+      if (!part) return reply.code(404).send({ error: `plan ${params.id} has no part "${body.slug}"` });
+      const wanted = body.profile ?? null;
+      const known = orderedProfiles(config.agentModels).map((p) => p.name);
+      if (wanted !== null && !known.includes(wanted))
+        return reply.code(400).send({
+          error:
+            known.length === 0
+              ? 'This deployment configures no agentModels.profiles, so there is nothing to pick.'
+              : `"${wanted}" is not one of this deployment's profiles: ${known.join(', ')}.`,
+        });
+      const updated = store.setPartProfile(part.id, wanted);
+      hub.broadcast({ type: 'world:changed' });
+      // A cycle, unlike the acceptance tick above: this changes what the next
+      // dispatch of a pending part costs, so an operator who re-prices one about
+      // to go out wants that to land before it does.
+      await harness.runCycle('manual');
       return { ok: true, part: updated };
     }),
   );

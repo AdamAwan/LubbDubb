@@ -203,6 +203,17 @@ const realApi = {
         ),
   setIssueWatched: (issueNumber: number, watched: boolean) =>
     post<{ ok: true; watched: boolean }>(`/api/issues/${issueNumber}/watch`, { watched }),
+  // Pin this goal's work to a model profile, or clear the pin (#342). The same
+  // call answers a standing proposal from the assayer, whichever way it went —
+  // the route settles the question on any write, which is what makes "keep mine"
+  // a decision rather than a refusal to answer.
+  setIssueProfile: (issueNumber: number, profile: string | null) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/profile`, { profile: profile ?? '' }),
+  // Override which profile one plan part runs on. Clearing it makes the part
+  // inherit the goal's pin again, which is not the same as naming the goal's
+  // current profile.
+  setPartProfile: (planId: string, slug: string, profile: string | null) =>
+    post<{ ok: true }>(`/api/plans/${planId}/part-profile`, { slug, profile: profile ?? '' }),
   // The operator's override of whether an issue is finished. `null` clears it,
   // returning the issue to whatever its agent or its plan says.
   setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>

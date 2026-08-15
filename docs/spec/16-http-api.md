@@ -278,6 +278,26 @@ dispatched at and a tag on one alone would change nothing
 tags. Every failed write is recorded on the error log. `world:changed` is broadcast either way,
 because whatever landed has already changed the world the cockpit is showing.
 
+### `POST /api/issues/:number/profile`
+
+Body `{profile?: string}`. Pins this goal's work to a model profile; absent or empty **clears** the
+pin, which is the state a ticket starts in rather than a third value. Like the watch route it writes
+**labels on the tracker** — `${prefix}-model-<profile>` set, every other model label cleared, so the
+ticket carries at most one answer — and it is the only reason this is a tracker write rather than a
+store one: a pin is visible where a human already looks, which is what makes "does it expire?" a
+question with no mechanism behind it ([02](02-configuration.md#pinning-one-goal-to-a-profile)).
+
+The same call **answers a standing profile proposal from the assayer**, whichever way the operator
+went. That is what makes "keep mine" a decision rather than a refusal to answer: the tag goes on
+deliberately disagreeing with the proposal, and a gate that re-read the disagreement would ask the
+same question for ever. What is recorded is that the question was answered, never what it was answered
+with — the tag is that. Broadcasts `world:changed` and runs a cycle, so a goal released from the gate
+moves immediately.
+
+400 when the deployment configures no profiles, when `profile` names one that is not configured
+(by name, with the configured set listed — the boundary half of the boot rejection), and on a provider
+failure, which is recorded on the error log. Returns `{ok: true, profile, answered}`.
+
 ### `POST /api/issues/:number/conclusion`
 
 Body `{verdict: 'done' | 'more_work' | null, note?: string}`. The operator's override of whether an
@@ -733,6 +753,18 @@ nobody would see. Keyed on the criterion's **text**, which is what the store hol
 criterion loses its tick. Broadcasts `dirty` and **runs no cycle**: a reviewer's note about finished
 work schedules nothing, and a pulse per checkbox is a pulse per checkbox. Returns `{ ok: true, part }`.
 → [08](08-planning.md#acceptance-ticked)
+
+### `POST /api/plans/:id/part-profile`
+
+`{ slug, profile? }`. Overrides which model profile one part's work runs on — the planner's own sizing
+of the part it cut, edited. 404 when the plan or the part is unknown; 400 when `profile` names one this
+deployment does not configure. Absent or empty **clears** it, which is not a synonym for naming the
+goal's current profile: a cleared part *inherits*, so re-pinning the goal later moves it too.
+
+Unlike the acceptance route above it **runs a cycle**, because this changes what the next dispatch of a
+pending part costs and an operator re-pricing one about to go out wants that to land before it does. A
+part already dispatched keeps what its task row stored, since resolution happens once, at dispatch.
+Returns `{ ok: true, part }`. → [02](02-configuration.md#pinning-one-goal-to-a-profile)
 
 ### `POST /api/issues/:number/validation/:checkId/{result,defer,waive,reset}`
 

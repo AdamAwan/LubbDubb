@@ -771,6 +771,29 @@
   color: #7fa8ff;
   background: #141d2e;
 }
+/* The model-profile picker (#342). Shaped like the toggles it sits beside, so a
+   goal's controls read as one row rather than a form dropped into a header. */
+.cn-profile {
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel-2);
+  border-radius: var(--cn-r-sm);
+  padding: 4px 8px;
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+}
+.cn-profile:hover {
+  border-color: #39404c;
+  color: var(--cn-fg);
+}
+/* Loud when a profile is actually named. A pin departs from the fleet's own
+   policy and spends or saves real money on every dispatch under it, so drawing it
+   like an untouched control is the one failure this whole surface exists to
+   prevent — the decision would be invisible to the person who made it. */
+.cn-profile.cn-profile-set {
+  border-color: #6b4a12;
+  color: #ffc46b;
+  background: #241a08;
+}
 .cn-lbl {
   font: 11px var(--cn-mono);
   color: var(--cn-fg-faint);

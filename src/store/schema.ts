@@ -301,6 +301,8 @@ CREATE TABLE IF NOT EXISTS issue_assays (
   summary     TEXT NOT NULL,
   goal_ref    TEXT NOT NULL,        -- fingerprint of the title+body judged
   by          TEXT NOT NULL,        -- assayer | operator
+  proposed_profile    TEXT,         -- the model profile the assayer proposed for this goal's work
+  profile_answered_at TEXT,         -- null while that proposal is waiting on a human (the gate)
   agent_id    TEXT,                 -- null for an operator verdict
   task_id     TEXT,
   comment_ref TEXT,                 -- the one living comment on the ticket, edited in place
@@ -396,6 +398,7 @@ CREATE TABLE IF NOT EXISTS plan_parts (
   acceptance_met TEXT,                -- JSON array of the criteria a reviewer has confirmed
   size        TEXT,                   -- s | m | l, how big this is to review; null = unstated
   expected_kind   TEXT,               -- code | report | determination; null = unstated, reads as code
+  profile     TEXT,                   -- the model profile this part runs on; null = inherit the goal's pin
   outcome_kind    TEXT,               -- what it actually produced, written at close (never for a merge)
   outcome_ref     TEXT,               -- flag:<id> | finding:<id>, optional evidence
   outcome_summary TEXT,               -- what the concluding agent found; required at close

@@ -94,6 +94,19 @@ interface AgentManagerOptions {
     model: string | null;
     effort: string | null;
   }) => string[];
+  /**
+   * What a goal's work runs on today, for the one decision `recordAssay` has to
+   * make about a proposal (issue #342).
+   *
+   * A function rather than the config, so the manager stays as ignorant of
+   * labels, profiles and precedence as it is of rules — it asks one question and
+   * gets one name. Unset (every runtime with no `agentModels`, and the tests that
+   * do not care) means no proposal is ever stored and no gate can ever hold.
+   */
+  goalProfile?: {
+    /** The profile `issue:<n>`'s work would run on now: its tag, or the configured default. */
+    effective: (issueOrigin: string) => string | null;
+  };
   whitelistedApprovals: WhitelistRule[];
   /** Builds the underlying runtime (PTY or stream-JSON) for a launch spec. */
   createSession: SessionFactory;
@@ -1041,22 +1054,35 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     agentId: string,
     verdict: GoalAssayVerdictName,
     summary: string,
-  ): { ok: true; issueOrigin: string; verdict: GoalAssayVerdictName } | { ok: false; error: string } {
+    profile: string | null,
+  ):
+    | { ok: true; issueOrigin: string; verdict: GoalAssayVerdictName; profileHeld: boolean }
+    | { ok: false; error: string } {
     return this.withCaller(agentId, ({ task }) => {
       const origin = assayerOrigin(task.originRef);
       if (!origin.ok) return { ok: false, error: origin.error };
 
+      // Whether the proposal needs a human is decided **here**, once, because this
+      // is where the ticket's own tag and the operator's config are both in hand.
+      // Deciding it at read time instead would put a config lookup inside
+      // `assayHold`, and a caller that forgot to wire it would gate the whole
+      // fleet rather than none of it.
+      const proposedProfile = this.opts.goalProfile && profile ? profile : null;
+      const profileHeld =
+        proposedProfile !== null && proposedProfile !== this.opts.goalProfile?.effective(origin.issueOrigin);
       this.store.recordAssay({
         originRef: origin.issueOrigin,
         verdict,
         summary,
         goalRef: goalFingerprint(task.originTitle, task.originSummary),
         by: 'assayer',
+        proposedProfile,
+        profileDiverges: profileHeld,
         agentId,
         taskId: task.id,
       });
       this.emit('assay', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin, verdict });
-      return { ok: true, issueOrigin: origin.issueOrigin, verdict };
+      return { ok: true, issueOrigin: origin.issueOrigin, verdict, profileHeld };
     });
   }
 

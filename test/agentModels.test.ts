@@ -13,22 +13,28 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { planAsSingle } from './support/plans.js';
 
 const PROFILES = {
-  fast: { model: 'haiku' },
-  standard: { model: 'sonnet', effort: 'medium' },
-  deep: { model: 'opus', effort: 'medium' },
+  fast: { model: 'haiku', rank: 1, description: 'mechanical work' },
+  standard: { model: 'sonnet', effort: 'medium', rank: 2, description: 'ordinary work' },
+  deep: { model: 'opus', effort: 'medium', rank: 3, description: 'work whose shape is unclear' },
 } as const;
 
 // -- resolution ---------------------------------------------------------------
 
 test('a rule with an assignment resolves to that profile', () => {
   const models = { profiles: PROFILES, default: 'standard', byRule: { 'issue-plan': 'deep' } };
-  assert.deepEqual(resolveAgentProfile(models, 'issue-plan'), { model: 'opus', effort: 'medium' });
+  assert.deepEqual(resolveAgentProfile(models, 'issue-plan'), {
+    name: 'deep',
+    model: 'opus',
+    effort: 'medium',
+    source: 'rule',
+  });
 });
 
 test('a rule with no assignment falls through to the default, as does a dispatch with no rule', () => {
   const models = { profiles: PROFILES, default: 'standard', byRule: { 'issue-plan': 'deep' } };
-  assert.deepEqual(resolveAgentProfile(models, 'pr-ci-failing'), { model: 'sonnet', effort: 'medium' });
-  assert.deepEqual(resolveAgentProfile(models, null), { model: 'sonnet', effort: 'medium' });
+  const standard = { name: 'standard', model: 'sonnet', effort: 'medium', source: 'default' } as const;
+  assert.deepEqual(resolveAgentProfile(models, 'pr-ci-failing'), standard);
+  assert.deepEqual(resolveAgentProfile(models, null), standard);
 });
 
 test('no policy at all, or a policy with no default, resolves to no model', () => {
@@ -40,8 +46,18 @@ test('no policy at all, or a policy with no default, resolves to no model', () =
 
 test('a rule mapped explicitly to the default profile resolves the same as falling through', () => {
   const models = { profiles: PROFILES, default: 'standard', byRule: { 'issue-plan': 'standard' } };
-  assert.deepEqual(resolveAgentProfile(models, 'issue-plan'), { model: 'sonnet', effort: 'medium' });
-  assert.deepEqual(resolveAgentProfile(models, 'issue-assay'), { model: 'sonnet', effort: 'medium' });
+  assert.deepEqual(resolveAgentProfile(models, 'issue-plan'), {
+    name: 'standard',
+    model: 'sonnet',
+    effort: 'medium',
+    source: 'rule',
+  });
+  assert.deepEqual(resolveAgentProfile(models, 'issue-assay'), {
+    name: 'standard',
+    model: 'sonnet',
+    effort: 'medium',
+    source: 'default',
+  });
 });
 
 // -- what the loader refuses --------------------------------------------------

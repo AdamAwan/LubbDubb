@@ -136,7 +136,11 @@ Points that are load-bearing:
   Pushed **before** `claudeArgs`, so an operator's own `--model` there still wins. The value is never
   validated by the harness — only the installed `claude` knows the valid set, so a bad alias surfaces
   as a failed agent at spawn. **`raw` mode ignores it**: running the operator's argv verbatim is that
-  mode's whole contract. → [02](02-configuration.md#model-assignment-by-rule)
+  mode's whole contract. Since issue #342 the policy the value is resolved from has three levels
+  rather than one — a pin on the goal, then the rule, then the fleet default — but the property this
+  bullet is about is unchanged, and deliberately: the pin is keyed on the dispatch's *origin*, never
+  on the run, so a retry and a re-dispatch resolve what the first attempt resolved.
+  → [02](02-configuration.md#model-assignment-by-rule), [02](02-configuration.md#pinning-one-goal-to-a-profile)
 - When a launch carries the tool channel, `MCP_PROTOCOL_ADDENDUM` is appended too — see
   [11](11-mcp-tools.md).
 

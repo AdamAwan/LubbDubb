@@ -455,7 +455,7 @@ distinction lives in `issueOriginRole` (`src/issueOrigins.ts`); see
 
 | Verdict    | Effect                                                                                     |
 | ---------- | ------------------------------------------------------------------------------------------ |
-| `workable` | None on scheduling. Stored so the assay is not asked again for this text.                  |
+| `workable` | None on scheduling, unless its **profile proposal** diverges — see below. Stored so the assay is not asked again for this text. |
 | `unclear`  | Holds the issue out of **both** rule `issue-plan` and rule `issue-pickup` while it stands. |
 | _no row_   | Holds nothing. This is what a crashed, killed or capped assayer leaves behind.             |
 
@@ -494,6 +494,28 @@ refuses. Two arms, plus a clearer that is deliberately not an arm:
    rejection-expiry pattern again, and here it is what covers a human who answers the question in a
    **comment** rather than by editing the body.
 3. **The operator clears it** (`{verdict: null}`) — a delete, which is why it is not an arm.
+
+### The second arm: an unanswered profile proposal (issue #342)
+
+The assayer also proposes which model profile the goal's work should run on, and a proposal that
+**differs from what is already standing** holds the funnel until a human answers it. Same predicate,
+same two call sites, and the same safety argument as above pointed at a second question:
+
+- **An absent proposal holds nothing**, exactly as silence does for the verdict — a crashed, killed or
+  capped assayer, an `unclear` verdict, or a deployment with no `agentModels` all leave the issue to
+  the funnel it would have entered anyway.
+- **Agreement holds nothing and costs no click.** Whether the proposal diverges is decided once, where
+  it is written and the tag and config are both in hand, and stored as `profile_answered_at` — so this
+  arm is a two-field read with no config threaded into it.
+- **It does not expire on world signal.** A comment is how a human answers "I could not act on this
+  goal"; it is not how they authorise spending more than the rule allows, and reading it as one would
+  release the gate with nobody having decided anything. Arm 1 (the text changed) and arm 3 (the row is
+  cleared) still end it, and so does the operator answering — one click on either side, through
+  `POST /api/issues/:number/profile`, which writes the tag and settles the question in one act.
+
+The hold's string names the proposal — `the goal assay proposes running this on "deep"`. A refused goal
+is reported ahead of an unpriced one: there is no point pricing work that is not going to start.
+→ [02](02-configuration.md#the-gate-the-assayer-proposes-a-human-confirms)
 
 The hold's string names **what happened and nothing else** — `the goal assay could not act on this
 goal`, or `you …` for an operator's own verdict. The assayer's words and the time it decided are not

@@ -285,6 +285,28 @@ export function AgentDrawer({
               <div className="dispatch-model">
                 <span className="dispatch-reason-label">Model</span> {task.model}
                 {task.effort && ` · ${task.effort} effort`}
+                {/* Which profile, and which level of the chain named it (#342). A
+                    pinned run cost what somebody chose for this goal rather than
+                    what its rule prices — and a bumped agent that reads as an
+                    ordinary one is the invisible half of pinning. Drawn from the
+                    stored source, never recomputed against today's config: the
+                    policy moves, and a finished run must keep saying what it was
+                    dispatched under. */}
+                {task.profile && (
+                  <span
+                    className={`chip small${task.profileSource === 'pin' ? ' warn' : ''}`}
+                    title={
+                      task.profileSource === 'pin'
+                        ? 'Pinned — this goal, or its plan, named this profile rather than taking its rule’s'
+                        : task.profileSource === 'rule'
+                          ? 'This dispatch rule’s own profile'
+                          : 'The fleet default, for a rule with no profile of its own'
+                    }
+                  >
+                    {task.profile}
+                    {task.profileSource === 'pin' ? ' · pinned' : ''}
+                  </span>
+                )}
               </div>
             )}
           </div>

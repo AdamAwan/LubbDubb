@@ -30,9 +30,24 @@ export const GOAL_ASSAY_VERDICT_HELP: Record<GoalAssayVerdictName, string> = {
 /** Long enough to be prose, short of a pasted transcript. Matches the assessment cap. */
 const MAX_ASSAY_SUMMARY = 2000;
 
+/**
+ * What the assayer is allowed to say about which profile a goal's work wants
+ * (issue #342), given the profiles this deployment actually configures.
+ *
+ * The names are the operator's own, handed to the agent by the tool rather than
+ * mapped through a difficulty scale of the harness's invention. A scale would
+ * need a second table (`byDifficulty`) translating three fixed words into an
+ * arbitrary set of profile names, and the translation is exactly where the
+ * meaning would be lost: an operator who splits `deep` into two knows what the
+ * two are for, and a fixed vocabulary cannot be told.
+ *
+ * Empty for a deployment with no `agentModels` — and then nothing is asked and
+ * nothing is refused for its absence, because there is no choice to make.
+ */
 export function validateGoalAssay(
   args: Record<string, unknown>,
-): { ok: true; verdict: GoalAssayVerdictName; summary: string } | { ok: false; error: string } {
+  profiles: readonly string[] = [],
+): { ok: true; verdict: GoalAssayVerdictName; summary: string; profile: string | null } | { ok: false; error: string } {
   const verdict = args.status;
   if (typeof verdict !== 'string' || !GOAL_ASSAY_VERDICTS.includes(verdict as GoalAssayVerdictName)) {
     return {
@@ -59,7 +74,42 @@ export function validateGoalAssay(
       error: `summary is too long (${summary.length} chars, max ${MAX_ASSAY_SUMMARY}). Summarise it.`,
     };
   }
-  return { ok: true, verdict: verdict as GoalAssayVerdictName, summary };
+  const named = verdict === 'workable' ? checkProfile(args.profile, profiles) : { ok: true as const, profile: null };
+  if (!named.ok) return named;
+  return { ok: true, verdict: verdict as GoalAssayVerdictName, summary, profile: named.profile };
+}
+
+/**
+ * The proposed profile, or why it is not one.
+ *
+ * Asked only of a **workable** verdict, and dropped rather than refused on an
+ * `unclear` one: a goal nobody could start from has no work to size, so a profile
+ * beside it is answering a question that does not arise. Refusing it instead
+ * would spend a round trip teaching an agent a distinction that changes nothing.
+ *
+ * Required when this deployment has profiles, for the reason the summary is
+ * required: an optional field is one most agents will omit most of the time, and
+ * an omitted proposal is indistinguishable from "the default is right" — which is
+ * the answer the harness would then act on, at the default's price, having asked.
+ */
+function checkProfile(
+  value: unknown,
+  profiles: readonly string[],
+): { ok: true; profile: string | null } | { ok: false; error: string } {
+  if (profiles.length === 0) return { ok: true, profile: null };
+  const options = profiles.join(', ');
+  if (typeof value !== 'string' || value.length === 0)
+    return {
+      ok: false,
+      error:
+        `profile is required: say which model profile this issue's work should run on, from ${options} — ` +
+        `they are listed cheapest-first with what each is for in this tool's description. Judge the work the ` +
+        `ticket implies, not the ticket's length. If a human has already pinned a profile on the ticket and you ` +
+        `agree with it, name that one.`,
+    };
+  if (!profiles.includes(value))
+    return { ok: false, error: `profile "${value}" is not one of this deployment's profiles: ${options}.` };
+  return { ok: true, profile: value };
 }
 
 /**

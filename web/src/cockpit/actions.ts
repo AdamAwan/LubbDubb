@@ -173,6 +173,19 @@ export interface CockpitActions {
    */
   setStackLanding(ref: string, landing: boolean): Promise<void>;
   setIssueWatched(issueNumber: number, watched: boolean): Promise<void>;
+  /**
+   * Pin a goal's work to a model profile, or clear the pin with `null` (#342).
+   * On the seam for every mutation's reason: `console/` may not import `api.js`.
+   *
+   * It is also the answer to a standing profile proposal — the gate is waiting on
+   * a decision, not on agreement, so this settles it either way.
+   */
+  setIssueProfile(issueNumber: number, profile: string | null): Promise<void>;
+  /**
+   * Override one plan part's profile, or clear it with `null` so the part
+   * inherits the goal's pin again.
+   */
+  setPartProfile(planId: string, slug: string, profile: string | null): Promise<void>;
   setIssueConclusion(issueNumber: number, verdict: 'done' | 'more_work' | null): Promise<void>;
   /**
    * Override the goal assay's verdict (#158). On the seam rather than in the

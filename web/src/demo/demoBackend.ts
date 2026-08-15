@@ -366,6 +366,10 @@ class DemoServer {
               verdict,
               by: 'operator',
               commentRef: null,
+              // An operator's own verdict proposes no profile: the pin is its own
+              // control, and a hand-set assay must not raise a question nobody asked.
+              proposedProfile: null,
+              awaitingProfileAnswer: false,
               summary: 'Set by the operator from the cockpit.',
               decidedAt: new Date().toISOString(),
             };
@@ -403,6 +407,34 @@ class DemoServer {
         undefined,
         `issue:${issueNumber}`,
       );
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Pin a goal to a profile, or clear the pin — the demo mirror of the label
+   * write, and of the answer it doubles as.
+   *
+   * The tag write and the settling are one act here as they are on the route: an
+   * operator who picks a profile has answered the assayer's proposal, whether
+   * they took it or kept their own.
+   */
+  async setIssueProfile(issueNumber: number, profile: string | null): Promise<{ ok: true }> {
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (issue) {
+      issue.modelPin = { profile, ignoredTags: [] };
+      if (issue.assay) issue.assay = { ...issue.assay, awaitingProfileAnswer: false };
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /** Override one part's profile — `null` returns it to inheriting the goal's pin. */
+  async setPartProfile(planId: string, slug: string, profile: string | null): Promise<{ ok: true }> {
+    const part = (this.state.planParts ?? []).find((p) => p.planId === planId && p.slug === slug);
+    if (part) {
+      part.profile = profile;
       this.dirty();
     }
     return { ok: true };
@@ -1165,6 +1197,7 @@ class DemoServer {
             body: String(ev.body ?? ''),
             labels,
             state: 'open',
+            modelPin: { profile: null, ignoredTags: [] },
             linkedPrNumber: null,
           }),
         ];
@@ -1926,6 +1959,9 @@ export const demoApi = {
   setPrExcluded: (prNumber: number, excluded: boolean) => getServer().setPrExcluded(prNumber, excluded),
   setStackLanding: (ref: string, landing: boolean) => getServer().setStackLanding(ref, landing),
   setIssueWatched: (issueNumber: number, watched: boolean) => getServer().setIssueWatched(issueNumber, watched),
+  setIssueProfile: (issueNumber: number, profile: string | null) => getServer().setIssueProfile(issueNumber, profile),
+  setPartProfile: (planId: string, slug: string, profile: string | null) =>
+    getServer().setPartProfile(planId, slug, profile),
   setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>
     getServer().setIssueConclusion(issueNumber, verdict),
   setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>

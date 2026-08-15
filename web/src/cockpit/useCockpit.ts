@@ -213,6 +213,8 @@ export function useCockpit(): CockpitStatus {
       setPrExcluded: (n, excluded) => then(api.setPrExcluded(n, excluded)),
       setStackLanding: (ref, landing) => then(api.setStackLanding(ref, landing)),
       setIssueWatched: (n, watched) => then(api.setIssueWatched(n, watched)),
+      setIssueProfile: (n, profile) => then(api.setIssueProfile(n, profile)),
+      setPartProfile: (planId, slug, profile) => then(api.setPartProfile(planId, slug, profile)),
       setIssueConclusion: (n, verdict) => then(api.setIssueConclusion(n, verdict)),
       setIssueAssay: (n, verdict) => then(api.setIssueAssay(n, verdict)),
       raiseBug: (n, summary, title) => then(api.raiseBug(n, summary, title)),

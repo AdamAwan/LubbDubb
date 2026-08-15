@@ -113,6 +113,9 @@ export function App() {
       onOpenGoal={(ref) => status.actions.selectGoal(ref)}
       onRespond={(id, text) => status.actions.respondAgent(id, text)}
       onAcceptance={(id, slug, criterion, met) => status.actions.setAcceptance(id, slug, criterion, met)}
+      onPartProfile={(id, slug, profile) => status.actions.setPartProfile(id, slug, profile)}
+      profiles={state.config.profiles}
+      defaultProfile={state.config.defaultProfile}
     />
   ) : null;
 

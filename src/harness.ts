@@ -14,6 +14,7 @@ import { rejectionSignalQuery } from './proposals/proposals.js';
 import { deliverySignalQuery } from './delivery/delivery.js';
 import { assaySignalQuery } from './intake/assay.js';
 import { retainedRunIssues, runsToRecord } from './floor/runs.js';
+import type { AgentModels } from './agents/modelPolicy.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
 import type { AssayDesk } from './intake/assayDesk.js';
 import type { PrNamingDesk } from './prNamingDesk.js';
@@ -38,6 +39,13 @@ interface HarnessDeps {
   runtime: RuntimeControl;
   /** PRs carrying this label (`${labelPrefix}-ignore`) are excluded from dispatch (the operator's "leave it alone" tag). */
   prIgnoreLabel: string;
+  /**
+   * What a dispatch needs to resolve the profile its origin is pinned to (issue
+   * #342) — passed straight through to the dispatch context. Absent = no
+   * `agentModels`, no `labelPrefix`, or a test that does not care, and then no
+   * dispatch is ever pinned.
+   */
+  modelPins?: { labelPrefix: string; models: AgentModels };
   /** How long an operator "Up next" priority override survives after its origin stops being tracked (issue #128; 0 disables pruning). */
   upNextOverrideTtlMs: number;
   /**
@@ -382,6 +390,9 @@ export class Harness extends EventEmitter {
         proposals,
         rejectionSignals,
         priorityOverrides,
+        // The goal tags and the profiles they may name, so a dispatch on a pinned
+        // issue is priced by the pin rather than by its rule.
+        modelPins: this.deps.modelPins,
         agentHeadroom: headroom,
       });
 

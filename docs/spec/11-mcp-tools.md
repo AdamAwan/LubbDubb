@@ -359,7 +359,7 @@ repaints on the verdict rather than on the next pulse.
 
 ### `assay_issue`
 
-Arguments `{status: 'workable'|'unclear', summary}`. Rule `issue-assay`'s assayer casts its verdict here, with
+Arguments `{status: 'workable'|'unclear', summary, profile?}`. Rule `issue-assay`'s assayer casts its verdict here, with
 identity structural as everywhere else — no issue argument, the origin resolved from the credential.
 
 - **`assayerOrigin` refuses every agent that is _doing_ the work**, and refuses the assessor too,
@@ -372,6 +372,15 @@ identity structural as everywhere else — no issue argument, the origin resolve
   nothing is closed, and the hold ends by itself when the ticket is edited or anything happens on it.
 - The verdict is fingerprinted against the title and body **the agent was dispatched with**, read off
   its task, so an edit made mid-run is not silently swallowed.
+- **`profile` is the assayer sizing the work** (issue #342), and the tool builds its `enum` and its
+  description from *this deployment's* `agentModels.profiles` — so the agent proposes from the
+  operator's own vocabulary rather than a difficulty scale that would then need mapping back. It is
+  required with `workable` when any profile is configured, because an optional field is one most
+  agents omit and an omitted proposal is indistinguishable from "the default is right" — which the
+  harness would then act on, at the default's price, having asked. It is dropped rather than refused
+  with `unclear`: a goal nobody can start from has no work to size. A proposal that differs from what
+  is already standing holds the funnel until a human answers, and the tool's own reply says so.
+  → [02](02-configuration.md#the-gate-the-assayer-proposes-a-human-confirms)
 
 It routes through `AgentManager.recordAssay` for the `assay` event, so the cockpit repaints on the
 verdict rather than on the next pulse.

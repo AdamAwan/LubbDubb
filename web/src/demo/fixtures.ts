@@ -41,7 +41,15 @@ interface DemoSeed {
  */
 type IssueSeed = Omit<
   Issue,
-  'assay' | 'conclusion' | 'delivery' | 'retrospective' | 'scratchpad' | 'shortfall' | 'spend' | 'validation'
+  | 'assay'
+  | 'conclusion'
+  | 'delivery'
+  | 'modelPin'
+  | 'retrospective'
+  | 'scratchpad'
+  | 'shortfall'
+  | 'spend'
+  | 'validation'
 > &
   Partial<Issue>;
 
@@ -51,6 +59,10 @@ function demoIssue(seed: IssueSeed): Issue {
     shortfall: null,
     delivery: null,
     assay: null,
+    // Unpinned, which is what almost every goal is: a pin is the exception an
+    // operator or an assayer made, so the demo models it on the fixtures that are
+    // about it rather than everywhere.
+    modelPin: { profile: null, ignoredTags: [] },
     retrospective: null,
     scratchpad: null,
     // Null rather than a zero: a goal nothing measured and a goal that cost
@@ -196,6 +208,14 @@ export function buildDemoState(): DemoSeed {
       watchLabel: 'lubbdubb-watch',
       containerTypes: ['Feature', 'Epic'],
       ignoreLabel: 'lubbdubb-ignore',
+      // Cheapest first, as `rank` orders them — the demo's profile controls draw
+      // this list in this order.
+      profiles: [
+        { name: 'fast', description: 'Mechanical, well-specified work with an obvious shape.' },
+        { name: 'standard', description: 'Ordinary feature and bug work with a clear approach.' },
+        { name: 'deep', description: 'Work whose shape is unclear, or where the approach is expensive to undo.' },
+      ],
+      defaultProfile: 'standard',
       // Two hours rather than the real two days, so the demo's waiting PR below
       // actually draws its age — the mechanism is what the demo is showing.
       reviewReminderMs: 2 * 60 * 60 * 1000,
@@ -668,6 +688,10 @@ export function buildDemoState(): DemoSeed {
               'Retrieval is keyword search, vector search and an RRF fold over both — which of the three is ' +
               'bringing back the wrong thing, and for which question?',
             by: 'assayer',
+            // An `unclear` verdict names no profile: a goal nobody could start
+            // from has no work to size.
+            proposedProfile: null,
+            awaitingProfileAnswer: false,
             decidedAt: ago(52),
             commentRef: 'issue:379:comment:8402',
           },
@@ -1037,6 +1061,10 @@ export function buildDemoState(): DemoSeed {
         rationale:
           'Intake goes last — enqueue has to be proven out first, or a rejected job is indistinguishable from a bad write.',
         acceptance: 'Every runner receives a payload the catalog parsed; no runner re-parses one itself.',
+        // The one part the planner singled out (#342), so the demo teaches the
+        // control rather than only offering it: its siblings inherit the goal's
+        // pin and this one is drawn loudly because it does not.
+        profile: 'deep',
         touches: [],
         acceptanceMet: [],
         size: null,

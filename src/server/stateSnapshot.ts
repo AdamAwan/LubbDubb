@@ -34,6 +34,8 @@ import { validationVerdict } from '../validation/verdict.js';
 import { validationResourcePath } from '../validation/resources.js';
 import { withLiveClaim } from '../validation/desktop.js';
 import { watchLabelsFor } from '../watchLabels.js';
+import { resolveModelTag } from '../modelLabels.js';
+import { orderedProfiles } from '../agents/modelPolicy.js';
 
 /**
  * The world the cockpit draws: the baseline the last pulse persisted, **never a
@@ -356,6 +358,12 @@ export function buildStateSnapshot(
       delivery: standingDelivery(deliveriesByOrigin.get(origin), issue, pickupCtx),
       // The intake verdict, beside the other two and inside `pickup` for none.
       assay: assayVerdictOf(assaysByOrigin.get(origin)),
+      // What this goal's work is pinned to, read off its own labels through the
+      // same pure function the dispatcher resolves the pin with — so the chip and
+      // the dispatch can never disagree about which profile is standing.
+      modelPin: (({ profile, ignored }) => ({ profile, ignoredTags: ignored }))(
+        resolveModelTag(issue.labels, config.labelPrefix, config.agentModels),
+      ),
       // The run's own write-up (rule `issue-retro`) — the reading, never the writing.
       retrospective: retroReading(store.getRetrospective(origin)),
       // The shared pad the agents on this goal left each other — the reading, for
@@ -393,6 +401,14 @@ export function buildStateSnapshot(
       // set and how to render an item's effective watched/ignored state.
       watchLabel,
       ignoreLabel,
+      // The profiles a goal or a part may be pinned to, cheapest first — the
+      // options every dropdown draws, and the order it draws them in. Empty for a
+      // deployment with no `agentModels`, which is what turns the control off:
+      // there is nothing to choose between.
+      profiles: orderedProfiles(config.agentModels),
+      // Which profile an unpinned dispatch falls back to, so a pin can be drawn
+      // as the departure from it that it is. Null when nothing is configured.
+      defaultProfile: config.agentModels?.default ?? null,
       // The container policy itself, because the backlog draws a container as a
       // heading over its children rather than as a row beside them — a question
       // about the item's type that no per-item verdict answers.
@@ -678,8 +694,19 @@ function padReading(pad: ScratchPadSummary | undefined) {
  */
 function assayVerdictOf(assay: IssueAssay | undefined) {
   if (!assay) return null;
-  const { verdict, summary, by, decidedAt } = assay;
-  return { verdict, summary, by, decidedAt, commentRef: issueCommentRef(assay.originRef, assay.commentRef) };
+  const { verdict, summary, by, decidedAt, proposedProfile } = assay;
+  return {
+    verdict,
+    summary,
+    by,
+    decidedAt,
+    commentRef: issueCommentRef(assay.originRef, assay.commentRef),
+    proposedProfile,
+    // Both fields, because the gate is exactly their conjunction: a proposal that
+    // was settled on arrival (the assayer agreed) is still worth showing, and it
+    // is holding nothing.
+    awaitingProfileAnswer: proposedProfile !== null && assay.profileAnsweredAt === null,
+  };
 }
 
 /**

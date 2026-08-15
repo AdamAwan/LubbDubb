@@ -66,6 +66,8 @@ function assay(over: Partial<IssueAssay> = {}): IssueAssay {
     summary: 'Better how? There is no measure here I could tell "done" by.',
     goalRef: goalFingerprint(i.title, i.body),
     by: 'assayer',
+    proposedProfile: null,
+    profileAnsweredAt: null,
     agentId: null,
     taskId: null,
     commentRef: null,

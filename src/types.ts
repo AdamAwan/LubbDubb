@@ -470,6 +470,28 @@ export interface Task {
    * still reads back as what the run actually used.
    */
   effort?: string | null;
+  /**
+   * The name of the profile {@link model} and {@link effort} came from — `fast`,
+   * `deep`, whatever this deployment calls them. Null for a run that resolved to
+   * no profile at all.
+   *
+   * A plain string for {@link effort}'s reason, and stored rather than looked up:
+   * profiles are re-pointed at new models as they ship, so the name is the only
+   * thing that stays legible about a finished run once its model string means
+   * something else.
+   */
+  profile?: string | null;
+  /**
+   * Which level of the precedence chain named that profile: `pin` when the goal's
+   * tag or its plan's part chose it, `rule` when `byRule` did, `default` when
+   * neither did (issue #342).
+   *
+   * The whole point is `pin`. A run that cost three times its rule's price and
+   * reads as an ordinary one is the invisible half of pinning, and re-deriving
+   * this when the drawer is opened would answer against today's config rather
+   * than the config the run was dispatched under.
+   */
+  profileSource?: string | null;
   status: TaskStatus;
   agentId: string | null;
   createdAt: string;
@@ -1260,6 +1282,25 @@ export interface IssueAssay {
    */
   goalRef: string;
   by: AssayAuthor;
+  /**
+   * The model profile the assayer proposed for this goal's work (issue #342), or
+   * null when it named none — which is every `unclear` verdict, every deployment
+   * with no `agentModels`, and any assayer that simply did not answer.
+   *
+   * Kept whatever the operator then decides, so the pair (this, the tag on the
+   * ticket) is what says a human intervened. Nothing reads it as the pin: the
+   * tag is the resolved answer, this is what was suggested.
+   */
+  proposedProfile: string | null;
+  /**
+   * When the profile question was settled — by the operator answering, or at the
+   * moment the proposal was written if there was nothing to ask.
+   *
+   * Null is the whole of the gate: a proposal with no answer holds the funnel
+   * (see `assayHold`). Stamped at write time when the assayer agreed with what
+   * was already standing, so agreement costs no click and raises no question.
+   */
+  profileAnsweredAt: string | null;
   /** The assaying agent and its task, from the credential. Null for an operator verdict. */
   agentId: string | null;
   taskId: string | null;
@@ -1964,6 +2005,25 @@ export interface PlanPart {
   size: PartSize | null;
   /** What the planner expected this part to produce. Null means unstated, which reads as `code`. */
   expectedKind: PartOutcomeKind | null;
+  /**
+   * The model profile this part's own work should run on (issue #342), or null to
+   * inherit the goal's pin — which is the common case and the one the planner
+   * should leave alone.
+   *
+   * Named by the planner, because it is the stage that knows: it has just cut the
+   * decomposition, and the part it made narrow enough to state acceptance
+   * criteria for is the part it can price. Overridable from the cockpit, since a
+   * plan is a proposal and this is one of its claims.
+   *
+   * A plain string for {@link PlanPart.slug}'s neighbours' reason — a profile
+   * this deployment no longer configures reads back as what the plan said, and
+   * `resolveAgentProfile` falls through to the rule rather than resolving to
+   * nothing.
+   *
+   * Optional on the same terms as {@link Task.model}: every stored row has it,
+   * and a caller building a part in a test has one fewer field to state.
+   */
+  profile?: string | null;
   /** What it actually produced, written when it concludes. Null until then; a merged part derives `code`. */
   outcomeKind: PartOutcomeKind | null;
   /** Optional evidence for a concluded part — `flag:<id>` or `finding:<id>`. */
@@ -1990,7 +2050,17 @@ export interface PlanPart {
 /** A part as the planner declared it, before the store assigns identity or progress. */
 export type PlanPartInput = Pick<
   PlanPart,
-  'slug' | 'seq' | 'title' | 'scope' | 'touches' | 'dependsOn' | 'rationale' | 'acceptance' | 'size' | 'expectedKind'
+  | 'slug'
+  | 'seq'
+  | 'title'
+  | 'scope'
+  | 'touches'
+  | 'dependsOn'
+  | 'rationale'
+  | 'acceptance'
+  | 'size'
+  | 'expectedKind'
+  | 'profile'
 >;
 
 /** One cumulative usage report from a session's turn-end `result` event. */

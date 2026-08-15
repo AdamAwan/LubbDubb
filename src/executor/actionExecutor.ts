@@ -839,7 +839,12 @@ export class ActionExecutor {
     // as one profile and stored — so a resumed agent re-launches on what it
     // started on rather than on whatever config says by then, and so the run's
     // cost is readable against what it ran on.
-    const profile = resolveAgentProfile(this.deps.agentModels, action.rule);
+    //
+    // `action.profile` is the origin's pin, stamped by the dispatcher from the
+    // goal's tag or the plan's part (issue #342). It beats the rule's entry and
+    // is still a pure function of the dispatch, so a retry, a re-dispatch and a
+    // boot-resume all land on the same profile they did the first time.
+    const profile = resolveAgentProfile(this.deps.agentModels, action.rule, action.profile);
     if (action.type === 'dispatch_code_agent')
       return store.createTask({
         kind: 'code',
@@ -857,6 +862,8 @@ export class ActionExecutor {
         ciChecks: action.ciChecks ?? null,
         model: profile?.model ?? null,
         effort: profile?.effort ?? null,
+        profile: profile?.name ?? null,
+        profileSource: profile?.source ?? null,
       });
     return store.createTask({
       kind: 'desk',
@@ -870,6 +877,8 @@ export class ActionExecutor {
       rule: action.rule,
       model: profile?.model ?? null,
       effort: profile?.effort ?? null,
+      profile: profile?.name ?? null,
+      profileSource: profile?.source ?? null,
     });
   }
 

@@ -40,6 +40,8 @@ export const PLAN_COLUMNS: ColumnMigrations = {
     acceptance_met: 'TEXT',
     size: 'TEXT',
     expected_kind: 'TEXT',
+    /** The profile this part's work runs on — see {@link PlanPart.profile}. */
+    profile: 'TEXT',
     outcome_kind: 'TEXT',
     outcome_ref: 'TEXT',
     outcome_summary: 'TEXT',
@@ -222,6 +224,7 @@ export class PlanStore {
         acceptanceMet: prev?.acceptanceMet ?? [],
         size: input.size,
         expectedKind: input.expectedKind,
+        profile: input.profile,
         // Progress, not declaration — an amendment re-declaring a part must not
         // wipe an outcome it already reached. Same split as branch/prNumber below.
         outcomeKind: prev?.outcomeKind ?? null,
@@ -247,16 +250,16 @@ export class PlanStore {
       // do `touches` and `size`. `acceptance_met` is not a declaration at all — it
       // is a reviewer's confirmations — so it sits with the outcome columns.
       `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, touches, rationale, acceptance,
-         acceptance_met, size, expected_kind,
+         acceptance_met, size, expected_kind, profile,
          outcome_kind, outcome_ref, outcome_summary, depends_on, branch, pr_number, status, blocked_reason,
          task_id, created_at, updated_at)
        VALUES (@id, @planId, @slug, @seq, @title, @scope, @touches, @rationale, @acceptance,
-         @acceptanceMet, @size, @expectedKind,
+         @acceptanceMet, @size, @expectedKind, @profile,
          @outcomeKind, @outcomeRef, @outcomeSummary, @dependsOn, @branch, @prNumber, @status, @blockedReason,
          @taskId, @createdAt, @updatedAt)
        ON CONFLICT(plan_id, slug) DO UPDATE SET seq=excluded.seq, title=excluded.title, scope=excluded.scope,
          touches=excluded.touches, rationale=excluded.rationale, acceptance=excluded.acceptance,
-         size=excluded.size, expected_kind=excluded.expected_kind,
+         size=excluded.size, expected_kind=excluded.expected_kind, profile=excluded.profile,
          depends_on=excluded.depends_on, updated_at=excluded.updated_at`,
     );
     const insertAll = this.ctx.db.transaction((all: PlanPart[]) => {
@@ -341,6 +344,28 @@ export class PlanStore {
       .prepare(`UPDATE plan_parts SET acceptance_met=?, updated_at=? WHERE id=?`)
       .run(JSON.stringify(criteria), updatedAt, id);
     return { ...rowToPlanPart(row), acceptanceMet: criteria, updatedAt };
+  }
+
+  /**
+   * Override which model profile one part's work runs on (issue #342) — the
+   * operator's arm of a claim the planner made.
+   *
+   * Null clears it, and clearing is not the same as naming the goal's profile: a
+   * cleared part *inherits*, so a later re-pin of the goal moves it too, while a
+   * named one stays where it was put. That is the distinction a two-state
+   * "overridden or not" flag would lose.
+   *
+   * Deliberately not guarded on status. A part already dispatched keeps the
+   * profile its task row stored — resolution happened once, at dispatch — so
+   * writing this only ever changes what a *future* dispatch of it costs, which is
+   * exactly what an operator re-pricing a retry is asking for.
+   */
+  setPartProfile(id: string, profile: string | null): PlanPart | null {
+    const row = this.ctx.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
+    if (!row) return null;
+    const updatedAt = this.ctx.now();
+    this.ctx.db.prepare(`UPDATE plan_parts SET profile=?, updated_at=? WHERE id=?`).run(profile, updatedAt, id);
+    return { ...rowToPlanPart(row), profile, updatedAt };
   }
 
   /**
@@ -539,6 +564,8 @@ interface PlanPartRow {
   acceptance_met: string | null | undefined;
   size: string | null | undefined;
   expected_kind: string | null | undefined;
+  /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
+  profile: string | null | undefined;
   outcome_kind: string | null | undefined;
   outcome_ref: string | null | undefined;
   outcome_summary: string | null | undefined;
@@ -589,6 +616,7 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
     acceptanceMet: parseStringArray(r.acceptance_met),
     size: partSizeOf(r.size),
     expectedKind: partOutcomeKindOf(r.expected_kind),
+    profile: r.profile ?? null,
     outcomeKind: partOutcomeKindOf(r.outcome_kind),
     outcomeRef: r.outcome_ref ?? null,
     outcomeSummary: r.outcome_summary ?? null,
@@ -744,6 +772,7 @@ function parseRevisionParts(raw: string): PlanPartInput[] {
           acceptance: text('acceptance'),
           size: partSizeOf(text('size')),
           expectedKind: partOutcomeKindOf(text('expectedKind')),
+          profile: text('profile'),
         },
       ];
     });

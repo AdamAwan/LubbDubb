@@ -63,6 +63,20 @@ const part = {
   base: z.string().min(1).nullable().default(null),
 };
 
+/**
+ * The model profile this dispatch's origin is pinned to (issue #342) — a goal's
+ * tag, or the profile its plan named for this part. Null for the ordinary case,
+ * which is a dispatch priced by its rule.
+ *
+ * Carried on the action rather than resolved at the executor because the pin is a
+ * property of the *world* — a label on a ticket, a field on a plan row — and the
+ * executor sees neither. Stamped in one place, where a candidate clears the
+ * headroom cut, so no rule can compose a dispatch that quietly loses it.
+ */
+const pin = {
+  profile: z.string().min(1).nullable().default(null),
+};
+
 const ActionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('dispatch_code_agent'),
@@ -89,6 +103,7 @@ const ActionSchema = z.discriminatedUnion('type', [
     ...origin,
     ...job,
     ...part,
+    ...pin,
     ...base,
   }),
   z.object({
@@ -98,6 +113,7 @@ const ActionSchema = z.discriminatedUnion('type', [
     originRef: z.string().nullable().default(null),
     ...origin,
     ...job,
+    ...pin,
     ...base,
   }),
   z.object({

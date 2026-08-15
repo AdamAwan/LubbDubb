@@ -83,6 +83,21 @@ const PartSchema = z.object({
    * otherwise wait for a merge — no second blocking mechanism, and none needed.
    */
   expectedKind: z.enum(['code', 'report', 'determination', 'human']).optional(),
+  /**
+   * The model profile this part's own work should run on (issue #342). Absent
+   * means the planner did not single this part out, and it inherits the goal's
+   * pin — which is what most parts should do, and what every plan written before
+   * this existed does.
+   *
+   * Not enumerated here, for {@link expectedKind}'s reason pointed at a different
+   * problem: the valid names are the operator's `agentModels.profiles`, which
+   * this schema cannot see, and an override template or an older plan naming a
+   * profile since renamed must still validate rather than failing a whole
+   * decomposition over one word. An unrecognised name falls through to the
+   * goal's pin at dispatch (`resolveAgentProfile`), which is the same place a
+   * mistyped tag lands.
+   */
+  profile: z.string().min(1).optional(),
 });
 
 /**
@@ -285,6 +300,7 @@ export function planPartInputs(doc: PlanDocument): PlanPartInput[] {
     acceptance: part.acceptance ?? null,
     size: part.size ?? null,
     expectedKind: part.expectedKind ?? null,
+    profile: part.profile ?? null,
   }));
 }
 

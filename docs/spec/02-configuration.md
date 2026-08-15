@@ -107,14 +107,14 @@ resolve them against the wrong directory:
 
 ### Dispatch behaviour
 
-| Key                   | Type            | Default                                                                          | Behaviour                                                                                                                                                                                                                                               |     |
-| --------------------- | --------------- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
-| `autoSend`            | object          | `{ enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] }` | The confidence gate on side-effectful actions. See [09](09-execution.md).                                                                                                                                                                               |     |
-| `promptTemplatesDir`  | `string`        | `.lubbdubb/prompts`                                                              | Directory of `<prompt-id>.md` overrides, read once at boot. Absent directory = all built-in defaults.                                                                                                                                                   |     |
-| `closedPrWindowMs`    | `number`        | `21600000` (6h)                                                                  | How far back providers look for PRs that left the open set. `0` disables the lookup entirely.                                                                                                                                                           |     |
-| `upNextOverrideTtlMs` | `number`        | `604800000` (7d)                                                                 | How long an operator "Up next" priority override (issue #128) survives after its origin stops being tracked. `0` disables pruning.                                                                                                                      |     |
-| `reviewReminderMs`    | `number`        | `172800000` (2d)                                                                 | How long a pull request may sit on a reviewer before the cockpit puts an age on its court chip. **Display only** — nothing dispatches, escalates or enters "Needs you" at this or any threshold. `0` shows the age from the first pulse it is observed waiting.                                        |     |
-| `ci.checks`           | `CiCheckRule[]` | `[]`                                                                             | Per-check CI policy: what rule `pr-ci-failing` does about _which_ check went red. Ordered, first match wins, replaced wholesale by an override. Empty — and any check matching no rule — is the pre-policy behaviour: dispatch a code agent. See below. |     |
+| Key                   | Type            | Default                                                                          | Behaviour                                                                                                                                                                                                                                                       |     |
+| --------------------- | --------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
+| `autoSend`            | object          | `{ enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] }` | The confidence gate on side-effectful actions. See [09](09-execution.md).                                                                                                                                                                                       |     |
+| `promptTemplatesDir`  | `string`        | `.lubbdubb/prompts`                                                              | Directory of `<prompt-id>.md` overrides, read once at boot. Absent directory = all built-in defaults.                                                                                                                                                           |     |
+| `closedPrWindowMs`    | `number`        | `21600000` (6h)                                                                  | How far back providers look for PRs that left the open set. `0` disables the lookup entirely.                                                                                                                                                                   |     |
+| `upNextOverrideTtlMs` | `number`        | `604800000` (7d)                                                                 | How long an operator "Up next" priority override (issue #128) survives after its origin stops being tracked. `0` disables pruning.                                                                                                                              |     |
+| `reviewReminderMs`    | `number`        | `172800000` (2d)                                                                 | How long a pull request may sit on a reviewer before the cockpit puts an age on its court chip. **Display only** — nothing dispatches, escalates or enters "Needs you" at this or any threshold. `0` shows the age from the first pulse it is observed waiting. |     |
+| `ci.checks`           | `CiCheckRule[]` | `[]`                                                                             | Per-check CI policy: what rule `pr-ci-failing` does about _which_ check went red. Ordered, first match wins, replaced wholesale by an override. Empty — and any check matching no rule — is the pre-policy behaviour: dispatch a code agent. See below.         |     |
 
 #### Per-check CI policy (`ci.checks`)
 
@@ -270,13 +270,13 @@ reading the file is not the same as knowing the policy.
 | `claudeCommand`         | `string`                        | `'claude'`              | The command spawned for an agent.                                                                                                                                                                                                                                                                                                                                                                                                |
 | `claudeArgs`            | `string[]`                      | `[]`                    | Extra args, appended **after** the harness's own, so an explicit flag there has the last word.                                                                                                                                                                                                                                                                                                                                   |
 | `agentPermissionMode`   | `string`                        | `'acceptEdits'`         | Passed to `--permission-mode`. `acceptEdits` auto-accepts file edits only. `bypassPermissions` maps to `--dangerously-skip-permissions`, which `claude` refuses under root.                                                                                                                                                                                                                                                      |
-| `agentModels`           | `AgentModels` (optional)        | unset                   | Which model each kind of work runs on and how hard, keyed on the dispatch rule that proposed it (issue #321). Named profiles, a `default` and per-rule assignments; resolved once at dispatch and stored on the task. Omitted, no launch carries `--model` or `--effort`. See [Model assignment](#model-assignment-by-rule) below and [10](10-agent-runtimes.md#launch-arguments).                                                                             |
+| `agentModels`           | `AgentModels` (optional)        | unset                   | Which model each kind of work runs on and how hard, keyed on the dispatch rule that proposed it (issue #321). Named profiles, a `default` and per-rule assignments; resolved once at dispatch and stored on the task. Omitted, no launch carries `--model` or `--effort`. See [Model assignment](#model-assignment-by-rule) below and [10](10-agent-runtimes.md#launch-arguments).                                               |
 | `agentAllowedTools`     | `string[]`                      | JS toolchain + git + gh | Tool allow rules merged into `--settings` as `permissions.allow` (Claude Code syntax, e.g. `Bash(npm:*)`). Pre-approves the mechanical validate/commit/push commands so the default config completes a task unattended without `bypassPermissions`. Never on `--allowedTools` (that carries the MCP grants). Default: `Bash(npm:*)`, `Bash(npx:*)`, `Bash(pnpm:*)`, `Bash(yarn:*)`, `Bash(node:*)`, `Bash(git:*)`, `Bash(gh:*)`. |
 | `agentPromptDelayMs`    | `number`                        | `1200`                  | Delay before the first message is delivered, giving an interactive REPL time to boot. Stream mode uses `0`.                                                                                                                                                                                                                                                                                                                      |
 | `agentSubmitDelayMs`    | `number`                        | `60`                    | PTY only: gap between writing message text and writing the submitting carriage return.                                                                                                                                                                                                                                                                                                                                           |
 | `agentIdleWaitMs`       | `number`                        | `90000`                 | PTY (real TUI) only: park a session as waiting after this long with no terminal output. `0` disables. Unlatched — output un-parks it.                                                                                                                                                                                                                                                                                            |
 | `agentWaitingPatterns`  | `string[]`                      | `[]`                    | Extra literal substrings a PTY session treats as "waiting for input".                                                                                                                                                                                                                                                                                                                                                            |
-| `agentResumeAttempts`   | `number`                        | `3`                     | How many times a live agent whose process dies mid-run is re-attached to its own session before it is settled as `failed` (issue #318). Counted on `agents.resume_attempts`, so the budget spans the agent's whole life and survives a restart. `0` disables auto-resume; ignored by runtimes that cannot resume.                                                                                                                 |
+| `agentResumeAttempts`   | `number`                        | `3`                     | How many times a live agent whose process dies mid-run is re-attached to its own session before it is settled as `failed` (issue #318). Counted on `agents.resume_attempts`, so the budget spans the agent's whole life and survives a restart. `0` disables auto-resume; ignored by runtimes that cannot resume.                                                                                                                |
 | `whitelistedApprovals`  | `{match, response}[]`           | `[]`                    | Waiting prompts containing `match` are auto-answered with `response` instead of escalating.                                                                                                                                                                                                                                                                                                                                      |
 | `sessionTranscriptRoot` | `string` (optional)             | `~/.claude/projects`    | Where Claude Code writes session transcripts, which PTY mode tails. Override only if the agent runs under a different HOME.                                                                                                                                                                                                                                                                                                      |
 | `docsFolderPrefix`      | `string \| string[]` (optional) | unset                   | Folder(s) whose files are promoted to artifact chips regardless of extension. Absolute entries also widen the artifact-serving boundary.                                                                                                                                                                                                                                                                                         |
@@ -291,9 +291,9 @@ a model per _kind_ of work:
 {
   "agentModels": {
     "profiles": {
-      "fast": { "model": "haiku" },
-      "standard": { "model": "sonnet", "effort": "medium" },
-      "deep": { "model": "opus", "effort": "medium" }
+      "fast": { "model": "haiku", "rank": 1, "description": "Mechanical, well-specified work." },
+      "standard": { "model": "sonnet", "effort": "medium", "rank": 2, "description": "Ordinary feature and bug work." },
+      "deep": { "model": "opus", "effort": "medium", "rank": 3, "description": "Work whose shape is unclear." }
     },
     "default": "deep",
     "byRule": { "pr-ci-gate": "fast", "issue-retro": "fast", "issue-assess": "standard" }
@@ -314,9 +314,17 @@ a model per _kind_ of work:
 - **The two fields resolve together, as one profile.** A lookup that fell back for the model and not
   the effort could pair a cheap model with a depth chosen for an expensive one, so `resolveAgentProfile`
   returns a whole profile or nothing.
+- **A profile also carries a `rank` and a `description`, and both are required.** Neither reaches the
+  command line, so neither widens the one-escape-hatch property above. `rank` orders the profiles
+  cheapest-first and must be unique: it is what lets the goal-profile gate say whether a proposal is
+  _cheaper_ or _deeper_ than what is standing, and what orders the cockpit's dropdowns. Declaration
+  order was the alternative and is not one — a key's position in a JSON object is not a value, and
+  reordering the block would silently re-rank the fleet. `description` is the whole of what the
+  assayer is told about a deployment's profiles when it proposes one, so it is written as
+  instructions to an agent about when to pick this profile rather than as a note to the operator.
 - **`effort` is optional, and omitting it is not the middle setting.** `claude --effort` takes
   `low`/`medium`/`high`/`xhigh`/`max`, and the CLI's own default is the top of that ladder — so an
-  unassigned rule is the *expensive* one, not the neutral one. This is the argument for setting
+  unassigned rule is the _expensive_ one, not the neutral one. This is the argument for setting
   `default`: a policy that covers only some rules leaves the rest at the CLI's default depth.
   A profile that omits `effort` passes no flag, which is what the smallest models need — they refuse
   the flag outright, so a cheap model and a shallow depth are alternative levers, not composable ones.
@@ -342,6 +350,11 @@ from `loadConfig` (not only `loadDeploymentConfig`, or no test could reach it):
   rather than starting it with a profile the resolver reads as having no model;
 - an `effort` that is not one of the five levels, which would otherwise reach the CLI as a flag value
   it rejects — at spawn, per agent, rather than once at boot;
+- a missing or non-numeric `rank`, a missing or empty `description`, or two profiles sharing a rank.
+  The first two are refused rather than defaulted because both have a _silent_ wrong answer available:
+  an inferred rank reads as a deliberate ordering, and an empty description makes every assay proposal
+  a guess that looks exactly like a judgement. A shared rank is refused because "deeper or cheaper
+  than what is standing" then has no answer;
 - a `default` or `byRule` value naming a profile that is not in `profiles`, which would otherwise
   launch with no flag and read as working;
 - a `byRule` key that is not a **pipeline** rule id. Validated against `DISPATCH_PIPELINE` rather than
@@ -368,8 +381,101 @@ not sitting in the middle of the range — it is at the expensive end of it, whi
 that motivates configuring the block at all.
 
 Resolution happens **once, at dispatch** (`ActionExecutor.recordDispatchTask`), and the resolved
-_strings_ — not the profile name — are stored on the task as `model` and `effort` — see [10](10-agent-runtimes.md#launch-arguments) and
-[14](14-persistence.md).
+_strings_ are stored on the task as `model` and `effort`, beside the `profile` name they came from and
+the `profileSource` that names which level of the chain below answered — see
+[10](10-agent-runtimes.md#launch-arguments) and [14](14-persistence.md).
+
+### Pinning one goal to a profile
+
+`byRule` prices work by **kind**, which is right as the default axis — it is the vocabulary
+`Task.rule`, the decision log and `rollUpTaskTypes` already share. It has no answer for the case an
+operator actually hits: _this issue is harder than the rule it arrived on._ Editing config moves every
+`issue-pickup` in the fleet, which is both too big and too slow to be the answer to one hard ticket
+(issue #342).
+
+The answer is a **tag on the ticket**:
+
+```
+${labelPrefix}-model-<profile>
+```
+
+written through `connector.setIssueLabel` — the same seam, and the same gesture, as the watch toggle,
+so Azure DevOps needs no separate answer. Writing one clears the others, as `watch` clears `ignore`.
+
+The chain a dispatch resolves through is then three levels, in `resolveAgentProfile`:
+
+| Level     | Where it comes from                            | `Task.profileSource` |
+| --------- | ---------------------------------------------- | -------------------- |
+| pin       | the plan part's `profile`, else the goal's tag | `pin`                |
+| `byRule`  | the dispatch rule that proposed the run        | `rule`               |
+| `default` | the fleet-wide fallback                        | `default`            |
+| —         | nothing configured: pass neither flag          | (null)               |
+
+- **The pin is keyed on the origin, never on the run.** That is what keeps `resolveAgentProfile` pure:
+  a retry runs the same profile, a re-dispatch resolves the same one, and a boot-resumed agent
+  re-launches on what its task row stored. Escalating on attempt count would break all three, and is a
+  separate argument — see [10](10-agent-runtimes.md#launch-arguments).
+- **It wins in both directions.** A pin is not an escalation; the same mechanism pins one noisy goal to
+  the cheapest profile. The word is _pin_, not _bump_, for exactly that reason — you name a profile,
+  not a direction.
+- **It reaches every dispatch on that issue's origins, with two carve-outs.** `issue-retro` runs on its
+  `byRule` entry whatever the goal is pinned to: a retrospective **gates nothing**, so inheriting a deep
+  pin is real money on a write-up no dispatch reads. `issue-assay` runs on its own entry because it is
+  the stage that _produces_ the pin. Both are declared in `UNPINNED_SUFFIXES` in `src/profilePin.ts`.
+  Nothing outside the `issue:<n>` subtree is pinned at all, so the CI and review rules on a pull request
+  the work produced resolve on `byRule` — following a pin down that lineage is a second mechanism.
+- **A tag naming no configured profile is ignored, and never parks anything.** Config is the operator's
+  own file and is refused at boot by name; a label is typed on a ticket by a human the harness cannot
+  refuse, so the only choices are falling back to the rule's entry or parking a watched issue over a
+  typo. `resolveModelTag` falls back and reports the tag it ignored, which the cockpit draws. Two valid
+  tags resolve to the **deeper** one — ranks are unique, so there is always an answer, and quietly
+  taking the cheaper of two is the failure that reads as ordinary output.
+- **A plan may name a profile per part**, which beats the goal's pin for that part alone. The planner
+  writes it, because it is the stage that just cut the decomposition and knows which part is the hairy
+  one; the cockpit can override it. Clearing a part's profile is not the same as naming the goal's:
+  a cleared part _inherits_, so re-pinning the goal later moves it too.
+- **Nothing needs enabling.** Pins are on wherever `labelPrefix` and `agentModels.profiles` are both
+  set, and off — completely, with no control drawn — where either is missing.
+
+#### The gate: the assayer proposes, a human confirms
+
+`assay_issue` asks the assayer for a profile alongside its `workable`/`unclear` verdict, enumerating
+this deployment's own profiles with their descriptions. The assayer is the right author because it is
+the only stage that reads the ticket against the repository **before** anything is spent, and it is
+already dispatched in front of every fresh issue. It necessarily runs on its own `byRule` entry.
+
+Naming the operator's profiles directly, rather than an abstract difficulty scale, deletes the
+`byDifficulty` mapping table a scale would have needed — and the mapping is exactly where the meaning
+would be lost, since an operator who splits `deep` into two knows what the two are for and a fixed
+vocabulary cannot be told.
+
+**A proposal that differs from what is already standing holds the funnel** until a human answers it,
+as a second arm on `assayHold` — see [06](06-issue-pickup.md). Blocking rather than informing, for the
+reason the `unclear` arm blocks: informing is what the cockpit already does for every verdict, and the
+dispatch the gate exists to price correctly would happen anyway. What makes it safe is what makes the
+first arm safe:
+
+- **An absent proposal holds nothing.** An assayer that crashes, is killed, spends its attempt cap or
+  simply names no profile leaves the issue to the funnel it would have entered anyway, on its rule's
+  own entry. So does every `unclear` verdict — a goal nobody could start from has no work to size.
+- **Agreement holds nothing, and costs no click.** The divergence is decided **once**, where the
+  proposal is written and the ticket's tag and the operator's config are both in hand
+  (`AgentManager.recordAssay`), and a proposal that matched what was standing is stored already
+  answered. So the gate itself is a two-field read with no config threaded into it, and no caller can
+  forget a lookup and gate the whole fleet by accident.
+- **The answer is recorded, not the choice.** The operator's click writes the tag _and_ stamps
+  `issue_assays.profile_answered_at`. What was chosen is the tag; a second copy of it on the row would
+  be free to drift. This is also why "keep mine" works — the tag goes on deliberately disagreeing with
+  the assayer, and a gate that re-read the disagreement would ask the same question for ever.
+- **It does not expire on world signal**, unlike the `unclear` arm. A comment or a link is how a human
+  answers "I could not act on this goal"; it is not how they authorise spending more than the rule
+  allows. Three things end it: the operator answering, the ticket being rewritten (a new fingerprint,
+  so a re-assay proposes against the current text), and `clearAssay`.
+
+The tag therefore holds the **resolved answer**, not an operator override sitting beside an inferred
+one — which is what collapses the precedence chain to one lookup at dispatch. Who decided is still
+answerable: the assay row keeps what was proposed, and a difference between it and the tag is a human
+having intervened.
 
 ### Provider targets
 
