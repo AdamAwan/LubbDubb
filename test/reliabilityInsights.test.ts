@@ -38,6 +38,8 @@ function agent(id: string, status: AgentStatus, over: Partial<Agent> = {}): Agen
     costUsd: 1,
     inputTokens: 1000,
     outputTokens: 100,
+    cacheReadTokens: null,
+    cacheCreationTokens: null,
     numTurns: 3,
     note: null,
     notedAt: null,

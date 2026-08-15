@@ -104,6 +104,8 @@ function agent(over: Partial<Agent>): Agent {
     costUsd: null,
     inputTokens: null,
     outputTokens: null,
+    cacheReadTokens: null,
+    cacheCreationTokens: null,
     numTurns: null,
     note: null,
     notedAt: null,

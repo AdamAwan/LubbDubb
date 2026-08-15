@@ -31,14 +31,32 @@ test('recordAgentUsage stores cumulative values and window-sums the deltas', () 
   const agent = store.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
   assert.equal(store.getAgent(agent.id)!.costUsd, null);
 
-  store.recordAgentUsage(agent.id, { costUsd: 0.5, inputTokens: 1000, outputTokens: 200, numTurns: 1 });
+  store.recordAgentUsage(agent.id, {
+    costUsd: 0.5,
+    inputTokens: 1000,
+    outputTokens: 200,
+    cacheReadTokens: 600,
+    cacheCreationTokens: 300,
+    numTurns: 1,
+  });
   at = '2026-07-22T12:00:00.000Z';
-  store.recordAgentUsage(agent.id, { costUsd: 1.25, inputTokens: 5000, outputTokens: 900, numTurns: 2 });
+  store.recordAgentUsage(agent.id, {
+    costUsd: 1.25,
+    inputTokens: 5000,
+    outputTokens: 900,
+    cacheReadTokens: 4200,
+    cacheCreationTokens: 400,
+    numTurns: 2,
+  });
 
   const after = store.getAgent(agent.id)!;
   assert.equal(after.costUsd, 1.25); // cumulative, not summed
   assert.equal(after.inputTokens, 5000);
   assert.equal(after.outputTokens, 900);
+  // The cached split is cumulative on the same terms, and is a *part* of the
+  // input rather than a sibling total — fresh input is the subtraction, 400.
+  assert.equal(after.cacheReadTokens, 4200);
+  assert.equal(after.cacheCreationTokens, 400);
   assert.equal(after.numTurns, 2);
 
   // Both deltas (0.5 + 0.75) fall in a window opened before the first report…
@@ -52,8 +70,22 @@ test('a regressed cumulative total never produces a negative window delta', () =
   const store = new Store(':memory:', () => '2026-07-22T10:00:00.000Z');
   const task = store.createTask({ kind: 'code', title: 't', prompt: 'p', branch: null, originRef: null });
   const agent = store.createAgent({ taskId: task.id, cwd: '/tmp', pid: null });
-  store.recordAgentUsage(agent.id, { costUsd: 1.0, inputTokens: null, outputTokens: null, numTurns: null });
-  store.recordAgentUsage(agent.id, { costUsd: 0.2, inputTokens: null, outputTokens: null, numTurns: null });
+  store.recordAgentUsage(agent.id, {
+    costUsd: 1.0,
+    inputTokens: null,
+    outputTokens: null,
+    cacheReadTokens: null,
+    cacheCreationTokens: null,
+    numTurns: null,
+  });
+  store.recordAgentUsage(agent.id, {
+    costUsd: 0.2,
+    inputTokens: null,
+    outputTokens: null,
+    cacheReadTokens: null,
+    cacheCreationTokens: null,
+    numTurns: null,
+  });
   assert.equal(store.sumUsageCostSince('2026-07-22T00:00:00.000Z'), 1.0);
   store.close();
 });
@@ -268,6 +300,11 @@ test('stream mode: result usage lands on the agent row and in the snapshot windo
   assert.equal(agent.costUsd, 0.42);
   assert.equal(agent.inputTokens, 900 + 4000 + 55_000, 'cache tokens count as input');
   assert.equal(agent.outputTokens, 350);
+  // …and are also kept apart, because the gross figure alone cannot say whether
+  // that input was cheap. A read bills at a fraction of a fresh token: 55k of
+  // this run's 59.9k input was already warm, and only 900 tokens were fresh.
+  assert.equal(agent.cacheReadTokens, 55_000);
+  assert.equal(agent.cacheCreationTokens, 4000);
   assert.equal(agent.numTurns, 6);
 
   const snap = await buildStateSnapshot(system);

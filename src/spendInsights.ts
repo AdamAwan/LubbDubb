@@ -109,6 +109,30 @@ interface SpendTotals {
   costUsd: number;
   inputTokens: number;
   outputTokens: number;
+  /**
+   * The cached share of the input, split the two ways it is priced: a read at a
+   * fraction of a fresh token, a write at a premium. Both are *parts* of
+   * {@link SpendTotals.inputTokens} and never additions to it.
+   *
+   * This is the panel's one actionable token reading. Cost already has the cache
+   * discount baked in (it comes from the provider), so no figure derived from
+   * cost can say whether the fleet is getting that discount — only this can, and
+   * a fleet whose read share collapses is one paying full price for context it
+   * had already paid to warm.
+   */
+  cacheReadTokens: number;
+  cacheCreationTokens: number;
+  /**
+   * The gross input of the runs the two figures above are summed over — the
+   * denominator the hit rate is a fraction *of*, and never `inputTokens`.
+   *
+   * They differ, and the difference is the whole reason this is shipped: a run
+   * from before the split was recorded reports a gross input and no breakdown at
+   * all, so dividing by the fleet's whole input would read those runs as a 0%
+   * hit rate rather than as unmeasured. Same stance as
+   * {@link SpendTotals.unmeasuredRuns}, one grain finer.
+   */
+  cacheMeasuredInputTokens: number;
   turns: number;
   /** Runs the totals are over: every agent that reported any usage at all. */
   measuredRuns: number;
@@ -288,6 +312,9 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
     costUsd: 0,
     inputTokens: 0,
     outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheCreationTokens: 0,
+    cacheMeasuredInputTokens: 0,
     turns: 0,
     measuredRuns: 0,
     unmeasuredRuns: 0,
@@ -318,6 +345,15 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
     totals.costUsd = roundUsd(totals.costUsd + cost);
     totals.inputTokens += inputTokens;
     totals.outputTokens += outputTokens;
+    // Both-or-neither, and the run's own input alongside them: the two columns
+    // are written in one breath by `recordAgentUsage`, so a run carrying one and
+    // not the other is a shape that cannot occur — testing both is what keeps a
+    // future half-write out of the denominator rather than silently at 0%.
+    if (agent.cacheReadTokens !== null && agent.cacheCreationTokens !== null) {
+      totals.cacheReadTokens += agent.cacheReadTokens;
+      totals.cacheCreationTokens += agent.cacheCreationTokens;
+      totals.cacheMeasuredInputTokens += inputTokens;
+    }
     totals.turns += agent.numTurns ?? 0;
     totals.measuredRuns += 1;
 

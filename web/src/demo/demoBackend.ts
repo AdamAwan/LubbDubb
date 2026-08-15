@@ -929,6 +929,8 @@ class DemoServer {
         costUsd: null,
         inputTokens: null,
         outputTokens: null,
+        cacheReadTokens: null,
+        cacheCreationTokens: null,
         numTurns: null,
         // A fresh agent has said nothing yet — the card falls back to its output
         // tail, which is exactly the state note_progress must not paper over.
@@ -1421,6 +1423,13 @@ const demoTokens = (costUsd: number) => ({
   outputTokens: Math.round(costUsd * 9_000),
 });
 
+/** The cached share of {@link demoTokens}'s input: a fleet reading ~78% from cache. */
+const demoCache = (costUsd: number) => ({
+  cacheReadTokens: Math.round(costUsd * 140_000),
+  cacheCreationTokens: Math.round(costUsd * 11_000),
+  cacheMeasuredInputTokens: Math.round(costUsd * 180_000),
+});
+
 const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
   deliberation: { label: 'Deliberation', blurb: 'Planning and assaying — deciding what the work is' },
   build: { label: 'Build', blurb: 'The pickup and every part — where a branch is cut and a PR is written' },
@@ -1814,6 +1823,11 @@ function buildDemoSpend(): SpendInsights {
     totals: {
       costUsd,
       ...demoTokens(costUsd),
+      // A warm fleet: most of the input is cache reads, a slice of it writes.
+      // The demo's whole input carries a breakdown, so the panel's "share is
+      // over the runs that reported one" caveat stays off screen here — the
+      // unmeasured-runs caveat below is the one this fixture is making.
+      ...demoCache(costUsd),
       turns: 268,
       measuredRuns,
       // Two PTY runs, so the panel's "unmeasured, not free" caveat is on screen

@@ -114,7 +114,8 @@ Two mode-specific sources that must not be conflated.
 
 - **Stream mode** — each `result` event's cumulative `total_cost_usd` / `usage` / `num_turns` is
   recorded by `Store.recordAgentUsage`: the cumulative values onto the `agents` row (cache tokens
-  folded into input), and the cost **delta** as a timestamped `usage_events` row.
+  folded into input, **and** kept apart beside it — see below), and the cost **delta** as a
+  timestamped `usage_events` row.
 - **PTY mode** — reports no per-turn usage. It instead captures the account rate limits from the
   status-line payload (`StatusFileRateLimits`), which is the one programmatic surface for the Pro/Max
   5h and weekly windows.
@@ -140,12 +141,33 @@ from them inherits the difference.
 
 The consequence is that **cost ÷ tokens is not a rate card**: the discount lands in the numerator and
 never in the denominator, so a fleet with warm caches reads as far cheaper per million tokens than
-any published price. That ratio is worth showing — it is the only measure the harness holds of how
-much cache the fleet is getting — but it has to be labelled as such, which is what the Spend panel's
-note does ([17](17-cockpit.md#spend)).
+any published price. That ratio was for a long time the only measure the harness held of how much
+cache the fleet was getting; it is a proxy, and it is no longer the reading the panel leads with.
 
 `usage_events` rows carry the same net-of-cache dollars, so the rolling windows and the daily trend
 inherit this without further comment.
+
+### The cached share is stored, not inferred
+
+`resultUsage` also keeps `cache_read_input_tokens` and `cache_creation_input_tokens` **apart** from
+the sum, as `cacheReadTokens` / `cacheCreationTokens` on `AgentUsage` and the `agents` row. They are
+**parts of `inputTokens`, never siblings of it** — nothing that already sums the gross figure changes
+meaning, and fresh input is the subtraction.
+
+The reason is that the two components are priced an order of magnitude apart, so the gross figure
+cannot distinguish the two fleets an operator most needs to tell apart: one reading 90% of its input
+from cache, and one reading none. They report identical `inputTokens` and very different bills — and
+because `costUsd` arrives with the discount already applied, no figure derived from cost can separate
+them either. This split is the only reading in the harness that can, which is what makes it the one
+token figure a deployment can act on.
+
+Both are **null on a row from before the columns existed**, and that is load-bearing rather than
+incidental: those runs measured a gross figure and nothing about its cache share, so they are left
+out of the fraction rather than counted as misses. `buildSpendInsights` therefore ships
+`cacheMeasuredInputTokens` — the gross input of the runs the split is summed over — beside the two
+figures, and the hit rate is a fraction **of that**, never of `totals.inputTokens`. It is the same
+stance `unmeasuredRuns` takes one grain coarser: a figure that is silent about how much of the fleet
+it speaks for reads as complete.
 
 ## Per-goal spend
 

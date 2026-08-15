@@ -1061,10 +1061,15 @@ Four pictures, in the order the questions arrive:
 **The method note is part of the panel, not a footnote**, and it sits level with the figures it
 qualifies rather than three screens below them. It states the one thing the numbers cannot: dollars are
 the provider's own, already net of cache pricing, while tokens are gross with cache reads and writes
-folded into input — so the tile's dollars-per-million-input-tokens is a measure of how much cache the
-fleet is getting and never a rate card
-([18](18-observability.md#dollars-are-net-of-cache-tokens-are-gross)). It also names the unmeasured
-runs, which appear in no figure above it.
+folded into input ([18](18-observability.md#dollars-are-net-of-cache-tokens-are-gross)) — which is why
+the tokens tile's second line is **the cached share of the input** and not a dollars-per-million rate.
+The rate was only ever a proxy for that share, and one a reader had to be told how to interpret; the
+share says it outright, and it is the one token figure a deployment can act on, since cost arrives with
+the discount already in it. Its denominator is the input of the runs that _reported_ a split, so the
+note names the shortfall whenever some run did not — a run from before the split was recorded is left
+out of the fraction rather than drawn as a cache miss
+([18](18-observability.md#the-cached-share-is-stored-not-inferred)). It also names the unmeasured runs,
+which appear in no figure above it.
 
 **It [exports](#exporting-a-reading)**, seven sections in the order the panel draws them — totals,
 phases, days, task types, failing checks, goals, runs — with the phase split riding inside each goal

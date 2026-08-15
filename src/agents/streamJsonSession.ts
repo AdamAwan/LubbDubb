@@ -358,11 +358,17 @@ function resultUsage(ev: StreamEvent): AgentUsage | null {
   return {
     costUsd: ev.total_cost_usd ?? null,
     // Cache tokens count as input: with caching on, bare input_tokens is a tiny
-    // residue and would wildly under-report what the turn actually consumed.
+    // residue and would wildly under-report what the turn actually consumed. The
+    // two cached components are also kept *apart* below, because summing them is
+    // lossy in the one direction that matters — a read costs a tenth of a fresh
+    // token and a write costs more than one, so the gross figure alone cannot
+    // say whether the fleet's caches are working.
     inputTokens: u
       ? (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0)
       : null,
     outputTokens: u?.output_tokens ?? null,
+    cacheReadTokens: u ? (u.cache_read_input_tokens ?? 0) : null,
+    cacheCreationTokens: u ? (u.cache_creation_input_tokens ?? 0) : null,
     numTurns: ev.num_turns ?? null,
   };
 }

@@ -223,6 +223,9 @@ export function spendCsv(insights: SpendInsights): string {
     ['Last 7d cost (USD)', windows.sevenDayCostUsd],
     ['Input tokens', totals.inputTokens],
     ['Output tokens', totals.outputTokens],
+    ['Cache read tokens', totals.cacheReadTokens],
+    ['Cache write tokens', totals.cacheCreationTokens],
+    ['Input tokens with a cache breakdown', totals.cacheMeasuredInputTokens],
     ['Turns', totals.turns],
     ['Measured runs', totals.measuredRuns],
     ['Unmeasured runs', totals.unmeasuredRuns],
@@ -361,13 +364,18 @@ function Tiles({ insights }: { insights: SpendInsights }): JSX.Element {
           <small>→</small>
           {fmtTokens(totals.outputTokens)}
         </span>
-        {/* Per *million* input tokens, and input rather than the pair, because
-            input is what the cache acts on — this is the one number on the panel
-            that moves when caching does. See the note at the foot. */}
+        {/* The cached share of the input, not a rate per Mtok. Both move when
+            caching does, but this one says so directly: the rate was only ever a
+            proxy — cost already has the discount in it, so a warm fleet made the
+            rate read cheap and left the reader to infer why. Denominator is the
+            input of runs that reported a breakdown, never the fleet's whole
+            input. See the note at the foot. */}
         <span className="sb">
-          {totals.inputTokens > 0
-            ? `${fmtUsd(totals.costUsd / (totals.inputTokens / 1e6))}/Mtok in`
-            : 'no input measured'}
+          {totals.cacheMeasuredInputTokens > 0
+            ? `${fmtShare(totals.cacheReadTokens, totals.cacheMeasuredInputTokens)} of input from cache`
+            : totals.inputTokens > 0
+              ? 'cache share unmeasured'
+              : 'no input measured'}
         </span>
       </div>
     </div>
@@ -773,10 +781,27 @@ function Method({ insights }: { insights: SpendInsights }): JSX.Element {
         fraction of a fresh input token and a cache write at a premium. Nothing here re-derives a price from tokens.
       </p>
       <p>
-        <b>Tokens are gross, and cache reads and writes are counted as input.</b> That is why the rate per million input
-        tokens above reads low on a fleet with warm caches: the discount lands in the numerator and never in the
-        denominator. It is a measure of how much cache the fleet is getting, not a price list.
+        <b>Tokens are gross, and cache reads and writes are counted as input.</b> The share beside them is the part of
+        that input the provider served from cache — the one figure here a fleet can act on, since cost arrives with the
+        discount already applied and can never say whether the discount was earned. A read bills at a fraction of a
+        fresh token and a write at a premium, so two fleets with identical token counts and very different bills are
+        told apart here and nowhere else.
       </p>
+      {totals.cacheMeasuredInputTokens < totals.inputTokens && (
+        <p>
+          <b>The share is over the runs that reported one</b>
+          {totals.cacheMeasuredInputTokens > 0 ? (
+            <>
+              {' '}
+              — {fmtTokens(totals.cacheMeasuredInputTokens)} of the {fmtTokens(totals.inputTokens)} input tokens above.
+            </>
+          ) : (
+            <> — none of the {fmtTokens(totals.inputTokens)} input tokens above.</>
+          )}{' '}
+          Runs from before the breakdown was recorded measured a gross figure and nothing about its cache share; they
+          are left out of the fraction rather than counted as cache misses.
+        </p>
+      )}
       {totals.unmeasuredRuns > 0 && (
         <p>
           <b>
