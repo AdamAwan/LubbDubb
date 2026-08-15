@@ -712,14 +712,50 @@ Two things, both **appended** to the rendered `issue-retro` prompt rather than i
 `loadPromptTemplates` rejects only _unknown_ placeholders, so a `{dossier}` token would be silently
 dropped by exactly the overrides that customised most:
 
-1. **The scratchpad** for its issue, attributed and quoted (`padTestimony`). This is the half nothing
-   else could supply: what the agents that did the work chose to record for whoever came next.
+1. **The scratchpad** for its issue, attributed and quoted (`retroPad`, over `padTestimony`). This is
+   the half nothing else could supply: what the agents that did the work chose to record for whoever
+   came next.
 2. **The dossier** (`retroDossier`, `src/retro/dossier.ts`), the record only the harness kept — the
    plan and its parts with their outcomes, the pull requests open and closed, the decisions with the
    rule ids that fired, escalations and how they were answered, proposals, the assay, the delivery,
    any shortfall, the conclusion, findings, agents spawned and reported spend. It **reads rows the
    pulse already wrote and derives no verdicts**: a fold that computed one would be a second opinion
    about a decision made somewhere else.
+
+### What it is bounded by
+
+This is the one dispatch in the harness whose prompt grew with **elapsed time** rather than with the
+size of the work. A goal that took one pull request rendered a page; a goal that ran for weeks across
+a replanned six-part plan rendered every dispatch, notify and escalation ever made under it. Nobody
+watches a prompt get big, and the cost was never only tokens — a writer handed three hundred
+mechanical rows writes a worse retrospective than one handed the arc.
+
+Every list is capped by a named constant in `src/retro/dossier.ts`, **per list rather than against one
+byte budget**, so a goal with three hundred decisions and two findings does not lose the findings.
+`priorWork.ts` sets the pattern: a stated maximum, and **what the cap dropped is named**, with the
+total beside it — a run long enough to truncate is itself part of the story. A dossier that dropped
+nothing renders exactly the rows it always did.
+
+The decision log is the one rendered as **shape, then exceptions**, because it is both the noisiest
+list and the least individually informative: a dispatch that was executed says only that the harness
+worked.
+
+- One **shape line** always — how many decisions, tallied by the rule that fired, then by outcome.
+- Then everything the harness did **not** simply carry out (`outcome` is not `executed`, or an
+  `admission` transformed it), in full. `admission` is rendered here and nowhere else in the dossier,
+  and it is exactly a retrospective's subject: it says a dispatch became an escalation.
+- Then a **tail** of the routine ones for context, capped, because the end of a run is usually what
+  the write-up is about.
+
+**A run where nothing was refused collapses to the shape line**, and loses nothing by it: with no
+exceptions to sit beside, the counts are what the rows would have said. That asymmetry is the point —
+an uneventful goal gets a compact record and an eventful one keeps every row worth learning from,
+rather than both being trimmed to the same length.
+
+The **pad is capped far higher than any goal reaches** (`retroPad`), and deliberately so. The dossier's
+lists are the harness's own mechanical churn; the pad is what an agent thought was worth the
+keystrokes, so the eventful runs are exactly the ones whose testimony must survive. The cap exists
+because uncapped is uncapped, not because it is expected to bite.
 
 Assembled in `ActionExecutor.recordDispatchTask` for the branch gate's reason — every dispatch passes
 through it — and keyed on the exact retro origin, so a finished goal's audit trail never lands in

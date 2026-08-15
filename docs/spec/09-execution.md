@@ -309,7 +309,8 @@ prompt.
   this agent working": the `issue:<n>` root plus its `:plan`, `:assay`, `:assess` and `:part:<slug>`
   arms. Everything else (a PR concern, a job, a filing) is handed nothing, which is the rejection note's
   widening rule at the level of a whole goal. The **retro origin is excluded** though `padOriginFor`
-  accepts it: `retroBriefing` already hands it the pad and the whole dossier.
+  accepts it: `retroBriefing` already hands it the pad and the whole dossier, both bounded on their own
+  terms ([05](05-dispatcher.md#what-it-is-bounded-by)).
 - **A part agent gets no parts section**, because `plan-part` renders every sibling through
   `siblingContext`; and the conclusion is omitted when the outstanding-work note already carries it, so
   one fact is never rendered twice in one prompt.
