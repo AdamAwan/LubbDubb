@@ -287,11 +287,40 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     super();
   }
 
-  /** Spawn an agent for a task in the given working directory. */
-  spawn(task: Task, cwd: string): Agent {
+  /**
+   * Spawn an agent for a task in the given working directory.
+   *
+   * `resumeSessionId` re-dispatches an origin **into the conversation its last
+   * agent had** instead of a cold one (issue #333), so attempt two does not re-read
+   * the repository and `CLAUDE.md` to re-derive what attempt one already worked
+   * out. Ignored by a runtime that cannot resume, which is what makes it safe to
+   * pass unconditionally: the caller reads the returned row's `sessionId` to learn
+   * whether the re-attach actually happened.
+   *
+   * **This is a spawn, not {@link AgentManager.resume}, and the difference is the
+   * whole reason it is here.** `resume` reuses the agent row, so its in-memory maps
+   * are already occupied and a caller must tear the dead launch down first or leak
+   * a spool dir and leave an MCP bearer token bound with nothing to revoke it. A
+   * retry gets a *new* agent row — `sessions`, `eventsKeys` and `mcpTokens` are all
+   * keyed by agent id, so there is nothing to write over and nothing to tear down.
+   * The previous agent's teardown already ran when it was reaped.
+   *
+   * Two rows then share one `sessionId`, which is correct: `--resume` appends to
+   * that transcript rather than forking a new id (see `buildClaudeStreamArgs`), so
+   * the id names the conversation and the rows name the attempts that spoke into
+   * it. Nothing keys on the id being unique per agent — `isRecoveryCandidate` gates
+   * on the *task* being outstanding, and attempt one's is settled by the time this
+   * runs.
+   */
+  spawn(task: Task, cwd: string, resumeSessionId?: string | null): Agent {
+    // A runtime that cannot resume has no conversation to inherit, so it falls back
+    // to a cold launch rather than refusing the dispatch.
+    const inherited = this.opts.resumable ? (resumeSessionId ?? null) : null;
     // Choose the session id up front so we own it and can `--resume` this exact
-    // conversation after a restart. Only resumable runtimes get one.
-    const sessionId = this.opts.resumable ? randomUUID() : null;
+    // conversation after a restart. Only resumable runtimes get one. A retry takes
+    // the previous agent's id instead of minting one — the one path where this is
+    // not a fresh conversation.
+    const sessionId = inherited ?? (this.opts.resumable ? randomUUID() : null);
     // The file-events spool key is independent of the resume session id, so stream
     // agents (no session id) still get one. Minted before the session so the env
     // carries it; mapped to the agent id below for draining.
@@ -304,7 +333,10 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       command: this.opts.command,
       args: this.opts.buildArgs({
         sessionId: sessionId ?? '',
-        resume: false,
+        // `--resume` on an inherited id, `--session-id` on a minted one, and never
+        // both — `appendSessionFlags` owns that choice, and `claude` exits 1 with no
+        // stream event at all if a pinned id already has a transcript.
+        resume: inherited !== null,
         mcpConfigPath: mcp?.configPath ?? null,
         // Decided at dispatch and stored on the row, so this forwards a string and
         // never re-derives one from config.
@@ -319,7 +351,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       },
       waitingPatterns: this.opts.waitingPatterns,
       sessionId,
-      resume: false,
+      resume: inherited !== null,
     });
 
     const agent = this.store.createAgent({ taskId: task.id, cwd, pid: null, status: 'starting', sessionId });
@@ -330,7 +362,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     }
     debugLog(
       'agent',
-      `spawn agent=${agent.id} cwd=${cwd} eventsDir=${this.fileEventsDir(agent.id) ?? '<file-events off>'}`,
+      `spawn agent=${agent.id} cwd=${cwd} eventsDir=${this.fileEventsDir(agent.id) ?? '<file-events off>'}` +
+        `${inherited ? ` resumed=${inherited}` : ''}`,
     );
     this.store.updateTask(task.id, { status: 'running', agentId: agent.id });
     this.sessions.set(agent.id, session);
