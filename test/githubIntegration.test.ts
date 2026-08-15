@@ -39,7 +39,7 @@ interface Script {
   checkRuns?: Record<string, GhCheckRun[]>;
   issues?: GhIssue[];
   timeline?: Record<number, GhTimelineEvent[]>;
-  throwOn?: 'listOpenPulls' | 'listOpenIssues' | 'listPullReviewThreads';
+  throwOn?: 'listOpenPulls' | 'listOpenIssues' | 'listPullReviewThreads' | 'updatePullBranch';
   createdPullNumber?: number;
   /** Branches the remote says are already gone — `deleteBranch` reports false for these. */
   missingBranches?: string[];
@@ -56,6 +56,8 @@ interface Recorded {
   createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
   titleSets: Array<{ number: number; title: string }>;
   baseSets: Array<{ number: number; base: string }>;
+  /** PR numbers `updatePullBranch` was called for — the server-side base merge. */
+  branchUpdates: number[];
   deletedBranches: string[];
 }
 
@@ -71,6 +73,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     createdPulls: [],
     titleSets: [],
     baseSets: [],
+    branchUpdates: [],
     deletedBranches: [],
   };
   const api: GitHubApi = {
@@ -83,6 +86,10 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     },
     async setPullBase(number, base) {
       recorded.baseSets.push({ number, base });
+    },
+    async updatePullBranch(number) {
+      if (script.throwOn === 'updatePullBranch') throw new Error('merge conflict between base and head');
+      recorded.branchUpdates.push(number);
     },
     async deleteBranch(branch) {
       recorded.deletedBranches.push(branch);
@@ -787,6 +794,21 @@ test('deleteBranch reaps a merged branch, and an already-absent one is still a s
     ref: 'issue/13 (already absent)',
   });
   assert.deepEqual(recorded.deletedBranches, ['issue/12', 'issue/13']);
+});
+
+test('updatePrBranch merges the base in server-side, and a refusal throws', async () => {
+  const { api, recorded } = fakeApi();
+  const sc = new GitHubSourceControlIntegration({ api });
+
+  // No worktree, no clone, no push — one call, and the base named back for the
+  // audit line.
+  assert.deepEqual(await sc.updatePrBranch({ prNumber: 12, base: 'main' }), { ok: true, ref: 'main' });
+  assert.deepEqual(recorded.branchUpdates, [12]);
+
+  // GitHub refusing the merge it called clean is the fallback's signal: it has to
+  // reach the caller, never be swallowed into an ok result.
+  const refusing = new GitHubSourceControlIntegration({ api: fakeApi({ throwOn: 'updatePullBranch' }).api });
+  await assert.rejects(() => refusing.updatePrBranch({ prNumber: 12, base: 'main' }), /merge conflict/);
 });
 
 test('setPullTitle and setPullBase each write only their own field', async () => {

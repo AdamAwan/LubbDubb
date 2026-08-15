@@ -415,6 +415,16 @@ export class OctokitGitHubApi implements GitHubApi {
   }
 
   /**
+   * GitHub's own base merge. Answers 202 with a job message rather than a commit —
+   * the merge is queued, and the next snapshot is what reports the branch no longer
+   * behind, so there is nothing here worth returning. A 422 (the head moved, or the
+   * merge is not in fact clean) throws, which is the fallback's signal.
+   */
+  async updatePullBranch(number: number): Promise<void> {
+    await this.octokit.pulls.updateBranch({ ...this.base, pull_number: number });
+  }
+
+  /**
    * Delete a branch ref. A 404 (or 422 "Reference does not exist") means the branch
    * is already gone — the common case on a repository with "automatically delete
    * head branches" on, where GitHub removed it at merge time. Reported as `false`

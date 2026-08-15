@@ -5,6 +5,7 @@ import type {
   IssueCommentInput,
   IssueLabelInput,
   PrBaseInput,
+  PrBaseUpdateInput,
   PrCreateInput,
   PrLabelInput,
   PrMergeInput,
@@ -20,6 +21,7 @@ import {
   isIssueCommentCapable,
   isIssueLabelCapable,
   isPrBaseCapable,
+  isPrBaseUpdateCapable,
   isPrCreateCapable,
   isPrLabelCapable,
   isPrMergeCapable,
@@ -96,6 +98,22 @@ export class CompositeConnector implements Connector, ActionSink {
     const handler = this.integrations.find(isPrBaseCapable);
     if (!handler) throw new Error('no integration can retarget PRs (no sourceControl provider is PrBaseCapable)');
     return handler.setPullBase(input);
+  }
+
+  /**
+   * The one outbound act whose missing handler is **not** an error (issue #332).
+   *
+   * Every other method here throws when no integration can serve it, because
+   * nothing else can: the harness asked for the only way that act happens. This
+   * one has a second way — the code agent the rule dispatched before the
+   * server-side path existed — so a provider without an "update branch" endpoint
+   * (Azure DevOps) is a configuration, not a fault, and saying so as `ok: false`
+   * is what keeps its Errors panel clean while the fallback does the work.
+   */
+  async updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {
+    const handler = this.integrations.find(isPrBaseUpdateCapable);
+    if (!handler) return { ok: false };
+    return handler.updatePrBranch(input);
   }
 
   async deleteBranch(input: BranchDeleteInput): Promise<SendResult> {

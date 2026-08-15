@@ -125,7 +125,7 @@ const RULES = [
     kind: 'rule',
     name: 'Base out of date',
     description:
-      'A PR that is behind its base branch (clean update) or conflicts with it (resolve and push) gets a code agent, so it never sits unmergeable while the base moves on. Last of the three, because a merge resolved now against code an open review is about to change is a conflict resolved twice.',
+      'A PR that has fallen behind its base branch, or conflicts with it, is brought back into line so it never sits unmergeable while the base moves on. The two arms cost very different things. Merely **behind** means the provider has already said the merge is clean, so there is no judgement in it and no agent is spent: the harness asks the provider to merge the base in itself, in one request, and the act is audited under the same origin an agent would have been. **Conflicted** keeps its code agent, because resolving a conflict is judgement, and the prompt tells it to escalate if it cannot resolve cleanly. A provider that cannot do the merge itself — or one that refuses — falls back to the agent on the next pulse, so the cheap path being unavailable never leaves a PR behind. Last of the concerns either way, because a merge resolved now against code an open review is about to change is a conflict resolved twice.',
   },
   {
     id: 'pr-merge-ready',

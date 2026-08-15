@@ -101,9 +101,16 @@ conflicted.
 ## `needsBaseUpdate(pr)`
 
 `isConflicted(pr) || mergeableState === 'behind'`. False for a merged PR. This is what rule `pr-base-update`
-consumes; the dispatcher then splits on `mergeableState === 'behind'` to choose between the
-`pr-base-update-behind` prompt (a routine update, no conflicts expected) and
-`pr-base-update-conflict` (merge, resolve, push, escalate if not cleanly resolvable).
+consumes; the dispatcher then splits on `mergeableState === 'behind'`, and the two arms cost
+different things.
+
+- **`behind`** — the provider has said the merge is clean, so the harness asks it to merge the base in
+  itself: an `update_pr_branch` act, no worktree and no agent. The `pr-base-update-behind` prompt is
+  still rendered, but only for the fallback — a provider that cannot do the merge (Azure DevOps has no
+  such endpoint) or refuses it gets the code agent on the next pulse instead.
+  → [05](05-dispatcher.md#pr-base-update--two-arms)
+- **`dirty`** — `pr-base-update-conflict`, and a code agent: merge, resolve, push, escalate if not
+  cleanly resolvable. Resolving a conflict is judgement, so it is never taken directly.
 
 ## Stacks
 
@@ -385,7 +392,7 @@ one thing are allowed to differ. The arm is reached only after seven earlier one
 request; reproducing all seven in the predicate would be a second copy of the verdict, free to drift.
 The predicate lives in `prHealth` rather than beside the arm because nothing outside the state
 snapshot may import the lens and the pulse has to fold it. So the clock runs more eagerly and the
-*arm* decides whether an age is ever shown — a pull request whose clock is running but whose court is
+_arm_ decides whether an age is ever shown — a pull request whose clock is running but whose court is
 the harness's shows nothing, which is the safe direction. Red CI, an unhandled comment and a staffed
 branch each stop the clock, because a reviewer cannot be late for work that is not ready.
 
@@ -480,6 +487,9 @@ its own warrant a code agent, in urgency order:
    thread.
 2. **CI** (`pr:<n>:ci`) — when `ciNeedsAttention(pr)` **and** `inheritedCiFailure` returns null.
 3. **Base** (`pr:<n>:mergeable`) — when `needsBaseUpdate(pr)`. The base is `pr.baseBranch ?? config.defaultBranch`.
+   A concern either way, because a staffed branch is _told_ about its base moving whichever arm it is
+   on; only the free-branch outcome differs, and only for `behind`, which is settled by an act rather
+   than by an agent.
 
 Then, by the branch's agent state: notify a running agent, hold for a busy one, or make the most
 urgent concern a dispatch candidate. Candidates from all PRs are ranked together — an operator-flagged

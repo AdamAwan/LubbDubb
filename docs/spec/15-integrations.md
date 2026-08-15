@@ -42,8 +42,8 @@ providers share one `FakeWorldStore` so their world stays coherent.
 `src/integrations/integration.ts` defines each outbound capability separately, with a type guard:
 
 `PrReplyCapable`, `PrMergeCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
-`PrBaseCapable`, `BranchDeleteCapable`, `IssueLabelCapable`, `WorkItemStateCapable`,
-`IssueCommentCapable`, `RefResolvable`, and the fake-only `Injectable`.
+`PrBaseCapable`, `PrBaseUpdateCapable`, `BranchDeleteCapable`, `IssueLabelCapable`,
+`WorkItemStateCapable`, `IssueCommentCapable`, `RefResolvable`, and the fake-only `Injectable`.
 
 `BranchDeleteCapable` deletes a branch outright — the reap after a pull request merges. Both
 providers implement it, and both report **already gone as success**: GitHub's "automatically delete
@@ -52,7 +52,14 @@ failure. GitHub deletes the ref; Azure has no delete verb for one and updates it
 id, which needs the id it currently points at, so the Azure arm is two calls and the first is also
 the already-gone check.
 
-The three PR-write capabilities are deliberately separate rather than one `PrWriteCapable`, because a
+`PrBaseUpdateCapable` merges a pull request's **base into it** — the arm of rule `pr-base-update` that
+costs no agent ([05](05-dispatcher.md#pr-base-update--two-arms)). GitHub implements it with
+`PUT /repos/{owner}/{repo}/pulls/{n}/update-branch`; **Azure DevOps has no equivalent and does not
+implement it**, which is exactly the asymmetry a per-capability interface exists for. Note that it is
+_not_ `PrBaseCapable`: one changes which branch a pull request merges into, the other merges that
+branch in.
+
+The PR-write capabilities are deliberately separate rather than one `PrWriteCapable`, because a
 provider may genuinely have one and not the others: GitHub retargets a stack itself when a rung
 merges, so its `setPullBase` serves only the hand-driven case, while Azure needs it on every merge.
 
@@ -67,7 +74,11 @@ Implements both seams:
 - **Reads** — fans `snapshot()` out across integrations (in parallel) and merges the slices,
   stamping `takenAt` from an injectable clock.
 - **Outbound** — routes each action to the **first** integration that can handle it, by type guard.
-  No handler throws a clear message naming the missing capability.
+  No handler throws a clear message naming the missing capability — with **one deliberate exception**:
+  `updatePrBranch` answers `{ok: false}` instead. It is the only outbound act with a second way to get
+  done (the code agent the rule falls back to), so a provider without the endpoint is a configuration
+  rather than a fault, and throwing would fill an Azure deployment's Errors panel with a fact about
+  its provider. → [09](09-execution.md#update_pr_branch--the-base-merge-without-an-agent)
 - **`resolveRefUrl(ref)`** — the first `RefResolvable`, or `null`.
 - **`inject(event)`** — routes to the fake that owns the event kind and logs it. An event with no fake
   owner is recorded as `inject_unhandled` rather than throwing: you cannot fake-inject onto a real
@@ -97,6 +108,11 @@ They are the only `Injectable` providers. `inject(event)` accepts:
 `pr_closed` **moves** the row rather than copying it. `mergePr` still marks a PR merged in place so the
 deterministic loop settles; a PR present in both lists would have the world diff report one merge
 twice.
+
+The outbound acts reflect into that same world, which is what makes a `buildSystem`-seam test a real
+loop rather than a recording: a reply marks its comment handled, a merge marks the PR merged, and
+`updatePrBranch` sets `mergeableState` to `clean` — the state a real provider reports once the merge
+lands, so the concern is gone rather than re-fired every pulse.
 
 The fake sink "sends" by reflecting the effect back into its own world (marking the answered comment
 handled) and recording a connector event, so nothing leaves the machine while the seam stays real and
@@ -138,6 +154,11 @@ Behaviour worth knowing:
   Pagination stops at the first entry outside the window: GitHub sorts by `updated` descending, and
   `updated_at >= closed_at` always holds, so the break is sound.
 - **A `prAuthor` filter** narrows the PR list client-side, for both open and closed PRs.
+- **`updatePullBranch(n)` is the one write with no local git behind it.** GitHub merges the base into
+  the pull request on its own machines and answers `202` with a job message rather than a commit, so
+  there is nothing to return: the next snapshot is what reports the branch no longer behind. A refusal
+  (`422` — the head moved, or the merge is not in fact clean) throws, which is the signal the harness
+  falls back to a code agent on. → [09](09-execution.md#update_pr_branch--the-base-merge-without-an-agent)
 - **A review thread is handled when the reviewer resolved it, or when the harness posted its newest
   reply — in that order.** The same two arms as the Azure provider, which is the point: both trackers
   carry a real resolution verdict, so both read it.

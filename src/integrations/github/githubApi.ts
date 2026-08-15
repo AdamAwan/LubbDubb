@@ -78,6 +78,13 @@ export interface GitHubApi {
   /** Retarget a pull request's base — a stack rung whose parent merged. */
   setPullBase(number: number, base: string): Promise<void>;
   /**
+   * Merge the base branch into a pull request that is behind it —
+   * `PUT /repos/{owner}/{repo}/pulls/{n}/update-branch`, GitHub's own server-side
+   * merge. Throws when GitHub refuses (a branch that has moved on under us, a
+   * conflict it did not report, a repository that forbids the write).
+   */
+  updatePullBranch(number: number): Promise<void>;
+  /**
    * Delete a branch. Returns whether a ref was actually removed: `false` means it
    * was already gone, which the reap treats as success (see {@link ActionSink.deleteBranch}).
    */

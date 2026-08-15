@@ -26,6 +26,7 @@ is rejected and audited rather than executed.
 | `reply_on_pr`         | `prNumber`, `draft`, `reason`             | `commentId`, `confidence` (0..1), `rule`                                       |
 | `merge_pr`            | `prNumber`, `reason`                      | `method` (`merge`\|`squash`\|`rebase`, default `squash`), `confidence`, `rule` |
 | `propose_plan`        | `planId`, `originRef`, `prompt`, `reason` | `rule`                                                                         |
+| `update_pr_branch`    | `prNumber`, `base`, `originRef`, `reason` | `rule`                                                                         |
 | `set_work_item_state` | `number`, `state`, `reason`               | `rule`                                                                         |
 | `no_op`               | `reason`                                  | `rule`                                                                         |
 
@@ -78,7 +79,7 @@ unconditional.
 | `pr-ci-failing`            | Failing CI                           | —                | An open PR has failing CI that is not inherited from its base, at least one failing check is actionable under `ci.checks`, and no agent is on its branch.                   |
 | `pr-ci-blocked`            | CI blocked elsewhere                 | —                | Same, but every failing check is configured non-actionable and at least one asks to escalate. Asked once; no agent is dispatched.                                           |
 | `pr-ci-gate`               | Check waiting on an action           | —                | A check is waiting rather than failing: a `ci.checks` rule watches it in a non-failing state (`states`), or the provider reports it `expired`. Own origin `pr:<n>:ci-gate`. |
-| `pr-base-update`           | Base out of date                     | —                | A PR is `behind` its base or conflicts with it.                                                                                                                             |
+| `pr-base-update`           | Base out of date                     | —                | A PR is `behind` its base (merged up to date with no agent) or conflicts with it (a code agent resolves it).                                                                |
 | `pr-merge-ready`           | Merge-ready PR                       | —                | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                                                                                              |
 | `work-item-in-review`      | Back off to review state             | `workItemStates` | A work item in a pickup state has an open PR (or is decomposed).                                                                                                            |
 | `work-item-back-to-pickup` | Return from review state             | `workItemStates` | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                                    |
@@ -300,7 +301,7 @@ The whole ranked list — above and below the cut — is returned as `DispatchRe
 ```mermaid
 flowchart TD
     CTX(["DispatchContext"]) --> WALK["walk DISPATCH_PIPELINE in order,<br/>running each rule whose enabled predicate says the operator has it on"]
-    WALK --> NA["non-dispatch acts, pushed straight through<br/>merge_pr · propose_plan · set_work_item_state<br/>escalate_to_human · respond_to_agent"]
+    WALK --> NA["non-dispatch acts, pushed straight through<br/>merge_pr · propose_plan · set_work_item_state · update_pr_branch<br/>escalate_to_human · respond_to_agent"]
     WALK --> CAND["one Candidate list, appended as the walk proceeds —<br/>so the pipeline order is the priority"]
     CAND --> OV["rankByPriorityOverride<br/>manual jobs first · overridden origins next · the rest in their natural order"]
     OV --> CUT{"the headroom cut — one walk"}
@@ -324,7 +325,10 @@ is no second list to keep in step with it. What each stage contributes:
 
 1. **Queued jobs** (`manual-job`), oldest first — a manual request takes the next free slot.
 2. **PR concerns** (`pr-review-comment` / `pr-ci-failing` / `pr-ci-gate` / `pr-base-update`), ranked **cross-PR** by
-   concern class then by PR number. World order is arbitrary and must not decide who wins scarce
+   concern class then by PR number. `pr-base-update`'s `behind` arm produces **no candidate at all**
+   when the provider can take it directly — see [below](#pr-base-update--two-arms) — so
+   what it contributes here is the conflict, and the fallback after a direct update that did not
+   happen. World order is arbitrary and must not decide who wins scarce
    headroom. Only the single most urgent concern per PR becomes a candidate, and "most urgent" is
    their pipeline order. An operator-flagged `urgent` CI check sorts its PR ahead of all of them, and
    is read off **every** concern on the PR rather than off the one that won — the flag is set by a CI
@@ -358,8 +362,8 @@ is no second list to keep in step with it. What each stage contributes:
 A superseded candidate is **queued, not dropped** — with the superseding rule named in its `reason`,
 and attributed to the rule that proposed it rather than to whatever held it.
 
-Non-dispatch actions (`merge_pr`, `propose_plan`, `set_work_item_state`, `escalate_to_human`,
-`respond_to_agent`) are
+Non-dispatch actions (`merge_pr`, `propose_plan`, `set_work_item_state`, `update_pr_branch`,
+`escalate_to_human`, `respond_to_agent`) are
 pushed directly, because they claim no headroom.
 
 ### Operator re-ordering (issue #128)
@@ -416,7 +420,11 @@ missing memory, purely from the audit log:
 | `hold`     | Cap spent and already escalated — do nothing, do not re-escalate. |
 
 `DEFAULT_COOLDOWN` is `{ maxAttempts: 3, cooldownMs: 900000 }` (15 minutes). Only **executed**
-dispatches count as attempts: a deferred one (paused, or no headroom) never ran. "Now" is the world
+dispatches count as attempts: a deferred one (paused, or no headroom) never ran. An executed
+`update_pr_branch` counts too, on its `originRef` — the question is how many times the harness has
+tried to clear an origin, not how many agents it spent, and an act that runs and leaves the PR behind
+is the same loop a dispatch that leaves it behind is. A _failed_ one is not an attempt: it never
+happened, and the agent it falls back to gets the origin's full budget. "Now" is the world
 snapshot's `takenAt`. An `escalate` verdict emits `escalate_to_human` carrying the throttled rule as
 its `rule` and `cooldown-escalate` as its `admission`, and claims no headroom.
 
@@ -714,6 +722,51 @@ override that predates the rule would silently drop a new `{token}`.
 The agent answers with `validation_report` ([11](11-mcp-tools.md)), whose third arm — `handback` —
 returns the check to the operator without recording a reading. See
 [20](20-validation.md#the-hand-over) for why there are three answers rather than two.
+
+## `pr-base-update` — two arms
+
+`needsBaseUpdate(pr)` ([07](07-pull-requests.md#needsbaseupdate)) is one predicate over two very
+different situations, and the rule splits them on `mergeableState === 'behind'`.
+
+**Conflicted** (`dirty`) is judgement: a code agent on the branch, the `pr-base-update-conflict`
+prompt, and an instruction to escalate if it cannot resolve cleanly. Unchanged.
+
+**Merely behind** is not. The provider has already said the merge is clean — that is what `behind`
+_means_, as against `dirty` — so there is no judgement anywhere on that path, and cutting a worktree,
+launching a model and paying a cold read of the repository to run two git commands was the clearest
+piece of pure waste in the pipeline, repeated every time the base moved under an open PR. The rule
+emits `update_pr_branch` instead: the executor asks the provider to merge the base in itself
+([09](09-execution.md#update_pr_branch--the-base-merge-without-an-agent)), in one request, and the act
+lands in the decision log under the same `pr:<n>:mergeable` origin an agent would have.
+
+What that does **not** change:
+
+- **A staffed branch is still told, not written to.** The concern is built either way, so a branch
+  with a running agent gets the note it always got, and a busy one holds it. Merging the base in
+  underneath a working agent would push a commit its worktree has never seen. The saving is in not
+  staffing a free branch, not in acting where the harness would not have.
+- **The origin's throttle.** The act takes the same `dispatchVerdict` a dispatch would, on the same
+  origin, so a base update that runs and leaves the PR behind cools down and then escalates on the
+  attempt cap rather than firing every pulse (see [the cooldown](#the-re-dispatch-cooldown)).
+- **Who authorizes it.** Nobody, deliberately: this is a write to a branch the harness owns, of a
+  merge the provider called clean, and the agent path took it without asking. A cheap path that asked
+  a human what the expensive one never did would be a new gate wearing an optimisation's clothes.
+
+What it does not get is a queue row. An act that completes in one request and claims no slot has
+nothing to be "up next" for, and a row that appeared and vanished within a pulse would say the fleet
+was busy with something it never staffed.
+
+**The fallback, and why it is a pulse later.** Not every provider can do this: GitHub has
+`PUT /repos/{owner}/{repo}/pulls/{n}/update-branch`, Azure DevOps has no equivalent, and a repository
+can refuse the write. Both show up on the decision row — `skipped` for "this provider cannot", audited
+and _not_ an error, `rejected` for a failure, which is also recorded through `errors.record`
+([18](18-observability.md)). `directUpdateUnperformed` reads that row back out of `recentDecisions` on
+the next pulse and builds the concern as the dispatch it always was, with the same
+`pr-base-update-behind` prompt. So the memory is the audit log — the same place the cooldown reads its
+attempts, which is what stops the two holding different opinions about what has been tried — and the
+cost of a provider that cannot do it is one recorded act and one pulse, never a PR left behind its
+base. It ages out with the window, which retries the cheap path: right for a refusal that was
+transient, one wasted request for a provider that never had it.
 
 ## `pr-merge-ready` — the merge gate
 

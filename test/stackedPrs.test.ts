@@ -236,15 +236,19 @@ test('suppressing CI does not suppress restacking — a stack keeps following it
     }),
   ];
   const result = await new RuleDispatcher().decide({ ...context([]), world: world([], prs) });
+  // The rung behind its parent is restacked without an agent (issue #332); the
+  // red bottom of the stack still gets one.
   assert.deepEqual(
-    result.actions
-      .filter((a) => a.type === 'dispatch_code_agent')
-      .map((a) => (a.type === 'dispatch_code_agent' ? [a.rule, a.branch] : [])),
+    result.actions.map((a) => [a.rule, a.type]),
     [
-      ['pr-ci-failing', 'issue/12/schema'],
-      ['pr-base-update', 'issue/12/api'],
+      ['pr-base-update', 'update_pr_branch'],
+      ['pr-ci-failing', 'dispatch_code_agent'],
     ],
   );
+  const restack = result.actions.find((a) => a.type === 'update_pr_branch');
+  assert.ok(restack && restack.type === 'update_pr_branch');
+  assert.equal(restack.prNumber, 41);
+  assert.equal(restack.base, 'issue/12/schema', 'the parent branch, not the integration branch');
 });
 
 test('a conflict on an inheriting PR is still notified to its running agent', async () => {

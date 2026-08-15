@@ -1,6 +1,6 @@
 import type { DispatchContext } from '../dispatcher.js';
 import { ciNeedsAttention, inheritedCiFailure, isStackedPr, needsBaseUpdate } from '../../prHealth.js';
-import type { Agent, PullRequest } from '../../types.js';
+import type { Agent, Decision, PullRequest } from '../../types.js';
 import { askedAlready } from '../admission.js';
 import {
   ciFailureNote,
@@ -12,6 +12,7 @@ import {
   type CiWatchVerdict,
 } from '../../ci/ciPolicy.js';
 import { mergeProposalRef, proposalHold } from '../../proposals/proposals.js';
+import { dispatchVerdict } from '../dispatchCooldown.js';
 import { DISPATCH_PIPELINE, type DispatchRuleId } from '../rules.js';
 import {
   prCommentOrigin,
@@ -219,9 +220,34 @@ export function prCiFailing(s: StageContext): void {
     if (needsBaseUpdate(pr)) {
       const base = pr.baseBranch ?? s.defaultBranch;
       const behind = pr.mergeableState === 'behind';
+      const mergeableOrigin = `pr:${pr.number}:mergeable`;
+      // The `behind` arm is two git commands against a merge the provider has
+      // *already asserted is clean*, so it is taken directly instead of costing a
+      // worktree, a model and a cold read of the repository (issue #332). The
+      // conflicted arm keeps its agent: resolving a conflict is judgement, and
+      // `pr-base-update-conflict` already tells the agent to escalate when it
+      // cannot.
+      //
+      // Unless the last direct attempt came back unperformed — a provider with no
+      // such endpoint (Azure DevOps has none), or a write the repository refused.
+      // Then this is the dispatch it always was, with the same routine-update
+      // prompt, so a PR is never left behind its base merely because the cheap
+      // path was unavailable.
+      const direct = behind && !directUpdateUnperformed(mergeableOrigin, ctx.recentDecisions);
       concerns.push({
         rule: 'pr-base-update',
-        origin: `pr:${pr.number}:mergeable`,
+        origin: mergeableOrigin,
+        act: direct
+          ? ({
+              type: 'update_pr_branch',
+              prNumber: pr.number,
+              base,
+              branch: pr.branch,
+              originRef: mergeableOrigin,
+              rule: 'pr-base-update',
+              reason: `PR #${pr.number} is behind ${base} with no conflicts; merging ${base} in through the provider rather than spending an agent on it.`,
+            } satisfies RawAction)
+          : undefined,
         title: behind ? `Update PR #${pr.number} with ${base}` : `Resolve merge conflicts on PR #${pr.number}`,
         prompt: s.templates.render(behind ? 'pr-base-update-behind' : 'pr-base-update-conflict', {
           number: pr.number,
@@ -230,7 +256,7 @@ export function prCiFailing(s: StageContext): void {
           base,
         }),
         dispatchReason: behind
-          ? `PR #${pr.number} is behind ${base} and no agent is on it.`
+          ? `PR #${pr.number} is behind ${base}, the base could not be merged in directly, and no agent is on it.`
           : `PR #${pr.number} has merge conflicts with ${base} and no agent is on it.`,
         note: behind
           ? `PR #${pr.number} is now behind ${base} — merge ${base} in to bring it up to date, then push.`
@@ -362,6 +388,37 @@ export function prCiFailing(s: StageContext): void {
       a.pr.number - b.pr.number,
   );
   for (const { pr, top } of prCandidates) {
+    const escalate = (attempts: number): RawAction => ({
+      type: 'escalate_to_human',
+      escalationType: 'resolve_ambiguity',
+      prompt: s.templates.render('pr-concern-escalation', {
+        title: top.title,
+        number: pr.number,
+        attempts,
+      }),
+      context: { originRef: top.origin, prNumber: pr.number, taskTitle: top.title },
+      // The concern that was throttled, then what throttling did to it. This
+      // escalation stands in for exactly one proposal — `top`, the concern the
+      // dispatch would have gone out for — so it has a proposer, unlike the
+      // branch note above.
+      rule: top.rule,
+      admission: 'cooldown-escalate',
+      reason: `Origin ${top.origin} hit the ${s.cooldown.maxAttempts}-attempt cap without clearing — escalating instead of looping.`,
+    });
+    // A concern with an act of its own is settled here rather than staffed: no
+    // candidate, no headroom claimed, and no Up next row for something that
+    // completes in one request. It is still **throttled on its origin**, and by
+    // the same verdict a dispatch would take — an act that runs and leaves the
+    // concern standing is the loop the cooldown exists for, whoever performed it.
+    if (top.act) {
+      const verdict = dispatchVerdict(top.origin, s.now, ctx.recentDecisions, s.cooldown);
+      if (verdict.kind === 'escalate') s.raw.push(escalate(verdict.attempts));
+      else if (verdict.kind === 'dispatch') s.raw.push(top.act);
+      // 'cooldown' — attempted too recently, and there is nothing to queue: the
+      // act claims no slot, so a held row would say the fleet is busy when it is
+      // not. 'hold' — already escalated; leave the origin alone.
+      continue;
+    }
     s.consider(
       {
         origin: top.origin,
@@ -388,25 +445,32 @@ export function prCiFailing(s: StageContext): void {
           reason: top.dispatchReason,
         } satisfies RawAction,
       },
-      (attempts) => ({
-        type: 'escalate_to_human',
-        escalationType: 'resolve_ambiguity',
-        prompt: s.templates.render('pr-concern-escalation', {
-          title: top.title,
-          number: pr.number,
-          attempts,
-        }),
-        context: { originRef: top.origin, prNumber: pr.number, taskTitle: top.title },
-        // The concern that was throttled, then what throttling did to it. This
-        // escalation stands in for exactly one proposal — `top`, the concern the
-        // dispatch would have gone out for — so it has a proposer, unlike the
-        // branch note above.
-        rule: top.rule,
-        admission: 'cooldown-escalate',
-        reason: `Origin ${top.origin} hit the ${s.cooldown.maxAttempts}-attempt cap without clearing — escalating instead of looping.`,
-      }),
+      escalate,
     );
   }
+}
+
+/**
+ * Did the last direct base update on this origin fail to happen?
+ *
+ * The memory behind the fallback, read from the audit log alone — the same place
+ * the cooldown reads its attempts, so the two cannot hold different opinions
+ * about what has been tried. Both unperformed outcomes count and mean one thing
+ * to the rule: `skipped` is a provider with no update-branch endpoint at all,
+ * `rejected` is one that has it and refused, and either way the branch still
+ * needs merging and only an agent is left to do it.
+ *
+ * Best-effort over the recent-decision window, and harmless as it ages out: the
+ * cheap path is simply tried once more, which is the right answer for a refusal
+ * that was transient and one wasted request for a provider that never had it.
+ */
+function directUpdateUnperformed(origin: string, decisions: Decision[]): boolean {
+  return decisions.some(
+    (d) =>
+      d.action.type === 'update_pr_branch' &&
+      d.action.originRef === origin &&
+      (d.outcome === 'skipped' || d.outcome === 'rejected'),
+  );
 }
 
 /** One thing wrong with a PR that would warrant a code agent on its branch. */
@@ -414,6 +478,20 @@ interface PrConcern {
   /** Which dispatcher rule raised this concern, carried onto the emitted action. */
   rule: DispatchRuleId;
   origin: string;
+  /**
+   * The act that settles this concern **without an agent**, when one can (issue
+   * #332) — today only the base update of a pull request the provider reported as
+   * merely `behind`. Set, and this concern's turn on a free branch emits the act
+   * instead of a dispatch; absent, everything below is what happens, unchanged.
+   *
+   * It rides on the concern rather than replacing it, because the concern is more
+   * than a dispatch: a branch that already has a running agent is *told* about the
+   * base moving (`note`) rather than having it merged under its feet, and a branch
+   * that is busy holds the signal for later. Both of those are as true of the
+   * cheap path as of the expensive one — the saving is in not staffing a free
+   * branch, not in acting where the harness would not have.
+   */
+  act?: RawAction;
   title: string;
   prompt: string;
   dispatchReason: string;

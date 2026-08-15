@@ -39,6 +39,15 @@ export type DispatchVerdict =
  * timestamp (the world snapshot's `takenAt`) so it's unit-testable at the
  * dispatcher seam. Counts only *executed* dispatches — deferred ones (paused / no
  * headroom) never ran, so they're not attempts.
+ *
+ * An **`update_pr_branch` counts too** (issue #332), and that is the whole reason
+ * the script path can keep the accounting it replaced: the question this answers
+ * is "how many times has the harness tried to clear this origin", not "how many
+ * agents has it spent". A base update that lands and does not clear `behind` is
+ * the same loop a dispatch that lands and does not clear it is, and it must
+ * escalate on the same cap rather than re-firing every pulse for as long as the
+ * base keeps moving. A *failed* one is deliberately not an attempt: it never
+ * happened, and the fallback agent gets the origin's full budget.
  */
 export function dispatchVerdict(
   origin: string,
@@ -53,7 +62,10 @@ export function dispatchVerdict(
   for (const d of recentDecisions) {
     if (d.outcome !== 'executed') continue;
     const a = d.action;
-    if ((a.type === 'dispatch_code_agent' || a.type === 'dispatch_desk_agent') && a.originRef === origin) {
+    if (
+      (a.type === 'dispatch_code_agent' || a.type === 'dispatch_desk_agent' || a.type === 'update_pr_branch') &&
+      a.originRef === origin
+    ) {
       attempts += 1;
       const t = Date.parse(d.createdAt);
       if (!Number.isNaN(t) && t > lastAttemptMs) lastAttemptMs = t;
