@@ -10,7 +10,7 @@ import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
 import { PriorityStore } from './priority.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
-import { absorbSinglePlanStatus, PlanStore, PLAN_COLUMNS } from './plans.js';
+import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
 import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './validation.js';
 import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS } from './issueVerdicts.js';
 import { ScratchStore } from './scratch.js';
@@ -157,10 +157,13 @@ export class Store {
     // is — before any module is constructed, let alone reads. #203's
     // `floor_completions` becomes #234's `issue_runs`, carrying the operator's
     // standing dismissals, which is what stops every cleared card coming back; and
-    // the retired `single` plan status is absorbed into `active`, the shape it
-    // carried now read off the parts.
+    // the two halves of the retired `single` plan shape are put back together —
+    // the status is absorbed into `active`, and the plan that carried no parts
+    // because "one pull request" *meant* no parts gets the one part it always was.
+    // Ordered: the backfill reads the status, so it must see the absorbed one.
     adoptFloorCompletions(this.db);
     absorbSinglePlanStatus(this.db);
+    backfillWholePlanParts(this.db, clock());
     // What kind of work each historical task was, so the by-task-type and
     // by-check spend tables can speak about the runs that predate the columns.
     // The one place a dispatch reason is ever parsed — see the function.

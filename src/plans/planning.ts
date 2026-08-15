@@ -2,10 +2,16 @@ import type { Decision, Plan } from '../types.js';
 import { dispatchVerdict, type CooldownPolicy, type DispatchVerdict } from '../dispatcher/dispatchCooldown.js';
 
 /**
- * The planning funnel: every watched, open issue passes a planning agent that
- * emits one of two verdicts — `single` (the one-agent / one-PR path) or `parts`
- * (a decomposition into stacked PRs). **Always on**: every watched issue is
- * routed by a planner, and there is no deployment in which one is not.
+ * The planning funnel: every watched, open issue passes a planning agent, which
+ * writes a plan — one or more parts, each its own branch and pull request.
+ * **Always on**: every watched issue is planned, and there is no deployment in
+ * which one is not.
+ *
+ * There is no second shape. A plan that is one pull request is a plan with one
+ * part, scheduled by rule `plan-part` on `issue/<n>/<slug>` exactly as a plan with
+ * eight parts is. That used to be a whole separate arm — a `single` verdict
+ * carrying *zero* parts, worked by rule `issue-pickup` on the flat `issue/<n>`
+ * branch — and every consumer downstream had to know which arm it was looking at.
  */
 export interface PlanningPolicy {
   /**
@@ -21,16 +27,15 @@ export interface PlanningPolicy {
    * every goal is planned — so the thing being defaulted is only whether a
    * planner's decision about how an issue is worked starts itself.
    *
-   * On, ingestion persists the verdict as `awaiting_approval`, rule
-   * `plan-approval` puts it to the operator once, and nothing is scheduled until
-   * they accept — approve-before rather than replan-after, which is the undo we
-   * built in place of this gate.
+   * On, ingestion persists the plan as `awaiting_approval`, rule `plan-approval`
+   * puts it to the operator once, and nothing is scheduled until they accept —
+   * approve-before rather than replan-after, which is the undo we built in place
+   * of this gate.
    *
-   * **Both arms.** A `single` verdict is a verdict about shape too — the same
-   * decision, differently answered — and gating only the `parts` arm left the
-   * commonest route with no acceptance step in it at all. The one arm still never
-   * gated is the `single` verdict the harness *overruled*, because parts are
-   * already in flight: the collapse was refused, so there is no decision in it.
+   * **Every plan, whatever its size.** A one-part plan is put to the operator on
+   * exactly the terms an eight-part one is: it is the same decision about the same
+   * thing — whether this work, as described, should happen — and the part count is
+   * not what makes it worth asking about.
    */
   requireApproval: boolean;
   /**
@@ -76,11 +81,11 @@ export function planOriginIssue(originRef: string | null): number | null {
 
 /**
  * The branch a planning agent works on. Deliberately a *separate namespace* from
- * both `issue/<n>` (what a `single` verdict's agent wants) and `issue/<n>/<slug>`
- * (the part branches): git stores refs as files, so `refs/heads/issue/12` and
- * `refs/heads/issue/12/plan` cannot coexist — the second needs the first to be a
- * directory. A planner branch under `issue/<n>/…` would therefore make the very
- * pickup its `single` verdict authorises impossible to branch for.
+ * both `issue/<n>` (what an unplanned pickup works on when the funnel fails open)
+ * and `issue/<n>/<slug>` (the part branches): git stores refs as files, so
+ * `refs/heads/issue/12` and `refs/heads/issue/12/plan` cannot coexist — the second
+ * needs the first to be a directory. A planner branch under `issue/<n>/…` would
+ * therefore collide with the parts of the very plan it is writing.
  */
 export function planBranch(issueNumber: number): string {
   return `plan/issue/${issueNumber}`;
@@ -88,21 +93,28 @@ export function planBranch(issueNumber: number): string {
 
 /**
  * Which arm of the funnel an issue is on this cycle.
- * - `single` — fall through to normal pickup (rule `issue-pickup`). `failedOpen` marks the
- *   issue that got there because planning gave up, not because a planner said so.
- * - `parts`  — decomposed; the part scheduler owns it, pickup stays off.
- * - `awaiting_approval` — the planner has spoken, but its verdict is a proposal a
- *   human has not answered yet (`planning.requireApproval`), on either arm. Pickup
- *   stays off exactly as for `parts` — including for a *single* verdict, which is
- *   the whole point: nothing is worked before the acceptance step. The part
- *   scheduler queues a decomposition's parts without dispatching any of them.
+ * - `parts`  — planned; the part scheduler owns it, whether the plan has one part
+ *   or eight. Pickup stays off.
+ * - `awaiting_approval` — the plan is written, but it is a proposal a human has
+ *   not answered yet (`planning.requireApproval`). Pickup stays off exactly as for
+ *   `parts`, and the part scheduler queues the parts without dispatching any.
  * - `planning` — a planner is still owed, either dispatchable now or cooling down.
+ * - `unplanned` — **the fail-open arm, and the only thing rule `issue-pickup` now
+ *   works.** There is no plan and there is not going to be one: the planner spent
+ *   its attempt cap or is being held off, so the issue falls through to being
+ *   worked whole on the flat `issue/<n>` branch rather than parked for ever.
+ *
+ * `unplanned` replaced a `single` route that meant two different things at once —
+ * "a planner decided one PR is right" and "no planner ever answered" — reached by
+ * the same arm and told apart by a `failedOpen` flag every reader had to remember
+ * to check. The first of those is now an ordinary one-part plan, so what is left
+ * here is only the failure, and it is named after it.
  */
 export type PlanRouteVerdict =
-  | { route: 'single'; failedOpen: boolean }
   | { route: 'parts' }
   | { route: 'awaiting_approval' }
-  | { route: 'planning'; planner: 'dispatch' | 'cooldown' };
+  | { route: 'planning'; planner: 'dispatch' | 'cooldown' }
+  | { route: 'unplanned' };
 
 interface PlanRouteInput {
   /** The persisted plan for this issue, or null when the planner hasn't spoken. */
@@ -112,9 +124,9 @@ interface PlanRouteInput {
   /**
    * How many parts the plan declares (retired ones excluded). Absent = none.
    *
-   * This is the plan's **shape**, and it is why the arm is not read off the status
-   * alone: a plan with no live parts is the single arm, whatever else is true of
-   * it. It also decides what a *failed* replan falls back to.
+   * Read for one question only: what a *failed replan* falls back to. An issue
+   * that already has parts has a plan to carry on with, so a planner that cannot
+   * settle must not drop it back to unplanned pickup.
    */
   existingParts?: number;
 }
@@ -159,27 +171,26 @@ export function plannerVerdict(
  * cooldown verdict, so the dispatcher and the cockpit's per-issue chip read the
  * same answer rather than each guessing at it.
  *
- * **Fail-open is the load-bearing part.** Narrowing pickup to `single` turns any
+ * **Fail-open is the load-bearing part.** Narrowing pickup to nothing turns any
  * planner that crashes or writes no `plan.json` into a permanently parked issue —
- * so once the existing attempt cap is spent the issue falls open to `single` and
- * gets worked the way it does today. Nothing escalates: the cap is the signal, and
- * an issue that quietly keeps moving beats one that quietly stops.
+ * so once the existing attempt cap is spent the issue falls open to `unplanned`
+ * and gets worked whole. Nothing escalates: the cap is the signal, and an issue
+ * that quietly keeps moving beats one that quietly stops.
  *
  * A **replan** fails back differently, and must: an issue that already has parts
- * has an existing decomposition to fall back on, and `single` would point rule `issue-pickup`
- * at the flat `issue/<n>` branch that git cannot create beside the part refs. The
+ * has a plan to fall back on, and `unplanned` would point rule `issue-pickup` at
+ * the flat `issue/<n>` branch that git cannot create beside the part refs. The
  * point of failing open is that the issue keeps moving — for a replan, that means
  * carrying on with the plan it already had.
+ *
+ * **A plan's part count is not asked about here.** It used to be the first
+ * question — no live parts meant the single arm, whatever else was true — and that
+ * one line was what made a one-part plan a different kind of thing from a two-part
+ * one all the way down.
  */
 export function resolvePlanRoute(input: PlanRouteInput): PlanRouteVerdict {
   const plan = input.plan;
   if (plan) {
-    // The shape, not a status: a plan being delivered with no live parts *is* the
-    // single arm. Read this way rather than from a `single` status, because a
-    // status that carried the shape made the two exclusive — a single-PR plan
-    // could not also be running, so every stage that asks "is this plan live?"
-    // silently answered no for it.
-    if (plan.status === 'active' && (input.existingParts ?? 0) === 0) return { route: 'single', failedOpen: false };
     // Named rather than folded into `parts`: the two behave identically for
     // pickup (the issue is planned either way) and differently for everything
     // downstream, and this is the one place the arm is decided — so an
@@ -191,7 +202,7 @@ export function resolvePlanRoute(input: PlanRouteInput): PlanRouteVerdict {
   }
   const kind = input.verdict.kind;
   if (kind === 'escalate' || kind === 'hold') {
-    return (input.existingParts ?? 0) > 0 ? { route: 'parts' } : { route: 'single', failedOpen: true };
+    return (input.existingParts ?? 0) > 0 ? { route: 'parts' } : { route: 'unplanned' };
   }
   return { route: 'planning', planner: kind === 'cooldown' ? 'cooldown' : 'dispatch' };
 }

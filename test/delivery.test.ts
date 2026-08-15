@@ -5,7 +5,7 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { issuePickupStatus } from '../src/dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import type { Issue, IssueDelivery, WorldEvent } from '../src/types.js';
-import { singlePlan } from './support/plans.js';
+import { spentPlannerAttempts } from './support/plans.js';
 
 // The pure hold predicate: what a `delivered` verdict holds, and what ends it.
 // No store, no world snapshot — the two arms are decidable from a row, an issue
@@ -155,11 +155,11 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: [],
+    // The funnel has failed open: this is about the park standing pickup down,
+    // and an issue the planner still owns would never reach pickup at all.
+    recentDecisions: spentPlannerAttempts(12),
     agentHeadroom: 3,
-    // Planned as one pull request: this is about the park standing pickup down,
-    // and an unplanned issue would be the planner's before pickup is reached.
-    plans: [singlePlan(12)],
+    plans: [],
     deliveries: [delivery()],
   });
   // Idleness is still a decision, so the cycle records a no_op — what must not be
@@ -177,9 +177,9 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: [],
+    recentDecisions: spentPlannerAttempts(12),
     agentHeadroom: 3,
-    plans: [singlePlan(12)],
+    plans: [],
     deliveries: [delivery()],
     deliverySignals: [event()],
   });
@@ -193,11 +193,11 @@ test('the chip and the rule answer the same question', () => {
     cooldown: DEFAULT_COOLDOWN,
     now: '2026-07-28T12:00:00.000Z',
     tasks: [],
-    recentDecisions: [],
+    recentDecisions: spentPlannerAttempts(12),
     openPrs: [],
     headroom: 3,
     paused: false,
-    plans: [singlePlan(12)],
+    plans: [],
   };
 
   const parked = issuePickupStatus(issue(), { ...base, deliveries: [delivery()] });

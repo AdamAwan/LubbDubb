@@ -269,7 +269,6 @@ test('a plan step for a person is never dispatched, and holds what depends on it
   const { plan } = ingestPlanDocument(system.store, {
     doc: {
       version: 1,
-      verdict: 'parts',
       evidence: [],
       reason: 'The console change has to happen before anything can verify it.',
       parts: [
@@ -337,7 +336,6 @@ test('declining a step blocks it rather than concluding it, so nothing downstrea
   const { plan } = ingestPlanDocument(system.store, {
     doc: {
       version: 1,
-      verdict: 'parts',
       evidence: [],
       reason: 'A person has to flip it first.',
       parts: [

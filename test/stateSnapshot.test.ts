@@ -8,7 +8,7 @@ import { buildSystem } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { planAsSingle } from './support/plans.js';
+import { failPlanningOpen } from './support/plans.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
@@ -24,7 +24,7 @@ function testConfig() {
     // file is about something else — leaving them on would put an extra agent in
     // front of every issue these assertions dispatch. Each has its own tests.
     // (The planning funnel cannot be pinned off; a goal is planned by writing the
-    // `single` verdict the planner would have written — `planAsSingle`.)
+    // funnel having failed open on it — `failPlanningOpen`.)
     assessment: { enabled: false } as never,
     assay: { enabled: false } as never,
     retrospective: { enabled: false } as never,
@@ -35,7 +35,7 @@ test('buildStateSnapshot ships a refUrls map covering world items and task branc
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_pr', number: 42, title: 'X', branch: 'feat/x' });
   system.connector.inject({ kind: 'new_issue', number: 13, title: 'Bug' });
-  planAsSingle(system.store, 13);
+  failPlanningOpen(system.store, 13);
   // The fake provider builds no real URLs; stand in a resolver so the wiring is
   // observable (the provider's resolver is unit-tested elsewhere).
   system.connector.resolveRefUrl = (ref: string) => `https://example.test/${ref}`;
@@ -111,7 +111,7 @@ test('buildStateSnapshot keys every goal by its canonical ref, so the cockpit ca
   // world and renders plain on a quiet one is the same defect either way.
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 13, title: 'Bug' });
-  planAsSingle(system.store, 13);
+  failPlanningOpen(system.store, 13);
   system.connector.resolveRefUrl = (ref: string) => `https://example.test/${ref}`;
   system.store.setWorldBaseline(await system.connector.getState());
 
@@ -154,9 +154,9 @@ test('buildStateSnapshot gives each decision the ref it is about, and keys it', 
 test('buildStateSnapshot attaches a pickup verdict to every issue', async () => {
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 7, title: 'Bug' });
-  planAsSingle(system.store, 7);
+  failPlanningOpen(system.store, 7);
   system.connector.inject({ kind: 'new_issue', number: 8, title: 'Staffed' });
-  planAsSingle(system.store, 8);
+  failPlanningOpen(system.store, 8);
   // Issue 8 has an active task on its origin → 'active', not 'eligible'.
   system.store.createTask({
     kind: 'code',
@@ -178,7 +178,7 @@ test('buildStateSnapshot attaches a pickup verdict to every issue', async () => 
 test('buildStateSnapshot pickup verdict reflects paused dispatch', async () => {
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_issue', number: 9, title: 'Bug' });
-  planAsSingle(system.store, 9);
+  failPlanningOpen(system.store, 9);
   system.runtimeControl.apply({ paused: true });
   system.store.setWorldBaseline(await system.connector.getState());
 
@@ -205,7 +205,7 @@ test('buildStateSnapshot never reads the provider — the pulse is the only read
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
   system.connector.inject({ kind: 'new_pr', number: 77, title: 'X', branch: 'feat/x' });
   system.connector.inject({ kind: 'new_issue', number: 78, title: 'Bug' });
-  planAsSingle(system.store, 78);
+  failPlanningOpen(system.store, 78);
   await system.harness.runCycle('manual');
 
   let reads = 0;

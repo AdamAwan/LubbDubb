@@ -89,7 +89,7 @@ function planWith(
 ): string {
   const parsed = validatePlanDocument({
     version: 1,
-    verdict: 'single',
+    parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
     reason: 'One small fix.',
     validation: { checks, resources },
   });

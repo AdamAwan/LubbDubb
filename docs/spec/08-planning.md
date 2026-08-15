@@ -10,36 +10,69 @@ test, and the off arm — `issue-pickup` un-narrowed, no plan row anywhere — i
 anything else in the harness is written for any more. A config file still setting `planning.enabled`
 is warned about and ignored ([02](02-configuration.md#retired-keys)).
 
+## A plan is a list of parts
+
+**Every plan has at least one part, and a plan with one part is not a different kind of thing from a
+plan with eight.** `PlanDocumentSchema` refuses a document declaring none; rule `plan-part` schedules
+every plan there is; each part gets `issue/<n>/<slug>`, its own agent and its own pull request,
+whether it has siblings or not.
+
+That is a change, and it is worth stating what it replaced, because the old shape is the reason so
+many surfaces used to fork. A plan document carried a `verdict` of `single` or `parts`, and **`single`
+meant _zero_ parts**: no part row, no branch of its own, no acceptance criteria, no scope to drift
+from — the issue was handed back to rule `issue-pickup` and worked whole on the flat `issue/<n>`
+branch. So the commonest plan the harness writes was the one encoded as the absence of a plan's
+contents, and everything downstream had to ask which of the two it was holding. The cost was paid in
+a dozen places at once: `planShape`, a `singleOverruled` override the planner could have its verdict
+refused by, a `describeSingleRoute` sentence for the approval card, two settlements in `refusePlan`,
+an `abandonDecomposition` route and cockpit control whose entire job was collapsing one shape into
+the other, a partless arm in the reconciler and another in the status comment, and a ref-collision
+guard that existed because the two shapes wanted branches git cannot hold at once.
+
+None of that was wrong for the encoding it had. It was all downstream of one decision — that "one
+pull request" is a *shape* rather than a *size* — and removing that decision removes the rest.
+
+The `verdict` field is gone from the document. A document still carrying one is not refused for
+carrying it (zod strips unknown keys), but one carrying no parts is, with a sentence saying so — so
+an operator override written against the old shape is corrected on its first submission rather than
+quietly ingesting as something else. `plan_submit` hands the reason back in the same turn.
+
 ## The four arms
 
 `resolvePlanRoute(input)` in `src/plans/planning.ts` is **the one place** an issue's arm is decided.
 Pure over the plan row plus the plan origin's cooldown verdict. Both the dispatcher (rules `issue-plan` and `issue-pickup`)
 and `issuePickupStatus` read it, so the cockpit's chip can never disagree with what fires.
 
-| Verdict                                              | Meaning                                                                                                                                                                       |
-| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `{route:'single', failedOpen}`                       | Fall through to normal pickup. `failedOpen` marks the ones that got there because planning gave up.                                                                           |
-| `{route:'parts'}`                                    | Decomposed; the part scheduler owns it and pickup stays off.                                                                                                                  |
-| `{route:'awaiting_approval'}`                        | Decomposed, and the decomposition is a proposal a human has not answered. Pickup stays off exactly as for `parts`; rule `plan-part` queues the parts without dispatching any. |
-| `{route:'planning', planner:'dispatch'\|'cooldown'}` | A planner is owed, now or after the gap.                                                                                                                                      |
+| Verdict                                              | Meaning                                                                                                                                                          |
+| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `{route:'parts'}`                                    | Planned; the part scheduler owns it and pickup stays off. One part or eight — the route does not count them.                                                     |
+| `{route:'awaiting_approval'}`                        | Planned, and the plan is a proposal a human has not answered. Pickup stays off exactly as for `parts`; rule `plan-part` queues the parts without dispatching any. |
+| `{route:'planning', planner:'dispatch'\|'cooldown'}` | A planner is owed, now or after the gap.                                                                                                                         |
+| `{route:'unplanned'}`                                | **The fail-open arm, and the only one rule `issue-pickup` works.** No plan, and none coming.                                                                     |
 
 Resolution order:
 
-1. Planning disabled → `single`.
-2. An `active` plan row with **no live parts** → `single`. That is the shape, and it is read off the
-   part rows rather than off the status — see [Shape is the parts](#shape-is-the-parts).
-3. A plan row with status `awaiting_approval` → `awaiting_approval`.
-4. A plan row with any status other than `planning` (`active`, `complete`, `abandoned`) → `parts`.
-5. Otherwise (no plan, or a plan back in `planning` — a replan in flight), the plan origin's cooldown
+1. A plan row with status `awaiting_approval` → `awaiting_approval`.
+2. A plan row with any status other than `planning` (`active`, `complete`, `abandoned`) → `parts`.
+3. Otherwise (no plan, or a plan back in `planning` — a replan in flight), the plan origin's cooldown
    verdict decides: `escalate`/`hold` → **fail open**; anything else → `planning`.
 
-**Fail-open is load-bearing.** Narrowing pickup to `single` would turn any planner that crashes or
-writes no plan into a permanently parked issue. Once the attempt cap is spent the issue falls open and
-gets worked normally. Nothing escalates: the cap is the signal, and an issue that quietly keeps moving
-beats one that quietly stops.
+The part count is not asked about. It used to be the *first* question — "an `active` plan with no
+live parts → `single`" — and that one line is what made a one-part plan a different kind of thing
+from a two-part one all the way down.
 
-A **replan** fails back differently — to `parts`, not `single` — when `existingParts > 0`. An issue
-that already has parts has a decomposition to fall back on, and `single` would point rule `issue-pickup` at the flat
+**Fail-open is load-bearing.** Narrowing pickup to nothing would turn any planner that crashes or
+writes no plan into a permanently parked issue. Once the attempt cap is spent the issue falls open to
+`unplanned` and gets worked whole. Nothing escalates: the cap is the signal, and an issue that quietly
+keeps moving beats one that quietly stops.
+
+`unplanned` is named after the failure because that is now all it is. The `single` route it replaced
+meant two unrelated things reached by the same arm — "a planner decided one PR is right" and "no
+planner ever answered" — told apart by a `failedOpen` flag every reader had to remember to check. The
+first is an ordinary one-part plan now, so only the failure is left.
+
+A **replan** fails back differently — to `parts`, not `unplanned` — when `existingParts > 0`. An issue
+that already has parts has a plan to fall back on, and `unplanned` would point rule `issue-pickup` at the flat
 `issue/<n>` branch git cannot create beside the existing part refs.
 
 ## Origins and branches
@@ -56,8 +89,12 @@ that already has parts has a decomposition to fall back on, and `single` would p
 
 The planner branch namespace is deliberately separate. Git stores refs as files, so
 `refs/heads/issue/12` and `refs/heads/issue/12/plan` cannot coexist — the second needs the first to be
-a directory. A planner branch under `issue/<n>/…` would make the very pickup its `single` verdict
-authorises impossible to branch for.
+a directory. A planner branch under `issue/<n>/…` would collide with the parts of the
+very plan it is writing.
+
+The planner branch namespace also has to stay clear of the part branches, which is the same fact from
+the other side: `plan/issue/<n>` cannot live under `issue/<n>/…` without colliding with the very parts
+the planner is writing.
 
 `planOriginIssue` is also the fence on plan ingestion via the file path: an ordinary pickup agent that
 writes a `plan.json` is ignored, because flipping its own issue to `parts` would strand it while
@@ -104,7 +141,6 @@ with no hierarchy, so the GitHub prompt is unchanged.
 ```json
 {
   "version": 1,
-  "verdict": "single" | "parts",
   "reason": "<one sentence: why this shape>",
   "diagnosis": "<what is actually wrong>",
   "approach": "<what is going to be done about it>",
@@ -116,8 +152,10 @@ with no hierarchy, so the GitHub prompt is unchanged.
 Validation (`PlanDocumentSchema`, zod):
 
 - `version` is literally `1`; `reason` is non-empty.
-- On `single`, `parts` is ignored.
-- On `parts`, at least one part is required.
+- **At least one part is required**, and this is the refusal that replaced the `single` verdict. The
+  message says what to do about it (`a plan needs at least one part — work that is one pull request
+  is a plan with one part`), because the deployments most likely to submit a partless document are
+  the ones running an operator-overridden prompt written against the old shape.
 - `slug` matches `^[a-z0-9][a-z0-9-]*$` and is unique within the document. It is the **merge key**: an
   amended plan merges on it, so it must survive a replan.
 - `scope` (files/areas this part owns) is non-empty.
@@ -135,7 +173,7 @@ Validation (`PlanDocumentSchema`, zod):
   through the second one (`a` → `[x, b]`, `b` → `[a]`) is one a chain walk cannot see.
 
 `validation` is the executable form of the `verification` narrative below — how anyone checks the
-*goal* was met, as steps rather than as a paragraph. Optional, read on both verdicts, and owned
+*goal* was met, as steps rather than as a paragraph. Optional, read whatever the plan's size, and owned
 entirely by [20](20-validation.md), which states its schema, its refusals and what an amendment may do
 to a check somebody has already run. The one thing worth knowing here: a check declares no actor, and
 a document that gives one is refused.
@@ -218,8 +256,8 @@ transport (`AgentManager` for the file path, `McpToolDeps` for the tool path) ra
 config here, so ingestion stays store-only and neither transport can persist a verdict the other
 would not.
 
-The verdict is persisted for **both** outcomes — a single-PR plan is a first-class row with no parts.
-Without one the planner would re-run on the same issue every cycle.
+The plan is persisted whatever its size — a one-part plan is an ordinary row with one part. Without a
+row the planner would re-run on the same issue every cycle.
 
 For an amendment:
 
@@ -228,24 +266,17 @@ For an amendment:
    agent, a branch or a PR is left exactly as it is. Retiring it would strand a PR the reconciler
    still folds reality onto, and a reviewer would have no idea the harness had written it off.
    Un-declaring in-flight work is a request to _stop_, which is a kill, not a plan edit.
-2. `amendedPlanStatus(verdict, surviving, requireApproval)` — `active`, or `awaiting_approval` when
-   approval is required. **Both verdicts are gated**, for the reason under
-   [the approval gate](#the-approval-gate). The one arm that is never gated is the _overridden_
-   `single` (`singleOverruled`) — parts are in flight, the collapse was refused, and there is no
-   decision left in it. Which shape was ingested is not written at all: it is the surviving parts,
-   read back by `planShape`.
+2. `ingestedPlanStatus(requireApproval)` — `active`, or `awaiting_approval` when approval is
+   required, and **nothing else is consulted**. This took the verdict and the surviving parts while a
+   `single` verdict could be *overruled* by a part already carrying a branch: shape arithmetic on the
+   write path, for a plan that is one pull request. An amendment now lands the same way whatever it
+   does to the part count.
 3. `store.upsertPlan`, then retire, then `store.upsertPlanParts` (which merges on slug and never
    deletes).
 4. `store.ingestValidation`, on the same terms one layer down: merged on the check id, letters
    assigned once, and a check the amendment stopped declaring superseded rather than deleted. Written
    whenever the document carries a validation block, which is the only condition there is.
    → [20](20-validation.md)
-
-An overridden `single` is reported rather than silently applied — asked of the parts
-(`singleOverruled`), never of the status, since an honoured single verdict is `active` too:
-`overriddenSingle` is returned, the
-tool path tells the **agent** and records an operator-facing error, and the file path (which cannot
-answer the agent) records the error alone.
 
 ## Plan parts
 
@@ -362,9 +393,8 @@ readiness then decides when the ask becomes actionable, exactly as it does for a
 `blocked`, with `declinedStepReason` on the row. **Not `concluded`**: concluding it would make
 `partSettled` answer true and release every dependent waiting on the thing that was refused — a plan
 completing on work nobody did. The dependents stay `pending`, the goal page draws the part under
-**Held** with the reason on it, and the ways out are the two on the plan sheet — Replan, or
-[abandon the decomposition](#when-the-collision-arrives-after-approval). Nothing escalates: the
-operator is the one who declined, and both buttons are in front of them.
+**Held** with the reason on it, and the way out is Replan, on the plan sheet. Nothing escalates: the
+operator is the one who declined, and the button is in front of them.
 
 That makes a declined step the **second** thing that can block a part, beside the ref collision. The
 readiness pass is still not one of them — it answers `pending` or `ready` and never `blocked` — and
@@ -429,7 +459,7 @@ whose issue is open and passes `issueWatchGateReason`:
   limit is visible instead of looking like nothing happened.
 - For an `awaiting_approval` plan every ready part is queued **`unapproved`** and nothing else: the
   cooldown and attempt-cap arms are skipped, because they would answer "why did this part not get an
-  agent" with the wrong reason. Skipping the plan outright would make an unapproved decomposition
+  agent" with the wrong reason. Skipping the plan outright would make an unapproved plan
   look exactly like an idle fleet — the invisibility `capped` is named to fix.
 - Candidates from all plans are then sorted by depth, issue number, `seq` and appended to the ranked
   list.
@@ -441,71 +471,74 @@ actually spawns, so a held dispatch leaves the part `ready`.
 ## The approval gate
 
 `planning.requireApproval`, **on by default** (`src/config.ts` and `DEFAULT_PLANNING` in
-`src/plans/planning.ts` agree). On, a planner's verdict is a **proposal** before it is work (issue
-#109 phase 3) — **either verdict**. Off, an enabled funnel behaves byte-for-byte as it did before
-phase 3 existed, on both arms: the verdict commits the moment the planner writes it, and no proposal
-row is written for anyone.
+`src/plans/planning.ts` agree). On, a plan is a **proposal** before it is work (issue #109 phase 3).
+Off, the funnel behaves byte-for-byte as it did before phase 3 existed: the plan commits the moment
+the planner writes it, and no proposal row is written for anyone.
 
-**Both arms, because both are verdicts about shape.** The gate started on the `parts` arm alone, on
-the reasoning that a `single` verdict proposes nothing — it is the path the funnel already falls open
-to. That was wrong in the one direction that matters: it made the _commonest_ route the one with no
-acceptance step in it. A planner deciding an issue is one pull request has decided something an
-operator may well disagree with (it is the same decision, differently answered), and "nothing is
-scheduled until you approve" was the whole promise of the gate. So a `single` verdict lands
-`awaiting_approval` too, is put to the operator by rule `plan-approval` exactly as a decomposition is,
-and rule `issue-pickup` starts nothing until it is released.
+**Every plan, whatever its size.** The gate started on the `parts` arm alone, on the reasoning that a
+`single` verdict proposes nothing — it was the path the funnel already fell open to. That was wrong in
+the one direction that mattered: it made the _commonest_ route the one with no acceptance step in it.
+A planner deciding an issue is one pull request has decided something an operator may well disagree
+with, and "nothing is scheduled until you approve" was the whole promise of the gate. The distinction
+is gone entirely now — there is one arm — but the reasoning is worth keeping, because it is the
+argument that generalised: what is being approved is *this work, described this way*, and the number
+of parts it is cut into is not what makes it worth asking about.
 
-**One `single` arm is never gated, at either setting**: the verdict the harness _overruled_. When live
-parts already carry a branch or a PR, `singleOverruled` is true, `amendedPlanStatus` keeps the plan
-`active` ungated, and the caller says so out loud (`overriddenSingle`) — the collapse was refused, so
-there is no decision left in it, and asking a human to approve a verdict that will not be honoured
-would be a question with no answer. That is also why `overriddenSingle` keys on the **parts** rather
-than on the status: an honoured single verdict is `active` too, and `awaiting_approval` is the verdict
-honoured and waiting, not overridden.
+There is also no longer an ungated arm. A `single` verdict the harness had *overruled* — parts already
+carrying branches, so the collapse was refused — was released without asking, because there was no
+decision left in it. Nothing overrules a plan any more, so nothing bypasses the gate.
 
-**What is being defaulted is only how a verdict lands**, not whether the funnel runs: whether a
-decomposition into N branches and N agents starts itself the moment a planner writes it, or waits for
-somebody to say yes.
+**What is being defaulted is only how a plan lands**, not whether the funnel runs: whether N branches
+and N agents start themselves the moment a planner writes them, or wait for somebody to say yes.
 Both polarities are asserted, and separately: `test/planApproval.test.ts` asserts the default **does**
-write a proposal — on each arm, and that accepting it releases the arm's own status — while
-`test/planPart.test.ts` pins `requireApproval: false` and asserts that path writes none. So the two
-default sites (`config.ts`, `DEFAULT_PLANNING`) cannot drift apart unnoticed.
+write a proposal and that accepting it releases the plan, while `test/planPart.test.ts` pins
+`requireApproval: false` and asserts that path writes none. So the two default sites (`config.ts`,
+`DEFAULT_PLANNING`) cannot drift apart unnoticed.
 
-**The gate is the plan's status.** Ingestion persists the verdict as `awaiting_approval` instead of
-`active`; releasing writes `active` on **either** arm, and that is the whole effect, because
-`awaiting_approval` is the released status with the gate closed. Rule `plan-part`'s question — "is
-this plan released" — is therefore the status check it already had, and a superseded verdict
-structurally cannot release a new one, because a replan resets the row.
+**The gate is the plan's status.** Ingestion persists the plan as `awaiting_approval` instead of
+`active`; releasing writes `active`, and that is the whole effect, because `awaiting_approval` is the
+released status with the gate closed. Rule `plan-part`'s question — "is this plan released" — is
+therefore the status check it already had, and a superseded plan structurally cannot release a new
+one, because a replan resets the row.
 
-### Shape is the parts
+### The status is the plan's life, and only that
 
-Which arm a released plan is on is **read off its parts, never stored** — `planShape(parts)` in
-`src/plans/parts.ts`. A `parts` verdict always declares at least one part (`planDocument` refuses an
-empty one) and ingestion writes them before the gate closes, while a `single` verdict retires every
-part nothing was started for. So **no live parts _is_ the single arm**, and a verdict column on the
-row would be a second answer to a question the parts already answer.
+`PlanStatus` carries `planning`, `awaiting_approval`, `active`, `complete` and `abandoned` — where the
+plan is in its life, and nothing about its shape.
 
-It was a `single` plan **status** until it was not, and the reason it moved is worth stating: shape
-and life are independent, and a status cannot hold both. A plan being delivered as one pull request is
-still being delivered — but `single` sat in the same field as `active`, so every consumer that
-switched on status had to know about the shape, and the one that forgot was silent. `PlanReconciler`
-lists `active`, `complete` and `awaiting_approval`; a `single` plan was in none of them, so it was
-never reconciled and **never wrote its status comment** — an issue worked whole told the tracker
-nothing at all, with no error anywhere. `absorbSinglePlanStatus` (`src/store/plans.ts`) carries those
-rows into `active` on boot.
+It carried the shape twice, in two different ways, and both are worth recording because the second is
+subtler than the first. It was a `single` plan **status** to begin with: shape and life are
+independent, and a status cannot hold both, so a plan being delivered as one pull request could not
+also be `active`. `PlanReconciler` lists `active`, `complete` and `awaiting_approval`, so a `single`
+plan was in none of them, was never reconciled, and **never wrote its status comment** — an issue
+worked whole told the tracker nothing at all, with no error anywhere.
 
-The consumers that ask the shape rather than the status: `resolvePlanRoute` (arm 2 above),
-`PlanReconciler.reconcilePlan` (the partless arm writes the status comment and folds nothing),
-`planInFlightVerdict` in `src/issueConclusion.ts` (a single-PR plan is _not_ in flight — its agent's
-declaration is what speaks), `abandonDecomposition` (a plan with no parts has nothing to collapse),
-and the cockpit's furnace and plan cards.
+The fix was to read the shape off the parts instead (`planShape`), and that was better but still a
+second question every consumer had to ask: `resolvePlanRoute`, `PlanReconciler.reconcilePlan`,
+`planInFlightVerdict`, `abandonDecomposition`, the cockpit's furnace and plan cards each had to know
+that a plan with no live parts was a different kind of plan. What removes the question is a plan
+always having parts. Nothing reads a shape now, because there is one.
+
+Two boot migrations carry the old rows over, and they run in this order because the second reads what
+the first writes (`src/store/store.ts`):
+
+- `absorbSinglePlanStatus` — the retired `single` **status** becomes `active`.
+- `backfillWholePlanParts` — every plan with **no part rows** gets the one part it always was, slug
+  `whole`. Without it those rows are scheduled by nothing at all: rule `issue-pickup` no longer looks
+  at a planned issue and rule `plan-part` finds no part, so a live goal parks itself silently on the
+  deploy that ships this. The part carries `branch = issue/<n>` when the plan was already being
+  delivered (`active`/`complete`), so the flat branch's open PR, pushed commits and running agent land
+  on it through the ordinary `part.branch ?? partBranch(…)` resolution and `foldPr` picks the PR up on
+  the next pulse; `null` before anything was scheduled, so the part is cut in the normal namespace.
+  `abandoned` plans are skipped — nothing schedules them, so there is no silence to fix, and inventing
+  a part for work somebody stopped would put a row in the graph claiming the opposite.
 
 | Step                 | What happens                                                                                                                                                                                                                                       |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Verdict lands        | `amendedPlanStatus(…, requireApproval)` → `awaiting_approval`, on either arm. Parts are written normally: the gate holds scheduling, not the record of the verdict.                                                                                |
+| The plan lands       | `ingestedPlanStatus(requireApproval)` → `awaiting_approval`. Parts are written normally: the gate holds scheduling, not the record of the plan.                                                                                                    |
 | Rule `plan-approval` | Emits `propose_plan` for an `awaiting_approval` plan whose issue is open and watched, unless `planProposalHold` finds a pending one. Read off `ctx.plans`, not `eligibleIssues` — a replan of a live plan is re-approved while its parts have PRs. |
 | The executor         | Creates an `approve_change` escalation plus a `plan` proposal with ref `issue:<n>:plan`, and re-asks the same hold (every path that reaches the executor is covered, not just the one that checks first).                                          |
-| Accept               | `ProposalDesk.accept` → `ActionExecutor.runAuthorized` → `releasePlan`: the plan becomes `active` (a decomposition) or `single` (one pull request), audited under `human:<proposal id>` as `authorized by you`.                                    |
+| Accept               | `ProposalDesk.accept` → `ActionExecutor.runAuthorized` → `releasePlan`: the plan becomes `active`, audited under `human:<proposal id>` as `authorized by you`.                                                                                     |
 | Reject               | `ProposalDesk.reject` → `refusePlan`, carrying the operator's note.                                                                                                                                                                                |
 | Replan               | `POST /api/plans/:id/replan` withdraws a pending proposal (below).                                                                                                                                                                                 |
 
@@ -518,68 +551,65 @@ shortfall's assessor quote and for the same two reasons: it is the planner's pro
 label a block whose edges it can see ([17](17-cockpit.md#how-an-escalation-card-is-laid-out)). It falls
 back to `reason` when the planner filled in neither, and is absent when it said nothing at all.
 
-**The decomposition is not in the ask.** It used to be its body — `describeProposedParts`, every part
+**The split is not in the ask.** It used to be its body — `describeProposedParts`, every part
 in dispatch order with every prerequisite — and that is the wrong half of a plan to put in front of
 someone about to authorise it: how the work is cut up is a question you reach _after_ agreeing the work
-is right, and the split is one click away in the plan panel, drawn as waves, where it reads far better
-than a flat list did. The card's **Read the full plan** control is the route to it, and the built-in
-template says so.
+is right, and the parts are one click away in the plan panel, drawn as waves, where they read far
+better than a flat list did. The card's **Read the full plan** control is the route to it, and the
+built-in template says so.
 
-`plan-approval` is rendered with `{parts}` — the pull requests the plan produces, `1` on a single
-verdict — and with `{list}`, which is still `describeProposedParts` for a decomposition and
-`describeSingleRoute` for a single verdict (naming the `issue/<n>` branch, because a branch that already
-exists is what the other warnings on this ask are about). The built-in template no longer interpolates
-`{list}`; it is rendered anyway, so an operator override written when the split _was_ the body keeps
-working. The single arm's branch survives that either way — `planApprovalNote` names it in the
-paragraph it appends, which is the half no override can drop. What approving and rejecting _this_ verdict do is then **appended** by `planApprovalNote`,
-never interpolated: the template is operator-overridable and `loadPromptTemplates` rejects only
-_unknown_ placeholders, so an `{arm}` token would be silently dropped by exactly the deployments that
-customised most — and the two arms settle differently enough that a reader given the wrong paragraph
-would answer the wrong question. The built-in template is arm-neutral for the same reason: an override
-written before the single arm existed still frames the question correctly, and the appended paragraph
-completes it. `planApprovalWarnings` appends after that, unchanged.
+`plan-approval` is rendered with `{parts}` — how many parts the plan has — and with `{list}`,
+`describeProposedParts`. The built-in template no longer interpolates `{list}`; it is rendered anyway,
+so an operator override written when the split _was_ the body keeps working. What approving and
+rejecting do is then **appended** by `planApprovalNote`, never interpolated: the template is
+operator-overridable and `loadPromptTemplates` rejects only _unknown_ placeholders, so a
+`{settlement}` token would be silently dropped by exactly the deployments that customised most.
+
+`planApprovalNote` is **one paragraph** now. It was two, and picking between them was the reason it
+was appended in the first place: a one-pull-request plan settled somewhere else entirely — approving
+it handed the issue to ordinary pickup, and refusing it had nowhere to fall back to — so a reader
+given the other arm's paragraph would answer the wrong question. Both settle identically, so there is
+no wrong paragraph left to hand anyone. `planApprovalWarnings` appends after that, unchanged.
 
 `planProposalHold(ref, proposals)` in `src/proposals/proposals.ts` holds on **`pending` only**, unlike
 `proposalHold`. A merge is proposed off world state that persists, so it needs a durable "no" and a
-settle window; a plan proposal is made once per **verdict**, and both verdicts rewrite the row the gate
-reads. A holding `rejected` would let one refusal veto every future decomposition (only an operator's
-replan can bring the question back); an expiring `accepted` would re-propose a decomposition whose
+settle window; a plan proposal is made once per **plan**, and both settlements rewrite the row the gate
+reads. A holding `rejected` would let one refusal veto every future plan (only an operator's
+replan can bring the question back); an expiring `accepted` would re-propose a plan whose
 agents are already running.
 
 It follows that **phase 4's signal expiry stops here**, and could not have been inherited: it ends a
 rejected hold, and this predicate never applies one — the signature says so, since it takes no signals
 at all. It would also read the wrong thing if it did. The transitions on `issue:<n>` are its comments
-and its links, none of which say anything about whether a decomposition is the right _shape_, while the
-row that **is** that verdict is rewritten by both settlements. `test/planApproval.test.ts` asserts the
+and its links, none of which say anything about whether the plan is the right one, while the
+row that **is** the plan is rewritten by both settlements. `test/planApproval.test.ts` asserts the
 polarity in both predicates rather than trusting the two to stay apart.
 
 **Rejection has an effect of its own**, because a bare "no" would park the issue: once the funnel is
 on, a plan is the only thing that schedules work for a planned issue (rule `work-item-in-review` parks the work item in
 the review state for the life of the plan, and `resolvePlanRoute` fails a spent replan back to `parts`).
-`refusePlan` (`src/plans/planApproval.ts`) therefore leaves the issue a **route**, and which route
-depends on the arm it is refusing.
+`refusePlan` (`src/plans/planApproval.ts`) therefore leaves the issue a **route**, and it is the same
+route every time: the plan goes to **`planning`** with the operator's note appended to `plan.reason`,
+which is the same one status write `POST /api/plans/:id/replan` makes, and rule `issue-plan` dispatches
+a replan from it on the next pulse. The note is not decoration: a planner shown only "declined" has no
+reason to decide differently to the way it just decided. It cannot loop — the planner's attempt cap
+ends it, and a spent cap fails the issue open and gets it worked, which is the funnel's existing answer
+to a planner that cannot settle.
 
-A refused **decomposition** retires every part `partHasWork` says nothing was started for, then writes
-`amendedPlanStatus('single', survivors)` — `active` either way, with the survivors deciding what that
-means:
+**Rejecting used to fork on the part count**, and the fork is what this replaces. A refused plan with
+parts collapsed to the no-parts "single" shape and was picked up whole; a refused plan that was
+*already* that shape had nowhere to fall — the single route is what the other arm fell *back* to — so
+it went to a planner instead. One button meant two unrelated things depending on a number it did not
+mention, and only one of them was ever the operator's intent: *this plan is wrong, write a better one*.
 
-- **no survivors** — nothing was in flight, so the shape is now single and the issue falls back to
-  being worked as one PR by rule `issue-pickup`.
-- **survivors** — parts are in flight, which means a _replan_ is being refused: the work already
-  running carries on and the amendment's new parts are the ones retired. Collapsing here is impossible
-  anyway, since git cannot create the flat `issue/<n>` branch beside the existing part refs.
+**What is still keyed on the parts is work that has left the harness**, which is not a question about
+shape. Every part `partHasWork` says nothing was started for is retired, so the graph says what
+happened instead of leaving `ready` rows nothing schedules; parts with a branch or a PR are left
+exactly as they are, because they are not the refusal's to withdraw. A refusal that finds work in
+flight is a *replan* being refused, and the work already running carries on while the planner rewrites
+around it.
 
-A refused **single** verdict (no live parts) is the arm with nowhere to fall: the single-PR route is
-what a refused decomposition falls _back_ to, so releasing it here would perform the very thing the
-operator declined, and `abandoned` would park the issue. "Not as one pull request" is a question
-only a planner can answer again — so the plan goes to **`planning`** with the operator's note appended
-to `plan.reason`, which is the same one status write `POST /api/plans/:id/replan` makes, and rule
-`issue-plan` dispatches a replan from it on the next pulse. The note is not decoration: a planner shown
-only "declined" has no reason to decide differently to the way it just decided. It cannot loop — the
-planner's attempt cap ends it, and a spent cap fails the issue open to `single` and gets it worked,
-which is the funnel's existing answer to a planner that cannot settle.
-
-An operator who wants a _different_ plan can also press Replan, which is on the same panel.
+An operator who wants a _different_ plan without refusing this one can press Replan, on the same panel.
 
 **Both settlements are compare-and-set against `awaiting_approval`**, the same discipline as
 `Store.decideProposal`'s against `pending`: a verdict arriving after the plan moved on — an operator
@@ -693,11 +723,16 @@ is exactly what a stray push or a PR opened on its branch would otherwise achiev
 
 ### The ref-collision guard
 
-`refs/heads/issue/12` and `refs/heads/issue/12/<slug>` cannot coexist. An issue worked as `single`
-first and then replanned to `parts` has exactly that branch, and every part branch would fail to
-create with a git error nobody can act on. The reconciler checks `git presence(issue/<n>)`; if the
-flat branch exists locally or remotely, every uncut part is parked `blocked` and **one** clear error is
-recorded naming the branch to delete or rename.
+`refs/heads/issue/12` and `refs/heads/issue/12/<slug>` cannot coexist. An issue picked up **unplanned**
+first — the funnel's fail-open arm — and planned afterwards has exactly that branch, and every part
+branch would fail to create with a git error nobody can act on. The reconciler checks
+`git presence(issue/<n>)`; if the flat branch exists locally or remotely, every uncut part is parked
+`blocked` and **one** clear error is recorded naming the branch to delete or rename.
+
+**A part whose branch _is_ the flat one does not collide with it** — it is what is on it. That is the
+shape a plan backfilled onto an issue the funnel had already worked has (`backfillWholePlanParts`),
+and blocking it against its own branch would wedge exactly the plans the backfill exists to keep
+moving.
 
 The wording is `refCollisionReason(issueNumber, presence)` (`src/plans/planReconciler.ts`, pure) and
 it is written in **two places from that one function**: the error above, and
@@ -734,13 +769,13 @@ no reason anywhere.
 
 ### When the collision arrives after approval
 
-An issue worked `single` first, replanned, and then **approved** onto its own taken branch is the bad
-case: the parts block instantly, and every exit is closed. `refusePlan` compare-and-sets against
-`awaiting_approval` — correctly, since refusing is a verdict on a question you have not yet answered
-— so the fall-back-to-`single` arm is gone the moment the decomposition is released; and
-`resolvePlanRoute` fails a spent replan back to `parts`, never open to `single`. The plan sits there,
-nothing is dispatched, and nothing says so. Three things close it, kept separate because they are
-three different jobs (`src/plans/planWedge.ts`):
+An issue picked up unplanned first, then planned and **approved** onto its own taken branch is the bad
+case: the parts block instantly. `refusePlan` compare-and-sets against `awaiting_approval` —
+correctly, since refusing is a verdict on a question you have not yet answered — so it is gone the
+moment the plan is released; and `resolvePlanRoute` fails a spent replan back to `parts`, never open
+to unplanned pickup. The plan sits there, nothing is dispatched, and nothing says so. Two things close
+it, kept separate because they are two different jobs (`src/plans/planWedge.ts`), and the way *out* is
+Replan — which is the way out of every plan that is wrong for any other reason too:
 
 - **Noticing** — `planIsWedged(parts)`: every _live_ part blocked, not any. The collision blocks them
   together or not at all, so a mixture is a plan still making progress. [Rule `plan-blocked`](05-dispatcher.md#the-rules-in-evaluation-order) escalates it once, deduped on an open
@@ -755,21 +790,17 @@ three different jobs (`src/plans/planWedge.ts`):
 - **Warning first** — `planApprovalWarnings(issue, parts, openPrs)` is **appended** to rule `plan-approval`'s ask
   (never interpolated, for `ciFailureNote`'s reason) and names both the blocked parts and any open PR
   for the issue that no part claims. It **warns and does not block**: refusing to approve would put a
-  git fact in front of a judgement about _shape_, the branch is one command from being gone, and the
-  operator's only exit would become the opposite verdict to the one they were giving.
-- **A way out** — `abandonDecomposition` (`planApproval.ts`, `POST /api/plans/:id/abandon`) retires
-  the parts, which **is** the collapse to one pull request — the shape is the live part list, so there
-  is no second status write that could disagree with it, and a plan that already has no parts is
-  refused rather than answered `ok` for retiring nothing. A separate act rather than a loosened `refusePlan`
-  guard because it is a different sentence: refusing says _I will not authorize this_, abandoning says
-  _I authorized it, it cannot run, work the issue whole instead_. The bar is `partHasWork`, so nothing
-  with an agent, a branch or a PR behind it is retired — which is also what makes the collapse safe,
-  since a part that never pushed has no branch to strand and the flat `issue/<n>` branch is exactly
-  the one rule `issue-pickup` now wants.
+  git fact in front of a judgement about the *work*, the branch is one command from being gone, and
+  the operator's only exit would become the opposite verdict to the one they were giving.
 
-**Nothing attaches the existing pull request to a part.** The single-arm PR claims to resolve the
-whole issue — the claim the decomposition overruled — so nothing knows which part, if any, it
-satisfies. Deriving it would infer a positive terminal from incidental evidence, refused everywhere
+There was a third thing, `abandonDecomposition` (`POST /api/plans/:id/abandon` and a control on the
+plan sheet), which retired the unstarted parts and worked the issue as one pull request. It was a
+distinct act only while a plan with no parts was a *different kind of plan* — "I authorized this, it
+cannot run, work the issue whole instead" was a sentence about a shape. It is not one now, so the
+route and the control are gone and the exit is Replan.
+
+**Nothing attaches the existing pull request to a part.** A PR on the flat branch claims to resolve
+the whole issue, so nothing knows which part, if any, it satisfies. Deriving it would infer a positive terminal from incidental evidence, refused everywhere
 else in the harness. It is named to the operator and left alone.
 
 ### The status comment
@@ -807,24 +838,23 @@ right, and both rest on it being visible — which, until #171, it was not excep
 tracker. Absent (no comment written yet) and unresolvable (a provider that builds no URLs) both reach
 the cockpit as silence rather than as a link to nowhere.
 
-**Both shapes write one.** A decomposition renders its part rows; the single-PR arm has none, and
-renders the shape and the planner's reason instead — "one pull request, this issue is being delivered
-whole, not decomposed". Rendering that arm through the part count said "0/0 parts done", a progress
-report on work that was never split. It is the arm that wrote **nothing at all** until the shape came
-out of the status: a `single` plan was in none of the statuses `PlanReconciler.reconcile` lists, so it
-was never reconciled, and an issue worked whole told its tracker nothing — silently, since there was
-no failure to record.
+**Every plan renders the same body**: the part rows and a progress count, pluralised honestly
+(`0/1 part done`). There is no second rendering, and getting rid of the second rendering is most of
+the point — a goal delivered as one pull request used to post `**One pull request** — this issue is
+being delivered whole, not decomposed`, which told a reader of the thread about the harness's internal
+taxonomy rather than about the work. It is also the arm that posted **nothing at all** until the shape
+came out of the status: a `single` plan was in none of the statuses `PlanReconciler.reconcile` lists,
+so it was never reconciled, and an issue worked whole told its tracker nothing — silently, since there
+was no failure to record.
 
-The partless arm has no observed news to gate on (its body is the verdict, which only a replan
-changes), so the **body itself** is the signal: `writeStatusComment` memoises the last body sent per
-plan and sends only on a difference. Memoised rather than stored — a restart costs one idempotent
-edit, and a column would be a copy of the comment there is already a ref to. Nothing is written while
-a plan is `awaiting_approval`, on either shape: an unapproved verdict has no progress to report, and
-posting one would announce a commitment on the tracker that the operator has not made.
+`writeStatusComment` memoises the last body sent per plan and sends only on a difference — a second
+guard behind the caller's own news check, which is what makes a re-render free. Memoised rather than
+stored: a restart costs one idempotent edit, and a column would be a copy of the comment there is
+already a ref to. Nothing is written while a plan is `awaiting_approval`: an unapproved plan has no
+progress to report, and posting one would announce a commitment on the tracker that the operator has
+not made.
 
-`Store.rollUpPlanStatus` moves a plan to `complete` when every live part is `merged`. A partless plan
-is never touched by it: what finishes the single-PR arm is the issue's own delivery, which the plan
-does not own.
+`Store.rollUpPlanStatus` moves a plan to `complete` when every live part is `merged`.
 
 ## Replan
 
@@ -839,8 +869,8 @@ callable throughout, and the cockpit's plan sheet gives a running discussion its
 clearing the flag has to be the route's own job rather than a caller's.
 
 The withdrawal is not optional under `requireApproval`: a pending verdict holds rule `plan-approval` off the plan,
-so the amended decomposition would never be put to anyone — and the stale card, if accepted, would
-release a decomposition its reader never saw. It routes through the ordinary `ProposalDesk.reject`,
+so the amended plan would never be put to anyone — and the stale card, if accepted, would
+release a plan its reader never saw. It routes through the ordinary `ProposalDesk.reject`,
 which is safe precisely because the status write above already moved the plan, so `refusePlan` finds
 nothing to settle and the withdrawal is only the inbox item closing.
 
@@ -852,11 +882,10 @@ fails or is never picked up leaves the issue exactly where it was, not parked.
 Three things make replan work rather than merely fire:
 
 1. `plannerVerdict` narrows the cooldown window to decisions since `plan.updatedAt`.
-2. `resolvePlanRoute` fails a spent replan back to `parts`, not open to `single`.
-3. Ingestion does the amendment (and, under `requireApproval`, asks again — an amended verdict is a
-   new proposal): `partsToRetire` respects started work, and `amendedPlanStatus`
-   refuses to collapse to `single` while any part has a branch or a PR, recording an error rather than
-   overriding the planner silently.
+2. `resolvePlanRoute` fails a spent replan back to `parts`, not open to unplanned pickup.
+3. Ingestion does the amendment (and, under `requireApproval`, asks again — an amended plan is a new
+   proposal): `partsToRetire` respects started work, so an amendment cannot withdraw a part that has
+   a branch or a PR behind it.
 
 ## Discussing a plan
 
@@ -873,20 +902,18 @@ prompt.
 1. 404 when the plan is unknown.
 2. **409 unless `plan.status === 'awaiting_approval'`.** Every framing of Discuss — the design, this
    section, the `discuss-plan` prompt itself ("before approving it") — only ever contemplates talking
-   through a decomposition that is still a pending question. Without the guard, discussing a `single`
-   plan and then ending the discussion writes `awaiting_approval` over zero parts: rule `plan-approval` proposes it,
-   an operator approves an empty decomposition, `resolvePlanRoute` now returns `parts` instead of
-   `single`, and the issue is parked with no ready part, no agent and no chip explaining why. Discussing
-   an already-`active` plan is the milder version of the same mistake — it reopens the gate rule `plan-part`
-   already cleared and stops scheduling the remaining parts, which is exactly the harm `/discuss/end`'s
-   own 409 (below) exists to prevent on the way back out. `PlanModal.tsx` hides the Discuss button
-   outside `awaiting_approval` so the UI cannot offer what the route refuses.
+   through a plan that is still a pending question. Discussing an already-`active` one manufactures a
+   gate it has been through: the discussion's own end writes `awaiting_approval` back over a plan an
+   operator already authorised, reopening the gate rule `plan-part` had cleared and stopping the
+   remaining parts being scheduled — which is exactly the harm `/discuss/end`'s own 409 (below) exists
+   to prevent on the way back out. `PlanModal.tsx` hides the Discuss button outside
+   `awaiting_approval` so the UI cannot offer what the route refuses.
 3. `store.setPlanStatus(id, 'planning')` — exactly what `/replan` does.
 4. `store.setPlanDiscussing(id, true)`.
 5. Withdraw any pending plan proposal (`ProposalDesk.reject`, "superseded by a discussion"). Safe for
    the reason the replan withdrawal is safe: the status write lands first, so `refusePlan` finds the
    plan no longer `awaiting_approval` and no-ops — the withdrawal only closes the inbox item. And
-   **necessary**: a pending proposal holds rule `plan-approval` (`planProposalHold`), so the amended decomposition
+   **necessary**: a pending proposal holds rule `plan-approval` (`planProposalHold`), so the amended plan
    would never be put to anyone, and the stale card, if accepted, would release a plan its reader never
    saw.
 6. Broadcast, run a cycle.
@@ -896,7 +923,7 @@ Returns `{ ok: true, plan }`.
 Rule `issue-plan` renders the `discuss-plan` template instead of `issue-replan` when `discussing` is set — same
 origin (`issue:<n>:plan`), same branch (`plan/issue/<n>`), same cooldown window, same attempt cap, same
 fail-open. `discuss-plan` is an ordinary overridable entry in the template book and tells the agent:
-this is a conversation, not a fresh decomposition; here is the current plan and its part states; use
+this is a conversation, not a fresh plan; here is the current plan and its part states; use
 `escalate` to ask and answer; call `plan_submit` with the amended document once the operator is
 satisfied; then finish.
 

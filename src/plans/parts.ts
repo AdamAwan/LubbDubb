@@ -145,34 +145,22 @@ export function liveParts(parts: readonly PlanPart[]): PlanPart[] {
 }
 
 /**
- * How the issue is being delivered — one pull request, or several.
- *
- * **Read, never stored.** The planner's verdict is a decision about shape, and the
- * parts already record it: a `parts` verdict always declares at least one part
- * (`planDocument` refuses an empty one) and ingestion writes them before anything
- * is scheduled, while a `single` verdict retires every part nothing was started
- * for. So "no live parts" *is* the single arm. A column would be a second answer
- * to a question the rows already answer, and a *status* — which is what this was
- * until the shape was pulled out of `PlanStatus` — was worse: it made shape and
- * lifecycle exclusive, so a single-PR plan could never also be `active`.
- */
-export function planShape(parts: readonly PlanPart[]): 'single' | 'parts' {
-  return liveParts(parts).length === 0 ? 'single' : 'parts';
-}
-
-/**
  * Is this plan still scheduling something for its issue?
  *
  * The one reading of "the plan owns this issue", asked by the conclusion resolver
- * and by rule `issue-assess`. Both used to compare the status against a list, and
- * both had to be told about the shape when it stopped being one: an `active` plan
- * with no live parts schedules **nothing** — its issue is worked whole through
- * ordinary pickup — so reading it as in flight would say `more_work` for ever and
- * would hold the assessor off the one arm it exists for.
+ * and by rule `issue-assess`. Purely a question about the plan's **lifecycle**,
+ * which is what it always should have been: a plan that has not completed and has
+ * not been abandoned is still working its issue, and how many parts it cut the
+ * work into has no bearing on that.
+ *
+ * It briefly had to consult the parts as well, because a plan delivering one pull
+ * request carried *no* parts and was scheduled by rule `issue-pickup` instead — so
+ * an `active` plan could genuinely be scheduling nothing. Now that every plan has
+ * parts and rule `plan-part` schedules all of them, the shape question is gone and
+ * so is the second reading.
  */
-export function planInFlight(plan: Plan, parts: readonly PlanPart[]): boolean {
-  if (plan.status === 'active') return planShape(parts) === 'parts';
-  return plan.status === 'planning' || plan.status === 'awaiting_approval';
+export function planInFlight(plan: Plan): boolean {
+  return plan.status === 'active' || plan.status === 'planning' || plan.status === 'awaiting_approval';
 }
 
 /**
@@ -301,49 +289,22 @@ export function partsToRetire(existing: PlanPart[], declared: string[]): PlanPar
 }
 
 /**
- * The status an ingested (or amended) plan resolves to, given the parts that
- * survive it — `active`, or `awaiting_approval` when the operator asked to approve
- * verdicts before anything is scheduled from them (issue #109 phase 3). That is
- * the whole implementation of the gate on the write side: the status *is* the
- * verdict's standing, so releasing it is a one-way transition on this row rather
- * than a proposal lookup that could expire or be re-read wrongly.
+ * The status an ingested (or amended) plan resolves to — `active`, or
+ * `awaiting_approval` when the operator asked to approve plans before anything is
+ * scheduled from them (issue #109 phase 3). That is the whole implementation of
+ * the gate on the write side: the status *is* the plan's standing, so releasing it
+ * is a one-way transition on this row rather than a proposal lookup that could
+ * expire or be re-read wrongly.
  *
- * Which *shape* was ingested is not written here at all — it is the parts, read
- * back by {@link planShape}.
- *
- * `requireApproval` gates **both** arms. A `single` verdict is a verdict — the
- * planner has decided this issue is one agent, one branch and one pull request,
- * which is a shape an operator may disagree with exactly as they may disagree with
- * a split — so it is put to them too, and nothing is scheduled until they answer.
- * Gating only the `parts` arm meant the commonest route started work with no
- * acceptance step at all, which is the hole this closes.
- *
- * The one arm that is **never gated** is a `single` verdict the world has already
- * overruled: once a part has a branch or a PR, the issue *is* split, and
- * collapsing it back would hand rule `issue-pickup` the flat `issue/<n>` branch
- * git cannot create beside the existing `issue/<n>/<slug>` refs, orphaning the
- * open PRs besides. The collapse is refused, so there is no proposal left in it —
- * asking a human to approve a verdict the harness has already overruled would be a
- * question with no decision in it, on the one path where work is genuinely
- * running. {@link singleOverruled} is that reading, asked by the caller that
- * reports it.
+ * **It does not ask how many parts there are**, and that is the point. This
+ * function used to take the submitted verdict and the surviving parts, because a
+ * `single` verdict meant *zero* parts and could be overruled by a part already
+ * carrying a branch — a whole arm of shape arithmetic, on the write path, for a
+ * plan that is one pull request. A plan is a plan: one part or eight, it lands the
+ * same way and is put to the operator on the same terms.
  */
-export function amendedPlanStatus(
-  verdict: 'single' | 'parts',
-  surviving: PlanPart[],
-  requireApproval = false,
-): PlanStatus {
-  if (singleOverruled(verdict, surviving)) return 'active';
+export function ingestedPlanStatus(requireApproval = false): PlanStatus {
   return requireApproval ? 'awaiting_approval' : 'active';
-}
-
-/**
- * A `single` verdict the world has already overruled — parts are in flight, so the
- * plan stays split and the caller says so out loud rather than the collapse
- * failing later as an unattributable git error. See {@link amendedPlanStatus}.
- */
-export function singleOverruled(verdict: 'single' | 'parts', surviving: PlanPart[]): boolean {
-  return verdict === 'single' && surviving.some(partHasWork);
 }
 
 /**

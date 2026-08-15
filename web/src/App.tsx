@@ -105,7 +105,6 @@ export function App() {
       refUrls={state.refUrls}
       onClose={() => status.actions.viewPlan(null)}
       onReplan={(id) => status.actions.replan(id)}
-      onAbandon={(id) => status.actions.abandonPlan(id)}
       onDiscuss={(id) => status.actions.discussPlan(id)}
       onEndDiscussion={(id) => status.actions.endPlanDiscussion(id)}
       onDecide={(id, verdict, note) => status.actions.decideProposal(id, verdict, note)}

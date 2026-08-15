@@ -44,7 +44,7 @@ and recording a failure must never throw.
 | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `cycle`    | The harness's cycle `catch` (message + stack); plan-reconciliation fetch and status-comment failures; the plan ref-collision guard.                                                                                                             |
 | `provider` | Provider snapshot `catch`es, via the optional `errors` in `IntegrationContext`; Azure transient-retry notices.                                                                                                                                  |
-| `agent`    | Spawn failures; terminal `failed` agents (with the exit code and an output tail); worktree removal failures; PTY sentinel-drift warnings; invalid or unreadable `plan.json`; an overridden `single` verdict; MCP channel/config/frame failures. |
+| `agent`    | Spawn failures; terminal `failed` agents (with the exit code and an output tail); worktree removal failures; PTY sentinel-drift warnings; invalid or unreadable `plan.json`; MCP channel/config/frame failures. |
 | `server`   | The Fastify `setErrorHandler` (method, URL, message, stack).                                                                                                                                                                                    |
 | `boot`     | Each agent found orphaned at boot (a crash, not a clean shutdown); a failed restore.                                                                                                                                                            |
 
@@ -186,7 +186,7 @@ An agent knows only the origin it was dispatched against, and that is rarely the
 origin reaches a goal, and everything else is the remainder:
 
 - **By name** — the whole `issue:<n>` subtree. Deliberately the whole subtree rather than the roles
-  `issueOriginRole` classifies: a planner that cost $4 and routed the goal to `single` spent that
+  `issueOriginRole` classifies: a planner that cost $4 and cut the goal into one part spent that
   money on the goal, whatever it did or did not build. Deliberation is spend.
 - **By lineage** — everything else, by walking `parentRef` up the durable work graph. `pr:41`'s
   parent is the part or issue that produced it; a job's is the issue that adopted it. Sub-refs

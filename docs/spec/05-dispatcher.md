@@ -91,7 +91,7 @@ unconditional.
 | `plan-approval`            | Plan needs your approval             | `planning`       | With `planning.requireApproval` on, a planner's verdict — either arm — is `awaiting_approval` and no verdict is pending.                                                    |
 | `plan-blocked`             | Approved plan is going nowhere       | `planning`       | Every live part of a released plan is blocked, so nothing will be dispatched for it. Asks a human once; dispatches nobody.                                                  |
 | `plan-part`                | Plan part ready                      | `planning`       | A part of an active plan is `ready` and unstaffed.                                                                                                                          |
-| `issue-pickup`             | Open issue without a PR              | —                | An eligible open issue has no **open** PR and no agent on it, and its plan says `single`. Never a retained run.                                                             |
+| `issue-pickup`             | Open issue without a PR              | —                | An eligible open issue has no **open** PR and no agent on it, and the funnel **failed open** on it (route `unplanned`). Never a retained run.                               |
 
 `workItemStates` is the one condition that is not a feature flag: it is true when the operator has
 configured **both** `issueInReviewState` and a non-empty `issuePickupStates`.
@@ -500,11 +500,12 @@ Opt-in: it fires only when the operator set **both** `issueInReviewState` and a 
 `issuePickupStates`, and only for items carrying a native `workItemState` (Azure work items; GitHub
 issues have none, so it is a no-op for them). It never fires on a closed item.
 
-- Item in a pickup state **and** (an open PR exists for it, or its plan is decomposed) → move it to
-  `issueInReviewState`. Decomposed is `partsPlanFor`, which asks the plan's **parts**, not its status
-  ([08](08-planning.md#shape-is-the-parts)): a plan being delivered as one pull request is `active`
-  too, and reading that as decomposed would park its work item in the review state for the life of a
-  plan that schedules nothing.
+- Item in a pickup state **and** (an open PR exists for it, or it has a plan) → move it to
+  `issueInReviewState`. Having a plan is `partsPlanFor`, an `active`/`complete` status and nothing
+  else. It had to ask the plan's **parts** as well while a plan delivering one pull request carried
+  none and was scheduled by rule `issue-pickup`: `active` did not then mean the plan was working the
+  issue, and reading it as one parked the work item in the review state for the life of a plan with
+  no parts to finish.
 - Item in `issueInReviewState` with no open PR **and an explicit `more_work` conclusion** → move it
   back to the **first** entry of `issuePickupStates`. There is no separate config for the return
   state: the first pickup state is the operator's own "start here".
@@ -578,9 +579,9 @@ It fires for issue N when all of:
   gate, and the Azure case this must cover is precisely an item rule `work-item-in-review` parked in
   the review state.
 - No `delivered` verdict stands, no open PR, and no plan still scheduling something — `planInFlight`
-  (`src/plans/parts.ts`), which is `planning`/`awaiting_approval`, or `active` **with live parts**.
-  The shape matters here: an `active` plan with none is the single-PR arm, and its one PR having been
-  worked is the case this rule exists for ([08](08-planning.md#shape-is-the-parts)).
+  (`src/plans/parts.ts`), which is `planning`, `awaiting_approval` or `active`. The status is the whole
+  reading, and the part count has no say in it
+  ([08](08-planning.md#the-status-is-the-plans-life-and-only-that)).
 - Nothing live on `issue:N` or any `issue:N:*` origin.
 - **At least one task has ever existed** on an origin that could have _delivered_ something
   (`hasPriorWork`).
@@ -598,7 +599,7 @@ the `issue:N:*` subtree holds two materially different things. The pickup root a
 the **work**; `issue:N:assess` is not work but only ever happens downstream of some, so it counts as
 **evidence**; `issue:N:plan` and `issue:N:assay` are the harness **deliberating**, and a task on one
 of those says the issue has been thought about, never that anything was built. Matching the whole
-subtree was a real defect: the planner's own task made every issue routed to `single` look worked, so
+subtree was a real defect: the planner's own task made every issue that reached pickup look worked, so
 it was assessed instead of picked up, the assessor honestly reported nothing delivered, rule `issue-shortfall`
 replanned, and the issue cycled the funnel without a line of its work ever being written. An
 **unrecognised** suffix is its own answer rather than a silent default — that is exactly how `:plan`
@@ -627,7 +628,7 @@ the check was rule `issue-assess`, the replan was `POST /api/plans/:id/replan`, 
 negative verdict was written into `issue_conclusions`, whose only consumer is rule `work-item-back-to-pickup`
 — which emits a _tracker_ move, so it fires only where `issueInReviewState` is configured. On GitHub
 it changed no dispatch at all; and on either provider, for an issue with a plan, rule `issue-pickup` is gated on
-the `single` route and rule `plan-part` finds every part settled. The assessor said "not delivered" and the
+the unplanned route and rule `plan-part` finds every part settled. The assessor said "not delivered" and the
 harness scheduled nothing, anywhere.
 
 This rule is the one consumer of `issue_shortfalls`, and it routes by the cause the assessor

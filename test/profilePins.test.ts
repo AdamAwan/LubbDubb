@@ -13,7 +13,7 @@ import { assayHold, goalFingerprint } from '../src/intake/assay.js';
 import type { Issue, IssueAssay } from '../src/types.js';
 import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { planAsSingle } from './support/plans.js';
+import { failPlanningOpen } from './support/plans.js';
 
 /**
  * Pinning one goal to a model profile (issue #342) — the precedence chain, the
@@ -270,7 +270,7 @@ async function dispatchTagged(n: number, labels: string[]) {
   };
   const system = buildSystem(pinConfig(), { worktrees: new FakeWorktreeManager(), streamSpawner: spawner });
   system.connector.inject({ kind: 'new_issue', number: n, title: 'Add login', labels });
-  planAsSingle(system.store, n);
+  failPlanningOpen(system.store, n);
   await system.harness.runCycle('manual');
   const task = system.store.getTask(system.store.listAgentsByStatus('starting', 'running')[0]!.taskId)!;
   return { args: launches[0]!, task, system };

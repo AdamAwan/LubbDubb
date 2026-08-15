@@ -5,7 +5,7 @@ import { DISPATCH_PIPELINE, DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import { askedAlready } from '../src/dispatcher/admission.js';
 import type { DispatchContext, QueueItem } from '../src/dispatcher/dispatcher.js';
 import type { Decision, Escalation, Issue, PullRequest, Task } from '../src/types.js';
-import { singlePlan } from './support/plans.js';
+import { spentPlannerAttempts } from './support/plans.js';
 
 // The rules/admission split. Two vocabularies that used to be one registry, and
 // the invisibility that hid between them: a rule superseded by an earlier one
@@ -109,7 +109,7 @@ test('a pickup the assessor supersedes names the assessor', async () => {
     updatedAt: NOW,
   };
   const d = new RuleDispatcher({}, {}, undefined, 'main', {}, { enabled: true });
-  const { upcoming } = await d.decide(ctx({ tasks: [done], plans: [singlePlan(12)] }));
+  const { upcoming } = await d.decide(ctx({ tasks: [done], recentDecisions: spentPlannerAttempts(12) }));
 
   const pickup = queued(upcoming, 'issue:12');
   assert.ok(pickup);
@@ -118,7 +118,7 @@ test('a pickup the assessor supersedes names the assessor', async () => {
 });
 
 test('nothing is superseded when no rule in front of pickup is on', async () => {
-  const { upcoming } = await new RuleDispatcher().decide(ctx({ plans: [singlePlan(12)] }));
+  const { upcoming } = await new RuleDispatcher().decide(ctx({ recentDecisions: spentPlannerAttempts(12) }));
   const pickup = queued(upcoming, 'issue:12');
   assert.equal(pickup?.status, 'dispatching', 'the default path is untouched by any of this');
 });

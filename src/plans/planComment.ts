@@ -17,14 +17,6 @@ import { partOutcomeKind, planProgress } from './parts.js';
  */
 export function renderPlanComment(plan: Plan, parts: PlanPart[], checks: ValidationCheck[] = []): string {
   const { settled, total } = planProgress(parts);
-  // The single-PR arm has no rows, and rendering it through the count below said
-  // "0/0 parts done" — a progress report on work that was never split. What it has
-  // to report is the shape itself and the planner's reason for it; the pull request
-  // is on the issue's own timeline, where the reader already is.
-  if (total === 0) {
-    const why = plan.reason ? `\n\n${plan.reason}` : '';
-    return `${MARKER}\n\n**One pull request** — this issue is being delivered whole, not decomposed.${why}${validation(checks)}${narrative(plan)}`;
-  }
   // "merged" was the only terminal when this was written, and is not any more. An
   // operator reading "3/4 parts merged" on a plan whose fourth part was a write-up
   // is being told something false.

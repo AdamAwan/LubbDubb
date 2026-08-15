@@ -12,7 +12,7 @@ import { Store } from '../src/store/store.js';
 import { AgentManager } from '../src/agents/agentManager.js';
 import type { AgentSession, AgentSessionStatus } from '../src/agents/session.js';
 import { FileEventsSpool } from '../src/agents/fileEvents.js';
-import { planAsSingle } from './support/plans.js';
+import { failPlanningOpen } from './support/plans.js';
 
 /**
  * Crash recovery on the **default** runtime (issue #318).
@@ -125,7 +125,7 @@ async function spawnAgent(dir: string, issue = 901, extra: Partial<Config> = {})
     errorMirror: () => {},
   });
   system.connector.inject({ kind: 'new_issue', number: issue, title: 'Add login' });
-  planAsSingle(system.store, issue);
+  failPlanningOpen(system.store, issue);
   await system.harness.runCycle('manual');
   const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
   return { launches, system, agent };

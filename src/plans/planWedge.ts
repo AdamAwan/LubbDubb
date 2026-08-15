@@ -1,9 +1,9 @@
 import type { Issue, PlanPart, PullRequest } from '../types.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
-import { liveParts, partBranch, partHasWork } from './parts.js';
+import { liveParts, partBranch } from './parts.js';
 
 /**
- * A decomposition that cannot proceed, and what the harness says about it.
+ * A plan that cannot proceed, and what the harness says about it.
  *
  * ## The gap this closes
  *
@@ -11,27 +11,24 @@ import { liveParts, partBranch, partHasWork } from './parts.js';
  * every `refs/heads/issue/12/<slug>`, so the reconciler parks the parts `blocked`
  * and says so. What it does not do is *reach anyone*. The Errors panel is a feed,
  * and a feed carries news; the plan's own status comment reports progress, and a
- * plan with no progress reports none. So an issue worked `single` first, replanned,
- * and then approved onto its own taken branch had two red assemblers, no agent, no
- * question in "Needs you", and no route out — `refusePlan` compare-and-sets against
- * `awaiting_approval`, so the fall-back-to-`single` arm is gone the moment the
- * decomposition is approved, and `resolvePlanRoute` fails a spent replan back to
- * `parts` rather than open to `single`.
+ * plan with no progress reports none. So an issue picked up unplanned first, then
+ * planned and approved onto its own taken branch, had red assemblers, no agent, no
+ * question in "Needs you", and no route out.
  *
- * Three separate things were missing and they are kept separate here: a way to
- * *notice* ({@link planIsWedged}), a way to *warn before it happens*
- * ({@link planApprovalWarnings}), and a way *out* (`abandonDecomposition`, beside
- * the other plan verdicts in `planApproval.ts`).
+ * Two separate things were missing and they are kept separate here: a way to
+ * *notice* ({@link planIsWedged}) and a way to *warn before it happens*
+ * ({@link planApprovalWarnings}). The way out is Replan, on the plan sheet, which
+ * is the way out of every plan that is wrong for any other reason too.
  *
  * ## What is deliberately not here
  *
- * **Nothing attaches the existing pull request to a part.** The single-arm PR
- * claims to resolve the whole issue — which is precisely the claim the
- * decomposition overruled — so nothing in the harness knows which part, if any, it
- * satisfies. Deriving that would be inferring a positive terminal from incidental
- * evidence, refused at every other point in this codebase (`undeclared` vs
- * `more_work`, the DONE sentinel vs the `result` event, `conclude_part` refusing
- * `kind: 'code'`). The PR is *named* to the operator and left alone.
+ * **Nothing attaches the existing pull request to a part.** A PR on the flat
+ * `issue/<n>` branch claims to resolve the whole issue, and nothing in the harness
+ * knows which part, if any, it satisfies. Deriving that would be inferring a
+ * positive terminal from incidental evidence, refused at every other point in this
+ * codebase (`undeclared` vs `more_work`, the DONE sentinel vs the `result` event,
+ * `conclude_part` refusing `kind: 'code'`). The PR is *named* to the operator and
+ * left alone.
  */
 
 /**
@@ -68,9 +65,9 @@ function wedgeReason(parts: PlanPart[]): string | null {
 /**
  * Open pull requests for the issue that **no live part claims**.
  *
- * The interesting one is the single-arm PR on the flat `issue/<n>` branch: it is
- * both the thing that blocks the parts and a real piece of work the operator has
- * open, and after a decomposition it belongs to nothing. `linkedPrNumber` is
+ * The interesting one is a PR on the flat `issue/<n>` branch, left by an unplanned
+ * pickup: it is both the thing that blocks the parts and a real piece of work the
+ * operator has open, and once a plan exists it belongs to nothing. `linkedPrNumber` is
  * included because it is the other way a PR is attached to an issue, and excluded
  * again when a part has claimed it — which is the ordinary case for a plan that is
  * working, where the sticky link points at whichever part opened last.
@@ -86,8 +83,8 @@ function unclaimedIssuePrs(issue: Issue, parts: PlanPart[], openPrs: PullRequest
 }
 
 /**
- * What an operator should know *before* releasing a decomposition — appended to
- * the approval ask, never interpolated into it.
+ * What an operator should know *before* releasing a plan — appended to the
+ * approval ask, never interpolated into it.
  *
  * Appending is the rule the rejection note, the outstanding-work note and
  * `ciFailureNote` all follow, and for the same reason: `plan-approval` is
@@ -143,21 +140,7 @@ export function wedgedPlanPrompt(issueNumber: number, issue: Issue, parts: PlanP
     (reason ? ` ${reason}` : '') +
     prs.join('') +
     `\n\nTwo ways out, and the harness will not choose between them: clear what is blocking the parts and they ` +
-    `start on the next pulse, or abandon the decomposition and work the issue as a single pull request ` +
-    `(the plan panel's control, available while no part has started).`
+    `start on the next pulse, or Replan from the plan sheet and let a planner cut the work somewhere the branch ` +
+    `is free.`
   );
-}
-
-/**
- * Can this decomposition still be abandoned — and if not, why not?
- *
- * Pure so the route's refusal and the cockpit's control are the same answer. The
- * bar is `partHasWork`, the existing statement of "something was started for this
- * part": retiring one with an agent, a branch or a PR behind it would strand real
- * work, which is the rule `partsToRetire` already enforces for an amendment.
- */
-export function abandonBlockers(parts: PlanPart[]): string[] {
-  return liveParts(parts)
-    .filter(partHasWork)
-    .map((p) => `"${p.slug}" is ${p.status}`);
 }

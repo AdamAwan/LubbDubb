@@ -21,7 +21,7 @@ import { join } from 'node:path';
 function doc(over: Record<string, unknown> = {}): PlanDocument {
   const parsed = validatePlanDocument({
     version: 1,
-    verdict: 'single',
+    parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
     reason: 'One small fix.',
     ...over,
   });
@@ -57,7 +57,7 @@ test('a validation block is optional, and absent is not the same as empty', () =
 test('a check carrying an actor is refused rather than ignored', () => {
   const refused = validatePlanDocument({
     version: 1,
-    verdict: 'single',
+    parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
     reason: 'r',
     validation: { checks: [check({ actor: 'fleet' })] },
   });
@@ -73,7 +73,7 @@ test('a check with no expectation is refused — that is what makes it a check',
     delete body[missing];
     const refused = validatePlanDocument({
       version: 1,
-      verdict: 'single',
+      parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
       reason: 'r',
       validation: { checks: [body] },
     });
@@ -84,7 +84,7 @@ test('a check with no expectation is refused — that is what makes it a check',
 test('duplicate check ids are refused, because the id is the merge key', () => {
   const refused = validatePlanDocument({
     version: 1,
-    verdict: 'single',
+    parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
     reason: 'r',
     validation: { checks: [check(), check({ title: 'Something else' })] },
   });
@@ -96,7 +96,7 @@ test('a resource name is a file name — a path is refused rather than sanitised
   for (const name of ['../secrets.env', 'nested/fixture.tar.gz', '..']) {
     const refused = validatePlanDocument({
       version: 1,
-      verdict: 'single',
+      parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
       reason: 'r',
       validation: { resources: [{ name }], checks: [] },
     });
@@ -111,7 +111,6 @@ test('an unknown resource or part reference is dropped, never a refusal', () => 
   const goal = ingest(
     store,
     doc({
-      verdict: 'parts',
       parts: [{ slug: 'writer', title: 'Write it', scope: 'src/', dependsOn: [] }],
       validation: {
         resources: [{ name: 'fixture.tar.gz' }],

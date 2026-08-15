@@ -803,24 +803,15 @@ like any other world fact. Returns `{ ok: true, check }`. → [20](20-validation
 ### `POST /api/plans/:id/replan`
 
 404 when the plan is unknown. Flips the plan to `planning`, **withdraws any pending plan proposal**
-(the amended verdict is a new proposal, and the superseded card must not release a decomposition its
+(the amended plan is a new proposal, and the superseded card must not release a plan its
 reader never saw), broadcasts, runs a cycle. **Tears nothing down** — see [08](08-planning.md).
 Returns `{ ok: true, plan }`.
 
-### `POST /api/plans/:id/abandon`
-
-No body. 404 when the plan is unknown. **409 unless the plan is `active`, has live parts, and no part
-has started** (`partHasWork`) — the guard is the point, since retiring a part with an agent, a branch
-or a PR behind it would strand real work, and a plan with no parts is already being worked whole.
-Retiring every live part **is** the collapse — the shape is the part list
-([08](08-planning.md#shape-is-the-parts)) — so rule `issue-pickup` then works the issue as one pull
-request. Broadcasts, runs a cycle. Returns `{ ok: true, detail, plan }`.
-
-This is the way out of a decomposition approved onto an issue whose flat `issue/<n>` branch was
-already taken: its parts block on the ref collision, and once released neither Reject (which settles
-an `awaiting_approval` plan) nor Replan (which fails back to `parts`) can free it. A separate act
-rather than a loosened `refusePlan` because it is a different sentence — see
-[08](08-planning.md#when-the-collision-arrives-after-approval).
+It is also the **only** way out of a plan approved onto an issue whose flat `issue/<n>` branch was
+already taken, whose parts block on the ref collision. There was a `POST /api/plans/:id/abandon`
+beside it that retired the unstarted parts and worked the issue as one pull request; that was a
+distinct act only while a plan with no parts was a different kind of plan, and it is gone with the
+shape. → [08](08-planning.md#when-the-collision-arrives-after-approval)
 
 ### `POST /api/plans/:id/discuss`
 

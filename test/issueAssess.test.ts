@@ -15,7 +15,7 @@ import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { foldWorkGraph } from '../src/graph/workGraph.js';
 import type { Agent, Decision, Issue, IssueDelivery, Plan, PlanPart, Task } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { singlePlan } from './support/plans.js';
+import { spentPlannerAttempts } from './support/plans.js';
 
 // Rule `issue-assess` — the assessor. What makes it fire, what makes it stand down, and the
 // one thing it must never do: let a second agent onto an issue it is judging.
@@ -57,15 +57,15 @@ function task(over: Partial<Task> = {}): Task {
 function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   return {
     world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
-    // Every issue here has already been planned as one pull request — see
-    // `singlePlan`. Without a row the planner is what fires, not the rule under
-    // test.
-    plans: [singlePlan(12)],
+    // The funnel has failed open on every issue here — see `spentPlannerAttempts`
+    // below. A plan of its own would mean the plan owns the issue, and this rule
+    // stands down for one that does.
+    plans: [],
     tasks: [task()],
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: [],
+    recentDecisions: spentPlannerAttempts(12),
     agentHeadroom: 3,
     ...over,
   };
@@ -246,27 +246,24 @@ test('every origin the harness dispatches under an issue is classified deliberat
 
 // -- the funnel's `single` arm -----------------------------------------------
 
-test('an issue the planner routed to `single` is picked up, not assessed', async () => {
+test('a planner having run is not work having been done', async () => {
   // The bug: the planner's own task sits at `issue:12:plan`, which counted as work
-  // having been done, so rule `issue-assess` fired on an issue nothing had ever built — and
-  // suppressed the pickup that was the whole point of the `single` verdict. The
-  // assessor then honestly reported nothing delivered, the shortfall replanned,
-  // and the loop closed with no PR ever written.
+  // having been done, so rule `issue-assess` fired on an issue nothing had ever
+  // built. The assessor then honestly reported nothing delivered, the shortfall
+  // replanned, and the loop closed with no PR ever written.
   const { actions } = await planningAssessor().decide(
     ctx({
-      plans: [plan('active')],
       tasks: [task({ originRef: 'issue:12:plan', branch: 'plan/issue/12', title: 'Plan issue #12' })],
     }),
   );
-  assert.deepEqual(origins(actions), ['issue:12'], 'a plan that says "one PR will do" releases the work');
+  assert.deepEqual(origins(actions), ['issue:12'], 'the funnel failed open, so the work is released');
 });
 
-test('once the single PR has been worked, the assessor gets its turn', async () => {
+test('once the PR has been worked, the assessor gets its turn', async () => {
   // The other half: the fix must not cost the assessor the case it exists for. A
   // pickup agent ran and its PR left the open world, so the question is live again.
   const { actions } = await planningAssessor().decide(
     ctx({
-      plans: [plan('active')],
       tasks: [task({ originRef: 'issue:12:plan', branch: 'plan/issue/12' }), task({ id: 't2', originRef: 'issue:12' })],
     }),
   );
@@ -314,11 +311,12 @@ test('a plan that still schedules something owns the issue', async () => {
   const done = await assessor().decide(ctx({ plans: [plan('complete')], planParts: [part()] }));
   assert.ok(origins(done.actions).includes('issue:12:assess'));
 
-  // And an `active` plan with **no live parts** is the single-PR arm, which
-  // schedules nothing either: its one PR having been worked is the case this rule
-  // exists for. Read off a status list, this arm held the assessor off for ever.
-  const whole = await assessor().decide(ctx({ plans: [plan('active')] }));
-  assert.ok(origins(whole.actions).includes('issue:12:assess'));
+  // The part count has no say in it, and used to: a plan delivering one pull
+  // request carried no parts and was scheduled by rule `issue-pickup`, so `active`
+  // did not imply the plan was working the issue and this reading had to consult
+  // the rows. One rule schedules every plan now, so the status is the whole answer.
+  const one = await assessor().decide(ctx({ plans: [plan('active')], planParts: [part()] }));
+  assert.ok(!origins(one.actions).includes('issue:12:assess'));
 });
 
 test('a standing verdict is not re-assessed', async () => {
@@ -372,7 +370,7 @@ test('a spent attempt cap returns the issue to ordinary pickup, with no escalati
   });
   const spent = [attempt(1), attempt(2), attempt(3)];
 
-  const { actions } = await assessor().decide(ctx({ recentDecisions: spent }));
+  const { actions } = await assessor().decide(ctx({ recentDecisions: [...spentPlannerAttempts(12), ...spent] }));
   assert.deepEqual(origins(actions), ['issue:12'], 'the issue falls back to pickup');
   assert.ok(
     !actions.some((a) => a.type === 'escalate_to_human'),
@@ -401,7 +399,9 @@ test('a cooling assessor still suppresses pickup for that cycle, and stays visib
       createdAt: '2026-07-28T11:55:00.000Z',
     },
   ];
-  const { actions, upcoming } = await assessor().decide(ctx({ recentDecisions: recent }));
+  const { actions, upcoming } = await assessor().decide(
+    ctx({ recentDecisions: [...spentPlannerAttempts(12), ...recent] }),
+  );
 
   assert.deepEqual(origins(actions), [], 'cooling, so nothing is dispatched');
   const queued = upcoming?.find((i) => i.origin === 'issue:12:assess');

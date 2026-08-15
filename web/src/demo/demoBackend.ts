@@ -548,12 +548,6 @@ class DemoServer {
   }
 
   /**
-   * Abandon a released decomposition — the demo mirror of
-   * `POST /api/plans/:id/abandon`. Mirrors the server's guards too (active, and no
-   * part started), because a demo that offers what the real route refuses teaches
-   * the control wrong.
-   */
-  /**
    * A reviewer ticking one acceptance criterion. Mirrors the real route's key:
    * the criterion's **text**, so a re-worded criterion loses its tick here too.
    */
@@ -564,20 +558,6 @@ class DemoServer {
         ? [...part.acceptanceMet.filter((c) => c !== criterion), criterion]
         : part.acceptanceMet.filter((c) => c !== criterion);
       part.acceptanceCriteria = part.acceptanceCriteria.map((c) => (c.text === criterion ? { text: c.text, met } : c));
-      this.dirty();
-    }
-    return { ok: true };
-  }
-
-  async abandonPlan(planId: string): Promise<{ ok: true }> {
-    const plan = (this.state.plans ?? []).find((p) => p.id === planId);
-    const parts = (this.state.planParts ?? []).filter((p) => p.planId === planId && p.status !== 'retired');
-    const started = parts.some((p) => ['dispatched', 'in_review', 'merged', 'concluded'].includes(p.status));
-    if (plan?.status === 'active' && parts.length > 0 && !started) {
-      // Retiring the parts *is* the collapse: the shape is the live part list, so
-      // the status stays `active` — the same write the real route makes.
-      for (const part of parts) part.status = 'retired';
-      plan.updatedAt = new Date().toISOString();
       this.dirty();
     }
     return { ok: true };
@@ -1968,7 +1948,7 @@ export const demoApi = {
     getServer().setIssueAssay(issueNumber, verdict),
   dismissRun: (issueNumber: number) => getServer().dismissRun(issueNumber),
   replan: (planId: string) => getServer().replan(planId),
-  // The demo's plans have one verdict each — no replan has landed in a browser
+  // The demo's plans have one revision each — no replan has landed in a browser
   // session — so the history is that single revision and a null diff, which is
   // exactly what the real route answers for a plan nobody has amended.
   getPlanHistory: (planId: string) => Promise.resolve(demoPlanHistory(planId)),
@@ -1976,7 +1956,6 @@ export const demoApi = {
     getServer().setAcceptance(planId, slug, criterion, met),
   setValidation: (issueNumber: number, checkId: string, act: ValidationAct) =>
     getServer().setValidation(issueNumber, checkId, act),
-  abandonPlan: (planId: string) => getServer().abandonPlan(planId),
   discussPlan: (planId: string) => getServer().discussPlan(planId),
   endPlanDiscussion: (planId: string) => getServer().endPlanDiscussion(planId),
   reorderUpNext: (origins: string[]) => getServer().reorderUpNext(origins),

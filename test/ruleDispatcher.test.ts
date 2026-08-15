@@ -3,20 +3,20 @@ import assert from 'node:assert/strict';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext, DispatchResult } from '../src/dispatcher/dispatcher.js';
 import type { Action, Decision, DecisionOutcome, PullRequest, WorldSnapshot } from '../src/types.js';
-import { singlePlan } from './support/plans.js';
+import { spentPlannerAttempts } from './support/plans.js';
 
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
   return {
     world: { takenAt: 'now', pullRequests: [], issues: [], ...world },
-    // Every issue in these worlds has already been planned as one pull request:
-    // the funnel is unconditional, so an issue with no plan row is one a planner
-    // is owed, and nothing downstream of pickup would fire for it.
-    plans: (world.issues ?? []).map((i) => singlePlan(i.number)),
+    plans: [],
     tasks: [],
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: [],
+    // The funnel has failed open on every issue in these worlds: it is
+    // unconditional, so an issue it is still working is one pickup is narrowed
+    // away from, and nothing downstream of pickup would fire for it.
+    recentDecisions: (world.issues ?? []).flatMap((i) => spentPlannerAttempts(i.number)),
     agentHeadroom: 3,
     ...over,
   };

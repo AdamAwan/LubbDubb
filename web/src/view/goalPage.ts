@@ -48,10 +48,9 @@ export interface GoalPageView {
    * Held apart from `parts` rather than folded in as a fifth group, because every
    * count on the page and the overview's segment track are reads of `parts` and a
    * retired part is not one of the goal's: it is what the plan *proposed*. Drawn
-   * all the same — "the plan has no live parts" is the single-PR arm
-   * ([08](../../../docs/spec/08-planning.md#shape-is-the-parts)), and stating that
-   * without showing what was decomposed and then retired leaves the operator with
-   * a sentence about a plan they cannot read.
+   * all the same, because what an amendment dropped is half of what the plan's
+   * record is for — a goal whose part list shrank between two readings otherwise
+   * simply lost rows, with nothing saying so.
    */
   retiredParts: PlanPart[];
   openPullRequests: OpenPullRequest[];
@@ -87,14 +86,12 @@ function belongsToGoal(candidate: string | null | undefined, ref: string): boole
 /**
  * Whether this pull request is one of the goal's.
  *
- * Three ways, and the part rows are only the first of them. A goal delivered
- * **whole** has no parts at all — the single-PR arm is exactly "no live parts"
- * ([08](../../../docs/spec/08-planning.md#shape-is-the-parts)) — so a page keyed on
- * `prNumber` alone drew no pull request for any goal the harness worked in one,
- * which is most finished goals. The other two are the server's own matching, in
- * `resolveIssuePr`: the branch convention (`issue/<n>`, and `issue/<n>/<slug>` for
- * a part whose row has not caught up), and `linkedPrNumber` for a PR the provider
- * linked itself. The convention is restated here rather than imported because the
+ * Three ways, and the part rows are only the first of them. A goal the funnel
+ * failed open on has no parts at all and its pull request is on the flat
+ * `issue/<n>` branch, so a page keyed on `prNumber` alone drew nothing for it. The
+ * other two are the server's own matching, in `resolveIssuePr`: the branch
+ * convention (`issue/<n>`, and `issue/<n>/<slug>` for a part whose row has not
+ * caught up), and `linkedPrNumber` for a PR the provider linked itself. The convention is restated here rather than imported because the
  * cockpit names `src/wire.ts` and nothing else; it is a *string shape*, not a
  * verdict, and the pair is pinned by `test/goalPage.test.ts`.
  */

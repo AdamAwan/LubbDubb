@@ -135,7 +135,7 @@ export function resolveIssueConclusion(
   // Above the stored declaration, not below it: a plan in flight has taken the
   // issue back, and a declaration made before it did is about a delivery attempt
   // the harness has since superseded.
-  const inFlight = planInFlightVerdict(plan, planParts);
+  const inFlight = planInFlightVerdict(plan);
   if (inFlight) return inFlight;
   if (stored) {
     return { verdict: stored.verdict, by: stored.by, note: stored.note, at: stored.updatedAt };
@@ -178,22 +178,22 @@ export function resolveIssueConclusion(
  * same status (`isPlanInDiscussion`) and 409s unless the plan was
  * `awaiting_approval`, so it is in flight on arrival and stays so.
  *
- * ## Why the single-PR arm is not in flight
+ * ## What is not in flight
  *
- * It is deliberately **not** derived from: it says the issue is delivered as one
- * PR, which is a statement about *shape*, not about whether that PR has been
- * written. Treating it as `more_work` would be harmless but dishonest, and
- * treating it as `done` would be catastrophic — so a single-PR plan leaves the
- * issue exactly where an unplanned one sits, waiting on its agent to declare.
- * `abandoned` says nothing about completeness either.
+ * `complete` and `abandoned`, and only those. Neither says anything about
+ * completeness that this arm should speak for: a `complete` plan is answered by
+ * arm 5 below, and an abandoned one leaves the issue exactly where an unplanned
+ * one sits, waiting on an agent to declare.
  *
- * That arm is the **parts**, not the status: an `active` plan with no live parts
- * is being delivered whole. Reading it off a `single` status was the same fact,
- * right up until the status had to be two things at once.
+ * It briefly had to read the **parts** as well, because an `active` plan
+ * delivering one pull request carried none and was scheduled by rule
+ * `issue-pickup` — so "active" did not imply the plan was working the issue.
+ * Every plan has parts now and one rule schedules all of them, so the status is
+ * the whole answer again.
  */
-function planInFlightVerdict(plan: Plan | null, parts: readonly PlanPart[]): ResolvedConclusion | null {
+function planInFlightVerdict(plan: Plan | null): ResolvedConclusion | null {
   if (!plan) return null;
-  if (planInFlight(plan, parts)) {
+  if (planInFlight(plan)) {
     return {
       verdict: 'more_work',
       by: 'plan',

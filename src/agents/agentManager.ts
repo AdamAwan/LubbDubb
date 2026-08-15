@@ -56,7 +56,7 @@ import type { AgentToolTarget } from '../mcp/tools/context.js';
 import type { ParsedFlag } from './sentinels.js';
 import { classifyArtifact, type FileEventRecord, type FileEventsSpool } from './fileEvents.js';
 import { PLAN_FILE, isPlanFile, parsePlanDocument } from '../plans/planDocument.js';
-import { ingestPlanDocument, overriddenSingleMessage } from '../plans/planIngest.js';
+import { ingestPlanDocument } from '../plans/planIngest.js';
 import { issueOrigin, planOriginIssue } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
 import type { AgentSession, SessionFactory } from './session.js';
@@ -1317,9 +1317,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   }
 
   /**
-   * Persist a planning agent's verdict from the `plan.json` it just wrote.
+   * Persist a planning agent's plan from the `plan.json` it just wrote.
    *
-   * The verdict is stored for *both* outcomes — a `single` plan is a first-class
+   * The plan is stored whatever its size — a one-part plan is a first-class
    * row — because without one the planner re-runs on the same issue every cycle.
    * This is also where a **replan** lands: same file, same hook, and the merge on
    * slug is what lets an in-flight part keep its branch and PR across an amendment.
@@ -1361,18 +1361,10 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       title: task.originTitle ?? task.title,
       requireApproval: this.opts.requirePlanApproval,
     });
-    if (result.overriddenSingle) {
-      // Not silently overridden: the planner asked for something the world no
-      // longer allows, and the operator has open PRs that explain why. (The tool
-      // path can say this to the agent as well; the file path has no way to.)
-      this.opts.errors?.record({
-        source: 'agent',
-        message: `Agent ${agent.id}: ${overriddenSingleMessage(origin, result.overriddenSingle.liveParts)}`,
-      });
-    }
     debugLog(
       'fileEvents',
-      `agent=${agent.id} plan ingested issue=#${number} verdict=${doc.verdict} status=${result.status} retired=${result.retired.length}`,
+      `agent=${agent.id} plan ingested issue=#${number} parts=${doc.parts.length} status=${result.status} ` +
+        `retired=${result.retired.length}`,
     );
   }
 

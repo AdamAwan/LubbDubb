@@ -179,7 +179,7 @@ test('the close-out obligation states the count, and only when there is one to s
 function plan(system: System, checks: Record<string, unknown>[]): string {
   const parsed = validatePlanDocument({
     version: 1,
-    verdict: 'single',
+    parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
     reason: 'One small fix.',
     validation: { checks },
   });

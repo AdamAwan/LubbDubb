@@ -15,7 +15,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import { buildNeedsYou } from '../web/src/view/needsYou.js';
 import type { CockpitActions } from '../web/src/cockpit/actions.js';
-import { planAsSingle } from './support/plans.js';
+import { failPlanningOpen } from './support/plans.js';
 
 /**
  * The usage-limit park (issue #318, phase 3).
@@ -140,7 +140,7 @@ async function fleet(issue = 701, patch: Record<string, unknown> = {}) {
     errorMirror: () => {},
   });
   system.connector.inject({ kind: 'new_issue', number: issue, title: 'Add login' });
-  planAsSingle(system.store, issue);
+  failPlanningOpen(system.store, issue);
   await system.harness.runCycle('manual');
   const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
   return { system, agent, child: children[0]!, children };

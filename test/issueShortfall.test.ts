@@ -19,7 +19,7 @@ import { proposalHold } from '../src/proposals/proposals.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { parsePlanDocument } from '../src/plans/planDocument.js';
 import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
-import { singlePlan } from './support/plans.js';
+import { spentPlannerAttempts } from './support/plans.js';
 import type {
   Agent,
   Issue,
@@ -97,14 +97,14 @@ test('an issue carrying a shortfall is pickup-eligible, and the chip says so', (
     cooldown: DEFAULT_COOLDOWN,
     now: NOW,
     tasks: [],
-    recentDecisions: [],
+    // The funnel has failed open — the shortfall releases the issue *into*
+    // pickup, which is a claim about what happens after the funnel, not before.
+    recentDecisions: spentPlannerAttempts(12),
     openPrs: [],
     // No delivery row: writing a shortfall clears one, in the store.
     deliveries: [],
     deliverySignals: [],
-    // Planned as one pull request — the shortfall releases the issue *into*
-    // pickup, which is a claim about what happens after the funnel, not before.
-    plans: [singlePlan(12)],
+    plans: [],
     headroom: 3,
     paused: false,
   });
@@ -718,7 +718,6 @@ function plannedSystem(): { system: System } {
   const doc = parsePlanDocument(
     JSON.stringify({
       version: 1,
-      verdict: 'parts',
       reason: 'Schema first.',
       parts: [
         { slug: 'schema', title: 'schema', scope: 'src/store/', dependsOn: [] },

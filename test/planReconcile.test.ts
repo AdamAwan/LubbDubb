@@ -232,11 +232,13 @@ test('the status comment is written once and then edited in place, only when the
   assert.equal(h.store.getPlanByOrigin('issue:12')?.statusCommentRef, 'comment_1');
 });
 
-test('a plan being delivered whole writes its status comment too', async () => {
-  // The bug this closes: the single-PR arm was a `single` plan *status*, and
-  // `reconcile` lists `active`/`complete`/`awaiting_approval` — so those plans were
-  // never reconciled and never wrote a comment. An issue worked whole told its
-  // tracker nothing at all, silently, since there was no failure to record.
+test('a one-part plan writes its status comment like any other', async () => {
+  // The bug this closes has moved but not gone: a plan delivering one pull request
+  // used to be a `single` plan *status*, and `reconcile` lists
+  // `active`/`complete`/`awaiting_approval` — so those plans were never reconciled
+  // and never wrote a comment. An issue worked whole told its tracker nothing at
+  // all, silently. It is now an ordinary one-part plan and renders as one: the same
+  // progress list an eight-part plan gets, counted in parts.
   const store = new Store(':memory:');
   const { sink, comments } = recordingSink();
   const plan = store.upsertPlan({
@@ -245,6 +247,21 @@ test('a plan being delivered whole writes its status comment too', async () => {
     status: 'active',
     reason: 'One PR is the right shape here.',
   });
+  store.upsertPlanParts(plan.id, [
+    {
+      slug: 'whole',
+      seq: 1,
+      title: 'The change',
+      scope: 'src/',
+      touches: [],
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+      size: null,
+      expectedKind: null,
+      profile: null,
+    },
+  ]);
   const reconciler = new PlanReconciler({
     store,
     git: new FakeGitObserver(),
@@ -254,17 +271,14 @@ test('a plan being delivered whole writes its status comment too', async () => {
   });
 
   await reconciler.reconcile(world());
-  assert.equal(comments.length, 1, 'the plan appearing is news on this arm too');
-  // The shape and the reason, not a progress count: rendering the partless arm
-  // through the rows said "0/0 parts done" — a progress report on work that was
-  // never split.
-  assert.match(comments[0]?.body ?? '', /One pull request/);
+  assert.equal(comments.length, 1, 'the plan appearing is news');
+  // Counted, and pluralised honestly — no second rendering for this size.
+  assert.match(comments[0]?.body ?? '', /0\/1 part done/);
   assert.match(comments[0]?.body ?? '', /One PR is the right shape here\./);
-  assert.doesNotMatch(comments[0]?.body ?? '', /parts? done/);
+  assert.doesNotMatch(comments[0]?.body ?? '', /One pull request/);
   assert.equal(store.getPlan(plan.id)?.statusCommentRef, 'comment_1');
 
-  // Its body is the verdict, which nothing but a replan changes, so the body is
-  // the news: an unchanged pulse must not rewrite it.
+  // The body is the news: an unchanged pulse must not rewrite it.
   await reconciler.reconcile(world());
   assert.equal(comments.length, 1);
   store.close();

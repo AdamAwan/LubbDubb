@@ -181,7 +181,6 @@ export function useCockpit(): CockpitStatus {
       decideRecovery: (taskId, verdict) => then(api.decideRecovery(taskId, verdict)),
 
       replan: (planId) => then(api.replan(planId)),
-      abandonPlan: (planId) => then(api.abandonPlan(planId)),
       setAcceptance: (planId, slug, criterion, met) => then(api.setAcceptance(planId, slug, criterion, met)),
       setValidation: (issueNumber, checkId, act) => then(api.setValidation(issueNumber, checkId, act)),
       viewPlan: (planId) => go({ plan: planId }),

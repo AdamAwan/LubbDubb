@@ -7,7 +7,7 @@ import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { gitRepo } from './support/gitRepo.js';
-import { planAsSingle } from './support/plans.js';
+import { failPlanningOpen } from './support/plans.js';
 
 const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
@@ -26,7 +26,7 @@ function build() {
     // file is about something else — leaving them on would put an extra agent in
     // front of every issue these assertions dispatch. Each has its own tests.
     // (The planning funnel cannot be pinned off; a goal is planned by writing the
-    // `single` verdict the planner would have written — `planAsSingle`.)
+    // funnel having failed open on it — `failPlanningOpen`.)
     assessment: { enabled: false } as never,
     assay: { enabled: false } as never,
     retrospective: { enabled: false } as never,
@@ -38,7 +38,7 @@ function build() {
 /** Dispatch a code agent for an injected issue; returns its task (whose worktree now exists). */
 async function codeAgent(sys: ReturnType<typeof build>['system'], issueNumber: number) {
   sys.connector.inject({ kind: 'new_issue', number: issueNumber, title: `Bug ${issueNumber}` });
-  planAsSingle(sys.store, issueNumber);
+  failPlanningOpen(sys.store, issueNumber);
   await sys.harness.runCycle('manual');
   const task = sys.store.listTasks().find((t) => t.kind === 'code' && t.branch === `issue/${issueNumber}`);
   assert.ok(task, 'a code task should have been dispatched');

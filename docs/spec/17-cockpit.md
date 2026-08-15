@@ -519,10 +519,10 @@ folds to no group at all.
 **Retired parts are carried on `retiredParts` and drawn in a column beside the four**, struck through
 and dashed. They are held off `parts` rather than made a fifth group because every count on the page and
 the overview's segment track are reads of `parts`, and what a plan _proposed_ is not what the goal is
-made of. Drawn all the same: a plan reaches "no live parts" — the single-PR arm
-([08](08-planning.md#shape-is-the-parts)) — precisely by having proposed a decomposition that was then
-retired, so the sentence on its own left the operator told about a plan they could not read. The empty
-line says which case it is: no plan drawn at all, or a plan whose parts are below it.
+made of. Drawn all the same, because what an amendment dropped is half of what the plan's record is
+for: a goal whose part list shrank between two readings would otherwise simply have lost rows, with
+nothing saying so. The empty line says which case it is: no plan drawn at all, or a plan every part of
+which was retired, with those parts below it.
 
 A part's row names its pull request as a way there rather than as text (`PR #412`), the one ref a wave
 carries; the goal it is under is the page it is already on.
@@ -633,7 +633,7 @@ vanishes when quiet is indistinguishable from one that broke.
   A PR is joined to its goal through **`goalOfPr`** — the server's own three-way match (a part's
   `prNumber`, the tracker's `linkedPrNumber`, the branch convention), read backwards — and the goal is
   drawn as a way onto its page. Through the parts alone it was drawn for almost no PR at all: a goal
-  worked _whole_ has no parts, which is the single-PR arm and most finished goals. A PR no ticket owns
+  the funnel failed open on has no parts and its PR is on the flat `issue/<n>` branch. A PR no ticket owns
   resolves to nothing and draws nothing, which is honest about what is known. The toggle is **disabled rather than absent** with no ignore label configured: the gate
   being off is a fact about the deployment worth seeing, and a control that comes and goes with a
   config key reads as a bug in the page. The merged count is drawn only where the snapshot carries a
@@ -1285,7 +1285,7 @@ browser and `refUrls` answers only for tracker items, so a link there would go n
 renders as one muted line above the map — _"Split this way because: …"_ — because that is the size of
 the question it answers. On a plan stored **before** `diagnosis` and `approach` existed both are null
 and `reason` falls back to the headline under the label it always had ("Why the planner split it", or
-"The approach" on the single-PR arm). The fallback is why the fields are separate rather than `reason`
+"The approach" on a one-part plan). The fallback is why the fields are separate rather than `reason`
 being retargeted: a stored plan keeps meaning what it meant when it was written.
 
 ### The map
@@ -1368,7 +1368,7 @@ are most of what a long one looks like.
 
 **The buttons say what they do.** Approve reads _"Approve — start N agents now"_; Reject names its own
 arm, which differs between them (a refused decomposition falls back to one pull request, a refused
-single verdict goes back to the planner). Above them, what is being authorised in numbers: pull
+a refused plan goes back to the planner). Above them, what is being authorised in numbers: pull
 requests, agents over time, `maxConcurrentPartsPerIssue`, how many start immediately, steps for a
 person, parts that are large to review, and what the goal has cost so far.
 
@@ -1384,8 +1384,10 @@ a box at the bottom.
 
 Approve / Reject appear only while the plan is `awaiting_approval`, and route through the same
 `decideProposal` the escalation card uses — one verdict, one implementation, so the rail's row clears
-whichever surface you decided from. Replan and Abandon sit apart, because they settle nothing about the
-proposal in front of you. While a plan is being discussed the sheet shows the conversation instead —
+whichever surface you decided from. Replan sits apart, because it settles nothing about the proposal in
+front of you. **Abandon** sat beside it and is gone: it retired the unstarted parts and worked the goal
+as one pull request, which was a distinct act only while a plan with no parts was a different kind of
+plan ([08](08-planning.md#a-plan-is-a-list-of-parts)). Replan is the way out now. While a plan is being discussed the sheet shows the conversation instead —
 the agent's status and last note, and a reply box posting through `POST /api/agents/:id/respond` — and
 offers **End discussion** instead of a verdict.
 

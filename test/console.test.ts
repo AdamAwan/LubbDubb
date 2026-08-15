@@ -573,7 +573,7 @@ test('a plan with no live parts draws what it proposed rather than only saying s
   });
 
   // The sentence alone left the operator told about a plan they could not read.
-  assert.ok(decode(html).includes('The plan has no live parts'));
+  assert.ok(decode(html).includes('Every part of this plan was retired'));
   assert.ok(decode(html).includes('split the store in two'));
   assert.ok(html.includes('cn-retired'));
 });
