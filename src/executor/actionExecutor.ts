@@ -29,7 +29,7 @@ import { shortfallRef } from '../delivery/shortfall.js';
 import { outstandingWorkNote } from '../mcp/conclusion.js';
 import { attachmentsNote } from '../jobs/attachments.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
-import { padTestimony, retroDossier } from '../retro/dossier.js';
+import { retroDossier, retroPad } from '../retro/dossier.js';
 import { priorWorkBriefing } from '../briefing/priorWork.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
 import { padOriginFor } from '../scratch/pad.js';
@@ -1041,7 +1041,7 @@ function retroBriefing(originRef: string | null | undefined, store: Store): stri
     // all, and a confident "$0.00" is the one reading that would be a lie.
     costUsd: agents.some((a) => a.costUsd !== null) ? agents.reduce((sum, a) => sum + (a.costUsd ?? 0), 0) : null,
   });
-  return [padTestimony(store.listScratchEntries(issueOriginRef)), dossier].filter(Boolean).join('\n\n');
+  return [retroPad(store.listScratchEntries(issueOriginRef)), dossier].filter(Boolean).join('\n\n');
 }
 
 /**

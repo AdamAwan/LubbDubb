@@ -1,7 +1,18 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { padTestimony, retroDossier, type RetroDossierInput } from '../src/retro/dossier.js';
+import { padTestimony, retroDossier, retroPad, type RetroDossierInput } from '../src/retro/dossier.js';
 import type { ScratchEntry } from '../src/types.js';
+
+/** A decision the harness carried out: the row the dossier is allowed to summarise away. */
+function routine(n: number): RetroDossierInput['decisions'][number] {
+  return {
+    rule: 'plan-part',
+    action: { type: 'dispatch_code_agent' },
+    outcome: 'executed',
+    detail: `part ${n}`,
+    admission: null,
+  } as RetroDossierInput['decisions'][number];
+}
 
 /** The empty run: nothing was planned, nothing was opened, nobody was asked. */
 function bare(): RetroDossierInput {
@@ -69,7 +80,20 @@ test('the dossier reports the plan, its parts, the decisions and what was spent'
     ] as RetroDossierInput['parts'],
     closedPullRequests: [{ number: 41, title: 'Schema', state: 'merged' }] as RetroDossierInput['pullRequests'],
     decisions: [
-      { rule: 'plan-part', action: { type: 'dispatch_code_agent' }, outcome: 'executed', detail: 'ready' },
+      {
+        rule: 'plan-part',
+        action: { type: 'dispatch_code_agent' },
+        outcome: 'executed',
+        detail: 'ready',
+        admission: null,
+      },
+      {
+        rule: 'pr-ci',
+        action: { type: 'dispatch_code_agent' },
+        outcome: 'deferred',
+        detail: 'cooldown',
+        admission: null,
+      },
     ] as RetroDossierInput['decisions'],
     escalations: [
       { type: 'answer_question', status: 'answered', prompt: 'which table?', response: 'the new one' },
@@ -105,6 +129,97 @@ test('the verdicts on the goal are reported with their authors', () => {
   });
   assert.match(text, /every part merged/);
   assert.match(text, /assessor/);
+});
+
+test('an uneventful run states the shape of its decision log instead of listing it', () => {
+  const text = retroDossier({ ...bare(), decisions: Array.from({ length: 40 }, (_, i) => routine(i)) });
+
+  assert.match(text, /40 decisions: 40 × `plan-part` — 40 executed\./);
+  assert.match(text, /carried out as proposed/i, 'the reader is told the log holds no exceptions');
+  assert.doesNotMatch(text, /part 7/, 'forty routine rows are what the shape line replaces');
+  assert.doesNotMatch(text, /not shown here/, 'nothing was dropped: the counts say everything the rows would');
+});
+
+test('an eventful run keeps every exception in full, and names the admission that transformed it', () => {
+  const decisions = [
+    ...Array.from({ length: 40 }, (_, i) => routine(i)),
+    {
+      rule: 'pr-ci',
+      action: { type: 'dispatch_code_agent' },
+      outcome: 'skipped',
+      detail: 'attempt cap',
+      admission: 'cooldown-escalate',
+    },
+    {
+      rule: 'issue-pickup',
+      action: { type: 'notify_agent' },
+      outcome: 'rejected',
+      detail: 'branch busy',
+      admission: null,
+    },
+  ] as RetroDossierInput['decisions'];
+  const text = retroDossier({ ...bare(), decisions });
+
+  assert.match(text, /42 decisions:/);
+  assert.match(text, /40 executed/);
+  assert.match(text, /attempt cap/, 'a skipped decision is rendered as a row, never as a count');
+  assert.match(text, /cooldown-escalate/, 'what became of the proposal is the retrospective’s subject');
+  assert.match(text, /branch busy/);
+  // The routine tail rides along for context, and says how much of itself it dropped.
+  assert.match(text, /part 39/, 'the end of the run is what a retrospective is usually about');
+  assert.doesNotMatch(text, /part 0\b/, 'the earliest routine rows go first');
+  assert.match(text, /30 of the 40 decisions that were carried out are not shown here/);
+});
+
+test('a sparse list survives alongside a saturated one, and every cap names its total', () => {
+  const text = retroDossier({
+    ...bare(),
+    decisions: Array.from({ length: 300 }, (_, i) => ({ ...routine(i), outcome: 'deferred' }) as never),
+    findings: [{ kind: 'bug', ref: 'issue:41', summary: 'the one finding on this run' } as never],
+    escalations: Array.from(
+      { length: 20 },
+      (_, i) => ({ type: 'answer_question', status: 'answered', prompt: `q${i}`, response: null }) as never,
+    ),
+  });
+
+  assert.match(text, /the one finding on this run/, 'three hundred decisions must not crowd out two findings');
+  assert.match(text, /280 of the 300 decisions that went another way are not shown here/);
+  assert.match(text, /8 of the 20 escalations are not shown here/);
+  assert.match(text, /q19/, 'the newest escalations are the ones kept');
+  assert.doesNotMatch(text, /q7\b/);
+});
+
+test('a run below every cap renders exactly the rows it always did', () => {
+  const prs = [
+    { number: 41, title: 'Schema', state: 'merged' },
+    { number: 42, title: 'Wiring', state: 'open' },
+  ] as RetroDossierInput['pullRequests'];
+  const text = retroDossier({ ...bare(), closedPullRequests: prs.slice(0, 1), pullRequests: prs.slice(1) });
+
+  assert.match(text, /#41 Schema — merged/);
+  assert.match(text, /#42 Wiring — open/);
+  assert.doesNotMatch(text, /not shown here/, 'a dossier that dropped nothing must not read as a partial one');
+});
+
+test('the retro pad is bounded far above what a goal writes, and says so when it bites', () => {
+  const entry = (i: number): ScratchEntry =>
+    ({
+      authorOriginRef: `issue:12:part:p${i}`,
+      topic: null,
+      note: `note ${i}`,
+      createdAt: '2026-07-30T09:00:00Z',
+    }) as ScratchEntry;
+
+  assert.equal(retroPad([]), '', 'an empty pad still renders nothing at all');
+
+  const small = retroPad(Array.from({ length: 20 }, (_, i) => entry(i)));
+  assert.match(small, /note 0/, 'a normal goal’s testimony is nowhere near the cap');
+  assert.doesNotMatch(small, /not shown here/);
+
+  const huge = retroPad(Array.from({ length: 70 }, (_, i) => entry(i)));
+  assert.match(huge, /note 69/);
+  assert.doesNotMatch(huge, /note 5\b/, 'over the cap the oldest go — recent notes are still true of the code');
+  assert.match(huge, /10 of the 70 notes on this pad are not shown here/);
 });
 
 test('pad testimony is attributed and quoted, and an empty pad renders nothing', () => {
