@@ -28,7 +28,7 @@ export type ValidationAct =
  * unrepresentable: a second field would let an ask and the fault log both be in
  * front, which is the state this type exists to rule out.
  */
-export type ConsolePanel = 'findings' | 'faults' | 'output' | 'launch' | { ask: string } | null;
+export type ConsolePanel = 'findings' | 'lessons' | 'faults' | 'output' | 'launch' | { ask: string } | null;
 
 /**
  * Which destination the situation area is on. One value rather than a boolean
@@ -165,6 +165,23 @@ export interface CockpitActions {
   promoteFinding(id: string): Promise<void>;
   fileFinding(id: string): Promise<void>;
   dismissFinding(id: string): Promise<void>;
+
+  /**
+   * Write down what working a goal taught about working this repository (#355).
+   * `originRef` is the goal it was learned on, or null when it was not learned on
+   * one — the provenance a reader dates the claim by, and the reason it is a
+   * parameter rather than something inferred from wherever the panel was opened.
+   */
+  proposeLesson(text: string, originRef: string | null): Promise<void>;
+  /**
+   * Vouch for a proposed lesson. The operator gate, and the whole of what makes
+   * a lesson store something other than the stale fleet-wide instruction block
+   * `docs/README.md` argues against — so it is a click, never a tool an agent
+   * could reach.
+   */
+  promoteLesson(id: string): Promise<void>;
+  /** Prune one, from either live status. Terminal: there is no un-retire. */
+  retireLesson(id: string): Promise<void>;
 
   completeHumanTask(id: string): Promise<void>;
   declineHumanTask(id: string, note: string): Promise<void>;

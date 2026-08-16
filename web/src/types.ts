@@ -46,6 +46,8 @@ export type {
   JobAttachment,
   JobAttachmentInput,
   JobSchedule,
+  Lesson,
+  LessonStatus,
   OpenPullRequest,
   OrphanedWork,
   AcceptanceCriterion,

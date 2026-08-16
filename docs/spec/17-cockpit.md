@@ -194,7 +194,7 @@ once.
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | `tab`                                | `work` / `tickets`; the overview is the absent value. `backlog` is an alias for `tickets`, so links to the deleted tab still land |
 | `goal`                               | the open goal page, as `issue:<n>`                                                                                                |
-| `panel`                              | `findings` / `faults` / `output` / `launch`                                                                                       |
+| `panel`                              | `findings` / `lessons` / `faults` / `output` / `launch`                                                                           |
 | `ask`                                | the queue row a `{ ask }` panel is showing                                                                                        |
 | `agent`                              | the open drawer's agent                                                                                                           |
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                    |
@@ -919,8 +919,8 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 ## The top bar and the panels
 
-The strip carries the ident, the nav, the pulse, the fleet cap, and seven readings: **Spend**, **Yield**,
-**Output**, **Findings**, **Faults**, **Launch** and **Settings**. Each is one subject stated once, in
+The strip carries the ident, the nav, the pulse, the fleet cap, and eight readings: **Spend**, **Yield**,
+**Output**, **Findings**, **Lessons**, **Faults**, **Launch** and **Settings**. Each is one subject stated once, in
 a plain label-and-number face. None reaches `api.js`: every one is a method on `CockpitActions`, and
 the fleet cap is the shared `FleetControl`, which is already on that seam.
 
@@ -952,11 +952,27 @@ the type exists to rule out. A `Panel` has **three ways out** — the backdrop, 
 because a thing that covers the console must not have exactly one exit; `test/console.test.ts` pins
 them.
 
-Four panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings, Spend and Yield are shell-owned modals beside them:
+Five panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings, Spend and Yield are shell-owned modals beside them:
 
 - **Findings** — the shared `FindingsPanel`, with promote / file / dismiss. The count is findings at
   `open` and nothing else: promoted, filed and dismissed are done, and `filing` is decided. Nothing in
   the dispatcher reads `findings`, so those three buttons are the only way one becomes anything.
+- **Lessons** — the shared `LessonsPanel`: what working a goal taught about working this repository,
+  the composer that writes one down, and the promote / retire buttons that are the only way one moves
+  (#355). Three sections, because the three statuses are three different questions — _what wants a
+  decision_, _what is vouched for_, _what did we stop believing_. The count is lessons at `proposed`
+  and nothing else, for the Findings count's reason: a count of what is already promoted would tick
+  up on the operator's own click and never come down.
+
+  Two things about this panel are load-bearing rather than presentational. **Retired lessons are
+  drawn**, muted, rather than dropped: this is the surface one prunes from, and a row that vanished
+  on being pruned would leave no way to tell a list you have finished with from one that lost rows.
+  And **the panel says out loud that nothing here reaches an agent** — promotion records the
+  operator's judgement and changes no launch argument — because a control that looks like it changes
+  what agents see and does not is worse than no control. Every card carries its provenance, the goal
+  it was learned on drawn as a `<Ref>` and the date beside it, since those are exactly the two things
+  a rendered block of assertions strips. Retire is a `ConfirmButton`: it is the one irreversible act
+  on the surface.
 - **Faults** — the recorded failures, forty rows, the surface you went looking for rather than a crop
   for a column. It offers a **two-step clear**, drawn **above** the rows and **at zero rows as well**:
   nothing in the harness reads the fault log back, so a clear costs nothing anything decides on, but it

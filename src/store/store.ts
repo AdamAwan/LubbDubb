@@ -9,6 +9,7 @@ import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
 import { PriorityStore } from './priority.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
+import { LessonStore } from './lessons.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
 import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './validation.js';
@@ -61,6 +62,8 @@ import type {
   Job,
   JobAttachment,
   JobSchedule,
+  Lesson,
+  LessonInput,
   Plan,
   PlanPart,
   PlanPartInput,
@@ -119,6 +122,7 @@ export class Store {
   private readonly schedules: JobScheduleStore;
   private readonly priority: PriorityStore;
   private readonly findings: FindingStore;
+  private readonly lessons: LessonStore;
   private readonly humanTasks: HumanTaskStore;
   private readonly plans: PlanStore;
   private readonly validation: ValidationStore;
@@ -188,6 +192,7 @@ export class Store {
     this.schedules = new JobScheduleStore(ctx);
     this.priority = new PriorityStore(ctx);
     this.findings = new FindingStore(ctx);
+    this.lessons = new LessonStore(ctx);
     this.humanTasks = new HumanTaskStore(ctx);
     this.plans = new PlanStore(ctx);
     this.validation = new ValidationStore(ctx);
@@ -348,6 +353,24 @@ export class Store {
   }
   linkFindingTicket(id: string, ticketRef: string): Finding | null {
     return this.findings.linkFindingTicket(id, ticketRef);
+  }
+
+  // -- Lessons (what working one goal taught, kept for the next) -------------
+
+  proposeLesson(input: LessonInput): Lesson {
+    return this.lessons.proposeLesson(input);
+  }
+  getLesson(id: string): Lesson | null {
+    return this.lessons.getLesson(id);
+  }
+  listLessons(limit?: number): Lesson[] {
+    return this.lessons.listLessons(limit);
+  }
+  promoteLesson(id: string): Lesson | null {
+    return this.lessons.promoteLesson(id);
+  }
+  retireLesson(id: string): Lesson | null {
+    return this.lessons.retireLesson(id);
   }
 
   // -- Human tasks (work only a person can do) -------------------------------

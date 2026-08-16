@@ -345,6 +345,12 @@ const realApi = {
   // back, so the work waits its turn there rather than on the fleet.
   fileFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/file`),
   dismissFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/dismiss`),
+
+  // Lessons (#355). Proposing is the operator's own arm — the retrospective's
+  // will land beside it — and promote/retire are the gate and the prune.
+  proposeLesson: (text: string, originRef: string | null) => post<{ ok: true }>('/api/lessons', { text, originRef }),
+  promoteLesson: (id: string) => post<{ ok: true }>(`/api/lessons/${id}/promote`),
+  retireLesson: (id: string) => post<{ ok: true }>(`/api/lessons/${id}/retire`),
   // Work only a person can do. `done` settles it and concludes any plan step it
   // backs, which releases whatever was waiting; `decline` settles it the other way
   // and deliberately does not conclude the step, so nothing downstream starts.

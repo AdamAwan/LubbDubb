@@ -91,6 +91,11 @@ export function buildStateSnapshot(
   // item that is *not* in the current world — a closed duplicate, say — so its
   // ref has to be resolved directly rather than looked up off the snapshot.
   const findings = store.listFindings();
+  // What working a goal taught, kept for the next one. Read here for findings'
+  // reason: each row's `originRef` names the goal it was learned on, and a goal
+  // the world has long since dropped is exactly the one a dated lesson points at,
+  // so its ref has to be resolved directly rather than looked up off the snapshot.
+  const lessons = store.listLessons();
   // Work only a person can do. Read here rather than only in the panel for
   // findings' reason: each row's `originRef` names the work it belongs to, and the
   // panel links it through the same ref map as everything else.
@@ -296,6 +301,10 @@ export function buildStateSnapshot(
     refs: [
       ...findings.map((f) => f.ref),
       ...findings.map((f) => f.ticketRef),
+      // The goal a lesson was learned on — usually finished and gone from the
+      // world lists by the time anyone reads the lesson, which is why it is
+      // resolved here rather than borrowed.
+      ...lessons.map((l) => l.originRef),
       // Both halves of a raised bug: the story it came from, and the bug itself once
       // the filing agent reports it — the chip on the row links the latter.
       ...bugFilings.map((b) => b.originRef),
@@ -577,6 +586,11 @@ export function buildStateSnapshot(
     // Operator-facing only: nothing in the dispatcher reads them, and one becomes
     // work only through `POST /api/findings/:id/promote`.
     findings,
+    // What working a goal taught about working this repository (issue #355).
+    // Operator-facing only, and more so than findings: a promoted lesson is one an
+    // operator has vouched for and nothing else — no rule reads it, no prompt
+    // renders it, and the launch arguments are the same bytes with or without one.
+    lessons,
     // Bugs raised from a story row: `filing` while the desk agent writes one, `filed`
     // with a ref once it exists. Several per story is the normal case, not an error —
     // a story can be wrong in more than one way.

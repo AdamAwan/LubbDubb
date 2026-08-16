@@ -12,6 +12,7 @@ import { RecoveryPanel } from '../components/RecoveryPanel.js';
 import { TicketsPanel } from '../components/TicketsPanel.js';
 import { WorkTreePanel } from '../components/WorkTreePanel.js';
 import { FindingsPanel } from '../components/FindingsPanel.js';
+import { LessonsPanel } from '../components/LessonsPanel.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
 import { InjectPanel } from '../components/InjectPanel.js';
@@ -172,6 +173,7 @@ function Crumb({
 /** What each panel calls itself — the same word as the reading that opens it. */
 const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string> = {
   findings: 'Findings',
+  lessons: 'Lessons',
   faults: 'Faults',
   output: 'Output',
   launch: 'Launch',
@@ -274,6 +276,17 @@ function panelBody(
           onPromote={(id) => actions.promoteFinding(id)}
           onFile={(id) => actions.fileFinding(id)}
           onDismiss={(id) => actions.dismissFinding(id)}
+        />
+      );
+    case 'lessons':
+      return (
+        <LessonsPanel
+          lessons={state.lessons}
+          now={view.now}
+          refUrls={state.refUrls}
+          onPropose={(text, originRef) => actions.proposeLesson(text, originRef)}
+          onPromote={(id) => actions.promoteLesson(id)}
+          onRetire={(id) => actions.retireLesson(id)}
         />
       );
     case 'faults':
