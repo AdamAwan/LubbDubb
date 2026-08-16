@@ -1001,14 +1001,17 @@ export type HumanTaskStatus = 'open' | 'done' | 'declined';
  * `ask` is every task a person typed or an agent requested: the harness knows
  * nothing about it beyond the words, and only a person can say it is done.
  * `close_out` is one the harness files itself and can therefore also settle
- * itself — the ticket it names is a thing it watches every pulse.
+ * itself — the ticket it names is a thing it watches every pulse. `burn` is the
+ * same shape one step further in: the run it names is one the harness is
+ * *watching spend*, so it both files and settles it, and the row is about an
+ * agent rather than a tracker item (see `src/spendBurn.ts`).
  *
  * A discriminator rather than a title match. The close-out sweep has to find its
  * own row again on the next pulse, and the alternative is recognising it by the
  * sentence it wrote — parsing prose the harness composed, which is the failure
  * mode `signalPolarity` and the reason plates already refuse.
  */
-export type HumanTaskKind = 'ask' | 'close_out';
+export type HumanTaskKind = 'ask' | 'close_out' | 'burn';
 
 /**
  * A unit of work only a person can do: flipping a setting in a console nobody

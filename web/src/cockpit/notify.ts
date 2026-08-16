@@ -143,7 +143,7 @@ const AGENT_ENDINGS = new Set(['done', 'killed', 'interrupted', 'failed', 'crash
 /**
  * How a needs-you row's kind reads in a notification title.
  *
- * Total over {@link NeedKind} rather than a lookup with a fallback, so a seventh
+ * Total over {@link NeedKind} rather than a lookup with a fallback, so a new
  * kind of ask fails the typecheck here instead of quietly notifying under a
  * generic heading — which is the failure a fallback would have hidden for
  * exactly as long as nobody read the notification carefully.
@@ -155,6 +155,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   permission: 'An agent wants a command',
   bench: 'Work only you can do',
   close_out: 'A delivered goal needs closing',
+  burn: 'A run is spending far more than usual',
   limit: 'An agent is out of account limit',
 };
 

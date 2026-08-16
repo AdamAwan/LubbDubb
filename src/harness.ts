@@ -19,6 +19,7 @@ import type { PlanReconciler } from './plans/planReconciler.js';
 import type { AssayDesk } from './intake/assayDesk.js';
 import type { PrNamingDesk } from './prNamingDesk.js';
 import type { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
+import type { SpendBurnDesk } from './spendBurnDesk.js';
 import type { BranchReapDesk } from './branchReapDesk.js';
 import type { ScheduleDesk } from './schedules/scheduleDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
@@ -66,6 +67,12 @@ interface HarnessDeps {
    * that do not care). It writes `human_tasks` rows and decides no dispatch.
    */
   closeOuts?: DeliveryCloseOutDesk;
+  /**
+   * Surfaces a live run spending far past what its kind of work costs. Absent =
+   * no burn watch (tests that do not care). It writes `human_tasks` rows, decides
+   * no dispatch, and stops nothing.
+   */
+  burn?: SpendBurnDesk;
   /** Deletes the branch behind a merged pull request. Absent = `reapMergedBranches` is off. */
   branchReaps?: BranchReapDesk;
   /**
@@ -246,6 +253,13 @@ export class Harness extends EventEmitter {
           .map((pr) => pr.number),
       );
       const agents = store.listAgents();
+      // What the fleet is spending *now*: a live run far past what its kind of
+      // work costs becomes a visible obligation to go and look at it. Beside the
+      // other bookkeeping and not in the dispatcher for `closeOuts`' reason — it
+      // staffs nobody, holds nothing and no rule reads what it writes. Handed the
+      // two reads above rather than taking its own, so the pulse walks the agents
+      // and tasks tables once between here and `decide`.
+      this.deps.burn?.run({ agents, tasks });
       const openEscalations = store.listOpenEscalations();
       const queuedJobs = store.listQueuedJobs();
       // Work a requeue is redoing, keyed on the origin it stands in for rather

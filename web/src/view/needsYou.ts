@@ -8,7 +8,7 @@ import { goalIssue, goalOfPr } from './goalPage.js';
  * free text. Drawing them as one kind is how a surface ends up offering the
  * wrong control.
  */
-export type NeedKind = 'recovery' | 'escalation' | 'permission' | 'proposal' | 'bench' | 'close_out' | 'limit';
+export type NeedKind = 'recovery' | 'escalation' | 'permission' | 'proposal' | 'bench' | 'close_out' | 'burn' | 'limit';
 
 /**
  * Who is stopped. `blocking` means an agent is parked and cannot proceed;
@@ -62,7 +62,12 @@ export interface NeedRow {
   originRef: string | null;
   /** Where a click goes. */
   opens: NeedDestination;
-  /** The parked agent, when there is one. */
+  /**
+   * The agent this row is about, when there is one — the parked agent on an
+   * escalation or a limit park, the spending one on a burn notice. Never the
+   * agent that merely raised the row: a bystander's id beside an ask reads as the
+   * thing to go and look at.
+   */
   agentId: string | null;
   /** Live plan parts this ask is holding. Zero when it genuinely holds nothing. */
   holding: number;
@@ -116,6 +121,24 @@ function holdingForEscalation(e: Escalation, state: AppState): number {
 function kindOf(e: Escalation, proposal: Proposal | undefined): NeedKind {
   if (e.context.permission) return 'permission';
   return proposal ? 'proposal' : 'escalation';
+}
+
+/**
+ * Which row kind a human task draws as.
+ *
+ * A total map rather than a pair of ternaries, so a new {@link HumanTaskKind}
+ * fails the typecheck here instead of silently drawing as a bench task — which is
+ * how the harness's own self-settling rows end up wearing the copy for the ones
+ * only a person can close.
+ */
+const TASK_KIND: Record<HumanTask['kind'], NeedKind> = {
+  ask: 'bench',
+  close_out: 'close_out',
+  burn: 'burn',
+};
+
+function needKindOfTask(kind: HumanTask['kind']): NeedKind {
+  return TASK_KIND[kind];
 }
 
 /**
@@ -202,13 +225,17 @@ export function buildNeedsYou(state: AppState): NeedRow[] {
     const goalRef = goalOf(t.originRef, state);
     rows.push({
       id: t.id,
-      kind: t.kind === 'close_out' ? 'close_out' : 'bench',
+      kind: needKindOfTask(t.kind),
       group: 'yours',
       title: t.title,
       goalRef,
       originRef: t.originRef ?? null,
       opens: opensAt(goalRef, state),
-      agentId: null,
+      // A burn notice is *about* its agent — the run is the subject, and the rail
+      // draws the id beside the row. Every other human task's `agentId` is the
+      // agent that happened to ask, which is not what this field means, so it
+      // stays null there rather than putting a bystander's id on the row.
+      agentId: t.kind === 'burn' ? t.agentId : null,
       holding: holdingForTask(t, parts),
       raisedAt: t.createdAt,
     });

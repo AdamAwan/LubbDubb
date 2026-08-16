@@ -79,7 +79,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
   },
   {
     title: 'Features',
-    keys: ['planning', 'validation', 'ci'],
+    keys: ['planning', 'validation', 'spendBurn', 'ci'],
   },
   {
     title: 'Paths',
