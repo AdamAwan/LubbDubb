@@ -69,8 +69,6 @@ function testConfig() {
     maxConcurrentAgents: 3,
     // The funnel in front of pickup would spawn an assayer/planner first; this
     // test is about what rule `issue-pickup` puts on the task row.
-    assessment: { enabled: false } as never,
-    assay: { enabled: false } as never,
   });
 }
 

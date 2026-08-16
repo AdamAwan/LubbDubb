@@ -4,19 +4,17 @@ import { join, resolve } from 'node:path';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { loadConfig, loadDeploymentConfig } from '../src/config.js';
+import { ticketAssignment } from '../src/ticketAssignment.js';
 
 test('loadConfig returns sane defaults with no overrides', () => {
   const cfg = loadConfig();
   assert.equal(cfg.maxConcurrentAgents, 3);
-  assert.equal(cfg.autoSend.enabled, false);
-  assert.equal(cfg.autoSend.confidenceThreshold, 0.85);
-  assert.deepEqual(cfg.autoSend.allowedActions, ['reply_on_pr']);
+  assert.equal(cfg.userId, undefined, 'no identity is assumed — the three "me" gates are off until one is set');
 });
 
 test('issue pickup defaults: lubbdubb label prefix, label-encoded priority scheme, medium fallback', () => {
   const cfg = loadConfig();
   assert.equal(cfg.labelPrefix, 'lubbdubb', 'watch/ignore tags derive from the lubbdubb prefix by default');
-  assert.equal(cfg.issuePickupRequireOwnLabel, false, 'ownership gate off by default (any tagger counts)');
   assert.deepEqual(cfg.issuePriorityLabels, { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 });
   assert.equal(cfg.issueDefaultPriority, 2);
 });
@@ -24,12 +22,10 @@ test('issue pickup defaults: lubbdubb label prefix, label-encoded priority schem
 test('labelPrefix and priority scheme are overridable', () => {
   const cfg = loadConfig({
     labelPrefix: 'team',
-    issuePickupRequireOwnLabel: true,
     issuePriorityLabels: { p0: 5 },
     issueDefaultPriority: 1,
   });
   assert.equal(cfg.labelPrefix, 'team');
-  assert.equal(cfg.issuePickupRequireOwnLabel, true);
   assert.deepEqual(cfg.issuePriorityLabels, { p0: 5 }, 'the scheme is replaced wholesale, not merged');
   assert.equal(cfg.issueDefaultPriority, 1);
 });
@@ -40,22 +36,24 @@ test('explicit overrides win over defaults', () => {
   assert.equal(cfg.maxConcurrentAgents, 7);
 });
 
-test('autoSend is deep-merged: a partial override keeps the other defaults', () => {
-  const cfg = loadConfig({ autoSend: { enabled: true } as never });
-  assert.equal(cfg.autoSend.enabled, true, 'the overridden field applies');
-  assert.equal(cfg.autoSend.confidenceThreshold, 0.85, 'untouched fields keep their defaults');
-  assert.deepEqual(cfg.autoSend.allowedActions, ['reply_on_pr']);
+test('one userId answers ownership, assignment and PR authorship together', () => {
+  // The six keys this replaced were one fact spelled per provider and per use, and
+  // could disagree with each other. Now there is one string and nothing to skew.
+  const cfg = loadConfig({
+    userId: 'adam',
+    github: { owner: 'acme', repo: 'app' },
+    integrations: { sourceControl: 'github', issues: 'github' },
+  });
+  assert.equal(cfg.userId, 'adam');
+  assert.equal(ticketAssignment(cfg)?.flag, ' --assignee adam', 'filed tickets go to them');
 });
 
-test('the assessor, the assay and the retrospective are on by default', () => {
-  const cfg = loadConfig();
-  assert.equal(cfg.assessment.enabled, true);
-  assert.equal(cfg.assay.enabled, true);
-  assert.equal(cfg.retrospective.enabled, true);
-  // Unchanged, and deliberately: the three above spend an agent, while this one
-  // sends things out into the world with no human in the loop. Different class of
-  // switch, different default.
-  assert.equal(cfg.autoSend.enabled, false);
+test('an unset userId leaves every identity gate off rather than guessing one', () => {
+  const cfg = loadConfig({
+    github: { owner: 'acme', repo: 'app' },
+    integrations: { sourceControl: 'github', issues: 'github' },
+  });
+  assert.equal(ticketAssignment(cfg), null, 'nothing to assign to, so tickets file unassigned');
 });
 
 test('the planning funnel is deep-merged when overridden', () => {
@@ -190,6 +188,11 @@ test('a config file naming a removed key is refused, with the key named', async 
   for (const [key, value] of [
     ['dispatcher', 'claude'],
     ['steeringPriorities', ['ship the release']],
+    // A file asking the harness to act on a pull request without being asked is
+    // asking for the one thing it will now never do, so this is a refusal rather
+    // than a drop: honouring it is impossible and ignoring it would have the
+    // harness do the opposite of what the file goes on saying.
+    ['autoSend', { enabled: true, allowedActions: ['merge_pr'] }],
   ] as const) {
     writeFileSync(join(dir, 'lubbdubb.config.json'), JSON.stringify({ [key]: value }), 'utf8');
     assert.throws(
@@ -242,6 +245,54 @@ test('a config file setting a retired switch warns and boots rather than refusin
   assert.equal(warnings.length, 2, 'and the operator hears about both, by name');
   assert.ok(warnings.some((w) => w.includes('planning.enabled')));
   assert.ok(warnings.some((w) => w.includes('validation.enabled')));
+});
+
+/**
+ * The same mechanism over a **top-level** key and a whole block. Both forms are in
+ * the list because a block whose every field went unconditional is removed whole,
+ * while an operator's file names the block rather than the field inside it — so
+ * dropping only `mcp.enabled` would leave `mcp: {}` merging into a config that no
+ * longer has the key.
+ */
+test('a retired top-level key and a retired whole block are both dropped, not merged into nothing', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  const warnings: string[] = [];
+  const realWarn = console.warn;
+  console.warn = (msg: string): void => void warnings.push(msg);
+  t.after(() => {
+    console.warn = realWarn;
+    process.chdir(cwd);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  writeFileSync(
+    join(dir, 'lubbdubb.config.json'),
+    JSON.stringify({
+      reapMergedBranches: false,
+      issuePickupRequireOwnLabel: true,
+      mcp: { enabled: false, permissionEscalation: false },
+      assay: { enabled: false },
+      github: { owner: 'acme', repo: 'app', defaultAssignee: 'someone-else' },
+      maxConcurrentAgents: 9,
+    }),
+    'utf8',
+  );
+
+  const cfg = loadDeploymentConfig();
+  assert.equal(cfg.maxConcurrentAgents, 9, 'the rest of the file is still honoured');
+  assert.deepEqual(cfg.github, { owner: 'acme', repo: 'app' }, 'the block survives, the retired field does not');
+  for (const key of ['reapMergedBranches', 'issuePickupRequireOwnLabel', 'mcp', 'assay'] as const) {
+    assert.ok(!Object.hasOwn(cfg, key), `${key} must not survive onto the config object`);
+    assert.ok(
+      warnings.some((w) => w.includes(key)),
+      `${key} must be named on the boot log`,
+    );
+  }
+  // The deployment that switched these off is getting them back, and has to hear
+  // it from the harness rather than from the fleet's behaviour.
+  assert.ok(warnings.every((w) => w.includes('no longer exists')));
 });
 
 /**

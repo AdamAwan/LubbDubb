@@ -39,14 +39,13 @@ import { hasPriorWork } from '../delivery/assessment.js';
  *   contingent on model diligence and invisible when it bites.
  * - And the hold itself expires — see {@link assayHold}.
  *
- * ## A third off-by-default agent (the second decision)
+ * ## A third agent in front of the work (the second decision)
  *
- * Yes, and the cost is worth naming rather than discovering: with `planning`,
- * `assessment` and this all on, a single issue can spend three agents before one
- * line of its work is written. `assay.enabled` is on by default all the same, so
- * the cost is stated rather than discovered — and what makes it bearable is that
- * only an explicit `unclear` holds anything, and that hold ends on the ticket's
- * own text changing or anyone commenting on it.
+ * The cost is worth naming rather than discovering: with planning, assessment and
+ * this all unconditional, a single issue can spend three agents before one line of
+ * its work is written. What makes it bearable is that only an explicit `unclear`
+ * holds anything, and that hold ends on the ticket's own text changing or anyone
+ * commenting on it.
  *
  * A pure predicate was considered and is not sufficient: it can check length and
  * structure and nothing else, while every failure this exists to catch — *"this
@@ -63,19 +62,6 @@ import { hasPriorWork } from '../delivery/assessment.js';
  * ticket, saying something on it, or clearing the verdict outright. What it must
  * never become is a durable refusal, which is what {@link assayHold} is about.
  */
-
-/** How the assay is gated, from operator config. */
-export interface AssayPolicy {
-  /**
-   * Master switch. **On by default** (`src/config.ts`); an omitted policy means
-   * off, as it does for every feature the dispatcher gates. Off, no assayer is
-   * dispatched, no verdict is written, and every rule in front of an issue behaves
-   * as it did before the assay existed.
-   */
-  enabled: boolean;
-}
-
-export const DEFAULT_ASSAY: AssayPolicy = { enabled: true };
 
 /**
  * The origin an assaying agent is dispatched on — its own, for `assessOrigin`'s

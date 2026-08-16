@@ -138,13 +138,6 @@ const ActionSchema = z.discriminatedUnion('type', [
     prNumber: z.number().int(),
     commentId: z.string().nullable().default(null),
     draft: z.string().min(1),
-    /**
-     * The dispatcher's self-reported confidence in this reply, 0..1. Gates
-     * auto-send: at or above the configured threshold (and with auto-send
-     * enabled) the harness sends it; otherwise it drafts and escalates. Absent
-     * is treated as 0 — no confidence stated means never auto-send.
-     */
-    confidence: z.number().min(0).max(1).optional(),
     ...base,
   }),
   z.object({
@@ -152,8 +145,6 @@ const ActionSchema = z.discriminatedUnion('type', [
     prNumber: z.number().int(),
     /** How to land the branch. Defaults to a squash merge. */
     method: z.enum(['merge', 'squash', 'rebase']).default('squash'),
-    /** Self-reported confidence, 0..1. Gates auto-merge the same way `reply_on_pr` gates auto-send. */
-    confidence: z.number().min(0).max(1).optional(),
     ...base,
   }),
   /**

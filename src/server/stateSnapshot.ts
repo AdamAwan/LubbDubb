@@ -225,11 +225,10 @@ export function buildStateSnapshot(
     deliveries,
     deliverySignals: deliveryWindow ? store.listWorldEventsSince(deliveryWindow.since, deliveryWindow.refs) : [],
     // The content gate in front of the funnel, read exactly as `Harness.runCycle`
-    // reads it — including the policy, so the chip reports an issue *awaiting* an
-    // assay rather than calling it eligible for a pickup that will not fire.
+    // reads it, so the chip reports an issue *awaiting* an assay rather than
+    // calling it eligible for a pickup that has not happened yet.
     assays,
     assaySignals: assayWindow ? store.listWorldEventsSince(assayWindow.since, assayWindow.refs) : [],
-    assay: config.assay,
     // So a closed ticket whose run still lives reads `retained` rather than
     // `done` — the same rows the retained list below is built from (issue #234).
     runs: issueRuns,
@@ -418,7 +417,6 @@ export function buildStateSnapshot(
       // the cockpit to infer from the provider name, so the one place that
       // decides is the one the route asks.
       canFileTickets: trackerCoordinates(config) !== null,
-      reviewReminderMs: config.reviewReminderMs,
     },
     // When the world below was actually observed — null before the first cycle,
     // when there is no baseline and the lists are empty. Shipped because the

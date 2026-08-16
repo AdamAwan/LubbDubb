@@ -158,31 +158,32 @@ Rule `pr-merge-ready` suppresses itself off the same predicate, so on the defaul
 but it is repeated here because it must hold for _every_ path that reaches the executor, the LLM
 dispatcher's prose-composed `reply_on_pr` included. Two call sites, one predicate.
 
-### 2. The gate — `autoSendVerdict(gate, actionType, confidence)`
+### 2. The one standing authority — `store.standingLandingForPr(prNumber)`
 
-Returns `{authorized: true, note}` — the note becoming the decider's reason on the proposal row,
-quoted verbatim by the audit line — or `{authorized: false, blockedBy}`, the reason the escalation
-quotes:
+**The harness authorizes no outbound act on its own.** There was a confidence gate here once:
+`autoSendVerdict` compared a dispatcher-reported number against a configured threshold and could send
+a reply or land a merge with nobody asked. It is gone, along with the `autoSend` config block and the
+`confidence` field on the two actions that carried it — the number was a hardcoded literal at one
+emitter, so the "threshold" resolved between two constants and measured nothing.
 
-1. `!gate.enabled` → `auto-send disabled`
-2. `!gate.allowedActions.includes(actionType)` → `<type> not in allowed auto-send actions`
-3. `confidence < gate.confidenceThreshold` → `confidence X < Y threshold`
+What is left is a **stack landing**: the operator's own authorization over a chain, clicked once over
+the pull request numbers it covers ([12](12-stacked-prs.md)). Asked only of a merge — a landing says
+nothing about replies — and asked _after_ the hold, so a rejection they gave still governs, and
+_before_ the escalation, so an authorized chain does not fill the inbox with the questions it exists
+to answer.
 
-Defaults are `{enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr']}`, so **out
-of the box nothing side-effectful leaves without an explicit human action.** Absent `confidence` is 0.
+**Nothing here can reject.** Only a human can, because a rejection is durable and a machine "no"
+would mean the question is never put to anyone. Unauthorized means "not mine to authorize", which is
+exactly what a pending proposal already says.
 
-**It never returns a rejection.** Only a human can reject, because a rejection is durable and a
-machine "no" would mean the question is never put to anyone. Blocked means "not mine to authorize",
-which is exactly what a pending proposal already says.
+### 3. Either the standing authority or an ask
 
-### 3. Either a decider or an ask
-
-- **Authorized** → `store.createProposal(…)`, then `decideProposal(id, 'accepted', verdict.note,
-'auto_send')`, then `runAuthorized(accepted, cycleId)`. No escalation: nothing is being asked of
+- **Covered by a landing** → `store.createProposal(…)`, then `decideProposal(id, 'accepted', note,
+'stack_landing')`, then `runAuthorized(accepted, cycleId)`. No escalation: nothing is being asked of
   anyone. One appears only if the act then fails.
-- **Blocked** → an escalation (`approve_change` for a merge, `review_reply` carrying the draft) plus a
-  **pending** proposal hanging off it, audited `executed` with the blocking reason — an escalation did
-  happen. Accepting performs the act; rejecting records the reason and stops.
+- **Everything else** → an escalation (`approve_change` for a merge, `review_reply` carrying the
+  draft) plus a **pending** proposal hanging off it, audited `executed` — an escalation did happen.
+  Accepting performs the act; rejecting records the reason and stops.
 
 ## Performing an authorized act
 
@@ -205,18 +206,22 @@ number". A malformed payload is reported, never guessed at.
 `authorityOf(proposal, pulseCycleId)` decides the whole decider → cycle id → wording chain at once,
 because the three are a chain and not three facts:
 
-| Decider     | Cycle id                                                                          | Reads as                                                     |
-| ----------- | --------------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| `human`     | `human:<proposal id>` — a decision made outside the pulse, like `agent-lifecycle` | `authorized by you`                                          |
-| `auto_send` | the pulse's own cycle id                                                          | `authorized by auto-send (confidence 0.90 ≥ 0.85 threshold)` |
+| Decider         | Cycle id                                                                          | Reads as                                         |
+| --------------- | --------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `human`         | `human:<proposal id>` — a decision made outside the pulse, like `agent-lifecycle` | `authorized by you`                              |
+| `stack_landing` | the pulse's own cycle id                                                          | `authorized by you, landing the stack`           |
+| `auto_send`     | the pulse's own cycle id                                                          | `authorized by auto-send` — historical rows only |
 
-Auto-send accepts _inside_ a cycle, so its row stays grouped with the pulse that produced the action
-and **cannot** carry the `human:` prefix the cockpit badges "you · accepted" off. An auto-sent row is
-deliberately left unbadged — that is the harness acting on its own — with the authority in the detail.
+A standing landing accepts _inside_ a cycle, so its row stays grouped with the pulse that produced
+the action and **cannot** carry the `human:` prefix the cockpit badges "you · accepted" off — that
+prefix marks a click being applied at a route, and this one was clicked earlier, over the chain.
 
-**The failure path is one path for both deciders.** A send that throws creates the same
-`autoSendFailed` / `autoMergeFailed` escalation as before and audits `rejected` (the act did not go
-out). The proposal stays `accepted` — it _was_ accepted — and once its settle window lapses the gate
+`auto_send` survives in the `decidedBy` union as a **historical** value only. Nothing writes it; a
+database written before the gate was removed still holds rows carrying it, and a decider the cockpit
+cannot name reads as a missing authority rather than an old one.
+
+**The failure path is one path for both deciders.** A send that throws creates an `autoMergeFailed`
+escalation and audits `rejected` (the act did not go out). The proposal stays `accepted` — it _was_ accepted — and once its settle window lapses the gate
 re-proposes if the world still warrants it. That is the recovery; it needs no new state.
 
 ## A rejection expires on signal

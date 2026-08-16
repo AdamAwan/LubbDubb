@@ -66,10 +66,10 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
     title: 'Integrations',
     keys: [
       'integrations',
+      'userId',
       'github',
       'azureDevOps',
       'labelPrefix',
-      'issuePickupRequireOwnLabel',
       'issuePriorityLabels',
       'issueDefaultPriority',
       'issuePickupStates',
@@ -79,21 +79,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
   },
   {
     title: 'Features',
-    keys: [
-      'planning',
-      'assessment',
-      'assay',
-      'retrospective',
-      'validation',
-      'mcp',
-      'autoSend',
-      'ci',
-      'reapMergedBranches',
-      // A feature's threshold rather than a dispatch one, and grouped by what it
-      // belongs to rather than by its units: it is the only `*Ms` key here, and
-      // sitting it beside the dispatch timings would imply it holds something.
-      'reviewReminderMs',
-    ],
+    keys: ['planning', 'validation', 'ci'],
   },
   {
     title: 'Paths',

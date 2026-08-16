@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext, DispatchResult } from '../src/dispatcher/dispatcher.js';
 import type { Action, Decision, DecisionOutcome, PullRequest, WorldSnapshot } from '../src/types.js';
-import { spentPlannerAttempts } from './support/plans.js';
+import { pastTheFunnel } from './support/plans.js';
 
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
   return {
@@ -16,7 +16,7 @@ function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {})
     // The funnel has failed open on every issue in these worlds: it is
     // unconditional, so an issue it is still working is one pickup is narrowed
     // away from, and nothing downstream of pickup would fire for it.
-    recentDecisions: (world.issues ?? []).flatMap((i) => spentPlannerAttempts(i.number)),
+    recentDecisions: (world.issues ?? []).flatMap((i) => pastTheFunnel(i.number)),
     agentHeadroom: 3,
     ...over,
   };

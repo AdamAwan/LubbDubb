@@ -410,7 +410,7 @@ instead, so an old row reads as a slightly tall card rather than a lie about its
 **Nothing in the dispatcher reads `findings`.** A queued job is dispatched by rule `manual-job` ahead of every
 world-driven rule, so an agent that could queue jobs could put agents on the fleet — one agent's hunch
 would spend another agent's slot, budget and worktree with nothing in between saying yes. That is a
-capability escalation, not a convenience, and it is exactly the shape the auto-send seam exists to
+capability escalation, not a convenience, and it is exactly the shape the proposal seam exists to
 gate.
 
 So a finding is a **claim, not work**. The tool's description _and_ its response say so outright, so an
@@ -461,8 +461,8 @@ of those is "deal with this later".
   from and nowhere else. It returns null for `fake`, or for a provider selected without its config;
   the route then 409s and the snapshot ships `config.canFileTickets: false` so the cockpit hides the
   button rather than offering a click that cannot work. One predicate, both surfaces.
-- **And the one other thing an agent cannot infer: who it is for.** `github.defaultAssignee` /
-  `azureDevOps.defaultAssignee` ([02](02-configuration.md#defaultassignee)) ride in on the same
+- **And the one other thing an agent cannot infer: who it is for.** `userId`
+  ([02](02-configuration.md#userid)) rides in on the same
   string — the create command gains `--assignee` / `--assigned-to`, and a paragraph says the flag is
   not optional, covers only the item the agent creates, and must not cost the ticket if the tracker
   refuses the identity. In the coordinates rather than a placeholder of its own, so an operator's

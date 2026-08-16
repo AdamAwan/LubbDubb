@@ -469,7 +469,8 @@ any of it would be a second copy of the procedure, drifting.
 
 It is always overwritten, and says so in its own body — telling an operator's edits from a stale copy
 has no honest implementation, and a skill that silently stopped being refreshed would describe a
-channel that had since changed. `validation.desktopSkill` turns the writing off.
+channel that had since changed. There is no key to stop it: the skill is the channel's interface, so
+a channel running without it is the channel failing at the job it was turned on for.
 
 ### Starting a run from the cockpit
 

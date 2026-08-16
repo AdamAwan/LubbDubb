@@ -143,9 +143,6 @@ function build(over: Record<string, unknown> = {}) {
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
-    assessment: { enabled: false } as never,
-    assay: { enabled: false } as never,
-    retrospective: { enabled: false } as never,
     ...over,
   });
   const worktrees = new FakeWorktreeManager(join(dir, 'wt'));
@@ -225,16 +222,6 @@ test('an abandoned PR keeps its branch on both sides', async () => {
   const { system, worktrees, deletedOnRemote } = build();
   system.connector.inject({ kind: 'new_pr', number: 7, title: 'PR 7', branch: 'issue/7' });
   system.connector.inject({ kind: 'pr_closed', prNumber: 7, merged: false });
-  await system.harness.runCycle('manual');
-
-  assert.deepEqual(worktrees.deleted, []);
-  assert.deepEqual(deletedOnRemote, []);
-  assert.equal(system.store.reapedPrs().has(7), false);
-});
-
-test('reapMergedBranches: false reaps nothing', async () => {
-  const { system, worktrees, deletedOnRemote } = build({ reapMergedBranches: false });
-  landPr(system, 7, 'issue/7');
   await system.harness.runCycle('manual');
 
   assert.deepEqual(worktrees.deleted, []);

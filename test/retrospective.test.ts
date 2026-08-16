@@ -203,7 +203,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
 
 /** The dispatcher with the retrospective on — everything else default. */
 function writer(): RuleDispatcher {
-  return new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, {}, { enabled: true });
+  return new RuleDispatcher();
 }
 
 function retroDispatches(actions: { type: string }[]): string[] {
@@ -252,12 +252,6 @@ test('nothing is written up while anything is still live under the goal', async 
     }),
   );
   assert.deepEqual(retroDispatches(live.actions), []);
-});
-
-test('off by config, no retrospective agent is ever dispatched', async () => {
-  const off = new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, {}, { enabled: false });
-  const plan = await off.decide(ctx({ deliveries: [delivered()] }));
-  assert.deepEqual(retroDispatches(plan.actions), []);
 });
 
 test('the dispatch context carries which goals have one, never what they say', () => {

@@ -32,7 +32,7 @@ import { renderPlanComment } from '../src/plans/planComment.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Decision, Issue, Plan, PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
-import { spentPlannerAttempts } from './support/plans.js';
+import { pastTheFunnel, spentAssayAttempts } from './support/plans.js';
 
 const enabled = { ...DEFAULT_PLANNING, enabled: true };
 
@@ -114,8 +114,11 @@ function context(issues: Issue[], extra: Partial<DispatchContext> = {}): Dispatc
     openEscalations: [],
     queuedJobs: [],
     agentHeadroom: 5,
-    recentDecisions: [],
     ...extra,
+    // Every issue in the world is past the goal assay: it is unconditional and
+    // ranks in front of everything here, so without this the ranking assertions
+    // would all lead with an assay.
+    recentDecisions: [...issues.flatMap((i) => spentAssayAttempts(i.number)), ...(extra.recentDecisions ?? [])],
   };
 }
 
@@ -280,7 +283,7 @@ test('parts rank after planners, before pickups, bottom of the stack first', asy
       plans,
       planParts: parts,
       agentHeadroom: 0,
-      recentDecisions: spentPlannerAttempts(14),
+      recentDecisions: pastTheFunnel(14),
     }),
   );
   assert.deepEqual(

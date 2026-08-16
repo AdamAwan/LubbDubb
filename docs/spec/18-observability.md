@@ -40,13 +40,13 @@ and recording a failure must never throw.
 
 ### Who records what
 
-| `source`   | Recorded by                                                                                                                                                                                                                                     |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cycle`    | The harness's cycle `catch` (message + stack); plan-reconciliation fetch and status-comment failures; the plan ref-collision guard.                                                                                                             |
-| `provider` | Provider snapshot `catch`es, via the optional `errors` in `IntegrationContext`; Azure transient-retry notices.                                                                                                                                  |
+| `source`   | Recorded by                                                                                                                                                                                                     |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cycle`    | The harness's cycle `catch` (message + stack); plan-reconciliation fetch and status-comment failures; the plan ref-collision guard.                                                                             |
+| `provider` | Provider snapshot `catch`es, via the optional `errors` in `IntegrationContext`; Azure transient-retry notices.                                                                                                  |
 | `agent`    | Spawn failures; terminal `failed` agents (with the exit code and an output tail); worktree removal failures; PTY sentinel-drift warnings; invalid or unreadable `plan.json`; MCP channel/config/frame failures. |
-| `server`   | The Fastify `setErrorHandler` (method, URL, message, stack).                                                                                                                                                                                    |
-| `boot`     | Each agent found orphaned at boot (a crash, not a clean shutdown); a failed restore.                                                                                                                                                            |
+| `server`   | The Fastify `setErrorHandler` (method, URL, message, stack).                                                                                                                                                    |
+| `boot`     | Each agent found orphaned at boot (a crash, not a clean shutdown); a failed restore.                                                                                                                            |
 
 **Do not add new swallowed `catch`es — route them here.** Tests silence the stderr mirror with
 `buildSystem(config, { errorMirror: () => {} })`.
@@ -73,7 +73,7 @@ column** so the audit log can answer "which rule fired" first-class rather than 
 
 | Outcome    | Written when                                                                                     |
 | ---------- | ------------------------------------------------------------------------------------------------ |
-| `executed` | The effect happened (including a no-op, and an escalation raised because auto-send was blocked). |
+| `executed` | The effect happened (including a no-op, and an escalation raised to put an act to you).          |
 | `deferred` | Held by the branch gate, the pause gate or the cap gate.                                         |
 | `rejected` | Malformed action, or the effect failed.                                                          |
 | `skipped`  | The origin already has an active task, the target agent is not live, or the cycle rationale row. |
@@ -270,7 +270,7 @@ change to how spend finds its goal belongs in `rollUpIssueSpend` and nowhere els
 
 **Derived, never stored,** for per-goal spend's reason exactly. **Fetched, never polled**, for the
 work graph's: it reads every agent the harness has ever run, and `/api/state` comes round every
-couple of seconds for every open cockpit. What the *indicators* need is already on the snapshot.
+couple of seconds for every open cockpit. What the _indicators_ need is already on the snapshot.
 
 **`ci` and `landing` are separate from `build`** although all three are work on the same code,
 because they fail differently and an operator acts on the difference: build is what a goal cost to
@@ -288,7 +288,7 @@ states instead of causes.
 `comment:<id>`, `reply` and the bare `pr:<n>` all fall to it, and so does a concern nobody has
 invented yet. Only `ci` is matched by name, because only `ci` is being lifted out — **a new pull
 request concern must not need a change in `phaseOf` to be counted at all.** That is the opposite
-stance to the issue subtree, and deliberately: there, an unnamed suffix means a *role* nobody
+stance to the issue subtree, and deliberately: there, an unnamed suffix means a _role_ nobody
 decided, which is worth surfacing as `other`; here it means one more thing a pull request needed
 before it landed, which is exactly what `landing` is.
 
@@ -300,7 +300,7 @@ mode draws a complete-looking breakdown of nothing.
 ## The reliability breakdown
 
 `buildReliabilityInsights` (`src/reliabilityInsights.ts`) answers the question the spend breakdown
-stops one short of: the money bought *something*, and **did it work**. It is served by
+stops one short of: the money bought _something_, and **did it work**. It is served by
 `GET /api/reliability` ([16](16-http-api.md#the-fetched-routes)) and drawn by the Yield panel
 ([17](17-cockpit.md#yield)). Two halves, and they are the two halves of one funnel:
 
@@ -342,12 +342,12 @@ cap.
 `prsAffected`/`prsObserved` is the other reading and both are shipped. `pending` and `unknown` are not
 verdicts and count as neither — crucially, a rerun passing through `pending` on its way back to green
 does **not** end the red span, or every retry would read as an instant recovery. A red with no green
-after it is still red *now*, so its span runs to the read rather than to its last event: otherwise the
+after it is still red _now_, so its span runs to the read rather than to its last event: otherwise the
 pull request nobody has fixed shows the least red time on the board.
 
 **Two classifiers, both borrowed.** Phases come from `spendInsights.phaseOf` and CI statuses from
 `worldDiff.ciStatusOf`; neither is re-derived here. `ciStatusOf` is the sharp edge — `world_events`
-stores a kind, a ref and a *sentence*, so the status a transition carried survives only inside that
+stores a kind, a ref and a _sentence_, so the status a transition carried survives only inside that
 sentence. **The matcher that writes it and the matcher that reads it are the same regexp in the same
 module**, for the PTY sentinel's reason: a reader that re-derived the format for itself would report
 zero failures, silently, the first time the wording changed.
@@ -364,7 +364,7 @@ already durable, already dated, and pruned by nothing.
 
 **The CI read is ordered, and the order is load-bearing.** `listWorldEventsOfKindsSince` returns
 **oldest first**, unlike its two neighbours in `WorldStore`, because the fold pairs each failing with
-the *next* passing. A descending read pairs every red with the green that preceded it and reports the
+the _next_ passing. A descending read pairs every red with the green that preceded it and reports the
 flakiest pipeline in the repository as recovering instantly.
 
 ## The live tail

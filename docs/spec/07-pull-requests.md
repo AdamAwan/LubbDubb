@@ -188,7 +188,7 @@ one.
   matters.
 
 Performed by `PrNamingDesk` on the pulse through `ActionSink.setPullBase`. Mechanical bookkeeping like
-the plan's status comment, so **not** auto-send gated; a failure is recorded and never fails the cycle.
+the plan's status comment, so it goes through no proposal; a failure is recorded and never fails the cycle.
 
 ### `buildStacks(openPrs, plans, parts, defaultBranch)`
 
@@ -278,8 +278,8 @@ place the model is consulted is `landingScope`, at the click, in the route.
 When a pull request merges, the branch behind it is deleted — the worktree and the local ref, then
 the branch on the remote. `reapableBranches` (`src/branchReap.ts`) is the predicate, pure and
 unit-tested; `BranchReapDesk` performs it on the pulse, beside the rename and the retarget and in
-the same register: mechanical bookkeeping, **not** auto-send gated, a failure recorded and never
-failing the cycle. Config key `reapMergedBranches`, on by default.
+the same register: mechanical bookkeeping through no proposal, a failure recorded and never failing
+the cycle. **Unconditional** — there is no key to turn it off.
 
 A branch is reapable when all of:
 
@@ -328,7 +328,7 @@ arrangement.
 
 ### `renamablePrs(prs, ctx)` — and what may be renamed
 
-`filters.prAuthor` is the gate, because it is already the operator's answer to "which pull requests
+`userId` is the gate, because it is already the operator's answer to "which pull requests
 are mine", and both providers apply it **at fetch time**:
 
 - **Set** — every PR in the world is theirs _by construction_; the provider never surfaced anyone
@@ -401,7 +401,7 @@ been: on a team the reviewer is somebody else, and an obligation that is not you
 "Needs you" — a queue of other people's obligations is what makes an inbox stop being read. Nothing
 dispatches, escalates or files a task at any threshold, because the harness has no more idea than the
 operator does how to make a colleague review faster. The whole of its effect is an age on the court
-chip past `reviewReminderMs` ([17](17-cockpit.md#the-overview), [02](02-configuration.md)).
+chip from the first pulse it is observed waiting ([17](17-cockpit.md#the-overview)).
 
 ### The CI policy decides the court, not `ciStatus`
 
@@ -560,4 +560,4 @@ GitHub or Azure UI is therefore the ordinary way to tell the harness a comment i
 harness's own reply is the fallback for a thread nobody resolved.
 
 Independently of all that, rule `pr-merge-ready` evaluates merge-readiness (see [05](05-dispatcher.md)) and emits
-`merge_pr`, which claims no headroom and goes through the executor's auto-send gate.
+`merge_pr`, which claims no headroom and is always written as a proposal for you.

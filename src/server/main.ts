@@ -16,15 +16,15 @@ async function main(): Promise<void> {
   // Before crash detection, so an agent the operator restores relaunches already
   // carrying the tool channel. Best-effort by contract: a false return means agents
   // run on the sentinels alone, which is a supported configuration, not a failed start.
-  const mcpReady = config.mcp.enabled ? await system.mcp.listen() : false;
+  const mcpReady = await system.mcp.listen();
 
-  // The desktop channel, on the same terms. `listen()` is the only thing that
-  // binds the stable socket or writes into the operator's home directory, which
-  // is why it is behind an explicitly-off-by-default flag rather than a default.
+  // The desktop channel is the one thing here still behind a flag, because it is
+  // the one thing with a footprint outside the harness: `listen()` binds the
+  // stable socket and writes into the operator's home directory. The skill rides
+  // with it rather than switching separately — the channel without its skill is
+  // the channel failing at the job it was turned on for.
   const desktopReady = config.validation.desktop ? await system.desktop.listen() : false;
-  if (desktopReady && config.validation.desktopSkill) {
-    installDesktopSkill(config.validation.desktopSkillPath, system.errors);
-  }
+  if (desktopReady) installDesktopSkill(config.validation.desktopSkillPath, system.errors);
 
   // Runs before the boot cycle, though the hold does not depend on that: the
   // harness re-asks every pulse, so what this ordering buys is only that the very
@@ -46,9 +46,7 @@ async function main(): Promise<void> {
     console.log('[lubbdubb] cockpit auth is DISABLED — anyone who can reach this port can queue jobs');
   }
   console.log(`[lubbdubb] heartbeat=${config.heartbeatIntervalMs}ms cap=${config.maxConcurrentAgents}`);
-  console.log(
-    `[lubbdubb] agent tools: ${mcpReady ? 'on' : config.mcp.enabled ? 'unavailable — sentinels only' : 'disabled'}`,
-  );
+  console.log(`[lubbdubb] agent tools: ${mcpReady ? 'on' : 'unavailable — sentinels only'}`);
   if (desktopReady) {
     // Printed with the command rather than a reference to it: this is the one
     // thing an operator has to do by hand, exactly once, and looking it up in the
@@ -57,9 +55,7 @@ async function main(): Promise<void> {
     console.log(`[lubbdubb] desktop validation channel on — register it in Claude Code once with:`);
     console.log(`[lubbdubb]   claude mcp add --scope user lubbdubb -- ${command} ${args.join(' ')}`);
     console.log(`[lubbdubb] credential at ${system.desktop.credentialPath()} (0600), reminted every start`);
-    if (config.validation.desktopSkill) {
-      console.log(`[lubbdubb] /lubbdubb skill installed at ${config.validation.desktopSkillPath}`);
-    }
+    console.log(`[lubbdubb] /lubbdubb skill installed at ${config.validation.desktopSkillPath}`);
   }
 
   if (crashed.length > 0) {

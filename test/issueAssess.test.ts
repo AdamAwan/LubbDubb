@@ -15,7 +15,7 @@ import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { foldWorkGraph } from '../src/graph/workGraph.js';
 import type { Agent, Decision, Issue, IssueDelivery, Plan, PlanPart, Task } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { spentPlannerAttempts } from './support/plans.js';
+import { pastTheFunnel } from './support/plans.js';
 
 // Rule `issue-assess` — the assessor. What makes it fire, what makes it stand down, and the
 // one thing it must never do: let a second agent onto an issue it is judging.
@@ -57,7 +57,7 @@ function task(over: Partial<Task> = {}): Task {
 function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
   return {
     world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
-    // The funnel has failed open on every issue here — see `spentPlannerAttempts`
+    // The funnel has failed open on every issue here — see `pastTheFunnel`
     // below. A plan of its own would mean the plan owns the issue, and this rule
     // stands down for one that does.
     plans: [],
@@ -65,7 +65,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: spentPlannerAttempts(12),
+    recentDecisions: pastTheFunnel(12),
     agentHeadroom: 3,
     ...over,
   };
@@ -78,22 +78,12 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
  * here about a parked issue. It has its own tests (test/retrospective.test.ts).
  */
 function assessor(): RuleDispatcher {
-  return new RuleDispatcher({}, {}, undefined, 'main', {}, { enabled: true }, {}, {}, { enabled: false });
+  return new RuleDispatcher();
 }
 
 /** The funnel and the assessor both on — what a `single` verdict actually meets. */
 function planningAssessor(): RuleDispatcher {
-  return new RuleDispatcher(
-    {},
-    {},
-    undefined,
-    'main',
-    {},
-    { enabled: true },
-    {},
-    { enabled: false },
-    { enabled: false },
-  );
+  return new RuleDispatcher();
 }
 
 /** One live part — a plan's **shape**: with none, `pl1` is delivered whole. */
@@ -174,11 +164,6 @@ test('an issue whose delivering PR has merged and left the world is assessed, no
   );
   assert.equal(dispatch.base, 'main', 'cut from the default branch, where the merged work actually is');
   assert.equal(dispatch.rule, 'issue-assess');
-});
-
-test('with the flag off nothing changes — the issue is picked up exactly as today', async () => {
-  const { actions } = await new RuleDispatcher().decide(ctx());
-  assert.deepEqual(origins(actions), ['issue:12'], 'off by default, so rule `issue-pickup` is un-narrowed');
 });
 
 // -- the prior-work condition ------------------------------------------------
@@ -331,11 +316,18 @@ test('a standing verdict is not re-assessed', async () => {
     updatedAt: '2026-07-28T10:00:00.000Z',
   };
   const { actions } = await assessor().decide(ctx({ deliveries: [delivery] }));
-  assert.deepEqual(origins(actions), [], 'parked, and not re-asked either');
+  // The retrospective is what a delivered goal legitimately gets next, and it is
+  // unconditional — so the assertion is that no *assessor* is sent round again,
+  // not that the cycle is empty. `test/retrospective.test.ts` owns the other half.
+  assert.deepEqual(
+    origins(actions).filter((o) => o !== 'issue:12:retro'),
+    [],
+    'parked, and not re-asked either',
+  );
 });
 
 test('the watch gate applies, evaluated once on the issue', async () => {
-  const d = new RuleDispatcher({ watchLabel: 'agent-ready' }, {}, undefined, 'main', {}, { enabled: true });
+  const d = new RuleDispatcher({ watchLabel: 'agent-ready' });
 
   const unwatched = await d.decide(ctx());
   assert.deepEqual(origins(unwatched.actions), [], 'opt-in: an untagged issue is left alone');
@@ -370,7 +362,7 @@ test('a spent attempt cap returns the issue to ordinary pickup, with no escalati
   });
   const spent = [attempt(1), attempt(2), attempt(3)];
 
-  const { actions } = await assessor().decide(ctx({ recentDecisions: [...spentPlannerAttempts(12), ...spent] }));
+  const { actions } = await assessor().decide(ctx({ recentDecisions: [...pastTheFunnel(12), ...spent] }));
   assert.deepEqual(origins(actions), ['issue:12'], 'the issue falls back to pickup');
   assert.ok(
     !actions.some((a) => a.type === 'escalate_to_human'),
@@ -399,9 +391,7 @@ test('a cooling assessor still suppresses pickup for that cycle, and stays visib
       createdAt: '2026-07-28T11:55:00.000Z',
     },
   ];
-  const { actions, upcoming } = await assessor().decide(
-    ctx({ recentDecisions: [...spentPlannerAttempts(12), ...recent] }),
-  );
+  const { actions, upcoming } = await assessor().decide(ctx({ recentDecisions: [...pastTheFunnel(12), ...recent] }));
 
   assert.deepEqual(origins(actions), [], 'cooling, so nothing is dispatched');
   const queued = upcoming?.find((i) => i.origin === 'issue:12:assess');

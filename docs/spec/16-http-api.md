@@ -759,7 +759,7 @@ work schedules nothing, and a pulse per checkbox is a pulse per checkbox. Return
 `{ slug, profile? }`. Overrides which model profile one part's work runs on — the planner's own sizing
 of the part it cut, edited. 404 when the plan or the part is unknown; 400 when `profile` names one this
 deployment does not configure. Absent or empty **clears** it, which is not a synonym for naming the
-goal's current profile: a cleared part *inherits*, so re-pinning the goal later moves it too.
+goal's current profile: a cleared part _inherits_, so re-pinning the goal later moves it too.
 
 Unlike the acceptance route above it **runs a cycle**, because this changes what the next dispatch of a
 pending part costs and an operator re-pricing one about to go out wants that to land before it does. A

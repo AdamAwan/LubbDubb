@@ -562,10 +562,12 @@ missing detail is not a clean bill of health.
 whole chip rather than the tone lookup alone, since two readings of one verdict side by side is how
 the same PR comes to wear two tones, or two thresholds, nobody chose.
 
-**The court chip grows an age when a review has been slow.** Past `reviewReminderMs` (default 2 days)
-a PR carrying `attention.reviewWaitingSince` reads `elsewhere · 3d`, with the instant it started
-waiting in the title. Below the threshold it draws nothing, because every open PR is waiting on
-somebody and an age on all of them says nothing about any.
+**The court chip carries how long a review has been waiting.** A PR carrying
+`attention.reviewWaitingSince` reads `elsewhere · 3d`, with the instant it started waiting in the
+title, from the first pulse it is observed waiting. There was a `reviewReminderMs` threshold under
+this once, on the argument that an age on every open PR says nothing about any — which is a team's
+problem. One person's queue is short enough to read, and a threshold only hid how long the short
+queue had been sitting.
 
 It is an age on a row you were already looking at, and **deliberately nothing more**. It raises no
 "Needs you" row, files no human task, and does not move the PR into your court: on a team the reviewer
@@ -775,7 +777,7 @@ dispatch, and the row under it is where the work is.
 A deployment with the gate off (`labelPrefix: ''`) is still refused in both directions: there is no tag
 to write either way, and a button that writes nothing is worse than one that says why.
 
-Assignment filtering is a server-side concern (`workItemAssignedTo` for Azure; GitHub has no issue
+Assignment filtering is a server-side concern (`userId` for Azure; GitHub has no issue
 assignee filter) and is deliberately not a cockpit one — the view shows whatever the tracker returned.
 
 ## The work tab

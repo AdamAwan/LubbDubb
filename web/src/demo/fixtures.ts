@@ -218,7 +218,6 @@ export function buildDemoState(): DemoSeed {
       defaultProfile: 'standard',
       // Two hours rather than the real two days, so the demo's waiting PR below
       // actually draws its age — the mechanism is what the demo is showing.
-      reviewReminderMs: 2 * 60 * 60 * 1000,
       // The demo world is all-fake, so the inject panel stays available — and by
       // the same token there is no tracker to file a ticket into, so that button
       // is hidden exactly as it would be on a `fake` deployment.

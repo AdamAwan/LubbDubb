@@ -1461,47 +1461,6 @@ test('the ordinary answer route refuses a permission request and names the one t
   system.store.close();
 });
 
-test('with the backstop disabled, the tool denies rather than blocking', async () => {
-  const system = build({ mcp: { enabled: true, permissionEscalation: false } });
-  const agent = spawnAgent(system, 'issue:12');
-  // Resolves immediately (no operator needed) with a deny — no escalation filed.
-  const verdict = verdictOf(await startPermission(system, agent, { command: 'anything' }));
-  assert.equal(verdict.behavior, 'deny');
-  assert.equal(system.store.listOpenEscalations().length, 0);
-  system.store.close();
-});
-
-// -- the fail-open floor -----------------------------------------------------
-
-test('with the channel off, no launch carries it and the sentinels still park and finish', () => {
-  const backend = new FakePtyBackend();
-  const system = buildSystem(testConfig({ mcp: { enabled: false } }), {
-    worktrees: new FakeWorktreeManager(),
-    backend,
-    errorMirror: () => {},
-  });
-  const agent = spawnAgent(system, 'issue:12');
-
-  assert.equal(system.mcp.session(agent.id), null, 'no credential is minted at all');
-  assert.equal(
-    backend.spawned[backend.spawned.length - 1]!.args.includes('--mcp-config'),
-    false,
-    'and nothing is wired into the launch',
-  );
-
-  // The floor: an agent with no tool channel parks and finishes exactly as before.
-  backend.last().emit('@@LUBBDUBB_WAITING:Which auth provider?@@');
-  assert.equal(system.store.listOpenEscalations().length, 1);
-  system.escalations.answer(system.store.listOpenEscalations()[0]!.id, 'Auth0');
-  backend.last().emit('@@LUBBDUBB_DONE@@');
-  assert.equal(system.store.getAgent(agent.id)?.status, 'done');
-  // With no channel there is no way to note progress, and nothing pretends there
-  // was one: the row's note stays null and the card falls back to the tail, which
-  // is exactly the pre-tool cockpit.
-  assert.equal(system.store.getAgent(agent.id)?.note, null);
-  system.store.close();
-});
-
 test('a system that never listened still mints credentials but wires no config path', () => {
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend, errorMirror: () => {} });
