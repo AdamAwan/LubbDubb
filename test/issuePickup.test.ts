@@ -9,7 +9,7 @@ import {
 } from '../src/dispatcher/issuePickup.js';
 import type { IssuePickupPolicy, IssuePickupContext } from '../src/dispatcher/issuePickup.js';
 import type { Decision, Issue, IssueRun, PullRequest, Task } from '../src/types.js';
-import { spentPlannerAttempts } from './support/plans.js';
+import { pastTheFunnel } from './support/plans.js';
 
 const SCHEME: IssuePickupPolicy = {
   priorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
@@ -238,7 +238,7 @@ function ctx(over: Partial<IssuePickupContext> = {}): IssuePickupContext {
     // works: it is unconditional, so an issue it is still working — or has planned
     // — is one pickup is narrowed away from. Every case below is about what
     // happens after that.
-    recentDecisions: spentPlannerAttempts(1),
+    recentDecisions: pastTheFunnel(1),
     openPrs: [],
     plans: [],
     headroom: 2,
@@ -329,7 +329,7 @@ test('issuePickupStatus: an ignore-tagged issue surfaces as ignored (ignore wins
 test('issuePickupStatus: a recent attempt puts the issue on cooldown', () => {
   const v = issuePickupStatus(
     issue(),
-    ctx({ recentDecisions: [...spentPlannerAttempts(1), dispatched('issue:1', '2026-07-21T00:59:30Z')] }),
+    ctx({ recentDecisions: [...pastTheFunnel(1), dispatched('issue:1', '2026-07-21T00:59:30Z')] }),
   );
   assert.equal(v.status, 'cooldown');
   assert.equal(v.eligible, false);
@@ -342,7 +342,7 @@ test('issuePickupStatus: the spent attempt cap surfaces as escalated', () => {
     dispatched('issue:1', '2026-07-21T00:20:00Z'),
     dispatched('issue:1', '2026-07-21T00:40:00Z'),
   ];
-  const v = issuePickupStatus(issue(), ctx({ recentDecisions: [...spentPlannerAttempts(1), ...attempts] }));
+  const v = issuePickupStatus(issue(), ctx({ recentDecisions: [...pastTheFunnel(1), ...attempts] }));
   assert.equal(v.status, 'escalated');
   assert.deepEqual(v.reasons, ['3 failed attempts — escalated to a human']);
 });

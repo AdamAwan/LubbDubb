@@ -10,7 +10,7 @@ import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import { decisionAttribution } from '../web/src/components/util.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Agent, Decision, Issue, PullRequest, Task } from '../src/types.js';
-import { spentPlannerAttempts } from './support/plans.js';
+import { pastTheFunnel } from './support/plans.js';
 
 // The decision row's two columns: `rule` names what **proposed** an act,
 // `admission` what **became** of it. One column answering both is what made a
@@ -81,7 +81,7 @@ test('only admission-kind ids are ever emitted into the admission field', async 
     ctx({
       world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
       // The funnel has failed open, so what the cap throttles is the pickup.
-      recentDecisions: [...spentPlannerAttempts(12), ...spentCap('issue:12', 'issue-pickup')],
+      recentDecisions: [...pastTheFunnel(12), ...spentCap('issue:12', 'issue-pickup')],
     }),
   );
   for (const a of actions) {
@@ -99,7 +99,7 @@ test('a throttled pickup names issue-pickup as its proposer, not the cap that st
     ctx({
       world: { takenAt: NOW, pullRequests: [], issues: [issue()] },
       // The funnel has failed open, so what the cap throttles is the pickup.
-      recentDecisions: [...spentPlannerAttempts(12), ...spentCap('issue:12', 'issue-pickup')],
+      recentDecisions: [...pastTheFunnel(12), ...spentCap('issue:12', 'issue-pickup')],
     }),
   );
   const escalation = actions.find((a) => a.type === 'escalate_to_human');

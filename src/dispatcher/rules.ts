@@ -53,9 +53,6 @@ type RuleKind = 'rule' | 'admission' | 'terminal';
  * which is a property of `IssuePickupPolicy` rather than a switch of its own.
  */
 export interface RuleConditions {
-  assessment: boolean;
-  assay: boolean;
-  retrospective: boolean;
   workItemStates: boolean;
 }
 
@@ -160,7 +157,6 @@ const RULES = [
     name: 'Issue goal needs checking',
     description:
       'A watched open issue nothing has been started for yet gets a code agent to read the ticket against the repository and say whether there is a goal here an agent could start from. It is the only gate in front of an issue that asks about *content*: every other one — the watch tag, the workflow state, the cooldown, the attempt cap, headroom — asks whether the harness is allowed to act, never whether there is anything to act on. A verdict of `unclear` stops the funnel for that issue and says what a human would need to supply; it ends by itself the moment the ticket is edited or anything happens on it. Ranked ahead of the planner, because assaying a goal the planner is about to decompose is the whole point. An assayer that writes no verdict — crashed, killed or capped — leaves the issue to ordinary pickup, so a failure can never park one.',
-    enabled: (c) => c.assay,
   },
   {
     id: 'issue-plan',
@@ -175,7 +171,6 @@ const RULES = [
     name: 'Issue may be finished',
     description:
       'A watched open issue that has already had agents on it, has nothing in flight and no open PR, gets a code agent to read what was actually delivered and say whether the issue is finished. It writes `delivered` — weaker than the tracker’s `closed`, reversible, and its only effect is to stop pickup — or sends the issue back round with an outstanding-work note. It is what stops `issue-pickup` re-picking work whose PR has merged and left the open list, which on GitHub nothing else prevents, and it ranks ahead of pickup for exactly the issues both would otherwise claim. An assessor that spends its attempt cap fails the issue open to ordinary pickup, so a failure can never park an issue.',
-    enabled: (c) => c.assessment,
   },
   {
     id: 'issue-shortfall',
@@ -190,7 +185,6 @@ const RULES = [
     name: 'Delivered goal needs a retrospective',
     description:
       'An issue the harness has parked as delivered, with nothing in flight under it and no retrospective yet, gets one desk agent to write the run up: what shipped, and what came out of the process of shipping it. It is handed the shared scratchpad the working agents left and the record the harness kept — which rules fired, what was escalated and how it was answered, replans, shortfalls, what it cost — and it writes one document per goal, read in the cockpit on the station that used to say nothing. It schedules nothing, gates nothing and posts nothing to the tracker, so a retrospective that never gets written costs only the report: an agent that crashes or spends its attempt cap leaves the goal exactly as delivered, with no escalation, because there is nothing a human can do about a write-up that did not happen that they cannot do by reading the issue.',
-    enabled: (c) => c.retrospective,
   },
 
   // ---- Plans: approve, notice a wedge, then schedule. -----------------------

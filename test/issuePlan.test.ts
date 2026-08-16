@@ -15,7 +15,7 @@ import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Decision, Issue, Plan, PlanPart, WorldSnapshot } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
-import { planWithOnePart, spentPlannerAttempts } from './support/plans.js';
+import { planWithOnePart, pastTheFunnel, spentAssayAttempts, failAssayOpen } from './support/plans.js';
 
 // -- the pure route ----------------------------------------------------------
 
@@ -134,8 +134,12 @@ function context(issues: Issue[], extra: Partial<DispatchContext> = {}): Dispatc
     openEscalations: [],
     queuedJobs: [],
     agentHeadroom: 5,
-    recentDecisions: [],
     ...extra,
+    // Every issue in the world is past the goal assay. The assay is unconditional
+    // and ranks in front of the planner, so without this each test below would be
+    // asserting about the assay rather than about the rule it names. Appended to
+    // whatever the case itself asked for rather than replacing it.
+    recentDecisions: [...issues.flatMap((i) => spentAssayAttempts(i.number)), ...(extra.recentDecisions ?? [])],
   };
 }
 
@@ -158,7 +162,7 @@ test('planners rank ahead of pickups for scarce headroom', async () => {
   // The funnel has failed open on #7, so it is a pickup; #12 needs a planner. One
   // slot: the planner takes it, because a planner unblocks work.
   const result = await new RuleDispatcher({}, {}, undefined, 'main', enabled).decide(
-    context([issue(7), issue(12)], { recentDecisions: spentPlannerAttempts(7), agentHeadroom: 1 }),
+    context([issue(7), issue(12)], { recentDecisions: pastTheFunnel(7), agentHeadroom: 1 }),
   );
   assert.deepEqual(
     result.upcoming?.map((q) => [q.rule, q.status]),
@@ -179,7 +183,7 @@ test('rule `issue-pickup` fires only for the unplanned arm, and is unchanged for
   // dispatch — the assertion is about which rule fires for #7.
   const planParts = [{ ...part('a', 1, { status: 'in_review', prNumber: 21 }), id: 'plan_9:a', planId: 'plan_9' }];
   const planned = await dispatcher.decide(
-    context([issue(7), issue(9)], { plans, planParts, recentDecisions: spentPlannerAttempts(7) }),
+    context([issue(7), issue(9)], { plans, planParts, recentDecisions: pastTheFunnel(7) }),
   );
   assert.deepEqual(
     planned.actions.map((a) => [a.rule, a.type === 'dispatch_code_agent' ? a.branch : null]),
@@ -189,7 +193,7 @@ test('rule `issue-pickup` fires only for the unplanned arm, and is unchanged for
 
   // Byte-for-byte: what the fail-open produces is the plain pickup, unchanged by
   // the funnel having routed the issue there.
-  const plain = await new RuleDispatcher().decide(context([issue(7)], { recentDecisions: spentPlannerAttempts(7) }));
+  const plain = await new RuleDispatcher().decide(context([issue(7)], { recentDecisions: pastTheFunnel(7) }));
   assert.deepEqual(planned.actions, plain.actions);
 });
 
@@ -223,11 +227,13 @@ function pickupCtx(extra: Partial<IssuePickupContext> = {}): IssuePickupContext 
     cooldown: DEFAULT_COOLDOWN,
     now: '2026-07-25T12:00:00.000Z',
     tasks: [],
-    recentDecisions: [],
     openPrs: [],
     headroom: 5,
     paused: false,
     ...extra,
+    // Past the goal assay, for `context`'s reason: it is the gate in front of the
+    // planner, and this file is about what the *planner* parks an issue for.
+    recentDecisions: [...spentAssayAttempts(12), ...(extra.recentDecisions ?? [])],
   };
 }
 
@@ -270,7 +276,7 @@ test('the pickup verdict explains an issue parked in the funnel', () => {
 
   // The fail-open arm is the one that reaches the ordinary eligible verdict.
   assert.equal(
-    issuePickupStatus(issue(12), pickupCtx({ ...on, recentDecisions: spentPlannerAttempts(12) })).status,
+    issuePickupStatus(issue(12), pickupCtx({ ...on, recentDecisions: pastTheFunnel(12) })).status,
     'eligible',
   );
 });
@@ -286,12 +292,6 @@ function systemWithPlanning(): System {
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     repoRoot: gitRepo(),
-    // Pinned off: all three default **on** now, and this file is about something
-    // else — an extra agent in front of each issue would change what these
-    // assertions see. Each has its own tests.
-    assessment: { enabled: false } as never,
-    assay: { enabled: false } as never,
-    retrospective: { enabled: false } as never,
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
   });
@@ -302,6 +302,8 @@ function systemWithPlanning(): System {
 test('an injected issue routes through the planner, and its verdict hands the issue back to pickup', async () => {
   const on = systemWithPlanning();
   on.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
+  // The assay runs in front of the planner and would take this cycle otherwise.
+  failAssayOpen(on.store, 1);
   await on.harness.runCycle('manual');
   const planTask = on.store.listTasks()[0];
   assert.equal(planTask?.branch, planBranch(1));

@@ -467,7 +467,7 @@ CREATE TABLE IF NOT EXISTS proposals (
   status        TEXT NOT NULL,      -- pending | accepted | rejected
   action        TEXT NOT NULL,      -- JSON: the validated action, run verbatim on accept
   note          TEXT,
-  decided_by    TEXT,               -- human | auto_send — the two authorities, one record
+  decided_by    TEXT,               -- human | stack_landing (| auto_send, historical)
   decided_at    TEXT,
   escalation_id TEXT,
   created_at    TEXT NOT NULL

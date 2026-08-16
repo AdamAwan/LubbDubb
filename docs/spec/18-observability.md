@@ -73,7 +73,7 @@ column** so the audit log can answer "which rule fired" first-class rather than 
 
 | Outcome    | Written when                                                                                     |
 | ---------- | ------------------------------------------------------------------------------------------------ |
-| `executed` | The effect happened (including a no-op, and an escalation raised because auto-send was blocked). |
+| `executed` | The effect happened (including a no-op, and an escalation raised to put an act to you).          |
 | `deferred` | Held by the branch gate, the pause gate or the cap gate.                                         |
 | `rejected` | Malformed action, or the effect failed.                                                          |
 | `skipped`  | The origin already has an active task, the target agent is not live, or the cycle rationale row. |

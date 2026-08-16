@@ -1,8 +1,9 @@
 # 11 — The MCP tool channel
 
 `src/mcp/`. Every spawned agent is wired to a tools-only MCP server running **inside the harness**.
-Config `mcp.enabled`, **on by default** — it is purely additive: it adds tools an agent may use and
-changes nothing about how one is dispatched, parked or finished.
+**Unconditional** — there is no key to turn it off. It is purely additive: it adds tools an agent may
+use and changes nothing about how one is dispatched, parked or finished, and a socket that fails to
+bind already degrades to the floor below, which is the only thing an off-switch ever bought.
 
 The channel exists because the sentinels and the file-events hook are both **fire-and-forget**. An
 agent can announce, but never receive a value back, never learn that what it sent was rejected, and
@@ -372,7 +373,7 @@ identity structural as everywhere else — no issue argument, the origin resolve
 - The verdict is fingerprinted against the title and body **the agent was dispatched with**, read off
   its task, so an edit made mid-run is not silently swallowed.
 - **`profile` is the assayer sizing the work** (issue #342), and the tool builds its `enum` and its
-  description from *this deployment's* `agentModels.profiles` — so the agent proposes from the
+  description from _this deployment's_ `agentModels.profiles` — so the agent proposes from the
   operator's own vocabulary rather than a difficulty scale that would then need mapping back. It is
   required with `workable` when any profile is configured, because an optional field is one most
   agents omit and an omitted proposal is indistinguishable from "the default is right" — which the
@@ -433,7 +434,7 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
   agent's judgement — a harness-written "closes" would shut a ticket whose remaining parts are open.
   A part gets `Part <n>/<m> of #<issue>.`, a whole-issue pickup `Relates to #<issue>.`
 
-**The floor is unchanged.** Unwired — no sink, `mcp.enabled: false`, a `claude` that ignores the
+**The floor is unchanged.** Unwired — no sink, a `listen()` that failed, a `claude` that ignores the
 server — the tool is still advertised (so `names.ts` stays honest) and reports that it is unavailable,
 and every prompt still tells the agent how to open its own pull request. `test/mcpChannel.test.ts`
 asserts that rather than intending it.
@@ -468,9 +469,10 @@ is not told about and does not call itself.
 - **Deny on death.** `PermissionDesk.denyAll(agentId)` resolves any request an agent was blocked on as
   a denial. It hangs off `McpBridgeServer.release(token)` — the one choke point every terminal path
   (kill / crash / shutdown) already hits — so a dead agent never leaves Claude blocked.
-- **Off-switch.** `mcp.permissionEscalation: false` (or `mcp.enabled: false`) leaves the tool
-  unwired; called anyway, it denies rather than blocks. Gated on `mcp.enabled` because the tool lives
-  on the MCP server.
+- **No off-switch.** The backstop is unconditional: the alternative to routing an un-allowlisted call
+  to the operator is Claude's headless default, a silent deny, which is a worse answer to the same
+  question. Where the channel itself is unavailable the tool is unwired and denies rather than
+  blocking, which is the floor below rather than a setting.
 
 ## Identity
 
@@ -628,7 +630,7 @@ Both verified empirically against `claude` 2.1.220 in headless `-p` mode, not as
 you haven't granted it yet."` with no human at the prompt. The flag is **additive, not restrictive**:
   an agent launched with it still uses Bash and Write normally.
 - **`--permission-prompt-tool <name>` wires the backstop** (issue #130). Passed only alongside
-  `--mcp-config` (the tool lives on that server) and only when `mcp.permissionEscalation` is on. Its
+  `--mcp-config`, since the tool lives on that server. Its
   value is `PERMISSION_PROMPT_TOOL` (`mcp__lubbdubb__request_permission`), derived from the same server
   id + tool name as every grant, so it can never drift from what `buildTools` exposes.
 
@@ -648,7 +650,6 @@ a `finish()` the model forgets to call is silence, and silence is indistinguisha
 Every one of these leaves behaviour byte-for-byte as it was without the channel, and
 `test/mcpChannel.test.ts` asserts that floor rather than merely intending it:
 
-- `mcp.enabled: false`
 - `listen()` returning false (socket unavailable)
 - An unwritable launch-config file (that one agent falls back; the rest are unaffected)
 - A `claude` that ignores the server
@@ -668,6 +669,6 @@ Not an omission. **Origin and branch are 1:1 for every world-driven dispatch rul
 `activeOrigins` / `findActiveTaskByOrigin` gate already _is_ a branch gate, and the existing gates leave
 no dispatch-time collision for a claim to prevent. What they cannot see is what an agent does once
 running — and a claim cannot fix that either: **advisory** makes it documentation an agent may forget,
-**enforcing** needs a lock that vanishes under `mcp.enabled: false` (a lock that silently is not one),
+**enforcing** needs a lock that vanishes whenever the socket does (a lock that silently is not one),
 and **letting the dispatcher read claims** would let an agent suppress another's dispatch. The
 structural detector in [12](12-artifacts-and-files.md) is what shipped instead.

@@ -334,11 +334,11 @@ export function prCiFailing(s: StageContext): void {
       // later cycle delivers them once the agent is running.
     }
 
-    // 3: Drive a settled PR the last mile — merge it in. `merge_pr` isn't an
-    // agent dispatch (it claims no headroom); the executor's auto-send gate
-    // decides whether to merge autonomously or escalate for approval. A
-    // 'behind'/'blocked'/'dirty' state is handled above, so it never counts as
-    // merge-ready here.
+    // 3: Drive a settled PR the last mile — propose merging it in. `merge_pr`
+    // isn't an agent dispatch (it claims no headroom), and it is never performed
+    // on the harness's own authority: the executor writes it as a proposal, which
+    // only a click or a standing stack landing settles. A 'behind'/'blocked'/'dirty'
+    // state is handled above, so it never counts as merge-ready here.
     //
     // A stacked PR is held: merging it would land part 2 *into part 1's branch*
     // mid-flight rather than into the integration branch. It becomes mergeable on
@@ -371,7 +371,6 @@ export function prCiFailing(s: StageContext): void {
         type: 'merge_pr',
         prNumber: pr.number,
         method: 'squash',
-        confidence: 0.9,
         rule: 'pr-merge-ready',
         reason: `PR #${pr.number} is green, approved and mergeable; merge it in.`,
       } satisfies RawAction);

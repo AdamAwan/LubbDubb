@@ -92,7 +92,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
 
 /** The dispatcher with the assay on — everything else default. */
 function assayer(): RuleDispatcher {
-  return new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, { enabled: true });
+  return new RuleDispatcher();
 }
 
 function origins(actions: { type: string; originRef?: string | null }[]): string[] {
@@ -135,9 +135,9 @@ test('a fresh issue is assayed before anything is dispatched against it', async 
   assert.equal(dispatch.originSummary, 'the thing should be better');
 });
 
-test('with the flag off nothing changes — the issue goes straight into the funnel', async () => {
+test('there is no flag to turn it off — a fresh issue is assayed before the planner sees it', async () => {
   const { actions } = await new RuleDispatcher().decide(ctx({ recentDecisions: [] }));
-  assert.deepEqual(origins(actions), ['issue:12:plan'], 'off by default, so nothing this rule does moves');
+  assert.deepEqual(origins(actions), ['issue:12:assay'], 'unconditional, and it runs in front of the funnel');
 });
 
 test('assay and pickup never both fire for one issue', async () => {
@@ -148,7 +148,7 @@ test('assay and pickup never both fire for one issue', async () => {
 });
 
 test('the planner is suppressed too — decomposing an unanswerable question is the point of this rule', async () => {
-  const d = new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, { enabled: true });
+  const d = new RuleDispatcher();
   const { actions } = await d.decide(ctx());
   assert.deepEqual(origins(actions), ['issue:12:assay'], 'ranked ahead of the planner, and standing it down');
 });
@@ -198,7 +198,7 @@ test('anything live under the issue stands the assay down', async () => {
 });
 
 test('the watch gate applies — an untagged issue is never assayed', async () => {
-  const d = new RuleDispatcher({ watchLabel: 'agent-ready' }, {}, undefined, 'main', {}, {}, {}, { enabled: true });
+  const d = new RuleDispatcher({ watchLabel: 'agent-ready' });
 
   const unwatched = await d.decide(ctx());
   assert.deepEqual(origins(unwatched.actions), [], 'the assay never filters a backlog nobody opted in');
@@ -261,7 +261,7 @@ test('a cooling assayer still suppresses pickup for that cycle, and stays visibl
 // -- the hold, and the two things that end it --------------------------------
 
 test('an unclear verdict holds the issue out of pickup and planning alike', async () => {
-  const d = new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, { enabled: true });
+  const d = new RuleDispatcher();
   const { actions } = await d.decide(ctx({ assays: [assay()] }));
   assert.deepEqual(origins(actions), [], 'no pickup, no planner, and not re-asked either');
 });
@@ -352,7 +352,6 @@ function pickupCtx(over: Partial<Parameters<typeof issuePickupStatus>[1]> = {}) 
     openPrs: [],
     headroom: 3,
     paused: false,
-    assay: { enabled: true },
     ...over,
   };
 }
@@ -391,7 +390,6 @@ test('the chip says eligible exactly when the rule would dispatch — cap spent,
     }),
   );
   assert.equal(capped.status, 'eligible', 'the fail-open is reported as the pickup it actually becomes');
-  assert.equal(issuePickupStatus(issue(), pickupCtx({ assay: { enabled: false } })).status, 'eligible');
 });
 
 test('an unwatched issue is reported as unwatched, never as awaiting an assay it will never get', () => {
@@ -588,7 +586,7 @@ function world(over: Partial<Issue> = {}): WorldSnapshot {
 test('a refused goal asks its question on the ticket, once, and edits it thereafter', async () => {
   const system = build();
   const { sink, writes } = commentSink();
-  const desk = new AssayDesk({ store: system.store, sink, assay: { enabled: true } });
+  const desk = new AssayDesk({ store: system.store, sink });
   system.store.recordAssay({
     originRef: 'issue:12',
     verdict: 'unclear',
@@ -612,7 +610,7 @@ test('a refused goal asks its question on the ticket, once, and edits it thereaf
 test('a hold that ended is retracted on the thread, not left standing', async () => {
   const system = build();
   const { sink, writes } = commentSink();
-  const desk = new AssayDesk({ store: system.store, sink, assay: { enabled: true } });
+  const desk = new AssayDesk({ store: system.store, sink });
   system.store.recordAssay({
     originRef: 'issue:12',
     verdict: 'unclear',
@@ -629,7 +627,7 @@ test('a hold that ended is retracted on the thread, not left standing', async ()
   system.store.close?.();
 });
 
-test('nothing is said with the assay off, or for a workable verdict', async () => {
+test('nothing is said for a workable verdict', async () => {
   const system = build();
   const { sink, writes } = commentSink();
   system.store.recordAssay({
@@ -639,18 +637,8 @@ test('nothing is said with the assay off, or for a workable verdict', async () =
     goalRef: goalFingerprint(issue().title, issue().body),
     by: 'assayer',
   });
-  await new AssayDesk({ store: system.store, sink, assay: { enabled: true } }).announce(world(), []);
+  await new AssayDesk({ store: system.store, sink }).announce(world(), []);
   assert.deepEqual(writes, [], 'a yes is not news for the ticket');
-
-  system.store.recordAssay({
-    originRef: 'issue:12',
-    verdict: 'unclear',
-    summary: 'no measure',
-    goalRef: goalFingerprint(issue().title, issue().body),
-    by: 'assayer',
-  });
-  await new AssayDesk({ store: system.store, sink, assay: { enabled: false } }).announce(world(), []);
-  assert.deepEqual(writes, [], 'off means off, including for a stale DB');
   system.store.close?.();
 });
 

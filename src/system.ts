@@ -282,11 +282,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const perm = config.agentPermissionMode;
   const extraArgs = config.claudeArgs;
   const allowedTools = config.agentAllowedTools;
-  // The permission backstop's tool name, wired only when the MCP channel is on and
-  // the operator left the backstop enabled (issue #130 phase B). Passed on every
+  // The permission backstop's tool name (issue #130 phase B). Passed on every
   // launch; it only takes effect when that launch also carries an `--mcp-config`.
-  const permissionPromptTool =
-    config.mcp.enabled && config.mcp.permissionEscalation ? PERMISSION_PROMPT_TOOL : undefined;
+  const permissionPromptTool = PERMISSION_PROMPT_TOOL;
   // `mcpConfigPath` is per-launch (minted by AgentManager) and MUST be threaded
   // through — without it neither `--mcp-config` nor `--permission-prompt-tool` is
   // ever added, and the tool channel is dead in production.
@@ -387,9 +385,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // What the assayer is offered when it proposes a profile for a goal.
     profiles: orderedProfiles(config.agentModels),
     // Lazy for the same reason as `agents`: the desk is built after this server
-    // (it needs the escalation inbox). Off entirely when the operator disabled the
-    // backstop, so `request_permission` denies rather than blocks.
-    permissions: (): PermissionDesk | undefined => (config.mcp.permissionEscalation ? permissions : undefined),
+    // (it needs the escalation inbox).
+    permissions: (): PermissionDesk => permissions,
     // Lazy for the same reason again: the sink and the template book are both built
     // below this. If this closure is ever dropped, `open_pr` reports itself unwired
     // in production and no test catches it — the ArgsBuilder/mcpConfigPath trap.
@@ -449,7 +446,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     statusFile: rateLimits ? (sessionId): string => rateLimits.fileFor(sessionId) : undefined,
     fileEvents,
     docsFolderPrefix: config.docsFolderPrefix,
-    mcp: config.mcp.enabled ? mcp : undefined,
+    mcp,
     // The `plan.json` transport's half of the approval gate — the tool transport
     // gets the same flag above, so a verdict lands identically either way.
     requirePlanApproval: config.planning.requireApproval,
@@ -495,7 +492,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     worktrees,
     escalations,
     sink: opts.sink ?? connector,
-    autoSend: config.autoSend,
     agentModels: config.agentModels,
     deskRoot: config.deskRoot,
     defaultBranch: config.defaultBranch,
@@ -508,9 +504,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     ciEvidence: opts.ciEvidence ?? connector,
   });
 
-  // The accept/reject surface for acts the auto-send gate refused to perform on
-  // its own. It runs an accepted act through the executor, so the outbound sink
-  // keeps a single caller and the human's authorization lands in the audit log.
+  // The accept/reject surface for every act the harness will not perform on its
+  // own — which is all of them. It runs an accepted act through the executor, so
+  // the outbound sink keeps a single caller and the human's authorization lands in
+  // the audit log.
   const proposals = new ProposalDesk(store, escalations, executor);
 
   // Dispatcher-level issue-pickup policy (gate + label-encoded priority), honoured
@@ -519,7 +516,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const issuePickup: IssuePickupPolicy = {
     watchLabel,
     ignoreLabel,
-    requireOwnLabel: config.issuePickupRequireOwnLabel,
+    // The ownership gate follows the operator's identity: with `userId` set, only a
+    // watch tag *they* added counts. Unset — the fake provider, a first run — there
+    // is no identity to attribute a tag to, so any tagger counts.
+    requireOwnLabel: config.userId !== undefined,
     priorityLabels: config.issuePriorityLabels,
     defaultPriority: config.issueDefaultPriority,
     pickupStates: config.issuePickupStates,
@@ -536,10 +536,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     prompts,
     config.defaultBranch,
     config.planning,
-    config.assessment,
     config.ci,
-    config.assay,
-    config.retrospective,
     config.validation,
     config.validationRoot,
   );
@@ -561,12 +558,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // The goal assay's outbound half: one living comment per refused goal, on the
   // ticket. Beside the plan reconciler because it is the same act — mechanical
   // bookkeeping through the same seam, not an action the executor gates.
-  const assays = new AssayDesk({ store, sink: opts.sink ?? connector, assay: config.assay, errors });
-  // The naming convention's outbound half. `filters.prAuthor` being configured is
-  // the operator's own answer to "which pull requests are mine", and both providers
-  // apply it at fetch time — so when it is set the world is already only theirs.
-  const prAuthorConfigured =
-    config.github?.filters?.prAuthor !== undefined || config.azureDevOps?.filters?.prAuthor !== undefined;
+  const assays = new AssayDesk({ store, sink: opts.sink ?? connector, errors });
+  // The naming convention's outbound half. `userId` being set is the operator's own
+  // answer to "which pull requests are mine", and both providers apply it at fetch
+  // time — so when it is set the world is already only theirs.
+  const prAuthorConfigured = config.userId !== undefined;
   const naming = new PrNamingDesk({
     sink: opts.sink ?? connector,
     defaultBranch: config.defaultBranch,
@@ -575,19 +571,16 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
   // The other half of tidying up after a pull request: once it has merged, the
-  // branch behind it goes — worktree, local ref, then the remote. Undefined when the
-  // operator turned it off, which is how the pulse learns to skip it entirely rather
-  // than run a desk that decides to do nothing.
-  const branchReaps = config.reapMergedBranches
-    ? new BranchReapDesk({
-        sink: opts.sink ?? connector,
-        store,
-        worktrees,
-        defaultBranch: config.defaultBranch,
-        prAuthorConfigured,
-        errors,
-      })
-    : undefined;
+  // branch behind it goes — worktree, local ref, then the remote. Only ever the
+  // operator's own pull requests, and never a branch another open PR still targets.
+  const branchReaps = new BranchReapDesk({
+    sink: opts.sink ?? connector,
+    store,
+    worktrees,
+    defaultBranch: config.defaultBranch,
+    prAuthorConfigured,
+    errors,
+  });
 
   // The step after the launch, and the one station on the floor a person staffs:
   // a delivered goal whose ticket is still open owes a close. Store-only — it

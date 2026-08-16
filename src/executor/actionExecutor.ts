@@ -6,7 +6,6 @@ import type { Worktrees } from '../worktree/worktreeManager.js';
 import type { EscalationInbox } from '../escalation/escalationInbox.js';
 import type { StackLandingDesk } from '../stacks/landingDesk.js';
 import type { ActionSink } from '../sink/actionSink.js';
-import type { AutoSendConfig } from '../config.js';
 import { resolveAgentProfile, type AgentModels } from '../agents/modelPolicy.js';
 import type { RuntimeControl } from '../runtimeControl.js';
 import type { ErrorRecorder } from '../errorLog.js';
@@ -50,7 +49,6 @@ interface ExecutorDeps {
   /** Outbound seam for side-effectful actions the harness may auto-send. */
   sink: ActionSink;
   /** Confidence-gated auto-send policy. */
-  autoSend: AutoSendConfig;
   /**
    * Which model each kind of work runs on (issue #321), or undefined for a
    * deployment that configures none. Consulted here, at dispatch, because this is
@@ -455,23 +453,20 @@ export class ActionExecutor {
   /**
    * The one place an outbound act is authorized (issue #109 phase 2). Both PR
    * acts the harness can publish — a drafted reply and a merge — come through
-   * here, and so do both authorities.
+   * here, and every one of them is written as a `Proposal` first.
    *
-   * Before this, "may this go out?" was answered twice over: a human clicked
-   * accept on a `Proposal` and the act ran through {@link runAuthorized}, or the
-   * confidence gate said yes and the executor called the sink itself. Two answers
-   * to one question, and no code could tell they were the same question — so an
-   * auto-merged PR's only record of its authority was a threshold quoted in
-   * prose. Auto-send is now a decider on the same record: the proposal is written
-   * first, the gate settles it as `auto_send`, and the act runs down the same path
-   * a human accept takes. The audit log answers "who authorized this" one way.
+   * **The harness authorizes nothing on its own.** There was once a confidence
+   * gate here that could clear an act by comparing a dispatcher-reported number
+   * against a threshold; it is gone, along with the `auto_send` decider it wrote.
+   * What remains is one standing authority — a stack landing the operator clicked
+   * over a named set of pull requests — and otherwise the question goes to them.
    *
-   * The order matters and is the point: the **gate is asked after the hold**, so a
-   * standing verdict (a pending question, a rejection you made, an act just
-   * authorized) governs regardless of which decider would answer next. And a
-   * blocked gate is emphatically **not** a `rejected` verdict — a rejection is
-   * durable and would suppress the human ask for good. Blocked means "not mine to
-   * authorize", which is exactly what a pending proposal says.
+   * The order matters and is the point: the **landing is asked after the hold**, so
+   * a standing verdict (a pending question, a rejection you made, an act just
+   * authorized) governs first. And an unauthorized act is emphatically **not** a
+   * `rejected` verdict — a rejection is durable and would suppress the human ask
+   * for good. Unauthorized means "not mine to authorize", which is exactly what a
+   * pending proposal says.
    */
   private async authorize(
     cycleId: string,
@@ -496,23 +491,19 @@ export class ActionExecutor {
     const heldBy = proposalHold(kind, ref, proposals, { rejectionSignals: signals });
     if (heldBy) return { outcome: 'skipped', detail: `Skipped ${subject}: ${heldBy}.`, recorded: false };
 
-    // Absent confidence means "no confidence stated" -> treat as 0 -> never auto-send.
-    const confidence = action.confidence ?? 0;
-    const verdict = autoSendVerdict(this.deps.autoSend, action.type, confidence);
     // The operator's standing authorization over a whole chain, asked only of a
-    // merge — a stack landing says nothing about replies. It is a *second*
-    // decider, not a widening of the gate above: auto-send answers "the harness
-    // cleared its own threshold", this answers "you authorized this chain in
-    // advance", and the audit row exists to tell those apart.
+    // merge — a stack landing says nothing about replies. It is the *only* thing
+    // that can authorize an act without a click on that act, and it is still the
+    // operator's own answer: "you authorized this chain in advance", given over the
+    // PR numbers it was clicked over.
     //
-    // Asked after the hold, like the gate, so a rejection you gave still governs;
-    // and asked *before* the escalation below, so an authorized chain does not
-    // fill the inbox with the questions it exists to answer. A rung the operator
-    // never authorized is not here, because the intent's scope is the PR numbers
-    // it was clicked over.
+    // Asked after the hold, so a rejection you gave still governs; and asked
+    // *before* the escalation below, so an authorized chain does not fill the inbox
+    // with the questions it exists to answer. A rung the operator never authorized
+    // is not here, because the intent's scope is the PR numbers it covers.
     const landing = merge ? store.standingLandingForPr(action.prNumber) : null;
 
-    if (verdict.authorized || landing) {
+    if (landing) {
       const proposal = store.createProposal({
         kind,
         ref,
@@ -523,17 +514,8 @@ export class ActionExecutor {
       });
       // The row was created `pending` one statement ago, so this compare-and-set
       // always wins; `?? proposal` is the type narrowing, not a fallback path.
-      //
-      // The landing wins the attribution when both would authorize. An operator
-      // who authorized the chain by hand is a stronger and more specific answer
-      // to "who authorized this" than a threshold that happens to also clear it.
-      const [note, decider] = landing
-        ? [
-            `you authorized landing ${landing.ref} (${landing.rungs.length} pull requests) on ${landing.createdAt}`,
-            'stack_landing' as const,
-          ]
-        : [verdict.authorized ? verdict.note : '', 'auto_send' as const];
-      const accepted = store.decideProposal(proposal.id, 'accepted', note, decider) ?? proposal;
+      const note = `you authorized landing ${landing.ref} (${landing.rungs.length} pull requests) on ${landing.createdAt}`;
+      const accepted = store.decideProposal(proposal.id, 'accepted', note, 'stack_landing') ?? proposal;
       const run = await this.runAuthorized(accepted, cycleId);
       return { ...run, recorded: true };
     }
@@ -552,20 +534,20 @@ export class ActionExecutor {
         ? {
             type: 'approve_change',
             prompt: `${preamble}PR #${action.prNumber} is green, approved and mergeable. Approve merging it (method: ${action.method})?`,
-            context: { prNumber: action.prNumber, method: action.method, confidence },
+            context: { prNumber: action.prNumber, method: action.method },
           }
         : {
             type: 'review_reply',
             prompt: `${preamble}Draft reply for PR #${action.prNumber}:\n\n${action.draft}`,
-            context: { prNumber: action.prNumber, commentId: action.commentId, draft: action.draft, confidence },
+            context: { prNumber: action.prNumber, commentId: action.commentId, draft: action.draft },
           },
     );
     const proposal = store.createProposal({ kind, ref, action: action as unknown as Action, escalationId: esc.id });
     return {
       outcome: 'executed',
       detail: merge
-        ? `PR #${action.prNumber} is merge-ready; proposed the merge for approval (${verdict.blockedBy}): ${esc.id} / ${proposal.id}. Accepting merges it.`
-        : `Drafted PR reply and proposed it for approval (${verdict.blockedBy}): ${esc.id} / ${proposal.id}. Accepting sends it.`,
+        ? `PR #${action.prNumber} is merge-ready; proposed the merge for approval: ${esc.id} / ${proposal.id}. Accepting merges it.`
+        : `Drafted PR reply and proposed it for approval: ${esc.id} / ${proposal.id}. Accepting sends it.`,
       recorded: false,
     };
   }
@@ -580,12 +562,12 @@ export class ActionExecutor {
    * Who authorized it, where the row is grouped and how the operator reads it all
    * come from {@link authorityOf}, which is the only thing that branches on the
    * decider. A human accept is recorded outside the pulse as `human:<proposal
-   * id>`; auto-send accepted *during* a cycle, so it keeps that cycle's id and
-   * stays grouped with the pulse that produced the action.
+   * id>`; a standing landing accepts *during* a cycle, so it keeps that cycle's id
+   * and stays grouped with the pulse that produced the action.
    *
-   * The failure path is one path for both deciders (`autoSendFailed` /
-   * `autoMergeFailed` context + a fresh escalation): an authorized act that can't
-   * be delivered must not evaporate. The proposal stays `accepted` — it *was*
+   * The failure path is one path for both deciders (an `autoMergeFailed` context +
+   * a fresh escalation): an authorized act that can't be delivered must not
+   * evaporate. The proposal stays `accepted` — it *was*
    * accepted — and once its settle window lapses the gate re-proposes the act if
    * the world still warrants it. That is the recovery, and it needs no new state.
    */
@@ -674,12 +656,7 @@ export class ActionExecutor {
           : this.deps.escalations.create({
               type: 'review_reply',
               prompt: `${approved} this reply, but sending it failed (${message}); send it manually.\n\nDraft reply for PR #${act.prNumber}:\n\n${act.body}`,
-              context: {
-                prNumber: act.prNumber,
-                commentId: act.commentId,
-                draft: act.body,
-                autoSendFailed: true,
-              },
+              context: { prNumber: act.prNumber, commentId: act.commentId, draft: act.body },
             });
       return audit(
         'rejected',
@@ -1054,31 +1031,6 @@ function retroBriefing(originRef: string | null | undefined, store: Store): stri
     costUsd: agents.some((a) => a.costUsd !== null) ? agents.reduce((sum, a) => sum + (a.costUsd ?? 0), 0) : null,
   });
   return [retroPad(store.listScratchEntries(issueOriginRef)), dossier].filter(Boolean).join('\n\n');
-}
-
-/**
- * The auto-send policy as a verdict on one act: either the harness authorizes it,
- * with the reason that goes on the proposal as the decider's note, or it does not,
- * with the reason the escalation quotes. Both directions come from here so the
- * threshold is stated once and the audit log cannot explain a send and a refusal
- * in two different vocabularies.
- *
- * Note what it does *not* return: a rejection. Only a human can reject, because a
- * rejection is durable and a machine "no" would mean the question is never put to
- * anyone. Everything this refuses becomes a pending proposal.
- */
-type AutoSendVerdict = { authorized: true; note: string } | { authorized: false; blockedBy: string };
-
-function autoSendVerdict(gate: AutoSendConfig, actionType: string, confidence: number): AutoSendVerdict {
-  if (!gate.enabled) return { authorized: false, blockedBy: 'auto-send disabled' };
-  if (!gate.allowedActions.includes(actionType))
-    return { authorized: false, blockedBy: `${actionType} not in allowed auto-send actions` };
-  if (confidence < gate.confidenceThreshold)
-    return {
-      authorized: false,
-      blockedBy: `confidence ${confidence.toFixed(2)} < ${gate.confidenceThreshold} threshold`,
-    };
-  return { authorized: true, note: `confidence ${confidence.toFixed(2)} ≥ ${gate.confidenceThreshold} threshold` };
 }
 
 function safeJson(v: unknown): string {

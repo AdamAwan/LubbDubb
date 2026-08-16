@@ -30,7 +30,7 @@ the other, a partless arm in the reconciler and another in the status comment, a
 guard that existed because the two shapes wanted branches git cannot hold at once.
 
 None of that was wrong for the encoding it had. It was all downstream of one decision — that "one
-pull request" is a *shape* rather than a *size* — and removing that decision removes the rest.
+pull request" is a _shape_ rather than a _size_ — and removing that decision removes the rest.
 
 The `verdict` field is gone from the document. A document still carrying one is not refused for
 carrying it (zod strips unknown keys), but one carrying no parts is, with a sentence saying so — so
@@ -43,12 +43,12 @@ quietly ingesting as something else. `plan_submit` hands the reason back in the 
 Pure over the plan row plus the plan origin's cooldown verdict. Both the dispatcher (rules `issue-plan` and `issue-pickup`)
 and `issuePickupStatus` read it, so the cockpit's chip can never disagree with what fires.
 
-| Verdict                                              | Meaning                                                                                                                                                          |
-| ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `{route:'parts'}`                                    | Planned; the part scheduler owns it and pickup stays off. One part or eight — the route does not count them.                                                     |
+| Verdict                                              | Meaning                                                                                                                                                           |
+| ---------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{route:'parts'}`                                    | Planned; the part scheduler owns it and pickup stays off. One part or eight — the route does not count them.                                                      |
 | `{route:'awaiting_approval'}`                        | Planned, and the plan is a proposal a human has not answered. Pickup stays off exactly as for `parts`; rule `plan-part` queues the parts without dispatching any. |
-| `{route:'planning', planner:'dispatch'\|'cooldown'}` | A planner is owed, now or after the gap.                                                                                                                         |
-| `{route:'unplanned'}`                                | **The fail-open arm, and the only one rule `issue-pickup` works.** No plan, and none coming.                                                                     |
+| `{route:'planning', planner:'dispatch'\|'cooldown'}` | A planner is owed, now or after the gap.                                                                                                                          |
+| `{route:'unplanned'}`                                | **The fail-open arm, and the only one rule `issue-pickup` works.** No plan, and none coming.                                                                      |
 
 Resolution order:
 
@@ -57,7 +57,7 @@ Resolution order:
 3. Otherwise (no plan, or a plan back in `planning` — a replan in flight), the plan origin's cooldown
    verdict decides: `escalate`/`hold` → **fail open**; anything else → `planning`.
 
-The part count is not asked about. It used to be the *first* question — "an `active` plan with no
+The part count is not asked about. It used to be the _first_ question — "an `active` plan with no
 live parts → `single`" — and that one line is what made a one-part plan a different kind of thing
 from a two-part one all the way down.
 
@@ -154,7 +154,7 @@ Validation (`PlanDocumentSchema`, zod):
 - `version` is literally `1`; `reason` is non-empty.
 - **At least one part is required**, and this is the refusal that replaced the `single` verdict. The
   message says what to do about it (`a plan needs at least one part — work that is one pull request
-  is a plan with one part`), because the deployments most likely to submit a partless document are
+is a plan with one part`), because the deployments most likely to submit a partless document are
   the ones running an operator-overridden prompt written against the old shape.
 - `slug` matches `^[a-z0-9][a-z0-9-]*$` and is unique within the document. It is the **merge key**: an
   amended plan merges on it, so it must survive a replan.
@@ -173,7 +173,7 @@ Validation (`PlanDocumentSchema`, zod):
   through the second one (`a` → `[x, b]`, `b` → `[a]`) is one a chain walk cannot see.
 
 `validation` is the executable form of the `verification` narrative below — how anyone checks the
-*goal* was met, as steps rather than as a paragraph. Optional, read whatever the plan's size, and owned
+_goal_ was met, as steps rather than as a paragraph. Optional, read whatever the plan's size, and owned
 entirely by [20](20-validation.md), which states its schema, its refusals and what an amendment may do
 to a check somebody has already run. The one thing worth knowing here: a check declares no actor, and
 a document that gives one is refused.
@@ -268,7 +268,7 @@ For an amendment:
    Un-declaring in-flight work is a request to _stop_, which is a kill, not a plan edit.
 2. `ingestedPlanStatus(requireApproval)` — `active`, or `awaiting_approval` when approval is
    required, and **nothing else is consulted**. This took the verdict and the surviving parts while a
-   `single` verdict could be *overruled* by a part already carrying a branch: shape arithmetic on the
+   `single` verdict could be _overruled_ by a part already carrying a branch: shape arithmetic on the
    write path, for a plan that is one pull request. An amendment now lands the same way whatever it
    does to the part count.
 3. `store.upsertPlan`, then retire, then `store.upsertPlanParts` (which merges on slug and never
@@ -481,10 +481,10 @@ the one direction that mattered: it made the _commonest_ route the one with no a
 A planner deciding an issue is one pull request has decided something an operator may well disagree
 with, and "nothing is scheduled until you approve" was the whole promise of the gate. The distinction
 is gone entirely now — there is one arm — but the reasoning is worth keeping, because it is the
-argument that generalised: what is being approved is *this work, described this way*, and the number
+argument that generalised: what is being approved is _this work, described this way_, and the number
 of parts it is cut into is not what makes it worth asking about.
 
-There is also no longer an ungated arm. A `single` verdict the harness had *overruled* — parts already
+There is also no longer an ungated arm. A `single` verdict the harness had _overruled_ — parts already
 carrying branches, so the collapse was refused — was released without asking, because there was no
 decision left in it. Nothing overrules a plan any more, so nothing bypasses the gate.
 
@@ -598,15 +598,15 @@ to a planner that cannot settle.
 
 **Rejecting used to fork on the part count**, and the fork is what this replaces. A refused plan with
 parts collapsed to the no-parts "single" shape and was picked up whole; a refused plan that was
-*already* that shape had nowhere to fall — the single route is what the other arm fell *back* to — so
+_already_ that shape had nowhere to fall — the single route is what the other arm fell _back_ to — so
 it went to a planner instead. One button meant two unrelated things depending on a number it did not
-mention, and only one of them was ever the operator's intent: *this plan is wrong, write a better one*.
+mention, and only one of them was ever the operator's intent: _this plan is wrong, write a better one_.
 
 **What is still keyed on the parts is work that has left the harness**, which is not a question about
 shape. Every part `partHasWork` says nothing was started for is retired, so the graph says what
 happened instead of leaving `ready` rows nothing schedules; parts with a branch or a PR are left
 exactly as they are, because they are not the refusal's to withdraw. A refusal that finds work in
-flight is a *replan* being refused, and the work already running carries on while the planner rewrites
+flight is a _replan_ being refused, and the work already running carries on while the planner rewrites
 around it.
 
 An operator who wants a _different_ plan without refusing this one can press Replan, on the same panel.
@@ -774,7 +774,7 @@ case: the parts block instantly. `refusePlan` compare-and-sets against `awaiting
 correctly, since refusing is a verdict on a question you have not yet answered — so it is gone the
 moment the plan is released; and `resolvePlanRoute` fails a spent replan back to `parts`, never open
 to unplanned pickup. The plan sits there, nothing is dispatched, and nothing says so. Two things close
-it, kept separate because they are two different jobs (`src/plans/planWedge.ts`), and the way *out* is
+it, kept separate because they are two different jobs (`src/plans/planWedge.ts`), and the way _out_ is
 Replan — which is the way out of every plan that is wrong for any other reason too:
 
 - **Noticing** — `planIsWedged(parts)`: every _live_ part blocked, not any. The collision blocks them
@@ -790,12 +790,12 @@ Replan — which is the way out of every plan that is wrong for any other reason
 - **Warning first** — `planApprovalWarnings(issue, parts, openPrs)` is **appended** to rule `plan-approval`'s ask
   (never interpolated, for `ciFailureNote`'s reason) and names both the blocked parts and any open PR
   for the issue that no part claims. It **warns and does not block**: refusing to approve would put a
-  git fact in front of a judgement about the *work*, the branch is one command from being gone, and
+  git fact in front of a judgement about the _work_, the branch is one command from being gone, and
   the operator's only exit would become the opposite verdict to the one they were giving.
 
 There was a third thing, `abandonDecomposition` (`POST /api/plans/:id/abandon` and a control on the
 plan sheet), which retired the unstarted parts and worked the issue as one pull request. It was a
-distinct act only while a plan with no parts was a *different kind of plan* — "I authorized this, it
+distinct act only while a plan with no parts was a _different kind of plan_ — "I authorized this, it
 cannot run, work the issue whole instead" was a sentence about a shape. It is not one now, so the
 route and the control are gone and the exit is Replan.
 
@@ -809,7 +809,7 @@ Each plan owns exactly **one** living comment on its issue, via
 `IssueCommentCapable.upsertIssueComment` and `plans.status_comment_ref`, edited in place. It is written
 when there is news: the plan appearing (no comment yet), a part moving, or the plan rolling up. Because
 it is one comment rather than a stream, it is mechanical bookkeeping rather than authored prose, which
-is why it is **not** auto-send gated. A failure to write it is recorded and the pulse continues —
+is why it goes through no proposal. A failure to write it is recorded and the pulse continues —
 progress reporting never takes the pulse down with it.
 
 **It carries the planner's reasoning as well as its progress.** The diagnosis, the approach, what was
@@ -824,8 +824,8 @@ is what a reader reads once, but whether the goal was actually checked is what a
 next month is trying to find out, and that reader is not on the operator's machine.
 → [20](20-validation.md)
 
-Two fields are deliberately **not** carried: `risks` and `openQuestions`. Both are caveats *on the
-verdict*, addressed to whoever is deciding whether the work happens — and by the time anything is
+Two fields are deliberately **not** carried: `risks` and `openQuestions`. Both are caveats _on the
+verdict_, addressed to whoever is deciding whether the work happens — and by the time anything is
 written here that decision is made, because nothing is written while a plan is `awaiting_approval`.
 That gate is also what keeps this honest: what lands on the tracker is a commitment the operator has
 made, the pulse after they make it.
@@ -833,7 +833,7 @@ made, the pulse after they make it.
 It is also the one act the plan path performs against the world without asking anyone, so the operator
 has to be able to read it: `/api/state` ships `plan.statusCommentRef` as a **canonical comment ref**
 (see [15](15-integrations.md#comment-refs)) rather than the store's provider id, resolved through
-`buildRefUrls` like every other link. Not auto-send gating it and keeping it to one comment are both
+`buildRefUrls` like every other link. Keeping it off the proposal path and to one comment are both
 right, and both rest on it being visible — which, until #171, it was not except by opening the
 tracker. Absent (no comment written yet) and unresolvable (a provider that builds no URLs) both reach
 the cockpit as silence rather than as a link to nowhere.

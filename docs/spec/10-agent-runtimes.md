@@ -128,7 +128,7 @@ Points that are load-bearing:
   threaded through the `ArgsBuilder` in `src/system.ts` — without that, `--mcp-config` (and the
   permission-prompt tool that lives on that server) never reach the agent.
 - `--model` is per-launch for the same reason and carries the same trap (issue #321). It is the
-  **task's own** model: resolved from the operator's `agentModels` policy at *dispatch* — not here —
+  **task's own** model: resolved from the operator's `agentModels` policy at _dispatch_ — not here —
   and stored on the row, so `AgentManager` forwards a string and knows nothing about rules or
   profiles. That is what makes a boot-`resume` re-launch on the model the conversation started on
   rather than on whatever config says by then. Absent (no policy, or a rule the policy does not
@@ -138,7 +138,7 @@ Points that are load-bearing:
   as a failed agent at spawn. **`raw` mode ignores it**: running the operator's argv verbatim is that
   mode's whole contract. Since issue #342 the policy the value is resolved from has three levels
   rather than one — a pin on the goal, then the rule, then the fleet default — but the property this
-  bullet is about is unchanged, and deliberately: the pin is keyed on the dispatch's *origin*, never
+  bullet is about is unchanged, and deliberately: the pin is keyed on the dispatch's _origin_, never
   on the run, so a retry and a re-dispatch resolve what the first attempt resolved.
   → [02](02-configuration.md#model-assignment-by-rule), [02](02-configuration.md#pinning-one-goal-to-a-profile)
 - When a launch carries the tool channel, `MCP_PROTOCOL_ADDENDUM` is appended too — see
@@ -153,8 +153,7 @@ resumed agent that was mid-work.
 agent — the production default, with no human at the permission prompt — hangs the moment it runs
 `npm run check`, `git` or `gh`. The old workaround, `bypassPermissions`, removes _every_ gate at once
 in a worktree of the real repo with the operator's shell environment inherited, and is refused under
-root. Two mechanisms replace that, mirroring the "authorise the routine, ask about the rest" split
-`autoSend` makes for outbound acts:
+root. Two mechanisms replace that, on an "authorise the routine, ask about the rest" split:
 
 - **The allow-list (`agentAllowedTools`).** A `permissions.allow` fragment merged into `--settings`,
   pre-approving the mechanical validate/commit/push commands (the JS toolchain, `git`, `gh`) so the
@@ -162,7 +161,7 @@ root. Two mechanisms replace that, mirroring the "authorise the routine, ask abo
   **not** `--allowedTools`: that flag carries the `mcp__lubbdubb__*` grants, and mixing a Bash rule
   into it risks silently dropping them (the drift `src/mcp/names.ts` guards against). Two flags, two
   concerns — the operator cannot lose the MCP grants by adjusting Bash access, by construction.
-- **The backstop (`mcp.permissionEscalation`, `--permission-prompt-tool`).** Claude Code evaluates
+- **The backstop (`--permission-prompt-tool`).** Unconditional. Claude Code evaluates
   allow rules _before_ the permission-prompt tool, so an allowlisted command never reaches it and the
   unattended path stays synchronous; the backstop fires only for what the allow-list misses. See
   [11](11-mcp-tools.md#request_permission) for the `request_permission` tool, the blocking
@@ -414,8 +413,8 @@ maps are keyed by agent id, so there is nothing to write over and nothing to tea
 previous agent's teardown already ran when it was reaped.
 
 Two agent rows then share one `sessionId`. That is correct rather than tolerated — `--resume` appends
-to that transcript instead of forking a new id, so the id names the *conversation* and the rows name
-the *attempts* that spoke into it. Nothing keys on the id being unique per agent, and the one place
+to that transcript instead of forking a new id, so the id names the _conversation_ and the rows name
+the _attempts_ that spoke into it. Nothing keys on the id being unique per agent, and the one place
 that could collide cannot: `isRecoveryCandidate` gates on the task being outstanding, and attempt
 one's is settled before attempt two exists.
 

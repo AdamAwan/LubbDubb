@@ -216,12 +216,6 @@ function systemFor(): System {
       deskRoot: join(dir, 'desk'),
       worktreeRoot: join(dir, 'wt'),
       repoRoot: gitRepo(),
-      // The funnel's neighbours are pinned off: this file is about what a working
-      // agent is handed, and an extra agent in front of the issue would change
-      // which task these assertions read.
-      assessment: { enabled: false } as never,
-      assay: { enabled: false } as never,
-      retrospective: { enabled: false } as never,
       heartbeatIntervalMs: 999_999,
       maxConcurrentAgents: 3,
     }),

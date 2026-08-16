@@ -19,7 +19,7 @@ import { proposalHold } from '../src/proposals/proposals.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { parsePlanDocument } from '../src/plans/planDocument.js';
 import { MCP_TOOL_NAMES } from '../src/mcp/names.js';
-import { spentPlannerAttempts } from './support/plans.js';
+import { pastTheFunnel } from './support/plans.js';
 import type {
   Agent,
   Issue,
@@ -99,7 +99,7 @@ test('an issue carrying a shortfall is pickup-eligible, and the chip says so', (
     tasks: [],
     // The funnel has failed open — the shortfall releases the issue *into*
     // pickup, which is a claim about what happens after the funnel, not before.
-    recentDecisions: spentPlannerAttempts(12),
+    recentDecisions: pastTheFunnel(12),
     openPrs: [],
     // No delivery row: writing a shortfall clears one, in the store.
     deliveries: [],
@@ -700,7 +700,6 @@ function systemWith(planning: boolean): { system: System } {
     worktreeRoot: join(dir, 'wt'),
     repoRoot: gitRepo(),
     planning: { enabled: planning, requireApproval: false } as never,
-    assessment: { enabled: true } as never,
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
   });

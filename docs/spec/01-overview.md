@@ -59,7 +59,7 @@ action are written to the `decisions` table, so an idle cycle is as explainable 
 | **Action**      | One item of the dispatcher's bounded output vocabulary                                          |
 | **Decision**    | One executed/deferred/rejected/skipped action, persisted with its reason                        |
 | **Escalation**  | A question parked for a human                                                                   |
-| **Plan**        | How one issue is being delivered: an ordered list of parts, one or many                        |
+| **Plan**        | How one issue is being delivered: an ordered list of parts, one or many                         |
 | **Finding**     | Something an agent noticed outside its own task                                                 |
 
 ## Task kinds
@@ -102,9 +102,9 @@ owns it.
 5. **At most one agent works a given origin.** `Store.findActiveTaskByOrigin` gates every dispatch.
 6. **The concurrency cap and the pause flag are read by reference every cycle.** Runtime changes take
    effect on the next cycle without a restart.
-7. **Nothing side-effectful leaves the machine autonomously unless auto-send is enabled, the action
-   type is allow-listed, and the stated confidence clears the threshold.** Otherwise it is drafted
-   and escalated.
+7. **Nothing side-effectful leaves the machine on the harness's own authority.** Every outbound act
+   is written as a proposal and put to the operator; the one standing authority is a stack landing
+   they clicked in advance, over the pull request numbers it covers.
 8. **Every caught failure is recorded through `ErrorLog.record`.** It is persisted, mirrored to
    stderr, and streamed to the cockpit.
 9. **Every decision is auditable.** Executed, deferred, rejected and skipped alike, each with a
@@ -119,8 +119,8 @@ owns it.
 1. `loadDeploymentConfig()` — the entry point's loader, the one that reads `lubbdubb.config.json` and
    the env overrides ([02](02-configuration.md#two-loaders)).
 2. `buildSystem(config)` — wires everything; opens the database and applies the schema + migrations.
-3. `system.mcp.listen()` when `mcp.enabled`. A false return is a supported outcome: agents then run
-   on the sentinels alone.
+3. `system.mcp.listen()`. A false return is a supported outcome: agents then run on the sentinels
+   alone.
 4. `system.recovery.detect()` — parks every agent orphaned by the previous run for an operator's
    restore / requeue / remove verdict. It resumes nothing and discards nothing, and while any verdict
    is outstanding the harness holds every pulse, so nothing new is queued in front of work that was

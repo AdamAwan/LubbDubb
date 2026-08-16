@@ -9,12 +9,10 @@ import { DISPATCH_PIPELINE, type RuleConditions, type StageRuleId } from './rule
 import { rankByPriorityOverride } from './priorityOverride.js';
 import { deliveryHold } from '../delivery/delivery.js';
 import { candidateParents } from '../issueRelations.js';
-import { assayHold, type AssayPolicy } from '../intake/assay.js';
+import { assayHold } from '../intake/assay.js';
 import { resolveModelTag } from '../modelLabels.js';
 import { pinnedProfileFor } from '../profilePin.js';
-import { type RetrospectivePolicy } from '../retro/retro.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from '../validation/policy.js';
-import { type AssessmentPolicy } from '../delivery/assessment.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import {
   DEFAULT_PLANNING,
@@ -113,9 +111,6 @@ export class RuleDispatcher implements Dispatcher {
   private readonly templates: PromptTemplates;
   private readonly defaultBranch: string;
   private readonly planning: PlanningPolicy;
-  private readonly assessment: AssessmentPolicy;
-  private readonly assay: AssayPolicy;
-  private readonly retrospective: RetrospectivePolicy;
   /** Only the one field any rule reads — see the constructor's narrowing below. */
   private readonly validation: Pick<ValidationPolicy, 'desktopClaimMinutes'>;
   private readonly validationRoot: string;
@@ -132,16 +127,13 @@ export class RuleDispatcher implements Dispatcher {
    * `defaultBranch` names the base a PR is assumed to target when the provider
    * doesn't report one, and only phrases the base-update prompt. `planning` carries
    * the funnel's two knobs — the part-concurrency cap and `requireApproval`;
-   * omitted means their defaults, never an absent funnel. `assessment` turns `issue-assess`
-   * on; omitted/disabled means no assessor fires and no issue is ever parked as
-   * delivered, so pickup behaves exactly as it does today. `ci` decides
+   * omitted means their defaults, never an absent funnel. `ci` decides
    * `pr-ci-failing` per failing check; omitted/empty means every failure is acted
    * on generically, which is what the rule did before per-check policy existed.
-   * `assay` turns the goal assay on; omitted/disabled means no assayer fires, no
-   * verdict is written, and nothing in front of an issue changes. `retrospective`
-   * turns `issue-retro` on; omitted/disabled means no delivered goal is written
-   * up, which changes no dispatch and no gate — it only leaves the Manifest
-   * station with nothing to read.
+   *
+   * The assay, the assessor and the retrospective take no policy at all: they are
+   * unconditional, and the only thing that ever holds one is the state of the issue
+   * in front of it.
    */
   constructor(
     pickup: Partial<IssuePickupPolicy> = {},
@@ -149,26 +141,14 @@ export class RuleDispatcher implements Dispatcher {
     templates: PromptTemplates = defaultPromptTemplates(),
     defaultBranch = 'main',
     planning: Partial<PlanningPolicy> = {},
-    assessment: Partial<AssessmentPolicy> = {},
     ci: Partial<CiPolicy> = {},
-    assay: Partial<AssayPolicy> = {},
-    retrospective: Partial<RetrospectivePolicy> = {},
     validation: Partial<ValidationPolicy> = {},
     validationRoot = '.lubbdubb/validation',
   ) {
-    // An **omitted** policy means the feature is out, for every one of the four
-    // below — the contract `pickup` already states two paragraphs up ("omitted =>
-    // no gate"), and deliberately not the same thing as the operator default in
-    // `src/config.ts`, which turns all four on. The composition root always passes
-    // config explicitly, so the two never both answer for one deployment: this
-    // fallback exists for a caller that has named no policy at all, and such a
-    // caller is asking for the rule not to fire.
-    this.assay = { enabled: assay.enabled ?? false };
-    this.retrospective = { enabled: retrospective.enabled ?? false };
     this.validation = {
-      // Not the `?? false` the optional funnels take: an omitted *duration* is not
-      // a feature being switched off, and zero would expire every claim the
-      // instant it was taken.
+      // An omitted *duration* is not a feature being switched off, and zero would
+      // expire every claim the instant it was taken — so this falls back to the
+      // operator default rather than to nothing.
       desktopClaimMinutes: validation.desktopClaimMinutes ?? DEFAULT_VALIDATION.desktopClaimMinutes,
     };
     this.validationRoot = validationRoot;
@@ -180,7 +160,6 @@ export class RuleDispatcher implements Dispatcher {
       // Reconciliation's knob, not the dispatcher's; carried so the policy stays one object.
       gitFetchIntervalMs: planning.gitFetchIntervalMs ?? DEFAULT_PLANNING.gitFetchIntervalMs,
     };
-    this.assessment = { enabled: assessment.enabled ?? false };
     this.templates = templates;
     this.pickup = {
       watchLabel: pickup.watchLabel,
@@ -204,17 +183,16 @@ export class RuleDispatcher implements Dispatcher {
     //
     // This is the whole of the dispatcher's priority order, and the only place it
     // is written down. A rule runs when it is reached and its `enabled` predicate
-    // says the operator has it on; an id with no stage was covered by an earlier
+    // says the world can answer it; an id with no stage was covered by an earlier
     // pass (see {@link STAGES}). Adding a rule is adding a registry entry in the
     // position it should run and a stage module here — there is no third thing to
     // keep in step, and nothing renders a position, so inserting one renumbers
     // nothing.
-    const conditions: RuleConditions = {
-      assessment: this.assessment.enabled,
-      assay: this.assay.enabled,
-      retrospective: this.retrospective.enabled,
-      workItemStates: s.workItemStates !== null,
-    };
+    //
+    // One condition remains, and it is about the *provider* rather than about a
+    // policy: a work-item state rule has nothing to read where the tracker has no
+    // state model to read it from.
+    const conditions: RuleConditions = { workItemStates: s.workItemStates !== null };
     for (const rule of DISPATCH_PIPELINE) {
       if (rule.enabled && !rule.enabled(conditions)) continue;
       STAGES[rule.id]?.(s);

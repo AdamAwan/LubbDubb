@@ -101,8 +101,8 @@ genuinely yours:
 
 - **Needs you** collects escalations, plan approvals, outbound-act proposals, and permission requests
   from agents that hit a command outside the allow-list.
-- **Nothing side-effectful leaves without a human**, unless you opt a specific action into
-  confidence-gated auto-send (off by default). A rejection stands until the world gives a reason to
+- **Nothing side-effectful leaves without a human.** The one exception is your own standing
+  authorization over a stack you chose to land. A rejection stands until the world gives a reason to
   ask again — a push, a CI result, an approval, a comment — and the reason you typed is handed to the
   next agent that works that item.
 - **A restart never decides for you.** Agents orphaned by a crash or shutdown are parked, and the

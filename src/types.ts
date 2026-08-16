@@ -2218,9 +2218,7 @@ export interface EscalationContext {
   prNumber?: number;
   commentId?: string | null;
   draft?: string;
-  confidence?: number;
   method?: string;
-  autoSendFailed?: boolean;
   autoMergeFailed?: boolean;
   // -- propose_plan escalations -------------------------------------------
   /** The plan whose decomposition this item asks you to authorize (issue #109 phase 3). */
@@ -2308,16 +2306,15 @@ export interface Proposal {
   /** Free text alongside the verdict — never instead of it. */
   note: string | null;
   /**
-   * Who decided. `human` is a click in the cockpit; `auto_send` is the harness
-   * accepting its own proposal because the confidence gate cleared it (phase 2) —
-   * one authorization representation rather than two, so the audit log answers
-   * "who authorized this outbound act" the same way for both.
+   * Who decided. `human` is a click in the cockpit; `stack_landing` is the
+   * operator having authorized a whole chain in advance, over the pull request
+   * numbers it was clicked across, before any rung of it was proposed.
    *
-   * `stack_landing` is the third, and it is a third rather than a reuse of
-   * `auto_send` because it answers the question differently: not "the harness
-   * cleared its own threshold" but "the operator authorized this whole chain in
-   * advance, before any of it was proposed". Folding it into `auto_send` would
-   * put a merge nobody's confidence gate ever judged under the gate's name.
+   * `auto_send` is **historical only** and nothing writes it any more: the
+   * confidence gate that produced it is gone, and the harness now authorizes no
+   * outbound act on its own. It stays in the union because a database written
+   * before that removal still holds rows carrying it, and a decider the cockpit
+   * cannot name reads as a missing authority rather than an old one.
    */
   decidedBy: 'human' | 'auto_send' | 'stack_landing' | null;
   decidedAt: string | null;

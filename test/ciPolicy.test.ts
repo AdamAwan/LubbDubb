@@ -472,7 +472,7 @@ test('loadConfig: the ci block defaults to empty, round-trips, and is validated 
 // --------------------------------------------------------------------------
 
 async function decide(prs: PullRequest[], ci: CiPolicy, extra: Partial<DispatchContext> = {}) {
-  const dispatcher = new RuleDispatcher({}, {}, undefined, 'main', {}, {}, ci);
+  const dispatcher = new RuleDispatcher({}, {}, undefined, 'main', {}, ci);
   return dispatcher.decide(context(prs, extra));
 }
 

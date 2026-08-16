@@ -24,13 +24,13 @@ function selection(over: Partial<IntegrationSelection>): IntegrationSelection {
   return { sourceControl: 'fake', issues: 'fake', ...over };
 }
 
-test('loadConfig carries a github block (owner/repo/filters) from overrides', () => {
-  const config = loadConfig({
-    github: { owner: 'acme', repo: 'app', filters: { prAuthor: 'bot' } },
-  });
+test('loadConfig carries a github block (owner/repo) from overrides', () => {
+  const config = loadConfig({ github: { owner: 'acme', repo: 'app' }, userId: 'bot' });
   assert.equal(config.github?.owner, 'acme');
   assert.equal(config.github?.repo, 'app');
-  assert.equal(config.github?.filters?.prAuthor, 'bot');
+  // Who the harness acts as is not in the provider block: it is one `userId` for
+  // every provider, so the coordinates and the identity cannot drift apart.
+  assert.equal(config.userId, 'bot');
 });
 
 test('registry builds real github providers when selected with a token + owner/repo', () => {

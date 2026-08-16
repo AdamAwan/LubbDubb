@@ -106,9 +106,6 @@ function streamConfig(dir: string, extra: Partial<Config> = {}): Config {
     maxConcurrentAgents: 3,
     // The funnel in front of pickup defaults on; this file is about the transport,
     // so pin it off and let rule `issue-pickup` dispatch directly.
-    assessment: { enabled: false } as never,
-    assay: { enabled: false } as never,
-    retrospective: { enabled: false } as never,
   });
 }
 

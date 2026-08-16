@@ -549,7 +549,7 @@ function PullRequests({ page, view }: { page: GoalPageView; view: CockpitView })
               <span className="cn-sub">{pr.branch}</span>
             </span>
             <CiLadder pr={pr} />
-            <CourtChip pr={pr} reminderMs={view.state.config.reviewReminderMs} now={view.now} />
+            <CourtChip pr={pr} now={view.now} />
           </div>
         ))}
         {closed.map((pr) => (
@@ -593,25 +593,19 @@ function waitedFor(sinceIso: string, now: number): string {
  * identically on both surfaces, and the same chip written twice is how they come
  * to differ by a tone or a threshold nobody chose.
  *
- * **The age appears only past `reviewReminderMs`.** Every open pull request is
- * waiting on somebody, so an age on all of them says nothing about any; the
- * threshold is what turns it from a decoration into a reading. And it stays a
- * *chip*, never a row in "Needs you": the reviewer here is somebody else, and a
- * queue of other people's obligations is precisely what makes an inbox stop being
- * read. Nothing is dispatched, escalated or filed at the threshold — the harness
- * has no more idea than you do how to make a colleague review faster.
+ * **The age is drawn from the first pulse a pull request is observed waiting.**
+ * There was a `reviewReminderMs` threshold here, on the argument that an age on
+ * every open pull request says nothing about any — which is a team's problem. One
+ * person's queue is short enough to read, and a threshold only hides how long the
+ * short queue has been sitting.
+ *
+ * It stays a *chip*, never a row in "Needs you": nothing is dispatched, escalated
+ * or filed at any age — the harness has no more idea than you do how to make a
+ * review happen faster.
  */
-export function CourtChip({
-  pr,
-  reminderMs,
-  now,
-}: {
-  pr: OpenPullRequest;
-  reminderMs: number;
-  now: number;
-}): JSX.Element {
+export function CourtChip({ pr, now }: { pr: OpenPullRequest; now: number }): JSX.Element {
   const since = pr.attention.reviewWaitingSince;
-  const waited = since !== undefined && now - Date.parse(since) >= reminderMs ? waitedFor(since, now) : null;
+  const waited = since !== undefined ? waitedFor(since, now) : null;
   return (
     <i
       className={`cn-chip ${courtTone(pr)}`}

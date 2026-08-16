@@ -175,9 +175,6 @@ function streamConfig(agentModels: Config['agentModels']) {
     heartbeatIntervalMs: 999_999,
     claudeArgs: ['--operator-arg'],
     agentModels,
-    assessment: { enabled: false } as never,
-    assay: { enabled: false } as never,
-    retrospective: { enabled: false } as never,
   });
 }
 

@@ -10,21 +10,6 @@ import { issueOriginRole } from '../issueOrigins.js';
  * existing rule asks: *is this finished?*
  */
 
-/** How the assessor is gated, from operator config. */
-export interface AssessmentPolicy {
-  /**
-   * Master switch. **On by default** (`src/config.ts`), and unlike `mcp.enabled`
-   * not purely additive — it spends an agent and its verdict gates pickup.
-   * The tool channel is on by default because it is purely additive; this is
-   * not — it gates pickup and spends an agent per assessed issue. `planning` is
-   * the right precedent and this follows it: with the flag off no rule fires, no
-   * verdict is written, and rule `issue-pickup` behaves exactly as it does today.
-   */
-  enabled: boolean;
-}
-
-export const DEFAULT_ASSESSMENT: AssessmentPolicy = { enabled: true };
-
 /**
  * The origin an assessing agent is dispatched on.
  *

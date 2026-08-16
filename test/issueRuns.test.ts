@@ -449,7 +449,7 @@ const closedIssue = issue({ state: 'closed' });
 // written, and `issue-retro`, whose only precondition is that row, never fired
 // either. Satellite *Not yet built*, Manifest *Nothing written*, permanently.
 test('a retained run is still assessed after its ticket closed', async () => {
-  const assessor = new RuleDispatcher({}, {}, undefined, 'main', {}, { enabled: true }, {}, {}, { enabled: false });
+  const assessor = new RuleDispatcher();
 
   const closed = await assessor.decide(
     dispatchCtx({ world: { takenAt: NOW, pullRequests: [], issues: [closedIssue] }, tasks: [task()] }),
@@ -473,7 +473,7 @@ test('a retained run is still assessed after its ticket closed', async () => {
 });
 
 test('a retained run is written up after its ticket closed', async () => {
-  const retro = new RuleDispatcher({}, {}, undefined, 'main', {}, { enabled: false }, {}, {}, { enabled: true });
+  const retro = new RuleDispatcher();
   const plan = await retro.decide(
     dispatchCtx({
       world: { takenAt: NOW, pullRequests: [], issues: [closedIssue] },

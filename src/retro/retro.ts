@@ -31,18 +31,6 @@
  * happen that they cannot do by reading the issue.
  */
 
-/** How the retrospective is gated, from operator config. */
-export interface RetrospectivePolicy {
-  /**
-   * Master switch, **on by default**. It spends one desk agent per delivered goal,
-   * once, after the work is over, and it gates nothing — so unlike `planning`,
-   * `assessment` and `assay` it can neither park an issue nor delay any work.
-   */
-  enabled: boolean;
-}
-
-export const DEFAULT_RETROSPECTIVE: RetrospectivePolicy = { enabled: true };
-
 /** A document long enough to be a real write-up, short enough not to be a pasted transcript. */
 export const MAX_RETRO_DOCUMENT = 20_000;
 
