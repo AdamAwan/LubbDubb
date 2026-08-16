@@ -1170,6 +1170,34 @@ export type IssueRunOutcome = 'judged' | 'abandoned';
  * read, and hide a retained run from the gate that decides whether the operator
  * still wants it worked.
  */
+/**
+ * One tracker item as the mirror keeps it (issue #329).
+ *
+ * Deliberately thinner than {@link Issue}: this is the row behind a *history*, so
+ * it carries what a list is read and ordered by and nothing a dispatch would want.
+ * No body, because the mirror holds every item the tracker has ever returned and a
+ * description per row is the bulk of a tracker; a rule that needs one reads the
+ * live issue, which is the only shape it is allowed to act on anyway.
+ *
+ * `changedAt` is the provider's own last-modified instant, and it is load-bearing
+ * twice over: it is the high-water mark the next sweep asks from, and it is why
+ * the one-month floor is a floor rather than a cut — an item older than the anchor
+ * that someone has touched since arrives on a changed-since read and is then kept
+ * like any other. → `docs/spec/14-persistence.md`
+ */
+export interface TrackerItem {
+  number: number;
+  title: string;
+  labels: string[];
+  state: IssueState;
+  /** The provider's web URL, when it gave one. */
+  url: string | null;
+  /** When the tracker says the item was filed — the list's `added` reading. */
+  createdAt: string;
+  /** When the tracker last saw it change. The sweep's high-water mark. */
+  changedAt: string;
+}
+
 export interface IssueRun {
   /** The issue, as `issue:<n>` — the same origin every record and gate keys on. */
   originRef: string;

@@ -14,7 +14,7 @@ import type {
   SendResult,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
-import type { WorldSnapshot } from '../types.js';
+import type { TrackerItem, WorldSnapshot } from '../types.js';
 import type { CiEvidenceReader, CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import {
   isBranchDeleteCapable,
@@ -30,6 +30,7 @@ import {
   isPrReplyCapable,
   isPrTitleCapable,
   isRefResolvable,
+  isTicketHistoryCapable,
   isWorkItemStateCapable,
   type Integration,
 } from './integration.js';
@@ -81,6 +82,29 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     const handler = this.integrations.find(isCiEvidenceCapable);
     if (!handler) return [];
     return handler.readCiFailureEvidence(prNumber, checks);
+  }
+
+  /**
+   * Tracker items in any state changed since `since`, or `[]` when no provider can
+   * answer — the second routed read that answers rather than throwing, for the
+   * evidence reader's reason. A history nobody can supply is an empty tab, not a
+   * failed pulse: the `fake` provider has no such list, and the sweep runs every
+   * cycle.
+   */
+  async listTicketHistory(since: string): Promise<TrackerItem[]> {
+    const handler = this.integrations.find(isTicketHistoryCapable);
+    if (!handler) return [];
+    return handler.listTicketHistory(since);
+  }
+
+  /**
+   * Whether any provider can answer {@link listTicketHistory} at all.
+   *
+   * @public — read structurally through `TicketHistorySource` (`src/tickets/sweep.ts`),
+   * which is what `TicketSweep` is handed. Name-based analysis cannot see that seam.
+   */
+  get tracksTicketHistory(): boolean {
+    return this.integrations.some(isTicketHistoryCapable);
   }
 
   async postPrReply(input: PrReplyInput): Promise<SendResult> {

@@ -192,6 +192,9 @@ export function useCockpit(): CockpitStatus {
       selectGoal: (ref) => go({ goal: ref }),
       openPanel: (panel) => go({ panel }),
       openTab: (next) => go({ tab: next }),
+      // One `go` for however many of the three moved: they are one place, and two
+      // calls would push two history entries for a single change of question.
+      setTicketQuery: (next) => go(next),
       collapseFeature: (issueNumber, collapsed) =>
         go((current) => ({
           collapsed: collapsed
@@ -250,6 +253,9 @@ export function useCockpit(): CockpitStatus {
       consolePanel: place.panel,
       tab: place.tab,
       collapsed: place.collapsed,
+      ticketWatch: place.ticketWatch,
+      ticketState: place.ticketState,
+      ticketOrder: place.ticketOrder,
     }),
   };
 }

@@ -1,12 +1,13 @@
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { IssueCommentInput, IssueLabelInput, SendResult } from '../../sink/actionSink.js';
-import type { Issue, IssueState } from '../../types.js';
+import type { Issue, IssueState, TrackerItem } from '../../types.js';
 import type {
   Capability,
   Integration,
   IssueCommentCapable,
   IssueLabelCapable,
   RefResolvable,
+  TicketHistoryCapable,
   WorldSlice,
 } from '../integration.js';
 import type { GhTimelineEvent, GitHubApi } from './githubApi.js';
@@ -35,7 +36,9 @@ interface GitHubIssuesOpts {
  * reading from the network instead of an injected fake world (so it is *not*
  * `Injectable`).
  */
-export class GitHubIssuesIntegration implements Integration, RefResolvable, IssueLabelCapable, IssueCommentCapable {
+export class GitHubIssuesIntegration
+  implements Integration, RefResolvable, IssueLabelCapable, IssueCommentCapable, TicketHistoryCapable
+{
   readonly id = 'issues:github';
   readonly capability: Capability = 'issues';
 
@@ -46,6 +49,36 @@ export class GitHubIssuesIntegration implements Integration, RefResolvable, Issu
   resolveRefUrl(ref: string): string | null {
     const { owner, repo } = this.opts;
     return owner && repo ? githubRefUrl(owner, repo, ref) : null;
+  }
+
+  /**
+   * The mirror's read: every issue GitHub has seen change since `since`, in either
+   * state (issue #329).
+   *
+   * Narrowed by nothing, exactly as {@link snapshot} narrows by nothing — the two
+   * must return the same population or the tab and the world disagree about which
+   * tickets exist. GitHub has no issue-side assignee filter in this codebase
+   * (`defaultAssignee` is documented as not one), so on this provider "the
+   * assignment filter" is the whole repository, and that is the honest answer
+   * rather than a second, quieter filter invented here.
+   *
+   * No timeline read, unlike the snapshot: a history row carries no linked PR, so
+   * a sweep costs its pages and nothing per item. That is the difference between a
+   * month of backfill being one request per hundred items and being one per item.
+   */
+  async listTicketHistory(since: string): Promise<TrackerItem[]> {
+    const raw = await this.opts.api.listIssuesChangedSince(since);
+    return raw
+      .filter((i) => !i.isPullRequest)
+      .map((i) => ({
+        number: i.number,
+        title: i.title,
+        labels: i.labels,
+        state: normalizeState(i.state),
+        url: i.url,
+        createdAt: i.createdAt,
+        changedAt: i.updatedAt,
+      }));
   }
 
   /** The outbound side of the cockpit's watch/ignore toggle. PRs and issues share the labels API. */

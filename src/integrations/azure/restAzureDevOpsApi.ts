@@ -540,7 +540,15 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   async listOpenWorkItems(tag?: string, assignedTo?: string): Promise<AzWorkItem[]> {
     // Two-step: WIQL returns the matching ids, then a batch read hydrates fields
     // and relations. WIQL can't return fields directly, so the batch is required.
-    const wiql = buildOpenWorkItemQuery(tag, assignedTo);
+    return this.runWorkItemQuery(buildOpenWorkItemQuery(tag, assignedTo));
+  }
+
+  async listWorkItemsChangedSince(since: string, tag?: string, assignedTo?: string): Promise<AzWorkItem[]> {
+    return this.runWorkItemQuery(buildWorkItemHistoryQuery(since, tag, assignedTo));
+  }
+
+  /** The shared two-step behind both work-item listings: ids from WIQL, fields from the batch read. */
+  private async runWorkItemQuery(wiql: string): Promise<AzWorkItem[]> {
     const query = await this.request<{ workItems?: Array<{ id: number }> }>(
       this.withApiVersion(`${this.projectUrl}/_apis/wit/wiql`),
       { method: 'POST', body: JSON.stringify({ query: wiql }) },
@@ -596,6 +604,8 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
         .map((t) => t.trim())
         .filter((t) => t !== ''),
       workItemType: String(fields['System.WorkItemType'] ?? ''),
+      createdAt: String(fields['System.CreatedDate'] ?? ''),
+      changedAt: String(fields['System.ChangedDate'] ?? ''),
       relationUrls: (w.relations ?? [])
         .filter((r) => r.rel === 'ArtifactLink' && typeof r.url === 'string')
         .map((r) => r.url as string),
@@ -785,16 +795,45 @@ function headsRef(branch: string): string {
  * any combination — neither, either, both — composes.
  */
 export function buildOpenWorkItemQuery(tag?: string, assignedTo?: string): string {
-  const clauses = [
-    '[System.TeamProject] = @project',
-    "[System.State] NOT IN ('Closed', 'Done', 'Removed', 'Resolved')",
-  ];
+  return workItemQuery(["[System.State] NOT IN ('Closed', 'Done', 'Removed', 'Resolved')"], tag, assignedTo);
+}
+
+/**
+ * WIQL selecting work items in **any** state that changed at or after `since`,
+ * under the same tag/assignee narrowing — the ticket mirror's query (issue #329).
+ *
+ * The state clause is dropped rather than inverted: this is a history, and a
+ * mirror that could only see finished work would be missing every row the cockpit
+ * shows as open. Exported for its own test beside {@link buildOpenWorkItemQuery},
+ * because a mis-built WIQL fails as an empty result rather than as an error — a
+ * tab with no rows, on a tracker that is full of them.
+ */
+export function buildWorkItemHistoryQuery(since: string, tag?: string, assignedTo?: string): string {
+  return workItemQuery([`[System.ChangedDate] >= '${wiqlDate(since)}'`], tag, assignedTo);
+}
+
+/** The clauses both work-item queries share, so the two narrowings are written once. */
+function workItemQuery(extra: string[], tag?: string, assignedTo?: string): string {
+  const clauses = ['[System.TeamProject] = @project', ...extra];
   // Tags are matched with CONTAINS; a single-quote in a tag would break the query,
   // so escape it the SQL way (double the quote).
   if (tag) clauses.push(`[System.Tags] CONTAINS '${tag.replace(/'/g, "''")}'`);
   // AssignedTo matches the identity's uniqueName/UPN exactly; same single-quote escape.
   if (assignedTo) clauses.push(`[System.AssignedTo] = '${assignedTo.replace(/'/g, "''")}'`);
   return `SELECT [System.Id] FROM WorkItems WHERE ${clauses.join(' AND ')} ORDER BY [System.Id] ASC`;
+}
+
+/**
+ * An ISO instant as WIQL will accept it: `YYYY-MM-DD HH:MM:SSZ`.
+ *
+ * WIQL rejects the `T` separator and sub-second precision, and rejects them by
+ * faulting the whole query — so the sweep would record a fault every pulse rather
+ * than silently reading nothing. Quotes are stripped rather than escaped because
+ * this value is never operator-supplied: it is the store's own high-water mark, and
+ * anything unparseable is a bug here, not input.
+ */
+function wiqlDate(iso: string): string {
+  return iso.replace(/'/g, '').replace('T', ' ').replace(/\.\d+/, '').replace(/Z?$/, 'Z');
 }
 
 /**

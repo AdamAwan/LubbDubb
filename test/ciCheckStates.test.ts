@@ -109,6 +109,7 @@ function fakeApi(evals: AzPolicyEvaluation[], pulls: AzPull[] = [pull()]): Azure
       return [];
     },
     listOpenWorkItems: unused('listOpenWorkItems'),
+    listWorkItemsChangedSince: unused('listWorkItemsChangedSince'),
     getWorkItems: unused('getWorkItems'),
     listWorkItemUpdates: unused('listWorkItemUpdates'),
     createThreadReply: unused('createThreadReply'),

@@ -1,4 +1,5 @@
 import type { ConsolePanel, ConsoleTab } from './actions.js';
+import type { TicketOrder, TicketStateFilter, TicketWatchFilter } from '../types.js';
 
 /**
  * Where the cockpit is — every piece of state that answers *what am I looking
@@ -39,6 +40,20 @@ export interface Place {
    * the sender was looking at.
    */
   collapsed: number[];
+  /**
+   * The Tickets tab's two filter axes and its ordering (issue #329).
+   *
+   * On `Place` rather than in the panel because the tab exists to be *asked* —
+   * "all unclosed watched items" is a question someone sends a link to, and a
+   * filter held in a `useState` compiles, renders and works right up until the
+   * back button steps over it or a reload drops it. The scroll offset deliberately
+   * is not here: a URL restoring an offset into a list that has since grown lands
+   * somewhere else entirely, so Back returns to the filter and the list re-reads
+   * its first page.
+   */
+  ticketWatch: TicketWatchFilter;
+  ticketState: TicketStateFilter;
+  ticketOrder: TicketOrder;
 }
 
 /** The cockpit with nothing open: the overview, which is what a bare URL means. */
@@ -54,9 +69,15 @@ export const NOWHERE: Place = {
   spend: false,
   reliability: false,
   collapsed: [],
+  ticketWatch: 'any',
+  ticketState: 'any',
+  ticketOrder: 'added',
 };
 
-const TABS: readonly ConsoleTab[] = ['overview', 'backlog', 'work'];
+const TABS: readonly ConsoleTab[] = ['overview', 'backlog', 'work', 'tickets'];
+const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched', 'ignored'];
+const TICKET_STATE: readonly TicketStateFilter[] = ['any', 'open', 'closed'];
+const TICKET_ORDER: readonly TicketOrder[] = ['added', 'cost'];
 const PANELS = ['findings', 'faults', 'output', 'launch'] as const;
 
 /** A parameter's value, with an empty one read as absent — `?goal=` names nothing. */
@@ -94,6 +115,12 @@ export function readPlace(search: string): Place {
     spend: query.has('spend'),
     reliability: query.has('reliability'),
     collapsed: readNumbers(param(query, 'collapsed')),
+    // Validated back into their types like every other parameter here, and for
+    // the same reason: these are the ones an operator is most likely to hand-edit,
+    // since the whole tab is a question spelled in the address bar.
+    ticketWatch: TICKET_WATCH.find((w) => w === param(query, 'watch')) ?? 'any',
+    ticketState: TICKET_STATE.find((s) => s === param(query, 'state')) ?? 'any',
+    ticketOrder: TICKET_ORDER.find((o) => o === param(query, 'order')) ?? 'added',
   };
 }
 
@@ -143,6 +170,12 @@ export function placeQuery(place: Place): string {
   if (place.collapsed.length > 0) {
     query.set('collapsed', [...place.collapsed].sort((a, b) => a - b).join(','));
   }
+  // Defaults omitted, so "all items, newest first" is a bare `?tab=tickets` rather
+  // than a second spelling of the same page — which is what keeps the comparison in
+  // `useNavigation` sound.
+  if (place.ticketWatch !== 'any') query.set('watch', place.ticketWatch);
+  if (place.ticketState !== 'any') query.set('state', place.ticketState);
+  if (place.ticketOrder !== 'added') query.set('order', place.ticketOrder);
   const encoded = query.toString();
   return encoded === '' ? '' : `?${encoded}`;
 }

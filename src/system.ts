@@ -13,6 +13,7 @@ import { GitCliObserver, type GitObserver } from './git/gitObserver.js';
 import { fetchRemote } from './git/gitCli.js';
 import { PlanReconciler } from './plans/planReconciler.js';
 import { AssayDesk } from './intake/assayDesk.js';
+import { TicketSweep } from './tickets/sweep.js';
 import { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import { AgentManager } from './agents/agentManager.js';
 import {
@@ -91,6 +92,13 @@ export interface System {
    * no other handle on the thing that wrote it.
    */
   graph: WorkGraphRecorder;
+  /**
+   * Keeps the ticket mirror current, and the one thing that knows whether the
+   * first sweep has landed. Exposed because `/api/tickets` has to say so: an empty
+   * list mid-backfill and an empty list on an empty tracker are the same picture
+   * and different facts.
+   */
+  tickets: TicketSweep;
   /** Live, ephemeral dispatch controls (cap + pause). Seeded from config at boot. */
   runtimeControl: RuntimeControl;
   /**
@@ -594,6 +602,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
   const graph = new WorkGraphRecorder({ store, errors });
 
+  // The ticket mirror's keeper: one month of backfill on a fresh database, then an
+  // incremental changed-since read every pulse. A record, not a decision — nothing
+  // under `src/dispatcher/` reads it, and the tab it feeds is a lens.
+  const tickets = new TicketSweep({ store, source: connector, errors });
+
   const harness = new Harness({
     store,
     connector,
@@ -606,6 +619,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     branchReaps,
     schedules,
     graph,
+    tickets,
     landings,
     // Holds the pulse while a previous run's agents await a verdict.
     recovery,
@@ -702,6 +716,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     dispatcher,
     harness,
     graph,
+    tickets,
     runtimeControl,
     issuePickup,
     prompts,

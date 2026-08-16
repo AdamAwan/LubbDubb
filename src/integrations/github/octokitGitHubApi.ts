@@ -355,15 +355,31 @@ export class OctokitGitHubApi implements GitHubApi {
       per_page: 100,
       ...(label ? { labels: label } : {}),
     });
-    return issues.map((i) => ({
-      number: i.number,
-      title: i.title,
-      body: i.body ?? '',
-      labels: i.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? ''))).filter((name) => name !== ''),
-      state: i.state,
-      url: i.html_url,
-      isPullRequest: i.pull_request !== undefined,
-    }));
+    return issues.map(mapIssue);
+  }
+
+  /**
+   * The same endpoint with `state: 'all'` and a `since` — the one call that can
+   * see a closed issue.
+   *
+   * `sort`/`direction` are pinned to `updated` ascending rather than left to the
+   * endpoint's `created` default: the sweep records the newest `changedAt` it saw
+   * as its high-water mark, and a page order unrelated to that instant makes a
+   * partial read (a rate limit, a dropped connection mid-pagination) leave a mark
+   * ahead of items it never fetched. Ascending, the mark only ever moves over
+   * ground actually covered.
+   */
+  async listIssuesChangedSince(since: string, label?: string): Promise<GhIssue[]> {
+    const issues = await this.octokit.paginate(this.octokit.issues.listForRepo, {
+      ...this.base,
+      state: 'all',
+      since,
+      sort: 'updated',
+      direction: 'asc',
+      per_page: 100,
+      ...(label ? { labels: label } : {}),
+    });
+    return issues.map(mapIssue);
   }
 
   async listIssueTimeline(number: number): Promise<GhTimelineEvent[]> {
@@ -487,4 +503,34 @@ export class OctokitGitHubApi implements GitHubApi {
       }
     }
   }
+}
+
+/**
+ * One issue row, from either listing. Written once because the two callers must
+ * agree field for field: the mirror joins its rows to the world's by number, and a
+ * `state` or a label list spelled differently on the two paths would present as a
+ * ticket that changes shape depending on which read last touched it.
+ */
+function mapIssue(i: {
+  number: number;
+  title: string;
+  body?: string | null;
+  labels: Array<string | { name?: string }>;
+  state: string;
+  html_url: string;
+  created_at: string;
+  updated_at: string;
+  pull_request?: unknown;
+}): GhIssue {
+  return {
+    number: i.number,
+    title: i.title,
+    body: i.body ?? '',
+    labels: i.labels.map((l) => (typeof l === 'string' ? l : (l.name ?? ''))).filter((name) => name !== ''),
+    state: i.state,
+    url: i.html_url,
+    isPullRequest: i.pull_request !== undefined,
+    createdAt: i.created_at,
+    updatedAt: i.updated_at,
+  };
 }

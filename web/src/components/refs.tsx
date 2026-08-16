@@ -77,6 +77,36 @@ function useRefWorld(): RefWorld {
   return world;
 }
 
+/**
+ * The shell's ref world with a panel's own URLs merged over it.
+ *
+ * For the surfaces fed by a **fetched** route rather than by the snapshot: the
+ * work graph and the Tickets tab both resolve their own `refUrls` off the
+ * connector, because `buildRefUrls` is assembled from the *world* and the things
+ * those two remember left it long ago. `<Ref>` looks up the world the shell
+ * provides, so a panel that drew one with its own URLs unmerged would render every
+ * reference as plain text — correct-looking rows that are dead ends, which is the
+ * single most repeated cockpit bug and the reason this module exists.
+ *
+ * `openGoal` and `hasGoal` are kept from the parent deliberately, not overridden.
+ * `hasGoal` will say no for a ticket the snapshot has forgotten, and {@link Ref}'s
+ * existing answer to that — link out to the tracker rather than open a page that
+ * would render empty — is then exactly right, with no special case in the panel.
+ */
+export function RefLinksExtended({
+  refUrls,
+  children,
+}: {
+  refUrls: Record<string, string>;
+  children: ReactNode;
+}): JSX.Element {
+  const parent = useRefWorld();
+  // The route's URLs win: it asked the connector about these very refs, while the
+  // snapshot's entry (if any) is whatever the world happened to still carry.
+  const world = useMemo(() => ({ ...parent, refUrls: { ...parent.refUrls, ...refUrls } }), [parent, refUrls]);
+  return <RefContext.Provider value={world}>{children}</RefContext.Provider>;
+}
+
 const GOAL_REF = /^issue:(\d+)(?::|$)/;
 const PR_REF = /^pr:(\d+)(?::|$)/;
 

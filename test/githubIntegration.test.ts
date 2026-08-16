@@ -38,7 +38,14 @@ interface Script {
   reviewThreads?: Record<number, GhReviewThread[]>;
   combinedStatus?: Record<string, GhCombinedStatus>;
   checkRuns?: Record<string, GhCheckRun[]>;
-  issues?: GhIssue[];
+  /**
+   * Issues the two listings serve. Timestamps are optional here and defaulted by
+   * {@link scriptedIssue} — a fixture about labels or linked PRs has no business
+   * stating a `created_at` to satisfy the mirror's ordering.
+   */
+  issues?: Array<Omit<GhIssue, 'createdAt' | 'updatedAt'> & Partial<Pick<GhIssue, 'createdAt' | 'updatedAt'>>>;
+  /** What `listIssuesChangedSince` was asked from, in call order. */
+  historySince?: string[];
   timeline?: Record<number, GhTimelineEvent[]>;
   throwOn?: 'listOpenPulls' | 'listOpenIssues' | 'listPullReviewThreads' | 'updatePullBranch' | 'getJobLog';
   /** Check-run annotations by check-run id — the structured half of CI evidence. */
@@ -50,12 +57,21 @@ interface Script {
   missingBranches?: string[];
 }
 
+/** A scripted issue with the timestamps the mirror reads defaulted in. */
+function scriptedIssue(
+  i: Omit<GhIssue, 'createdAt' | 'updatedAt'> & Partial<Pick<GhIssue, 'createdAt' | 'updatedAt'>>,
+): GhIssue {
+  return { createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z', ...i };
+}
+
 interface Recorded {
   reviewReplies: Array<{ number: number; inReplyTo: number; body: string }>;
   issueComments: Array<{ number: number; body: string }>;
   commentEdits: Array<{ commentId: number; body: string }>;
   merges: Array<{ number: number; method: MergeMethod }>;
   issueLabelQueries: Array<string | undefined>;
+  /** Instants `listIssuesChangedSince` was called with. */
+  historySince: string[];
   labelSets: Array<{ number: number; label: string; present: boolean }>;
   closedSince: string[];
   annotationReads: number[];
@@ -75,6 +91,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     commentEdits: [],
     merges: [],
     issueLabelQueries: [],
+    historySince: [],
     labelSets: [],
     closedSince: [],
     annotationReads: [],
@@ -146,7 +163,13 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     async listOpenIssues(label) {
       recorded.issueLabelQueries.push(label);
       if (script.throwOn === 'listOpenIssues') throw new Error('boom');
-      return script.issues ?? [];
+      return (script.issues ?? []).filter((i) => i.state === 'open').map(scriptedIssue);
+    },
+    async listIssuesChangedSince(since, label) {
+      recorded.historySince.push(since);
+      recorded.issueLabelQueries.push(label);
+      // Every state, unlike the open list above — the whole point of the seam.
+      return (script.issues ?? []).map(scriptedIssue);
     },
     async listIssueTimeline(number) {
       return script.timeline?.[number] ?? [];

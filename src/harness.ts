@@ -85,6 +85,12 @@ interface HarnessDeps {
    */
   graph?: WorkGraphRecorder;
   /**
+   * Keeps the ticket mirror current (issue #329). Absent = no mirror, which is
+   * every test that does not name one and every deployment whose issues provider
+   * cannot list history.
+   */
+  tickets?: { run(): Promise<void> };
+  /**
    * The crash-recovery gate: how many agents orphaned by the previous run are
    * still waiting on an operator's verdict. Any at all holds the pulse — see
    * {@link Harness.runCycle}.
@@ -423,6 +429,13 @@ export class Harness extends EventEmitter {
       });
 
       const summary = await this.deps.executor.execute(cycleId, plan);
+      // The ticket mirror, last in the cycle and deliberately so: it is a record
+      // nothing here decides from, and its first run is a month of backfill. Ahead
+      // of `execute` that one slow sweep would hold the fleet's work on the pulse a
+      // deployment starts; behind it, it costs a boot's latency and nothing else.
+      // It records its own failures and never throws — a tracker that refused us
+      // must not cost the cycle it happened in.
+      await this.deps.tickets?.run();
       const report: CycleReport = { cycleId, source, rationale: plan.rationale, summary, at: new Date().toISOString() };
       this.emit('cycle:end', report);
       return report;

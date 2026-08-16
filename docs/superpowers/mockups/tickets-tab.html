@@ -349,6 +349,9 @@
                  place a list is sorted from, and two controls for one job is two
                  places to leave disagreeing. Both filters and the ordering are
                  `Place` fields either way. -->
+            <!-- Loaded of *filtered*, while the head counts the history itself: a
+                 filter narrows the list, and a head that moved with it would report
+                 a shrinking history. -->
             <span class="fsum"><b>40</b> of <b>1,284</b> loaded · <b>$2,914.60</b> spent</span>
           </div>
 
@@ -718,9 +721,12 @@
           table exempt, and the failure is invisible.</li>
       </ul>
       <p>
-        What this buys, beyond the retention answer: the counts, both orderings and the paging all become one
-        SQL query over one table, and the tab stops depending on how fast the tracker can be asked for a
-        thousand items.
+        What this buys, beyond the retention answer: the counts, both orderings and the paging are all
+        answerable from one local table, and the tab stops depending on how fast the tracker can be asked
+        for a thousand items. One more state fell out of building it — a sweep that <i>completed and found
+        nothing</i> has to be recorded as distinct from one that has not run, or an empty tracker leaves the
+        foot saying “reading the last month” forever, which is the very confusion the floor is stated to
+        avoid.
       </p>
     </div>
 
@@ -766,10 +772,14 @@
           <code>buildSpendGoals</code> (<code>src/spendInsights.ts</code>) — the one place that decides which
           goal a run's money belongs to. A second rollup here would be a second opinion about attribution,
           which is precisely what that module opens by refusing to have.</li>
-        <li>Because the list is a local mirror, both orderings are one query over one table, keyset-paged on
-          <code>(sort key, id)</code> — the id breaking ties so two tickets that cost the same never swap
-          places between pages and hide a row. No per-request ranking, no cache to invalidate, and the
-          question “what has cost the most” is answerable without asking the tracker anything at all.</li>
+        <li>Because the list is a local mirror, the question “what has cost the most” is answerable without
+          asking the tracker anything at all. <b>As built, the ordering is not SQL</b>: neither axis is the
+          table's to know — the watch bucket is a function of the operator's label prefix and cost is
+          <code>buildSpendGoals</code>' answer, so either as a stored column would be a stale copy of a
+          verdict that moves. The mirror hands back its rows and one pure function filters, orders and pages
+          them, which is affordable because a row is one line with no body and the route is fetched on open.
+          A cost column refreshed by the sweep is the escalation if a deployment outgrows it — and it should
+          be taken only then, since it trades one honest source for two.</li>
         <li>A ticket with no spend sorts last and draws <code>—</code>, not <code>$0.00</code>: never worked
           and worked for free are different facts, and a zero would state the wrong one.</li>
       </ul>
@@ -799,8 +809,9 @@
         <li>Pages of 40, requested one ahead of the foot. The head states <b>loaded of total</b> — an infinite
           list with no total tells a reader nothing about whether they are near the end.</li>
         <li>The cursor is a keyset — the last row's sort key and id — not an offset, so a sweep landing
-          mid-scroll cannot shift the window and make a row appear twice or not at all. It carries the
-          filter it was cut from, so changing one starts a new list rather than appending to the old.</li>
+          mid-scroll cannot shift the window and make a row appear twice or not at all. A cursor whose row
+          has since left the filtered set restarts the list rather than guessing a position: repeating rows
+          is a failure a reader can see, and a silently skipped page is not.</li>
         <li>The foot is a real state, not an absence: reaching it names the floor
           (<i>“start of history — 14 Jul 2026”</i>). A list that just stops reads as one that failed.</li>
         <li>Scroll position is deliberately <b>not</b> on <code>Place</code>: a URL that restores a scroll

@@ -717,6 +717,48 @@ CREATE TABLE IF NOT EXISTS validation_resources (
   PRIMARY KEY (origin_ref, name)
 );
 
+-- The ticket mirror: every item the tracker's assignment filter has returned since
+-- the harness first swept, in whatever state it was last seen in (issue #329).
+--
+-- A record, not a world. Nothing dispatches from this — the dispatcher reads the
+-- live issue list, which is open items by construction — and nothing here is ever
+-- deleted, which is the whole difference between it and a cache. An item the
+-- tracker stops returning (closed, untagged, reassigned) keeps its last-seen row,
+-- because the question the tab answers is "what has this fleet been asked to do",
+-- and a history that forgets cannot answer it.
+--
+-- No index beyond the primary key, and that is deliberate: number **is** the
+-- default ordering (a tracker id is auto-incremental, so id order is arrival
+-- order), and the other reading — cost — is not this table's to know. See
+-- src/tickets/ticketList.ts for where the rest of the query happens and why.
+--
+-- first_seen_at is the sweep that first wrote the row and never moves; added_at
+-- is the tracker's own creation instant, which is what the row *displays*, and the
+-- two differ by exactly the backfill: on the first sweep every row is first seen at
+-- once.
+CREATE TABLE IF NOT EXISTS tracker_items (
+  number        INTEGER PRIMARY KEY,
+  title         TEXT NOT NULL,
+  labels        TEXT NOT NULL,     -- JSON array
+  state         TEXT NOT NULL,     -- 'open' | 'closed', the tracker's word
+  url           TEXT,
+  added_at      TEXT NOT NULL,     -- the tracker's created date; the default ordering
+  changed_at    TEXT NOT NULL,     -- the tracker's last-modified; the sweep's high-water mark
+  first_seen_at TEXT NOT NULL,     -- frozen
+  updated_at    TEXT NOT NULL
+);
+
+-- The sweep's own bookkeeping: one row, id 1. anchor_at is one month before the
+-- first sweep and is **frozen** — a rolling window would drop the far end of the
+-- history every night, silently, which is the opposite of what the mirror is for.
+-- swept_to is the high-water mark the next changed-since read asks from.
+CREATE TABLE IF NOT EXISTS tracker_sweep (
+  id         INTEGER PRIMARY KEY CHECK (id = 1),
+  anchor_at  TEXT NOT NULL,
+  swept_to   TEXT,
+  updated_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);

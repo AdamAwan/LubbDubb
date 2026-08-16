@@ -44,7 +44,7 @@ interface Refused {
 }
 
 /** What {@link readRequest} hands back: the parsed values, or the one refusal string. */
-type RequestRead<P, B> = { ok: true; params: P; body: B } | Refused;
+type RequestRead<P, B, Q> = { ok: true; params: P; body: B; query: Q } | Refused;
 
 /**
  * Parse whichever of `params`/`body` a route declares. Params are read first, so
@@ -56,23 +56,31 @@ type RequestRead<P, B> = { ok: true; params: P; body: B } | Refused;
  * lets an all-optional body be omitted entirely while a required field still
  * refuses by name.
  */
-export function readRequest<P = undefined, B = undefined>(
-  req: { params?: unknown; body?: unknown },
+export function readRequest<P = undefined, B = undefined, Q = undefined>(
+  req: { params?: unknown; body?: unknown; query?: unknown },
   // `unknown` as the schemas' *input* type is what lets a schema transform on the
   // way through — a `:number` param arrives as a string and leaves as a number, a
   // `kind` defaults, a note is trimmed — while `P`/`B` still infer from what the
   // handler receives.
-  schemas: { params?: z.ZodType<P, z.ZodTypeDef, unknown>; body?: z.ZodType<B, z.ZodTypeDef, unknown> },
-): RequestRead<P, B> {
+  schemas: {
+    params?: z.ZodType<P, z.ZodTypeDef, unknown>;
+    body?: z.ZodType<B, z.ZodTypeDef, unknown>;
+    query?: z.ZodType<Q, z.ZodTypeDef, unknown>;
+  },
+): RequestRead<P, B, Q> {
   const params = schemas.params?.safeParse(req.params ?? {});
   if (params && !params.success) return { ok: false, error: refusalMessage(params.error) };
+  // Read in the order a reader would blame them: a request that names no such item
+  // is refused for that before whatever its query or body got wrong.
+  const query = schemas.query?.safeParse(req.query ?? {});
+  if (query && !query.success) return { ok: false, error: refusalMessage(query.error) };
   const body = schemas.body?.safeParse(req.body ?? {});
   if (body && !body.success) return { ok: false, error: refusalMessage(body.error) };
-  // The two casts are the only ones left, and they are sound: a schema that was
+  // The three casts are the only ones left, and they are sound: a schema that was
   // given produced `data` of its own output type, and one that was not leaves
   // `undefined`, which is what the generic defaults to for a route that declares
   // no such half.
-  return { ok: true, params: params?.data as P, body: body?.data as B };
+  return { ok: true, params: params?.data as P, body: body?.data as B, query: query?.data as Q };
 }
 
 /**
@@ -95,14 +103,28 @@ export function readRequest<P = undefined, B = undefined>(
  * `checked({ params: Y }, ...)`. Same one refusal path, in the order the route
  * needs.
  */
-export function checked<P = undefined, B = undefined>(
-  schemas: { params?: z.ZodType<P, z.ZodTypeDef, unknown>; body?: z.ZodType<B, z.ZodTypeDef, unknown> },
-  handler: (input: { params: P; body: B; req: FastifyRequest; reply: FastifyReply }) => unknown,
+export function checked<P = undefined, B = undefined, Q = undefined>(
+  schemas: {
+    params?: z.ZodType<P, z.ZodTypeDef, unknown>;
+    body?: z.ZodType<B, z.ZodTypeDef, unknown>;
+    /**
+     * The query string, declared the same way as the other two (issue #329).
+     *
+     * A `GET` whose parameters are filters had no home here, and the one route
+     * that needed them before this reached for `req.query as {…}` — which is the
+     * assertion this module exists to remove, just on the third half of the
+     * request rather than the first two. A filter is exactly the sort of value an
+     * operator hand-edits in the address bar, so it is the half that most wants
+     * validating.
+     */
+    query?: z.ZodType<Q, z.ZodTypeDef, unknown>;
+  },
+  handler: (input: { params: P; body: B; query: Q; req: FastifyRequest; reply: FastifyReply }) => unknown,
 ): (req: FastifyRequest, reply: FastifyReply) => Promise<unknown> {
   return async (req, reply) => {
     const input = readRequest(req, schemas);
     if (!input.ok) return reply.code(400).send({ error: input.error });
-    return handler({ params: input.params, body: input.body, req, reply });
+    return handler({ params: input.params, body: input.body, query: input.query, req, reply });
   };
 }
 
