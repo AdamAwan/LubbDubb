@@ -2169,8 +2169,14 @@ export const demoApi = {
   // and a fixture is the only way the tab shows what it is for. The filtering,
   // ordering and paging are performed here rather than faked, so what a reader
   // clicks behaves exactly as it will against a real mirror.
-  getTickets: (query: { watch: string; state: string; order: string; cursor: string | null }) =>
-    Promise.resolve(demoTickets(query)),
+  getTickets: (query: {
+    watch: string;
+    tracking: string;
+    state: string;
+    feature: string | null;
+    order: string;
+    cursor: string | null;
+  }) => Promise.resolve(demoTickets(query)),
   // The demo's one written-up goal, so the Manifest station has something to open.
   // Everything else answers null, which is the same thing the real route says for a
   // goal nobody wrote up — silence, not an error.
@@ -2291,9 +2297,29 @@ export function connectDemoWs(onEvent: (ev: unknown) => void, onStatus?: (connec
  * route does it — because a demo whose controls do nothing demonstrates the chrome
  * and not the tab.
  */
-function demoTickets(query: { watch: string; state: string; order: string; cursor: string | null }): TicketsPayload {
+function demoTickets(query: {
+  watch: string;
+  tracking: string;
+  state: string;
+  feature: string | null;
+  order: string;
+  cursor: string | null;
+}): TicketsPayload {
   const now = Date.now();
   const iso = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000).toISOString();
+  // Three features and a hue apiece, so the legend, the grouping and the orphan
+  // bucket all have something to draw. The fourth of every group is deliberately
+  // left parentless — an orphan is a state the surface has to be able to show.
+  const features = [
+    { number: 900, title: 'Payments' },
+    { number: 901, title: 'Onboarding' },
+    { number: 902, title: 'Platform hygiene' },
+  ];
+  const featureOf = (n: number) => (n % 4 === 3 ? null : (features[n % 3] ?? null));
+  // The demo's stand-in for the store's least-used-first assignment: the position
+  // in the list, which for three features is the same answer.
+  const featureSlotOf = (feature: { number: number } | null) =>
+    feature === null ? null : features.findIndex((f) => f.number === feature.number);
   const worked: TicketRow[] = DEMO_GOAL_SEEDS.map((seed, i) => ({
     number: seed.issueNumber,
     title: seed.title ?? `Goal #${seed.issueNumber}`,
@@ -2305,6 +2331,12 @@ function demoTickets(query: { watch: string; state: string; order: string; curso
     outcome: i % 5 === 3 ? 'fell short' : 'delivered',
     addedAt: iso(seed.hoursAgo + 48),
     changedAt: iso(seed.hoursAgo),
+    // Closed in the tracker, so the mirror has stopped enriching them.
+    tracking: 'frozen' as const,
+    workItemState: 'Closed',
+    issueType: 'Task',
+    parent: featureOf(seed.issueNumber),
+    featureSlot: featureSlotOf(featureOf(seed.issueNumber)),
   }));
   // A tail nobody has triaged, so `unwatched` and `ignored` are not empty answers.
   const untouched: TicketRow[] = DEMO_UNTRIAGED.map((seed) => ({
@@ -2317,16 +2349,32 @@ function demoTickets(query: { watch: string; state: string; order: string; curso
     outcome: null,
     addedAt: iso(seed.hoursAgo),
     changedAt: iso(seed.hoursAgo),
+    tracking: 'live' as const,
+    workItemState: seed.number % 3 === 0 ? 'Ready' : seed.number % 3 === 1 ? 'New' : 'Active',
+    issueType: 'Task',
+    parent: featureOf(seed.number),
+    featureSlot: featureSlotOf(featureOf(seed.number)),
   }));
 
   const all = [...worked, ...untouched].sort((a, b) => b.number - a.number);
   const matching = all.filter(
     (row) =>
-      (query.state === 'any' || row.state === query.state) && (query.watch === 'any' || row.watch === query.watch),
+      (query.tracking === 'any' || row.tracking === query.tracking) &&
+      (query.state === 'any' || row.workItemState === query.state) &&
+      (query.feature === null ||
+        (query.feature === 'none' ? row.parent === null : row.parent?.number === Number(query.feature))) &&
+      (query.watch === 'any' || row.watch === query.watch),
   );
   if (query.order === 'cost') matching.sort((a, b) => (b.costUsd ?? -1) - (a.costUsd ?? -1) || b.number - a.number);
+  if (query.order === 'changed')
+    matching.sort((a, b) => (a.changedAt < b.changedAt ? 1 : a.changedAt > b.changedAt ? -1 : b.number - a.number));
 
-  const key = (row: TicketRow) => (query.order === 'cost' ? `${row.costUsd ?? -1}:${row.number}` : `${row.number}`);
+  const key = (row: TicketRow) =>
+    query.order === 'cost'
+      ? `${row.costUsd ?? -1}:${row.number}`
+      : query.order === 'changed'
+        ? `${row.changedAt}:${row.number}`
+        : `${row.number}`;
   const from = query.cursor === null ? 0 : matching.findIndex((row) => key(row) === query.cursor) + 1;
   const rows = matching.slice(from, from + 40);
   const last = rows[rows.length - 1];
@@ -2334,8 +2382,26 @@ function demoTickets(query: { watch: string; state: string; order: string; curso
     rows,
     total: matching.length,
     kept: all.length,
+    live: all.filter((row) => row.tracking === 'live').length,
     totalCostUsd: Math.round(matching.reduce((n, r) => n + (r.costUsd ?? 0), 0) * 100) / 100,
     nextCursor: from + rows.length < matching.length && last ? key(last) : null,
+    states: [
+      ...all.reduce((counts, row) => {
+        const state = row.workItemState;
+        if (state !== null) counts.set(state, (counts.get(state) ?? 0) + 1);
+        return counts;
+      }, new Map<string, number>()),
+    ]
+      .map(([state, count]) => ({ state, count, pickup: state === 'Ready' || state === 'Active' }))
+      .sort((a, b) => b.count - a.count || a.state.localeCompare(b.state)),
+    features: features
+      .map((f) => ({
+        ...f,
+        slot: featureSlotOf(f) ?? 0,
+        count: all.filter((row) => row.parent?.number === f.number).length,
+      }))
+      .filter((f) => f.count > 0),
+    orphanCount: all.filter((row) => row.parent === null).length,
     anchorAt: iso(24 * 30),
     backfilling: false,
     refUrls: {},

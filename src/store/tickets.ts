@@ -1,5 +1,61 @@
 import type { IssueState, TrackerItem } from '../types.js';
 import type { StoreContext } from './context.js';
+import type { ColumnMigrations } from './migrate.js';
+
+/**
+ * Everything past the original `CREATE`: the mirror was a record of the tracker's
+ * own five fields, and is now what every screen reads, so it carries the harness's
+ * reading (`tracking`) and the fields a work surface groups and filters by.
+ *
+ * `feature_colors` is a fresh table and needs no entry — but a table being new
+ * *once* does not keep it exempt, so it declares an empty one below.
+ */
+export const TICKET_COLUMNS: ColumnMigrations = {
+  tracker_items: {
+    tracking: "TEXT NOT NULL DEFAULT 'live'",
+    work_item_state: 'TEXT',
+    issue_type: 'TEXT',
+    parent_number: 'INTEGER',
+    parent_title: 'TEXT',
+    parent_known: 'INTEGER NOT NULL DEFAULT 0',
+    last_read_at: 'TEXT',
+  },
+  feature_colors: {},
+};
+
+/**
+ * How many hues the feature ladder has.
+ *
+ * A fixed ladder rather than a hue per feature: a colour picked at random has two
+ * failure modes nothing catches — one that disappears against the panel, and two
+ * features that land close enough to read as one. Twelve tested hues assigned
+ * least-used-first cannot draw either, and past twelve the ladder repeats, which is
+ * honest: a legend with forty colours is not a legend anyone reads.
+ */
+const FEATURE_SLOTS = 12;
+
+/**
+ * What the world knows about an item that the tracker's history read does not:
+ * its provider-native state, its type, and the feature it hangs off.
+ *
+ * Passed *in* to the sweep rather than fetched by it, because the snapshot has
+ * already paid for all three — the hierarchy hydration in particular is two batched
+ * reads per pulse, and asking for it a second time here would double it for a
+ * record.
+ */
+export interface LiveTicketFacts {
+  number: number;
+  labels: string[];
+  workItemState: string | null;
+  issueType: string | null;
+  /**
+   * The feature this hangs off; `null` is an orphan and `undefined` is a link that
+   * could not be read. Kept apart all the way to the column, because collapsing
+   * them tells a reader an item belongs to no feature when the truth is that we
+   * could not tell.
+   */
+  parent?: { number: number; title: string } | null;
+}
 
 /** Where the sweep has got to, and how far back it was ever allowed to look. */
 export interface TrackerSweepMark {
@@ -91,7 +147,7 @@ export class TicketStore {
    * — and a tab that said "reading the last month" forever on an empty tracker
    * would be the very confusion the mark exists to resolve.
    */
-  recordSweep(askedFrom: string, items: readonly TrackerItem[]): void {
+  recordSweep(askedFrom: string, items: readonly TrackerItem[], live: readonly LiveTicketFacts[] = []): void {
     const ts = this.ctx.now();
     const upsert = this.ctx.db.prepare(
       `INSERT INTO tracker_items (number, title, labels, state, url, added_at, changed_at, first_seen_at, updated_at)
@@ -104,6 +160,22 @@ export class TicketStore {
          added_at=excluded.added_at,
          changed_at=excluded.changed_at,
          updated_at=excluded.updated_at`,
+    );
+    // The live overlay. `parent_known` is written from the fact itself rather than
+    // from whether `parent_number` came out null, which is the whole point of the
+    // flag: an orphan and an unreadable link are both a null id.
+    const enrich = this.ctx.db.prepare(
+      `UPDATE tracker_items SET
+         tracking='live',
+         labels=@labels,
+         work_item_state=@workItemState,
+         issue_type=@issueType,
+         parent_number=CASE WHEN @parentKnown = 1 THEN @parentNumber ELSE parent_number END,
+         parent_title=CASE WHEN @parentKnown = 1 THEN @parentTitle ELSE parent_title END,
+         parent_known=CASE WHEN @parentKnown = 1 THEN 1 ELSE parent_known END,
+         last_read_at=@ts,
+         updated_at=@ts
+       WHERE number=@number`,
     );
     const mark = this.ctx.db.prepare(
       // `MAX` rather than assignment: a batch is not ordered, and a provider that
@@ -126,8 +198,80 @@ export class TicketStore {
         });
         if (item.changedAt > newest) newest = item.changedAt;
       }
+
+      for (const fact of live) {
+        enrich.run({
+          number: fact.number,
+          labels: JSON.stringify(fact.labels),
+          workItemState: fact.workItemState,
+          issueType: fact.issueType,
+          parentKnown: fact.parent === undefined ? 0 : 1,
+          parentNumber: fact.parent?.number ?? null,
+          parentTitle: fact.parent?.title ?? null,
+          ts,
+        });
+      }
+
+      // Freezing is by *absence from the live set*, and it is skipped entirely
+      // when that set is empty. A provider whose snapshot failed hands back its
+      // last good read, but one that is down on a first boot hands back nothing at
+      // all — and freezing every row off that would retire the whole board in one
+      // pulse, silently, which is the one way this can be wrong at scale. The same
+      // reading the close-out sweep already takes for the same reason.
+      if (live.length > 0) {
+        const stmt = this.ctx.db.prepare(
+          `UPDATE tracker_items SET tracking='frozen', updated_at=?
+           WHERE tracking='live' AND number NOT IN (${live.map(() => '?').join(',')})`,
+        );
+        stmt.run(ts, ...live.map((f) => f.number));
+      }
+
       mark.run(newest, ts);
     })();
+  }
+
+  /**
+   * The colour slot each of these features draws in, assigning one to any that has
+   * never been seen.
+   *
+   * Least-used-first rather than round-robin on the id: a deployment that has
+   * retired half its features would otherwise pile the survivors onto a handful of
+   * hues. Ties break on the lowest slot, so the assignment is deterministic and a
+   * test can state it. Assigned once and never moved — a colour that changed
+   * between sessions is worse than no colour at all.
+   */
+  ensureFeatureColors(numbers: readonly number[]): Map<number, number> {
+    const rows = this.ctx.db.prepare(`SELECT number, slot FROM feature_colors`).all() as {
+      number: number;
+      slot: number;
+    }[];
+    const assigned = new Map(rows.map((r) => [r.number, r.slot]));
+    const used = new Array<number>(FEATURE_SLOTS).fill(0);
+    for (const slot of assigned.values()) if (slot >= 0 && slot < FEATURE_SLOTS) used[slot] = (used[slot] ?? 0) + 1;
+
+    const ts = this.ctx.now();
+    const insert = this.ctx.db.prepare(
+      `INSERT OR IGNORE INTO feature_colors (number, slot, assigned_at) VALUES (?, ?, ?)`,
+    );
+    // Ascending, so two deployments that met the same features in the same order
+    // colour them the same way — an ordering the caller's map iteration would not
+    // otherwise guarantee.
+    for (const number of [...new Set(numbers)].sort((a, b) => a - b)) {
+      if (assigned.has(number)) continue;
+      let pick = 0;
+      let fewest = used[0] ?? 0;
+      for (let slot = 1; slot < FEATURE_SLOTS; slot += 1) {
+        const count = used[slot] ?? 0;
+        if (count < fewest) {
+          pick = slot;
+          fewest = count;
+        }
+      }
+      used[pick] = fewest + 1;
+      assigned.set(number, pick);
+      insert.run(number, pick, ts);
+    }
+    return assigned;
   }
 
   /**
@@ -141,10 +285,27 @@ export class TicketStore {
   }
 }
 
-/** One mirrored item: the tracker's own fields, plus when this harness first saw it. */
+/** One mirrored item: the tracker's own fields, plus what the harness makes of it. */
 export interface MirroredTicket extends TrackerItem {
   /** The sweep that first wrote this row; frozen. On the backfill, every row shares it. */
   firstSeenAt: string;
+  /**
+   * `frozen` is an item that has left the tracker's open set. It keeps every field
+   * it was last seen with and is no longer enriched from the world, which is why
+   * the tab counts *live* and *kept* as two numbers.
+   */
+  tracking: 'live' | 'frozen';
+  /** The provider's own word for its state, or null where the provider has none. */
+  workItemState: string | null;
+  issueType: string | null;
+  /**
+   * The feature it hangs off. `undefined` is the third value and not a tidier
+   * `null`: it means the link was never resolved — no hierarchy, or a read that
+   * failed — where `null` means the tracker says there is no parent.
+   */
+  parent?: { number: number; title: string } | null;
+  /** The last sweep that saw this item in the live set. Null on a row only ever seen frozen. */
+  lastReadAt: string | null;
 }
 
 interface TrackerItemRow {
@@ -157,6 +318,13 @@ interface TrackerItemRow {
   changed_at: string;
   first_seen_at: string;
   updated_at: string;
+  tracking: string | null;
+  work_item_state: string | null;
+  issue_type: string | null;
+  parent_number: number | null;
+  parent_title: string | null;
+  parent_known: number | null;
+  last_read_at: string | null;
 }
 
 function rowToTicket(r: TrackerItemRow): MirroredTicket {
@@ -169,7 +337,19 @@ function rowToTicket(r: TrackerItemRow): MirroredTicket {
     createdAt: r.added_at,
     changedAt: r.changed_at,
     firstSeenAt: r.first_seen_at,
+    // A row written before these columns existed reads `null`, and `live` is the
+    // right thing to say about it: it was in the open set when it was last swept,
+    // and the next sweep decides the question properly either way.
+    tracking: r.tracking === 'frozen' ? 'frozen' : 'live',
+    workItemState: r.work_item_state,
+    issueType: r.issue_type,
+    ...(r.parent_known === 1 ? { parent: parentOf(r) } : {}),
+    lastReadAt: r.last_read_at,
   };
+}
+
+function parentOf(r: TrackerItemRow): { number: number; title: string } | null {
+  return r.parent_number === null ? null : { number: r.parent_number, title: r.parent_title ?? `#${r.parent_number}` };
 }
 
 function parseLabels(raw: string): string[] {

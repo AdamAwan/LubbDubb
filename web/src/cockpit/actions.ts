@@ -39,7 +39,7 @@ export type ConsolePanel = 'findings' | 'faults' | 'output' | 'launch' | { ask: 
  * A selected goal outranks all three, so this says where the nav last was, never
  * what is drawn.
  */
-export type ConsoleTab = 'overview' | 'backlog' | 'work' | 'tickets';
+export type ConsoleTab = 'overview' | 'work' | 'tickets';
 
 /**
  * Every mutation the cockpit can perform, pre-bound and refetching on completion.
@@ -146,9 +146,13 @@ export interface CockpitActions {
    * than a `useState` in the panel — because the whole point of the tab is that
    * "unclosed watched items" is a link someone can send.
    */
-  setTicketQuery(next: Partial<Pick<Place, 'ticketWatch' | 'ticketState' | 'ticketOrder'>>): void;
+  setTicketQuery(
+    next: Partial<
+      Pick<Place, 'ticketWatch' | 'ticketTracking' | 'ticketState' | 'ticketFeature' | 'ticketGroup' | 'ticketOrder'>
+    >,
+  ): void;
   /**
-   * Fold a backlog feature's children away, or open them again. Every feature is
+   * Fold a feature's children away in the tickets tab, or open them again. Every feature is
    * open until this closes one, so the argument is the state being *set* rather
    * than a bare toggle — the caller already knows which way the chevron points,
    * and a toggle read from stale props would fight a fold restored from the URL.

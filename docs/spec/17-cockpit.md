@@ -34,7 +34,7 @@ What keeps that from swallowing the cockpit's rules is the split on **behaviour 
   helpers. The escalation 409 rules, the recovery verdicts and the decline-needs-a-note refusal get
   exactly one implementation, and the console **embeds** them rather than redrawing them.
 - **Drawn** (`web/src/console/`) — anything that draws over data it was handed: the rail rows, the
-  goal page's sections, the overview's cards, the backlog's groups, the top bar's readings.
+  goal page's sections, the overview's cards, the tickets table's rows, the top bar's readings.
 
 `test/console.test.ts` pins the embedding from the sharp end: a goal page answering an ask must render
 the shared card, not a compact copy of it, because a copy is how one surface ends up offering free
@@ -99,7 +99,7 @@ Four surfaces and one shell.
 │ ┌───────────┐ │                                                        │
 │ │ Blocking  │ │                                                        │
 │ │ escalation│ │             the situation area                         │
-│ │ plan      │ │    (a tab — overview, backlog, work — or a goal page)  │
+│ │ plan      │ │    (a tab — overview, work, tickets — or a goal page)  │
 │ │ permission│ │                                                        │
 │ │ Yours     │ │                                                        │
 │ │ bench     │ │                                                        │
@@ -119,9 +119,11 @@ outranks the nav's tab, whichever it is. Selecting a goal is what a queue row do
 move the nav — so with a tab winning, clicking an ask would land the operator on a triage list, or on
 the record, instead of on the ask.
 
-The **nav** is three tabs: Overview, Backlog (carrying the unwatched count — the one number that says
-whether triage is worth opening, read off the same `backlogGroups` the view draws so the count and
-the rows cannot differ), and Work. Every button clears _both_ pieces of state, because a nav click
+The **nav** is three tabs: Overview, Work, and Tickets — the last carrying the untriaged count, the
+one number that says whether triage is worth opening. It is `untriagedCount` (`web/src/worldBuckets.ts`)
+over the same watch bucket the tab's Unwatched filter uses, so the number on the button and the rows
+behind it cannot differ, and it is hidden at zero because a badge that always shows is one nobody
+reads. Every button clears _both_ pieces of state, because a nav click
 means "go here" and either half left standing would land somewhere else.
 
 **The nav sits in the top bar** (`TopBar.tsx`), not at the head of the situation area. The situation
@@ -185,22 +187,22 @@ writes one back.
 panel in front, the open drawer, the plan sheet, the retrospective, the notepad, and the three top-bar
 modals — and nothing that answers _what is true_. It replaced ten independent `useState`s in
 `useCockpit`, and one record rather than ten is the load-bearing part: a drawer opened over a goal
-page on the backlog tab is **one** place, and stepping back out of it has to restore all three at
+page on the tickets tab is **one** place, and stepping back out of it has to restore all three at
 once.
 
-| Parameter                            | Carries                                              |
-| ------------------------------------ | ---------------------------------------------------- |
-| `tab`                                | `backlog` / `work` / `tickets`; the overview is the absent value |
-| `goal`                               | the open goal page, as `issue:<n>`                   |
-| `panel`                              | `findings` / `faults` / `output` / `launch`          |
-| `ask`                                | the queue row a `{ ask }` panel is showing           |
-| `agent`                              | the open drawer's agent                              |
-| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad       |
-| `settings` / `spend` / `reliability` | the three top-bar modals                             |
-| `collapsed`                          | the backlog features folded away, as `3,12`          |
-| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched` / `ignored`; `any` is the absent value |
-| `state`                              | its tracker axis: `open` / `closed`; `any` is the absent value |
-| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value |
+| Parameter                            | Carries                                                                                                                           |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `tab`                                | `work` / `tickets`; the overview is the absent value. `backlog` is an alias for `tickets`, so links to the deleted tab still land |
+| `goal`                               | the open goal page, as `issue:<n>`                                                                                                |
+| `panel`                              | `findings` / `faults` / `output` / `launch`                                                                                       |
+| `ask`                                | the queue row a `{ ask }` panel is showing                                                                                        |
+| `agent`                              | the open drawer's agent                                                                                                           |
+| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                    |
+| `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                          |
+| `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                 |
+| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched` / `ignored`; `any` is the absent value                                    |
+| `state`                              | its tracker axis: `open` / `closed`; `any` is the absent value                                                                    |
+| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                               |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
@@ -405,7 +407,7 @@ Watch, the conclusion, raising a bug, the ticket, and ending the run.
 - **The watch toggle writes both tags.** `setIssueWatched` tags the watch label and clears the ignore
   label, or the reverse — so the title names both. Saying only "remove the watch label" understates a
   click that also tags the goal ignored, and the difference is visible: the goal lands in the
-  backlog's Ignored group rather than back in Unwatched.
+  tickets tab's Ignored filter rather than back in Unwatched.
 - **Three conclusion controls, not two.** `Mark done` / `Unfinish` writes or withdraws `done`. **More
   work** opens `InstructionModal` and writes what the operator wants done next, in words — it is a
   third control rather than the finished toggle's other end because what it writes is not the opposite
@@ -630,7 +632,7 @@ vanishes when quiet is indistinguishable from one that broke.
   refs' reason. The control is drawn here as well as in the drawer and the rail because it is the
   answer to the question the row raises where the row is: an operator who can see the park and has to
   go looking for the way out of it is one who leaves the slot held.
-  **The name is the row's control and the refs sit beside it** (`cn-refs`), the backlog row's shape and
+  **The name is the row's control and the refs sit beside it** (`cn-refs`), the tickets row's shape and
   for its reason: a link inside a button is a second destination for one click. A row draws **two**
   refs where there are two — the origin it was dispatched at (`pr:412`, `issue:212:part:x`), and, when
   that origin is a pull request some ticket owns, the goal behind it, resolved through `goalOfPr`. The
@@ -644,7 +646,7 @@ vanishes when quiet is indistinguishable from one that broke.
   about it. Anything else would let a chip say "you" with nothing to answer.
 - **Pull requests** — every open PR with its court chip, its CI ladder, and the watch/ignore toggle.
   An **ignored** PR stays in the list, with its health, and is drawn **spent** — the same dimming a
-  closed PR and an ignored backlog goal take, off `attention.status === 'ignored'` rather than a
+  closed PR and an ignored goal take, off `attention.status === 'ignored'` rather than a
   second reading of the labels. The chip alone left the one row nothing will happen on sitting at the
   same weight as the ones being worked, which is the whole thing the tag is meant to say.
   A PR is joined to its goal through **`goalOfPr`** — the server's own three-way match (a part's
@@ -701,102 +703,6 @@ since stopped honouring it.
 The demo backend holds its own clock and reports the claim two beats after load, so the ending — the
 entry leaving with nobody having pressed anything — is visible in the Pages build.
 
-## The backlog
-
-A nav view, opened rather than always present, because triage is periodic — **nothing in it blocks an
-agent**, which is the whole difference between this surface and the rail. Four groups, every open item
-in exactly one of them:
-
-| Group             | Holds                                                   |
-| ----------------- | ------------------------------------------------------- |
-| Watched           | what the harness will pick up                           |
-| Blocked at intake | an `unclear` assay, quoted, with the override beside it |
-| Unwatched         | the triage list, newest first                           |
-| Ignored           | tagged leave-alone, a tail, with un-ignore              |
-
-**Which items the harness will work is `watchBucket`'s answer** (`web/src/worldBuckets.ts`), read once
-here rather than re-derived from the labels — a second reading of the same tags is how two surfaces
-start disagreeing about what is watched. It carries the server's precedence: ignore wins, then watch,
-else the type default.
-
-**Intake is pulled _out_ of Watched rather than greyed inside it.** An `unclear` assay is the one
-intake reading that _stops dispatch_ ([06](06-issue-pickup.md)); among the watched rows it reads as a
-detail rather than as the thing holding all the work. An **ignored** item is never intake, whatever a
-stale verdict says: "leave this alone" is the operator's own instruction and outranks a reading about a
-goal nobody is going to work.
-
-**One pass and one assignment per item**, not four filters. An item matching two predicates would draw
-twice, with two toggles, and the second would be a different answer to the same question. Closed items
-are left out altogether — a closed ticket is neither watchable nor ignorable. Each group draws 25 rows
-and then states the remainder; a group with nothing in it is muted, never removed.
-
-**A row's name opens the goal's page**, through the same `selectGoal` a queue row and an overview row
-call: one way into a goal, from every surface that lists one. It is the **name** rather than the whole
-row, unlike the overview's, because a backlog row carries controls of its own and a button cannot hold
-them — which is also why the number is drawn plainly rather than through `refLink`, a link inside a
-button being a second destination for one click. The tracker's own page is a click further on, from the
-goal page's `Open ticket ↗`.
-
-**The row quotes and never parses.** The intake group prints the assayer's own sentence
-(`Assay: unclear — "…"`); every other group prints `pickup.reasons[0]`. The watch and ignore labels are
-filtered out of the chips a row shows: which group a row is filed under already states its watch state,
-and the toggle beside it states it again — a third copy is the noise that made the old flat world panel
-unreadable.
-
-**The override is `Override → workable`**, on intake rows alone, writing through `setIssueAssay`. A
-`workable` verdict blocks nothing, so a button on one would offer to change a reading that changes no
-behaviour.
-
-### Features are headings, not rows
-
-Within each group, rows are arranged under the feature they belong to by `groupByFeature`
-(`web/src/issueGroups.ts`), over the rows the group actually **draws** — a heading standing above the
-25-row cut would promise children that are in the remainder.
-
-**A container is a heading and never a row.** Nothing is ever dispatched at one, so listing a Feature
-among the items being triaged asks an operator to remember which is which on every read; drawing it
-above its children says it structurally. The heading carries the feature's own controls — its name
-opens its goal page, and its `WatchToggle` is the container's — and the work under it is indented to
-the fold gutter.
-
-Whether an item is a container is read from **`config.containerTypes`**, the operator's own policy,
-shipped on the state snapshot for this. Deliberately not `pickup.status === 'container'`: an ignored
-container reports `ignored` and a gate-off deployment reports something else again, so a
-verdict-based reading would move a Feature in and out of the heading position as its tags changed.
-
-`groupByFeature` returning **null is "draw the flat list"** — a GitHub or fake world has no tree, and
-inventing one heading over every issue would claim a hierarchy the tracker never had. The `untracked`
-group draws no heading at all; `orphans` draws a labelled one with no controls, because there is no
-item there to operate on. A feature the world holds only as some other item's `parent` — the ordinary
-case under a tag or assignee filter — draws as a plain heading that says `not in the filtered item
-list`, since there is nothing to open or tag.
-
-The heading states **both counts and only when they differ** (`groupProgress`): "3 children" above two
-rows reads as a row that failed to draw, and "2" above a feature with three hides one.
-
-**Every feature is open until the operator folds one.** The backlog's job is to show what is waiting,
-and a surface that hides it behind a click reports an empty board. A fold is `Place.collapsed`
-(`?collapsed=3,12`) rather than a `useState`, for the reason every piece of "where am I" state is:
-stepping back into the backlog has to restore the same folded features, and a shared link has to show
-what the sender was looking at. Collapsed rather than expanded is what is carried, so the default is
-the empty list and a bare URL; the list is deduplicated and sorted, so one set of folds has one
-spelling and cannot push a history entry that goes nowhere.
-
-**A container's watch toggle is live in both directions.** It was once disabled in the direction that
-would opt the item in, on the grounds that the harness would not keep that promise. It keeps it now:
-watching a Feature tags every item beneath it ([06](06-issue-pickup.md#watching-a-container-cascades)),
-which is what "work this feature" has always meant, and the button's title states the cascade with the
-number of children it will reach. The container is still never dispatched at — that is a fact about
-dispatch, and the row under it is where the work is.
-
-A deployment with the gate off (`labelPrefix: ''`) is still refused in both directions: there is no tag
-to write either way, and a button that writes nothing is worse than one that says why.
-
-Assignment filtering is a server-side concern (`userId` for Azure; GitHub has no issue
-assignee filter) and is deliberately not a cockpit one — the view shows whatever the tracker returned.
-The same asymmetry reaches [the tickets tab](#the-tickets-tab), which mirrors exactly the population
-each provider's own listing returns.
-
 ## The work tab
 
 The durable record: `WorkTreePanel`, the shared component, drawn as the third nav destination. It is
@@ -821,37 +727,154 @@ It is a **lens**: nothing here, and nothing in the dispatcher, decides anything 
 ## The tickets tab
 
 Every item the tracker's assignment filter has returned since the harness first swept — worked or
-not, open or closed — as the fourth nav destination. Where the [backlog](#the-backlog-tab) is triage
-over the open world and the [work tab](#the-work-tab) is the record of what the harness *did*, this
-is the record of what it was **asked** to do. It is drawn as a table because it is read as one: the
-tracker id, the ticket, the two readings, the cost and the date, each row taking the list's tracks by
-subgrid so the columns line up however long one title runs.
+not, live or frozen — and, since the backlog was folded into it (#351), **the one surface triage
+happens on**. Where the [work tab](#the-work-tab) is the record of what the harness _did_, this is
+what it was **asked** to do, and what you are asking it to do next. It is drawn as a table because it
+is read as one: the tracker id, the ticket, the readings, the cost and the date, each row taking the
+list's tracks by subgrid so the columns line up however long one title runs.
 
-It is a **lens**, and it is **fetched on open and per page rather than polled** (`/api/tickets`), for
-the work tab's reason: the list is all-time and only grows, and `/api/state` comes round every couple
-of seconds. → [16](16-http-api.md#get-apitickets)
+**Why one surface and not two.** The backlog was open items grouped by watch bucket; this tab was the
+same items plus the closed ones, filtered by the same bucket. Two surfaces that can be told different
+things about one item is the drift `src/watchLabels.ts` exists to prevent, one level up — so the
+backlog is deleted and every part of it is named a destination here rather than assumed to survive.
 
-### Two axes, because they are two questions
+| The backlog had                                | It is now                                                  |
+| ---------------------------------------------- | ---------------------------------------------------------- |
+| four groups (watched/intake/unwatched/ignored) | the **Watch** filter's four values                         |
+| intake pulled out of Watched                   | the **intake call-out** above the list                     |
+| `Override → workable` on intake rows           | the same button, the same call, on the same rows           |
+| features as headings, folds on `Place`         | `group=feature`, the same `collapsed` field                |
+| the name opening the goal page                 | unchanged — `selectGoal`, refs beside it                   |
+| 25 rows then "…and 31 more"                    | the keyset cursor and infinite scroll this tab already had |
+| the nav's unwatched count                      | the same number on the Tickets button (`untriagedCount`)   |
+
+`?tab=backlog` **resolves to this tab** rather than falling through to the overview, which is what an
+unknown tab does: every bookmark and shared link to it would otherwise land somewhere else with
+nothing saying so. One alias entry in `place.ts`; a stranded link is a bug report.
+
+It is **fetched on open and per page rather than polled** (`/api/tickets`), for the work tab's reason:
+the list is all-time and only grows, and `/api/state` comes round every couple of seconds.
+→ [16](16-http-api.md#get-apitickets)
+
+### The mirror is the list; the world is the overlay
+
+Rows come from the **local mirror**, so the tab opens instantly and a provider that is briefly down is
+the same picture as one that is up. Everything that is a _live reading_ — the pickup reasons, the
+assay, the current labels — is read off the **state snapshot the cockpit already has**, and that split
+is the whole of the design: those are the server's own sentences, and a second derivation of them here
+would be a second opinion about a decision made elsewhere.
+
+**Frozen is not deleted.** An item that has left the tracker's open set is marked `frozen` by the
+sweep: it keeps every field it was last seen with and stops being enriched from the world. That is why
+the head counts **live** and **kept** as two numbers — a work surface's population and the size of the
+history under it are different facts, and one shown as the other would report a history that shrinks
+every time something closes. → [14](14-persistence.md#the-ticket-mirror)
+
+### Three axes, because they are three questions
 
 **Watch is the harness's reading** — the `${labelPrefix}-watch` / `-ignore` pair, resolved through
 `watchBucketOf` (`src/watchLabels.ts`), the same precedence the dispatcher's gate resolves through.
 It is **three-valued**: an item nobody has opted in is `unwatched`, one tagged leave-alone is
-`ignored`, and folding the two would report a triage nobody made. **State is the tracker's own word**,
-open or closed.
+`ignored`, and folding the two would report a triage nobody made.
+
+**Tracking is what the harness is doing about it** — live or frozen. **State is the tracker's own
+word**, and it is a _second tier_ rather than a value on the first: a provider with native states
+closes an item several ways, and `Closed` and `Removed` are both frozen and are not the same fact.
+
+The state list is **discovered from the mirror with counts, never hardcoded**. A fixed Azure ladder is
+wrong on the first customised process template, and silently: the missing state's items simply stop
+being reachable by any filter. Where the provider has no native states — GitHub, the fake — the tier
+is **not drawn at all**, because a control offering states the tracker cannot produce is one that
+always returns nothing. A `▲` marks the states `pickupStates` lets through, read from config rather
+than inferred: _why is Ready worked and New not_ is the most-asked question about an Azure deployment,
+answered where the states are.
+
+Facets are counted over the **whole mirror**, not the filtered set. A facet counted after its own
+filter shows `1` beside whichever value is selected and nothing beside the rest — a control that
+erases its own alternatives the moment it is used.
 
 The harness's own outcome for a goal — `delivered`, `fell short`, `concluded`, `abandoned` — rides on
-the row as a chip and is deliberately **not a third filter**: it answers a different question from
-either axis, and a third control makes the filter row a cube. It is folded to one word on the server
-(`src/tickets/outcomes.ts`) from `resolveIssueConclusion` plus the delivery and run rows, because a
-precedence rule re-implemented in a component is a second opinion about it.
+the row as a chip and is deliberately **not a filter**: it answers a different question from any axis.
+It is folded to one word on the server (`src/tickets/outcomes.ts`) from `resolveIssueConclusion` plus
+the delivery and run rows, because a precedence rule re-implemented in a component is a second opinion
+about it.
+
+### Intake is pulled out, never greyed inside the list
+
+An `unclear` assay is the one intake reading that **stops dispatch** ([06](06-issue-pickup.md)). Among
+a page of rows it reads as a detail rather than as the thing holding all the work, so it is drawn as a
+call-out **above** the list: what is held, the assayer's own sentence quoted whole, and
+`Override → workable` beside it. A lamp marks the same rows in the table.
+
+The sentence is quoted and never reworded — it is the only account of why the goal is held, so a
+paraphrase would be the only account there is, and wrong. An **ignored** item is never intake,
+whatever a stale verdict says: "leave this alone" is the operator's own instruction and outranks a
+reading about a goal nobody is going to work.
+
+Unlike the group it replaces, the call-out is **absent when nothing is held** rather than drawn empty.
+A group that vanishes when quiet reads as one that broke; an exception nobody has is not a heading.
+
+### Two controls, and no more
+
+This tab used to state that nothing in it changed the world. That was true of a record and is false of
+a work surface, and the sentence changed with the code rather than after it. What it says now is
+narrower and holds: **the watch switch and the intake override, and nothing else.**
+
+- Both write through calls that already existed — `POST /api/issues/:number/watch` and
+  `setIssueAssay` — so the merged surface introduces no new way to change the world.
+- The switch is **three-valued to display and two-valued to write**: `unwatched` is a state you can
+  leave and never one you can select.
+- **A container cascades, and the heading says so before the click** — `cascadeNote` states the
+  number it will reach, because a click that writes eight tags must say eight. A container is still
+  never dispatched at; the rows under it are the work.
+- It is **inert on a frozen row** (nothing in the tracker left to tag), on a row the world no longer
+  holds, and on a deployment with the gate off (`labelPrefix: ''`) — each with a title saying which.
+  A button that writes nothing is worse than one that says why.
+
+### Features are headings, not rows
+
+Under `group=feature` — the default — rows are arranged under the feature they hang off by
+`featureBlocks` (`web/src/issueGroups.ts`), and the heading carries the feature's own controls.
+**A container is a heading and never a row**: nothing is ever dispatched at one, so listing it among
+the items being triaged asks an operator to remember which is which on every read.
+
+The arrangement reads the **mirror's own parent columns**, not the world's relations, and that is what
+lets a frozen row keep its heading: its feature is the one it was last seen under, where a
+world-shaped grouping would drop every closed item into one nameless pile. The three values of
+`parent` stay apart all the way to the screen — a feature, a resolved `null` (an orphan, which gets a
+heading saying so), and an **unresolved** absence, which draws flush with no heading at all. Filing
+the third under "no feature" would accuse a GitHub issue of missing something its tracker never had.
+
+`group=flat` draws one list with the feature as a **column** instead, which is also what a tracker
+with no hierarchy gets. The column is absent under grouping rather than repeated: the heading already
+says which feature a row is under, and a third copy is the noise that made the old flat world panel
+unreadable.
+
+**Every feature is open until the operator folds one.** The tab's job is to show what is waiting, and a
+surface that hides it behind a click reports an empty board. A fold is `Place.collapsed`
+(`?collapsed=3,12`) rather than a `useState`: stepping back into the tab has to restore the same folds,
+and a shared link has to show what the sender was looking at. Collapsed rather than expanded is what is
+carried, so the default is the empty list and a bare URL; the list is deduplicated and sorted, so one
+set of folds has one spelling and cannot push a history entry that goes nowhere.
+
+### "Why is nothing on this?"
+
+A row that is watched and has no agent and no PR carries a marker that opens the dispatcher's own
+account of what it would do next cycle — `isIssuePickupEligible`'s `reasons[]` and the funnel's route,
+**quoted verbatim**. The lens derives nothing: a surface that reasoned about pickup would be a second
+dispatcher, and the two would drift the first time a gate changed.
+
+It **expands** rather than living only in a `title`, because a tooltip nobody can select text out of is
+where a stack trace goes to die. A frozen row has no reasons at all — eligibility is a reading of the
+live world.
 
 ### Ordering, and the two things the mirror does not know
 
 The default ordering is the **tracker id descending**, which is arrival order: an id is
-auto-incremental, so there is no date to parse and no timezone to get wrong. The other is **cost**,
-and both live on the **column headers alone** — two controls for one job is two places to leave
-disagreeing, so the filter row carries the axes and a *loaded of total* reading instead. An infinite
-list with no total says nothing about whether a reader is near the end.
+auto-incremental, so there is no date to parse and no timezone to get wrong. The others are **cost**
+and **last change**, and all of them live on the **column headers alone** — two controls for one job is
+two places to leave disagreeing, so the filter row carries the axes and a _loaded of total_ reading
+instead. An infinite list with no total says nothing about whether a reader is near the end.
 
 Neither the watch bucket nor the cost is a column on the mirror, and that is deliberate: the bucket is
 a function of the operator's label prefix, and cost is `buildSpendGoals`' answer, which moves every
@@ -859,6 +882,20 @@ pulse. Either as a stored column would be a stale copy of a verdict that changes
 So the mirror hands back its rows and one pure function (`src/tickets/ticketList.ts`) does the
 filtering, ordering and paging. A ticket the fleet never ran on draws an em dash rather than `$0.00` —
 never worked and worked for free are different facts.
+
+### The feature colour
+
+Each feature draws in a hue from a **fixed twelve-slot ladder**, assigned least-used-first the first
+time it is seen and then persisted (`feature_colors`, [14](14-persistence.md)). Persisted because the
+whole value is that the same feature is the same colour tomorrow; a _ladder_ rather than a random hue
+per feature because a random one has two failure modes nothing catches — one that disappears against
+the panel, and two features that land close enough to read as one. Past twelve the ladder repeats,
+which is honest: a legend with forty colours is not a legend anyone reads.
+
+The wire carries the **slot, not a colour**: the palette belongs to the stylesheet, and a hex on the
+wire is one no theme could reach. The number and the name ride on every chip and heading too, so the
+column works for a colour-blind reader and in a screenshot pasted into a ticket. The legend doubles as
+the feature filter and is a `Place` field.
 
 ### The floor, and the foot of the list
 
@@ -868,18 +905,17 @@ intersect and the list would simply stop. The cursor is a **keyset** rather than
 landing mid-scroll cannot make a row appear twice or not at all.
 
 The **foot is a real state, not an absence**: a list that just stops reads as one that failed to load.
-Reaching it names the floor — *"start of history — 14 Jul 2026, a month before the first scan"* —
+Reaching it names the floor — _"start of history — 14 Jul 2026, a month before the first scan"_ —
 because the floor is a cap and this codebase ships no silent ones. While the first sweep is still
 filling, the foot says so, since an empty list mid-backfill and an empty tracker are the same picture
 and different facts. → [14](14-persistence.md#the-ticket-mirror)
 
-### What it is not
+### What it is still not
 
-No mutation: no un-dismiss, no re-open, no verdict toggle, and no watch toggle — a history you can
-edit from is not a history, and the backlog is where triage happens. The scroll offset is deliberately
-**not** on `Place` either, unlike the two axes and the ordering: a URL that restored an offset into a
-list that has since grown lands somewhere else entirely, so Back returns to the filter and the list
-re-reads its first page.
+No un-dismiss, no re-open, no verdict toggle. The two controls above are the whole of what this
+surface writes, and everything else on a row is a reading. The scroll offset is deliberately **not** on
+`Place` either, unlike every filter: a URL that restored an offset into a list that has since grown
+lands somewhere else entirely, so Back returns to the filter and the list re-reads its first page.
 
 ## The top bar and the panels
 
@@ -1650,7 +1686,7 @@ stylesheet.
 
 **One rule a call site still has to keep: a reference never goes inside a button.** A link nested in a
 control is a second destination for one click, so a row that carries both draws its name as the control
-and the refs beside it, in a `cn-refs` group — the fleet card, the rack and the backlog row all take
+and the refs beside it, in a `cn-refs` group — the fleet card, the rack and the tickets row all take
 that shape. It is pinned structurally, because nesting one reads fine and renders fine.
 
 **The provider is `RefLinks`, mounted at the shell** (`App.tsx`), carrying `refUrls`, the way onto a
@@ -1665,7 +1701,7 @@ Nothing new reaches for them; new code draws a reference with `<Ref>`.
 
 **Every reference the UI shows is routed through one of these (#199), with no exceptions.** So the goal
 page's pull requests and its plan waves, the overview's fleet, rack, up-next and world-signal rows, the
-backlog's rows, the findings panel, escalations, the plan sheet, the recovery cards, the agent drawer,
+tickets rows, the findings panel, escalations, the plan sheet, the recovery cards, the agent drawer,
 the spend and reliability tables and the work-tree panel all draw links wherever there is somewhere to
 go.
 
@@ -1774,7 +1810,7 @@ disagree with what the dispatcher does:
   reasons are in the `title`. Four of the seven take a tone (`courtTone`); the rest print plain —
   `ignored` says which arm it is in the chip and dims its whole row instead, since it is the one arm
   that is a standing instruction rather than a reading of where the work got to.
-- **Issue pickup** — `issuePickupStatus(issue, ctx)`, attached per issue. The backlog draws its first
+- **Issue pickup** — `issuePickupStatus(issue, ctx)`, attached per issue. The tickets tab draws its first
   reason as the row's sentence, and its `container` arm is what disables a watch toggle.
 
 **Nothing is derived in the browser that the server decided.** `attention.status`, `ciVerdict`,
@@ -1799,7 +1835,7 @@ from a reader that broke, and because each of these is a decision rather than an
   `liveOverlapCount` is folded on the view model. [12](12-artifacts-and-files.md#file-overlap-detection)
   states this from the detector's side; it is not restated here.
 - **`groupByFeature` (`web/src/issueGroups.ts`) is drawn by nothing.** The Azure work-item tree arranged
-  the old flat world panel's rows; the backlog groups by watch state instead, which is the axis triage
+  the old flat world panel's rows; the tickets tab filters by watch state instead, which is the axis triage
   acts on. The fold is pure and tested (`test/issueGroups.test.ts`) and is what a hierarchy view would
   be built from.
 - **`reorderUpNext`, `dismissHumanTask` and `fetchWorkSubtree` have no caller either.** The overview's
@@ -1847,7 +1883,7 @@ them teaches an operator that the other six are a bug on the day they first appe
 stated in a comment above the `issues` array, and the arithmetic around it has to hold as well: the cap
 is 3 with two agents live, so exactly one goal is `eligible` and the rest of the ready ones are
 `blocked` — a world with six eligible goals under a cap of three is one the dispatcher could not have
-produced. Twelve of the fourteen are reachable by clicking, through the backlog's four groups; `done`
+produced. Twelve of the fourteen are reachable by clicking, through the tickets tab's watch filter; `done`
 and `retained` are carried without being listed anywhere, because no surface lists a closed goal — both
 are still readings the wire ships and the goal page draws.
 
@@ -1898,7 +1934,7 @@ button and the recovery hold not, the ask drawn above the plan, a goal with no a
 goal page answering through the shared card, a held part quoting the reconciler, a retired plan drawing
 what it proposed rather than only saying it has no live parts, an HTML ticket drawn as HTML, a goal with
 no measured spend drawing no `$0.00`, the overview's five cards, an empty rack still drawing, the
-backlog's four groups, its rows being ways into their goals and its disabled container toggle, the fault
+tickets tab's intake call-out, its rows being ways into their goals and its container cascade, the fault
 log keeping its clear at zero, a panel's two ways out, the demo gate on injection, the precedence
 between a goal and whichever tab the nav is on, all three tabs appearing in the nav (a destination added
 to `ConsoleTab` and forgotten there is a view nothing can reach), the work graph drawn by its own tab

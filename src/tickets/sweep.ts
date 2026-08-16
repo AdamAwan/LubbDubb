@@ -1,6 +1,7 @@
 import type { ErrorRecorder } from '../errorLog.js';
+import type { LiveTicketFacts } from '../store/tickets.js';
 import type { Store } from '../store/store.js';
-import type { TrackerItem } from '../types.js';
+import type { Issue, TrackerItem } from '../types.js';
 
 /** How far back the very first sweep reaches. One month, and it is never re-read. */
 const TICKET_BACKFILL_MS = 30 * 24 * 60 * 60 * 1000;
@@ -90,7 +91,7 @@ export class TicketSweep {
       // Recorded even when the tracker had nothing to give: a completed sweep that
       // found nothing and a sweep that has not run are different states, and only
       // the mark tells them apart.
-      store.recordSweep(askedFrom, items);
+      store.recordSweep(askedFrom, items, liveFacts(store.getWorldBaseline()?.issues ?? []));
     } catch (err) {
       errors?.record({
         source: 'provider',
@@ -98,4 +99,40 @@ export class TicketSweep {
       });
     }
   }
+}
+
+/**
+ * The world's own reading of the items that are still live, for the mirror to
+ * overlay onto the tracker's five fields.
+ *
+ * Taken from the snapshot the cycle has already built rather than fetched here.
+ * The hierarchy in particular costs two batched provider reads per pulse, and
+ * paying for it a second time to fill a record would double it — while the two
+ * copies could still disagree, which is worse than either.
+ *
+ * The **open set is the definition of live**, and "no longer in the open set" is
+ * read the two ways the providers disagree about — gone from the list, or still
+ * listed with a closed state. Azure keeps reporting a closed work item; GitHub's
+ * issues provider fetches open issues only, so a closed one simply stops appearing.
+ * Reading only the first would leave every Azure item live forever; reading only
+ * the second never fires on GitHub. It is the same pair of readings, for the same
+ * reason, that the delivery close-out sweep takes.
+ * → `docs/spec/13-jobs-and-findings.md`
+ */
+function liveFacts(issues: readonly Issue[]): LiveTicketFacts[] {
+  return issues
+    .filter((issue) => issue.state === 'open')
+    .map((issue) => ({
+      number: issue.number,
+      labels: issue.labels,
+      workItemState: issue.workItemState ?? null,
+      issueType: issue.issueType ?? null,
+      // Spread rather than assigned, so an *unresolved* parent stays `undefined`
+      // and does not overwrite a link a previous sweep managed to read.
+      ...(issue.parent === undefined ? {} : { parent: issue.parent === null ? null : relative(issue.parent) }),
+    }));
+}
+
+function relative(parent: { number: number; title: string }): { number: number; title: string } {
+  return { number: parent.number, title: parent.title };
 }

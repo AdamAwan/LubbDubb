@@ -755,15 +755,40 @@ CREATE TABLE IF NOT EXISTS validation_resources (
 -- two differ by exactly the backfill: on the first sweep every row is first seen at
 -- once.
 CREATE TABLE IF NOT EXISTS tracker_items (
-  number        INTEGER PRIMARY KEY,
-  title         TEXT NOT NULL,
-  labels        TEXT NOT NULL,     -- JSON array
-  state         TEXT NOT NULL,     -- 'open' | 'closed', the tracker's word
-  url           TEXT,
-  added_at      TEXT NOT NULL,     -- the tracker's created date; the default ordering
-  changed_at    TEXT NOT NULL,     -- the tracker's last-modified; the sweep's high-water mark
-  first_seen_at TEXT NOT NULL,     -- frozen
-  updated_at    TEXT NOT NULL
+  number          INTEGER PRIMARY KEY,
+  title           TEXT NOT NULL,
+  labels          TEXT NOT NULL,     -- JSON array
+  state           TEXT NOT NULL,     -- 'open' | 'closed', the tracker's word
+  url             TEXT,
+  added_at        TEXT NOT NULL,     -- the tracker's created date; the default ordering
+  changed_at      TEXT NOT NULL,     -- the tracker's last-modified; the sweep's high-water mark
+  first_seen_at   TEXT NOT NULL,     -- frozen
+  updated_at      TEXT NOT NULL,
+  -- 'live' | 'frozen'. Frozen is an item that has left the tracker's open set: it
+  -- keeps every field it was last seen with and is no longer enriched from the
+  -- world. Not a second copy of state -- a provider with native states can close
+  -- an item several ways, and this says what the *harness* does about it.
+  tracking        TEXT NOT NULL DEFAULT 'live',
+  work_item_state TEXT,              -- the provider's own word (Azure); null where there is none
+  issue_type      TEXT,              -- 'Feature' / 'Task' / …; null on a flat tracker
+  -- The hierarchy parent, last seen. Two columns and a flag rather than one
+  -- nullable id, because a null id would collapse "no parent" into "we could not
+  -- read the parent", which the provider is careful to keep apart.
+  parent_number   INTEGER,
+  parent_title    TEXT,
+  parent_known    INTEGER NOT NULL DEFAULT 0,  -- 0 = never resolved, 1 = resolved (parent may still be null)
+  last_read_at    TEXT               -- the last sweep that saw this item in the live set
+);
+
+-- Which colour each feature is drawn in, as a slot on a fixed ladder rather than a
+-- hex string: the palette belongs to the stylesheet, and a stored colour would be a
+-- second opinion about it that no theme change could reach. Assigned
+-- least-used-first on first sight and then never moved — the whole value of the
+-- column is that the same feature is the same colour tomorrow.
+CREATE TABLE IF NOT EXISTS feature_colors (
+  number      INTEGER PRIMARY KEY,
+  slot        INTEGER NOT NULL,
+  assigned_at TEXT NOT NULL
 );
 
 -- The sweep's own bookkeeping: one row, id 1. anchor_at is one month before the

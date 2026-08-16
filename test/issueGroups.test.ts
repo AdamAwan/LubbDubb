@@ -1,148 +1,114 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { groupByFeature, groupProgress } from '../web/src/issueGroups.js';
-import type { Issue, IssueRelative } from '../web/src/types.js';
+import { cascadeNote, featureBlocks, isContainerType } from '../web/src/issueGroups.js';
+import type { Issue, TicketRow } from '../web/src/types.js';
 
 /**
- * The World panel's grouping, tested at the same seam the panel calls it — pure
- * over already-filtered rows, so a tab's narrowing is the caller's business and
- * every case here is about arrangement alone.
+ * The tickets tab's arrangement, tested at the same seam the panel calls it — pure
+ * over already-filtered rows, so the filters are the caller's business and every
+ * case here is about layout alone.
+ *
+ * It groups the **mirror's** rows off their own parent columns, which is what lets
+ * a frozen row keep its heading. The three values of `parent` are the whole subject:
+ * a feature, a resolved `null`, and an unresolved absence, which must never be read
+ * as each other.
  */
 
-function issue(over: Partial<Issue> = {}): Issue {
+function row(over: Partial<TicketRow> & Pick<TicketRow, 'number'>): TicketRow {
   return {
-    id: `i${over.number ?? 1}`,
-    number: 1,
-    title: 'X',
-    body: '',
-    labels: [],
+    title: `Ticket ${over.number}`,
     state: 'open',
-    linkedPrNumber: null,
-    pickup: { eligible: true, status: 'eligible', reasons: [] },
-    conclusion: { verdict: 'undeclared', by: null, note: '', at: null },
-    shortfall: null,
-    delivery: null,
-    assay: null,
-    retrospective: null,
-    scratchpad: null,
-    instructions: [],
+    watch: 'watched',
+    labels: [],
+    costUsd: null,
+    outcome: null,
+    addedAt: '2026-08-01T00:00:00.000Z',
+    changedAt: '2026-08-01T00:00:00.000Z',
+    tracking: 'live',
+    workItemState: null,
+    issueType: null,
+    featureSlot: null,
     ...over,
-  } as Issue;
+  };
 }
 
-function feature(over: Partial<IssueRelative> = {}): IssueRelative {
-  return { number: 812, title: 'Checkout', issueType: 'Feature', workItemState: 'Active', state: 'open', ...over };
-}
+const checkout = { number: 812, title: 'Checkout' };
 
-const isContainer = (i: Issue): boolean => i.pickup?.status === 'container';
-
-/** The whole GitHub path: no tree reported, so no structure is invented over it. */
-test('a tracker with no hierarchy is not grouped at all', () => {
-  assert.equal(groupByFeature([issue({ number: 1 }), issue({ number: 2 })], isContainer), null);
+test('a tracker that reports no hierarchy gets no headings at all', () => {
+  // The whole GitHub path: `parent` is absent on every row, so there is nothing to
+  // arrange and inventing one heading over the lot would claim a tree the tracker
+  // never had.
+  const blocks = featureBlocks([row({ number: 1 }), row({ number: 2 })]);
+  assert.equal(blocks.length, 1);
+  assert.equal(blocks[0]?.key, 'untracked');
+  assert.equal(blocks[0]?.feature, null);
+  assert.equal(blocks[0]?.rows.length, 2);
 });
 
-test('stories are grouped under the feature their parent names', () => {
-  const groups = groupByFeature(
-    [issue({ number: 845, parent: feature() }), issue({ number: 844, parent: feature() })],
-    isContainer,
-  );
-  assert.equal(groups?.length, 1);
-  assert.equal(groups?.[0]?.kind, 'feature');
-  assert.equal(groups?.[0]?.feature?.number, 812);
-  // Sorted, not in arrival order.
+test('rows are grouped under the feature their parent names, and keep the list order', () => {
+  const blocks = featureBlocks([
+    row({ number: 9, parent: checkout, featureSlot: 3 }),
+    row({ number: 4, parent: checkout, featureSlot: 3 }),
+  ]);
+  assert.equal(blocks.length, 1);
+  assert.deepEqual(blocks[0]?.feature, { number: 812, title: 'Checkout', slot: 3 });
+  // Not re-sorted: the ordering is the one the operator chose in the header.
   assert.deepEqual(
-    groups?.[0]?.issues.map((i) => i.number),
-    [844, 845],
+    blocks[0]?.rows.map((r) => r.number),
+    [9, 4],
   );
 });
 
-/**
- * The ordinary Azure case: a tag or assignee filter leaves the Feature out of the
- * item list, so the heading has to come from a child's own `parent` summary.
- */
-test('a feature absent from the world still heads its group', () => {
-  const groups = groupByFeature([issue({ number: 845, parent: feature() })], isContainer);
-  assert.equal(groups?.[0]?.feature?.title, 'Checkout');
-  assert.equal(groups?.[0]?.featureIssue, null);
+test('a frozen row keeps the feature it was last seen under', () => {
+  // The reason the arrangement reads the mirror's own columns rather than the live
+  // world: a closed item is no longer in the world, and a world-shaped grouping
+  // would drop every one of them into a single nameless pile.
+  const blocks = featureBlocks([row({ number: 7, parent: checkout, tracking: 'frozen' })]);
+  assert.equal(blocks[0]?.feature?.number, 812);
 });
 
-test('a container in the world heads its own group and is never a row in it', () => {
-  const container = issue({
-    number: 812,
-    title: 'Checkout',
-    issueType: 'Feature',
-    workItemState: 'Active',
-    children: [feature({ number: 843 }), feature({ number: 844 }), feature({ number: 845 })],
-    pickup: { eligible: false, status: 'container', reasons: ['Feature is a container'] },
-  });
-  const groups = groupByFeature([container, issue({ number: 845, parent: feature() })], isContainer);
-  assert.equal(groups?.length, 1);
-  assert.equal(groups?.[0]?.featureIssue?.number, 812);
+test('an unresolved parent is not an orphan', () => {
+  // `null` is the tracker saying "no parent"; absent is it having no opinion. Only
+  // the first is an orphan, and conflating them files a GitHub issue under a
+  // heading accusing it of a gap its tracker never had.
+  const blocks = featureBlocks([row({ number: 1, parent: null }), row({ number: 2 })]);
+  const kinds = blocks.map((b) => b.key);
+  assert.deepEqual(kinds, ['untracked', 'orphans']);
+  assert.equal(blocks.find((b) => b.key === 'orphans')?.orphans, true);
+  assert.equal(blocks.find((b) => b.key === 'untracked')?.orphans, false);
+});
+
+test('headless rows come first and the parentless group last', () => {
+  const blocks = featureBlocks([
+    row({ number: 1, parent: null }),
+    row({ number: 2, parent: checkout }),
+    row({ number: 3 }),
+  ]);
   assert.deepEqual(
-    groups?.[0]?.issues.map((i) => i.number),
-    [845],
+    blocks.map((b) => b.key),
+    ['untracked', 'f812', 'orphans'],
   );
 });
 
-/**
- * `null` is the tracker saying "no parent"; `undefined` is it having no opinion.
- * Conflating them files every GitHub issue under a heading accusing it of a gap.
- */
-test('untracked items are separated from genuine orphans', () => {
-  const groups = groupByFeature(
-    [
-      issue({ number: 903, issueType: 'Bug', parent: null }),
-      issue({ number: 208 }),
-      issue({ number: 845, parent: feature() }),
-    ],
-    isContainer,
-  );
-  assert.deepEqual(
-    groups?.map((g) => g.kind),
-    ['untracked', 'feature', 'orphans'],
-  );
-  assert.deepEqual(
-    groups?.[0]?.issues.map((i) => i.number),
-    [208],
-  );
-  assert.deepEqual(
-    groups?.[2]?.issues.map((i) => i.number),
-    [903],
-  );
+test('a container is read from the operator policy, case-insensitively', () => {
+  const feature = { issueType: 'Feature' } as Issue;
+  assert.equal(isContainerType(feature, ['feature', 'epic']), true);
+  assert.equal(isContainerType({ issueType: 'Task' } as Issue, ['Feature']), false);
+  // A flat tracker reports no type at all, so the gate is a no-op rather than a guess.
+  assert.equal(isContainerType({} as Issue, ['Feature']), false);
 });
 
-test('features are ordered by number, with the parentless group last', () => {
-  const groups = groupByFeature(
-    [
-      issue({ number: 901, parent: feature({ number: 820, title: 'Fraud' }) }),
-      issue({ number: 903, issueType: 'Bug', parent: null }),
-      issue({ number: 845, parent: feature() }),
-    ],
-    isContainer,
+test('watching a container says what else the click will tag', () => {
+  // The invariant is about the words, not the markup: a click that writes eight
+  // tags must say eight, or the operator finds out afterwards in the dispatch log.
+  const container = { issueType: 'Feature', children: [{}, {}, {}] } as unknown as Issue;
+  assert.equal(cascadeNote(container, ['Feature']), ' and its 3 child items');
+  assert.equal(
+    cascadeNote({ issueType: 'Feature', children: [{}] } as unknown as Issue, ['Feature']),
+    ' and its 1 child item',
   );
-  assert.deepEqual(
-    groups?.map((g) => g.feature?.number ?? g.kind),
-    [812, 820, 'orphans'],
-  );
-});
-
-/**
- * A heading reporting one number is wrong in a way an operator cannot see: the
- * rows under it are narrowed by the watch tab, the feature's own children are not.
- */
-test('groupProgress reports what is shown and what the feature really holds', () => {
-  const container = issue({
-    number: 812,
-    issueType: 'Feature',
-    children: [feature({ number: 843 }), feature({ number: 844 }), feature({ number: 845 })],
-    pickup: { eligible: false, status: 'container', reasons: ['Feature is a container'] },
-  });
-  const groups = groupByFeature([container, issue({ number: 845, parent: feature() })], isContainer);
-  assert.deepEqual(groupProgress(groups![0]!), { shown: 1, children: 3 });
-});
-
-/** Nothing is known about a feature the world doesn't hold, so nothing is claimed. */
-test('groupProgress reports no child count for a feature read off a relation', () => {
-  const groups = groupByFeature([issue({ number: 845, parent: feature() })], isContainer);
-  assert.deepEqual(groupProgress(groups![0]!), { shown: 1, children: null });
+  // An ordinary item cascades to nothing, and a container holding nothing has
+  // nothing to promise either.
+  assert.equal(cascadeNote({ issueType: 'Task', children: [{}] } as unknown as Issue, ['Feature']), '');
+  assert.equal(cascadeNote({ issueType: 'Feature' } as unknown as Issue, ['Feature']), '');
 });

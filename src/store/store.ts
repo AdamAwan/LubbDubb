@@ -27,7 +27,13 @@ import { ErrorStore } from './errors.js';
 import { GraphStore } from './graph.js';
 import { BugFilingStore } from './bugFilings.js';
 import { adoptFloorCompletions, FloorStore, FLOOR_COLUMNS } from './floor.js';
-import { TicketStore, type MirroredTicket, type TrackerSweepMark } from './tickets.js';
+import {
+  TicketStore,
+  TICKET_COLUMNS,
+  type LiveTicketFacts,
+  type MirroredTicket,
+  type TrackerSweepMark,
+} from './tickets.js';
 import type {
   Agent,
   AgentFile,
@@ -156,6 +162,7 @@ export class Store {
       JOB_SCHEDULE_COLUMNS,
       ISSUE_VERDICT_COLUMNS,
       FLOOR_COLUMNS,
+      TICKET_COLUMNS,
     ]) {
       ensureColumns(this.db, columns);
     }
@@ -851,8 +858,11 @@ export class Store {
   readTrackerSweep(): TrackerSweepMark | null {
     return this.tickets.readTrackerSweep();
   }
-  recordSweep(askedFrom: string, items: readonly TrackerItem[]): void {
-    this.tickets.recordSweep(askedFrom, items);
+  recordSweep(askedFrom: string, items: readonly TrackerItem[], live?: readonly LiveTicketFacts[]): void {
+    this.tickets.recordSweep(askedFrom, items, live);
+  }
+  ensureFeatureColors(numbers: readonly number[]): Map<number, number> {
+    return this.tickets.ensureFeatureColors(numbers);
   }
   listTrackerItems(): MirroredTicket[] {
     return this.tickets.listTrackerItems();

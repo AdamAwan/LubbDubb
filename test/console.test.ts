@@ -608,12 +608,16 @@ test('the ticket is drawn as HTML when the tracker wrote HTML', () => {
   assert.ok(!html.includes('&lt;div&gt;'), 'the tags are structure, not text to print');
 });
 
-test('a backlog row is a way into the goal it names', () => {
+test('a held goal is a way into the goal it names', () => {
   // One way into a goal, from every surface that lists one — the queue row, the
-  // overview row and this. It is the name rather than the whole row, because a
-  // backlog row carries controls of its own and a button cannot hold them.
-  const html = render(view({ tab: 'backlog' }));
-  assert.ok(html.includes('cn-grow cn-goal-row'));
+  // overview row and this. It is the name rather than the whole row, because the
+  // row carries controls of its own and a button cannot hold them.
+  //
+  // The tickets tab's rows come from its own route, which nothing fetches in a
+  // static render; the intake call-out is drawn from the snapshot, so it is the
+  // part of the tab this seam can see.
+  const html = render(view({ tab: 'tickets' }));
+  assert.ok(html.includes('tickets-intake-name'));
 });
 
 test('a goal with no measured spend draws no spend row rather than $0.00', () => {
@@ -699,119 +703,36 @@ test('a goal row is a way into its page', () => {
 });
 
 /**
- * The one `<button …>` opening tag whose *attributes* carry `needle`.
+ * The backlog's four groups became the tickets tab's watch filter (#351), and its
+ * intake group became the call-out above the list. What the group *argued* — that
+ * an `unclear` assay is the one intake reading that stops dispatch, so it must be
+ * pulled out rather than greyed inside the watched rows — is what these assert.
  *
- * Opening tags only, so a string that also appears in a row's text cannot be
- * mistaken for the control that quotes it — and exactly one, because "some button
- * on the page says this" is the assertion that passes with the wrong button.
+ * The tab's rows arrive from its own route, which a static render does not fetch,
+ * so the arrangement those groups used to cover is tested against `featureBlocks`
+ * in `test/issueGroups.test.ts` instead.
  */
-function buttonWith(html: string, needle: string): string {
-  const tags = [...html.matchAll(/<button\b[^>]*>/g)].map((m) => m[0]).filter((t) => t.includes(needle));
-  assert.equal(tags.length, 1, `expected exactly one button whose attributes mention "${needle}"`);
-  const tag = tags[0];
-  assert.ok(tag);
-  return tag;
-}
-
-/** Every backlog group heading, in document order. */
-function groupHeadings(html: string): string[] {
-  return [...html.matchAll(/<div class="cn-grpname">([^<]*)/g)].map((m) => (m[1] ?? '').trim());
-}
-
-const BACKLOG_GROUPS = ['Watched', 'Blocked at intake', 'Unwatched', 'Ignored'];
-
-test('the backlog groups by watch state and gives intake its own group', () => {
-  const v = view({ tab: 'backlog' });
-  const html = render(v);
-  assert.deepEqual(groupHeadings(html), BACKLOG_GROUPS, 'four groups, in the order triage reads them');
-
-  // Intake is pulled *out* of Watched rather than greyed inside it: an `unclear`
-  // assay is the one intake reading that stops dispatch, and among watched rows
-  // it reads as a detail instead of as the thing holding all work.
+test('a goal the assay refused is pulled out of the list, quoted, with its override beside it', () => {
+  const v = view({ tab: 'tickets' });
   const intake = v.state.world.issues.find((i) => i.assay?.verdict === 'unclear');
   assert.ok(intake, 'the demo fixtures must carry a goal the assay refused');
   const assay = intake.assay;
   assert.ok(assay);
 
-  const decoded = decode(html);
-  const quoted = decoded.indexOf(assay.summary);
-  assert.ok(quoted !== -1, 'the assayer’s own words are quoted, never reworded');
-  assert.ok(
-    decoded.indexOf('Blocked at intake') < quoted && quoted < decoded.indexOf('Unwatched'),
-    'the refused goal belongs in the intake group, not in Watched',
-  );
+  const decoded = decode(render(v));
+  assert.ok(decoded.includes('held at intake'), 'the call-out names what is holding the work');
+  assert.ok(decoded.includes(assay.summary), 'the assayer’s own words are quoted, never reworded');
+  assert.ok(decoded.includes('Override → workable'), 'and the one button that unblocks it sits on the row');
 });
 
-test('a backlog group with nothing in it is muted, never removed', () => {
-  const v = view({ tab: 'backlog' });
-  const html = render({ ...v, state: { ...v.state, world: { ...v.state.world, issues: [] } } });
-  assert.deepEqual(groupHeadings(html), BACKLOG_GROUPS, 'a group that vanishes when quiet reads as one that broke');
-});
-
-test('a feature is a heading over its work, never a row beside it', () => {
-  const v = view({ tab: 'backlog' });
-  const container = v.state.world.issues.find((i) => i.pickup.status === 'container');
-  assert.ok(container, 'the demo fixtures must carry a container');
-  const html = render(v);
-
-  // The feature's own line is the heading, and the fold beside it is what makes a
-  // long one collapsible to that line.
-  const headings = [...html.matchAll(/<div class="cn-subhead[^"]*">/g)];
-  assert.ok(headings.length > 0, 'a tracker with a tree draws feature headings');
-  assert.ok(html.includes('aria-expanded="true"'), 'every feature is open until the operator folds one');
-
-  // …and it is not also drawn as an ordinary row, which is the whole complaint:
-  // an item nothing is ever dispatched at, sitting in the list being triaged.
-  const rows = [...html.matchAll(/<div class="cn-row[^"]*">/g)].length;
-  const nested = [...html.matchAll(/<div class="cn-row[^"]*cn-nested[^"]*">/g)].length;
-  assert.ok(nested > 0, 'the work under a feature is indented to it');
-  assert.ok(nested <= rows);
-});
-
-test('folding a feature hides its work and keeps its heading', () => {
-  const v = view({ tab: 'backlog' });
-  const container = v.state.world.issues.find((i) => i.pickup.status === 'container');
-  assert.ok(container);
-  // A child the world holds as an issue of its own — the rows the fold hides are
-  // those, not the relation summaries the feature merely names.
-  const child = v.state.world.issues.find((i) => i.parent?.number === container.number && i.state === 'open');
-  assert.ok(child, 'the demo fixtures must carry an open item under that container');
-
-  const open = render(v);
-  const folded = render({ ...v, collapsedFeatures: new Set([container.number]) });
-
-  assert.ok(decode(open).includes(child.title), 'open by default — a surface that hides the backlog reports none');
-  assert.ok(!decode(folded).includes(child.title), 'folding puts the work away');
-  assert.ok(decode(folded).includes(container.title), 'and leaves the heading, or there is nothing to unfold');
-  assert.ok(folded.includes('aria-expanded="false"'));
-});
-
-test('a container is a heading over its work, and watching it says what it will cascade to', () => {
-  const v = view({ tab: 'backlog' });
-  const container = v.state.world.issues.find((i) => i.pickup.status === 'container');
-  assert.ok(container, 'the demo fixtures must carry an item the harness refuses as a container');
-
-  // Untagged, so it falls into the triage group, which is the group that draws a
-  // Watch button at all. The fixture's container carries the watch label.
-  const issues = v.state.world.issues.map((i) => (i.number === container.number ? { ...i, labels: [] } : i));
+test('nothing held at intake draws no call-out at all', () => {
+  // Unlike the group it replaces, which was drawn empty because a group that
+  // vanishes reads as one that broke: a call-out is an exception being raised, and
+  // an exception nobody has is not a heading, it is silence.
+  const v = view({ tab: 'tickets' });
+  const issues = v.state.world.issues.map((i) => ({ ...i, assay: null }));
   const html = render({ ...v, state: { ...v.state, world: { ...v.state.world, issues } } });
-
-  // The container is live in both directions now: watching a Feature tags every
-  // item beneath it, which is what "work this feature" has always meant, so the
-  // click the toggle offers is one the harness keeps.
-  const toggle = buttonWith(html, `Tag #${container.number}`);
-  assert.doesNotMatch(toggle, / disabled=""/, 'watching a feature is a real act, not a refused one');
-  const kids = container.children?.length ?? 0;
-  assert.ok(kids > 0, 'the demo fixtures must carry a container with work under it');
-  assert.match(
-    toggle,
-    new RegExp(`and its ${kids} child item`),
-    'the title states the cascade — a click writing eight tags must say eight',
-  );
-
-  const open = v.state.world.issues.find((i) => i.pickup.status === 'unwatched');
-  assert.ok(open, 'the demo fixtures must carry an open item nobody has opted in');
-  assert.doesNotMatch(buttonWith(html, `#${open.number}`), / disabled=""/, 'an ordinary item is still watchable');
+  assert.ok(!html.includes('tickets-intake'), 'no goal is held, so nothing claims one is');
 });
 
 test('the fault log keeps its clear even when it is empty', () => {
@@ -907,13 +828,13 @@ test('injection rides in the launch panel, and the demo build is the whole of it
 
 test('each tab replaces the last, and a selected goal outranks every one of them', () => {
   assert.ok(render(view()).includes('World signals'), 'the overview is the tab the console opens on');
-  assert.ok(!render(view({ tab: 'backlog' })).includes('World signals'), 'a tab replaces the one before it');
+  assert.ok(!render(view({ tab: 'tickets' })).includes('World signals'), 'a tab replaces the one before it');
   assert.ok(!render(view({ tab: 'work' })).includes('World signals'));
 
   // A queue row selects a goal without moving the nav, so the goal has to win —
   // otherwise clicking an ask lands on a triage list, or on the record.
   const v = goalView();
-  for (const tab of ['backlog', 'work'] as const) {
+  for (const tab of ['tickets', 'work'] as const) {
     assert.ok(render({ ...v, tab }).includes('cn-goal'), `a goal must outrank the ${tab} tab`);
   }
 });
@@ -927,7 +848,7 @@ test('each tab replaces the last, and a selected goal outranks every one of them
  */
 test('the work graph is a nav destination, not a strip under the page', () => {
   const nav = render(view()).split('</nav>')[0] ?? '';
-  for (const label of ['Overview', 'Backlog', 'Work']) {
+  for (const label of ['Overview', 'Work', 'Tickets']) {
     assert.ok(nav.includes(`>${label}`), `the nav is missing ${label}`);
   }
 
