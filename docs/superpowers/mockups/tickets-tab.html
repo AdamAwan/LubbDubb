@@ -207,6 +207,7 @@
   .note h2{margin:0 0 8px;font-size:11.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--fg-dim)}
   .note p{margin:0 0 9px;font-size:12.5px;line-height:1.6;color:var(--fg-dim);max-width:104ch}
   .note p:last-child{margin-bottom:0}
+  .note ul + p{margin-top:10px}
   .note ul{margin:0;padding-left:17px;font-size:12.5px;line-height:1.6;color:var(--fg-dim)}
   .note li{margin-bottom:6px}
   .note li:last-child{margin-bottom:0}
@@ -222,6 +223,12 @@
   .ask:last-child{border-bottom:0}
   .ask .said{font-size:12.5px;color:var(--fg)}
   .ask .url{font:11.5px var(--mono);color:var(--link-ink);overflow-wrap:anywhere}
+
+  /* the state gallery: list states that only exist at the ends of the scroll */
+  .states{display:grid;gap:12px;grid-template-columns:1fr}
+  @media (min-width:1000px){ .states{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  .state h3{margin:0 0 7px;font-size:11.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--fg-faint)}
+  .state .sentinel{margin:0;text-align:center;line-height:1.55}
 </style>
 </head>
 <body>
@@ -307,15 +314,15 @@
 
           <div class="dhead">
             <h1>Tickets</h1>
-            <i class="n">1,284 assigned</i>
-            <span class="more">the assignment filter's whole list · open and closed</span>
+            <i class="n">1,284 kept</i>
+            <span class="more">history from 14 Jul 2026 · everything seen since is kept</span>
           </div>
           <p class="dnote">
-            Everything the tracker returns for the configured assignment filter, whether or not the harness
-            has ever touched it — narrowed by the two readings that mean different things: <b>watch</b> is
-            the harness's, a label an operator sets, and <b>state</b> is the tracker's own. Cost is what the
-            fleet has spent under the ticket, which is why a row can be closed and free, or open and the
-            most expensive thing on the page.
+            Every item the assignment filter has returned since the harness first scanned, whether or not it
+            was ever worked — narrowed by the two readings that mean different things: <b>watch</b> is the
+            harness's, a label an operator sets, and <b>state</b> is the tracker's own. Cost is what the fleet
+            has spent under the ticket, which is why a row can be closed and free, or open and the most
+            expensive thing on the page. <b>Nothing is ever dropped</b>; the list only grows.
           </p>
 
           <!-- ---------- filters: two axes and an ordering ---------- -->
@@ -680,6 +687,43 @@
       </div>
     </div>
 
+    <div class="note span2">
+      <h2>The mirror, and the one-month floor</h2>
+      <p>
+        The list is <b>not</b> a live read of the tracker. It is a local table the pulse keeps up to date, and
+        that is what the retention decision makes it: <b>backfill one month, then keep everything forever.</b>
+        Two rules, and they pull in opposite directions, so both are written down rather than left to the
+        reading of whoever implements it.
+      </p>
+      <ul>
+        <li><b>The floor is anchored, not rolling.</b> One month back from the <i>first</i> scan, stamped once
+          and frozen — the same shape as <code>issue_runs.completed_at</code>, and for the same reason. A
+          rolling month would quietly drop the far end of the history every night, which is the exact
+          opposite of what was asked for, and it would do it silently.</li>
+        <li><b>Nothing is ever deleted.</b> A row the tracker stops returning — closed long ago, moved,
+          untagged, unassigned — stays. The mirror is a record of what was seen, not a copy of what the
+          tracker currently says, which is also why the count in the head reads <i>kept</i> rather than
+          <i>assigned</i>.</li>
+        <li><b>The floor is stated on the surface</b>, because it is a cap and this codebase does not ship
+          silent ones. “History from 14 Jul 2026” at the head, and the foot of the list says the same thing
+          when you reach it rather than simply stopping.</li>
+        <li><b>The floor is a floor, not a filter.</b> Backfill pages by <i>last changed</i>, so a ticket
+          filed two years ago that someone touched last week arrives and is then kept like anything else.
+          Worth saying out loud: the history is “everything since the anchor, plus whatever older work is
+          still alive”, and a reader who assumes a clean cut-off will eventually find a 2024 ticket in the
+          list and think the floor is broken.</li>
+        <li>A new table needs no <code>ColumnMigrations</code> entry — but the moment a column is added to it
+          later, it does, guarded by a <code>PRAGMA table_info</code> check
+          (<code>CLAUDE.md</code>, <code>docs/spec/14-persistence.md</code>). Being new once does not keep a
+          table exempt, and the failure is invisible.</li>
+      </ul>
+      <p>
+        What this buys, beyond the retention answer: the counts, both orderings and the paging all become one
+        SQL query over one table, and the tab stops depending on how fast the tracker can be asked for a
+        thousand items.
+      </p>
+    </div>
+
     <div class="note warn span2">
       <h2>The one thing that is not a UI change — neither provider can list a closed ticket</h2>
       <p>
@@ -690,9 +734,17 @@
         it fetches every open issue on purpose. Nothing in the harness has ever asked a tracker for a closed
         item — <code>issue_runs</code> is what remembers them, and it only knows the ones the fleet worked.
         <b>So “show me all closed items” is a provider change before it is a cockpit change:</b> a new
-        listing method on both <code>*Api</code> interfaces, taking the state and a page cursor — and, per
-        <code>CLAUDE.md</code>, added to each scripted fake in the same change, or the tests keep passing
-        against a seam that no longer describes the provider.
+        listing method on both <code>*Api</code> interfaces, taking a state, a <i>changed since</i> instant
+        and a page cursor — and, per <code>CLAUDE.md</code>, added to each scripted fake in the same change,
+        or the tests keep passing against a seam that no longer describes the provider.
+      </p>
+      <p>
+        <b>“Changed since” is the parameter that makes the mirror cheap</b>, and both providers already have
+        it: GitHub's issues list takes <code>since</code> with <code>state=all</code>, and Azure's WIQL can
+        filter on <code>System.ChangedDate</code>. So the backfill is one paged sweep from the anchor, run
+        once, and every pulse after it asks only for what has changed since the last sweep. Without that
+        parameter the tab is a full re-list of the tracker on every pulse, which is the version of this
+        feature that gets turned off.
       </p>
       <p>
         <b>The assignment filter is also not symmetrical today.</b> Azure has one —
@@ -706,18 +758,18 @@
     </div>
 
     <div class="note">
-      <h2>Ordering, and why cost is not just an <code>ORDER BY</code></h2>
+      <h2>Ordering</h2>
       <ul>
         <li><b>Added</b> is the tracker's own id, descending — auto-incremental, so it is the arrival order
-          without a date to parse or a timezone to get wrong. Keyset paging on it (<code>id &lt; cursor</code>)
-          is stable while the list grows underneath.</li>
+          with no date to parse and no timezone to get wrong.</li>
         <li><b>Cost</b> is not the tracker's to know: it is the local store's, and it must come from
           <code>buildSpendGoals</code> (<code>src/spendInsights.ts</code>) — the one place that decides which
           goal a run's money belongs to. A second rollup here would be a second opinion about attribution,
           which is precisely what that module opens by refusing to have.</li>
-        <li>So cost order cannot be keyset-paged against the tracker. The route ranks the whole filtered set
-          once, caches it against the filter, and the cursor is a position in <i>that</i> ranking — which is
-          also what stops a pulse landing mid-scroll from duplicating or skipping a row.</li>
+        <li>Because the list is a local mirror, both orderings are one query over one table, keyset-paged on
+          <code>(sort key, id)</code> — the id breaking ties so two tickets that cost the same never swap
+          places between pages and hide a row. No per-request ranking, no cache to invalidate, and the
+          question “what has cost the most” is answerable without asking the tracker anything at all.</li>
         <li>A ticket with no spend sorts last and draws <code>—</code>, not <code>$0.00</code>: never worked
           and worked for free are different facts, and a zero would state the wrong one.</li>
       </ul>
@@ -746,8 +798,11 @@
           observed inside it, not against the viewport.</li>
         <li>Pages of 40, requested one ahead of the foot. The head states <b>loaded of total</b> — an infinite
           list with no total tells a reader nothing about whether they are near the end.</li>
-        <li>The cursor is opaque and carries the ranking it was cut from, so changing a filter starts a new
-          list rather than appending to the old one.</li>
+        <li>The cursor is a keyset — the last row's sort key and id — not an offset, so a sweep landing
+          mid-scroll cannot shift the window and make a row appear twice or not at all. It carries the
+          filter it was cut from, so changing one starts a new list rather than appending to the old.</li>
+        <li>The foot is a real state, not an absence: reaching it names the floor
+          (<i>“start of history — 14 Jul 2026”</i>). A list that just stops reads as one that failed.</li>
         <li>Scroll position is deliberately <b>not</b> on <code>Place</code>: a URL that restores a scroll
           offset into a list that has since grown lands somewhere else entirely. Back returns to the filter,
           which is the place; the list re-reads its first page.</li>
@@ -757,6 +812,11 @@
     <div class="note">
       <h2>Where the pieces go</h2>
       <ul>
+        <li><b>Store:</b> a new module under <code>src/store/</code> owning the mirror table and its frozen
+          backfill anchor — the only directory that touches SQLite, one module per group of related tables,
+          delegated from <code>store.ts</code> under the same method names.</li>
+        <li><b>Sweep:</b> the pulse writes the mirror through that module. It is a <i>record</i>, not a
+          decision — nothing under <code>src/dispatcher/</code> reads it, and the tab stays a lens.</li>
         <li><b>Route:</b> <code>GET /api/tickets</code> in a new <code>src/server/routes/tickets.ts</code>,
           wrapped in <code>checked(...)</code>, registered in <code>ROUTE_MODULES</code>; query carries
           <code>watch</code>, <code>state</code>, <code>order</code>, <code>cursor</code>. Fetched, never on
@@ -777,18 +837,53 @@
     </div>
 
     <div class="note span2">
-      <h2>Open, and worth deciding before code</h2>
+      <h2>Two states that do not fit in the frames above</h2>
+      <div class="states">
+        <div class="state">
+          <h3>The foot of the list, reached</h3>
+          <section class="card">
+            <div class="rows">
+              <p class="sentinel" style="border-top:0">
+                Start of history — 14 Jul 2026, a month before the first scan. Nothing older was ever
+                fetched, and nothing seen since has been dropped.
+              </p>
+            </div>
+          </section>
+          <p style="margin:8px 0 0;font-size:12px;color:var(--fg-faint);line-height:1.55">
+            An infinite list that simply stops reads as one that failed to load. The floor is a cap, so the
+            foot names it.
+          </p>
+        </div>
+        <div class="state">
+          <h3>Backfilling, on a fresh install</h3>
+          <section class="card">
+            <div class="rows">
+              <p class="sentinel" style="border-top:0"><i class="spin"></i>
+                Reading the last month from the tracker — 340 of about 1,300.
+              </p>
+            </div>
+          </section>
+          <p style="margin:8px 0 0;font-size:12px;color:var(--fg-faint);line-height:1.55">
+            The one sweep that is slow, and it happens once. Said plainly rather than left as an empty tab,
+            which is indistinguishable from a broken one.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div class="note span2">
+      <h2>Still open</h2>
       <ul>
-        <li><b>How far back does “all” go?</b> A tracker with years of closed items makes the first cost
-          ranking an expensive read. A ceiling (“closed in the last N months”) would keep it cheap, at the
-          price of a list that quietly is not all of them — which is the sort of silence this codebase
-          generally refuses. Stated here rather than chosen.</li>
         <li><b>Does this replace the Backlog tab?</b> It is a superset of it — Backlog is open items grouped by
           watch bucket, which is this tab with <code>state=open</code> and a grouping. They should probably not
           both exist for long.</li>
         <li><b>Cost of an item that was rolled into another goal</b> (<code>#297</code> above) reads
           <code>—</code>, because the money was attributed to the goal that did the work. Correct per
           <code>buildSpendGoals</code>, but it means a ticket can be closed, real, and free.</li>
+        <li><b>Is the month configurable?</b> Drawn as a fixed month. It is one number, it is only read once
+          per install, and a knob nobody turns is a knob with a default that has to be right anyway — but it
+          is cheap to expose, and an operator adopting the harness onto a long-running tracker is exactly who
+          would want it wider.</li>
       </ul>
     </div>
 
