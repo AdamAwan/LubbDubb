@@ -11,6 +11,7 @@ import type {
   ScratchpadPayload,
   ReliabilityPayload,
   SpendPayload,
+  SpendTrendPayload,
   WorkRootsPayload,
   WorkSubtreePayload,
 } from '../../src/wire.js';
@@ -137,6 +138,10 @@ const realApi = {
   // and each goal's own total — and this is the reading behind them: every agent
   // the harness has run, split by phase, by goal and over a fortnight.
   getSpend: () => authFetch('/api/spend').then((r) => json<SpendPayload>(r)),
+  // The trend behind the breakdown, fetched when its tab is first opened rather
+  // than with the panel: it reads two months of world events on top of the same
+  // agent walk, and the tab an operator never opens should cost nothing.
+  getSpendTrend: () => authFetch('/api/spend/trend').then((r) => json<SpendTrendPayload>(r)),
   // What the spending bought, fetched when the Yield panel opens. Same stance as
   // the spend breakdown and for the same reason: the *gauge* is derived from the
   // agent rows already on the snapshot, and this is every run the harness has

@@ -40,13 +40,13 @@ and recording a failure must never throw.
 
 ### Who records what
 
-| `source`   | Recorded by                                                                                                                                                                                                                                     |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `cycle`    | The harness's cycle `catch` (message + stack); plan-reconciliation fetch and status-comment failures; the plan ref-collision guard.                                                                                                             |
-| `provider` | Provider snapshot `catch`es, via the optional `errors` in `IntegrationContext`; Azure transient-retry notices.                                                                                                                                  |
+| `source`   | Recorded by                                                                                                                                                                                                     |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cycle`    | The harness's cycle `catch` (message + stack); plan-reconciliation fetch and status-comment failures; the plan ref-collision guard.                                                                             |
+| `provider` | Provider snapshot `catch`es, via the optional `errors` in `IntegrationContext`; Azure transient-retry notices.                                                                                                  |
 | `agent`    | Spawn failures; terminal `failed` agents (with the exit code and an output tail); worktree removal failures; PTY sentinel-drift warnings; invalid or unreadable `plan.json`; MCP channel/config/frame failures. |
-| `server`   | The Fastify `setErrorHandler` (method, URL, message, stack).                                                                                                                                                                                    |
-| `boot`     | Each agent found orphaned at boot (a crash, not a clean shutdown); a failed restore.                                                                                                                                                            |
+| `server`   | The Fastify `setErrorHandler` (method, URL, message, stack).                                                                                                                                                    |
+| `boot`     | Each agent found orphaned at boot (a crash, not a clean shutdown); a failed restore.                                                                                                                            |
 
 **Do not add new swallowed `catch`es — route them here.** Tests silence the stderr mirror with
 `buildSystem(config, { errorMirror: () => {} })`.
@@ -270,7 +270,7 @@ change to how spend finds its goal belongs in `rollUpIssueSpend` and nowhere els
 
 **Derived, never stored,** for per-goal spend's reason exactly. **Fetched, never polled**, for the
 work graph's: it reads every agent the harness has ever run, and `/api/state` comes round every
-couple of seconds for every open cockpit. What the *indicators* need is already on the snapshot.
+couple of seconds for every open cockpit. What the _indicators_ need is already on the snapshot.
 
 **`ci` and `landing` are separate from `build`** although all three are work on the same code,
 because they fail differently and an operator acts on the difference: build is what a goal cost to
@@ -288,7 +288,7 @@ states instead of causes.
 `comment:<id>`, `reply` and the bare `pr:<n>` all fall to it, and so does a concern nobody has
 invented yet. Only `ci` is matched by name, because only `ci` is being lifted out — **a new pull
 request concern must not need a change in `phaseOf` to be counted at all.** That is the opposite
-stance to the issue subtree, and deliberately: there, an unnamed suffix means a *role* nobody
+stance to the issue subtree, and deliberately: there, an unnamed suffix means a _role_ nobody
 decided, which is worth surfacing as `other`; here it means one more thing a pull request needed
 before it landed, which is exactly what `landing` is.
 
@@ -297,10 +297,91 @@ before it landed, which is exactly what `landing` is.
 the panel can say how much of the fleet it is speaking for. Without it, a fleet run entirely in PTY
 mode draws a complete-looking breakdown of nothing.
 
+**The goal rows are their own fold.** `buildSpendGoals` produces the ranked per-issue rows, the phase
+split inside each and the `attribution` map behind both; `buildSpendInsights` calls it and so does
+the trend below. Its own function because two readings want the goals and only one of them wants a
+run ranking and a check table — and because the alternative, a second roll-up in the trend module, is
+the second opinion this section spends four paragraphs refusing to have.
+
+## The spend trend
+
+`buildSpendTrend` (`src/spendTrend.ts`) answers the question the breakdown cannot, being all-time:
+**is what I did working**. It is served by `GET /api/spend/trend`
+([16](16-http-api.md#the-fetched-routes)) and drawn by the Spend panel's Trend tab
+([17](17-cockpit.md#spend)). Eight weekly buckets, three readings, one shared axis.
+
+**Cost over time is not the answer, which is why this is not a token timeline.** A fleet's bill falls
+when it is idle exactly as readily as when it is efficient, so a total per day says nothing about
+whether an optimisation worked. Every reading here is therefore a **rate over a unit of delivered
+work**.
+
+**The unit is a goal that closed, never a run.** Every per-run rate the harness could report is
+gameable for free: split the same work across twice as many smaller agents and input-per-run halves
+while nothing whatever improves. A closed goal cannot be subdivided by a dispatch change. It is the
+more awkward denominator — goals differ in size — so the **whole cohort's costs are shipped**
+(`SpendTrendWeek.costs`) rather than only the median, and the panel draws the spread as points. A
+median with no spread beside it lets a week that happened to close three small goals read as
+progress.
+
+**A goal lands in the week it closed and carries spend from whenever that spend happened.** Closures
+come from `world_events` (`issue_closed`), the last one per goal, so a goal that came back and landed
+again counts once and in the week it finally landed.
+
+### Cohort and period are different weeks
+
+Two kinds of reading share the axis and the difference is stated on every field, because the shared
+axis actively invites comparing them:
+
+- **Cohort** — a property of the goals that closed that week, counting spend from wherever it
+  happened: `medianCostUsd`, `medianInputTokens`, `costs`, `byPhase`, `reopened`.
+- **Period** — what was observed inside the week itself: `settled`, `completed`, `lostCostUsd`,
+  `reds`.
+
+**CI reds are a period reading on purpose.** Attributing a red to the goal it eventually belonged to
+would need every red inside every goal's lead time, which reaches back further than any window this
+module can ask for — and would silently under-report exactly the early weeks it has no history for.
+`redsPerGoal` is reds observed that week over goals delivered that week: a rate of pipeline noise
+against delivered work, needing no lineage walk.
+
+### Absolutes ride with every share
+
+`byPhase` is **dollars per goal**, not a share, and `SpendTrendPhaseShift` ships both. This is the
+reading the whole tab exists for: a fleet that plans more in order to review less shows a rising
+deliberation _share_ and a falling deliberation _cost_, and a share column on its own reports that
+as a regression. A share is only ever drawn next to the absolute it is a share of.
+
+### What is withheld, and why
+
+**The current week is partial and is dropped from the comparison.** Goals are still closing into it,
+so every cohort figure on it is an under-count by construction; folding it into the recent half is
+exactly the shape that makes a fleet look like it improved on the day it was read. The panel draws
+that bucket hollow.
+
+**`comparison` is null below two complete weeks a side.** A comparison drawn off one week of goals is
+noise with a percentage sign on it, and withholding it from the payload is the only way the panel can
+be made not to draw it.
+
+**Goals that closed with no measured spend are counted apart** (`goalsUnmeasured`) and appear in no
+figure, for `totals.unmeasuredRuns`' reason exactly.
+
+**Reopened goals are read from the world, not from an event.** `diffWorlds` has no `closed → open`
+transition to emit, so a goal that came back is only visible as one that closed inside the window and
+is nonetheless open in the baseline. It is the one reading here that can contradict the other two: a
+fleet that got cheaper by closing goals it had not finished looks like progress on every other chart
+in the tab.
+
+**Derived, never stored** — and, unlike a token timeline, **it works on every database from before it
+was written.** `usage_events` dates dollars and has never dated tokens, so a per-day token trend
+would start empty on the day it shipped; a goal's tokens come off the `agents` rows and are as old as
+the goal. That is a large part of the argument for cohorting goals rather than bucketing tokens.
+
+**Fetched on the tab's first visit**, not with the breakdown: it reads two months of world events on
+top of the same all-time agent walk, and a tab an operator never opens should cost nothing.
+
 ## The reliability breakdown
 
 `buildReliabilityInsights` (`src/reliabilityInsights.ts`) answers the question the spend breakdown
-stops one short of: the money bought *something*, and **did it work**. It is served by
+stops one short of: the money bought _something_, and **did it work**. It is served by
 `GET /api/reliability` ([16](16-http-api.md#the-fetched-routes)) and drawn by the Yield panel
 ([17](17-cockpit.md#yield)). Two halves, and they are the two halves of one funnel:
 
@@ -342,12 +423,12 @@ cap.
 `prsAffected`/`prsObserved` is the other reading and both are shipped. `pending` and `unknown` are not
 verdicts and count as neither — crucially, a rerun passing through `pending` on its way back to green
 does **not** end the red span, or every retry would read as an instant recovery. A red with no green
-after it is still red *now*, so its span runs to the read rather than to its last event: otherwise the
+after it is still red _now_, so its span runs to the read rather than to its last event: otherwise the
 pull request nobody has fixed shows the least red time on the board.
 
 **Two classifiers, both borrowed.** Phases come from `spendInsights.phaseOf` and CI statuses from
 `worldDiff.ciStatusOf`; neither is re-derived here. `ciStatusOf` is the sharp edge — `world_events`
-stores a kind, a ref and a *sentence*, so the status a transition carried survives only inside that
+stores a kind, a ref and a _sentence_, so the status a transition carried survives only inside that
 sentence. **The matcher that writes it and the matcher that reads it are the same regexp in the same
 module**, for the PTY sentinel's reason: a reader that re-derived the format for itself would report
 zero failures, silently, the first time the wording changed.
@@ -364,7 +445,7 @@ already durable, already dated, and pruned by nothing.
 
 **The CI read is ordered, and the order is load-bearing.** `listWorldEventsOfKindsSince` returns
 **oldest first**, unlike its two neighbours in `WorldStore`, because the fold pairs each failing with
-the *next* passing. A descending read pairs every red with the green that preceded it and reports the
+the _next_ passing. A descending read pairs every red with the green that preceded it and reports the
 flakiest pipeline in the repository as recovering instantly.
 
 ## The live tail

@@ -64,8 +64,23 @@ import { rollUpChecks, rollUpTaskTypes, type ChecksSpend, type TaskTypeSpend } f
  */
 export type SpendPhase = 'deliberation' | 'build' | 'ci' | 'landing' | 'evidence' | 'job' | 'other';
 
-/** Reading order, funnel order: decide, build, go green, land, check, and the two remainders. */
-const PHASE_ORDER: readonly SpendPhase[] = ['deliberation', 'build', 'ci', 'landing', 'evidence', 'job', 'other'];
+/**
+ * Reading order, funnel order: decide, build, go green, land, check, and the two
+ * remainders.
+ *
+ * Exported because `spendTrend` walks the same phases over a different axis, and
+ * a phase list written twice is a panel that silently stops counting `job` the
+ * day someone adds a phase to one of them.
+ */
+export const PHASE_ORDER: readonly SpendPhase[] = [
+  'deliberation',
+  'build',
+  'ci',
+  'landing',
+  'evidence',
+  'job',
+  'other',
+];
 
 /**
  * What each phase is, in the operator's words rather than the ref vocabulary's.
@@ -289,8 +304,11 @@ export function phaseLabel(phase: SpendPhase): string {
   return PHASE_COPY[phase].label;
 }
 
-/** A zeroed phase record — the shape every `byPhase` starts from, so every key is present. */
-function zeroPhases(): Record<SpendPhase, number> {
+/**
+ * A zeroed phase record — the shape every `byPhase` starts from, so every key is
+ * present. Exported alongside {@link PHASE_ORDER} and for its reason.
+ */
+export function zeroPhases(): Record<SpendPhase, number> {
   return { deliberation: 0, build: 0, ci: 0, landing: 0, evidence: 0, job: 0, other: 0 };
 }
 
@@ -299,14 +317,74 @@ function ranAt(agent: Agent): string {
   return agent.endedAt ?? agent.startedAt;
 }
 
+/** What {@link buildSpendGoals} hands back: the goal rows, and the map behind them. */
+interface SpendGoalRollup {
+  goals: SpendGoal[];
+  unattributedCostUsd: number;
+  /** {@link rollUpIssueSpend}'s own agent → goal map, passed through untouched. */
+  attribution: Map<string, number | null>;
+}
+
+/**
+ * The per-goal rows, costliest first — `rollUpIssueSpend`'s totals with the phase
+ * split and the last activity folded on.
+ *
+ * Its own function because two panels want it and only one of them wants the rest
+ * of this module. `spendTrend` cohorts these rows by the week each goal closed
+ * and needs nothing else here; making it call {@link buildSpendInsights} would
+ * have it computing a run ranking and a check table to throw both away, and
+ * having it roll up goals itself would be the second opinion about which goal a
+ * pull request belongs to that this module opens by refusing to have.
+ */
+export function buildSpendGoals(input: {
+  agents: readonly Agent[];
+  tasks: readonly Task[];
+  nodes: readonly WorkNode[];
+  issues: readonly Issue[];
+}): SpendGoalRollup {
+  const { agents, tasks, issues } = input;
+  const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
+  const titleOfIssue = new Map(issues.map((i) => [i.number, i.title]));
+  const rollup = rollUpIssueSpend({ agents, tasks, nodes: input.nodes });
+
+  const goalPhases = new Map<number, Record<SpendPhase, number>>();
+  const goalLastAt = new Map<number, string>();
+  for (const agent of agents) {
+    // The roll-up's own silence about a run that reported nothing, kept here so
+    // the phase split is a partition of exactly the money the totals are over.
+    if (agent.costUsd === null && agent.inputTokens === null && agent.outputTokens === null) continue;
+    const issueNumber = rollup.attribution.get(agent.id) ?? null;
+    if (issueNumber === null) continue;
+    const phase = phaseOf(originOfTask.get(agent.taskId) ?? null);
+    const byPhase = goalPhases.get(issueNumber) ?? zeroPhases();
+    byPhase[phase] = roundUsd(byPhase[phase] + (agent.costUsd ?? 0));
+    goalPhases.set(issueNumber, byPhase);
+    const at = ranAt(agent);
+    const seen = goalLastAt.get(issueNumber);
+    if (seen === undefined || at > seen) goalLastAt.set(issueNumber, at);
+  }
+
+  return {
+    goals: [...rollup.byIssue.values()]
+      .map((spend) => ({
+        ...spend,
+        title: titleOfIssue.get(spend.issueNumber) ?? null,
+        byPhase: goalPhases.get(spend.issueNumber) ?? zeroPhases(),
+        lastAt: goalLastAt.get(spend.issueNumber) ?? null,
+      }))
+      .sort((a, b) => b.costUsd - a.costUsd || a.issueNumber - b.issueNumber),
+    unattributedCostUsd: rollup.unattributedCostUsd,
+    attribution: rollup.attribution,
+  };
+}
+
 export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
   const { agents, tasks, nodes, issues, usageEvents, now } = input;
   const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
   const titleOfTask = new Map(tasks.map((t) => [t.id, t.title]));
-  const titleOfIssue = new Map(issues.map((i) => [i.number, i.title]));
   // The per-goal totals and the attribution behind them, computed once by the
-  // module that owns the question — never a second walk of the graph. See above.
-  const rollup = rollUpIssueSpend({ agents, tasks, nodes });
+  // fold that owns the question — never a second walk of the graph. See above.
+  const rollup = buildSpendGoals({ agents, tasks, nodes, issues });
 
   const totals: SpendTotals = {
     costUsd: 0,
@@ -320,8 +398,6 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
     unmeasuredRuns: 0,
   };
   const phaseTotals = new Map<SpendPhase, SpendPhaseTotal>();
-  const goalPhases = new Map<number, Record<SpendPhase, number>>();
-  const goalLastAt = new Map<number, string>();
   const runs: SpendRun[] = [];
 
   for (const agent of agents) {
@@ -371,15 +447,6 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
     phaseTotal.runs += 1;
     phaseTotals.set(phase, phaseTotal);
 
-    if (issueNumber !== null) {
-      const byPhase = goalPhases.get(issueNumber) ?? zeroPhases();
-      byPhase[phase] = roundUsd(byPhase[phase] + cost);
-      goalPhases.set(issueNumber, byPhase);
-      const at = ranAt(agent);
-      const seen = goalLastAt.get(issueNumber);
-      if (seen === undefined || at > seen) goalLastAt.set(issueNumber, at);
-    }
-
     runs.push({
       agentId: agent.id,
       originRef,
@@ -395,21 +462,12 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
     });
   }
 
-  const goals: SpendGoal[] = [...rollup.byIssue.values()]
-    .map((spend) => ({
-      ...spend,
-      title: titleOfIssue.get(spend.issueNumber) ?? null,
-      byPhase: goalPhases.get(spend.issueNumber) ?? zeroPhases(),
-      lastAt: goalLastAt.get(spend.issueNumber) ?? null,
-    }))
-    .sort((a, b) => b.costUsd - a.costUsd || a.issueNumber - b.issueNumber);
-
   return {
     generatedAt: new Date(now).toISOString(),
     totals,
     windows: { fiveHourCostUsd: input.fiveHourCostUsd, sevenDayCostUsd: input.sevenDayCostUsd },
     phases: PHASE_ORDER.map((p) => phaseTotals.get(p)).filter((p): p is SpendPhaseTotal => p !== undefined),
-    goals,
+    goals: rollup.goals,
     unattributedCostUsd: rollup.unattributedCostUsd,
     taskTypes: rollUpTaskTypes({ agents, tasks }),
     checks: rollUpChecks({ agents, tasks }),

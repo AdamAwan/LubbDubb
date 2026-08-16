@@ -16,25 +16,25 @@ cockpit's frequent state polling is never throttled.
 static SPA, and a list of route modules it mounts in order. Everything else lives beside the thing it
 is about.
 
-| Module                  | Holds                                                                                       |
-| ----------------------- | ------------------------------------------------------------------------------------------- |
-| `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/health`                |
-| `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt                           |
-| `routes/artifacts.ts`   | `/artifacts/:id` and `/attachments/:id`, their capability signers, and the path confinement |
-| `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/exclude`               |
-| `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                               |
-| `routes/findings.ts`    | Promote / file / dismiss                                                                    |
-| `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                          |
-| `routes/issues.ts`      | Watch, conclusion, assay, delivered, shortfall, dismiss-run                                 |
-| `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`                                    |
-| `routes/plans.ts`       | Replan, abandon, discuss, discuss/end                                                       |
-| `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it      |
-| `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                          |
-| `routes/spend.ts`       | `/api/spend` — the breakdown behind the cost indicators                                     |
-| `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                         |
-| `routes/reliability.ts` | `/api/reliability` — run outcomes and CI health, the reading beside the spend one           |
-| `routes/work.ts`        | The work graph and its ignore / file verdicts                                               |
-| `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                              |
+| Module                  | Holds                                                                                         |
+| ----------------------- | --------------------------------------------------------------------------------------------- |
+| `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/health`                  |
+| `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt                             |
+| `routes/artifacts.ts`   | `/artifacts/:id` and `/attachments/:id`, their capability signers, and the path confinement   |
+| `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/exclude`                 |
+| `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                 |
+| `routes/findings.ts`    | Promote / file / dismiss                                                                      |
+| `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                            |
+| `routes/issues.ts`      | Watch, conclusion, assay, delivered, shortfall, dismiss-run                                   |
+| `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`                                      |
+| `routes/plans.ts`       | Replan, abandon, discuss, discuss/end                                                         |
+| `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it        |
+| `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                            |
+| `routes/spend.ts`       | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend |
+| `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                           |
+| `routes/reliability.ts` | `/api/reliability` — run outcomes and CI health, the reading beside the spend one             |
+| `routes/work.ts`        | The work graph and its ignore / file verdicts                                                 |
+| `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                                |
 
 Each module exports one `register(app, ctx)` — the `RouteModule` type in `routes/context.ts` — and
 takes a `RouteContext` of `{system, hub, artifactKey, artifactSigner}`. It is the facade shape
@@ -446,6 +446,19 @@ about which goal a pull request's money belongs to. Read-only, and it takes no p
 windows it reports are the same two `buildUsage` puts on the snapshot, asked the same way, so the
 panel and the chip it opens from cannot disagree.
 
+### `GET /api/spend/trend`
+
+The same money on a week axis, cohorted by the goals that closed: median cost and tokens per goal,
+the stage split as dollars per goal, and whether the work still landed. Returns `{ trend }` — see
+[18](18-observability.md#the-spend-trend) for why the unit is a closed goal, why cohort and period
+weeks are different weeks, and what is withheld rather than drawn thin.
+
+Fetched on the Trend tab's **first visit** rather than alongside `/api/spend`, which is one step
+further than the other fetched-on-open routes go: it reads two months of `world_events` on top of the
+same all-time agent walk, and the tab an operator never opens should cost nothing. Its goals come
+from `buildSpendGoals`, the fold `/api/spend` ships — the two tabs state one goal's cost a click
+apart, and agreement by construction is the only kind that holds.
+
 ### `GET /api/reliability`
 
 What the spending bought: run outcomes all-time and CI health over the last fortnight. Returns
@@ -759,7 +772,7 @@ work schedules nothing, and a pulse per checkbox is a pulse per checkbox. Return
 `{ slug, profile? }`. Overrides which model profile one part's work runs on — the planner's own sizing
 of the part it cut, edited. 404 when the plan or the part is unknown; 400 when `profile` names one this
 deployment does not configure. Absent or empty **clears** it, which is not a synonym for naming the
-goal's current profile: a cleared part *inherits*, so re-pinning the goal later moves it too.
+goal's current profile: a cleared part _inherits_, so re-pinning the goal later moves it too.
 
 Unlike the acceptance route above it **runs a cycle**, because this changes what the next dispatch of a
 pending part costs and an operator re-pricing one about to go out wants that to land before it does. A

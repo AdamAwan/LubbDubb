@@ -3311,6 +3311,29 @@ body {
   color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
+/* A change, on the trend tab. Colour is the *direction the reading moves in*, not
+   the sign of the number: falling money is `good` and falling completion is
+   `bad`, and the caller decides which by passing the tone. Doing it by sign here
+   would paint a halved completion rate green. `level` is its own tone rather than
+   an absence, because "we changed nothing" is an answer. */
+.sp-delta {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.sp-delta.good {
+  color: var(--green);
+}
+.sp-delta.bad {
+  color: var(--red);
+}
+.sp-delta.level {
+  color: var(--grey);
+}
+/* The trend's tab strip sits inside the reading panel, so it takes the panel's
+   own gutter rather than the settings modal's tighter one. */
+.read-modal .settings-tabs {
+  margin: 10px 0 2px;
+}
 
 /* --- the two panels: phases, and the trend --- */
 

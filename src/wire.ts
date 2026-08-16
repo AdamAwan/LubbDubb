@@ -53,6 +53,7 @@ import type { ControlState } from './runtimeControl.js';
 import type { RunningConfigGroup } from './server/runningConfig.js';
 import type { ReliabilityInsights, RunTally } from './reliabilityInsights.js';
 import type { SpendInsights } from './spendInsights.js';
+import type { SpendTrend } from './spendTrend.js';
 import type { Stack } from './stacks/stack.js';
 import type {
   AccountRateLimits,
@@ -642,6 +643,16 @@ export interface SpendPayload {
 }
 
 /**
+ * `/api/spend/trend` — the same money on a week axis, cohorted by the goals that
+ * closed. Fetched on the trend tab's *first visit* rather than with the
+ * breakdown: it reads two months of world events on top of the same all-time
+ * agent walk, and the tab an operator never opens should cost nothing.
+ */
+export interface SpendTrendPayload {
+  trend: SpendTrend;
+}
+
+/**
  * `/api/reliability` — what the spending bought: run outcomes all-time, and CI
  * health over the last fortnight. Fetched on open for `SpendPayload`'s reason.
  */
@@ -743,6 +754,13 @@ export type {
   RunTally,
 } from './reliabilityInsights.js';
 export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
+export type {
+  SpendTrend,
+  SpendTrendComparison,
+  SpendTrendPeriod,
+  SpendTrendPhaseShift,
+  SpendTrendWeek,
+} from './spendTrend.js';
 export type { ChecksSpend, TaskTypeSpend } from './taskTypeSpend.js';
 export type { Stack } from './stacks/stack.js';
 export type { PlanDiff } from './plans/planDiff.js';

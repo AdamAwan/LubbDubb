@@ -24,6 +24,9 @@ import type {
   SpendGoal,
   SpendInsights,
   SpendPhase,
+  SpendTrend,
+  SpendTrendPeriod,
+  SpendTrendWeek,
   SpendRun,
   Task,
   UnrecordedWorkView,
@@ -1877,6 +1880,214 @@ function buildDemoSpend(): SpendInsights {
   };
 }
 
+/**
+ * Eight weeks of closed goals, authored — `buildDemoSpend`'s reason exactly.
+ *
+ * The seed carries the shape the tab exists to show, because a demo that only
+ * demonstrates the chrome demonstrates nothing: goals get steadily cheaper,
+ * **deliberation's dollars rise while its share rises faster**, CI's fall by more
+ * than deliberation gains, and completion holds. That is the one reading the tab
+ * is built around — planning more in order to review less — and it is on screen
+ * here rather than only in the argument for it.
+ *
+ * The last week is partial, so the hollow bar and the "still filling" caveat are
+ * drawn rather than being branches nobody sees.
+ */
+const DEMO_TREND_WEEKS: {
+  /** Every goal that closed that week, as its total cost. */
+  costs: number[];
+  byPhase: Partial<Record<SpendPhase, number>>;
+  settled: number;
+  completed: number;
+  lostCostUsd: number;
+  reds: number;
+  reopened: number;
+}[] = [
+  {
+    costs: [6.2, 9.1, 12.4, 8.8],
+    byPhase: { deliberation: 1.28, build: 4.2, ci: 2.02, landing: 1.24, evidence: 0.38 },
+    settled: 41,
+    completed: 33,
+    lostCostUsd: 3.1,
+    reds: 10,
+    reopened: 0,
+  },
+  {
+    costs: [7.4, 8.9, 11.2],
+    byPhase: { deliberation: 1.31, build: 4.11, ci: 1.94, landing: 1.2, evidence: 0.36 },
+    settled: 38,
+    completed: 32,
+    lostCostUsd: 2.6,
+    reds: 7,
+    reopened: 1,
+  },
+  {
+    costs: [5.9, 9.6, 10.8, 13.1, 7.2],
+    byPhase: { deliberation: 1.22, build: 4.3, ci: 2.4, landing: 1.28, evidence: 0.4 },
+    settled: 45,
+    completed: 36,
+    lostCostUsd: 3.4,
+    reds: 14,
+    reopened: 0,
+  },
+  {
+    costs: [6.8, 8.4, 9.9, 11.6],
+    byPhase: { deliberation: 1.34, build: 4.06, ci: 2.0, landing: 1.22, evidence: 0.36 },
+    settled: 40,
+    completed: 33,
+    lostCostUsd: 2.8,
+    reds: 9,
+    reopened: 0,
+  },
+  // The prompt change lands here: deliberation goes up in dollars, everything
+  // downstream of it goes down by more.
+  {
+    costs: [5.1, 7.2, 8.6, 6.4],
+    byPhase: { deliberation: 1.62, build: 3.14, ci: 1.32, landing: 0.84, evidence: 0.28 },
+    settled: 39,
+    completed: 33,
+    lostCostUsd: 1.9,
+    reds: 6,
+    reopened: 0,
+  },
+  {
+    costs: [4.8, 6.8, 7.9, 6.1, 5.4],
+    byPhase: { deliberation: 1.66, build: 2.88, ci: 1.14, landing: 0.78, evidence: 0.26 },
+    settled: 42,
+    completed: 36,
+    lostCostUsd: 1.7,
+    reds: 6,
+    reopened: 1,
+  },
+  {
+    costs: [4.4, 6.4, 7.1, 5.8],
+    byPhase: { deliberation: 1.71, build: 2.6, ci: 0.98, landing: 0.74, evidence: 0.24 },
+    settled: 37,
+    completed: 32,
+    lostCostUsd: 1.4,
+    reds: 5,
+    reopened: 0,
+  },
+  // Still filling — two goals in, where a whole week runs to four or five.
+  {
+    costs: [4.2, 6.0],
+    byPhase: { deliberation: 1.74, build: 2.52, ci: 0.94, landing: 0.72, evidence: 0.22 },
+    settled: 16,
+    completed: 14,
+    lostCostUsd: 0.6,
+    reds: 2,
+    reopened: 0,
+  },
+];
+
+function buildDemoTrend(): SpendTrend {
+  const now = Date.now();
+  const week = 7 * 86_400_000;
+  const round = (n: number) => Math.round(n * 1e6) / 1e6;
+  const zero = (): Record<SpendPhase, number> => ({
+    deliberation: 0,
+    build: 0,
+    ci: 0,
+    landing: 0,
+    evidence: 0,
+    job: 0,
+    other: 0,
+  });
+  const median = (xs: number[]): number | null => {
+    if (xs.length === 0) return null;
+    const sorted = [...xs].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)] ?? null;
+  };
+  // Tokens track cost at the same rate the breakdown's fixture uses, so the two
+  // tabs cannot state a goal's size two different ways.
+  const tokensOf = (costUsd: number) => Math.round(costUsd * 620_000);
+
+  const start = now - DEMO_TREND_WEEKS.length * week;
+  const buckets: SpendTrendWeek[] = DEMO_TREND_WEEKS.map((seed, i) => {
+    const costs = [...seed.costs].sort((a, b) => a - b);
+    return {
+      startsAt: new Date(start + i * week).toISOString(),
+      partial: i === DEMO_TREND_WEEKS.length - 1,
+      goalsClosed: costs.length,
+      // One goal a fortnight closes with nothing recorded, so the caveat about
+      // unmeasured goals is on screen rather than a dead branch.
+      goalsUnmeasured: i === 2 ? 1 : 0,
+      medianCostUsd: median(costs),
+      medianInputTokens: median(costs.map(tokensOf)),
+      costs,
+      byPhase: { ...zero(), ...seed.byPhase },
+      reopened: seed.reopened,
+      settled: seed.settled,
+      completed: seed.completed,
+      completionRate: seed.settled > 0 ? seed.completed / seed.settled : null,
+      lostCostUsd: seed.lostCostUsd,
+      reds: seed.reds,
+      redsPerGoal: costs.length > 0 ? seed.reds / costs.length : null,
+    };
+  });
+
+  /** The same fold `buildSpendTrend` does, over the complete weeks of one half. */
+  const fold = (span: SpendTrendWeek[]): SpendTrendPeriod => {
+    const costs = span.flatMap((w) => w.costs);
+    const settled = span.reduce((n, w) => n + w.settled, 0);
+    const completed = span.reduce((n, w) => n + w.completed, 0);
+    const byPhase = zero();
+    for (const phase of Object.keys(byPhase) as SpendPhase[]) {
+      const total = span.reduce((n, w) => n + w.byPhase[phase] * w.goalsClosed, 0);
+      byPhase[phase] = costs.length > 0 ? round(total / costs.length) : 0;
+    }
+    const last = span[span.length - 1];
+    return {
+      startsAt: span[0]?.startsAt ?? '',
+      endsAt: new Date(Date.parse(last?.startsAt ?? '') + week).toISOString(),
+      weeks: span.length,
+      goalsClosed: costs.length,
+      medianCostUsd: median(costs),
+      medianInputTokens: median(costs.map(tokensOf)),
+      byPhase,
+      completionRate: settled > 0 ? completed / settled : null,
+      lostCostPerGoalUsd: costs.length > 0 ? round(span.reduce((n, w) => n + w.lostCostUsd, 0) / costs.length) : null,
+      redsPerGoal: costs.length > 0 ? span.reduce((n, w) => n + w.reds, 0) / costs.length : null,
+      reopenedRate: costs.length > 0 ? span.reduce((n, w) => n + w.reopened, 0) / costs.length : null,
+    };
+  };
+
+  const complete = buckets.filter((w) => !w.partial);
+  const half = Math.floor(complete.length / 2);
+  const earlier = fold(complete.slice(0, half));
+  const recent = fold(complete.slice(complete.length - half));
+  const shareOf = (p: SpendTrendPeriod, phase: SpendPhase) => {
+    const total = Object.values(p.byPhase).reduce((a, b) => a + b, 0);
+    return total > 0 ? p.byPhase[phase] / total : 0;
+  };
+
+  return {
+    generatedAt: new Date(now).toISOString(),
+    weeks: DEMO_TREND_WEEKS.length,
+    bucketMs: week,
+    startsAt: new Date(start).toISOString(),
+    buckets,
+    comparison: {
+      earlier,
+      recent,
+      phases: (Object.keys(zero()) as SpendPhase[])
+        .filter((phase) => earlier.byPhase[phase] > 0 || recent.byPhase[phase] > 0)
+        .map((phase) => ({
+          phase,
+          label: PHASE_COPY[phase].label,
+          earlierUsd: earlier.byPhase[phase],
+          recentUsd: recent.byPhase[phase],
+          earlierShare: shareOf(earlier, phase),
+          recentShare: shareOf(recent, phase),
+          changeRatio:
+            earlier.byPhase[phase] > 0
+              ? (recent.byPhase[phase] - earlier.byPhase[phase]) / earlier.byPhase[phase]
+              : null,
+        })),
+    },
+  };
+}
+
 export const demoApi = {
   getState: () => getServer().getState(),
   getTranscript: (agentId: string) => getServer().getTranscript(agentId),
@@ -1899,6 +2110,10 @@ export const demoApi = {
   // agent the store holds; the demo's world is built fresh in the browser each
   // load, so a fixture is the only honest way to show the panel at all.
   getSpend: () => Promise.resolve({ insights: buildDemoSpend() }),
+  // The trend behind it, authored for the same reason and against the same
+  // fixture: the demo's store holds no closed goals to cohort, so a fixture is
+  // the only way the tab shows what it is for.
+  getSpendTrend: () => Promise.resolve({ trend: buildDemoTrend() }),
   // The reliability breakdown, authored for the spend panel's reason exactly: the
   // demo's world is built fresh in the browser each load, so there are no settled
   // agents and no CI history to fold.

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import type {
   ChecksSpend,
   SpendGoal,
@@ -6,10 +6,12 @@ import type {
   SpendPhase,
   SpendPhaseTotal,
   SpendRun,
+  SpendTrend,
   TaskTypeSpend,
 } from '../types.js';
 import { api } from '../api.js';
 import { Downloads, toCsv } from './Downloads.js';
+import { SpendTrendTab } from './SpendTrendTab.js';
 import { fmtTokens, fmtUsd, relTime } from './util.js';
 import { Ref } from './refs.js';
 
@@ -42,18 +44,42 @@ import { Ref } from './refs.js';
  * (a fresh harness, or one that has only ever run PTY agents), so it cannot also
  * be the failure mode.
  *
+ * **Two tabs since the trend arrived.** The breakdown answers *where the money
+ * went*; the trend answers *is what I did working*, which the breakdown cannot,
+ * being all-time. A tab rather than a second panel because they are one subject
+ * read two ways, and the bar's rule is that a subject is stated once — the same
+ * argument that put the breakdown behind the Power gauge rather than beside it.
+ * The trend fetches on its **first visit** and both stay mounted after, which is
+ * the settings modal's stance: a tab an operator never opens should cost nothing,
+ * and switching back should cost nothing twice.
+ *
  * Phase colour lives in the stylesheet as `--sp-<phase>`, not here: this component
  * names a phase and the sheet decides what that looks like, which is the division
  * the rest of the cockpit keeps.
  */
+type TabId = 'breakdown' | 'trend';
+
+const TABS: readonly { id: TabId; label: string }[] = [
+  { id: 'breakdown', label: 'Breakdown' },
+  { id: 'trend', label: 'Trend' },
+];
+
 export function SpendModal({ onClose }: { onClose: () => void }): JSX.Element {
   const [insights, setInsights] = useState<SpendInsights | null>(null);
   const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
+  const [tab, setTab] = useState<TabId>('breakdown');
+  const [trend, setTrend] = useState<SpendTrend | null>(null);
+  const [trendState, setTrendState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle');
   // The modal, not the breakdown inside it: the body is three different elements
   // across loading, failure and the all-unmeasured case, and a ref that is null
   // on two of them is a button that silently does nothing. The chrome it brings
   // along — the head, the close — is dropped by the print sheet's own rules.
   const modal = useRef<HTMLDivElement>(null);
+  // The trend is fetched from a click rather than an effect, so it has no cleanup
+  // to hang a `live` flag on. This is that flag: a panel closed mid-fetch must not
+  // come back to set state on a component that is gone.
+  const alive = useRef(true);
+  useEffect(() => () => void (alive.current = false), []);
 
   // Escape closes, as it does on every other panel that covers the cockpit: a
   // thing this large must not have exactly one exit.
@@ -82,6 +108,28 @@ export function SpendModal({ onClose }: { onClose: () => void }): JSX.Element {
     };
   }, []);
 
+  // The trend's own fetch, on the tab's first visit and never again. `idle` is
+  // the state that makes that a fact rather than an intention: a second visit
+  // finds it `ready` or `failed` and asks for nothing.
+  const openTab = useCallback(
+    (id: TabId) => {
+      setTab(id);
+      if (id !== 'trend' || trendState !== 'idle') return;
+      setTrendState('loading');
+      api
+        .getSpendTrend()
+        .then((res) => {
+          if (!alive.current) return;
+          setTrend(res.trend);
+          setTrendState('ready');
+        })
+        .catch(() => {
+          if (alive.current) setTrendState('failed');
+        });
+    },
+    [trendState],
+  );
+
   return (
     <div className="read-backdrop" onClick={onClose}>
       <div
@@ -106,13 +154,14 @@ export function SpendModal({ onClose }: { onClose: () => void }): JSX.Element {
                 {
                   format: 'csv',
                   title:
-                    'Every table on this panel, in the order it is drawn — totals, phases, days, task types, checks, goals, runs',
-                  build: () => spendCsv(insights),
+                    'Every table on this panel, in the order it is drawn — totals, phases, days, task types, checks, ' +
+                    'goals, runs, and the weekly trend once its tab has been opened',
+                  build: () => spendCsv(insights, trend),
                 },
                 {
                   format: 'json',
                   title: 'The exact payload this panel drew, unrounded',
-                  build: () => JSON.stringify(insights, null, 2),
+                  build: () => JSON.stringify(trend === null ? insights : { insights, trend }, null, 2),
                 },
               ]}
               sheet={{
@@ -126,10 +175,47 @@ export function SpendModal({ onClose }: { onClose: () => void }): JSX.Element {
             close
           </button>
         </div>
-        <Body insights={insights} state={state} />
+        <div className="settings-tabs" role="tablist">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              role="tab"
+              aria-selected={tab === t.id}
+              className={`btn ghost settings-tab${tab === t.id ? ' active' : ''}`}
+              onClick={() => openTab(t.id)}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {/* Hidden rather than unmounted, so a breakdown scrolled to the goal table
+            is where it was left on the way back — and so the trend pays for its
+            fetch once. */}
+        <div hidden={tab !== 'breakdown'} role="tabpanel">
+          <Body insights={insights} state={state} />
+        </div>
+        <div hidden={tab !== 'trend'} role="tabpanel">
+          <TrendBody trend={trend} state={trendState} />
+        </div>
       </div>
     </div>
   );
+}
+
+/** The trend tab's four states, kept out of the tab itself so it draws one thing. */
+function TrendBody({
+  trend,
+  state,
+}: {
+  trend: SpendTrend | null;
+  state: 'idle' | 'loading' | 'ready' | 'failed';
+}): JSX.Element {
+  if (state === 'loading' || state === 'idle') return <p className="empty">Reading eight weeks…</p>;
+  // A failed fetch must not draw as a fleet that has closed nothing, for the
+  // reason `$0.00` cannot be the breakdown's failure mode: "no goals closed" is a
+  // real and reportable answer here.
+  if (state === 'failed' || trend === null) return <p className="empty">Could not read the trend.</p>;
+  return <SpendTrendTab trend={trend} />;
 }
 
 /** Everything below the head, so the three states are one readable switch. */
@@ -211,7 +297,7 @@ function Body({ insights, state }: { insights: SpendInsights | null; state: 'loa
  * with the panel: a table the export forgets is the same silent under-report,
  * arriving as a complete-looking file.
  */
-export function spendCsv(insights: SpendInsights): string {
+export function spendCsv(insights: SpendInsights, trend: SpendTrend | null = null): string {
   const { totals, windows, phases, goals, runs, timeline, taskTypes, checks } = insights;
   const order = phases.map((p) => p.phase);
 
@@ -312,7 +398,114 @@ export function spendCsv(insights: SpendInsights): string {
       r.endedAt,
     ]),
     [`The ${runs.length} costliest of ${insights.rankedFrom} measured runs.`],
+
+    // The trend rides in the same file rather than a second one, because it is
+    // the same money on a different axis — and it is only here once its tab has
+    // been opened, which is the one place this export can be incomplete. It says
+    // so in a row rather than being silently absent, since a file read six months
+    // from now has no panel beside it to explain the gap.
+    ...(trend === null
+      ? [[], ['Trend'], ['The trend tab was not opened, so its weeks are not in this file.']]
+      : trendCsv(trend, order)),
   ]);
+}
+
+/**
+ * The trend tab's sections, in the order it draws them.
+ *
+ * `costs` is joined into one cell rather than exploded into a row per goal: the
+ * spread is a property *of the week*, and a row per goal would silently turn a
+ * table of eight weeks into a table of every goal that closed — a different
+ * document with the same heading.
+ */
+function trendCsv(trend: SpendTrend, order: readonly SpendPhase[]): (string | number | null)[][] {
+  const { comparison } = trend;
+  return [
+    [],
+    ['Trend — weeks'],
+    [
+      'Week start (ISO)',
+      'Still filling',
+      'Goals closed',
+      'Goals with no spend',
+      'Median cost (USD)',
+      'Median input tokens',
+      'Reopened',
+      'Runs settled',
+      'Runs finished',
+      'Lost run cost (USD)',
+      'CI reds',
+      'Every goal cost (USD)',
+      ...order.map((p) => `${p} per goal (USD)`),
+    ],
+    ...trend.buckets.map((w) => [
+      w.startsAt,
+      w.partial ? 'yes' : 'no',
+      w.goalsClosed,
+      w.goalsUnmeasured,
+      w.medianCostUsd,
+      w.medianInputTokens,
+      w.reopened,
+      w.settled,
+      w.completed,
+      w.lostCostUsd,
+      w.reds,
+      w.costs.join(' '),
+      ...order.map((p) => w.byPhase[p]),
+    ]),
+    [
+      'Cost, tokens, the stage split and reopens belong to the goals that closed that week. Runs settled and CI reds ' +
+        'are what was observed inside the week itself. The last week is still filling.',
+    ],
+    [],
+
+    ['Trend — halves'],
+    ...(comparison === null
+      ? [['Too few complete weeks to compare halves — two either side are needed.']]
+      : [
+          [
+            'Half',
+            'From (ISO)',
+            'To (ISO)',
+            'Weeks',
+            'Goals closed',
+            'Median cost (USD)',
+            'Median input tokens',
+            'Runs finished (rate)',
+            'Lost run cost per goal (USD)',
+            'CI reds per goal',
+            'Reopened (rate)',
+          ],
+          ...([comparison.earlier, comparison.recent] as const).map((p, i) => [
+            i === 0 ? 'earlier' : 'recent',
+            p.startsAt,
+            p.endsAt,
+            p.weeks,
+            p.goalsClosed,
+            p.medianCostUsd,
+            p.medianInputTokens,
+            p.completionRate,
+            p.lostCostPerGoalUsd,
+            p.redsPerGoal,
+            p.reopenedRate,
+          ]),
+          [],
+          ['Trend — stage shift'],
+          ['Stage', 'Share then', 'Share now', 'USD per goal then', 'USD per goal now', 'Change (ratio)'],
+          ...comparison.phases.map((p) => [
+            p.phase,
+            p.earlierShare,
+            p.recentShare,
+            p.earlierUsd,
+            p.recentUsd,
+            p.changeRatio,
+          ]),
+          [
+            'Read the dollar columns with the share columns: a stage whose share rose while its dollars fell did not ' +
+              'get more expensive.',
+          ],
+        ]),
+  ];
 }
 
 /** A share of the whole, as a percentage — the reading every bar here is drawn from. */

@@ -1074,7 +1074,49 @@ which appear in no figure above it.
 **It [exports](#exporting-a-reading)**, seven sections in the order the panel draws them — totals,
 phases, days, task types, failing checks, goals, runs — with the phase split riding inside each goal
 row as it rides inside that goal's bar, and each of the three remainders (reached no goal, named no
-check, attributed to a check) carried as its own row.
+check, attributed to a check) carried as its own row. Three more sections follow **once the Trend tab
+has been opened**; when it has not, the export says so in a row rather than omitting them silently,
+because a file read six months from now has no panel beside it to explain a gap.
+
+### The Trend tab
+
+`web/src/components/SpendTrendTab.tsx`, drawing `GET /api/spend/trend`
+([18](18-observability.md#the-spend-trend)). A tab rather than a second panel because the breakdown
+and the trend are one subject read two ways, and the bar's rule is that a subject is stated once —
+the same argument that put the breakdown behind the Power reading rather than beside it.
+
+**It fetches on its first visit and both tabs stay mounted after**, which is the settings modal's
+stance ([Settings](#settings)): a tab an operator never opens costs nothing, and switching back costs
+nothing twice. Tab state is a `useState` and not a [`Place`](#the-address-bar) field, for the same
+reason the settings modal's is — it is a position inside a surface the address bar already carries,
+not a surface of its own.
+
+Three sections, each headed by the question it answers, and **the shared week axis is the design**:
+every chart is the same eight weeks at the same x, so a change that shows up in one is read against
+the other two without a click.
+
+- **Are goals getting cheaper?** — median cost per closed goal as bars, with every goal in the cohort
+  drawn as a point beside it. The spread is drawn rather than summarised because goals differ in
+  size; the points are placed by index rather than jittered, since a random offset would reshuffle on
+  every render. The current week is **outlined rather than filled** — it is an under-count by
+  construction, and a hollow bar is the only honest way to draw a figure that is going to grow.
+- **Which stages cost more, and which less?** — the cohort's phase split as a share band, and the
+  same shift as **dollars** in the table beneath it. The table is not optional: a stage whose share
+  rose while its dollars fell is a fleet doing everything else more cheaply, and the band alone draws
+  that as a regression. This is the reading the tab exists for.
+- **Has the success rate changed?** — completion rate and red checks per goal on two axes, plus four
+  tiles including **reopened after close**. That last one is the honesty check: a fleet that got
+  cheaper by closing goals it had not finished looks like progress on every other chart here.
+
+**Colour is the direction the reading moves in, not the sign of the number.** `.sp-delta` takes a
+tone from the call site — falling money is `good`, falling completion is `bad` — because deciding by
+sign in the stylesheet would paint a halved completion rate green.
+
+**The panel draws figures and never derives them.** Medians, the two halves and the phase shift are
+all `buildSpendTrend`'s, for the reason the breakdown ships its splits: a second implementation of
+"the median goal" a tab away from the first is free to disagree with it, silently. When the server
+withholds the comparison — fewer than two complete weeks a side — the tab says so rather than drawing
+a percentage off one week of goals.
 
 ## Exporting a reading
 
