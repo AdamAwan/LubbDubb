@@ -6,13 +6,19 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readdirSync, readFileSync } from 'node:fs';
-import { WorktreeManager } from '../src/worktree/worktreeManager.js';
+import { defaultPoolSize, WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
+/**
+ * A throwaway repository, because everything in this file is git behaviour and
+ * `config.repoRoot` defaults to `process.cwd()` — the exception `CLAUDE.md` names.
+ * `main` is explicit so a `base` of `"main"` resolves whatever the host's
+ * `init.defaultBranch` happens to be.
+ */
 function initRepo(): string {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
   const git = (args: string[]) => execFileSync('git', args, { cwd: dir });
-  git(['init', '-q']);
+  git(['init', '-q', '-b', 'main']);
   git(['config', 'user.email', 't@t.com']);
   git(['config', 'user.name', 'Test']);
   writeFileSync(join(dir, 'README.md'), '# test\n');
@@ -33,12 +39,19 @@ function commitOn(dir: string, branch: string, file: string): void {
   git(dir, ['commit', '-q', '-m', `add ${file}`]);
 }
 
-test('creates a new worktree on a new branch and reuses it', async () => {
+/** A manager over `repo` with nothing in flight anywhere — the plain test posture. */
+function manager(repo: string, size = 4, held: (branch: string) => boolean = () => false): WorktreeManager {
+  return new WorktreeManager(repo, join(repo, '.wt'), { size, held });
+}
+
+test('creates a new slot on a new branch and reuses it', async () => {
   const repo = initRepo();
-  const wt = new WorktreeManager(repo, join(repo, '.wt'));
+  const wt = manager(repo);
 
   const path1 = await wt.ensure('feature/x');
-  assert.ok(path1.includes('feature-x'));
+  // The directory is a *slot*, not the branch: naming it after what it holds is
+  // exactly the coupling the pool exists to break.
+  assert.ok(path1.endsWith('slot-0'));
 
   // Reused, not recreated.
   const path2 = await wt.ensure('feature/x');
@@ -48,12 +61,12 @@ test('creates a new worktree on a new branch and reuses it', async () => {
   assert.equal(existing, path1);
 });
 
-test('checks out an existing branch into a worktree', async () => {
+test('checks out an existing branch into a slot', async () => {
   const repo = initRepo();
   execFileSync('git', ['branch', 'existing'], { cwd: repo });
-  const wt = new WorktreeManager(repo, join(repo, '.wt'));
-  const path = await wt.ensure('existing');
-  assert.ok(path.includes('existing'));
+  const wt = manager(repo);
+  const dir = await wt.ensure('existing');
+  assert.equal(git(dir, ['rev-parse', '--abbrev-ref', 'HEAD']), 'existing');
 });
 
 test('a new branch forks from the named base, not from HEAD', async () => {
@@ -65,7 +78,7 @@ test('a new branch forks from the named base, not from HEAD', async () => {
   commitOn(repo, 'someones-feature', 'stray.txt');
   assert.notEqual(git(repo, ['rev-parse', 'HEAD']), trunkTip);
 
-  const wt = new WorktreeManager(repo, join(repo, '.wt'));
+  const wt = manager(repo);
   const dir = await wt.ensure('issue/12/schema', 'trunk');
 
   assert.equal(git(dir, ['rev-parse', 'HEAD']), trunkTip);
@@ -82,7 +95,7 @@ test('a base resolves through origin/<base> ahead of the local ref', async () =>
   git(repo, ['update-ref', 'refs/remotes/origin/trunk', remoteTip]);
   git(repo, ['checkout', '-q', 'trunk']);
 
-  const wt = new WorktreeManager(repo, join(repo, '.wt'));
+  const wt = manager(repo);
   const dir = await wt.ensure('issue/12/schema', 'trunk');
 
   assert.equal(git(dir, ['rev-parse', 'HEAD']), remoteTip);
@@ -94,7 +107,7 @@ test('the base is cut from a commit, so the new branch tracks nothing', async ()
   commitOn(repo, 'trunk', 'trunk.txt');
   git(repo, ['update-ref', 'refs/remotes/origin/trunk', git(repo, ['rev-parse', 'trunk'])]);
 
-  const wt = new WorktreeManager(repo, join(repo, '.wt'));
+  const wt = manager(repo);
   await wt.ensure('issue/12/schema', 'trunk');
 
   // An upstream of origin/trunk would aim a later bare `git push` at the base.
@@ -109,7 +122,7 @@ test('reuse comes first: an existing branch keeps its base', async () => {
   const branchTip = git(repo, ['rev-parse', 'issue/12/schema']);
   git(repo, ['checkout', '-q', 'trunk']);
 
-  const wt = new WorktreeManager(repo, join(repo, '.wt'));
+  const wt = manager(repo);
   const dir = await wt.ensure('issue/12/schema', 'trunk');
 
   // Not re-based onto trunk — an in-flight agent's branch is left alone.
@@ -117,10 +130,10 @@ test('reuse comes first: an existing branch keeps its base', async () => {
   assert.notEqual(branchTip, trunkTip);
 });
 
-test('reuse comes first: an existing worktree is handed back untouched', async () => {
+test('reuse comes first: a slot already on the branch is handed back untouched', async () => {
   const repo = initRepo();
   commitOn(repo, 'trunk', 'trunk.txt');
-  const wt = new WorktreeManager(repo, join(repo, '.wt'));
+  const wt = manager(repo);
 
   const first = await wt.ensure('issue/12/schema', 'trunk');
   const tip = git(first, ['rev-parse', 'HEAD']);
@@ -133,56 +146,56 @@ test('reuse comes first: an existing worktree is handed back untouched', async (
 
 test('an unresolvable base fails loudly instead of falling back to HEAD', async () => {
   const repo = initRepo();
-  const wt = new WorktreeManager(repo, join(repo, '.wt'));
+  const wt = manager(repo);
 
   await assert.rejects(() => wt.ensure('issue/12/schema', 'no-such-branch'), /no commit/);
   assert.equal(await wt.findExisting('issue/12/schema'), null);
 });
 
-test('an orphaned worktree directory is reclaimed instead of wedging the branch forever', async () => {
+test('an unresolvable base leaves a free slot exactly as it was, not cleaned and half-prepared', async () => {
+  const repo = initRepo();
+  const wt = manager(repo);
+  const dir = await wt.ensure('issue/1');
+  writeFileSync(join(dir, 'stray.txt'), 'left by the previous occupant');
+  await wt.remove('issue/1');
+
+  await assert.rejects(() => wt.ensure('issue/2', 'no-such-branch'), /no commit/);
+
+  assert.ok(existsSync(join(dir, 'stray.txt')), 'the start point is resolved before anything is touched');
+  assert.equal(git(dir, ['rev-parse', '--abbrev-ref', 'HEAD']), 'issue/1');
+});
+
+test('an orphaned slot directory is reclaimed instead of shrinking the pool forever', async () => {
   const repo = initRepo();
   commitOn(repo, 'trunk', 'trunk.txt');
   const root = join(repo, '.wt');
   // What an interrupted agent leaves behind: the admin entry is gone while the
   // folder is still on disk, so `git worktree list` cannot see it and
   // `git worktree add` refuses the path — every retry, forever.
-  mkdirSync(join(root, 'issue-35377'), { recursive: true });
-  writeFileSync(join(root, 'issue-35377', 'stray.txt'), 'left over');
+  mkdirSync(join(root, 'slot-0'), { recursive: true });
+  writeFileSync(join(root, 'slot-0', 'stray.txt'), 'left over');
 
-  const wt = new WorktreeManager(repo, root);
+  const wt = manager(repo);
   const dir = await wt.ensure('issue/35377', 'trunk');
 
-  assert.equal(dir, join(root, 'issue-35377'));
+  assert.equal(dir, join(root, 'slot-0'));
   assert.equal(git(dir, ['rev-parse', 'HEAD']), git(repo, ['rev-parse', 'trunk']));
   assert.equal(await wt.findExisting('issue/35377'), dir);
 });
 
-test('a de-registered worktree whose branch still exists is reclaimed too', async () => {
+test('a de-registered slot is pruned out of the pool rather than counted against its bound', async () => {
   const repo = initRepo();
   const root = join(repo, '.wt');
-  const wt = new WorktreeManager(repo, root);
+  const wt = manager(repo);
   const dir = await wt.ensure('issue/35225');
   // Exactly the observed damage: the .git/worktrees admin entry went, the
-  // checkout did not. `git worktree prune` is for the opposite case.
+  // checkout did not.
   rmSync(join(repo, '.git', 'worktrees'), { recursive: true, force: true });
   assert.equal(await wt.findExisting('issue/35225'), null);
 
+  await wt.remove('issue/35225');
   assert.equal(await wt.ensure('issue/35225'), dir);
-});
-
-test('a registered worktree standing on the target path is never reclaimed', async () => {
-  const repo = initRepo();
-  const root = join(repo, '.wt');
-  const wt = new WorktreeManager(repo, root);
-  // `sanitize` maps both branches onto one directory, so a live agent's checkout
-  // is what stands where the second one wants to go. Reclaiming it would yank a
-  // running agent's work; failing loudly is the only honest answer.
-  const live = await wt.ensure('feature/x');
-  writeFileSync(join(live, 'work-in-progress.txt'), 'unpushed');
-
-  await assert.rejects(() => wt.ensure('feature-x'), /already exists/);
-  assert.ok(existsSync(join(live, 'work-in-progress.txt')), "a live agent's checkout must survive");
-  assert.equal(await wt.findExisting('feature/x'), live);
+  assert.deepEqual(readdirSync(root), ['slot-0'], 'and no second slot was minted around it');
 });
 
 test('a reclaim held up by a live process says so, rather than reporting an errno', async (t) => {
@@ -193,7 +206,7 @@ test('a reclaim held up by a live process says so, rather than reporting an errn
 
   const repo = initRepo();
   const root = join(repo, '.wt');
-  const dir = join(root, 'issue-35174');
+  const dir = join(root, 'slot-0');
   mkdirSync(dir, { recursive: true });
   // The two-day wedge, reproduced: an agent's task was interrupted, its process
   // died, and the shell it had started with the Bash tool survived with its cwd
@@ -202,7 +215,7 @@ test('a reclaim held up by a live process says so, rather than reporting an errn
   t.after(() => squatter.kill());
   await new Promise((r) => setTimeout(r, 200)); // let it actually be running in there
 
-  const wt = new WorktreeManager(repo, root);
+  const wt = manager(repo);
   await assert.rejects(
     () => wt.ensure('issue/35174'),
     (err: Error) => {
@@ -217,14 +230,205 @@ test('a reclaim held up by a live process says so, rather than reporting an errn
   );
 });
 
-test('an omitted base still forks from HEAD', async () => {
+test('an omitted base still forks from the repo root HEAD, not from the slot the branch inherits', async () => {
   const repo = initRepo();
   commitOn(repo, 'trunk', 'trunk.txt');
-  const wt = new WorktreeManager(repo, join(repo, '.wt'));
+  const wt = manager(repo);
 
-  const dir = await wt.ensure('issue/12/schema');
+  const first = await wt.ensure('issue/12/schema');
+  assert.equal(git(first, ['rev-parse', 'HEAD']), git(repo, ['rev-parse', 'HEAD']));
 
-  assert.equal(git(dir, ['rev-parse', 'HEAD']), git(repo, ['rev-parse', 'HEAD']));
+  // The pooled half of the same rule: the slot's own HEAD is now the *previous*
+  // occupant's, and forking implicitly off it would silently mis-base the branch.
+  writeFileSync(join(first, 'work.txt'), 'work');
+  git(first, ['add', '.']);
+  git(first, ['commit', '-q', '-m', 'work']);
+  await wt.remove('issue/12/schema');
+
+  const second = await wt.ensure('issue/12/api');
+
+  assert.equal(second, first);
+  assert.equal(git(second, ['rev-parse', 'HEAD']), git(repo, ['rev-parse', 'HEAD']));
+});
+
+// ---------------------------------------------------------------------------
+// The pool: the lease, the warm state, and the bound.
+// ---------------------------------------------------------------------------
+
+test('a slot is reused across branches, keeping what git ignores and clearing what it does not', async () => {
+  const repo = initRepo();
+  writeFileSync(join(repo, '.gitignore'), 'deps/\n');
+  git(repo, ['add', '.']);
+  git(repo, ['commit', '-q', '-m', 'ignore deps']);
+  const wt = manager(repo);
+
+  const first = await wt.ensure('issue/1');
+  // The dependency tree, in miniature: ignored, and the whole reason this ticket
+  // exists — a dispatch that has to rebuild it pays minutes for nothing.
+  mkdirSync(join(first, 'deps'));
+  writeFileSync(join(first, 'deps', 'installed.txt'), 'warm');
+  writeFileSync(join(first, 'scratch.txt'), 'a stray from the last goal');
+  await wt.remove('issue/1');
+
+  const second = await wt.ensure('issue/2');
+
+  assert.equal(second, first, 'two consecutive dispatches on different branches land in one directory');
+  assert.equal(readFileSync(join(second, 'deps', 'installed.txt'), 'utf8'), 'warm', '`clean -fd`, never `-fdx`');
+  assert.equal(existsSync(join(second, 'scratch.txt')), false, "the previous occupant's untracked strays are gone");
+  assert.equal(git(second, ['rev-parse', '--abbrev-ref', 'HEAD']), 'issue/2');
+});
+
+test('a branch with commits, handed a slot, still has them: the reset form is unreachable', async () => {
+  const repo = initRepo();
+  commitOn(repo, 'trunk', 'trunk.txt');
+  const trunkTip = git(repo, ['rev-parse', 'trunk']);
+  const wt = manager(repo, 1);
+
+  const dir = await wt.ensure('issue/12/schema', 'trunk');
+  writeFileSync(join(dir, 'part.txt'), 'part');
+  git(dir, ['add', '.']);
+  git(dir, ['commit', '-q', '-m', 'part']);
+  const partTip = git(dir, ['rev-parse', 'HEAD']);
+
+  // The slot goes to something else and then comes back — a re-dispatch, a retry,
+  // a part picked up again. `git switch -C` / `checkout -B` would *reset* the
+  // branch to the start point here and discard that commit, with nothing red.
+  await wt.remove('issue/12/schema');
+  assert.equal(await wt.ensure('issue/13', 'trunk'), dir);
+  await wt.remove('issue/13');
+
+  const back = await wt.ensure('issue/12/schema', 'trunk');
+
+  assert.equal(back, dir);
+  assert.equal(git(back, ['rev-parse', 'HEAD']), partTip, 'the commit survives the switch');
+  assert.notEqual(partTip, trunkTip);
+});
+
+test('a slot leased to a live agent is never handed to a second branch', async () => {
+  const repo = initRepo();
+  const wt = manager(repo);
+
+  const live = await wt.ensure('issue/1');
+  writeFileSync(join(live, 'work-in-progress.txt'), 'unpushed');
+
+  // The property one directory per branch used to provide for free, and the one
+  // pooling has to state: two agents in one tree on different branches is worse
+  // than anything `fileOverlap` reports.
+  const second = await wt.ensure('issue/2');
+
+  assert.notEqual(second, live);
+  assert.equal(git(live, ['rev-parse', '--abbrev-ref', 'HEAD']), 'issue/1');
+  assert.ok(existsSync(join(live, 'work-in-progress.txt')), "a live agent's checkout must survive");
+});
+
+test('`remove` releases the lease and deletes nothing', async () => {
+  const repo = initRepo();
+  const wt = manager(repo);
+  const first = await wt.ensure('issue/1');
+
+  await wt.remove('issue/1');
+  assert.ok(existsSync(first), 'the directory is the warm state — removing it is the bug being fixed');
+
+  assert.equal(await wt.ensure('issue/2'), first, 'and the released slot is the next dispatch’s');
+});
+
+test('a released slot still on the branch is handed back to it, warm', async () => {
+  const repo = initRepo();
+  const wt = manager(repo);
+  const first = await wt.ensure('issue/1');
+  await wt.remove('issue/1');
+
+  assert.equal(await wt.ensure('issue/1'), first);
+});
+
+test('a slot carrying uncommitted tracked changes is never handed to another branch', async () => {
+  const repo = initRepo();
+  const wt = manager(repo, 2);
+  const dir = await wt.ensure('issue/1');
+  // What a failed or killed agent leaves: an edit to a tracked file, uncommitted.
+  // `git switch` would carry it across onto the next branch, where a later agent
+  // would commit work it has no idea the origin of.
+  writeFileSync(join(dir, 'README.md'), '# half-finished\n');
+  await wt.remove('issue/1');
+
+  const next = await wt.ensure('issue/2');
+
+  assert.notEqual(next, dir);
+  assert.equal(readFileSync(join(dir, 'README.md'), 'utf8'), '# half-finished\n', 'and the work is still there');
+});
+
+test('the pool never exceeds its bound, and exhaustion is a refusal that names the slots', async () => {
+  const repo = initRepo();
+  const root = join(repo, '.wt');
+  const wt = manager(repo, 1);
+  await wt.ensure('issue/1');
+
+  await assert.rejects(
+    () => wt.ensure('issue/2'),
+    (err: Error) => {
+      assert.match(err.message, /No free worktree slot for branch issue\/2/);
+      assert.match(err.message, /work in flight on issue\/1/, 'saying what is holding the one slot there is');
+      assert.match(err.message, /worktreePoolSize/, 'and which knob raises the bound');
+      return true;
+    },
+  );
+  assert.deepEqual(readdirSync(root), ['slot-0'], 'and nothing was minted past the bound');
+});
+
+test('the pool bound defaults to the concurrency cap plus slack', () => {
+  // Derived rather than a flat default, so raising the cap does not silently start
+  // rejecting dispatches for want of a directory.
+  assert.equal(defaultPoolSize(3), 5);
+  assert.equal(defaultPoolSize(20), 22);
+  assert.equal(defaultPoolSize(0), 3, 'a cap of zero still leaves a pool that can be leased from');
+});
+
+test('a restart holds the slot of work still outstanding, and releases it once recovery settles', async () => {
+  const repo = initRepo();
+  const root = join(repo, '.wt');
+  const before = new WorktreeManager(repo, root, { size: 3, held: () => false });
+  const restored = await before.ensure('issue/1');
+
+  // The restart. A fresh manager's in-memory leases are empty by construction, so
+  // what is left is the branch the slot is checked out on and whether the harness
+  // still has work in flight on it — which a restored orphan does.
+  const outstanding = new Set(['issue/1']);
+  const after = new WorktreeManager(repo, root, { size: 3, held: (b) => outstanding.has(b) });
+  assert.notEqual(await after.ensure('issue/2'), restored, "a restored agent's slot is not reissued under it");
+
+  // `requeue` and `remove` settle the task, and that is the boot release: nothing
+  // in the manager had to remember anything for it to happen.
+  outstanding.clear();
+  const later = new WorktreeManager(repo, root, { size: 3, held: () => false });
+  assert.equal(await later.ensure('issue/3'), restored);
+});
+
+test('deleteBranch drops the branch ref and keeps the directory, squash-merged or not', async () => {
+  const repo = initRepo();
+  const wt = manager(repo);
+
+  const dir = await wt.ensure('issue/12');
+  writeFileSync(join(dir, 'work.txt'), 'work');
+  git(dir, ['add', '.']);
+  git(dir, ['commit', '-q', '-m', 'work']);
+  // Landed the way `merge_pr` lands things: squashed, so the branch has *no*
+  // ancestry link to main. `git branch -d` refuses on exactly this, which is why
+  // the reap uses -D — with -d it would silently never delete anything.
+  git(repo, ['merge', '-q', '--squash', 'issue/12']);
+  git(repo, ['commit', '-q', '-m', 'squashed']);
+
+  await wt.deleteBranch('issue/12');
+
+  assert.equal(git(repo, ['branch', '--list', 'issue/12']), '', 'the local branch should be gone');
+  assert.ok(existsSync(dir), 'the slot is the pool’s, not the branch’s');
+  assert.equal(git(dir, ['rev-parse', '--abbrev-ref', 'HEAD']), 'HEAD', 'detached, which is what freed the ref');
+  assert.equal(await wt.ensure('issue/13'), dir, 'and it goes straight back into the pool');
+});
+
+test('deleteBranch on a branch that does not exist is a no-op', async () => {
+  const repo = initRepo();
+  const wt = manager(repo);
+  await wt.deleteBranch('never/existed');
 });
 
 // ---------------------------------------------------------------------------
@@ -254,50 +458,38 @@ test('the fake is reuse-first, like the real one, and ignores base on reuse', as
   const second = await wt.ensure('issue/12', 'some/other/base');
 
   // Reuse-first is load-bearing in production — `Store.findActiveTaskByBranch`
-  // exists because one branch is one directory — so a fake minting a fresh path
-  // per call would let a test assert behaviour the real manager does not have.
+  // exists because of it — so a fake minting a fresh path per call would let a
+  // test assert behaviour the real manager does not have.
   assert.equal(second, first);
   assert.equal(wt.ensured.length, 2);
 });
 
-test('the fake removes what it made, and a removal of nothing is a no-op', async () => {
+test('the fake leases slots too: a live branch keeps its directory, a released one gives it up', async () => {
   const wt = new FakeWorktreeManager();
-  const dir = await wt.ensure('issue/12', 'main');
+
+  const live = await wt.ensure('issue/12', 'main');
+  const other = await wt.ensure('issue/13', 'main');
+  // A fake still keyed on the branch would hand every branch its own path and keep
+  // every test green while the real manager started leasing slots.
+  assert.notEqual(other, live);
 
   await wt.remove('issue/12');
   await wt.remove('never/existed');
-
-  assert.equal(existsSync(dir), false);
+  assert.ok(existsSync(live), 'and it deletes nothing — the directory is the warm state');
   assert.deepEqual(wt.removed, ['issue/12', 'never/existed']);
-  // Removed, then asked for again: a fresh directory, exactly as the real one.
-  assert.ok(existsSync(await wt.ensure('issue/12', 'main')));
+
+  // Released, and still on its old occupant, so that branch gets it straight back.
+  assert.equal(await wt.ensure('issue/12'), live);
+  await wt.remove('issue/12');
+  assert.equal(await wt.ensure('issue/14'), live, 'and any other branch takes the free slot');
 });
 
-test('deleteBranch drops the worktree and the branch ref, squash-merged or not', async () => {
-  const repo = initRepo();
-  const wt = new WorktreeManager(repo, join(repo, '.wt'));
+test('the fake refuses past its bound, as the real one does', async () => {
+  const wt = new FakeWorktreeManager(undefined, 1);
 
-  // No base: forked from the repo's HEAD, whatever `git init` named it.
-  const dir = await wt.ensure('issue/12');
-  writeFileSync(join(dir, 'work.txt'), 'work');
-  git(dir, ['add', '.']);
-  git(dir, ['commit', '-q', '-m', 'work']);
-  // Landed the way `merge_pr` lands things: squashed, so the branch has *no*
-  // ancestry link to main. `git branch -d` refuses on exactly this, which is why
-  // the reap uses -D — with -d it would silently never delete anything.
-  git(repo, ['merge', '-q', '--squash', 'issue/12']);
-  git(repo, ['commit', '-q', '-m', 'squashed']);
+  await wt.ensure('issue/12');
 
-  await wt.deleteBranch('issue/12');
-
-  assert.equal(existsSync(dir), false, 'the worktree should be gone');
-  assert.equal(git(repo, ['branch', '--list', 'issue/12']), '', 'the local branch should be gone');
-});
-
-test('deleteBranch on a branch that does not exist is a no-op', async () => {
-  const repo = initRepo();
-  const wt = new WorktreeManager(repo, join(repo, '.wt'));
-  await wt.deleteBranch('never/existed');
+  await assert.rejects(() => wt.ensure('issue/13'), /No free worktree slot for branch issue\/13/);
 });
 
 /**

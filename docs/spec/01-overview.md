@@ -64,8 +64,10 @@ action are written to the `decisions` table, so an idle cycle is as explainable 
 
 ## Task kinds
 
-- **`code`** — runs in a git worktree of `repoRoot`, on a named branch. Worktrees are keyed by branch
-  and reused, so two tasks on one branch share one checkout.
+- **`code`** — runs in a git worktree of `repoRoot`, on a named branch. Worktrees are a bounded pool
+  of directories leased to branches and switched rather than recreated, so a dispatch starts warm;
+  a branch holding a lease gets the same directory back, so two tasks on one branch share one
+  checkout. → [09](09-execution.md#worktrees)
 - **`desk`** — runs in a scratch directory under `deskRoot`, keyed by task id. No branch, no worktree.
 
 ## The dispatcher

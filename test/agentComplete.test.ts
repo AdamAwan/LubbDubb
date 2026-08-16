@@ -79,7 +79,7 @@ test('completing an agent lands on the done terminal, not the kill one', async (
   system.store.close();
 });
 
-test('a completed agent is reaped as done, and its worktree removed', async () => {
+test('a completed agent is reaped as done, and its worktree slot released', async () => {
   const { system } = build();
   await codeAgent(system, 8);
   const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
@@ -91,12 +91,13 @@ test('a completed agent is reaped as done, and its worktree removed', async () =
   // (`worktreeCleanup.test.ts` holds that property on the sentinel path). Here the
   // kill *is* the exit, so what this asserts is the half `kill()` suppresses:
   // `exited` is left intact, so a completed agent is reaped where a killed one
-  // never is, and the worktree is reclaimed.
+  // never is, and its pool slot goes back.
   system.agents.complete(agent.id);
-  await waitFor(() => !existsSync(cwd));
+  await waitFor(() => reaps.length > 0);
 
   assert.deepEqual(reaps, ['done'], 'a completed agent must be reaped, and reaped as done');
-  assert.ok(!existsSync(cwd), 'a completed agent gets the clean finish: worktree removed');
+  assert.ok(existsSync(cwd), 'the directory stays — releasing the slot is not deleting it');
+  assert.equal(await system.worktrees.ensure('someone/else', 'main'), cwd, 'the slot is back in the pool');
   system.store.close();
 });
 

@@ -1,7 +1,6 @@
 import { existsSync, mkdirSync, rmSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
 import { runGit, resolveCommit } from '../git/gitCli.js';
-import { branchDirName } from './branchDir.js';
 
 /**
  * Git's *write* side, as the one seam the executor depends on. Its read side has
@@ -10,75 +9,141 @@ import { branchDirName } from './branchDir.js';
  * dispatched a code agent cut a real branch in whatever checkout `repoRoot`
  * happened to name (`process.cwd()` by default) and never deleted it.
  *
- * Deliberately two methods: `ensure`/`remove` is the whole of what
+ * Deliberately three methods: `ensure`/`remove`/`deleteBranch` is the whole of what
  * {@link ActionExecutor} and the reap in `system.ts` ask for, and a seam wider
  * than its consumer is a fake with behaviour nobody checks.
  */
 export interface Worktrees {
-  /** Path to a worktree for `branch`, creating it if needed. */
+  /**
+   * Path to a worktree for `branch`, leasing a pool slot and switching it onto the
+   * branch. Throws when no slot is free — the dispatch is rejected rather than
+   * queued behind a directory.
+   */
   ensure(branch: string, base?: string): Promise<string>;
-  /** Drop the worktree for `branch` if one exists; a no-op otherwise. */
+  /**
+   * Release the lease `ensure` took. **The directory stays**, with everything git
+   * ignores in it, for whichever branch gets the slot next.
+   */
   remove(branch: string): Promise<void>;
   /**
-   * Drop the worktree *and* the local branch ref — the local half of the reap after
+   * Release the lease *and* the local branch ref — the local half of the reap after
    * a pull request merges. A branch that does not exist locally is a no-op.
    */
   deleteBranch(branch: string): Promise<void>;
 }
 
 /**
- * Creates git worktrees lazily — only when a code task needs one — keyed by
- * branch and reused if a worktree for that branch already exists. Desk tasks
- * never call this. Keeping worktrees per-branch means two tasks on the same
- * branch share a checkout instead of fighting over it.
+ * A bounded pool of git worktree directories, leased to branches on demand.
+ *
+ * **Why a pool and not a directory per branch.** Every goal mints branches — the
+ * assay, the pickup, one per plan part — and the old manager created a directory
+ * per branch and deleted it when the work ended. So every code agent landed in a
+ * tree with nothing installed and paid to install it before it could run one
+ * check: minutes of wall clock and several tool turns per dispatch, for setup
+ * whose answer was already on disk in the sibling worktree deleted an hour ago.
+ * A slot that is switched rather than recreated keeps everything git ignores,
+ * which is where a project's build state lives — so warm dependencies are a
+ * *consequence* of reuse rather than something the harness manages. Nothing here
+ * knows what a package manager is, and nothing here should learn.
+ *
+ * **What a directory per branch was silently providing.** It was the only thing
+ * stopping two agents sharing a checkout: one branch, one path, so a second agent
+ * on a different branch could not land in the first one's tree. Pooling breaks that
+ * coupling, so the lease below is explicit and checked on every hand-out. Getting it
+ * wrong would put two agents in one directory on different branches — worse than
+ * anything `fileOverlap` reports, since `sameWorktree` at least assumes they agree
+ * on the branch.
+ *
+ * Desk tasks never call any of this.
  */
 export class WorktreeManager implements Worktrees {
+  /**
+   * The slot this run handed to each branch, until {@link remove} releases it.
+   *
+   * **In memory on purpose, and it is only half the lease.** It covers the window a
+   * durable reading cannot: an agent's task is settled the moment it reports done,
+   * but its *process* is still sitting in the directory until `reaped` fires, and
+   * cleaning and switching a tree out from under an exiting process is exactly the
+   * kind of damage that shows up as an `EBUSY` two days later. `system.ts` releases
+   * on `reaped`, which is the honest end of "something is still in there".
+   *
+   * The other half is {@link WorktreeManager.pool.held}, and it is the half that
+   * survives a restart — see there.
+   */
+  private readonly leases = new Map<string, string>();
+
   constructor(
     private readonly repoRoot: string,
     private readonly worktreeRoot: string,
+    private readonly pool: {
+      /**
+       * Hard bound on how many slot directories may exist under `worktreeRoot`.
+       * Disk is then bounded too, which the old manager never was: twenty
+       * concurrent agents meant twenty full checkouts and no ceiling at all.
+       */
+      size: number;
+      /**
+       * Whether the harness still has work in flight on a branch — wired to
+       * `Store.findActiveTaskByBranch`, the same predicate the executor's branch
+       * gate asks.
+       *
+       * **This is what makes the lease survive a restart.** A restart empties
+       * {@link WorktreeManager.leases}, and crash recovery may then *restore* an
+       * orphan back into its existing directory; with the in-memory half alone the
+       * very next dispatch would clean and switch that tree under the restored
+       * agent. A restored orphan's task is still outstanding, so this reports its
+       * slot held. The mirror case is the release the boot needs: `requeue` and
+       * `remove` verdicts settle the task, and the slot is free that instant.
+       */
+      held: (branch: string) => boolean;
+    },
   ) {}
 
   /**
-   * Return the path to a worktree for `branch`, creating it if needed. A *new*
-   * branch is cut from `base` (resolved by {@link resolveCommit}, so
-   * `origin/<base>` wins over the local ref); omitting `base` forks it from the
-   * repo root's HEAD, which is whatever that checkout happens to be sitting on.
+   * Return the path to a worktree for `branch`, leasing a slot for it.
    *
-   * **Reuse comes first, and `base` is then ignored entirely** — an existing
-   * worktree, or an existing local branch, is handed back as-is. That is
-   * deliberate (you don't move an in-flight agent's branch out from under it),
-   * but it means `ensure(branch, base)` does *not* guarantee the branch is based
-   * on `base`; it only decides where a branch that didn't exist starts.
+   * **Reuse comes first, and `base` is then ignored entirely** — a slot already
+   * checked out on the branch, or an existing local branch, is handed back as-is.
+   * That is deliberate (you don't move an in-flight agent's branch out from under
+   * it), but it means `ensure(branch, base)` does *not* guarantee the branch is
+   * based on `base`; it only decides where a branch that didn't exist starts. Two
+   * tasks on one branch therefore share a checkout rather than fighting over it,
+   * exactly as they did before there was a pool.
    *
-   * A `base` that resolves to nothing throws rather than quietly falling back to
-   * HEAD: silently picking an incidental base is the bug this parameter exists to
-   * fix. The executor records the failure as a rejected dispatch.
+   * Otherwise a **free** slot is cleaned and switched onto the branch (see
+   * {@link handOver}), and only when there is none does the pool grow, up to its
+   * bound. A `base` that resolves to nothing throws rather than quietly falling back
+   * to HEAD: silently picking an incidental base is the bug this parameter exists to
+   * fix. So does an exhausted pool, and so does a switch that git refuses. The
+   * executor records each as a rejected dispatch — **never** a silent fall back to a
+   * fresh directory, which would reintroduce the cold start invisibly.
    */
   async ensure(branch: string, base?: string): Promise<string> {
+    // Cheap, idempotent, and it must run before the slot scan rather than inside
+    // {@link reclaim}: a slot whose directory vanished leaves an admin entry that
+    // would otherwise read as an occupied path forever, so the pool would shrink
+    // by one per lost directory with nothing to say so.
+    await this.git(['worktree', 'prune']).catch(() => {});
+
     const existing = await this.findExisting(branch);
-    if (existing) return existing;
+    if (existing) return this.lease(branch, existing);
 
-    const dir = resolve(this.worktreeRoot, branchDirName(branch));
     mkdirSync(this.worktreeRoot, { recursive: true });
-    await this.reclaim(dir);
+    const slots = await this.slots();
+    const survey = await this.survey(slots);
+    if (survey.free) {
+      await this.handOver(survey.free, branch, base);
+      return this.lease(branch, survey.free);
+    }
 
-    if (await this.branchExists(branch)) {
-      await this.git(['worktree', 'add', dir, branch]);
-      return dir;
-    }
-    if (base === undefined) {
-      await this.git(['worktree', 'add', '-b', branch, dir]);
-      return dir;
-    }
-    const startPoint = await resolveCommit(this.repoRoot, base);
-    if (!startPoint) {
-      throw new Error(`Cannot create branch ${branch}: base '${base}' resolves to no commit in ${this.repoRoot}.`);
-    }
-    await this.git(['worktree', 'add', '-b', branch, dir, startPoint]);
-    return dir;
+    const minted = this.nextSlotPath(slots);
+    if (!minted) throw new Error(this.exhausted(branch, survey.blocked));
+    await this.reclaim(minted);
+    await this.create(minted, branch, base);
+    return this.lease(branch, minted);
   }
 
-  /** Path of an existing worktree for the branch, or null. */
+  /** Path of an existing worktree checked out on the branch, or null. */
   async findExisting(branch: string): Promise<string | null> {
     const entries = await this.registered();
     const match = entries.find((e) => e.branch === branch || e.branch === `refs/heads/${branch}`);
@@ -86,14 +151,23 @@ export class WorktreeManager implements Worktrees {
     return null;
   }
 
-  async remove(branch: string): Promise<void> {
-    const dir = await this.findExisting(branch);
-    if (!dir) return;
-    await this.git(['worktree', 'remove', '--force', dir]);
+  /**
+   * Release the lease. Nothing is deleted, which is the whole change: the slot keeps
+   * its checkout and everything git ignores in it, and the next branch to be handed
+   * this slot starts warm.
+   *
+   * A failed or killed agent's tree therefore survives for inspection the way it
+   * always did — until the slot is reissued, which is the trade pooling makes. What
+   * it must *not* do is go on holding the slot: nothing would ever release it and
+   * the pool would shrink by one per failure.
+   */
+  remove(branch: string): Promise<void> {
+    this.leases.delete(branch);
+    return Promise.resolve();
   }
 
   /**
-   * Drop the worktree and then the branch ref itself, for a branch whose pull
+   * Release the lease and then delete the branch ref itself, for a branch whose pull
    * request has merged.
    *
    * **`-D`, not `-d`.** `merge_pr` squashes, and a squash-merged branch has no
@@ -102,33 +176,214 @@ export class WorktreeManager implements Worktrees {
    * delete anything. The safety `-d` offers is already provided by the caller, which
    * only asks for branches the provider says are merged.
    *
+   * **The slot is detached, not removed.** `git branch -D` refuses a branch that is
+   * checked out anywhere, and the directory is no longer this branch's to delete —
+   * detaching frees the ref and leaves the warm tree standing for the next occupant.
+   * The repo's own main worktree is left alone: detaching an operator's checkout to
+   * reap a branch would be a rude surprise, and `-D` failing loudly is the honest
+   * answer there.
+   *
    * A branch that is not there is a no-op rather than a failure: the reap's question
    * is whether the ref is gone, and both answers satisfy it.
    */
   async deleteBranch(branch: string): Promise<void> {
     await this.remove(branch);
+    const holding = await this.findExisting(branch);
+    if (holding !== null && holding !== resolve(this.repoRoot)) await runGit(holding, ['switch', '--detach']);
     if (!(await this.branchExists(branch))) return;
     await this.git(['branch', '-D', branch]);
+  }
+
+  /** Record the lease and hand the path back — the one place a lease is taken. */
+  private lease(branch: string, dir: string): string {
+    this.leases.set(branch, dir);
+    return dir;
+  }
+
+  /**
+   * The first free slot, and — when there is none — why each of the others was not.
+   *
+   * Two conditions make a slot unavailable, and the second is a correctness rule
+   * rather than a convenience. **A slot carrying uncommitted tracked changes is
+   * never handed to another branch**: `git switch` happily *carries* uncommitted
+   * edits across when they do not conflict, so a failed agent's half-finished work
+   * would land on an unrelated branch and be committed there by an agent that has no
+   * idea where it came from. Refusing the slot is also what makes a switch failure
+   * exceptional enough to reject a dispatch over.
+   *
+   * The reason each blocked slot is blocked is collected as it goes, because the
+   * message an exhausted pool throws is the operator's only handle on it — "no free
+   * slot" alone names neither what is holding them nor what to do.
+   */
+  private async survey(slots: WorktreeEntry[]): Promise<{ free: string | null; blocked: string[] }> {
+    const blocked: string[] = [];
+    for (const slot of slots) {
+      const holder = this.holder(slot);
+      if (holder !== null) {
+        blocked.push(`${slot.path} (work in flight on ${holder})`);
+        continue;
+      }
+      if (await this.dirty(slot.path)) {
+        blocked.push(`${slot.path} (uncommitted changes on ${shortBranch(slot.branch) ?? 'a detached HEAD'})`);
+        continue;
+      }
+      return { free: slot.path, blocked };
+    }
+    return { free: null, blocked };
+  }
+
+  /**
+   * The branch still holding this slot, or null when nothing does — the lease, asked.
+   *
+   * The two arms are the two halves described on {@link WorktreeManager.leases} and
+   * `pool.held`, and they cover windows the other cannot: this run's own lease runs
+   * until the process is reaped, and the branch actually checked out in the slot is
+   * what a restart has left to go on.
+   */
+  private holder(slot: WorktreeEntry): string | null {
+    const leased = this.leaseOn(slot.path);
+    if (leased !== null) return leased;
+    const occupant = shortBranch(slot.branch);
+    if (occupant !== null && this.pool.held(occupant)) return occupant;
+    return null;
+  }
+
+  private leaseOn(dir: string): string | null {
+    for (const [branch, held] of this.leases) if (held === dir) return branch;
+    return null;
+  }
+
+  /** Does this slot carry changes to *tracked* files that nobody has committed? */
+  private async dirty(dir: string): Promise<boolean> {
+    try {
+      const { stdout } = await runGit(dir, ['status', '--porcelain', '--untracked-files=no']);
+      return stdout.trim() !== '';
+    } catch {
+      // A slot git cannot even read is not one to hand out.
+      return true;
+    }
+  }
+
+  /**
+   * Clean a free slot and switch it onto `branch`.
+   *
+   * **`-fd`, never `-fdx`.** The ignored files are the warm state this pool exists
+   * to keep; `-x` would delete the dependencies and defeat the whole change, and
+   * excluding named paths would be the repo-specific configuration the harness must
+   * not grow. What is left behind is a stale ignored build output — a `dist/`, a
+   * generated file — that can mislead a later agent on a different branch. That is
+   * an accepted trade, recorded in [09](../../docs/spec/09-execution.md#worktrees).
+   *
+   * **Ordering.** The clean runs before the switch because `git switch` refuses when
+   * an untracked file would be overwritten. The start point is resolved before
+   * either, so an unresolvable `base` leaves the slot exactly as it was rather than
+   * cleaned and half-prepared.
+   *
+   * **The reset forms are unreachable, and that is the point.** `git switch -C` and
+   * `git checkout -B` *reset* an existing branch to the start point, which on a slot
+   * being handed to a branch that already has commits — a re-dispatch, a retry, a
+   * part picked up again — discards them with nothing red anywhere. So existence is
+   * checked first and the create form is only ever reached for a branch that does
+   * not exist.
+   */
+  private async handOver(dir: string, branch: string, base?: string): Promise<void> {
+    const exists = await this.branchExists(branch);
+    const start = exists ? null : await this.startPoint(branch, base);
+    try {
+      await runGit(dir, ['clean', '-fd']);
+      await runGit(dir, start === null ? ['switch', '--quiet', branch] : ['switch', '--quiet', '-c', branch, start]);
+    } catch (err) {
+      throw new Error(`Cannot hand worktree slot ${dir} to branch ${branch}: ${(err as Error).message}`);
+    }
+  }
+
+  /** Add a brand-new slot directory, already on the branch. */
+  private async create(dir: string, branch: string, base?: string): Promise<void> {
+    if (await this.branchExists(branch)) {
+      await this.git(['worktree', 'add', dir, branch]);
+      return;
+    }
+    await this.git(['worktree', 'add', '-b', branch, dir, await this.startPoint(branch, base)]);
+  }
+
+  /**
+   * Where a branch that does not exist yet starts, as a **commit**.
+   *
+   * An omitted `base` means the repo root's HEAD — what `git worktree add -b` used
+   * to fork from implicitly. It is named explicitly now because a pooled slot's own
+   * HEAD is the *previous occupant's*, so leaving it implicit would silently mis-base
+   * every branch cut into a reused slot.
+   */
+  private async startPoint(branch: string, base?: string): Promise<string> {
+    if (base === undefined) {
+      const { stdout } = await this.git(['rev-parse', 'HEAD']);
+      return stdout.trim();
+    }
+    const startPoint = await resolveCommit(this.repoRoot, base);
+    if (!startPoint)
+      throw new Error(`Cannot create branch ${branch}: base '${base}' resolves to no commit in ${this.repoRoot}.`);
+    return startPoint;
+  }
+
+  /** The pool: every registered worktree under `worktreeRoot`, in a stable order. */
+  private async slots(): Promise<WorktreeEntry[]> {
+    const entries = await this.registered();
+    return entries.filter((e) => isUnder(this.worktreeRoot, e.path)).sort((a, b) => (a.path < b.path ? -1 : 1));
+  }
+
+  /**
+   * Where the next slot would go, or null when the pool is at its bound.
+   *
+   * The lowest unused index rather than a count, so a pool that lost a slot fills the
+   * hole instead of walking its names upward. A directory left by a pre-pool
+   * deployment (named after a branch) is a registered worktree under the same root,
+   * so it counts toward the bound and is reused like any other slot — the migration
+   * is that there isn't one.
+   */
+  private nextSlotPath(slots: WorktreeEntry[]): string | null {
+    if (slots.length >= this.pool.size) return null;
+    const taken = new Set(slots.map((e) => e.path));
+    for (let i = 0; i < this.pool.size; i += 1) {
+      const dir = resolve(this.worktreeRoot, slotDirName(i));
+      if (!taken.has(dir)) return dir;
+    }
+    return null;
+  }
+
+  /**
+   * What an exhausted pool says. Rejecting is preferable to blocking — the executor
+   * already records a rejected dispatch and settles the task, and the next cycle
+   * tries again — but a rejection that does not name the slots or the knob is a dead
+   * end for whoever reads the decision log.
+   */
+  private exhausted(branch: string, blocked: string[]): string {
+    return (
+      `No free worktree slot for branch ${branch}: all ${this.pool.size} slots under ${this.worktreeRoot} are ` +
+      `unavailable — ${blocked.join('; ')}. A slot is held while the harness has work in flight on the branch ` +
+      'checked out in it, and a slot carrying uncommitted tracked changes is never handed to another branch, ' +
+      'because git would carry those edits across onto it. Raise `worktreePoolSize`, or commit or discard the ' +
+      'changes in the slots named above; the dispatch is retried next cycle either way.'
+    );
   }
 
   /**
    * Free a target path that a *dead* checkout is squatting on. An interrupted or
    * killed agent can leave its worktree de-registered-but-present — the
-   * `.git/worktrees/<name>` admin entry gone, the folder still on disk — which
-   * `findExisting` cannot see (it reads the porcelain list) and
-   * `git worktree add` then refuses with `fatal: '<dir>' already exists`. Since
-   * the path is deterministic, every retry hits the same wall: the branch is
-   * wedged for good and the issue never gets an agent.
+   * `.git/worktrees/<name>` admin entry gone, the folder still on disk — which the
+   * porcelain list cannot see and `git worktree add` then refuses with
+   * `fatal: '<dir>' already exists`. Since slot paths are deterministic, every retry
+   * hits the same wall: the slot is wedged for good and the pool is one smaller.
    *
-   * `git worktree prune` does *not* cover it — prune is the mirror case, an
-   * admin entry whose directory vanished — so it runs first only to clear that
-   * cruft cheaply before the porcelain list is read.
+   * `git worktree prune` does *not* cover it — prune is the mirror case, an admin
+   * entry whose directory vanished — which is why {@link ensure} runs prune ahead of
+   * the slot scan and this separately.
    *
-   * **Registered is untouchable.** The guard is the porcelain list, not the
-   * presence of a `.git` file: a directory git still knows about is some agent's
-   * live checkout, and yanking it mid-run is far worse than the collision. When
-   * one stands here (two branches can sanitize onto one directory) the `add`
-   * below fails loudly, which is the honest answer.
+   * **Registered is untouchable.** The guard is the porcelain list, not the presence
+   * of a `.git` file: a directory git still knows about is some agent's live
+   * checkout, and yanking it mid-run is far worse than the collision. A registered
+   * worktree standing here is not reachable through the pool scan either (it would
+   * have been surveyed as a slot), so the `add` below failing loudly is the honest
+   * answer.
    *
    * Reclaiming discards whatever the dead orphan still held. That is acceptable:
    * with no admin entry there is no branch or commit behind those files and no
@@ -143,7 +398,6 @@ export class WorktreeManager implements Worktrees {
    * and `EBUSY: resource busy or locked` does not tell them that is what to do.
    */
   private async reclaim(dir: string): Promise<void> {
-    await this.git(['worktree', 'prune']).catch(() => {});
     if (!existsSync(dir)) return;
     const entries = await this.registered();
     if (entries.some((e) => e.path === dir)) return;
@@ -160,7 +414,7 @@ export class WorktreeManager implements Worktrees {
   /**
    * The live worktrees, paths resolved: git's porcelain output is
    * forward-slashed even on Windows, so an unresolved path would never compare
-   * equal to the `resolve`d target `reclaim` guards on.
+   * equal to the `resolve`d slot paths every check here is built on.
    */
   private async registered(): Promise<WorktreeEntry[]> {
     const { stdout } = await this.git(['worktree', 'list', '--porcelain']);
@@ -179,6 +433,36 @@ export class WorktreeManager implements Worktrees {
   private git(args: string[]): Promise<{ stdout: string; stderr: string }> {
     return runGit(this.repoRoot, args);
   }
+}
+
+/**
+ * How a pool slot index becomes a directory name, in one place — the real manager
+ * and {@link FakeWorktreeManager} both.
+ *
+ * It replaced `branchDirName`, which sanitised a *branch* into a directory name.
+ * That mapping had to be shared because it could **collide**: with one directory per
+ * branch, two branches sanitising onto one name landed on one checkout, and the fake
+ * had to reproduce it. A slot is not named after what it holds, so there is nothing
+ * left to collide and the sharing is now only so the two roots look alike.
+ */
+export function slotDirName(index: number): string {
+  return `slot-${index}`;
+}
+
+/**
+ * How many slots the pool gets beyond the concurrency cap.
+ *
+ * The cap bounds how many agents are *running*, and slots are held slightly longer
+ * than that: from `ensure` until the agent's process is actually reaped, and by any
+ * slot left carrying uncommitted changes by a run that failed. Sized to absorb that
+ * rather than to hide a leak — a pool that needs more than this is a deployment that
+ * should say so through `worktreePoolSize`.
+ */
+const POOL_SLACK = 2;
+
+/** The pool bound a deployment that does not configure one runs on. */
+export function defaultPoolSize(maxConcurrentAgents: number): number {
+  return Math.max(1, maxConcurrentAgents) + POOL_SLACK;
 }
 
 /**
@@ -220,6 +504,18 @@ function reclaimFailure(dir: string, err: NodeJS.ErrnoException): string {
 interface WorktreeEntry {
   path: string;
   branch: string | null;
+}
+
+/** `refs/heads/x` as `x`, which is what every branch predicate here is asked about. */
+function shortBranch(ref: string | null): string | null {
+  if (ref === null) return null;
+  return ref.startsWith('refs/heads/') ? ref.slice('refs/heads/'.length) : ref;
+}
+
+/** Is `path` inside `root`? Both are already resolved when this is asked. */
+function isUnder(root: string, path: string): boolean {
+  const rel = relative(root, path);
+  return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
 }
 
 function parseWorktreeList(porcelain: string): WorktreeEntry[] {

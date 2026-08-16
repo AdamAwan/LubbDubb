@@ -210,8 +210,9 @@ export class ActionExecutor {
             task = this.recordDispatchTask(action, evidence, retry);
             // A desk retry keeps the previous scratch directory; every other dispatch
             // gets the directory its own task names. A *code* retry still goes through
-            // `ensure` — a cleanly finished agent's worktree is removed when it is
-            // reaped and has to come back — and lands on the same deterministic path.
+            // `ensure` — the slot's lease was released when the previous agent was
+            // reaped — and reuse-first lands it back on the slot still checked out on
+            // the branch, so `--resume` finds the transcript where it left it.
             const cwd =
               retry && action.type === 'dispatch_desk_agent'
                 ? retry.previous.cwd
@@ -713,10 +714,17 @@ export class ActionExecutor {
    * {@link AgentManager.spawn} settles its own task as `failed` when the session
    * fails to start — a more specific reading of the same failure, which this must
    * not overwrite.
+   *
+   * **The worktree slot goes back too.** A dispatch that got past `ensure` and threw
+   * at the spawn holds a lease no `reaped` event will ever release, because no
+   * process ever ran; left alone the pool shrinks by one per such failure, silently,
+   * until every dispatch is rejected for want of a slot. Releasing a branch that was
+   * never leased (an `ensure` that threw is the common case here) is a no-op.
    */
   private abandonUnstarted(task: Task): void {
     const current = this.deps.store.getTask(task.id);
     if (current && isActiveTask(current)) this.deps.store.updateTask(task.id, { status: 'interrupted' });
+    if (task.branch) void this.deps.worktrees.remove(task.branch).catch(() => {});
   }
 
   /**
