@@ -136,8 +136,12 @@ decomposition.
 Your part is the header controls on the goal page:
 
 - **Mark done** when the goal is met.
-- **Work left** when it is not — a third control rather than the other end of the toggle, because it
-  is what puts the goal back in front of the harness once no PR is open.
+- **More work** when it is not, and say what is left in your own words — _change the button to
+  primary_, _the permission is wrong_. A third control rather than the other end of the toggle,
+  because it does two things the toggle cannot: your sentence goes to the next agent verbatim, and the
+  goal goes back in front of the harness once no PR is open. Several stand at once, they are drawn on
+  the goal page until an agent concludes it, and any of them can be withdrawn. The agent amends the
+  ticket itself when what you said changes what the goal asks for.
 - **Raise a bug** when you ran the thing and it does not do what you expect. That is the one fact
   about a goal no agent on it can derive, because none of them ran it. Your words become the new
   goal.
@@ -148,7 +152,7 @@ the item open.
 
 ### 5. Conclude, or let it end
 
-A run lives until it is ended. `Mark done`, `Work left`, or `End the run` on a retained one. A fleet
+A run lives until it is ended. `Mark done`, `More work`, or `End the run` on a retained one. A fleet
 whose goals never conclude fills the rail with obligations nobody has retired, and that is the state
 in which people stop reading the rail — which is the only real failure mode of this whole
 arrangement.

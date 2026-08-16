@@ -211,6 +211,7 @@ introduced.
 | `findings`             | Things agents noticed outside their own task.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | —                                                                                                                                            |
 | `human_tasks`          | Work only a person can do. `part_id` is the only way one holds work off the fleet; nothing in the dispatcher reads this table. `kind` tells the harness's own close-out from everything a person or an agent asked for, and `dismissed_at` is the settled row an operator has cleared off the bench — presentation, never a fourth status.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | —                                                                                                                                            |
 | `issue_conclusions`    | Whether an issue is finished, per issue origin. One row, overwritten per declaration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `origin_ref` is `PRIMARY KEY`                                                                                                                |
+| `issue_instructions`   | What the operator has told the fleet to do on a goal, in their own words ("change the button to primary"). Append-only, several per goal, and settled together by the conclusion that answers them. Not a verdict: nothing gates on it. |
 | `plans`                | One delivery plan per issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `origin_ref` is `UNIQUE`                                                                                                                     |
 | `plan_parts`           | Parts of a multi-PR plan. `depends_on`, `touches` and `acceptance_met` are JSON arrays.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `UNIQUE (plan_id, slug)`                                                                                                                     |
 | `plan_revisions`       | Every plan a planner has submitted for one plan row, oldest first. `narrative` and `parts` are JSON. Append-only. Its `verdict` column is vestigial — written, never read — since every plan is a list of parts.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `UNIQUE (plan_id, seq)`                                                                                                                      |
@@ -241,7 +242,8 @@ introduced.
 Indexes cover the hot lookups: `agent_flags(agent_id)`, `agent_files(agent_id)`, `agents(status)`,
 `tasks(status)`, `jobs(status)`, `job_attachments(target_ref)`, `job_schedules(enabled, next_run_at)`, `findings(status)`, `plans(origin_ref)`, `plan_parts(plan_id)`, `validation_checks(origin_ref)`,
 `decisions(cycle_id)`, `world_events(created_at)`, `usage_events(at)`, `error_events(created_at)`,
-`work_nodes(parent_ref)`, `work_item_filings(job_id)`, `issue_bug_filings(origin_ref)`, `tasks(origin_ref)`. The last is the work graph's attempt list: a node's
+`work_nodes(parent_ref)`, `work_item_filings(job_id)`, `issue_bug_filings(origin_ref)`,
+`issue_instructions(origin_ref)`, `tasks(origin_ref)`. The last is the work graph's attempt list: a node's
 attempts are the `tasks` rows carrying its origin, so no separate attempts table exists — `tasks` only
 lacked the index.
 
@@ -403,6 +405,31 @@ shortfall normalises `part_slug` against `cause`, an assay keeps `comment_ref` o
 is unchanged — so a version of it that owned the row would be a `switch (kind)`: the same four
 half-rows, moved. The boundary is exactly what is uniform: an upsert keyed on `origin_ref`, plus a
 set of sibling rows to delete, in one transaction.
+
+### Operator instructions on a goal
+
+`addIssueInstruction({originRef, text})`, `listStandingInstructions(originRef)`,
+`listAllStandingInstructions()`, `settleInstructions(originRef)`, `withdrawInstruction(id)` —
+`src/store/instructions.ts`.
+
+Not filed with the verdicts above, and the distinction is the whole shape. Every table there holds one
+standing answer per issue, overwritten per declaration, read by a gate. An instruction is **input**:
+several stand at once, they are appended to every dispatch on the goal
+([09](09-execution.md#the-operators-own-instructions-reach-the-agent)), and nothing in the dispatcher
+branches on them. Putting a growing list under the module whose discipline is one-row-per-issue would
+have cost that discipline its meaning.
+
+- **Append-only.** No update beside the insert, for the scratchpad's reason: a revised instruction
+  would leave a record of what the operator ended up asking for rather than what the agent was actually
+  handed, and the two differ exactly when something went wrong.
+- **`settled_at` is the whole lifecycle**, and a settled row is kept rather than deleted so the trail of
+  what was asked survives the asking. It is set by the agent's `conclude_work` (all of a goal's at once)
+  or by the operator withdrawing one.
+- **Ordered `created_at ASC, rowid ASC`**, `listScratchEntries`' tie-break for its reason: the id is a
+  nanoid, so two rows written in the same millisecond would otherwise come back in a random order, and
+  the list is read as a sequence.
+- **One grouped read for the snapshot**, `listScratchPadSummaries`' rule: `/api/state` is polled, and a
+  read per goal would scale the poll with the size of the backlog.
 
 ### Plans
 

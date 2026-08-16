@@ -44,6 +44,7 @@ type IssueSeed = Omit<
   | 'assay'
   | 'conclusion'
   | 'delivery'
+  | 'instructions'
   | 'modelPin'
   | 'retrospective'
   | 'scratchpad'
@@ -65,6 +66,8 @@ function demoIssue(seed: IssueSeed): Issue {
     modelPin: { profile: null, ignoredTags: [] },
     retrospective: null,
     scratchpad: null,
+    // Nothing standing, which is every goal the operator has not written on.
+    instructions: [],
     // Null rather than a zero: a goal nothing measured and a goal that cost
     // nothing are different facts, and the demo must not model the one the
     // cockpit is built to keep apart. Fixtures that have been worked set it.

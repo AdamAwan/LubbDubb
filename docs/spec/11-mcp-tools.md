@@ -289,8 +289,13 @@ everything is delivered and it is waiting on test. See
   over-long one (>2000 chars) is refused rather than silently cut.
 - **A `more_work` note reaches the next agent** for that issue, appended to its prompt, attributed and
   quoted so it reads as a report rather than as the harness's instruction. Only an _agent's_ verdict
-  is carried; an operator's toggle is not, since the operator has the cockpit and the job queue to say
-  what they want done.
+  is carried; an operator's toggle is not, since what the operator has to say travels as an
+  instruction of its own ([09](09-execution.md#the-operators-own-instructions-reach-the-agent)).
+- **It settles the goal's standing operator instructions**, whichever verdict it casts. The note _is_
+  the answer to what was in front of the agent, and on `more_work` it reaches the next agent — an
+  instruction that also survived would arrive twice, in two voices, with no way to tell whether it had
+  already been acted on. Which is why the appended block tells the agent to say what it did with each
+  one: an instruction it decided against is one nobody hears about otherwise.
 - **It schedules nothing.** `more_work` returns the issue to pickup on a later cycle through rule `work-item-back-to-pickup`;
   it does not dispatch. The response says so, so an agent does not assume a follow-up is queued — and
   `done` does not close the ticket in the tracker, which the response also says.

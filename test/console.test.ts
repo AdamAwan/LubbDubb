@@ -395,21 +395,37 @@ function goalView(mutate: (state: CockpitView['state']) => void = () => {}, ref:
 }
 
 /**
- * `more_work` is a verdict the harness acts on — it puts the goal back in front
- * of pickup once no PR is open — so losing the only control that sets it loses
- * the behaviour, silently and with every type still checking. The floor carried
- * it; this pins that the goal page carries it too.
+ * "More work" is how an operator says what they want done next, in words — and
+ * the verdict it writes is what puts the goal back in front of pickup once no PR
+ * is open. Losing the control loses both, silently and with every type still
+ * checking. The floor carried the verdict; this pins that the goal page carries
+ * the way to write one.
  */
 test('a goal can still be sent back for more work, not only marked done', () => {
   const html = render(goalView());
-  assert.ok(html.includes('Work left'), 'the goal page must offer the more_work verdict');
+  assert.ok(html.includes('More work'), 'the goal page must offer the way to say what is left');
 
+  // Offered *again* on a goal already sent back, unlike the verdict-only control
+  // it replaced: a second thing the operator wants is a second instruction, and a
+  // hidden button would be a goal they can no longer say anything about.
   const already = goalView((s) => {
     const issue = s.world.issues.find((i) => `issue:${i.number}` === goalRef());
     assert.ok(issue, 'the fixture goal must be in the world');
     issue.conclusion = { ...issue.conclusion, verdict: 'more_work' };
+    issue.instructions = [
+      {
+        id: 'ins_demo',
+        originRef: `issue:${issue.number}`,
+        text: 'change the button to primary',
+        createdAt: new Date().toISOString(),
+        settledAt: null,
+      },
+    ];
   });
-  assert.ok(!render(already).includes('Work left'), 'a goal already sent back does not offer the same verdict again');
+  const standing = render(already);
+  assert.ok(standing.includes('More work'), 'and it still is once one stands');
+  assert.ok(standing.includes('change the button to primary'), 'what was asked for is drawn, not just counted');
+  assert.ok(standing.includes('Withdraw'), 'and there is a way to take it back');
 });
 
 /**

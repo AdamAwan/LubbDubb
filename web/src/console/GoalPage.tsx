@@ -6,6 +6,7 @@ import type { Issue, OpenPullRequest, PlanPart, PullRequest } from '../types.js'
 import { AsyncButton } from '../components/AsyncButton.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
+import { InstructionModal } from '../components/InstructionModal.js';
 import { renderRichText } from '../components/richText.js';
 import { fmtUsd, relTime } from '../components/util.js';
 import { Ref } from '../components/refs.js';
@@ -58,6 +59,7 @@ export function GoalPage({
       <div className="cn-gcols">
         <div className="cn-stack">
           <PlanWaves page={page} />
+          <Instructions issue={page.issue} actions={actions} />
           <Ticket issue={page.issue} refUrls={view.state.refUrls} />
           <PullRequests page={page} view={view} />
         </div>
@@ -165,8 +167,12 @@ function Header({
   const finished = issue.conclusion.verdict === 'done';
   // `more_work` is not the opposite of `done` — it is the verdict that puts a
   // goal back in front of the harness once no PR is open, so it needs its own
-  // control rather than a second meaning for the finished toggle.
+  // control rather than a second meaning for the finished toggle. Here it only
+  // marks the button: what the operator writes is the instruction, and the
+  // verdict is what makes there be an agent to read it.
   const moreWork = issue.conclusion.verdict === 'more_work';
+  const [instructing, setInstructing] = useState(false);
+  const standing = issue.instructions.length;
   const merged = page.parts.filter((p) => p.group === 'merged').length;
   const url = issue.url ?? refUrls[`#${issue.number}`];
   // Keyed on the run existing and not having been ended, never on anything the
@@ -271,14 +277,18 @@ function Header({
         >
           {finished ? 'Unfinish' : 'Mark done'}
         </button>
-        {issue.state === 'open' && !moreWork && (
+        {issue.state === 'open' && (
           <button
             type="button"
-            className="cn-tgl"
-            onClick={() => void actions.setIssueConclusion(issue.number, 'more_work')}
-            title="Say there is work left here, so the harness picks it up again once no PR is open"
+            className={`cn-tgl ${moreWork ? 'cn-watch' : ''}`}
+            onClick={() => setInstructing(true)}
+            title={
+              standing === 0
+                ? 'Say what you want done next on this goal — your words go to the next agent, and the harness picks it up again once no PR is open'
+                : `Add to the ${standing} instruction${standing === 1 ? '' : 's'} already standing on this goal`
+            }
           >
-            Work left
+            More work{standing > 0 ? ` · ${standing}` : ''}
           </button>
         )}
         {config.canFileTickets && (
@@ -307,6 +317,14 @@ function Header({
           </button>
         )}
       </div>
+      {instructing && (
+        <InstructionModal
+          issueNumber={issue.number}
+          issueTitle={issue.title}
+          onSubmit={(text) => actions.addInstruction(issue.number, text)}
+          onClose={() => setInstructing(false)}
+        />
+      )}
       {raisingBug && (
         <RaiseBugModal
           issueNumber={issue.number}
@@ -504,6 +522,51 @@ function Part({
  * text. This is the one field on the page the *tracker* wrote rather than an
  * agent, which is why it is the one that sniffs.
  */
+/**
+ * What the operator has asked for on this goal and no agent has answered yet.
+ *
+ * **Above the ticket, and it draws nothing when there is nothing standing.** Both
+ * halves are deliberate. An instruction outranks the ticket for as long as it
+ * stands — it is the newer statement of the same goal — so reading it after the
+ * body it amends is reading them in the wrong order. And a card that were always
+ * present would be furniture: the empty-state rule the rest of this page follows
+ * ("a surface that vanishes when quiet is indistinguishable from one that broke")
+ * is about surfaces that answer a standing question, and "has anyone written on
+ * this goal" is answered by the header's own control, which is always drawn and
+ * counts them.
+ *
+ * Withdrawing is offered per row because an instruction is free text sent to an
+ * agent: a typo, or a mind changed before anything picked it up, needs a way back
+ * that is not "wait for an agent to act on it".
+ */
+function Instructions({ issue, actions }: { issue: Issue; actions: CockpitActions }): JSX.Element | null {
+  if (issue.instructions.length === 0) return null;
+  return (
+    <section className="cn-card">
+      <h3>
+        What you’ve asked for <span className="cn-more">standing until an agent concludes this goal</span>
+      </h3>
+      <div className="cn-rows">
+        {issue.instructions.map((instruction) => (
+          <div className="cn-row" key={instruction.id}>
+            <span className="cn-grow">
+              <b className="cn-name">{instruction.text}</b>
+              <span className="cn-sub">{instruction.createdAt}</span>
+            </span>
+            <AsyncButton
+              className="cn-tgl"
+              onClick={() => actions.withdrawInstruction(issue.number, instruction.id)}
+              title="Take this back — it stops being sent to the next agent"
+            >
+              Withdraw
+            </AsyncButton>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Ticket({ issue, refUrls }: { issue: Issue; refUrls: Record<string, string> }): JSX.Element {
   return (
     <section className="cn-card">

@@ -25,6 +25,7 @@ function issue(over: Partial<Issue> = {}): Issue {
     assay: null,
     retrospective: null,
     scratchpad: null,
+    instructions: [],
     ...over,
   } as Issue;
 }

@@ -406,11 +406,23 @@ Watch, the conclusion, raising a bug, the ticket, and ending the run.
   label, or the reverse — so the title names both. Saying only "remove the watch label" understates a
   click that also tags the goal ignored, and the difference is visible: the goal lands in the
   backlog's Ignored group rather than back in Unwatched.
-- **Three conclusion controls, not two.** `Mark done` / `Unfinish` writes or withdraws `done`. **Work
-  left** writes `more_work`, and it is a third control rather than the finished toggle's other end
-  because `more_work` is not the opposite of `done` — it is the verdict that puts a goal back in front
-  of the harness once no PR is open ([06](06-issue-pickup.md#concluding-an-issue)). It is offered only
-  on an open ticket that does not already carry it.
+- **Three conclusion controls, not two.** `Mark done` / `Unfinish` writes or withdraws `done`. **More
+  work** opens `InstructionModal` and writes what the operator wants done next, in words — it is a
+  third control rather than the finished toggle's other end because what it writes is not the opposite
+  of `done`: it is an instruction, plus the `more_work` that puts the goal back in front of the harness
+  once no PR is open ([06](06-issue-pickup.md#concluding-an-issue),
+  [16](16-http-api.md#post-apiissuesnumberinstruction)). It is offered on any open ticket, **including
+  one that already carries instructions** — a second thing the operator wants is a second instruction,
+  and the button that hid itself once the verdict was set was a goal they could no longer say anything
+  about. It carries the standing count, so the header says how much is waiting without opening
+  anything.
+- **What you've asked for** draws those instructions above the ticket, with a `Withdraw` beside each.
+  Above, because an instruction is the newer statement of the same goal and reading it after the body it
+  amends is reading them in the wrong order; drawn at all, because a surface that writes free text to an
+  agent and shows the operator nothing back is one they cannot correct. It is the page's one card that
+  is absent when empty — the empty-state rule ("a surface that vanishes when quiet is
+  indistinguishable from one that broke") is about surfaces answering a standing question, and "has
+  anyone written on this goal" is answered by the header's control, which is always drawn.
 - **Raise a bug** is gated on `config.canFileTickets` and opens the shared `RaiseBugModal`. It files
   into the tracker rather than writing a verdict about the item, and it leaves the goal's own verdict
   where it found it.

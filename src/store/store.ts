@@ -14,6 +14,7 @@ import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS
 import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './validation.js';
 import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS } from './issueVerdicts.js';
 import { ScratchStore } from './scratch.js';
+import { InstructionStore } from './instructions.js';
 import { AgentStore, AGENT_COLUMNS } from './agents.js';
 import { TranscriptStore } from './transcripts.js';
 import { EscalationStore } from './escalations.js';
@@ -47,6 +48,7 @@ import type {
   HumanTaskStatus,
   IssueRun,
   IssueConclusion,
+  IssueInstruction,
   IssueDelivery,
   IssueShortfall,
   Job,
@@ -114,6 +116,7 @@ export class Store {
   private readonly plans: PlanStore;
   private readonly validation: ValidationStore;
   private readonly verdicts: IssueVerdictStore;
+  private readonly instructions: InstructionStore;
   private readonly scratch: ScratchStore;
   private readonly agents: AgentStore;
   private readonly transcripts: TranscriptStore;
@@ -181,6 +184,7 @@ export class Store {
     this.plans = new PlanStore(ctx);
     this.validation = new ValidationStore(ctx);
     this.verdicts = new IssueVerdictStore(ctx);
+    this.instructions = new InstructionStore(ctx);
     this.scratch = new ScratchStore(ctx);
     this.agents = new AgentStore(ctx);
     this.transcripts = new TranscriptStore(ctx);
@@ -492,6 +496,25 @@ export class Store {
   clearIssueConclusion(originRef: string): boolean {
     return this.verdicts.clearIssueConclusion(originRef);
   }
+
+  // -- Operator instructions on a goal ---------------------------------------
+
+  addIssueInstruction(input: { originRef: string; text: string }): IssueInstruction {
+    return this.instructions.addIssueInstruction(input);
+  }
+  listStandingInstructions(originRef: string): IssueInstruction[] {
+    return this.instructions.listStandingInstructions(originRef);
+  }
+  listAllStandingInstructions(): IssueInstruction[] {
+    return this.instructions.listAllStandingInstructions();
+  }
+  settleInstructions(originRef: string): number {
+    return this.instructions.settleInstructions(originRef);
+  }
+  withdrawInstruction(id: string): boolean {
+    return this.instructions.withdrawInstruction(id);
+  }
+
   recordDelivery(input: Parameters<IssueVerdictStore['recordDelivery']>[0]): IssueDelivery {
     return this.verdicts.recordDelivery(input);
   }

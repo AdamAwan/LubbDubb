@@ -4,6 +4,7 @@ import type {
   Issue,
   IssueAssay,
   IssueDelivery,
+  IssueInstruction,
   PlanPart,
   Retrospective,
   ScratchPadSummary,
@@ -199,6 +200,17 @@ export function buildStateSnapshot(
   // grouped read for the whole world (see `Store.listScratchPadSummaries`), keyed
   // on the issue origin like every other per-goal record.
   const padsByOrigin = new Map(store.listScratchPadSummaries().map((p) => [p.padRef, p]));
+  // What the operator has asked for on each goal and no agent has concluded yet.
+  // One read for the whole world, grouped here rather than queried per goal for
+  // the pads' reason — and shipped in full rather than as a count, because unlike
+  // a pad these are short, few, and the thing the operator most needs to see they
+  // said.
+  const instructionsByOrigin = new Map<string, IssueInstruction[]>();
+  for (const instruction of store.listAllStandingInstructions()) {
+    const held = instructionsByOrigin.get(instruction.originRef);
+    if (held) held.push(instruction);
+    else instructionsByOrigin.set(instruction.originRef, [instruction]);
+  }
   const assays = store.listAssays();
   const assayWindow = assaySignalQuery(assays);
   // Keyed the same way the conclusion and shortfall maps below are, so the
@@ -368,6 +380,11 @@ export function buildStateSnapshot(
       // The shared pad the agents on this goal left each other — the reading, for
       // the retrospective's reason: the trail is fetched when a reader opens it.
       scratchpad: padReading(padsByOrigin.get(origin)),
+      // What the operator has asked for and nobody has concluded yet — in full,
+      // unlike the pad above: it is the operator's own words, they are what the
+      // next agent will act on, and a count would tell them nothing they did not
+      // already know about a thing they wrote themselves.
+      instructions: instructionsByOrigin.get(origin) ?? [],
       // The harness's run at this goal (issues #203, #234) — when it started, when
       // it was first observed finished, and whether the operator has ended it.
       // Absent when the harness has never had work under the goal, so the floor

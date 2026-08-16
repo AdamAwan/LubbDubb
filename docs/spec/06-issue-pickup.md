@@ -327,6 +327,16 @@ issue (`outstandingWorkNote`), attributed and quoted so it does not read as the 
 instruction. Appended rather than filled into a template placeholder, for the reason a rejected
 proposal's note is: an operator override omitting a new token would silently drop it.
 
+An **operator's** `more_work` carries no note into that prompt, and never did — the fixed
+`Set by the operator from the cockpit.` said only *that* there was more. What the operator has to say
+travels beside the verdict instead, as an **instruction**: its own append-only row, several to a goal,
+appended to every dispatch on it until an agent concludes
+([09](09-execution.md#the-operators-own-instructions-reach-the-agent),
+[14](14-persistence.md#operator-instructions-on-a-goal)). The cockpit writes the pair in one act
+([16](16-http-api.md#post-apiissuesnumberinstruction)), because either half alone does nothing: an
+instruction on a parked item is read by nobody, and a verdict with no instruction re-dispatches an
+agent onto the ticket that already produced the thing the operator was unhappy with.
+
 Consequence worth knowing: on a provider with no work-item state machine (GitHub, the fake) a
 conclusion is recorded and displayed but changes no dispatch — there is no review state to be parked
 in, so there is no bounce-back to suppress.

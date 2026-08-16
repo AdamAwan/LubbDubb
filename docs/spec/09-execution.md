@@ -327,6 +327,49 @@ prompt.
   recent 15 entries and the write-up at 4 000 characters, with the elision stated and `scratch_read`
   named, or a partial record reads as the whole one.
 
+## The operator's own instructions reach the agent
+
+The cockpit's **More work** control writes what the operator wants done on a goal, in their words —
+_change the button to primary_, _the permission is wrong_, _the loading icon spins forever, fix it_.
+It replaced a bare `more_work` toggle whose fixed note (`Set by the operator from the cockpit.`)
+carried none of that, so the next agent re-read the same ticket that had already produced the thing
+the operator was unhappy with. The rows are in
+[14](14-persistence.md#operator-instructions-on-a-goal); the routes that write them are in
+[16](16-http-api.md#post-apiissuesnumberinstruction).
+
+`recordDispatchTask` appends `operatorInstructionsNote(...)` (`src/goalInstructions.ts`, pure) to the
+dispatch prompt whenever the goal carries an instruction nobody has concluded yet.
+
+- **First among the appended blocks.** It is the only one of them that changes _what the work is_ —
+  the rejection note, the outstanding-work note, the briefing and the attachments all describe work
+  already asked for.
+- **They accumulate, and they stand until an agent concludes the goal.** Two things wanted before
+  anyone worked it are two things; a conclusion is one overwritten row, so the note could not have
+  lived there. `conclude_work` settles every instruction standing on the goal, whichever verdict it
+  casts — the agent's note is the answer to them, and it reaches the next agent through
+  `outstandingWorkNote` ([11](11-mcp-tools.md#conclude_work)). **Not settled at dispatch**: an agent
+  that died before doing anything would take the operator's words with it, silently.
+- **Scoped by `padOriginFor`**, the attachments' rule for the attachments' reason — an instruction is
+  about the goal, and the agents that work it are dispatched for `:plan`, `:assay`, `:assess` and
+  `:part:<slug>`. An exact match would put _change the button to primary_ in front of nobody at all on
+  a decomposed goal. The retro origin is deliberately **not** excluded the way the briefing excludes
+  it: a retrospective that did not know what was asked for mid-run would write up a different run from
+  the one that happened.
+- **Appended, not filled in**, for the rejection note's reason, and **quoted and attributed** — but
+  framed as _instructions_ where the outstanding-work note is framed as a report. That inversion is the
+  point: this is the operator, it postdates the ticket, and where it disagrees with the ticket, the plan
+  or an earlier agent's note, it wins.
+- **The agent updates the ticket, and the harness does not.** An instruction that changes what the goal
+  asks for has to reach the record every later agent, every assessor and every human reads — and the
+  agent is the only party that can tell "this changes the goal" from "this says how to do work the goal
+  already asks for". So `ticketAmendCommands(config, number)` supplies the one thing an agent cannot
+  infer (which tracker, read-then-write, both halves) and the judgement stays the agent's. That is
+  `trackerCoordinates`' arrangement exactly ([13](13-jobs-and-findings.md)). Null under the `fake`
+  provider, where the note says there is nothing to update rather than naming a command that would
+  fail.
+- **An untouched goal appends nothing**, so its prompt is byte-identical to one composed before this
+  existed.
+
 ## An operator's attachments reach the agent
 
 A blueprint launched from the cockpit may carry images (issue #249) — a screenshot of the panel to
