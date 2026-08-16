@@ -1,7 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { AppState } from '../web/src/types.js';
-import { fireNotifications, notifiableChanges, notifySnapshot } from '../web/src/cockpit/notify.js';
+import {
+  fireNotifications,
+  notifiableChanges,
+  notifySnapshot,
+  sendTestNotification,
+} from '../web/src/cockpit/notify.js';
 
 // The demo seed is a whole, coherent snapshot — the same one `needsYou.test.ts`
 // builds on — so these read against a state with real escalations and agents in
@@ -88,6 +93,14 @@ test('an unhappy ending says which', () => {
   assert.equal(items[0]!.title, 'Agent crashed');
 });
 
+/** One notification the stubbed engine was asked to raise. */
+interface Raised {
+  title: string;
+  tag: string | undefined;
+  /** The engine's own late refusal, so a test can play the `error` event back. */
+  fireError: () => void;
+}
+
 /**
  * The browser half, under a stubbed engine.
  *
@@ -101,18 +114,31 @@ test('an unhappy ending says which', () => {
  * to stand one up in node without restating the DOM's constructor type.
  */
 function withEngine(
-  engine: { permission: NotificationPermission; visibility: DocumentVisibilityState; focused: boolean },
+  engine: {
+    permission: NotificationPermission;
+    visibility: DocumentVisibilityState;
+    focused: boolean;
+    /** Engines that throw from the constructor rather than resolving to a no-op. */
+    throws?: boolean;
+    /** No Notification API at all, which is a different answer from a refusal. */
+    absent?: boolean;
+  },
   body: () => void,
-): { title: string; tag: string | undefined }[] {
-  const raised: { title: string; tag: string | undefined }[] = [];
+): Raised[] {
+  const raised: Raised[] = [];
   class StubNotification {
     static permission = engine.permission;
+    onerror: (() => void) | null = null;
     constructor(title: string, opts?: { tag?: string }) {
-      raised.push({ title, tag: opts?.tag });
+      if (engine.throws) throw new TypeError('Illegal constructor');
+      raised.push({ title, tag: opts?.tag, fireError: () => this.onerror?.() });
     }
   }
   const before = { notification: globalThis.Notification, document: globalThis.document };
-  Object.defineProperty(globalThis, 'Notification', { value: StubNotification, configurable: true });
+  Object.defineProperty(globalThis, 'Notification', {
+    value: engine.absent ? undefined : StubNotification,
+    configurable: true,
+  });
   Object.defineProperty(globalThis, 'document', {
     value: { visibilityState: engine.visibility, hasFocus: () => engine.focused },
     configurable: true,
@@ -202,4 +228,75 @@ test('notifySnapshot reduces a whole AppState to the three lists', () => {
       .concat((state.recovery ?? []).length > 0 ? ['recovery'] : [])
       .sort(),
   );
+});
+
+/**
+ * The test notification, which exists because the feature is otherwise
+ * unfalsifiable: a grant that was never given, an engine that refuses the
+ * constructor and a fleet with nothing to say all present to an operator as no
+ * notification. These cover that it answers, and that its two deliberate
+ * departures from `fireNotifications` hold — neither the focus gate nor the
+ * switch may suppress a diagnostic, since both are what is being diagnosed.
+ */
+test('a test notification fires with the cockpit in front of the operator', () => {
+  // The focus gate cannot survive a button: a press means the window is focused,
+  // so keeping it here would make the test unpassable and prove nothing.
+  const raised = withEngine({ permission: 'granted', visibility: 'visible', focused: true }, () => {
+    assert.equal(sendTestNotification(), 'sent');
+  });
+  assert.equal(raised.length, 1);
+  assert.equal(raised[0]!.tag, 'lubbdubb:test');
+});
+
+test('a test notification does not consult the switch it is there to vouch for', () => {
+  // `enabled` is off in `localStorage` until a grant lands, and an operator
+  // diagnosing this has not committed to it yet.
+  const raised = withEngine({ permission: 'granted', visibility: 'visible', focused: true }, () => {
+    assert.equal(sendTestNotification(), 'sent');
+  });
+  assert.equal(raised.length, 1);
+});
+
+test('a test notification reports the grant it is missing rather than failing quietly', () => {
+  const denied = withEngine({ permission: 'denied', visibility: 'hidden', focused: false }, () => {
+    assert.equal(sendTestNotification(), 'blocked');
+  });
+  assert.deepEqual(denied, []);
+
+  // `default` is the Firefox case: a request closed without an answer, and a
+  // browser blocking new requests outright answers it that way with no prompt.
+  const unanswered = withEngine({ permission: 'default', visibility: 'hidden', focused: false }, () => {
+    assert.equal(sendTestNotification(), 'blocked');
+  });
+  assert.deepEqual(unanswered, []);
+});
+
+test('a test notification separates an absent API from a refused one', () => {
+  withEngine({ permission: 'granted', visibility: 'hidden', focused: false, absent: true }, () => {
+    assert.equal(sendTestNotification(), 'unsupported');
+  });
+});
+
+test('an engine that throws from the constructor is reported, not swallowed', () => {
+  // Firefox for Android is the live example: no `Notification` constructor, a
+  // `TypeError` instead. `fireNotifications` swallows this by design; a
+  // diagnostic that swallowed it would be worse than useless.
+  withEngine({ permission: 'granted', visibility: 'hidden', focused: false, throws: true }, () => {
+    assert.equal(sendTestNotification(), 'failed');
+  });
+});
+
+test('a notification the desktop drops after accepting it comes back as undelivered', () => {
+  // The one signal that separates "your desktop refused it" from "it worked and
+  // you were not looking" — late, and off the engine rather than the return.
+  let late: string | null = null;
+  const raised = withEngine({ permission: 'granted', visibility: 'hidden', focused: false }, () => {
+    assert.equal(
+      sendTestNotification(() => (late = 'undelivered')),
+      'sent',
+    );
+  });
+  assert.equal(late, null, 'nothing is undelivered until the engine says so');
+  raised[0]!.fireError();
+  assert.equal(late, 'undelivered');
 });

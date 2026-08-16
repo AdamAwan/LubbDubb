@@ -1124,6 +1124,44 @@ to say. Both halves are asserted in `test/notify.test.ts` against a stubbed engi
 | Permission | Requested only from the button, never a mount effect: every engine requires a user gesture and some refuse silently. `enabled` is written only once the browser has actually granted, so a switch can never read on and do nothing.       |
 | Suppressed | Only while the cockpit is **both** `document.visibilityState === 'visible'` **and** `document.hasFocus()`. A notification for a row you are looking at is noise, and the point is to reach you when you are elsewhere.                    |
 
+#### Proving it works
+
+**The feature is otherwise unfalsifiable, which is the one thing about it an operator reliably hits.**
+Every quiet link in the chain presents identically: a grant that was never given, a browser with no
+`Notification` constructor, a desktop dropping what the browser accepted, and a fleet with simply
+nothing to say all look like _no notification_. Neither of the two gates above helps — they are also
+silent, and a correct suppression is indistinguishable from a broken one. So there is a button.
+
+`sendTestNotification` (`web/src/cockpit/notify.ts`) raises one on demand and reports how far it got:
+`sent`, `undelivered`, `blocked`, `unsupported` or `failed`. It skips **both** gates
+`fireNotifications` applies, each for its own reason. The focus gate cannot survive a button — a press
+means the window is focused by definition, so keeping it would make the test unpassable. And
+`enabled` is skipped because the switch is what the operator is deciding whether to trust; a
+diagnostic that answers only after you have committed to the thing diagnoses nothing.
+
+`sent` is deliberately the weaker claim. The constructor returning is the browser _accepting_ the
+notification and nothing further; whether a banner is drawn belongs to the desktop, and Do Not Disturb,
+a focus mode and a per-application mute all drop it past the point the page can see. The wording says
+so rather than declaring success and sending an operator to look for a cockpit bug that is not there.
+`undelivered` is the engine's own `error` event arriving late to say the desktop refused it — the one
+signal that separates that case from "it worked and you were not looking", and best-effort, since an
+engine that drops one silently reports nothing.
+
+**A request the browser never answers has its own wording.** `requestPermission` resolving `default`
+leaves `Notification.permission` on the value it already held, so without the `asked` flag the button
+is indistinguishable from one that did nothing — press, no prompt, no change, no message. Firefox is
+where this bites: _Block new requests asking to allow notifications_ (Settings → Privacy & Security →
+Permissions → Notifications) answers `default` with no prompt at all, permanently, and the panel now
+names that setting instead of leaving a dead button.
+
+**The demo cannot demonstrate this, and that is not a bug in the demo.** Nothing on the demo's
+heartbeat produces a notifiable change — the beat moves `worldObservedAt` and settles the desktop
+claim two beats after load, and neither is a needs-you row, an error or an agent ending.
+Every change that _would_ notify is driven by a click, and a click means the window is focused, which
+is the suppression. So on the Pages build the automatic path is unreachable by construction, in every
+browser, and the button is the whole of what the demo has to show. Anyone concluding "notifications
+are broken" from the demo has learned nothing about their browser.
+
 **Decided from state, not from websocket frames.** `notifiableChanges` (`web/src/cockpit/notify.ts`)
 is a pure diff of two reduced snapshots, and the needs-you half diffs the **rendered** queue —
 `buildNeedsYou`'s own output. Watching frames instead would have covered escalations and missed human

@@ -3102,6 +3102,12 @@ body {
 .settings-toggle-child {
   margin-left: 18px;
 }
+/* The proof button, set apart from the switches above it: it changes nothing and
+   asks the browser a question, which is a different kind of control from a
+   preference and reads wrong flush against one. */
+.settings-test {
+  margin-top: 8px;
+}
 .settings-group {
   margin-bottom: 10px;
 }
