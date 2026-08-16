@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import type { SpendPayload } from '../../wire.js';
-import { buildSpendInsights, spendTimelineSince } from '../../spendInsights.js';
+import type { SpendPayload, SpendTrendPayload } from '../../wire.js';
+import { buildSpendGoals, buildSpendInsights, spendTimelineSince } from '../../spendInsights.js';
+import { buildSpendTrend, spendTrendSince } from '../../spendTrend.js';
 import type { RouteContext } from './context.js';
 
 /**
@@ -41,5 +42,42 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         now,
       }),
     } satisfies SpendPayload;
+  });
+
+  /**
+   * The trend tab, fetched on its *first visit* rather than with the breakdown.
+   *
+   * A route of its own for the reason the settings modal mounts its tabs lazily:
+   * this reaches two months of world events on top of the same all-time agent
+   * walk, and an operator who opened the panel to read the phase table should not
+   * pay for it. Both tabs stay mounted once visited, so the cost is once per
+   * panel session either way.
+   *
+   * The goals are `buildSpendGoals`' own rows, which is the same fold the
+   * breakdown ships — the two tabs state one goal's cost a click apart, and
+   * agreement by construction is the only kind that holds.
+   */
+  app.get('/api/spend/trend', async () => {
+    const now = Date.now();
+    const since = spendTrendSince(now);
+    const world = store.getWorldBaseline();
+    const agents = store.listAgents();
+    return {
+      trend: buildSpendTrend({
+        goals: buildSpendGoals({
+          agents,
+          tasks: store.listTasks(),
+          nodes: store.listWorkNodes(),
+          issues: world?.issues ?? [],
+        }).goals,
+        closures: store.listWorldEventsOfKindsSince(since, ['issue_closed']),
+        // The world as it stands, for the reopen check: a goal that closed inside
+        // the window and is open here came back.
+        issues: world?.issues ?? [],
+        agents,
+        ciEvents: store.listWorldEventsOfKindsSince(since, ['pr_ci']),
+        now,
+      }),
+    } satisfies SpendTrendPayload;
   });
 }
