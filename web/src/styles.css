@@ -3566,3 +3566,296 @@ body {
   opacity: 0.75;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------------------------------------------------------------------------
+ * The Tickets tab (issue #329)
+ *
+ * In the token layer rather than `console.css`, like the work tree beside it: the
+ * panel lives under `components/` and must look native inside the console without
+ * that sheet reaching into it. Every colour here is a `--cn-*` token or a shared
+ * one, so a theme change moves both together.
+ * ------------------------------------------------------------------------- */
+.tickets {
+  max-width: 1400px;
+}
+.tickets-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+}
+.tickets-head h1 {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.tickets-n {
+  font: 600 11px var(--cn-mono);
+  color: var(--cn-fg-faint);
+  background: var(--cn-panel-2);
+  border: 1px solid var(--cn-line);
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-style: normal;
+}
+.tickets-hint {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+}
+
+/* the filter row: two axes, drawn as two groups because that is what they are */
+.tickets-filters {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 9px 11px;
+  margin-bottom: 10px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+}
+.tickets-fgroup {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.tickets-flabel {
+  font-size: 10.5px;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+  white-space: nowrap;
+}
+.tickets-fdiv {
+  width: 1px;
+  height: 22px;
+  background: var(--cn-line);
+}
+.tickets-seg {
+  display: flex;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  overflow: hidden;
+  background: var(--cn-panel-2);
+}
+.tickets-seg button {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--cn-fg-faint);
+  border-right: 1px solid var(--cn-line);
+  white-space: nowrap;
+}
+.tickets-seg button:last-child {
+  border-right: 0;
+}
+.tickets-seg button:hover {
+  color: var(--cn-fg-dim);
+  background: #20242a;
+}
+.tickets-seg button.on {
+  background: #1e2735;
+  color: var(--cn-fg);
+  box-shadow: inset 0 -2px 0 var(--cn-accent);
+}
+.tickets-sum {
+  margin-left: auto;
+  font: 11.5px var(--cn-mono);
+  color: var(--cn-fg-faint);
+  white-space: nowrap;
+}
+.tickets-sum b {
+  color: var(--cn-fg-dim);
+  font-weight: 600;
+}
+
+.tickets-card {
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+  min-width: 0;
+  overflow: hidden;
+}
+
+/* The tracks are the *list's*, taken by each row through subgrid, so the id, the
+   cost and the date line up down the whole list however long one title runs. A
+   column is what makes a history scannable; independently laid-out rows read as
+   ragged. */
+.tickets-rows {
+  display: grid;
+  grid-template-columns: 66px minmax(0, 1fr) 92px 74px 82px 84px auto;
+}
+.tickets-thead,
+.tickets-row {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+.tickets-thead {
+  padding: 8px 13px;
+  border-bottom: 1px solid var(--cn-line);
+  background: var(--cn-panel-2);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  font-size: 10.5px;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+/* Only the two orderable columns are buttons: a header that sorts and a header
+   that labels must not look the same. */
+.tickets-thead button {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: var(--cn-fg-faint);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.tickets-thead button:hover {
+  color: var(--cn-fg-dim);
+}
+.tickets-thead button.on {
+  color: var(--cn-fg);
+}
+.tickets-num {
+  display: block;
+  text-align: right;
+}
+.tickets-arrow {
+  font-size: 9px;
+  color: var(--cn-accent);
+  font-style: normal;
+}
+
+.tickets-row {
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--cn-line-soft);
+}
+.tickets-row:last-child {
+  border-bottom: 0;
+}
+.tickets-row:hover {
+  background: #181b20;
+}
+.tickets-id {
+  font: 12px var(--cn-mono);
+  color: var(--cn-fg-faint);
+}
+.tickets-what {
+  min-width: 0;
+}
+.tickets-name {
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 13px;
+}
+.tickets-sub {
+  display: block;
+  margin-top: 3px;
+}
+.tickets-row.closed .tickets-name {
+  color: var(--cn-fg-dim);
+}
+/* Tabular figures, because this column is read as a column — and it is one of the
+   two the list can be ordered by. */
+.tickets-cost {
+  font: 12px var(--cn-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--cn-fg-dim);
+  text-align: right;
+}
+.tickets-cost.none {
+  color: #4b5058;
+}
+.tickets-added {
+  font: 11.5px var(--cn-mono);
+  color: var(--cn-fg-faint);
+  text-align: right;
+}
+/* The column the list is ordered by is lit: the sort key is a property of the
+   data, so it is shown on the data and not only on the control. */
+.by-cost .tickets-cost {
+  color: var(--cn-fg);
+  font-weight: 600;
+}
+.by-added .tickets-added {
+  color: var(--cn-fg-dim);
+}
+
+.tickets-watch.watched {
+  background: #12212e;
+  border-color: #1f3b52;
+  color: #63b3ed;
+}
+.tickets-watch.unwatched {
+  background: transparent;
+  color: var(--cn-fg-faint);
+}
+.tickets-watch.ignored {
+  background: transparent;
+  border-style: dashed;
+  color: #666b73;
+}
+.tickets-state.open {
+  background: #122a1e;
+  border-color: #1e4733;
+  color: var(--cn-green);
+}
+.tickets-state.closed {
+  background: transparent;
+  border-style: dashed;
+  color: var(--cn-fg-faint);
+}
+.tickets-verdict {
+  background: #2a2118;
+  border-color: #4a3a1c;
+  color: var(--cn-amber);
+}
+
+/* The foot is a real state, not an absence: a list that simply stops reads as one
+   that failed to load, and the floor under the history is a cap, so it is named. */
+.tickets-foot {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 14px;
+  color: var(--cn-fg-faint);
+  font-size: 12px;
+  text-align: center;
+  border-top: 1px solid var(--cn-line-soft);
+}
+.tickets-spin {
+  width: 11px;
+  height: 11px;
+  border: 2px solid var(--cn-line);
+  border-top-color: var(--cn-accent);
+  border-radius: 50%;
+  display: inline-block;
+  flex: none;
+  animation: tickets-spin 0.8s linear infinite;
+}
+@keyframes tickets-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tickets-spin {
+    animation: none;
+    border-top-color: var(--cn-line);
+  }
+}

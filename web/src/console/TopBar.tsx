@@ -6,12 +6,13 @@ import { backlogGroups } from './Backlog.js';
 import { productionReading } from '../view/production.js';
 
 /** The nav's destinations, in reading order — the order the tabs are drawn in. */
-const TABS: readonly ConsoleTab[] = ['overview', 'backlog', 'work'];
+const TABS: readonly ConsoleTab[] = ['overview', 'backlog', 'work', 'tickets'];
 
 export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
   backlog: 'Backlog',
   work: 'Work',
+  tickets: 'Tickets',
 };
 
 /**
@@ -26,7 +27,10 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
  * triage count — the one number that says whether it is worth opening; the other
  * two carry none, since neither has a number that decides whether to look.
  *
- * Three tabs and nothing else: the open goal's crumb is drawn at the head of the
+ * Tickets carries no count, unlike the backlog's triage tally: there is no number
+ * on an all-time list that decides whether it is worth opening.
+ *
+ * Four tabs and nothing else: the open goal's crumb is drawn at the head of the
  * situation area instead ({@link ConsoleRoot}). A title is as long as whoever
  * filed it made it, and one in here widens the nav by whatever that is — pushing
  * the readings onto a second line on the act of opening a goal. The bar is the

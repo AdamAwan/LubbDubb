@@ -7,6 +7,8 @@
 // Kept side-effect-free at module scope: the real build imports this file but the
 // `VITE_DEMO` branch in api.ts is statically false there, so Rollup drops it.
 import type {
+  TicketRow,
+  TicketsPayload,
   AppState,
   CockpitDecision,
   Decision,
@@ -2097,6 +2099,13 @@ export const demoApi = {
   getWorkRoots: () =>
     Promise.resolve({ roots: [] as WorkNodeView[], unrecorded: [] as UnrecordedWorkView[], refUrls: {} }),
   getWorkSubtree: (_ref: string) => Promise.resolve({ nodes: [] as WorkNodeView[], refUrls: {} }),
+  // The ticket mirror, authored for `getSpend`'s reason: the demo's world is built
+  // fresh in the browser each load, so there is no swept history to page through
+  // and a fixture is the only way the tab shows what it is for. The filtering,
+  // ordering and paging are performed here rather than faked, so what a reader
+  // clicks behaves exactly as it will against a real mirror.
+  getTickets: (query: { watch: string; state: string; order: string; cursor: string | null }) =>
+    Promise.resolve(demoTickets(query)),
   // The demo's one written-up goal, so the Manifest station has something to open.
   // Everything else answers null, which is the same thing the real route says for a
   // goal nobody wrote up — silence, not an error.
@@ -2206,3 +2215,71 @@ export const demoApi = {
 export function connectDemoWs(onEvent: (ev: unknown) => void, onStatus?: (connected: boolean) => void): WsClient {
   return getServer().connect(onEvent, onStatus);
 }
+
+/**
+ * The demo's ticket mirror: the goals the spend fixture already names, plus a tail
+ * of untouched backlog so the two filter axes have something to separate.
+ *
+ * The query is genuinely applied — filtered, ordered and paged the same way the
+ * route does it — because a demo whose controls do nothing demonstrates the chrome
+ * and not the tab.
+ */
+function demoTickets(query: { watch: string; state: string; order: string; cursor: string | null }): TicketsPayload {
+  const now = Date.now();
+  const iso = (hoursAgo: number) => new Date(now - hoursAgo * 3_600_000).toISOString();
+  const worked: TicketRow[] = DEMO_GOAL_SEEDS.map((seed, i) => ({
+    number: seed.issueNumber,
+    title: seed.title ?? `Goal #${seed.issueNumber}`,
+    // The fixture's goals are the closed ones — they are what the spend tab cohorts.
+    state: 'closed' as const,
+    watch: 'watched' as const,
+    labels: ['lubbdubb-watch'],
+    costUsd: Object.values(seed.byPhase).reduce((a, b) => a + b, 0),
+    outcome: i % 5 === 3 ? 'fell short' : 'delivered',
+    addedAt: iso(seed.hoursAgo + 48),
+    changedAt: iso(seed.hoursAgo),
+  }));
+  // A tail nobody has triaged, so `unwatched` and `ignored` are not empty answers.
+  const untouched: TicketRow[] = DEMO_UNTRIAGED.map((seed) => ({
+    number: seed.number,
+    title: seed.title,
+    state: 'open' as const,
+    watch: seed.ignored ? ('ignored' as const) : ('unwatched' as const),
+    labels: seed.ignored ? ['lubbdubb-ignore'] : [],
+    costUsd: null,
+    outcome: null,
+    addedAt: iso(seed.hoursAgo),
+    changedAt: iso(seed.hoursAgo),
+  }));
+
+  const all = [...worked, ...untouched].sort((a, b) => b.number - a.number);
+  const matching = all.filter(
+    (row) =>
+      (query.state === 'any' || row.state === query.state) && (query.watch === 'any' || row.watch === query.watch),
+  );
+  if (query.order === 'cost') matching.sort((a, b) => (b.costUsd ?? -1) - (a.costUsd ?? -1) || b.number - a.number);
+
+  const key = (row: TicketRow) => (query.order === 'cost' ? `${row.costUsd ?? -1}:${row.number}` : `${row.number}`);
+  const from = query.cursor === null ? 0 : matching.findIndex((row) => key(row) === query.cursor) + 1;
+  const rows = matching.slice(from, from + 40);
+  const last = rows[rows.length - 1];
+  return {
+    rows,
+    total: matching.length,
+    kept: all.length,
+    totalCostUsd: Math.round(matching.reduce((n, r) => n + (r.costUsd ?? 0), 0) * 100) / 100,
+    nextCursor: from + rows.length < matching.length && last ? key(last) : null,
+    anchorAt: iso(24 * 30),
+    backfilling: false,
+    refUrls: {},
+  };
+}
+
+/** Backlog the demo's fleet has never been pointed at — the unwatched/ignored tail. */
+const DEMO_UNTRIAGED: { number: number; title: string; hoursAgo: number; ignored?: boolean }[] = [
+  { number: 412, title: 'Document the two-watcher requirement for maintenance jobs', hoursAgo: 5 },
+  { number: 409, title: 'Gap clustering merges unrelated questions into one gap', hoursAgo: 30 },
+  { number: 402, title: 'Spike: replace node-pty with a portable shim', hoursAgo: 72, ignored: true },
+  { number: 398, title: 'Sweep docs/ for links that no longer resolve', hoursAgo: 96 },
+  { number: 371, title: 'Retire the legacy priority override table', hoursAgo: 200, ignored: true },
+];

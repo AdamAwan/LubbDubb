@@ -72,6 +72,7 @@ import type {
   HumanTask,
   IssueConclusionVerdict,
   IssueRunOutcome,
+  IssueState,
   IssueSpend,
   Issue as WorldIssue,
   Job,
@@ -612,6 +613,88 @@ export interface WorkRootsPayload {
 
 export interface WorkSubtreePayload {
   nodes: WorkNode[];
+  refUrls: Record<string, string>;
+}
+
+// -- The Tickets tab (issue #329) -------------------------------------------
+
+/**
+ * The harness's reading of an item, and the tracker's — the two axes the tab
+ * filters on, and deliberately two rather than one.
+ *
+ * `watch` is a label an operator sets and the dispatcher's gate reads; `state` is
+ * the tracker's own word. Folding them would make "nobody has triaged this" and
+ * "this is finished" the same kind of answer, which is exactly the distinction the
+ * tab exists to let someone ask about.
+ */
+export type TicketWatchFilter = 'any' | 'watched' | 'unwatched' | 'ignored';
+export type TicketStateFilter = 'any' | 'open' | 'closed';
+/** By tracker id descending (arrival order), or by what the fleet spent under it. */
+export type TicketOrder = 'added' | 'cost';
+
+/** One row of the Tickets tab. */
+export interface TicketRow {
+  number: number;
+  title: string;
+  state: IssueState;
+  /** Three-valued: an untagged item is `unwatched`, not `ignored`. → `src/watchLabels.ts` */
+  watch: TicketWatchFilter & ('watched' | 'unwatched' | 'ignored');
+  labels: string[];
+  /**
+   * Dollars spent under this goal, or **null** where the fleet never ran on it.
+   * Null rather than `0`: never worked and worked for free are different facts.
+   */
+  costUsd: number | null;
+  /**
+   * The harness's own outcome for a goal it worked — `delivered`, `fell short`,
+   * `concluded`, `abandoned` — or null for one it never reached a verdict on.
+   * Row information, not a third filter: it answers a different question from
+   * either axis, and a third control would make the filter row a cube.
+   */
+  outcome: string | null;
+  /** The tracker's creation instant — what the `added` ordering is a proxy for. */
+  addedAt: string;
+  /** The tracker's last-modified instant. */
+  changedAt: string;
+}
+
+/**
+ * `/api/tickets` — one page of the mirror, fetched on open and again as the list
+ * is scrolled. Never on `/api/state`: that endpoint comes round every couple of
+ * seconds and this list is all-time.
+ */
+export interface TicketsPayload {
+  rows: TicketRow[];
+  /** Rows matching the filters, all of them — what makes "40 of 906" sayable. */
+  total: number;
+  /**
+   * The whole mirror, unfiltered — the size of the history itself.
+   *
+   * Separate from `total` because they answer different questions and a surface
+   * that showed one as the other would state a shrinking history every time
+   * someone narrowed the list. The head names this; the filter row names `total`.
+   */
+  kept: number;
+  /** What the whole filtered set cost, not the page. */
+  totalCostUsd: number;
+  /** Where the next page starts, or null at the foot of the list. */
+  nextCursor: string | null;
+  /**
+   * One month before the first sweep, frozen. The floor under the history, stated
+   * because it is a cap: a list that simply stopped would read as one that failed
+   * to load rather than as one that has reached the beginning.
+   */
+  anchorAt: string;
+  /**
+   * True while the first sweep is still filling the mirror — the one slow read,
+   * and the difference between an empty tab and a broken one.
+   */
+  backfilling: boolean;
+  /**
+   * Reference → web URL, resolved off the connector rather than read from the
+   * snapshot's map: `buildRefUrls` is built from the world, and most rows here
+   * have long left it.
+   */
   refUrls: Record<string, string>;
 }
 

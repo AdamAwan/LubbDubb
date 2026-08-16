@@ -279,6 +279,8 @@ function workItem(over: Partial<AzWorkItem> = {}): AzWorkItem {
     relationUrls: [],
     parentId: null,
     childIds: [],
+    createdAt: '2026-01-01T00:00:00Z',
+    changedAt: '2026-01-01T00:00:00Z',
     url: 'https://dev.azure.com/o/p/_workitems/edit/101',
     ...over,
   };
@@ -298,6 +300,7 @@ function relationApi(
     async listOpenWorkItems() {
       return listed;
     },
+    listWorkItemsChangedSince: unused,
     async getWorkItems(ids) {
       reads.push([...ids]);
       if (opts.failReads) throw new Error('batch read exploded');

@@ -81,6 +81,9 @@ test('optional text trims, reads blank as absent, and refuses a non-string by na
     ok: true,
     params: undefined,
     body: { summary: 'done' },
+    // A half the caller declared no schema for reads back undefined — the same
+    // answer `params` gives here, and what the generic defaults to.
+    query: undefined,
   });
   // Blank and absent are one state — every route taking one falls back to its own
   // default for both.
@@ -190,9 +193,12 @@ test('no route reads req.params or req.body through a type assertion', () => {
   // request-reading code (`app.ts`'s auth hook, `validation.ts` itself), so a
   // route group added as a new module is covered on the day it is written.
   //
-  // `req.query` is deliberately out of scope: both of its two sites assert the
-  // value to `unknown` and test its type before use, so the assertion claims
-  // nothing about the data.
+  // `req.query`'s two remaining sites (the artifact routes) assert the value to
+  // `unknown` and test its type before use, so the assertion claims nothing about
+  // the data. Since #329 a query string can be *declared* instead — `checked`
+  // takes a `query` schema — and a route whose parameters are filters should:
+  // those are the half an operator hand-edits in the address bar, so they are the
+  // half that most wants validating.
   const assertions = routeSources().flatMap(([file, source]) =>
     [...source.matchAll(/req\.(params|body)[^\n]*\bas\b/g)].map((m) => `${file}: ${m[0]}`),
   );

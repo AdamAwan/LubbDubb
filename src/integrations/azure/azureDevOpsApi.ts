@@ -71,6 +71,16 @@ export interface AzureDevOpsApi {
    */
   listOpenWorkItems(tag?: string, assignedTo?: string): Promise<AzWorkItem[]>;
   /**
+   * Work items in **any** state that Azure last saw change at or after `since`,
+   * under the same tag/assignee narrowing as {@link listOpenWorkItems}.
+   *
+   * The ticket mirror's read (issue #329), and the only place the harness asks for
+   * a closed work item. `System.ChangedDate` is what makes a sweep incremental —
+   * and what makes the mirror's one-month floor a floor rather than a cut, since an
+   * older item touched inside the window comes back on it too.
+   */
+  listWorkItemsChangedSince(since: string, tag?: string, assignedTo?: string): Promise<AzWorkItem[]>;
+  /**
    * Read specific work items by id — how the *related* items are hydrated. The
    * open-item list is narrowed by tag/assignee, so an item's parent Feature is
    * usually not in it, and the relationship is only worth carrying if the thing
@@ -303,6 +313,10 @@ export interface AzWorkItem {
   childIds: number[];
   /** Web URL to the work item. */
   url: string;
+  /** System.CreatedDate — the ticket mirror's `added` reading. */
+  createdAt: string;
+  /** System.ChangedDate — the instant the mirror's next sweep asks from. */
+  changedAt: string;
 }
 
 export interface AzWorkItemUpdate {

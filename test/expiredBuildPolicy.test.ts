@@ -97,6 +97,7 @@ function fakeApi(evals: AzPolicyEvaluation[]): AzureDevOpsApi {
       return [];
     },
     listOpenWorkItems: unused('listOpenWorkItems'),
+    listWorkItemsChangedSince: unused('listWorkItemsChangedSince'),
     getWorkItems: unused('getWorkItems'),
     listWorkItemUpdates: unused('listWorkItemUpdates'),
     createThreadReply: unused('createThreadReply'),

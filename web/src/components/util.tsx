@@ -109,6 +109,24 @@ export function relTime(iso: string, now: number = Date.now()): string {
   return `${Math.round(secs / 3600)}h ago`;
 }
 
+/**
+ * The same instant on a longer scale: "2h ago", "3d ago", "14 Jul".
+ *
+ * Beside {@link relTime} rather than replacing it, because the two are read for
+ * different things. A fleet row is minutes old and "72h ago" is the right answer
+ * there; a ticket list spans a year, and a column of three-digit hours is
+ * unreadable. Past a fortnight it stops being relative at all — "412d ago" is a
+ * number nobody converts, and the date is what someone would say out loud.
+ */
+export function relAge(iso: string, now: number = Date.now()): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return '';
+  const days = Math.floor((now - then) / 86_400_000);
+  if (days < 1) return relTime(iso, now);
+  if (days < 14) return `${days}d ago`;
+  return new Date(then).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
 /** Compact USD cost: "$0.42", "$12.30", "$142" — cents only while they matter. */
 export function fmtUsd(n: number): string {
   return n >= 100 ? `$${Math.round(n)}` : `$${n.toFixed(2)}`;

@@ -77,6 +77,17 @@ export interface GitHubApi {
 
   /** Open issues, optionally narrowed to a label. Includes PRs — caller filters them out. */
   listOpenIssues(label?: string): Promise<GhIssue[]>;
+  /**
+   * Issues in **either** state that GitHub last saw change at or after `since`,
+   * optionally narrowed to a label. Includes PRs — caller filters them out.
+   *
+   * The mirror's read (issue #329), and the only place the harness asks GitHub for
+   * a closed issue. `since` filters on *updated* rather than created, which is what
+   * lets a sweep ask for the little that has moved instead of re-listing the
+   * tracker; it is also why the mirror's one-month floor is a floor rather than a
+   * cut, since an older item touched inside the window comes back too.
+   */
+  listIssuesChangedSince(since: string, label?: string): Promise<GhIssue[]>;
   /** Timeline events for an issue, used to find the PR that references/closes it. */
   listIssueTimeline(number: number): Promise<GhTimelineEvent[]>;
 
@@ -244,6 +255,10 @@ export interface GhIssue {
   url: string;
   /** True when this "issue" is really a PR (the Issues API returns both). */
   isPullRequest: boolean;
+  /** `created_at` — when the issue was filed. The ticket mirror's `added` reading. */
+  createdAt: string;
+  /** `updated_at` — the instant the mirror's next sweep asks from. */
+  updatedAt: string;
 }
 
 export interface GhTimelineEvent {

@@ -1,4 +1,5 @@
 import type { RecoveryVerdict, WorkNodeView } from '../types.js';
+import type { Place } from './place.js';
 
 /**
  * What an operator concluded about one validation check. A union rather than four
@@ -38,7 +39,7 @@ export type ConsolePanel = 'findings' | 'faults' | 'output' | 'launch' | { ask: 
  * A selected goal outranks all three, so this says where the nav last was, never
  * what is drawn.
  */
-export type ConsoleTab = 'overview' | 'backlog' | 'work';
+export type ConsoleTab = 'overview' | 'backlog' | 'work' | 'tickets';
 
 /**
  * Every mutation the cockpit can perform, pre-bound and refetching on completion.
@@ -136,6 +137,16 @@ export interface CockpitActions {
   openPanel(panel: ConsolePanel): void;
   /** Move the nav to a destination. A selected goal still outranks it. */
   openTab(tab: ConsoleTab): void;
+  /**
+   * Narrow or re-order the Tickets tab (issue #329).
+   *
+   * One method taking a partial rather than three, because the three are one
+   * place: changing a filter also drops you back to the first page, and two calls
+   * would push two history entries for one move. It is on the seam at all — rather
+   * than a `useState` in the panel — because the whole point of the tab is that
+   * "unclosed watched items" is a link someone can send.
+   */
+  setTicketQuery(next: Partial<Pick<Place, 'ticketWatch' | 'ticketState' | 'ticketOrder'>>): void;
   /**
    * Fold a backlog feature's children away, or open them again. Every feature is
    * open until this closes one, so the argument is the state being *set* rather

@@ -17,7 +17,7 @@ import type {
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
-import type { WorldSnapshot } from '../types.js';
+import type { TrackerItem, WorldSnapshot } from '../types.js';
 
 /**
  * A modular integration owns exactly one *slice* of the outside world.
@@ -202,6 +202,40 @@ export interface CiEvidenceCapable {
 
 export function isCiEvidenceCapable(x: Integration): x is Integration & CiEvidenceCapable {
   return typeof (x as Partial<CiEvidenceCapable>).readCiFailureEvidence === 'function';
+}
+
+/**
+ * An integration that can list the tracker items it owns **across states**, not
+ * just the open ones — what the ticket mirror is filled from (issue #329).
+ *
+ * Its own capability rather than a widening of {@link Integration.snapshot},
+ * because it answers a different question and must not be confused with one. The
+ * snapshot is *the world the harness acts on*, and that is open items by
+ * definition — a rule that could see closed ones would eventually act on one. This
+ * reads history, nothing dispatches from it, and a provider that cannot answer
+ * simply is not capable: the sweep then writes nothing and the tab is empty rather
+ * than wrong.
+ *
+ * **Narrowed exactly as the provider's own open list is** — the same tag and
+ * assignee filters, applied in the same place — so the mirror can never hold a
+ * different population from the one the harness works. Where a provider narrows
+ * by nothing (GitHub today), the mirror is every issue in the repository, and that
+ * is the honest answer rather than a second, quieter filter invented here.
+ */
+export interface TicketHistoryCapable {
+  /**
+   * Items in any state that the tracker last saw change at or after `since`.
+   *
+   * One call, paginated internally where the provider needs it — the shape
+   * {@link GitHubApi.listRecentlyClosedPulls} already set, and for its reason: the
+   * caller bounds the size by choosing `since`, so a seam that returned a cursor
+   * would push paging into every caller to save nothing.
+   */
+  listTicketHistory(since: string): Promise<TrackerItem[]>;
+}
+
+export function isTicketHistoryCapable(x: Integration): x is Integration & TicketHistoryCapable {
+  return typeof (x as Partial<TicketHistoryCapable>).listTicketHistory === 'function';
 }
 
 /** An integration that can add/remove a label on an issue / work item — the watch/ignore toggle. */

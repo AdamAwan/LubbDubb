@@ -21,6 +21,7 @@ import {
 } from '../src/integrations/azure/workItems.js';
 import {
   buildOpenWorkItemQuery,
+  buildWorkItemHistoryQuery,
   isSignInHtml,
   policyDisplayName,
   RestAzureDevOpsApi,
@@ -54,6 +55,8 @@ interface Script {
   relatedWorkItems?: AzWorkItem[];
   updates?: Record<number, AzWorkItemUpdate[]>;
   throwOn?: 'listActivePullRequests' | 'listOpenWorkItems' | 'getBuildTimeline';
+  /** What `listWorkItemsChangedSince` serves, when it should differ from the open list. */
+  historyItems?: AzWorkItem[];
   /** Build timelines by build id — the structured half of CI evidence. */
   timeline?: Record<number, AzTimelineRecord[]>;
   /** Build logs keyed `<buildId>/<logId>` — the fallback half. */
@@ -68,6 +71,8 @@ interface Recorded {
   newThreads: Array<{ prId: number; content: string }>;
   completions: Array<{ prId: number; commit: string; method: MergeMethod }>;
   tagQueries: Array<string | undefined>;
+  /** Instants `listWorkItemsChangedSince` was called with. */
+  historySince: string[];
   assignedToQueries: Array<string | undefined>;
   updateQueries: number[];
   /** Each `getWorkItems` batch, in order — the relation-hydration round trips. */
@@ -91,6 +96,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     newThreads: [],
     completions: [],
     tagQueries: [],
+    historySince: [],
     assignedToQueries: [],
     updateQueries: [],
     itemReads: [],
@@ -155,6 +161,14 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
       recorded.assignedToQueries.push(assignedTo);
       if (script.throwOn === 'listOpenWorkItems') throw new Error('boom');
       return script.workItems ?? [];
+    },
+    async listWorkItemsChangedSince(since, tag, assignedTo) {
+      recorded.historySince.push(since);
+      recorded.tagQueries.push(tag);
+      recorded.assignedToQueries.push(assignedTo);
+      // Every state, and every item — the WIQL does the narrowing for real, and a
+      // fake that filtered here would be asserting the query rather than the mapping.
+      return script.historyItems ?? script.workItems ?? [];
     },
     async getWorkItems(ids) {
       recorded.itemReads.push([...ids]);
@@ -564,6 +578,19 @@ test('buildOpenWorkItemQuery: filters to open states and, when set, a tag (singl
   assert.match(tagged, /System\.Tags] CONTAINS 'agent''s'/);
 });
 
+test('buildWorkItemHistoryQuery: drops the state clause, dates the read, and keeps the narrowing', () => {
+  const q = buildWorkItemHistoryQuery('2026-08-01T09:30:00.123Z', 'team', "o'brien@acme.com");
+  // Any state — a mirror that could only see finished work would be missing every
+  // row the cockpit shows as open.
+  assert.ok(!q.includes('System.State'), 'the open-state clause is gone');
+  // WIQL rejects the `T` separator and sub-second precision, and rejects them by
+  // faulting the whole query — which would be a fault every pulse, not a quiet
+  // empty read.
+  assert.ok(q.includes("[System.ChangedDate] >= '2026-08-01 09:30:00Z'"), q);
+  assert.ok(q.includes("[System.Tags] CONTAINS 'team'"), q);
+  assert.ok(q.includes("[System.AssignedTo] = 'o''brien@acme.com'"), 'the same escape the open list uses');
+});
+
 test('buildOpenWorkItemQuery: narrows to an assignee (single-quote escaped)', () => {
   const base = buildOpenWorkItemQuery();
   assert.doesNotMatch(base, /System\.AssignedTo/);
@@ -849,6 +876,8 @@ function workItem(over: Partial<AzWorkItem> = {}): AzWorkItem {
     relationUrls: [],
     parentId: null,
     childIds: [],
+    createdAt: '2026-01-01T00:00:00Z',
+    changedAt: '2026-01-01T00:00:00Z',
     url: 'https://dev.azure.com/o/p/_workitems/edit/101',
     ...over,
   };

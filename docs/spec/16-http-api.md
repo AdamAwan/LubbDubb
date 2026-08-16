@@ -112,9 +112,9 @@ mirrors it to stderr and streams it to the cockpit), and returned as a plain `50
 
 ## Request validation
 
-Every route reads its path params and its body through a **zod schema**. A handler does not read the
-request at all: it is **wrapped in `checked(schemas, handler)`** (`src/server/validation.ts`) and
-handed `{params, body, req, reply}` already parsed. `checked` is the only caller of `readRequest` and
+Every route reads its path params, its query string and its body through a **zod schema**. A handler
+does not read the request at all: it is **wrapped in `checked(schemas, handler)`**
+(`src/server/validation.ts`) and handed `{params, body, query, req, reply}` already parsed. `checked` is the only caller of `readRequest` and
 the only place a refusal becomes a `400`.
 
 That is the shape and not an implementation detail. `req.params as { number: string }` is a claim
@@ -124,8 +124,10 @@ assertions left 36 verbatim copies of `if (!input.ok) return reply.code(400).sen
 one correct, and nothing but a source grep saying the 37th had to be (issue #237). A handler that is
 _handed_ checked values has no raw request to assert about and no check to skip.
 `test/requestValidation.test.ts` asserts both structurally, over every file in `src/server/routes/`.
-(`req.query` is out of scope on both of its sites — each asserts the value to `unknown` and tests its
-type before use, so the assertion claims nothing.)
+(The two artifact routes still read `req.query` directly — each asserts the value to `unknown` and
+tests its type before use, so the assertion claims nothing about the data. Since #329 a query string
+can be *declared* instead, and a route whose parameters are filters should declare one: those are the
+half an operator hand-edits in the address bar, so they are the half that most wants validating.)
 
 Four properties hold across the surface:
 
@@ -136,8 +138,8 @@ Four properties hold across the surface:
 - **Every field states its own refusal in full** — `cap must be a number`, `invalid issue number` —
   because the 400 body joins the schema's messages and drops their field paths. A field declared
   without a message refuses with zod's stock text, which names nothing.
-- **Params are read before the body**, so a request naming no such item is refused for that whatever
-  else its body got wrong. Where a route answers 404/409 off the store first (`/api/findings/:id/*`,
+- **Params are read first, then the query, then the body**, so a request naming no such item is
+  refused for that whatever else it got wrong. Where a route answers 404/409 off the store first (`/api/findings/:id/*`,
   `/api/work/:ref/file`), it reads the params, asks the store, and reads the body after — a finding
   that does not exist is a 404 whatever the body says. Those three apply `checked` **a second time,
   by hand**, inside the outer handler (`return checked({body: X}, inner)(req, reply)`) rather than
@@ -418,6 +420,33 @@ colons (`issue:12`, `pr:41:ci`), so the route has to survive one in a path segme
 resolved through the connector's own `resolveRefUrl` rather than read off the snapshot's `refUrls` —
 that map is built from the world, and a PR the graph remembers merging left the world hours ago.
 Returns `{ nodes, refUrls }`.
+
+### `GET /api/tickets`
+
+One page of the **ticket mirror**: every item the tracker's assignment filter has returned since the
+harness first swept, worked or not, open or closed (issue #329). Rate-limited and fetched rather than
+polled, for `/api/work`'s reason — the list is all-time and only grows.
+
+Four query parameters, every one defaulting so a bare call is the tab's own first request:
+`watch` (`any` | `watched` | `unwatched` | `ignored`), `state` (`any` | `open` | `closed`), `order`
+(`added` | `cost`) and an opaque `cursor`. They default **here** as well as in `Place`, which is what
+keeps a bare `?tab=tickets` and a bare `/api/tickets` the same place. A hand-edited value is a `400`
+naming the field; a stale cursor is not — a cursor whose row has left the filtered set restarts the
+list, because repeating rows is a failure a reader can see and a silently skipped page is not.
+
+Returns `{ rows, total, totalCostUsd, nextCursor, anchorAt, backfilling, refUrls }`. `total` and
+`totalCostUsd` describe the **whole filtered set**, not the page — an infinite list with no total says
+nothing about whether a reader is near the end. `anchorAt` is the frozen one-month floor and
+`backfilling` says whether the first sweep has landed; both are shipped because the tab has to *say*
+them, an empty list mid-backfill being indistinguishable from an empty tracker. `refUrls` covers the
+page's own rows, resolved through the connector's `resolveRefUrl` rather than read off the snapshot —
+that map is built from the world, and most rows here left it long ago.
+
+Three readings are quoted rather than re-derived: cost from `buildSpendGoals`, the outcome word from
+`resolveIssueConclusion` (folded server-side by `src/tickets/outcomes.ts`), and the watch bucket from
+`src/watchLabels.ts` — the same precedence the dispatcher's gate resolves through. It is a lens: no
+rule under `src/dispatcher/` reads the table behind it. → [17](17-cockpit.md#the-tickets-tab),
+[14](14-persistence.md#the-ticket-mirror)
 
 ### `GET /api/retrospectives/:ref`
 

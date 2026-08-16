@@ -10,6 +10,7 @@ import { Overview } from './Overview.js';
 import { Backlog } from './Backlog.js';
 import { Panel } from './Panel.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
+import { TicketsPanel } from '../components/TicketsPanel.js';
 import { WorkTreePanel } from '../components/WorkTreePanel.js';
 import { FindingsPanel } from '../components/FindingsPanel.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
@@ -98,6 +99,23 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       return <Overview view={view} actions={actions} />;
     case 'backlog':
       return <Backlog view={view} actions={actions} />;
+    case 'tickets':
+      // Embedded exactly as the work tree is, and for the same reason: it reaches
+      // its own route, which `console/` may not, but rendering a component that
+      // does is not reaching — the import ban is on `api.js` and still holds.
+      return (
+        <TicketsPanel
+          query={{ watch: view.ticketWatch, state: view.ticketState, order: view.ticketOrder }}
+          onQuery={(next) =>
+            actions.setTicketQuery({
+              ...(next.watch !== undefined ? { ticketWatch: next.watch } : {}),
+              ...(next.state !== undefined ? { ticketState: next.state } : {}),
+              ...(next.order !== undefined ? { ticketOrder: next.order } : {}),
+            })
+          }
+          now={view.now}
+        />
+      );
     case 'work':
       // The shared panel, embedded exactly as the launch desk is: it reaches its
       // own routes, which `console/` may not, but rendering one that does is not

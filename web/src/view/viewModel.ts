@@ -1,4 +1,16 @@
-import type { AppState, Agent, Task, AgentFlag, AgentFile, OrphanedWork, Escalation, Proposal } from '../types.js';
+import type {
+  AppState,
+  Agent,
+  Task,
+  AgentFlag,
+  AgentFile,
+  OrphanedWork,
+  Escalation,
+  Proposal,
+  TicketOrder,
+  TicketStateFilter,
+  TicketWatchFilter,
+} from '../types.js';
 import { buildNeedsYou } from './needsYou.js';
 import type { NeedRow } from './needsYou.js';
 import { buildGoalPage } from './goalPage.js';
@@ -61,6 +73,14 @@ export interface CockpitView {
    * membership is the only question it asks.
    */
   collapsedFeatures: ReadonlySet<number>;
+  /**
+   * What the Tickets tab is narrowed to and ordered by. Carried through the view
+   * model rather than read from the place in the panel, so every surface reads one
+   * shape and the panel stays a component that is *told* where it is.
+   */
+  ticketWatch: TicketWatchFilter;
+  ticketState: TicketStateFilter;
+  ticketOrder: TicketOrder;
 
   /** The agent whose drawer is open, if any. */
   selectedAgent: Agent | null;
@@ -207,6 +227,10 @@ interface ViewInputs {
    * for one — it is what the empty place carries and what a bare URL means.
    */
   collapsed?: readonly number[];
+  /** Optional for `collapsed`'s reason: the defaults are what a bare URL means. */
+  ticketWatch?: TicketWatchFilter;
+  ticketState?: TicketStateFilter;
+  ticketOrder?: TicketOrder;
 }
 
 function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefined): Map<string, T[]> {
@@ -257,6 +281,9 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     consolePanel: input.consolePanel,
     tab: input.tab,
     collapsedFeatures: new Set(input.collapsed ?? []),
+    ticketWatch: input.ticketWatch ?? 'any',
+    ticketState: input.ticketState ?? 'any',
+    ticketOrder: input.ticketOrder ?? 'added',
 
     selectedAgent: state.agents.find((a) => a.id === selected) ?? null,
     selectedOutput: selected ? input.liveOutput.get(selected) : undefined,

@@ -7,9 +7,11 @@ import type {
   Integration,
   IssueCommentCapable,
   IssueLabelCapable,
+  TicketHistoryCapable,
   WorkItemStateCapable,
   WorldSlice,
 } from '../integration.js';
+import type { TrackerItem } from '../../types.js';
 import type { FakeWorldStore } from './fakeWorld.js';
 
 const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set(['new_issue', 'issue_state', 'issue_linked_pr']);
@@ -21,7 +23,7 @@ const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set(['new_issue', 'issue
  * of an injected fake world.
  */
 export class FakeIssuesIntegration
-  implements Integration, Injectable, WorkItemStateCapable, IssueLabelCapable, IssueCommentCapable
+  implements Integration, Injectable, WorkItemStateCapable, IssueLabelCapable, IssueCommentCapable, TicketHistoryCapable
 {
   readonly id = 'issues:fake';
   readonly capability: Capability = 'issues';
@@ -34,7 +36,18 @@ export class FakeIssuesIntegration
   private readonly comments = new Map<string, { number: number; body: string }>();
   private nextCommentId = 1;
 
-  constructor(private readonly world: FakeWorldStore) {}
+  /**
+   * When each fake issue was first seen, so the mirror has the two instants a real
+   * tracker supplies. In memory rather than in the fake world document: the
+   * document is the *world*, and stamping tracker metadata into it would have the
+   * fake modelling something no provider puts there.
+   */
+  private readonly seenAt = new Map<number, string>();
+
+  constructor(
+    private readonly world: FakeWorldStore,
+    private readonly now: () => string = () => new Date().toISOString(),
+  ) {}
 
   /**
    * Every label reads as one the viewer added.
@@ -52,6 +65,35 @@ export class FakeIssuesIntegration
    */
   async snapshot(): Promise<WorldSlice> {
     return { issues: this.world.read().issues.map((i) => ({ ...i, labelsAddedByViewer: i.labels })) };
+  }
+
+  /**
+   * The fake's ticket history: its whole issue list, in whatever state each is in.
+   *
+   * `since` is deliberately **ignored**. A fake that filtered on it would be
+   * asserting the provider's own query rather than the mirror's behaviour, and the
+   * upsert behind this is idempotent — so serving everything every sweep exercises
+   * exactly the path a real provider's incremental read lands in, and does it on
+   * the first pulse of every test that has issues.
+   *
+   * This is what gives the Tickets tab a populated list on the `fake` provider,
+   * which is how the tab is developed and demonstrated at all.
+   */
+  async listTicketHistory(_since: string): Promise<TrackerItem[]> {
+    const ts = this.now();
+    return this.world.read().issues.map((issue) => {
+      const createdAt = this.seenAt.get(issue.number) ?? ts;
+      this.seenAt.set(issue.number, createdAt);
+      return {
+        number: issue.number,
+        title: issue.title,
+        labels: issue.labels,
+        state: issue.state,
+        url: null,
+        createdAt,
+        changedAt: ts,
+      };
+    });
   }
 
   handles(kind: InjectableEvent['kind']): boolean {

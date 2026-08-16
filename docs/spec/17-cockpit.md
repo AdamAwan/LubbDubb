@@ -190,7 +190,7 @@ once.
 
 | Parameter                            | Carries                                              |
 | ------------------------------------ | ---------------------------------------------------- |
-| `tab`                                | `backlog` / `work`; the overview is the absent value |
+| `tab`                                | `backlog` / `work` / `tickets`; the overview is the absent value |
 | `goal`                               | the open goal page, as `issue:<n>`                   |
 | `panel`                              | `findings` / `faults` / `output` / `launch`          |
 | `ask`                                | the queue row a `{ ask }` panel is showing           |
@@ -198,6 +198,9 @@ once.
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad       |
 | `settings` / `spend` / `reliability` | the three top-bar modals                             |
 | `collapsed`                          | the backlog features folded away, as `3,12`          |
+| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched` / `ignored`; `any` is the absent value |
+| `state`                              | its tracker axis: `open` / `closed`; `any` is the absent value |
+| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
@@ -779,6 +782,8 @@ to write either way, and a button that writes nothing is worse than one that say
 
 Assignment filtering is a server-side concern (`userId` for Azure; GitHub has no issue
 assignee filter) and is deliberately not a cockpit one — the view shows whatever the tracker returned.
+The same asymmetry reaches [the tickets tab](#the-tickets-tab), which mirrors exactly the population
+each provider's own listing returns.
 
 ## The work tab
 
@@ -800,6 +805,69 @@ the tracker accounts for, with `File a work item` and `Ignore` beside each row, 
 can ever mark done what nothing records. → [16](16-http-api.md#get-apiwork)
 
 It is a **lens**: nothing here, and nothing in the dispatcher, decides anything from what it draws.
+
+## The tickets tab
+
+Every item the tracker's assignment filter has returned since the harness first swept — worked or
+not, open or closed — as the fourth nav destination. Where the [backlog](#the-backlog-tab) is triage
+over the open world and the [work tab](#the-work-tab) is the record of what the harness *did*, this
+is the record of what it was **asked** to do. It is drawn as a table because it is read as one: the
+tracker id, the ticket, the two readings, the cost and the date, each row taking the list's tracks by
+subgrid so the columns line up however long one title runs.
+
+It is a **lens**, and it is **fetched on open and per page rather than polled** (`/api/tickets`), for
+the work tab's reason: the list is all-time and only grows, and `/api/state` comes round every couple
+of seconds. → [16](16-http-api.md#get-apitickets)
+
+### Two axes, because they are two questions
+
+**Watch is the harness's reading** — the `${labelPrefix}-watch` / `-ignore` pair, resolved through
+`watchBucketOf` (`src/watchLabels.ts`), the same precedence the dispatcher's gate resolves through.
+It is **three-valued**: an item nobody has opted in is `unwatched`, one tagged leave-alone is
+`ignored`, and folding the two would report a triage nobody made. **State is the tracker's own word**,
+open or closed.
+
+The harness's own outcome for a goal — `delivered`, `fell short`, `concluded`, `abandoned` — rides on
+the row as a chip and is deliberately **not a third filter**: it answers a different question from
+either axis, and a third control makes the filter row a cube. It is folded to one word on the server
+(`src/tickets/outcomes.ts`) from `resolveIssueConclusion` plus the delivery and run rows, because a
+precedence rule re-implemented in a component is a second opinion about it.
+
+### Ordering, and the two things the mirror does not know
+
+The default ordering is the **tracker id descending**, which is arrival order: an id is
+auto-incremental, so there is no date to parse and no timezone to get wrong. The other is **cost**,
+and both live on the **column headers alone** — two controls for one job is two places to leave
+disagreeing, so the filter row carries the axes and a *loaded of total* reading instead. An infinite
+list with no total says nothing about whether a reader is near the end.
+
+Neither the watch bucket nor the cost is a column on the mirror, and that is deliberate: the bucket is
+a function of the operator's label prefix, and cost is `buildSpendGoals`' answer, which moves every
+pulse. Either as a stored column would be a stale copy of a verdict that changes, drifting invisibly.
+So the mirror hands back its rows and one pure function (`src/tickets/ticketList.ts`) does the
+filtering, ordering and paging. A ticket the fleet never ran on draws an em dash rather than `$0.00` —
+never worked and worked for free are different facts.
+
+### The floor, and the foot of the list
+
+The list is scrolled rather than paged, forty rows at a time, observed by an `IntersectionObserver`
+rooted on `.cn-sit` — the element that actually scrolls, since against the viewport it would never
+intersect and the list would simply stop. The cursor is a **keyset** rather than an offset, so a sweep
+landing mid-scroll cannot make a row appear twice or not at all.
+
+The **foot is a real state, not an absence**: a list that just stops reads as one that failed to load.
+Reaching it names the floor — *"start of history — 14 Jul 2026, a month before the first scan"* —
+because the floor is a cap and this codebase ships no silent ones. While the first sweep is still
+filling, the foot says so, since an empty list mid-backfill and an empty tracker are the same picture
+and different facts. → [14](14-persistence.md#the-ticket-mirror)
+
+### What it is not
+
+No mutation: no un-dismiss, no re-open, no verdict toggle, and no watch toggle — a history you can
+edit from is not a history, and the backlog is where triage happens. The scroll offset is deliberately
+**not** on `Place` either, unlike the two axes and the ordering: a URL that restored an offset into a
+list that has since grown lands somewhere else entirely, so Back returns to the filter and the list
+re-reads its first page.
 
 ## The top bar and the panels
 

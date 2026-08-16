@@ -43,8 +43,8 @@ providers share one `FakeWorldStore` so their world stays coherent.
 
 `PrReplyCapable`, `PrMergeCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
 `PrBaseCapable`, `PrBaseUpdateCapable`, `BranchDeleteCapable`, `IssueLabelCapable`,
-`WorkItemStateCapable`, `IssueCommentCapable`, `CiEvidenceCapable`, `RefResolvable`, and the
-fake-only `Injectable`.
+`WorkItemStateCapable`, `IssueCommentCapable`, `CiEvidenceCapable`, `RefResolvable`,
+`TicketHistoryCapable`, and the fake-only `Injectable`.
 
 `BranchDeleteCapable` deletes a branch outright — the reap after a pull request merges. Both
 providers implement it, and both report **already gone as success**: GitHub's "automatically delete
@@ -52,6 +52,22 @@ head branches" setting removes the branch at merge time, so absence is the commo
 failure. GitHub deletes the ref; Azure has no delete verb for one and updates it to the zero object
 id, which needs the id it currently points at, so the Azure arm is two calls and the first is also
 the already-gone check.
+
+`TicketHistoryCapable` lists the tracker's items **across states**, which nothing else here does, and
+that is precisely why it is its own capability rather than a widening of `snapshot()`. The snapshot is
+_the world the harness acts on_, and that is open items by definition — a rule that could see a closed
+one would eventually act on it. This reads history for [the ticket mirror](14-persistence.md#the-ticket-mirror),
+and it is narrowed **exactly as each provider's own open listing is**: `workItemTag` and
+`workItemAssignedTo` on Azure, nothing on GitHub. The mirror therefore always holds the population the
+harness works, never a wider one — and on GitHub, where there is no issue-side assignee filter
+([the `github` provider](#the-github-provider)), "the assignment filter" is the whole repository, which
+is the honest answer rather than a second, quieter filter invented for this feature.
+
+Both arms take a **changed-since** instant, and that is what makes a sweep incremental instead of a
+re-list of the tracker every pulse: GitHub's issues list takes `since` with `state=all`, Azure's WIQL
+filters on `System.ChangedDate` (with the `T` separator and sub-second precision stripped, which WIQL
+rejects by faulting the whole query). It is also why the mirror's one-month floor is a floor rather
+than a cut — asking by last-changed brings back older items that are still alive.
 
 `PrBaseUpdateCapable` merges a pull request's **base into it** — the arm of rule `pr-base-update` that
 costs no agent ([05](05-dispatcher.md#pr-base-update--two-arms)). GitHub implements it with
@@ -100,6 +116,11 @@ Implements both seams:
   rather than a fault, and throwing would fill an Azure deployment's Errors panel with a fact about
   its provider. → [09](09-execution.md#update_pr_branch--the-base-merge-without-an-agent)
 - **`resolveRefUrl(ref)`** — the first `RefResolvable`, or `null`.
+- **`listTicketHistory(since)`** — the first `TicketHistoryCapable`, or `[]`. The **second** routed
+  read that answers rather than throwing, for `readCiFailureEvidence`'s reason: the mirror it fills is
+  a lens nothing dispatches from, and a provider with no such listing is an empty tab rather than a
+  failed pulse. `tracksTicketHistory` says whether any provider can answer at all, which is what stops
+  the sweep stamping a floor for a history it will never read.
 - **`inject(event)`** — routes to the fake that owns the event kind and logs it. An event with no fake
   owner is recorded as `inject_unhandled` rather than throwing: you cannot fake-inject onto a real
   provider. **There is no HTTP route behind this**: it is the test suite's world driver (316 call

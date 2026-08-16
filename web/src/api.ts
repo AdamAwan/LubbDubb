@@ -13,6 +13,7 @@ import type {
   SpendPayload,
   SpendTrendPayload,
   WorkRootsPayload,
+  TicketsPayload,
   WorkSubtreePayload,
 } from '../../src/wire.js';
 import { demoApi, connectDemoWs } from './demo/demoBackend.js';
@@ -123,6 +124,19 @@ const realApi = {
   getWorkRoots: () => authFetch('/api/work').then((r) => json<WorkRootsPayload>(r)),
   getWorkSubtree: (ref: string) =>
     authFetch(`/api/work/${encodeURIComponent(ref)}`).then((r) => json<WorkSubtreePayload>(r)),
+  // The Tickets tab's list: fetched when the tab opens and again per page as it is
+  // scrolled, never polled — the mirror is all-time and only grows. Defaults are
+  // omitted from the query string so a bare call and a bare `?tab=tickets` are the
+  // same request.
+  getTickets: (query: { watch: string; state: string; order: string; cursor: string | null }) => {
+    const params = new URLSearchParams();
+    if (query.watch !== 'any') params.set('watch', query.watch);
+    if (query.state !== 'any') params.set('state', query.state);
+    if (query.order !== 'added') params.set('order', query.order);
+    if (query.cursor !== null) params.set('cursor', query.cursor);
+    const search = params.toString();
+    return authFetch(`/api/tickets${search === '' ? '' : `?${search}`}`).then((r) => json<TicketsPayload>(r));
+  },
   // A goal's retrospective, fetched when the Manifest station is opened. The
   // snapshot carries only the summary, for the reason the work graph is not
   // polled: a document per issue on every poll pays for the feature in bandwidth.

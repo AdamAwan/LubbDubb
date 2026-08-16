@@ -26,6 +26,7 @@ import { ErrorStore } from './errors.js';
 import { GraphStore } from './graph.js';
 import { BugFilingStore } from './bugFilings.js';
 import { adoptFloorCompletions, FloorStore, FLOOR_COLUMNS } from './floor.js';
+import { TicketStore, type MirroredTicket, type TrackerSweepMark } from './tickets.js';
 import type {
   Agent,
   AgentFile,
@@ -64,6 +65,7 @@ import type {
   StackLanding,
   StackLandingStatus,
   Task,
+  TrackerItem,
   UsageEvent,
   ValidationAmendment,
   ValidationAmendResult,
@@ -125,6 +127,7 @@ export class Store {
   private readonly graph: GraphStore;
   private readonly bugFilings: BugFilingStore;
   private readonly floor: FloorStore;
+  private readonly tickets: TicketStore;
 
   constructor(dbPath: string, clock: Clock = systemClock) {
     if (dbPath !== ':memory:') mkdirSync(dirname(dbPath), { recursive: true });
@@ -191,6 +194,7 @@ export class Store {
     this.graph = new GraphStore(ctx);
     this.bugFilings = new BugFilingStore(ctx);
     this.floor = new FloorStore(ctx);
+    this.tickets = new TicketStore(ctx);
   }
 
   close(): void {
@@ -814,5 +818,20 @@ export class Store {
   }
   listIssueRuns(): IssueRun[] {
     return this.floor.listIssueRuns();
+  }
+
+  // -- The ticket mirror ----------------------------------------------------
+
+  ensureTrackerSweep(backfillMs: number): TrackerSweepMark {
+    return this.tickets.ensureTrackerSweep(backfillMs);
+  }
+  readTrackerSweep(): TrackerSweepMark | null {
+    return this.tickets.readTrackerSweep();
+  }
+  recordSweep(askedFrom: string, items: readonly TrackerItem[]): void {
+    this.tickets.recordSweep(askedFrom, items);
+  }
+  listTrackerItems(): MirroredTicket[] {
+    return this.tickets.listTrackerItems();
   }
 }

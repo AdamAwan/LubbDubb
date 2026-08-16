@@ -1,12 +1,13 @@
 import type { ErrorRecorder } from '../../errorLog.js';
 import type { IssueCommentInput, IssueLabelInput, SendResult, WorkItemStateInput } from '../../sink/actionSink.js';
-import type { Issue, IssueRelative, IssueState } from '../../types.js';
+import type { Issue, IssueRelative, IssueState, TrackerItem } from '../../types.js';
 import type {
   Capability,
   Integration,
   IssueCommentCapable,
   IssueLabelCapable,
   RefResolvable,
+  TicketHistoryCapable,
   WorkItemStateCapable,
   WorldSlice,
 } from '../integration.js';
@@ -47,7 +48,13 @@ interface AzureWorkItemsOpts {
  * `labels`, so the provider-agnostic pickup/priority gates work unchanged.
  */
 export class AzureDevOpsWorkItemsIntegration
-  implements Integration, RefResolvable, WorkItemStateCapable, IssueLabelCapable, IssueCommentCapable
+  implements
+    Integration,
+    RefResolvable,
+    WorkItemStateCapable,
+    IssueLabelCapable,
+    IssueCommentCapable,
+    TicketHistoryCapable
 {
   readonly id = 'issues:azure';
   readonly capability: Capability = 'issues';
@@ -59,6 +66,32 @@ export class AzureDevOpsWorkItemsIntegration
   resolveRefUrl(ref: string): string | null {
     const { organization, project, repository } = this.opts;
     return organization && project && repository ? azureRefUrl(organization, project, repository, ref) : null;
+  }
+
+  /**
+   * The mirror's read: work items in either state changed since `since` (issue #329).
+   *
+   * Under the same `workItemTag` / `assignedTo` narrowing {@link snapshot} applies —
+   * this provider's whole assignment filter — so the mirror holds the population the
+   * harness works and not a wider one.
+   *
+   * Neither the hierarchy nor the tag-authorship revisions are hydrated, unlike the
+   * snapshot: a history row is read and ordered, never dispatched from, and those
+   * two reads are per-item. Paying them across a month of backfill would make the
+   * first sweep cost a request per ticket.
+   */
+  async listTicketHistory(since: string): Promise<TrackerItem[]> {
+    const { api, workItemTag, assignedTo } = this.opts;
+    const raw = await api.listWorkItemsChangedSince(since, workItemTag, assignedTo);
+    return raw.map((w) => ({
+      number: w.id,
+      title: w.title,
+      labels: w.tags,
+      state: normalizeState(w.state),
+      url: w.url,
+      createdAt: w.createdAt,
+      changedAt: w.changedAt,
+    }));
   }
 
   async snapshot(): Promise<WorldSlice> {
