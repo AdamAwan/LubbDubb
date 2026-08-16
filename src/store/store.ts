@@ -49,6 +49,7 @@ import type {
   Finding,
   FindingInput,
   FindingStatus,
+  GoalFile,
   HumanTask,
   HumanTaskKind,
   HumanTaskStatus,
@@ -644,6 +645,9 @@ export class Store {
   }
   listAllFiles(): AgentFile[] {
     return this.agents.listAllFiles();
+  }
+  listGoalFiles(goalRef: string): GoalFile[] {
+    return this.agents.listGoalFiles(goalRef);
   }
 
   // -- Transcripts ---------------------------------------------------------

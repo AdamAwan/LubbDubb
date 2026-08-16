@@ -885,6 +885,24 @@ export interface AgentFile {
 /** A file event as captured, before the store assigns identity. */
 export type AgentFileInput = Pick<AgentFile, 'path' | 'tool' | 'promoted'>;
 
+/**
+ * One path a goal has been edited in, and the work that last wrote it — the
+ * `agent_files` rows of a whole issue subtree, folded to one row per path.
+ *
+ * Deliberately narrower than {@link AgentFile}: no agent id, no tool and no
+ * promotion flag, because the one reader is the prior-work briefing and a field
+ * it does not render is a field a later reader would have to guess the meaning
+ * of. → `Store.listGoalFiles`.
+ */
+export interface GoalFile {
+  /** As the writing agent reported it — worktree-relative where the write landed inside its cwd. */
+  path: string;
+  /** The origin of the task whose agent last wrote it: `issue:12:part:schema`, say. */
+  originRef: string;
+  /** When that last write was recorded. */
+  createdAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Findings (what an agent discovers outside its own task)
 // ---------------------------------------------------------------------------

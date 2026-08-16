@@ -123,6 +123,20 @@ the read must happen **inside the drain** while `agent.cwd` still exists.
 
 Tests: `test/fileEvents.test.ts`.
 
+### The rows read back by goal
+
+`agent_files` has three readers, and they ask different questions of it. The drawer's "files changed"
+list asks about **one agent** (`listFiles`); the overlap panel asks which agents were writing one path
+**at the same time** ([below](#file-overlap-detection)); and the prior-work briefing asks where **one
+goal** has been, through `Store.listGoalFiles` ([14](14-persistence.md#flags-and-files)) — the rows of a
+whole `issue:<n>` subtree, code tasks only, folded to one row per path and newest write first.
+
+That third reader is why the capture path is worth more than the drawer it was built for: the paths a
+goal has already been edited in are the cheapest orientation a fresh agent can be given, and they cost
+nothing to collect because the hook was already collecting them. The briefing renders them as testimony
+like everything else around it — a path may have been written on a sibling's branch, or renamed since —
+and the rendering rules are in [09](09-execution.md#what-earlier-agents-worked-out-reaches-the-next-one).
+
 ## Serving artifacts
 
 `GET /artifacts/:id`, addressed by **flag id** — so the served path comes from the stored flag row,

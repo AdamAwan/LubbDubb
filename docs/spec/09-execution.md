@@ -304,12 +304,29 @@ prompt.
   the harness already says. It carries the **pad**; the planner's **`document` / `risks` /
   `outOfScope`**, which reach the plan sheet and no agent — and on a one-part plan are the entire
   product of a code agent that read the whole repository, while rule `issue-pickup`'s prompt is the issue title and
-  body; a part's **`rationale` / `acceptance`**, stored and rendered nowhere at all; and the **prose
-  behind each standing verdict** (assay, conclusion, delivery, shortfall). It therefore omits
+  body; a part's **`rationale` / `acceptance`**, stored and rendered nowhere at all; the **prose
+  behind each standing verdict** (assay, conclusion, delivery, shortfall); and **the paths the goal has
+  been edited in**. It therefore omits
   `plan.reason` (rendered by `currentPlanSummary` to a replanner and as `{plan}` to a part agent) and a
   part's status, branch and PR number (`currentPlanSummary`, `siblingContext`).
 - **No world facts.** A pull request's state is live through `world_read`; pasted into a prompt it would
   be a stale second reading of something the agent can ask about properly.
+- **Files this goal has been edited in** (issue #354) is the one section that is stored *fields* rather
+  than stored prose, and it sits last — the sections above it are the argument, this is the index. One
+  line per path, most recent write first, attributed to the origin that wrote it, from
+  `Store.listGoalFiles` ([14](14-persistence.md#flags-and-files)). Three things about it, each answering
+  a rule it sits against:
+  - **It is still a join, never a judgement.** A path is `agent_files.path` quoted back and the order is
+    a stored timestamp. Ranking, relevance scoring or "the files you probably want" would be the second
+    opinion about somebody else's decision that this module and `retroDossier` both refuse.
+  - **It is not a world fact.** A pull request's state is a fact about the world *now*, which
+    `world_read` answers better than a paste; this is a fact about the goal's **own history**, like the
+    pad, and no live tool answers it. A path written on a sibling's branch may not exist on this
+    dispatch's branch, and a rename leaves the record pointing at nothing — which is testimony going
+    stale, covered by the heading's own framing rather than by a softer sentence of the section's.
+  - **Promoted paths are in it and unmarked**, and it **stays on for a part dispatch**: `forPart`
+    suppresses the parts section alone, because `siblingContext` renders what a sibling was _for_ and
+    nowhere renders where it has been.
 - **Scoped by `padOriginFor`, not a fresh predicate** — already the harness's answer to "which goal is
   this agent working": the `issue:<n>` root plus its `:plan`, `:assay`, `:assess` and `:part:<slug>`
   arms. Everything else (a PR concern, a job, a filing) is handed nothing, which is the rejection note's
@@ -324,8 +341,10 @@ prompt.
 - **Bounded, and it names what it dropped.** Appended text lands after the cached prefix, so a briefing
   is fresh input tokens on every dispatch. An untouched goal renders the empty string, so a first
   agent's prompt is byte-identical to one composed before this existed; the pad is capped at the most
-  recent 15 entries and the write-up at 4 000 characters, with the elision stated and `scratch_read`
-  named, or a partial record reads as the whole one.
+  recent 15 entries, the file list at the most recent 25 paths and the write-up at 4 000 characters,
+  with the elision stated and `scratch_read` named, or a partial record reads as the whole one. The
+  file cap is the tightest because it is the one section that scales with the **size** of the work
+  rather than with what anyone chose to write down.
 
 ## The operator's own instructions reach the agent
 

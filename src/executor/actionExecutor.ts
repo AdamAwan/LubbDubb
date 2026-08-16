@@ -994,6 +994,11 @@ function outstandingForOrigin(originRef: string | null | undefined, store: Store
  * retrospective is handed the pad and the whole dossier by {@link retroBriefing},
  * and would otherwise read its own goal's testimony twice in one prompt.
  *
+ * The file list is the one input that is not a lookup by this ref but a join across
+ * the whole subtree, and it is scoped by the same `issue:<n>` root for that reason —
+ * `Store.listGoalFiles` takes the goal, never the dispatching origin, because where
+ * a *sibling* has been is the half of that list worth having.
+ *
  * In the executor, and for the branch gate's reason: every dispatch passes through
  * here whatever composed it, an accepted proposal's included.
  */
@@ -1011,6 +1016,7 @@ function priorWorkFor(originRef: string | null | undefined, store: Store, outsta
     delivery: store.getDelivery(issueOriginRef),
     shortfall: store.getShortfall(issueOriginRef),
     entries: store.listScratchEntries(issueOriginRef),
+    files: store.listGoalFiles(issueOriginRef),
     forPart: /^issue:\d+:part:/.test(ref),
   });
   return briefing || null;
