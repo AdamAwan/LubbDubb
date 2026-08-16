@@ -250,3 +250,50 @@ export function fireNotifications(items: readonly NotifyItem[], prefs: NotifyPre
     }
   }
 }
+
+/**
+ * How far a test notification got. `sent` is the browser having **accepted** it,
+ * which is deliberately not the same claim as the operator having seen it —
+ * everything past the constructor belongs to the desktop, and `undelivered` is
+ * the engine coming back to say so.
+ */
+export type NotifyTestResult = 'sent' | 'undelivered' | 'blocked' | 'unsupported' | 'failed';
+
+/**
+ * Raise one notification on demand, so the chain can be proved rather than
+ * waited on.
+ *
+ * The feature is otherwise unfalsifiable, and that is the whole reason this
+ * exists: every quiet link in the chain — a grant that was never given, an
+ * engine that refuses the constructor, a desktop dropping what the browser
+ * accepted — presents to an operator as *no notification*, which is also what a
+ * fleet with nothing to say presents as. There is no way to tell those apart by
+ * watching, and the honest reading of "I can't get this working" is usually that
+ * nothing had happened worth announcing yet.
+ *
+ * It skips **both** gates {@link fireNotifications} applies, each for its own
+ * reason. The focus gate cannot survive a button: a press means the window is
+ * focused by definition, so keeping it would make the test unpassable. And
+ * `prefs.enabled` is skipped because the switch is what you are trying to decide
+ * whether to trust — a diagnostic that answers only once you have already
+ * committed to the thing diagnoses nothing.
+ *
+ * `onUndelivered` fires on the engine's `error` event, which is the one signal
+ * that separates "the desktop dropped it" from "it worked and you were not
+ * looking". It is late and best-effort — engines that drop a notification
+ * silently report nothing, so its absence proves nothing either way.
+ */
+export function sendTestNotification(onUndelivered?: () => void): NotifyTestResult {
+  if (typeof Notification === 'undefined') return 'unsupported';
+  if (Notification.permission !== 'granted') return 'blocked';
+  try {
+    const raised = new Notification('LubbDubb', {
+      body: 'Notifications are working. The cockpit will reach you like this when it needs you.',
+      tag: 'lubbdubb:test',
+    });
+    raised.onerror = () => onUndelivered?.();
+    return 'sent';
+  } catch {
+    return 'failed';
+  }
+}
