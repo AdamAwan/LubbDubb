@@ -128,10 +128,21 @@ const realApi = {
   // scrolled, never polled — the mirror is all-time and only grows. Defaults are
   // omitted from the query string so a bare call and a bare `?tab=tickets` are the
   // same request.
-  getTickets: (query: { watch: string; state: string; order: string; cursor: string | null }) => {
+  getTickets: (query: {
+    watch: string;
+    tracking: string;
+    state: string;
+    feature: string | null;
+    order: string;
+    cursor: string | null;
+  }) => {
+    // Defaults omitted, exactly as `placeQuery` omits them, so the URL an operator
+    // is looking at and the request behind it are the same question.
     const params = new URLSearchParams();
     if (query.watch !== 'any') params.set('watch', query.watch);
+    if (query.tracking !== 'live') params.set('tracking', query.tracking);
     if (query.state !== 'any') params.set('state', query.state);
+    if (query.feature !== null) params.set('feature', query.feature);
     if (query.order !== 'added') params.set('order', query.order);
     if (query.cursor !== null) params.set('cursor', query.cursor);
     const search = params.toString();

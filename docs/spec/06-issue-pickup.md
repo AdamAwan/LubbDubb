@@ -328,7 +328,7 @@ instruction. Appended rather than filled into a template placeholder, for the re
 proposal's note is: an operator override omitting a new token would silently drop it.
 
 An **operator's** `more_work` carries no note into that prompt, and never did — the fixed
-`Set by the operator from the cockpit.` said only *that* there was more. What the operator has to say
+`Set by the operator from the cockpit.` said only _that_ there was more. What the operator has to say
 travels beside the verdict instead, as an **instruction**: its own append-only row, several to a goal,
 appended to every dispatch on it until an agent concludes
 ([09](09-execution.md#the-operators-own-instructions-reach-the-agent),
@@ -482,8 +482,9 @@ way to stop the harness working:
   `undeclared`-vs-`more_work` again: the harness acts on what was said, never on silence.
 - **The hold expires on its own** (below).
 - **The operator can clear or override it** (`POST /api/issues/:number/assay`), from either cockpit:
-  the backlog files a refused goal under **Blocked at intake** and puts the override on its row
-  ([17](17-cockpit.md#the-backlog)). Only a refusal draws the affordance — a
+  the tickets tab pulls a refused goal **out of the list into its intake call-out**, quotes the
+  assayer's sentence and puts the override beside it
+  ([17](17-cockpit.md#intake-is-pulled-out-never-greyed-inside-the-list)). Only a refusal draws the affordance — a
   `workable` verdict blocks nothing — and clearing is a distinct third option rather than the same
   toggle's other end.
 
@@ -566,7 +567,7 @@ nothing.
 ### The watch gate
 
 The assay applies only to issues that already pass the watch gate — it never filters an untagged
-backlog. So it does second-guess an explicit operator signal, and is argued for on that basis: the
+tickets tab. So it does second-guess an explicit operator signal, and is argued for on that basis: the
 tag says _work this_, and the assay's answer is not _no_ but _with what?_. A question, asked once,
 that the operator ends by editing the ticket, replying to it, or clearing the verdict.
 

@@ -126,7 +126,7 @@ _handed_ checked values has no raw request to assert about and no check to skip.
 `test/requestValidation.test.ts` asserts both structurally, over every file in `src/server/routes/`.
 (The two artifact routes still read `req.query` directly — each asserts the value to `unknown` and
 tests its type before use, so the assertion claims nothing about the data. Since #329 a query string
-can be *declared* instead, and a route whose parameters are filters should declare one: those are the
+can be _declared_ instead, and a route whose parameters are filters should declare one: those are the
 half an operator hand-edits in the address bar, so they are the half that most wants validating.)
 
 Four properties hold across the surface:
@@ -452,23 +452,50 @@ Returns `{ nodes, refUrls }`.
 ### `GET /api/tickets`
 
 One page of the **ticket mirror**: every item the tracker's assignment filter has returned since the
-harness first swept, worked or not, open or closed (issue #329). Rate-limited and fetched rather than
-polled, for `/api/work`'s reason — the list is all-time and only grows.
+harness first swept, worked or not, live or frozen (issues #329, #351). Rate-limited and fetched rather
+than polled, for `/api/work`'s reason — the list is all-time and only grows.
 
-Four query parameters, every one defaulting so a bare call is the tab's own first request:
-`watch` (`any` | `watched` | `unwatched` | `ignored`), `state` (`any` | `open` | `closed`), `order`
-(`added` | `cost`) and an opaque `cursor`. They default **here** as well as in `Place`, which is what
-keeps a bare `?tab=tickets` and a bare `/api/tickets` the same place. A hand-edited value is a `400`
-naming the field; a stale cursor is not — a cursor whose row has left the filtered set restarts the
-list, because repeating rows is a failure a reader can see and a silently skipped page is not.
+Six query parameters, every one defaulting so a bare call is the tab's own first request:
 
-Returns `{ rows, total, totalCostUsd, nextCursor, anchorAt, backfilling, refUrls }`. `total` and
-`totalCostUsd` describe the **whole filtered set**, not the page — an infinite list with no total says
-nothing about whether a reader is near the end. `anchorAt` is the frozen one-month floor and
-`backfilling` says whether the first sweep has landed; both are shipped because the tab has to *say*
+| Parameter  | Values                                                                      |
+| ---------- | --------------------------------------------------------------------------- |
+| `watch`    | `any` \| `watched` \| `unwatched` \| `ignored`                              |
+| `tracking` | `any` \| `live` \| `frozen` — the harness's reading. **Defaults to `live`** |
+| `state`    | `any`, or a provider-native state exactly as the tracker spells it          |
+| `feature`  | a feature number, or `none` for the items the tracker says have no parent   |
+| `order`    | `added` \| `changed` \| `cost`                                              |
+| `cursor`   | opaque; this route's own output handed back                                 |
+
+They default **here** as well as in `Place`, which is what keeps a bare `?tab=tickets` and a bare
+`/api/tickets` the same place. `tracking` defaulting to `live` is a deliberate change of what a bare
+call means: the tab is a work surface now, and opening it on a thousand frozen rows would bury the ones
+that are still work.
+
+**`state` is free-form, and validated only for length**, because the vocabulary is the tracker's and
+this route cannot hold the list. A state no item carries narrows to an empty list — a filter that found
+nothing, not a place that does not exist. The two literals `open` and `closed` are read as the _old_
+two-valued `state` axis and mapped onto `tracking`: no tracker spells a state that way, and a saved link
+that silently matched nothing would be worse than an alias that is written down. `place.ts` carries the
+same alias, and has to. Any other hand-edited value is a `400` naming the field; a stale cursor is not —
+a cursor whose row has left the filtered set restarts the list, because repeating rows is a failure a
+reader can see and a silently skipped page is not.
+
+Returns `{ rows, total, kept, live, totalCostUsd, nextCursor, states, features, orphanCount, anchorAt,
+backfilling, refUrls }`. `total` and `totalCostUsd` describe the **whole filtered set**, not the page —
+an infinite list with no total says nothing about whether a reader is near the end — while `kept` and
+`live` describe the mirror itself, which no filter changes. `states` and `features` are the facets, and
+they are counted over the **whole mirror** rather than the filtered set: a facet counted after its own
+filter shows `1` beside whichever value was selected and nothing beside the rest, which is a control
+that erases its own alternatives. `states` is **empty for a provider with no native states**, which is
+what tells the cockpit not to draw that filter tier at all. `anchorAt` is the frozen one-month floor and
+`backfilling` says whether the first sweep has landed; both are shipped because the tab has to _say_
 them, an empty list mid-backfill being indistinguishable from an empty tracker. `refUrls` covers the
 page's own rows, resolved through the connector's `resolveRefUrl` rather than read off the snapshot —
 that map is built from the world, and most rows here left it long ago.
+
+Note what it does **not** ship: the pickup reasons and the assay. Those are live readings the cockpit
+already holds on `/api/state`, and a second copy of them here would be a second answer to a question
+the dispatcher has already answered.
 
 Three readings are quoted rather than re-derived: cost from `buildSpendGoals`, the outcome word from
 `resolveIssueConclusion` (folded server-side by `src/tickets/outcomes.ts`), and the watch bucket from

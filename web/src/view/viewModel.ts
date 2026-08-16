@@ -9,6 +9,7 @@ import type {
   Proposal,
   TicketOrder,
   TicketStateFilter,
+  TicketTrackingFilter,
   TicketWatchFilter,
 } from '../types.js';
 import { buildNeedsYou } from './needsYou.js';
@@ -79,7 +80,10 @@ export interface CockpitView {
    * shape and the panel stays a component that is *told* where it is.
    */
   ticketWatch: TicketWatchFilter;
+  ticketTracking: TicketTrackingFilter;
   ticketState: TicketStateFilter;
+  ticketFeature: number | 'none' | null;
+  ticketGroup: 'feature' | 'flat';
   ticketOrder: TicketOrder;
 
   /** The agent whose drawer is open, if any. */
@@ -229,7 +233,10 @@ interface ViewInputs {
   collapsed?: readonly number[];
   /** Optional for `collapsed`'s reason: the defaults are what a bare URL means. */
   ticketWatch?: TicketWatchFilter;
+  ticketTracking?: TicketTrackingFilter;
   ticketState?: TicketStateFilter;
+  ticketFeature?: number | 'none' | null;
+  ticketGroup?: 'feature' | 'flat';
   ticketOrder?: TicketOrder;
 }
 
@@ -282,7 +289,10 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     tab: input.tab,
     collapsedFeatures: new Set(input.collapsed ?? []),
     ticketWatch: input.ticketWatch ?? 'any',
+    ticketTracking: input.ticketTracking ?? 'live',
     ticketState: input.ticketState ?? 'any',
+    ticketFeature: input.ticketFeature ?? null,
+    ticketGroup: input.ticketGroup ?? 'feature',
     ticketOrder: input.ticketOrder ?? 'added',
 
     selectedAgent: state.agents.find((a) => a.id === selected) ?? null,

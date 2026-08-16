@@ -9,7 +9,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { buildTicketPage, TICKET_PAGE } from '../src/tickets/ticketList.js';
 import { ticketOutcomes } from '../src/tickets/outcomes.js';
 import { TicketSweep } from '../src/tickets/sweep.js';
-import type { MirroredTicket } from '../src/store/tickets.js';
+import type { LiveTicketFacts, MirroredTicket } from '../src/store/tickets.js';
 import type { TicketsPayload } from '../src/wire.js';
 import type { TrackerItem } from '../src/types.js';
 
@@ -30,7 +30,15 @@ function item(over: Partial<TrackerItem> & Pick<TrackerItem, 'number'>): Tracker
 }
 
 function mirrored(over: Partial<MirroredTicket> & Pick<MirroredTicket, 'number'>): MirroredTicket {
-  return { ...item(over), firstSeenAt: '2026-08-01T00:00:00.000Z', ...over };
+  return {
+    ...item(over),
+    firstSeenAt: '2026-08-01T00:00:00.000Z',
+    tracking: 'live',
+    workItemState: null,
+    issueType: null,
+    lastReadAt: null,
+    ...over,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -193,30 +201,33 @@ function page(
     items,
     costs,
     outcomes: new Map(),
+    featureSlots: new Map(),
+    pickupStates: [],
     ...LABELS,
-    query: { watch: 'any', state: 'any', order: 'added', cursor: null, ...query },
+    query: { watch: 'any', tracking: 'any', state: 'any', feature: null, order: 'added', cursor: null, ...query },
   });
 }
 
-test('the two axes are independent, and an untagged item is unwatched rather than ignored', () => {
+test('the axes are independent, and an untagged item is unwatched rather than ignored', () => {
   const items = [
-    mirrored({ number: 4, labels: ['lubbdubb-watch'], state: 'open' }),
-    mirrored({ number: 3, labels: ['lubbdubb-watch'], state: 'closed' }),
-    mirrored({ number: 2, labels: [], state: 'open' }),
-    mirrored({ number: 1, labels: ['lubbdubb-ignore'], state: 'closed' }),
+    mirrored({ number: 4, labels: ['lubbdubb-watch'], state: 'open', tracking: 'live' }),
+    mirrored({ number: 3, labels: ['lubbdubb-watch'], state: 'closed', tracking: 'frozen' }),
+    mirrored({ number: 2, labels: [], state: 'open', tracking: 'live' }),
+    mirrored({ number: 1, labels: ['lubbdubb-ignore'], state: 'closed', tracking: 'frozen' }),
   ];
 
-  // The four questions the ticket asks, in the order it asks them.
+  // The four questions the ticket asks, in the order it asks them. `tracking` is
+  // the harness's reading and `watch` the operator's, and neither narrows the other.
   assert.deepEqual(
-    page(items, { watch: 'watched', state: 'open' }).rows.map((r) => r.number),
+    page(items, { watch: 'watched', tracking: 'live' }).rows.map((r) => r.number),
     [4],
   );
   assert.deepEqual(
-    page(items, { state: 'closed' }).rows.map((r) => r.number),
+    page(items, { tracking: 'frozen' }).rows.map((r) => r.number),
     [3, 1],
   );
   assert.deepEqual(
-    page(items, { watch: 'unwatched', state: 'open' }).rows.map((r) => r.number),
+    page(items, { watch: 'unwatched', tracking: 'live' }).rows.map((r) => r.number),
     [2],
     'an item nobody has opted in is unwatched — folding it into ignored would report a triage nobody made',
   );
@@ -353,7 +364,7 @@ test('GET /api/tickets ships the mirror, filtered, ordered and paged', async () 
     'the harness reading rides on every row',
   );
 
-  const unwatched = await app.inject({ method: 'GET', url: '/api/tickets?watch=unwatched&state=open' });
+  const unwatched = await app.inject({ method: 'GET', url: '/api/tickets?watch=unwatched&tracking=live' });
   assert.deepEqual(
     (unwatched.json() as TicketsPayload).rows.map((r) => r.number),
     [13],
@@ -363,6 +374,8 @@ test('GET /api/tickets ships the mirror, filtered, ordered and paged', async () 
   // point: the snapshot's issue list can no longer answer for it.
   system.connector.inject({ kind: 'issue_state', number: 12, state: 'closed' });
   await system.harness.runCycle('manual');
+  // Spelled the old way on purpose: `state=closed` is the pre-#351 axis, and the
+  // alias is what keeps every saved link and bookmark working.
   const closed = await app.inject({ method: 'GET', url: '/api/tickets?state=closed' });
   const closedBody = closed.json() as TicketsPayload;
   assert.deepEqual(
@@ -372,9 +385,164 @@ test('GET /api/tickets ships the mirror, filtered, ordered and paged', async () 
   assert.equal(closedBody.total, 1, 'the filtered set is one');
   assert.equal(closedBody.kept, 3, 'but the history is still three — a filter does not shrink it');
 
-  const refused = await app.inject({ method: 'GET', url: '/api/tickets?state=nonsense' });
+  // A state no item carries is a filter that found nothing, not a place that does
+  // not exist: the vocabulary is the tracker's, so this file cannot hold the list to
+  // validate against and an empty answer is the honest one.
+  const unknown = await app.inject({ method: 'GET', url: '/api/tickets?state=nonsense' });
+  assert.equal(unknown.statusCode, 200);
+  assert.deepEqual((unknown.json() as TicketsPayload).rows, []);
+
+  const refused = await app.inject({ method: 'GET', url: '/api/tickets?tracking=nonsense' });
   assert.equal(refused.statusCode, 400, 'a hand-edited filter is refused as a value, not thrown');
 
   await app.close();
   system.store.close();
+});
+
+// ---------------------------------------------------------------------------
+// Live and frozen (#351)
+// ---------------------------------------------------------------------------
+
+/** The live overlay a sweep is handed, narrowed to what these cases care about. */
+function fact(number: number, over: Partial<LiveTicketFacts> = {}): LiveTicketFacts {
+  return { number, labels: [], workItemState: null, issueType: null, ...over };
+}
+
+test('an item that leaves the open set freezes, keeps everything, and thaws if it comes back', () => {
+  const store = new Store(':memory:');
+  store.ensureTrackerSweep(MONTH_MS);
+  store.recordSweep(
+    SINCE,
+    [item({ number: 1 }), item({ number: 2 })],
+    [fact(1, { workItemState: 'Active', issueType: 'Task', parent: { number: 90, title: 'Payments' } }), fact(2)],
+  );
+  assert.deepEqual(
+    store.listTrackerItems().map((r) => [r.number, r.tracking]),
+    [
+      [2, 'live'],
+      [1, 'live'],
+    ],
+  );
+
+  // #1 is gone from the open set. It freezes, and it keeps every field it was last
+  // seen with — the whole reason a frozen row is kept rather than dropped.
+  store.recordSweep(SINCE, [], [fact(2)]);
+  const frozen = store.listTrackerItems().find((r) => r.number === 1);
+  assert.equal(frozen?.tracking, 'frozen');
+  assert.equal(frozen?.workItemState, 'Active');
+  assert.deepEqual(frozen?.parent, { number: 90, title: 'Payments' });
+
+  // Reopened, so the next sweep says so. Thaw is one condition, not a judgement.
+  store.recordSweep(SINCE, [], [fact(1), fact(2)]);
+  assert.equal(store.listTrackerItems().find((r) => r.number === 1)?.tracking, 'live');
+  store.close();
+});
+
+test('an empty live set freezes nothing at all', () => {
+  // A provider whose snapshot failed hands back its last good read, but one that is
+  // down on a first boot hands back nothing — and freezing the whole board off that
+  // is the one way this can be wrong at scale.
+  const store = new Store(':memory:');
+  store.ensureTrackerSweep(MONTH_MS);
+  store.recordSweep(SINCE, [item({ number: 1 })], [fact(1)]);
+  store.recordSweep(SINCE, [], []);
+  assert.equal(store.listTrackerItems()[0]?.tracking, 'live', 'silence is not evidence that the board is closed');
+  store.close();
+});
+
+test('an orphan and an unreadable parent are never collapsed into each other', () => {
+  const store = new Store(':memory:');
+  store.ensureTrackerSweep(MONTH_MS);
+  store.recordSweep(
+    SINCE,
+    [item({ number: 1 }), item({ number: 2 })],
+    [
+      // The tracker says this one hangs off nothing…
+      fact(1, { parent: null }),
+      // …and this provider reports no hierarchy at all, which is a different fact.
+      fact(2),
+    ],
+  );
+  const rows = store.listTrackerItems();
+  assert.equal(rows.find((r) => r.number === 1)?.parent, null, 'a resolved absence is an orphan');
+  assert.ok(!('parent' in (rows.find((r) => r.number === 2) ?? {})), 'an unresolved one says nothing');
+
+  // And a sweep that could not read the link must not erase one an earlier sweep did.
+  store.recordSweep(SINCE, [], [fact(1, { parent: { number: 90, title: 'Payments' } })]);
+  store.recordSweep(SINCE, [], [fact(1)]);
+  assert.deepEqual(store.listTrackerItems().find((r) => r.number === 1)?.parent, { number: 90, title: 'Payments' });
+  store.close();
+});
+
+test('a feature keeps its colour, and the ladder is spread rather than piled', () => {
+  const store = new Store(':memory:');
+  const first = store.ensureFeatureColors([90, 91]);
+  assert.notEqual(first.get(90), first.get(91), 'two features do not draw as one');
+  // Assigned once and never moved: a colour that changed between sessions is worse
+  // than no colour, since the whole value is that it is the same tomorrow.
+  const again = store.ensureFeatureColors([91, 90, 92]);
+  assert.equal(again.get(90), first.get(90));
+  assert.equal(again.get(91), first.get(91));
+  assert.equal(new Set([again.get(90), again.get(91), again.get(92)]).size, 3, 'least-used-first spreads them');
+  store.close();
+});
+
+test('the facets count the whole mirror, not the filtered set', () => {
+  // A facet counted after its own filter shows 1 beside whichever value was picked
+  // and nothing beside the rest — a control that erases its own alternatives.
+  const items = [
+    mirrored({ number: 3, workItemState: 'Ready', parent: { number: 90, title: 'Payments' } }),
+    mirrored({ number: 2, workItemState: 'New', parent: { number: 90, title: 'Payments' } }),
+    mirrored({ number: 1, workItemState: 'New', parent: null }),
+  ];
+  const narrowed = page(items, { state: 'New' });
+  assert.deepEqual(
+    narrowed.rows.map((r) => r.number),
+    [2, 1],
+  );
+  assert.deepEqual(
+    narrowed.states.map((s) => [s.state, s.count]),
+    [
+      ['New', 2],
+      ['Ready', 1],
+    ],
+    'every state the mirror carries is still offered, with its own count',
+  );
+  assert.deepEqual(
+    narrowed.features.map((f) => [f.number, f.count]),
+    [[90, 2]],
+  );
+  assert.equal(narrowed.orphanCount, 1);
+
+  // The feature filter, and its orphan bucket — which is the tracker's "no parent",
+  // never a parent we failed to read.
+  assert.deepEqual(
+    page(items, { feature: 90 }).rows.map((r) => r.number),
+    [3, 2],
+  );
+  assert.deepEqual(
+    page(items, { feature: 'none' }).rows.map((r) => r.number),
+    [1],
+  );
+});
+
+test('the pickup states config marks the states it lets through', () => {
+  const items = [mirrored({ number: 1, workItemState: 'Ready' }), mirrored({ number: 2, workItemState: 'New' })];
+  const facets = buildTicketPage({
+    items,
+    costs: new Map(),
+    outcomes: new Map(),
+    featureSlots: new Map(),
+    pickupStates: ['Ready'],
+    ...LABELS,
+    query: { watch: 'any', tracking: 'any', state: 'any', feature: null, order: 'added', cursor: null },
+  }).states;
+  assert.deepEqual(
+    facets.map((f) => [f.state, f.pickup]),
+    [
+      ['New', false],
+      ['Ready', true],
+    ],
+    'read from config, never inferred from what happened to be dispatched',
+  );
 });

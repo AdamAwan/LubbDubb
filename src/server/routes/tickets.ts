@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { TicketsPayload } from '../../wire.js';
+import type { TicketStateFilter, TicketTrackingFilter, TicketsPayload } from '../../wire.js';
 import { buildSpendGoals } from '../../spendInsights.js';
-import { buildTicketPage } from '../../tickets/ticketList.js';
+import { buildTicketPage, NO_FEATURE } from '../../tickets/ticketList.js';
 import { ticketOutcomes } from '../../tickets/outcomes.js';
 import { watchLabelsFor } from '../../watchLabels.js';
 import { checked } from '../validation.js';
@@ -19,8 +19,23 @@ import type { RouteContext } from './context.js';
  */
 const TicketQuery = z.object({
   watch: z.enum(['any', 'watched', 'unwatched', 'ignored']).default('any'),
-  state: z.enum(['any', 'open', 'closed']).default('any'),
-  order: z.enum(['added', 'cost']).default('added'),
+  /**
+   * Defaults to `live`, and that is a deliberate change of what a bare
+   * `/api/tickets` means: the tab is a work surface now rather than a record of
+   * one, and opening it on a thousand closed rows would bury the ninety that are
+   * still work. The history is one click away and still all there.
+   */
+  tracking: z.enum(['any', 'live', 'frozen']).default('live'),
+  /**
+   * Free-form because it is the *tracker's* word, validated only for length.
+   * `open` and `closed` are accepted as aliases for the old two-valued `state`
+   * axis (below) — no tracker spells a state that way, and a saved link that
+   * silently matched nothing would be worse than an alias that is written down.
+   */
+  state: z.string().max(80).default('any'),
+  /** A feature number, or `none` for the items the tracker says have no parent. */
+  feature: z.string().max(20).optional(),
+  order: z.enum(['added', 'changed', 'cost']).default('added'),
   // Opaque to the caller and validated only for length: it is this route's own
   // output handed back, and a malformed one restarts the list rather than refusing
   // the request (see `afterCursor`) — repeating rows is a failure a reader can see,
@@ -71,8 +86,17 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         nodes: store.listWorkNodes(),
         issues: store.getWorldBaseline()?.issues ?? [],
       });
+      const items = store.listTrackerItems();
+      // Assigned here rather than by the sweep, because a feature earns a colour by
+      // being *drawn* — a slot spent on a parent nobody ever sees would push the
+      // features a reader does see further round the ladder.
+      const featureSlots = store.ensureFeatureColors(
+        items.flatMap((item) => (item.parent ? [item.parent.number] : [])),
+      );
       const page = buildTicketPage({
-        items: store.listTrackerItems(),
+        items,
+        featureSlots,
+        pickupStates: config.issuePickupStates ?? [],
         costs: new Map(goals.map((g) => [g.issueNumber, g.costUsd])),
         outcomes: ticketOutcomes({
           runs: store.listIssueRuns(),
@@ -84,7 +108,13 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         }),
         watchLabel,
         ignoreLabel,
-        query: { watch: query.watch, state: query.state, order: query.order, cursor: query.cursor ?? null },
+        query: {
+          watch: query.watch,
+          ...coarseAxes(query.tracking, query.state),
+          feature: parseFeature(query.feature),
+          order: query.order,
+          cursor: query.cursor ?? null,
+        },
       });
 
       // Resolved off the connector, not read from the snapshot's `refUrls`: that
@@ -108,4 +138,32 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
       } satisfies TicketsPayload;
     }),
   );
+}
+
+/**
+ * The two coarse axes, and the one alias between them.
+ *
+ * `state` used to be `open` / `closed` and is now the tracker's own word, with the
+ * harness's reading moved to `tracking`. Those two literals are therefore the one
+ * ambiguous input this route can receive — and since no tracker spells a state
+ * that way (Azure capitalises, GitHub has none at all), reading them as the old
+ * axis is unambiguous in practice and keeps every saved link and bookmark working.
+ * The alternative is a filter that quietly matches nothing, which is the failure
+ * this codebase spends the most effort refusing.
+ */
+function coarseAxes(
+  tracking: TicketTrackingFilter,
+  state: string,
+): { tracking: TicketTrackingFilter; state: TicketStateFilter } {
+  if (state === 'open') return { tracking: 'live', state: 'any' };
+  if (state === 'closed') return { tracking: 'frozen', state: 'any' };
+  return { tracking, state };
+}
+
+/** A feature number, the orphan bucket, or null for every feature. Junk narrows nothing. */
+function parseFeature(raw: string | undefined): number | typeof NO_FEATURE | null {
+  if (raw === undefined || raw === '') return null;
+  if (raw === NO_FEATURE) return NO_FEATURE;
+  const number = Number(raw);
+  return Number.isInteger(number) && number > 0 ? number : null;
 }

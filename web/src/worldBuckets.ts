@@ -32,3 +32,28 @@ export function watchBucket(labels: string[] | undefined, opts: WatchBucketOpts)
   if (opts.watchLabel && present.includes(opts.watchLabel)) return 'watched';
   return opts.defaultWatched ? 'watched' : 'unwatched';
 }
+
+/**
+ * How many open items nobody has triaged — the nav's one number, and the only
+ * reading that says whether the tickets tab is worth opening.
+ *
+ * It lived on the backlog's own grouping until that tab was folded in, and it
+ * keeps that surface's invariant: **the count is what the Unwatched filter
+ * shows**, so the number on the button and the rows behind it cannot differ. That
+ * is why it asks the bucket and nothing else — a count that also subtracted, say,
+ * the items held at intake would be a promise the list does not keep.
+ *
+ * Closed items are left out for the reason they always were: a closed ticket is
+ * neither watchable nor ignorable, so it is not waiting on anybody.
+ */
+export function untriagedCount(
+  issues: readonly { state: string; labels: string[] }[],
+  opts: { watchLabel: string; ignoreLabel: string },
+): number {
+  let n = 0;
+  for (const issue of issues) {
+    if (issue.state !== 'open') continue;
+    if (watchBucket(issue.labels, { ...opts, defaultWatched: false }) === 'unwatched') n += 1;
+  }
+  return n;
+}

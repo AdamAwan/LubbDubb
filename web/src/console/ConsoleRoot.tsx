@@ -7,7 +7,6 @@ import { KIND_LABEL, QueueRail, subjectLabel } from './QueueRail.js';
 import { needBody } from './NeedsBand.js';
 import { GoalPage } from './GoalPage.js';
 import { Overview } from './Overview.js';
-import { Backlog } from './Backlog.js';
 import { Panel } from './Panel.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
 import { TicketsPanel } from '../components/TicketsPanel.js';
@@ -97,22 +96,32 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
   switch (tab) {
     case 'overview':
       return <Overview view={view} actions={actions} />;
-    case 'backlog':
-      return <Backlog view={view} actions={actions} />;
     case 'tickets':
       // Embedded exactly as the work tree is, and for the same reason: it reaches
       // its own route, which `console/` may not, but rendering a component that
       // does is not reaching — the import ban is on `api.js` and still holds.
       return (
         <TicketsPanel
-          query={{ watch: view.ticketWatch, state: view.ticketState, order: view.ticketOrder }}
+          query={{
+            watch: view.ticketWatch,
+            tracking: view.ticketTracking,
+            state: view.ticketState,
+            feature: view.ticketFeature,
+            group: view.ticketGroup,
+            order: view.ticketOrder,
+          }}
           onQuery={(next) =>
             actions.setTicketQuery({
               ...(next.watch !== undefined ? { ticketWatch: next.watch } : {}),
+              ...(next.tracking !== undefined ? { ticketTracking: next.tracking } : {}),
               ...(next.state !== undefined ? { ticketState: next.state } : {}),
+              ...(next.feature !== undefined ? { ticketFeature: next.feature } : {}),
+              ...(next.group !== undefined ? { ticketGroup: next.group } : {}),
               ...(next.order !== undefined ? { ticketOrder: next.order } : {}),
             })
           }
+          view={view}
+          actions={actions}
           now={view.now}
         />
       );

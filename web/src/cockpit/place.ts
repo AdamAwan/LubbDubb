@@ -1,5 +1,5 @@
 import type { ConsolePanel, ConsoleTab } from './actions.js';
-import type { TicketOrder, TicketStateFilter, TicketWatchFilter } from '../types.js';
+import type { TicketOrder, TicketStateFilter, TicketTrackingFilter, TicketWatchFilter } from '../types.js';
 
 /**
  * Where the cockpit is — every piece of state that answers *what am I looking
@@ -8,7 +8,7 @@ import type { TicketOrder, TicketStateFilter, TicketWatchFilter } from '../types
  *
  * One record rather than the ten `useState`s it replaced, because the back
  * button is a single history of *places*: a drawer opened over a goal page on
- * the backlog tab is one place, and stepping back out of it has to restore all
+ * the tickets tab is one place, and stepping back out of it has to restore all
  * three at once. Ten independent pieces of state can express that; ten
  * independent history entries cannot.
  */
@@ -31,17 +31,17 @@ export interface Place {
   spend: boolean;
   reliability: boolean;
   /**
-   * The backlog's feature headings that are **collapsed**, by issue number.
+   * The tickets tab's feature headings that are **collapsed**, by issue number.
    *
    * Collapsed rather than expanded, so the default — every feature open — is the
    * empty list and a bare URL. It is a place rather than a `useState` for the
-   * usual reason: folding three features away and stepping back into the backlog
-   * has to restore the same three, and a reload of a shared link has to show what
-   * the sender was looking at.
+   * usual reason: folding three features away and stepping back into the tab has
+   * to restore the same three, and a reload of a shared link has to show what the
+   * sender was looking at.
    */
   collapsed: number[];
   /**
-   * The Tickets tab's two filter axes and its ordering (issue #329).
+   * How the Tickets tab is narrowed, arranged and ordered (issues #329, #351).
    *
    * On `Place` rather than in the panel because the tab exists to be *asked* —
    * "all unclosed watched items" is a question someone sends a link to, and a
@@ -52,7 +52,18 @@ export interface Place {
    * its first page.
    */
   ticketWatch: TicketWatchFilter;
+  /**
+   * What the harness is doing about an item, which is not what the tracker calls
+   * it. Defaults to `live` — the tab is the surface work happens on now, and
+   * opening it on a thousand frozen rows would bury the ones that are still work.
+   */
+  ticketTracking: TicketTrackingFilter;
+  /** The tracker's own word, or `any`. Free-form: the vocabulary is the tracker's. */
   ticketState: TicketStateFilter;
+  /** A feature number, `none` for the orphans, or null for every feature. */
+  ticketFeature: number | 'none' | null;
+  /** Features as headings, or one flat list with a feature column. */
+  ticketGroup: 'feature' | 'flat';
   ticketOrder: TicketOrder;
 }
 
@@ -70,14 +81,27 @@ export const NOWHERE: Place = {
   reliability: false,
   collapsed: [],
   ticketWatch: 'any',
+  ticketTracking: 'live',
   ticketState: 'any',
+  ticketFeature: null,
+  ticketGroup: 'feature',
   ticketOrder: 'added',
 };
 
-const TABS: readonly ConsoleTab[] = ['overview', 'backlog', 'work', 'tickets'];
+const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets'];
+/**
+ * Tabs that no longer exist, and where they went.
+ *
+ * The backlog was folded into the tickets tab, which is a strict superset of it —
+ * and an unknown tab resolves to the overview, so without this every bookmark and
+ * shared link to `?tab=backlog` would land somewhere else with nothing saying so.
+ * An alias is one entry; a stranded link is a bug report.
+ */
+const TAB_ALIASES: Readonly<Record<string, ConsoleTab>> = { backlog: 'tickets' };
 const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched', 'ignored'];
-const TICKET_STATE: readonly TicketStateFilter[] = ['any', 'open', 'closed'];
-const TICKET_ORDER: readonly TicketOrder[] = ['added', 'cost'];
+const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
+const TICKET_GROUP = ['feature', 'flat'] as const;
+const TICKET_ORDER: readonly TicketOrder[] = ['added', 'changed', 'cost'];
 const PANELS = ['findings', 'faults', 'output', 'launch'] as const;
 
 /** A parameter's value, with an empty one read as absent — `?goal=` names nothing. */
@@ -101,7 +125,7 @@ export function readPlace(search: string): Place {
   const panel = param(query, 'panel');
   const ask = param(query, 'ask');
   return {
-    tab: TABS.find((t) => t === tab) ?? 'overview',
+    tab: TABS.find((t) => t === tab) ?? (tab !== null ? TAB_ALIASES[tab] : undefined) ?? 'overview',
     goal: param(query, 'goal'),
     // The ask panel carries its row, so it is its own parameter rather than a
     // prefix on `panel` — an id is opaque and free to contain whatever the
@@ -119,9 +143,46 @@ export function readPlace(search: string): Place {
     // the same reason: these are the ones an operator is most likely to hand-edit,
     // since the whole tab is a question spelled in the address bar.
     ticketWatch: TICKET_WATCH.find((w) => w === param(query, 'watch')) ?? 'any',
-    ticketState: TICKET_STATE.find((s) => s === param(query, 'state')) ?? 'any',
+    ...readTracking(param(query, 'tracking'), param(query, 'state')),
+    ticketFeature: readFeature(param(query, 'feature')),
+    ticketGroup: TICKET_GROUP.find((g) => g === param(query, 'group')) ?? 'feature',
     ticketOrder: TICKET_ORDER.find((o) => o === param(query, 'order')) ?? 'added',
   };
+}
+
+/**
+ * The two coarse axes, and the one alias between them — the cockpit's half of the
+ * route's `coarseAxes`, and it has to stay its half.
+ *
+ * `state` used to be `open` / `closed` and is now the tracker's own word, with the
+ * harness's reading moved to `tracking`. Reading those two literals as the old axis
+ * is what keeps every saved link working; the alternative is a filter that quietly
+ * matches nothing. No tracker spells a state that way — Azure capitalises, GitHub
+ * has none at all — so the alias cannot swallow a real one.
+ *
+ * The state is otherwise **not validated against a list**, unlike every other
+ * parameter here, because the list is the tracker's and this file cannot know it. A
+ * state no item carries narrows to an empty list, which is a filter that found
+ * nothing rather than a place that does not exist.
+ */
+function readTracking(
+  tracking: string | null,
+  state: string | null,
+): { ticketTracking: TicketTrackingFilter; ticketState: TicketStateFilter } {
+  if (state === 'open') return { ticketTracking: 'live', ticketState: 'any' };
+  if (state === 'closed') return { ticketTracking: 'frozen', ticketState: 'any' };
+  return {
+    ticketTracking: TICKET_TRACKING.find((t) => t === tracking) ?? 'live',
+    ticketState: state ?? 'any',
+  };
+}
+
+/** A feature number, the orphan bucket, or null. Junk narrows nothing, as everywhere here. */
+function readFeature(value: string | null): number | 'none' | null {
+  if (value === null) return null;
+  if (value === 'none') return 'none';
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : null;
 }
 
 /**
@@ -174,7 +235,10 @@ export function placeQuery(place: Place): string {
   // than a second spelling of the same page — which is what keeps the comparison in
   // `useNavigation` sound.
   if (place.ticketWatch !== 'any') query.set('watch', place.ticketWatch);
+  if (place.ticketTracking !== 'live') query.set('tracking', place.ticketTracking);
   if (place.ticketState !== 'any') query.set('state', place.ticketState);
+  if (place.ticketFeature !== null) query.set('feature', String(place.ticketFeature));
+  if (place.ticketGroup !== 'feature') query.set('group', place.ticketGroup);
   if (place.ticketOrder !== 'added') query.set('order', place.ticketOrder);
   const encoded = query.toString();
   return encoded === '' ? '' : `?${encoded}`;

@@ -2,15 +2,14 @@ import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { FleetControl } from '../components/FleetControl.js';
-import { backlogGroups } from './Backlog.js';
+import { untriagedCount } from '../worldBuckets.js';
 import { productionReading } from '../view/production.js';
 
 /** The nav's destinations, in reading order — the order the tabs are drawn in. */
-const TABS: readonly ConsoleTab[] = ['overview', 'backlog', 'work', 'tickets'];
+const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets'];
 
 export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
-  backlog: 'Backlog',
   work: 'Work',
   tickets: 'Tickets',
 };
@@ -23,14 +22,16 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
  * from, and the bar is the one row of the shell that is always on screen.
  *
  * A click clears *both* pieces of state, because a nav click means "go here" and
- * either half left standing would land somewhere else. The backlog carries its
+ * either half left standing would land somewhere else. Tickets carries its
  * triage count — the one number that says whether it is worth opening; the other
  * two carry none, since neither has a number that decides whether to look.
  *
- * Tickets carries no count, unlike the backlog's triage tally: there is no number
- * on an all-time list that decides whether it is worth opening.
+ * Tickets carries the triage tally the backlog used to, since it is now the surface
+ * triage happens on. It counts what the tab's Unwatched filter draws, so the number
+ * and the rows behind it cannot differ, and it is hidden at zero — a badge that
+ * always shows is one nobody reads.
  *
- * Four tabs and nothing else: the open goal's crumb is drawn at the head of the
+ * Three tabs and nothing else: the open goal's crumb is drawn at the head of the
  * situation area instead ({@link ConsoleRoot}). A title is as long as whoever
  * filed it made it, and one in here widens the nav by whatever that is — pushing
  * the readings onto a second line on the act of opening a goal. The bar is the
@@ -39,7 +40,7 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
  */
 function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const goal = view.goalPage;
-  const unwatched = backlogGroups(view).unwatched.length;
+  const untriaged = untriagedCount(view.state.world.issues, view.state.config);
   const go = (tab: ConsoleTab) => () => {
     actions.selectGoal(null);
     actions.openTab(tab);
@@ -51,10 +52,10 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
         <button key={tab} type="button" className={goal === null && view.tab === tab ? 'cn-on' : ''} onClick={go(tab)}>
           {TAB_LABEL[tab]}
           {/* The space is the gap: `.cn-n` carries no margin of its own. */}
-          {tab === 'backlog' && (
+          {tab === 'tickets' && untriaged > 0 && (
             <>
               {' '}
-              <i className="cn-n">{unwatched} unwatched</i>
+              <i className="cn-n">{untriaged} to triage</i>
             </>
           )}
         </button>

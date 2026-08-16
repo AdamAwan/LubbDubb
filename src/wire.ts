@@ -639,9 +639,48 @@ export interface WorkSubtreePayload {
  * tab exists to let someone ask about.
  */
 export type TicketWatchFilter = 'any' | 'watched' | 'unwatched' | 'ignored';
-export type TicketStateFilter = 'any' | 'open' | 'closed';
-/** By tracker id descending (arrival order), or by what the fleet spent under it. */
-export type TicketOrder = 'added' | 'cost';
+/**
+ * What the *harness* is doing about an item, which is not the same question as
+ * what the tracker calls it.
+ *
+ * `frozen` is an item that has left the tracker's open set: the mirror keeps every
+ * field it last saw and stops enriching it from the world. Two axes rather than
+ * one, because a provider with native states closes an item several ways —
+ * `Closed` and `Removed` are both frozen and are not the same fact — and one
+ * control folding them would state a triage nobody made.
+ */
+export type TicketTrackingFilter = 'any' | 'live' | 'frozen';
+/**
+ * The tracker's own word, free-form because it is the tracker's: `any`, or a
+ * provider-native state exactly as the provider spells it. Never a hardcoded
+ * ladder — the first customised Azure process template would put items in a state
+ * no filter could reach, and nothing would say so.
+ */
+export type TicketStateFilter = string;
+/** By tracker id descending (arrival order), by last change, or by what the fleet spent under it. */
+export type TicketOrder = 'added' | 'changed' | 'cost';
+
+/** One state the mirror has actually seen, and how many rows carry it. */
+export interface TicketStateFacet {
+  state: string;
+  count: number;
+  /** True where `pickupStates` lets this state through — config, not a guess. */
+  pickup: boolean;
+}
+
+/**
+ * One feature the mirror's rows hang off, for the legend that is also the filter.
+ *
+ * `slot` is an index into the cockpit's fixed hue ladder, not a colour: the palette
+ * belongs to the stylesheet, and a hex here would be a second opinion about it that
+ * no theme could reach.
+ */
+export interface TicketFeatureFacet {
+  number: number;
+  title: string;
+  slot: number;
+  count: number;
+}
 
 /** One row of the Tickets tab. */
 export interface TicketRow {
@@ -667,6 +706,26 @@ export interface TicketRow {
   addedAt: string;
   /** The tracker's last-modified instant. */
   changedAt: string;
+  /**
+   * `frozen` says the item has left the tracker's open set and the mirror has
+   * stopped enriching it. The row's controls are inert on a frozen row: there is
+   * nothing in the tracker left to tag.
+   */
+  tracking: 'live' | 'frozen';
+  /** The provider's own state word, or null where the provider has none. */
+  workItemState: string | null;
+  /** `Feature` / `Task` / …, or null on a flat tracker. */
+  issueType: string | null;
+  /**
+   * The feature this hangs off. Three values, and the third is why the key is
+   * optional rather than merely nullable: **absent** means the link was never
+   * resolved (no hierarchy, or a read that failed), where `null` means the tracker
+   * says there is no parent. Collapsing them would tell a reader an item belongs to
+   * no feature when the truth is that we could not tell.
+   */
+  parent?: { number: number; title: string } | null;
+  /** The parent's hue slot, so a row can be drawn in its feature's colour. */
+  featureSlot: number | null;
 }
 
 /**
@@ -701,6 +760,27 @@ export interface TicketsPayload {
    * and the difference between an empty tab and a broken one.
    */
   backfilling: boolean;
+  /**
+   * How many of the mirror's rows are still live. Beside `kept` rather than
+   * instead of it: a work surface's population and the size of the history it sits
+   * on are different numbers, and one shown as the other would report a history
+   * that shrinks every time an item closes.
+   */
+  live: number;
+  /**
+   * The states the mirror has actually seen, with counts — **empty** for a
+   * provider with no native states, which is what tells the cockpit not to draw the
+   * second filter tier at all. A control offering states the provider cannot
+   * produce is one that always returns nothing.
+   */
+  states: TicketStateFacet[];
+  /**
+   * The features the filtered set hangs off, for the legend. Ordered by count so
+   * the ladder's colours land on the features a reader actually sees.
+   */
+  features: TicketFeatureFacet[];
+  /** How many rows have no parent at all — the legend's "no feature" bucket. */
+  orphanCount: number;
   /**
    * Reference → web URL, resolved off the connector rather than read from the
    * snapshot's map: `buildRefUrls` is built from the world, and most rows here

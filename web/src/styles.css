@@ -3687,7 +3687,12 @@ body {
    ragged. */
 .tickets-rows {
   display: grid;
-  grid-template-columns: 66px minmax(0, 1fr) 92px 74px 82px 84px auto;
+  grid-template-columns: 66px minmax(0, 1fr) 128px 96px 82px 84px auto;
+}
+/* Grouped by feature, the heading says which feature a row is under, so the column
+   would be a third copy of it. Flat, there is no heading, so it comes back. */
+.tickets-rows:not(.grouped) {
+  grid-template-columns: 66px minmax(0, 1fr) 150px 128px 96px 82px 84px auto;
 }
 .tickets-thead,
 .tickets-row {
@@ -3858,4 +3863,445 @@ body {
     animation: none;
     border-top-color: var(--cn-line);
   }
+}
+
+
+/* ---------------------------------------------------------------------------
+   The tickets tab as the one work surface (#351): the backlog's controls, its
+   feature headings and its intake call-out, folded into the mirror's list.
+   --------------------------------------------------------------------------- */
+
+.tickets-live {
+  font: 600 11px var(--cn-mono);
+  color: #8fe3bd;
+  background: #12241d;
+  border: 1px solid #1f4436;
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-style: normal;
+}
+
+/* Intake sits *above* the list rather than as a filter on it: an unclear assay is
+   the one intake reading that stops dispatch, and among a page of rows it reads as
+   a detail rather than as the thing holding all the work. */
+.tickets-intake {
+  border: 1px solid #4a3a1d;
+  border-radius: var(--cn-r);
+  background: #191713;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.tickets-intake-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 12px;
+  font-size: 12.5px;
+  flex-wrap: wrap;
+}
+.tickets-intake-head span {
+  color: var(--cn-fg-faint);
+  font-size: 12px;
+}
+.tickets-lamp {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cn-amber);
+  flex: none;
+  box-shadow: 0 0 0 3px rgb(245 165 36 / 14%);
+}
+.tickets-intake-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-top: 1px solid #2a2419;
+}
+.tickets-intake-name {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.tickets-intake-name b {
+  display: block;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The assayer's own sentence, quoted whole — it is the only account of why the goal
+   is held, so it is styled as a quotation rather than as a status line. */
+.tickets-quote {
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
+  font-style: italic;
+  color: #d3b98a;
+}
+
+/* The tracker's own states, drawn only where the provider has any. */
+.tickets-states,
+.tickets-legend {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  padding: 8px 11px;
+  margin-bottom: 8px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+}
+.tickets-states button,
+.tickets-fchip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 9px;
+  border: 1px solid var(--cn-line);
+  border-radius: 99px;
+  background: var(--cn-panel-2);
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tickets-states button:hover,
+.tickets-fchip:hover {
+  color: var(--cn-fg);
+}
+.tickets-states button.on,
+.tickets-fchip.on {
+  border-color: #33507f;
+  background: #161d2b;
+  color: var(--cn-fg);
+}
+.tickets-states button.gate {
+  border-color: #2a4a3a;
+}
+.tickets-gate {
+  color: #6fce9f;
+  font-size: 10px;
+  font-style: normal;
+}
+.tickets-k {
+  font: 600 10px var(--cn-mono);
+  color: var(--cn-fg-faint);
+  font-style: normal;
+}
+.tickets-why {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+}
+
+/* The feature ladder: twelve hues at one lightness and one chroma, assigned
+   least-used-first by the store and persisted, so the same feature is the same
+   colour tomorrow. A fixed ladder rather than a random hue per feature — a random
+   one can vanish against the panel, or land close enough to another to read as it. */
+.tickets-sw,
+.tickets-stripe {
+  flex: none;
+  /* The unassigned case, and the orphan bucket: hatched rather than coloured, so
+     "no feature" cannot be mistaken for a feature. */
+  background: repeating-linear-gradient(45deg, #3a3f48, #3a3f48 2px, #22262c 2px, #22262c 4px);
+}
+.tickets-sw {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.tickets-stripe {
+  width: 10px;
+  height: 16px;
+  border-radius: 3px;
+}
+.f0 {
+  background: #6ea8fe;
+}
+.f1 {
+  background: #f0a3c0;
+}
+.f2 {
+  background: #7fd4a8;
+}
+.f3 {
+  background: #e0b25c;
+}
+.f4 {
+  background: #b39ded;
+}
+.f5 {
+  background: #5fc9d6;
+}
+.f6 {
+  background: #e88f6a;
+}
+.f7 {
+  background: #93c47d;
+}
+.f8 {
+  background: #c9a0dc;
+}
+.f9 {
+  background: #7ab8c9;
+}
+.f10 {
+  background: #d6a86a;
+}
+.f11 {
+  background: #8fb0e8;
+}
+
+/* A feature is a heading, never a row: nothing is ever dispatched at a container,
+   so listing one among the items being triaged asks an operator to remember which
+   is which on every read. */
+.tickets-fhead {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: 22px 10px minmax(0, 1fr) auto auto;
+  gap: 9px;
+  align-items: center;
+  padding: 8px 12px;
+  border-top: 1px solid var(--cn-line);
+  background: #171a1e;
+}
+.tickets-fhead.plain {
+  grid-template-columns: 22px minmax(0, 1fr);
+  opacity: 0.8;
+}
+.tickets-fold {
+  color: var(--cn-fg-faint);
+  font-size: 11px;
+  justify-self: center;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.tickets-fname {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+.tickets-fopen {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  font: inherit;
+}
+.tickets-fnum,
+.tickets-fcount {
+  font: 600 11px var(--cn-mono);
+  color: var(--cn-fg-faint);
+  font-style: normal;
+}
+.tickets-fcount {
+  font-weight: 400;
+  font-family: inherit;
+  font-size: 11.5px;
+}
+.tickets-row.nested .tickets-id {
+  padding-left: 18px;
+}
+
+/* The row's name is the control and the refs sit beside it: a reference never goes
+   inside a button, because one click cannot have two destinations. */
+.tickets-name-btn {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.tickets-what {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+.tickets-what .tickets-lamp {
+  margin-top: 5px;
+}
+.tickets-row.frozen {
+  opacity: 0.62;
+}
+.tickets-row.frozen:hover {
+  opacity: 0.86;
+}
+.tickets-row.held {
+  background: #15140f;
+}
+.tickets-reason {
+  color: var(--cn-fg-faint);
+}
+
+/* Expanded rather than hover-only: a tooltip nobody can select text out of is where
+   a stack trace goes to die. */
+.tickets-why-b {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid #4a3a1d;
+  background: #2a2118;
+  color: var(--cn-amber);
+  font: 600 10px var(--cn-mono);
+  cursor: pointer;
+}
+.tickets-why-b.quiet {
+  border-color: var(--cn-line);
+  background: var(--cn-panel-2);
+  color: var(--cn-fg-faint);
+}
+.tickets-rows .tickets-why {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 10px 12px 12px 46px;
+  border-top: 1px solid var(--cn-line-soft);
+  background: #14171c;
+}
+.tickets-rows .tickets-why h4 {
+  margin: 0 0 6px;
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--cn-fg-dim);
+}
+.tickets-rows .tickets-why ul {
+  margin: 0;
+  padding-left: 16px;
+}
+.tickets-rows .tickets-why li {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--cn-fg-dim);
+}
+.tickets-rows .tickets-why p {
+  margin: 7px 0 0;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+}
+
+/* Three-valued to display, two-valued to write: an untagged item shows as neither,
+   which is a state you can leave and never one you can select. */
+.tickets-switch {
+  display: inline-flex;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  overflow: hidden;
+  background: var(--cn-panel-2);
+}
+.tickets-switch button,
+.tickets-switch i {
+  padding: 3px 8px;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+  border: 0;
+  border-right: 1px solid var(--cn-line);
+  background: none;
+  cursor: pointer;
+  font-style: normal;
+}
+.tickets-switch > :last-child {
+  border-right: 0;
+}
+.tickets-switch button:hover:not(:disabled) {
+  color: var(--cn-fg);
+  background: #20242a;
+}
+.tickets-switch .on.w {
+  background: #12241d;
+  color: #8fe3bd;
+}
+.tickets-switch .on.i {
+  background: #2b1517;
+  color: #ff9b9b;
+}
+.tickets-switch .on.u {
+  background: #212832;
+  color: var(--cn-fg-dim);
+  cursor: default;
+}
+.tickets-switch.off {
+  opacity: 0.45;
+}
+.tickets-switch button:disabled {
+  cursor: default;
+}
+
+/* The tracker's own word where there is one. Frozen wins over the state's own tone:
+   a closed item is a record, whatever the tracker calls the closing state. */
+.tickets-state {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel-2);
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+  white-space: nowrap;
+  font-style: normal;
+}
+.tickets-state.frozen {
+  border-style: dashed;
+  color: var(--cn-fg-faint);
+}
+.tickets-state.ready,
+.tickets-state.active,
+.tickets-state.doing {
+  border-color: #1e4733;
+  color: var(--cn-green);
+}
+.tickets-state.inreview {
+  border-color: #4a3a1c;
+  color: var(--cn-amber);
+}
+
+/* The feature cell, in the flat arrangement where there is no heading to say it. */
+.tickets-feat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 3px 8px;
+  border-radius: 99px;
+  border: 1px solid var(--cn-line);
+  background: var(--cn-panel-2);
+}
+.tickets-ft {
+  font-size: 11.5px;
+  color: var(--cn-fg-dim);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-style: normal;
+}
+/* The two absences, drawn apart: the tracker saying there is no parent, and a link
+   that was never resolved. Drawing them the same would tell a reader an item
+   belongs to no feature when the truth is that we could not tell. */
+.tickets-feat.orphan {
+  border-style: dashed;
+}
+.tickets-feat.unknown {
+  border: 0;
+  background: none;
+  color: var(--cn-fg-faint);
 }

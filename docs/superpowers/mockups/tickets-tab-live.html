@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LubbDubb — Tickets: the one work surface (Backlog folded in)</title>
+<style>
+  /* Tokens from `web/src/console/console.css` (`--cn-*`) and the reference
+     treatment from `web/src/styles.css`, carried over from `tickets-tab.html`
+     unchanged — this is the same tab, two iterations on. Class names are
+     unprefixed: a picture, not a stylesheet anyone ships. */
+  :root{
+    --bg:#0d0e11; --panel:#15171b; --panel-2:#1b1e23; --line:#24272e; --line-soft:#1e2126;
+    --fg:#e7e9ec; --fg-dim:#9aa1ab; --fg-faint:#6b727c;
+    --accent:#5b8cff; --red:#ff5f5f; --amber:#f5a524; --green:#3ecf8e; --violet:#a78bfa;
+    --r:8px; --r-sm:6px;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    --link-line:#4a7794; --link-fill:#17242c; --link-ink:#7fb8dc; --blue:#5b9ec9;
+
+    /* The feature ladder: twelve hues at one lightness and one chroma, so no
+       feature can come out unreadable and no two adjacent ones read as the same
+       colour. Assigned next-least-used at first sight, then persisted — not a
+       random hue per feature. See the note below. */
+    --f1:#6ea8fe; --f2:#f0a3c0; --f3:#7fd4a8; --f4:#e0b25c; --f5:#b39ded; --f6:#5fc9d6;
+    --f7:#e88f6a; --f8:#93c47d; --f9:#c9a0dc; --f10:#7ab8c9; --f11:#d6a86a; --f12:#8fb0e8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#08090b;color:var(--fg);font:13px/1.45 var(--ui);-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  a{text-decoration:none;color:inherit}
+
+  /* ---------- the mockup page around the frame ---------- */
+  .sheet{max-width:1620px;margin:0 auto;padding:22px 18px 64px}
+  .cap{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+  .cap h1{margin:0;font-size:15px;font-weight:600;letter-spacing:.2px}
+  .cap .sub{font-size:12.5px;color:var(--fg-faint)}
+  .cap .sub a{color:var(--link-ink)}
+  .frame{border:1px solid #22252b;border-radius:10px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.45)}
+  .framecap{display:flex;align-items:baseline;gap:8px;margin:26px 0 8px;font-size:12px;color:var(--fg-faint)}
+  .framecap b{color:var(--fg-dim);font-weight:600;font-size:12.5px}
+
+  .urlbar{display:flex;align-items:center;gap:9px;padding:7px 12px;background:#101216;
+          border-bottom:1px solid var(--line)}
+  .urlbar .nav{display:flex;gap:6px;color:var(--fg-faint);font-size:13px}
+  .urlbar .box{flex:1;min-width:0;border:1px solid var(--line);border-radius:99px;background:var(--panel);
+               padding:4px 12px;font:11.5px var(--mono);color:var(--fg-dim);overflow:hidden;
+               text-overflow:ellipsis;white-space:nowrap}
+  .urlbar .box em{color:var(--fg);font-style:normal}
+
+  /* ---------- shell ---------- */
+  .app{display:grid;grid-template-rows:auto 1fr;height:1020px;background:var(--bg)}
+  .bar{display:flex;align-items:center;gap:16px;padding:0 14px;min-height:46px;flex-wrap:wrap;
+       border-bottom:1px solid var(--line);background:var(--panel)}
+  .ident{display:flex;align-items:center;gap:8px;font-weight:600;letter-spacing:.2px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(62,207,142,.15)}
+  .bar .sep{width:1px;height:20px;background:var(--line)}
+  .reads{display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+  .read{display:flex;align-items:baseline;gap:6px;padding:4px 9px;border:1px solid var(--line);
+        border-radius:var(--r-sm);background:var(--panel-2);white-space:nowrap}
+  .read b{font:600 12px/1 var(--mono)}
+  .read span{font-size:11px;color:var(--fg-faint);text-transform:uppercase;letter-spacing:.6px}
+  .read.quiet b{color:var(--fg-faint)}
+  .topnav{display:flex;gap:4px;align-items:center;flex-wrap:nowrap;flex:0 0 auto}
+  .topnav button{padding:5px 12px;border:1px solid transparent;border-radius:var(--r-sm);font-size:13px;
+                 color:var(--fg-faint);white-space:nowrap}
+  .topnav .on{background:var(--panel-2);color:var(--fg);border-color:var(--line)}
+  .topnav .n{font:600 10.5px var(--mono);color:var(--fg-faint);font-style:italic}
+  .topnav .gone{position:relative;color:#3f444c;text-decoration:line-through}
+  .topnav .gone::after{content:"deleted";position:absolute;left:50%;transform:translateX(-50%);top:26px;
+                       font:600 9px var(--mono);letter-spacing:.5px;color:#57606e}
+
+  .body{display:grid;grid-template-columns:300px 1fr;min-height:0}
+  @media (max-width:1100px){ .body{grid-template-columns:1fr} }
+
+  /* ---------- queue rail (context only, unchanged) ---------- */
+  .rail{border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+  .rail-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .rail-head h2{margin:0;font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--fg-dim)}
+  .count{margin-left:auto;font:600 11px/1 var(--mono);background:var(--red);color:#180404;padding:3px 7px;border-radius:99px}
+  .rail-list{overflow:auto;padding:8px;display:flex;flex-direction:column;gap:6px}
+  .q{display:grid;grid-template-columns:3px 1fr;gap:10px;border:1px solid var(--line);border-radius:var(--r);
+     background:var(--panel-2);text-align:left;overflow:hidden}
+  .q .stripe{background:var(--amber)}
+  .q.urgent .stripe{background:var(--red)}
+  .q .qin{padding:10px 12px 11px 2px}
+  .qkind{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+  .tag{font:600 10px/1 var(--mono);letter-spacing:.6px;text-transform:uppercase;padding:3px 6px;border-radius:4px;
+       background:#2a2118;color:var(--amber)}
+  .urgent .tag{background:#2b1517;color:var(--red)}
+  .qage{margin-left:auto;font:11px var(--mono);color:var(--fg-faint)}
+  .qtitle{font-size:13px;line-height:1.35;margin:0 0 6px}
+  .qmeta{display:flex;gap:8px;font-size:11.5px;color:var(--fg-faint);flex-wrap:wrap}
+  .railsub{padding:10px 14px 4px;font-size:11px;letter-spacing:.7px;text-transform:uppercase;color:var(--fg-faint)}
+
+  /* ---------- situation ---------- */
+  .sit{overflow:auto;min-height:0;padding:14px;position:relative}
+  .dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 4px}
+  .dhead h1{margin:0;font-size:19px;line-height:1.3;font-weight:600}
+  .dhead .n{font:600 11px var(--mono);color:var(--fg-faint);background:var(--panel-2);
+            border:1px solid var(--line);padding:2px 7px;border-radius:99px}
+  .dhead .live{font:600 11px var(--mono);color:#8fe3bd;background:#12241d;border:1px solid #1f4436;
+               padding:2px 7px;border-radius:99px}
+  .dhead .more{margin-left:auto;font-size:11.5px;color:var(--fg-faint)}
+  .dnote{margin:0 0 12px;font-size:12.5px;color:var(--fg-faint);max-width:96ch;line-height:1.55}
+  .dnote b{color:var(--fg-dim)}
+
+  /* ---------- filters ---------- */
+  .filters{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:9px 11px;margin-bottom:8px;
+           border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+  .fgroup{display:flex;align-items:center;gap:7px;min-width:0}
+  .flabel{font-size:10.5px;letter-spacing:.7px;text-transform:uppercase;color:var(--fg-faint);white-space:nowrap}
+  .seg{display:flex;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;background:var(--panel-2)}
+  .seg button{padding:4px 10px;font-size:12px;color:var(--fg-faint);border-right:1px solid var(--line);white-space:nowrap}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:#212832;color:var(--fg)}
+  .fdiv{width:1px;height:22px;background:var(--line)}
+  .fsum{margin-left:auto;font-size:11.5px;color:var(--fg-faint);white-space:nowrap}
+  .fsum b{color:var(--fg-dim);font-weight:600}
+
+  /* the intake call-out: the one reading that stops dispatch, kept out of the list */
+  .intake{display:flex;align-items:center;gap:10px;padding:9px 12px;margin-bottom:8px;
+          border:1px solid #4a3a1d;border-radius:var(--r);background:#191713}
+  .intake .lamp{width:8px;height:8px;border-radius:50%;background:var(--amber);flex:0 0 auto;
+                box-shadow:0 0 0 3px rgba(245,165,36,.14)}
+  .intake b{font-size:12.5px}
+  .intake span{font-size:12px;color:var(--fg-faint)}
+  .intake .go{margin-left:auto;border:1px solid #4a3a1d;border-radius:var(--r-sm);padding:3px 10px;
+              font-size:12px;color:var(--amber);background:#221d14}
+
+  /* the tracker's own states, only drawn for a provider that has them */
+  .states2{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 11px;margin-bottom:8px;
+           border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+  .sbtn{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid var(--line);
+        border-radius:99px;background:var(--panel-2);font-size:11.5px;color:var(--fg-dim);white-space:nowrap}
+  .sbtn .k{font:600 10px var(--mono);color:var(--fg-faint)}
+  .sbtn.on{border-color:#33507f;background:#161d2b;color:var(--fg)}
+  .sbtn.gate{border-color:#2a4a3a}
+  .sbtn .gatemark{color:#6fce9f;font-size:10px}
+  .states2 .why{margin-left:auto;font-size:11px;color:var(--fg-faint)}
+
+  /* the feature legend, which is also the feature filter */
+  .legend{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px 11px;margin-bottom:10px;
+          border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+  .fchip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px 3px 7px;border:1px solid var(--line);
+         border-radius:99px;background:var(--panel-2);font-size:11.5px;color:var(--fg-dim);white-space:nowrap}
+  .fchip .sw{width:8px;height:8px;border-radius:2px;flex:0 0 auto}
+  .fchip .n{font:600 10px var(--mono);color:var(--fg-faint)}
+  .fchip.on{color:var(--fg);border-color:#3a4150;background:#20242c}
+  .fchip.orphan .sw{background:repeating-linear-gradient(45deg,#3a3f48,#3a3f48 2px,#22262c 2px,#22262c 4px)}
+
+  /* ---------- the table ---------- */
+  .card{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);overflow:visible}
+  .rows{display:grid}
+  .thead,.trow{display:grid;
+    grid-template-columns:64px minmax(300px,2.4fr) 148px 132px 84px 82px 92px;
+    gap:10px;align-items:center;padding:9px 12px}
+  .thead{border-bottom:1px solid var(--line);font-size:10.5px;letter-spacing:.7px;text-transform:uppercase;
+         color:var(--fg-faint);position:sticky;top:0;background:var(--panel);z-index:3}
+  .thead button{font:inherit;letter-spacing:inherit;text-transform:inherit;color:var(--fg-faint)}
+  .thead button.on{color:var(--fg-dim)}
+  .num{text-align:right;justify-self:end}
+  .arrow{font-style:normal;font-size:8px;margin-left:3px}
+  .trow{border-top:1px solid var(--line-soft);position:relative}
+  .trow:hover{background:#171a1f}
+  .trow.frozen{opacity:.62}
+  .trow.frozen:hover{opacity:.86}
+  .trow.held{background:#15140f}
+  .trow.held:hover{background:#1a1811}
+  .id{font:600 12px var(--mono);color:var(--fg-faint)}
+  .what{min-width:0;display:flex;align-items:flex-start;gap:8px}
+  .lamp{width:7px;height:7px;border-radius:50%;background:var(--amber);flex:0 0 auto;margin-top:5px}
+  .namebtn{display:block;text-align:left;min-width:0;flex:1}
+  .name{display:block;font-weight:600;font-size:13px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sub{display:flex;align-items:center;gap:7px;margin-top:3px;font-size:11.5px;color:var(--fg-faint);flex-wrap:wrap}
+  .sub.quote{color:#d3b98a;font-style:italic}
+  .chip{display:inline-block;font:600 10px/1 var(--mono);letter-spacing:.5px;text-transform:uppercase;
+        padding:3px 6px;border-radius:4px;background:var(--panel-2);color:var(--fg-faint);border:1px solid var(--line);
+        font-style:normal}
+  .chip.verdict{background:#14231c;color:#7fd4a8;border-color:#1f4436}
+  .chip.short{background:#2a2118;color:var(--amber);border-color:#4a3a1d}
+
+  /* feature heading — the grouped mode's replacement for the Feature column */
+  .fhead{display:grid;grid-template-columns:22px 10px 1fr auto auto;gap:9px;align-items:center;
+         padding:8px 12px;border-top:1px solid var(--line);background:#171a1e}
+  .fhead .fold{color:var(--fg-faint);font-size:11px;justify-self:center}
+  .fhead .stripe{width:10px;height:16px;border-radius:3px}
+  .fhead .fname{display:flex;align-items:baseline;gap:8px;min-width:0}
+  .fhead .fname b{font-size:13px;font-weight:600}
+  .fhead .fname i{font:600 11px var(--mono);color:var(--fg-faint);font-style:normal}
+  .fhead .fcount{font-size:11.5px;color:var(--fg-faint)}
+  .fhead.plain{opacity:.75}
+  .fhead.plain .fname b{font-weight:500;color:var(--fg-dim)}
+  .nested .id{padding-left:20px}
+
+  /* watch switch — a control, in the table */
+  .sw2{display:inline-flex;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;background:var(--panel-2)}
+  .sw2 button{padding:3px 8px;font-size:11px;color:var(--fg-faint);border-right:1px solid var(--line)}
+  .sw2 button:last-child{border-right:0}
+  .sw2 button.on.w{background:#12241d;color:#8fe3bd}
+  .sw2 button.on.i{background:#2b1517;color:#ff9b9b}
+  .sw2 button.on.u{background:#212832;color:var(--fg-dim)}
+  .sw2.busy{opacity:.5}
+  .casc{display:block;margin-top:3px;font-size:10.5px;color:var(--fg-faint)}
+  .ovr{display:inline-block;margin-top:4px;padding:2px 8px;border:1px solid #4a3a1d;border-radius:var(--r-sm);
+       font-size:11px;color:var(--amber);background:#221d14}
+
+  /* state chips — the tracker's own words */
+  .st{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:99px;border:1px solid var(--line);
+      background:var(--panel-2);font-size:11.5px;color:var(--fg-dim);white-space:nowrap}
+  .st .d{width:6px;height:6px;border-radius:50%;background:var(--fg-faint)}
+  .st.new .d{background:#8fb0e8} .st.ready .d{background:#6ea8fe} .st.active .d{background:var(--green)}
+  .st.review .d{background:var(--amber)} .st.resolved .d{background:var(--violet)}
+  .st.closed{color:var(--fg-faint)} .st.closed .d{background:#4b5158}
+  .st.removed{color:var(--fg-faint)} .st.removed .d{background:#4b5158}
+
+  .cost{font:12px var(--mono);text-align:right;justify-self:end}
+  .cost.none{color:var(--fg-faint)}
+  .added{font:11.5px var(--mono);color:var(--fg-faint);text-align:right;justify-self:end}
+  .refs{display:flex;gap:6px;justify-content:flex-end;align-items:center}
+  .ref-goal{border:1px solid var(--link-line);background:var(--link-fill);color:var(--link-ink);
+            border-radius:var(--r-sm);padding:2px 7px;font:600 11px var(--mono)}
+  .ext{border:1px solid var(--line);border-radius:var(--r-sm);padding:2px 7px;font:600 11px var(--mono);color:var(--fg-dim)}
+
+  /* the "why not" marker and its tooltip */
+  .why-b{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;
+         border:1px solid #4a3a1d;background:#2a2118;color:var(--amber);font:600 10px var(--mono)}
+  .why-b.quiet{border-color:var(--line);background:var(--panel-2);color:var(--fg-faint)}
+  .tip{position:absolute;z-index:6;left:250px;top:44px;width:440px;padding:10px 12px;border:1px solid #3a4150;
+       border-radius:var(--r);background:#1b1f26;box-shadow:0 14px 34px rgba(0,0,0,.55)}
+  .tip h4{margin:0 0 6px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--fg-dim)}
+  .tip ul{margin:0;padding-left:16px}
+  .tip li{font-size:12px;line-height:1.5;color:var(--fg-dim);margin:2px 0}
+  .tip li b{color:var(--fg)}
+  .tip .foot{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-size:11px;color:var(--fg-faint)}
+  .tip code{font:11px var(--mono);color:var(--link-ink)}
+
+  .sentinel{padding:12px;text-align:center;font-size:12px;color:var(--fg-faint);border-top:1px solid var(--line-soft);margin:0}
+  .spin{display:inline-block;width:10px;height:10px;margin-right:7px;border:2px solid var(--line);
+        border-top-color:var(--fg-faint);border-radius:50%;vertical-align:-1px}
+
+  /* ---------- notes ---------- */
+  .notes{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:26px}
+  @media (max-width:1000px){ .notes{grid-template-columns:1fr} }
+  .note{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:14px 16px}
+  .note.span2{grid-column:1/-1}
+  .note h2{margin:0 0 8px;font-size:13px;font-weight:600}
+  .note h3{margin:14px 0 6px;font-size:12px;font-weight:600;color:var(--fg-dim)}
+  .note ul{margin:0;padding-left:18px}
+  .note li{font-size:12.5px;line-height:1.6;color:var(--fg-dim);margin:5px 0}
+  .note li b{color:var(--fg)}
+  .note p{margin:0 0 8px;font-size:12.5px;line-height:1.6;color:var(--fg-dim)}
+  .note code{font:11.5px var(--mono);color:var(--link-ink)}
+  .warn{border-color:#4a3a1d;background:#191713}
+  .warn h2{color:var(--amber)}
+  .q-open{border-color:#33507f;background:#12151c}
+  .q-open h2{color:#8fb0e8}
+  .decided{border-color:#1f4436;background:#111815}
+  .decided h2{color:#8fe3bd}
+  table.k{width:100%;border-collapse:collapse;margin:4px 0 2px}
+  table.k th,table.k td{text-align:left;padding:6px 8px;font-size:12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  table.k th{color:var(--fg-faint);font-weight:600;font-size:10.5px;letter-spacing:.6px;text-transform:uppercase}
+  table.k td{color:var(--fg-dim)}
+  table.k td b{color:var(--fg)}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="cap">
+    <h1>Tickets — the one work surface</h1>
+    <span class="sub">
+      builds on <a href="tickets-tab.html">tickets-tab.html</a> (#329) · rows read live from the local mirror,
+      the watch switch and the intake override move into the table, pickup refusals get a tooltip, features
+      become coloured headings, the tracker's own states replace open/closed — and the
+      <b style="color:var(--fg-dim)">Backlog tab is deleted</b>, its four groups folded in as filters
+    </span>
+  </div>
+
+  <div class="framecap"><b>The tab</b> — Azure DevOps deployment, <code>labelPrefix: "lubbdubb"</code>, <code>pickupStates: ["Ready","Active"]</code>, grouped by feature</div>
+
+  <div class="frame">
+    <div class="urlbar">
+      <div class="nav">←&nbsp;&nbsp;→&nbsp;&nbsp;⟳</div>
+      <div class="box">localhost:4317/?tab=tickets&amp;<em>watch=any&amp;tracking=live&amp;group=feature&amp;collapsed=311&amp;order=changed</em></div>
+    </div>
+
+    <div class="app">
+      <div class="bar">
+        <div class="ident"><i class="dot"></i> LubbDubb</div>
+        <div class="sep"></div>
+        <nav class="topnav">
+          <button>Overview</button>
+          <button class="gone">Backlog</button>
+          <button>Work</button>
+          <button class="on">Tickets <i class="n">31 to triage</i></button>
+          <button>Spend</button>
+          <button>Errors</button>
+        </nav>
+        <div class="reads">
+          <div class="read"><b>3</b><span>agents</span></div>
+          <div class="read"><b>12s</b><span>since pulse</span></div>
+          <div class="read quiet"><b>$142.80</b><span>today</span></div>
+        </div>
+      </div>
+
+      <div class="body">
+        <aside class="rail">
+          <div class="rail-head"><h2>Needs you</h2><i class="count">2</i></div>
+          <div class="rail-list">
+            <div class="q urgent">
+              <div class="stripe"></div>
+              <div class="qin">
+                <div class="qkind"><i class="tag">escalation</i><i class="qage">6m</i></div>
+                <p class="qtitle">Which of the two payment providers is authoritative?</p>
+                <div class="qmeta"><span>#412 · agent parked</span></div>
+              </div>
+            </div>
+            <div class="q">
+              <div class="stripe"></div>
+              <div class="qin">
+                <div class="qkind"><i class="tag">plan</i><i class="qage">31m</i></div>
+                <p class="qtitle">Plan for #418 awaiting approval</p>
+                <div class="qmeta"><span>6 parts · 1 for a person</span></div>
+              </div>
+            </div>
+            <div class="railsub">Later</div>
+            <div class="q">
+              <div class="stripe" style="background:#3a3f48"></div>
+              <div class="qin">
+                <div class="qkind"><i class="tag" style="background:#1b1e23;color:var(--fg-faint)">close-out</i><i class="qage">2h</i></div>
+                <p class="qtitle">#405 delivered — the work item is still open</p>
+                <div class="qmeta"><span>blocks nothing</span></div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- ================= THE TAB ================= -->
+        <main class="sit">
+
+          <div class="dhead">
+            <h1>Tickets</h1>
+            <i class="live">96 live</i>
+            <i class="n">1,284 kept</i>
+            <span class="more">mirror refreshed 12s ago · history from 14 Jul 2026</span>
+          </div>
+          <p class="dnote">
+            One surface for every item the tracker has ever handed this fleet — the triage the Backlog tab
+            used to do and the record this tab already kept, which were the same list read twice. Everything
+            here is the <b>local mirror</b>, rewritten each pulse; a closed item is <b>frozen, not dropped</b>,
+            which is why <i>live</i> and <i>kept</i> are two numbers. <b>Two things on a row write anything</b>:
+            the watch switch, and the intake override.
+          </p>
+
+          <!-- ---------- intake: pulled out, never greyed inside the list ---------- -->
+          <div class="intake">
+            <i class="lamp"></i>
+            <b>3 goals are held at intake</b>
+            <span>— an <i>unclear</i> assay stops pickup, so nothing under them moves until you say otherwise</span>
+            <button class="go">Show them</button>
+          </div>
+
+          <!-- ---------- tier one: the coarse axes ---------- -->
+          <div class="filters">
+            <div class="fgroup">
+              <span class="flabel">Watch</span>
+              <div class="seg">
+                <button class="on">Any</button>
+                <button>Watched</button>
+                <button>Unwatched <i style="color:var(--fg-dim)">31</i></button>
+                <button>Ignored</button>
+              </div>
+            </div>
+            <div class="fdiv"></div>
+            <div class="fgroup">
+              <span class="flabel">Tracking</span>
+              <div class="seg">
+                <button>Any</button>
+                <button class="on">Live</button>
+                <button>Frozen</button>
+              </div>
+            </div>
+            <div class="fdiv"></div>
+            <div class="fgroup">
+              <span class="flabel">Group</span>
+              <div class="seg">
+                <button class="on">By feature</button>
+                <button>Flat</button>
+              </div>
+            </div>
+            <span class="fsum"><b>40</b> of <b>96</b> loaded · <b>$1,204.15</b> spent</span>
+          </div>
+
+          <!-- ---------- tier two: the tracker's own states ---------- -->
+          <div class="states2">
+            <span class="flabel">State</span>
+            <button class="sbtn on">Any <i class="k">96</i></button>
+            <button class="sbtn">New <i class="k">31</i></button>
+            <button class="sbtn gate">Ready <i class="gatemark">▲</i> <i class="k">18</i></button>
+            <button class="sbtn gate">Active <i class="gatemark">▲</i> <i class="k">9</i></button>
+            <button class="sbtn">In&nbsp;Review <i class="k">7</i></button>
+            <button class="sbtn">Resolved <i class="k">4</i></button>
+            <button class="sbtn">Closed <i class="k">1,183</i></button>
+            <button class="sbtn">Removed <i class="k">32</i></button>
+            <span class="why"><i class="gatemark" style="color:#6fce9f">▲</i> a state <code style="font:11px var(--mono)">pickupStates</code> lets through</span>
+          </div>
+
+          <!-- ---------- the feature legend, which is also the feature filter ---------- -->
+          <div class="legend">
+            <span class="flabel">Feature</span>
+            <button class="fchip"><i class="sw" style="background:var(--f1)"></i>Payments <i class="n">118</i></button>
+            <button class="fchip"><i class="sw" style="background:var(--f2)"></i>Onboarding <i class="n">204</i></button>
+            <button class="fchip"><i class="sw" style="background:var(--f3)"></i>Reporting <i class="n">77</i></button>
+            <button class="fchip"><i class="sw" style="background:var(--f4)"></i>Platform hygiene <i class="n">311</i></button>
+            <button class="fchip"><i class="sw" style="background:var(--f5)"></i>Notifications <i class="n">265</i></button>
+            <button class="fchip orphan"><i class="sw"></i>No feature <i class="n">14</i></button>
+          </div>
+
+          <!-- ---------- the table ---------- -->
+          <section class="card">
+            <div class="rows">
+
+              <div class="thead">
+                <span>#</span>
+                <span>Ticket</span>
+                <span>Watch</span>
+                <span>State</span>
+                <span class="num"><button>Cost</button></span>
+                <span class="num"><button class="on">Changed <i class="arrow">▼</i></button></span>
+                <span></span>
+              </div>
+
+              <!-- ======== FEATURE HEADING: carries the container's own controls ======== -->
+              <div class="fhead">
+                <button class="fold" title="Fold this feature away">▾</button>
+                <i class="stripe" style="background:var(--f1)"></i>
+                <span class="fname"><b>Payments</b><i>#118</i><i class="fcount">· 4 of 9 children</i></span>
+                <span class="sw2"><button class="on w">Watch</button><button>Ignore</button></span>
+                <span class="refs"><a class="ext" href="#" title="Open #118 in the tracker">#118</a></span>
+              </div>
+
+              <div class="trow nested">
+                <span class="id">#412</span>
+                <span class="what">
+                  <button class="namebtn" title="Open this goal — its plan, its ticket, its pull requests and anything it is asking you">
+                    <b class="name">Split the payment capture retry out of the checkout path</b>
+                    <span class="sub"><i class="chip">agent now</i> Task · 1 escalation open · 3 parts of 6 done</span>
+                  </button>
+                </span>
+                <span><span class="sw2"><button class="on w">Watch</button><button>Ignore</button></span></span>
+                <span><span class="st active"><i class="d"></i>Active</span></span>
+                <span class="cost">$38.40</span>
+                <span class="added">4m ago</span>
+                <span class="refs"><button class="ref-goal" title="Open goal #412">#412</button><a class="ext" href="#" title="Open pull request #421">#421</a></span>
+              </div>
+
+              <!-- THE TOOLTIP CASE -->
+              <div class="trow nested">
+                <span class="id">#418</span>
+                <span class="what">
+                  <button class="namebtn">
+                    <b class="name">Refund reconciliation report for the finance export</b>
+                    <span class="sub">
+                      <i class="why-b" title="Why is nothing on this?">?</i>
+                      Task · watched 3d ago · never picked up
+                    </span>
+                  </button>
+                </span>
+                <span><span class="sw2"><button class="on w">Watch</button><button>Ignore</button></span></span>
+                <span><span class="st ready"><i class="d"></i>Ready</span></span>
+                <span class="cost none">—</span>
+                <span class="added">3d ago</span>
+                <span class="refs"><a class="ext" href="#" title="Open #418 in the tracker">#418</a></span>
+
+                <!-- drawn open, because a mockup has to show the state it is about -->
+                <div class="tip">
+                  <h4>Why nothing is on this</h4>
+                  <ul>
+                    <li><b>The plan is waiting for you.</b> Six parts, submitted 31m ago; no part is dispatched until it is approved.</li>
+                    <li><b>One part is for a person</b> — “confirm the finance export column order with Ops” — and three parts depend on it.</li>
+                  </ul>
+                  <div class="foot">
+                    The dispatcher's own words, quoted — <code>isIssuePickupEligible</code>'s
+                    <code>reasons[]</code> and the funnel's route for this item, as of the pulse 12s ago.
+                    Never re-derived here.
+                  </div>
+                </div>
+              </div>
+
+              <!-- INTAKE: what Backlog's second group was, as a row that keeps its control -->
+              <div class="trow nested held">
+                <span class="id">#420</span>
+                <span class="what">
+                  <i class="lamp"></i>
+                  <button class="namebtn">
+                    <b class="name">Make the payments dashboard better</b>
+                    <span class="sub quote">Assay: unclear — “No acceptance criteria, and ‘better’ is not
+                      measurable — I cannot tell what would count as done.”</span>
+                  </button>
+                </span>
+                <span>
+                  <span class="sw2"><button class="on w">Watch</button><button>Ignore</button></span>
+                  <button class="ovr" title="Work it anyway — the harness stops holding pickup and runs a cycle now">Override → workable</button>
+                </span>
+                <span><span class="st ready"><i class="d"></i>Ready</span></span>
+                <span class="cost none">—</span>
+                <span class="added">2d ago</span>
+                <span class="refs"><a class="ext" href="#">#420</a></span>
+              </div>
+
+              <div class="trow nested">
+                <span class="id">#409</span>
+                <span class="what">
+                  <button class="namebtn">
+                    <b class="name">Charge idempotency keys survive a broker replay</b>
+                    <span class="sub">Task · PR open 5h · moved to In Review by the harness</span>
+                  </button>
+                </span>
+                <span><span class="sw2"><button class="on w">Watch</button><button>Ignore</button></span></span>
+                <span><span class="st review"><i class="d"></i>In&nbsp;Review</span></span>
+                <span class="cost">$62.15</span>
+                <span class="added">5h ago</span>
+                <span class="refs"><button class="ref-goal">#409</button><a class="ext" href="#">#414</a></span>
+              </div>
+
+              <div class="trow nested frozen">
+                <span class="id">#397</span>
+                <span class="what">
+                  <button class="namebtn">
+                    <b class="name">Payments: retire the legacy capture endpoint</b>
+                    <span class="sub"><i class="chip verdict">delivered</i> closed 3d ago · frozen, last read 3d ago</span>
+                  </button>
+                </span>
+                <span><span class="sw2" title="Closed in the tracker — there is nothing here to tag"><button>Watch</button><button>Ignore</button></span></span>
+                <span><span class="st closed"><i class="d"></i>Closed</span></span>
+                <span class="cost">$121.05</span>
+                <span class="added">3d ago</span>
+                <span class="refs"><button class="ref-goal">#397</button><a class="ext" href="#">#404</a></span>
+              </div>
+
+              <!-- ======== a folded feature: the fold is a Place field ======== -->
+              <div class="fhead">
+                <button class="fold" title="Show the work under this feature">▸</button>
+                <i class="stripe" style="background:var(--f4)"></i>
+                <span class="fname"><b>Platform hygiene</b><i>#311</i><i class="fcount">· 12 children, folded</i></span>
+                <span class="sw2"><button>Watch</button><button class="on i">Ignore</button></span>
+                <span class="refs"><a class="ext" href="#">#311</a></span>
+              </div>
+
+              <!-- ======== a feature the item list does not itself contain ======== -->
+              <div class="fhead plain">
+                <button class="fold">▾</button>
+                <i class="stripe" style="background:var(--f2)"></i>
+                <span class="fname"><b>Onboarding</b><i>#204</i><i class="fcount">· not in the filtered item list</i></span>
+                <span></span>
+                <span></span>
+              </div>
+
+              <div class="trow nested">
+                <span class="id">#419</span>
+                <span class="what">
+                  <button class="namebtn">
+                    <b class="name">Onboarding: resend the verification email after a bounce</b>
+                    <span class="sub">Task · nobody has opted this in</span>
+                  </button>
+                </span>
+                <span><span class="sw2"><button>Watch</button><button class="on u">—</button><button>Ignore</button></span></span>
+                <span><span class="st new"><i class="d"></i>New</span></span>
+                <span class="cost none">—</span>
+                <span class="added">6h ago</span>
+                <span class="refs"><a class="ext" href="#">#419</a></span>
+              </div>
+
+              <div class="trow nested">
+                <span class="id">#417</span>
+                <span class="what">
+                  <button class="namebtn">
+                    <b class="name">Notifications: collapse duplicate digest sends</b>
+                    <span class="sub">Task · tagging in the tracker…</span>
+                  </button>
+                </span>
+                <span><span class="sw2 busy"><button class="on w">Watch</button><button>Ignore</button></span></span>
+                <span><span class="st ready"><i class="d"></i>Ready</span></span>
+                <span class="cost none">—</span>
+                <span class="added">just now</span>
+                <span class="refs"><a class="ext" href="#">#417</a></span>
+              </div>
+
+              <!-- ======== orphans and unreadable parents get their own headings ======== -->
+              <div class="fhead plain">
+                <button class="fold">▾</button>
+                <i class="stripe" style="background:repeating-linear-gradient(45deg,#3a3f48,#3a3f48 2px,#22262c 2px,#22262c 4px)"></i>
+                <span class="fname"><b>No feature</b><i class="fcount">· 14 items with no parent at all</i></span>
+                <span></span>
+                <span></span>
+              </div>
+
+              <div class="trow nested">
+                <span class="id">#402</span>
+                <span class="what">
+                  <button class="namebtn">
+                    <b class="name">Reporting: nightly export drops the last hour</b>
+                    <span class="sub"><i class="chip short">fell short</i> parent unreadable · 2 runs · retro filed</span>
+                  </button>
+                </span>
+                <span><span class="sw2"><button class="on w">Watch</button><button>Ignore</button></span></span>
+                <span><span class="st resolved"><i class="d"></i>Resolved</span></span>
+                <span class="cost">$88.90</span>
+                <span class="added">1d ago</span>
+                <span class="refs"><button class="ref-goal">#402</button></span>
+              </div>
+
+              <p class="sentinel"><i class="spin"></i> Reading the next page…</p>
+            </div>
+          </section>
+
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= NOTES ================= -->
+  <div class="notes">
+
+    <div class="note span2 decided">
+      <h2>Decided: Backlog is deleted, and this is where its four groups go</h2>
+      <p>
+        Backlog and Tickets were the same list read twice — the drift the shared <code>watchLabels</code>
+        function exists to prevent, one level up. Everything Backlog did lands here or it is a capability
+        lost silently, so each of its parts is named:
+      </p>
+      <table class="k">
+        <tr><th>Backlog had</th><th>Becomes</th><th>Why that shape</th></tr>
+        <tr>
+          <td><b>Four groups</b> — Watched, Blocked at intake, Unwatched, Ignored</td>
+          <td>the <b>Watch</b> filter's four values, plus the intake call-out above the list</td>
+          <td>one pass, one assignment per item — the property groups had, kept: an item matching two
+            predicates would draw twice with two switches, and the second is a different answer to the
+            same question</td>
+        </tr>
+        <tr>
+          <td><b>Intake pulled out</b>, not greyed inside Watched</td>
+          <td>a call-out with a count and a <i>Show them</i> filter, and a lamp on the row</td>
+          <td>an <code>unclear</code> assay is the one intake reading that <i>stops dispatch</i>; among 96
+            rows it reads as a detail rather than as the thing holding all the work</td>
+        </tr>
+        <tr>
+          <td><b><code>Override → workable</code></b> on intake rows</td>
+          <td>the same button, same <code>setIssueAssay</code> call, on the same rows</td>
+          <td>the second and last thing on a row that writes. On intake rows alone: a
+            <code>workable</code> verdict blocks nothing, so the button on one would offer to change a
+            reading that changes no behaviour</td>
+        </tr>
+        <tr>
+          <td><b>The assayer's sentence, quoted</b></td>
+          <td>the row's subline, quoted whole</td>
+          <td>it is the only account of why the goal is held, so a paraphrase would be the only account
+            there is, and wrong</td>
+        </tr>
+        <tr>
+          <td><b>Features as headings</b>, folds on <code>Place.collapsed</code></td>
+          <td><code>group=feature</code> — the same <code>groupByFeature</code>, the same
+            <code>collapsed</code> field, the same container controls on the heading</td>
+          <td>a container is never dispatched at, so it is never a row. <code>group=flat</code> brings back
+            the Feature <i>column</i>, which is what a GitHub world with no hierarchy gets — and
+            <code>groupByFeature</code> returning null already means “draw the flat list”</td>
+        </tr>
+        <tr>
+          <td><b>The name opens the goal page</b></td>
+          <td>unchanged — <code>selectGoal</code>, from the name, refs beside it</td>
+          <td>one way into a goal from every surface that lists one; a reference never goes inside a
+            button, because one click cannot have two destinations</td>
+        </tr>
+        <tr>
+          <td><b>25 rows then “and 31 more”</b></td>
+          <td>the keyset cursor and infinite scroll this tab already has</td>
+          <td>the cut existed because the backlog drew from the snapshot; a paged list does not need it</td>
+        </tr>
+        <tr>
+          <td><b>The nav badge</b> — unwatched count, read off <code>backlogGroups</code></td>
+          <td>the same number on the Tickets button, read off the mirror's watch filter</td>
+          <td><code>TopBar.tsx:42</code> is the one consumer outside the tab, and deleting
+            <code>Backlog.tsx</code> without moving it takes the only number that says whether triage is
+            worth opening</td>
+        </tr>
+      </table>
+      <h3>What is actually deleted</h3>
+      <ul>
+        <li><code>web/src/console/Backlog.tsx</code>, and <code>'backlog'</code> from
+          <code>ConsoleTab</code> and from <code>TABS</code> in <code>place.ts</code> — the second is the
+          site nothing checks.</li>
+        <li><b><code>?tab=backlog</code> resolves to the tickets tab</b> rather than 404ing to the overview.
+          <code>place.ts</code> already falls back to <code>overview</code> for an unknown tab, which would
+          silently strand every bookmark and shared link an operator has. One alias entry, and a line in the
+          spec's address-bar table saying it is one.</li>
+        <li><b>Nothing under <code>web/src/</code> that Backlog owned may simply stop being imported.</b>
+          <code>backlogGroups</code> moves to the panel (or dies with its last caller);
+          <code>watchBucket</code>, <code>groupByFeature</code>, <code>groupProgress</code> and
+          <code>isContainerType</code> keep their callers here. knip runs with every rule at
+          <code>error</code>, so an export left behind turns <code>npm run check</code> red — which is the
+          good case. The bad case is deleting a helper the merged panel needed and rewriting it slightly
+          differently.</li>
+        <li><b>The spec's whole <code>## The backlog</code> section is rewritten into the tickets section</b>
+          in the same change, not deleted: the arguments in it — one assignment per item, intake pulled out,
+          containers as headings, the quote-never-parse rule, features open until folded — are the reasons
+          this design is shaped the way it is, and they outlive the tab they were written for.</li>
+      </ul>
+    </div>
+
+    <div class="note">
+      <h2>1 · Every screen reads the mirror; the mirror is rewritten each pulse</h2>
+      <ul>
+        <li><b>A pulse writes what it saw.</b> One sweep per pulse over the assignment filter, upserting by
+          number — the same call the snapshot already makes, so no new provider traffic on the common path.</li>
+        <li><b>Closed means stop tracking, not delete.</b> A row whose state left the open set is marked
+          <code>tracking='frozen'</code> and the sweep skips it. It keeps its last-read title, labels, state
+          and parent. Deleting it would take the cost history and the verdict with it, and the close-out
+          sweep recognises its own obligation by finding the item again.</li>
+        <li><b>Thaw is one condition, not a judgement:</b> the tracker returns it in the open set again.</li>
+        <li><b>The dispatcher does not read this table, and must not start.</b> Rules keep deciding from the
+          live snapshot — a rule that could see a frozen row would eventually dispatch onto a closed item,
+          and nothing would look wrong.</li>
+      </ul>
+    </div>
+
+    <div class="note warn">
+      <h2>2 · The table is a control now — two of them</h2>
+      <p>
+        The shipped tab states <i>“nothing in it is a control that changes the world — a history you can edit
+        from is not a history.”</i> That sentence was true of a record and is false of this surface, so it
+        changes in <code>docs/spec/17-cockpit.md</code> in the same commit as the code.
+      </p>
+      <ul>
+        <li><b>Two controls, and no more:</b> the watch switch and the intake override. Both already exist and
+          both keep their routes — <code>POST /api/issues/:number/watch</code> and
+          <code>setIssueAssay</code> — so the merged surface introduces no new way to change the world.</li>
+        <li><b>Only on live rows.</b> A frozen row's switch is inert with a title saying why: there is
+          nothing in the tracker left to tag.</li>
+        <li><b>A container cascades, and the heading says so before the click</b> — and a partial failure is
+          reported (“tagged 6 of 9”), because an operator told “watched” while three children kept the old
+          tag has been lied to about what the harness will pick up.</li>
+        <li><b>Optimistic, then reconciled by the pulse.</b> Trusting the click alone would leave the tab
+          claiming a tag the tracker refused.</li>
+        <li><b>A gate-off deployment (<code>labelPrefix: ''</code>) refuses both directions</b> and says why —
+          there is no tag to write, and a button that writes nothing is worse than one that explains itself.</li>
+      </ul>
+    </div>
+
+    <div class="note">
+      <h2>3 · “Why is nothing on this?” — quoted, never re-derived</h2>
+      <p>
+        <code>isIssuePickupEligible</code> already returns <code>{eligible, reasons[]}</code>, and the
+        funnel's route says the rest. The tooltip ships those strings. A lens that reasoned about pickup
+        would be a second dispatcher, and the two would drift the first time a gate changed.
+      </p>
+      <ul>
+        <li><b>Only where the question makes sense</b> — a live row that is watched with no agent and no PR.
+          A frozen row has no reasons, because eligibility is a reading of the live world.</li>
+        <li><b>Quiet marker on a feature heading:</b> a container is never worked itself, which is an
+          explanation rather than a problem.</li>
+        <li>Reasons it can carry today, verbatim from the gates: tagged leave-alone; no watch tag; the watch
+          tag was added by someone else; a container type; a state outside <code>pickupStates</code>; assay
+          unclear; plan awaiting approval; blocked on a human part; attempt cap reached.</li>
+        <li><b>Hover is not the only way to it</b> — the same list is the row's expanded panel on click. A
+          tooltip nobody can select text out of is where a stack trace goes to die.</li>
+      </ul>
+    </div>
+
+    <div class="note">
+      <h2>4 · Parent feature, and the colour</h2>
+      <p>
+        <code>Issue.parent</code> has three distinct values and the surface must keep them apart — grouped as
+        headings, or flat as a column.
+      </p>
+      <table class="k">
+        <tr><th>Value</th><th>Means</th><th>Drawn</th></tr>
+        <tr><td><b>a parent</b></td><td>the Feature this hangs off</td><td>coloured heading / chip</td></tr>
+        <tr><td><b><code>null</code></b></td><td>an orphan — genuinely no parent</td><td>hatched “no feature” heading</td></tr>
+        <tr><td><b><code>undefined</code></b></td><td>the link could not be read, or no hierarchy</td><td>“parent unreadable”, kept out of the orphan group</td></tr>
+      </table>
+      <p>
+        Folding <i>unreadable</i> into <i>orphan</i> would say this item belongs to no feature, which is a
+        different and wrong thing to say about a link we could not fetch. The provider is already careful
+        about exactly this; the surface must not undo it.
+      </p>
+      <h3>On “a random colour persisted in the db”</h3>
+      <ul>
+        <li><b>Persisted: yes.</b> The whole value is that the same feature is the same colour every
+          morning. One row per feature id, written on first sight.</li>
+        <li><b>Random: recommend not.</b> A random hue has two failures with nothing to catch them — one that
+          vanishes against <code>--panel-2</code>, and two features that land near-identical. Instead a
+          <b>fixed twelve-hue ladder</b> at one lightness and chroma, assigned <b>next-least-used at first
+          sight</b>, then persisted. Past twelve the ladder repeats, which is honest: a legend with forty
+          colours is not a legend anyone reads.</li>
+        <li><b>Colour is never the only signal</b> — number and name ride on every heading and chip, so the
+          column works for a colour-blind reader and in a screenshot pasted into a ticket.</li>
+      </ul>
+    </div>
+
+    <div class="note span2">
+      <h2>5 · States: the tracker's own words, on the deployments that have them</h2>
+      <ul>
+        <li><b>Two tiers, not one control.</b> <i>Tracking</i> (live / frozen) is the harness's reading;
+          <i>State</i> is the tracker's own word. Folding them would state a triage nobody made —
+          <i>Removed</i> and <i>Closed</i> are both frozen and are not the same fact.</li>
+        <li><b>The state list is discovered, never hardcoded</b> — the distinct set the mirror has seen, with
+          counts. A hardcoded Azure ladder is wrong on the first customised process template, and silently:
+          the missing state's items stop being reachable by any filter.</li>
+        <li><b>GitHub and the fake have no native states</b>, so the second tier is not drawn and the coarse
+          axis reads Open / Closed. A filter offering states the provider cannot produce is a control that
+          always returns nothing.</li>
+        <li><b>The ▲ marks a state <code>pickupStates</code> lets through</b>, read from config — the
+          most-asked question about an Azure deployment, answered where the states are.</li>
+      </ul>
+    </div>
+
+    <div class="note span2">
+      <h2>Where the pieces go</h2>
+      <ul>
+        <li><b>Store:</b> <code>src/store/tickets.ts</code> keeps the table. New columns on an <i>existing</i>
+          table — <code>tracking</code>, <code>work_item_state</code>, <code>parent_number</code>,
+          <code>parent_title</code>, <code>last_read_at</code> — each need an additive
+          <code>ALTER TABLE</code> in that module's <code>ColumnMigrations</code>, or they are invisible on
+          every database from before today with nothing erroring. The feature-colour table is a fresh
+          <code>CREATE TABLE</code> that declares an empty column list anyway.</li>
+        <li><b>Sweep:</b> the pulse's mirror write gains the freeze rule and the parent columns. Still a
+          record — nothing under <code>src/dispatcher/</code> reads it, and that belongs in a structural
+          test, not a comment.</li>
+        <li><b>Route:</b> <code>GET /api/tickets</code> grows <code>tracking</code>, a provider-native
+          <code>state</code>, <code>feature</code> and <code>group</code>; the response ships the discovered
+          state list with counts, the feature legend with colours, the intake count, and per-row reasons.
+          Wrapped in <code>checked(...)</code>. No new write route — both controls already have one.</li>
+        <li><b>Wire:</b> <code>TicketRow</code> gains <code>workItemState</code>, <code>tracking</code>,
+          <code>parent</code>, <code>featureColor</code>, <code>pickupReasons</code>, <code>assay</code>.</li>
+        <li><b>Place:</b> <code>tracking</code>, <code>state</code>, <code>feature</code>,
+          <code>group</code> join the tab's three fields; <code>collapsed</code> is inherited from the
+          backlog, and <code>backlog</code> leaves <code>TABS</code> with an alias behind it.</li>
+        <li><b>Panel:</b> <code>TicketsPanel.tsx</code> absorbs <code>Backlog.tsx</code>, which is deleted.</li>
+        <li><b>Specs, same change:</b> <code>17-cockpit.md</code> (the merged tab, the deleted section, the
+          “no controls” sentence, the nav, the address bar), <code>16-http-api.md</code>,
+          <code>14-persistence.md</code>, <code>15-integrations.md</code>,
+          <code>06-issue-pickup.md</code>.</li>
+      </ul>
+    </div>
+
+    <div class="note span2 q-open">
+      <h2>Still open</h2>
+      <ul>
+        <li><b>Sequencing.</b> This is comfortably four changes: the mirror's freeze + parent columns; the
+          live read and the two controls; features and states; then Backlog's deletion last, once the tab
+          demonstrably carries everything it did. Deleting first loses capability for however long the rest
+          takes.</li>
+        <li><b>Does the mirror become the snapshot's source, or stay beside it?</b> This mockup says every
+          <i>screen</i> reads the mirror and the <i>dispatcher</i> keeps reading the live world. The stronger
+          version puts a stale row one bug away from a dispatch. Recommend not, for now.</li>
+        <li><b>Hierarchy on the history read.</b> <code>listTicketHistory</code> deliberately does not hydrate
+          parents — that read is per-item and a month of backfill would cost a request per ticket. Cheapest
+          honest version: hydrate for the open set only (already fetched for the snapshot), and leave frozen
+          rows with the parent they were last seen with.</li>
+        <li><b>Freezing on <code>Removed</code>.</b> Azure's <i>Removed</i> means “this was never real”. Same
+          freeze — but should it count in the totals or the spend at all?</li>
+        <li><b>Cost on a frozen row</b> still moves if a late run is attributed to it. Either the row is not
+          truly frozen, or only the tracker fields freeze and cost is read live. The second is what this
+          draws.</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
