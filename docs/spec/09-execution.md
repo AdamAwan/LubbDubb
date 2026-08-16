@@ -477,52 +477,153 @@ called by the plan reconciler rather than the executor.
 
 ## Worktrees
 
-`src/worktree/worktreeManager.ts`. Worktrees are created lazily — only when a code task needs one —
-keyed by branch and **reused** if one already exists. Two tasks on the same branch therefore share a
-checkout rather than fighting over it. Desk tasks never call this.
+`src/worktree/worktreeManager.ts`. Worktrees are a **bounded pool of directories leased to
+branches** — created lazily, only when a code task needs one, and switched rather than recreated.
+Desk tasks never call this.
 
-The executor depends on the `Worktrees` **interface**, not the class: `ensure`/`remove` is the whole
-of what it and the reap in `system.ts` ask for, and a seam wider than its consumer is a fake with
-behaviour nobody checks. `WorktreeManager` is the real implementation, wired by default;
-`FakeWorktreeManager` is the injected one (see [19](19-development.md)). This is git's **write** side
-given the treatment its read side already had in `GitObserver` — the asymmetry was load-bearing,
-because the write side is the half that mutates a repository.
+The key used to be the branch: one directory per branch, deleted when the work ended. Every goal
+mints branches — the assay, the pickup, one per plan part — so a directory was born and died per unit
+of work, and **every code agent landed in a tree with no dependencies installed** and paid to install
+them before it could run one check. In this repo that is `npm ci` over native builds: minutes of wall
+clock and several tool turns per dispatch, for setup whose answer was already on disk in the sibling
+worktree deleted an hour ago. A slot that is switched keeps everything git ignores, which is where a
+project's build state lives — so **warm dependencies are a consequence of reuse, not something the
+harness manages**. Nothing here knows what a package manager is, there is no install command and no
+config key naming one; if the harness ever needs to know the project's toolchain, this has gone
+wrong.
+
+The executor depends on the `Worktrees` **interface**, not the class: `ensure`/`remove`/`deleteBranch`
+is the whole of what it and the reap in `system.ts` ask for, and a seam wider than its consumer is a
+fake with behaviour nobody checks. `WorktreeManager` is the real implementation, wired by default;
+`FakeWorktreeManager` is the injected one, and it **models the pool too** (see
+[19](19-development.md)) — a fake still keyed on the branch would hand every branch its own path and
+keep every test green while the real manager leased slots. This is git's **write** side given the
+treatment its read side already had in `GitObserver` — the asymmetry was load-bearing, because the
+write side is the half that mutates a repository.
 
 `ensure(branch, base?)`:
 
-1. An existing worktree for the branch is returned as-is.
-2. A stale target directory is **reclaimed** (below).
-3. An existing **local branch** gets a worktree added at it.
-4. With no `base`, `git worktree add -b <branch> <dir>` forks from the repo root's HEAD.
-5. With a `base`, it is resolved through `resolveCommit`; a base that resolves to nothing **throws**
-   rather than quietly falling back to HEAD — silently picking an incidental base is the bug the
-   parameter exists to fix. The executor's `catch` audits it as a rejected dispatch.
+1. `git worktree prune`, so a slot whose directory vanished stops counting against the bound.
+2. A worktree already checked out on the branch is returned as-is, and re-leased.
+3. Otherwise the first **free** slot is cleaned and switched onto the branch (below).
+4. With no free slot the pool grows: a stale target directory is **reclaimed**, then
+   `git worktree add` puts a new slot straight on the branch. Slot directories are `slot-<n>`, the
+   lowest unused index.
+5. With the pool at its bound, `ensure` **throws** — see [exhaustion](#exhaustion).
+
+A branch that does not exist yet starts at a commit: `base` resolved through `resolveCommit`, or the
+repo root's HEAD when there is no `base`. The start point is named **explicitly** even in the HEAD
+case, because a pooled slot's own HEAD is the previous occupant's and forking implicitly off it would
+silently mis-base every branch cut into a reused slot. A base that resolves to nothing **throws**
+rather than quietly falling back to HEAD — silently picking an incidental base is the bug the
+parameter exists to fix. It is resolved before the slot is touched, so that failure leaves the slot
+exactly as it was rather than cleaned and half-prepared. The executor's `catch` audits it as a
+rejected dispatch.
 
 **Reuse comes first, and `base` is then ignored entirely.** `ensure(branch, base)` does not guarantee
 the branch is based on `base`; it only decides where a branch that did not exist starts. You do not
-move an in-flight agent's branch out from under it.
+move an in-flight agent's branch out from under it. Two tasks on one branch therefore share a
+checkout rather than fighting over it, exactly as they did before there was a pool.
 
-The directory name is the branch with every character outside `[a-zA-Z0-9._-]` replaced by `-`.
-`remove(branch)` runs `git worktree remove --force` when a worktree exists.
+### The lease
+
+**A directory per branch was the only thing stopping two agents sharing a checkout**, and it provided
+that implicitly: one branch, one path. Pooling breaks the coupling, so the lease is explicit and
+checked on every hand-out. Getting it wrong puts two agents in one directory on different branches,
+which is worse than anything `fileOverlap` reports — `sameWorktree` at least assumes they agree on
+the branch.
+
+A slot is **held** while either is true, and the two arms cover windows the other cannot:
+
+- **This run leased it**, and `remove` has not released it. A task is settled the moment its agent
+  reports done, but the agent's _process_ is still sitting in that directory until `reaped` fires,
+  and cleaning and switching a tree out from under an exiting process is the damage that shows up as
+  an `EBUSY` two days later. `system.ts` releases on `reaped`, the honest end of "something is still
+  in there".
+- **The branch it is checked out on still has outstanding work** — `Store.findActiveTaskByBranch`,
+  the same predicate the executor's [branch gate](#2-branch-gate--deferred-code-dispatches-only)
+  asks. This is the half that survives a restart, where the in-memory leases are empty by
+  construction: crash recovery may **restore** an orphan back into its existing directory, and
+  without this the very next dispatch would clean and switch that tree under it. The mirror case is
+  the release a boot needs — a `requeue` or `remove` verdict settles the task, and the slot is free
+  that instant, with nothing in the manager having had to remember anything.
+
+A slot carrying **uncommitted tracked changes** is also never handed to another branch, and that is a
+correctness rule rather than tidiness: `git switch` _carries_ uncommitted edits across when they do
+not conflict, so a failed agent's half-finished work would land on an unrelated branch and be
+committed there by an agent with no idea where it came from. It is also what keeps a failed or killed
+agent's tree readable, which is what deleting the directory used to provide.
+
+### Handing a slot over
+
+In this order, and the order is load-bearing:
+
+1. **`git clean -fd`** — untracked files, **never `-fdx`**. The ignored files _are_ the warm state
+   this pool exists to keep; `-x` would delete the dependencies and defeat the whole thing, and
+   excluding named paths would be the repo-specific configuration the harness refuses to grow.
+2. **`git switch <branch>`** when the ref exists, `git switch -c <branch> <commit>` when it does not.
+   The clean must precede it because `git switch` refuses when an untracked file would be
+   overwritten.
+
+**`git switch -C` and `git checkout -B` are unreachable, deliberately.** They _reset_ an existing
+branch to the start point, so on a slot being handed to a branch that already has commits — a
+re-dispatch, a retry, a part picked up again — they discard that work silently, with nothing red
+anywhere. Existence is checked first and the create form is only ever reached for a branch that does
+not exist.
+
+A failure at either step is a **rejected dispatch naming the branch and the slot**, never a silent
+fall back to a fresh directory — which would reintroduce the cold start invisibly, which is the one
+outcome that would leave this whole change looking like it worked.
+
+**The accepted trade: stale ignored output.** `-fd` leaves behind whatever the previous occupant's
+build produced — a `dist/`, a generated file, a compiled artifact — on a branch that never built it.
+A later agent can read that as its own branch's output and be misled by it. This is a trade, not an
+oversight: the alternatives are `-x` (which deletes the dependencies and defeats the ticket) or an
+ignore list of paths to keep (which is exactly the repo-specific configuration the harness must not
+learn). Agents run their own builds; a stale artifact is a wrong answer they can correct, where a
+cold tree is minutes they cannot get back.
+
+### Exhaustion
+
+Pool size is `worktreePoolSize`, defaulting to `maxConcurrentAgents` plus a slack of two
+([02](02-configuration.md#repository)). Disk is therefore bounded too, which it never was: twenty
+concurrent agents meant twenty full checkouts and no ceiling at all.
+
+With every slot held, `ensure` **throws** and the executor audits a rejected dispatch, which settles
+the task and leaves the next cycle to try again. Rejecting is preferable to blocking — waiting on a
+directory would hold the pulse — and the refusal names each slot and why it is unavailable, plus the
+key that raises the bound, because a rejection that names neither is a dead end in the decision log.
+
+The live cap from `POST /api/control` moves the number of _agents_, not the number of directories:
+the bound is read once at boot, so raising the cap past the pool trades dispatches for rejections
+until `worktreePoolSize` is raised too.
+
+### Slot names and migration
+
+Slot directories are `slot-0`, `slot-1`, … under `worktreeRoot`. There is no migration: a directory
+left by a pre-pool deployment (named after a branch) is a registered worktree under the same root, so
+it counts toward the bound and is leased like any other slot.
 
 ### Reclaiming an orphaned directory
 
 An interrupted or killed agent can leave its checkout **de-registered but present** — the
-`.git/worktrees/<name>` admin entry gone, the folder still on disk. `findExisting` reads
-`git worktree list --porcelain`, so it cannot see one; the deterministic path is then computed and
-`git worktree add` refuses it with `fatal: '<dir>' already exists`. Because the path is
-deterministic, every retry hits the same wall: the branch is wedged for good, the issue never gets
-an agent, and the decision log shows nothing but repeated `rejected` dispatches. `git worktree
-prune` does **not** clean it — prune is the mirror case, an admin entry whose directory vanished.
+`.git/worktrees/<name>` admin entry gone, the folder still on disk. The porcelain list cannot see
+one, so the slot is not in the pool; the next slot path is then computed and `git worktree add`
+refuses it with `fatal: '<dir>' already exists`. Because slot paths are deterministic, every retry
+hits the same wall: the pool is one smaller for good, and the decision log shows nothing but
+repeated `rejected` dispatches. `git worktree prune` does **not** clean it — prune is the mirror
+case, an admin entry whose directory vanished, and it runs ahead of the slot scan on every `ensure`
+for exactly that half.
 
-So before every `worktree add`, `ensure` prunes (cheap and idempotent, clearing that mirror-case
-cruft) and then, if the target path exists on disk and is **not** in the porcelain list, removes it
-(`git worktree remove --force` first, its failure ignored, in case git still half-tracks it).
+So before minting a slot, `ensure` checks whether the target path exists on disk and is **not** in
+the porcelain list, and removes it if so (`git worktree remove --force` first, its failure ignored,
+in case git still half-tracks it).
 
 - **Registered is untouchable.** The guard is the porcelain list, not the presence of a `.git` file:
   a directory git still knows about is some agent's live checkout, and yanking it mid-run is far
-  worse than the collision. Two branches can sanitize onto one directory — when a live worktree
-  stands there the `add` fails loudly, which is the honest answer.
+  worse than the collision. A registered worktree standing on the path was already surveyed as a
+  slot, so it is unreachable here at all — and the `add` failing loudly is the honest answer if it
+  ever were.
 - Reclaiming **discards** whatever the dead orphan still held. With no admin entry there is no
   branch or commit behind those files and no workflow that could recover them; they are unreachable
   either way.
@@ -552,16 +653,36 @@ leaves descendants nothing can walk to, and `reclaim` is where that shows up. Te
 `test/worktreeManager.test.ts` (Windows-only for the lock itself — POSIX permits removing a live
 process's cwd, so there is nothing there to reproduce).
 
-### Removal
+### Release
 
-`src/system.ts` listens for `agents.on('reaped')` and removes the worktree only when:
+`remove(branch)` releases the lease and **deletes nothing**. That is the whole change: the slot keeps
+its checkout and everything git ignores in it, and a failed or killed agent's tree stays readable
+until the slot is reissued.
 
-- the agent's status is `done` (failed and killed agents keep theirs for debugging), **and**
+`deleteBranch(branch)` — the local half of the reap after a pull request merges — releases the lease
+and deletes the ref. `git branch -D` refuses a branch that is checked out anywhere, and the directory
+is no longer the branch's to delete, so the slot holding it is **detached** (`git switch --detach`)
+and left standing for the next occupant. The repo's own main worktree is exempt: detaching an
+operator's checkout to reap a branch would be a rude surprise, and `-D` failing loudly is the honest
+answer there. `-D` and not `-d` for the reason it always was — `merge_pr` squashes, so `-d`'s "is
+this merged" test says no for every branch this is called on.
+
+`src/system.ts` listens for `agents.on('reaped')` and releases the slot when:
+
 - the task has a branch, **and**
 - no other active task shares that branch.
 
-Sequencing matters: `reaped` fires only once the process has _actually exited_, because a live process
-pins the worktree cwd. A removal failure is recorded to the error log.
+**Every agent status, not just `done`.** Nothing else releases a lease, so skipping the failed and
+killed ones would shrink the pool by one per failure with nothing at all to say so — where under the
+old manager the same condition merely left a directory on disk.
+
+Sequencing still matters: `reaped` fires only once the process has _actually exited_, because that
+process is still sitting in the directory the next occupant will clean and switch. A release failure
+is recorded to the error log.
+
+One release does not hang off an agent at all: a dispatch that got past `ensure` and threw at the
+spawn holds a lease no `reaped` event will ever release, so `abandonUnstarted` gives the slot back
+along with the task row it settles.
 
 ## Git
 

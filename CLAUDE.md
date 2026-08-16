@@ -226,6 +226,19 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
   `base`; it only decides where a branch that did not exist starts. An unresolvable `base` throws
   rather than falling back to HEAD — silently picking an incidental base is the bug the parameter
   exists to fix. → [09](docs/spec/09-execution.md#worktrees)
+- **Worktrees are a pool of slots leased to branches, and `git switch -C` / `checkout -B` must stay
+  unreachable.** The reset form rewinds an existing branch to the start point, so a slot handed to a
+  branch that already has commits — a re-dispatch, a retry, a part picked up again — loses them, with
+  nothing red. Check the ref exists first and only ever reach `switch -c` for one that does not.
+  → [09](docs/spec/09-execution.md#handing-a-slot-over)
+- **A slot is cleaned with `git clean -fd`, never `-fdx`.** The ignored files are the warm dependency
+  tree the pool exists to keep; `-x` deletes it and every dispatch pays for a cold install again,
+  which nothing measures and no test sees. → [09](docs/spec/09-execution.md#handing-a-slot-over)
+- **The lease is the only thing keeping two agents out of one directory now.** A directory per branch
+  used to provide that implicitly. Anything that hands out a slot goes through
+  `WorktreeManager.ensure`, and anything that frees one goes through `remove` / `deleteBranch` — a
+  path that picks a directory itself puts two agents in one tree on different branches.
+  → [09](docs/spec/09-execution.md#the-lease)
 - **`resolveCommit` prefers `origin/<ref>` over the local ref** and returns a SHA, because the
   harness's clone never checks the integration branch out. New `GitObserver` methods stay read-only
   and fetch-free.

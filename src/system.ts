@@ -9,7 +9,7 @@ import type { CiEvidenceReader } from './ci/ciEvidence.js';
 import { ticketAmendCommands } from './goalInstructions.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
 import { defaultSessionRoot } from './agents/sessionTranscript.js';
-import { WorktreeManager, type Worktrees } from './worktree/worktreeManager.js';
+import { defaultPoolSize, WorktreeManager, type Worktrees } from './worktree/worktreeManager.js';
 import { GitCliObserver, type GitObserver } from './git/gitObserver.js';
 import { fetchRemote } from './git/gitCli.js';
 import { PlanReconciler } from './plans/planReconciler.js';
@@ -149,6 +149,13 @@ export interface System {
    * `config.validation.desktop` is on.
    */
   desktop: McpDesktopServer;
+  /**
+   * The pool of worktree directories code dispatch leases slots from. Exposed
+   * because the lease is a property of the *whole* dispatch path — a slot held by a
+   * live agent is never handed to a second branch — and asserting that needs the
+   * same manager the executor and the reap are wired to, not a second one.
+   */
+  worktrees: Worktrees;
   /** Central error log: every caught failure is persisted here and streamed to the cockpit. */
   errors: ErrorLog;
 }
@@ -216,7 +223,17 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const connector = new CompositeConnector(integrations, now);
   const backend = opts.backend ?? new NodePtyBackend();
 
-  const worktrees = opts.worktrees ?? new WorktreeManager(config.repoRoot, config.worktreeRoot);
+  // Worktrees are a bounded pool of directories leased to branches, not one
+  // directory per branch — so a dispatch lands in a tree that still has the last
+  // occupant's ignored build state. `held` is the durable half of the lease: it is
+  // what stops a slot being reissued under an agent a restart restored into it, and
+  // what releases one the moment crash recovery settles the task behind it.
+  const worktrees =
+    opts.worktrees ??
+    new WorktreeManager(config.repoRoot, config.worktreeRoot, {
+      size: config.worktreePoolSize ?? defaultPoolSize(config.maxConcurrentAgents),
+      held: (branch) => store.findActiveTaskByBranch(branch) !== null,
+    });
   // Branch reality for plan reconciliation — read-only, and the seam a test swaps
   // to script "has this part pushed" without a repo.
   const gitObserver = opts.gitObserver ?? new GitCliObserver(config.repoRoot);
@@ -691,20 +708,25 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     else if (by === 'operator') escalations.dismissEscalationsForAgent(agentId, 'operator marked the work complete');
   });
 
-  // A cleanly finished code agent's worktree is removed once its process has
-  // actually exited ('reaped' — a live process pins the cwd and would block the
-  // removal). Failed/killed agents keep theirs for debugging; a next dispatch on
-  // the branch recreates it via `ensure`. Worktrees are shared per-branch, so
-  // hands off while any sibling task on the branch is still active.
-  agents.on('reaped', ({ taskId, status }) => {
-    if (status !== 'done') return;
+  // A code agent's worktree slot is released once its process has actually exited
+  // ('reaped'), and nothing is deleted: the slot keeps its checkout and everything
+  // git ignores in it for whichever branch is handed it next, and a failed or killed
+  // agent's tree stays readable until then. The rendezvous on the exit is still
+  // load-bearing — a live process is sitting in that directory, and the next
+  // occupant cleans and switches it.
+  //
+  // **Every status, not just `done`.** Nothing else releases a lease, so skipping
+  // the failed and killed ones would shrink the pool by one per failure with nothing
+  // to say so. Slots are shared per-branch, so hands off while any sibling task on
+  // the branch is still active.
+  agents.on('reaped', ({ taskId }) => {
     const task = store.getTask(taskId);
     const branch = task?.branch;
     if (!branch) return;
     const active = (s: string): boolean => s === 'queued' || s === 'running' || s === 'waiting';
     if (store.listTasks().some((t) => t.id !== taskId && t.branch === branch && active(t.status))) return;
     void worktrees.remove(branch).catch((err: Error) => {
-      errors.record({ source: 'agent', message: `Failed to remove worktree for ${branch}: ${err.message}` });
+      errors.record({ source: 'agent', message: `Failed to release the worktree slot for ${branch}: ${err.message}` });
     });
   });
 
@@ -731,6 +753,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     attachments,
     mcp,
     desktop,
+    worktrees,
     errors,
   };
 }

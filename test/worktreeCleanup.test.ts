@@ -42,45 +42,52 @@ async function codeAgent(sys: ReturnType<typeof build>['system'], issueNumber: n
   return task!;
 }
 
-async function waitFor(cond: () => boolean, ms = 2000): Promise<void> {
-  const start = Date.now();
-  while (!cond()) {
-    if (Date.now() - start > ms) return;
-    await tick(20);
-  }
+/** Whether the slot is free — asked the only way that is observable from here. */
+async function reissued(sys: ReturnType<typeof build>['system'], cwd: string, branch: string): Promise<boolean> {
+  return (await sys.worktrees.ensure(branch, 'main')) === cwd;
 }
 
-test('a finished code agent has its worktree removed once the process exits', async () => {
+test('a finished code agent has its worktree slot released once the process exits', async () => {
   const { system, backend } = build();
   const task = await codeAgent(system, 7);
   const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
   const cwd = agent.cwd;
-  assert.ok(existsSync(cwd), 'worktree should exist while the agent runs');
+  assert.ok(existsSync(cwd), 'the slot should exist while the agent runs');
 
   backend.last().emit('@@LUBBDUBB_DONE@@\r\n');
   assert.equal(system.store.getTask(task.id)!.status, 'done');
-  // Removal waits for the actual process exit — the live process pins the cwd.
+  // The release waits for the actual process exit — the agent is still sitting in
+  // that directory, and the next occupant cleans and switches it.
   await tick(50);
-  assert.ok(existsSync(cwd), 'worktree must survive until the process is reaped');
+  assert.equal(await reissued(system, cwd, 'someone/else'), false, 'held until the process is reaped');
+  await system.worktrees.remove('someone/else');
 
+  const reaped = new Promise<void>((r) => system.agents.on('reaped', () => r()));
   backend.last().emitExit(0);
-  await waitFor(() => !existsSync(cwd));
-  assert.ok(!existsSync(cwd), 'worktree should be removed after done + exit');
+  await reaped;
+  await tick(20);
+
+  assert.ok(existsSync(cwd), 'nothing is deleted — the ignored build state is what makes the next run warm');
+  assert.equal(await reissued(system, cwd, 'someone/later'), true, 'and the slot is back in the pool');
   system.store.close();
 });
 
-test('a failed agent keeps its worktree for debugging', async () => {
+test('a failed agent keeps its worktree for debugging, but not its lease', async () => {
   const { system, backend } = build();
   await codeAgent(system, 8);
   const cwd = system.store.listAgentsByStatus('starting', 'running')[0]!.cwd;
 
   backend.last().emitExit(1);
   await tick(100);
+
   assert.ok(existsSync(cwd), 'a failed agent worktree must not be removed');
+  // Nothing else releases a lease, so skipping the failed ones would shrink the
+  // pool by one per failure with nothing at all to say so.
+  assert.equal(await reissued(system, cwd, 'someone/else'), true, 'the slot goes back to the pool');
   system.store.close();
 });
 
-test('a shared-branch worktree is not removed while another task on the branch is active', async () => {
+test('a shared-branch slot is not released while another task on the branch is active', async () => {
   const { system, backend } = build();
   const task = await codeAgent(system, 9);
   const cwd = system.store.listAgentsByStatus('starting', 'running')[0]!.cwd;
@@ -100,6 +107,7 @@ test('a shared-branch worktree is not removed while another task on the branch i
   backend.last().emit('@@LUBBDUBB_DONE@@\r\n');
   backend.last().emitExit(0);
   await tick(100);
-  assert.ok(existsSync(cwd), 'shared worktree must not be yanked from an active sibling task');
+
+  assert.equal(await reissued(system, cwd, 'someone/else'), false, 'not yanked from an active sibling task');
   system.store.close();
 });

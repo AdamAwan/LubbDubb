@@ -247,14 +247,14 @@ the escape hatch for the case where the build must not run — a checkout instal
 
 Tests build a full `System` with fakes injected via `buildSystem(config, opts)`:
 
-| Option          | Replaces                                                                                                                                                                   |
-| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `backend`       | `NodePtyBackend` → `FakePtyBackend` (`src/pty/fakeBackend.ts`). Drive it with `.last().emit(...)` / `.emitExit(...)`; inspect `.writes`.                                   |
-| `streamSpawner` | The real child process for the stream-JSON runtime.                                                                                                                        |
-| `sink`          | The outbound seam (defaults to the composite connector).                                                                                                                   |
-| `gitObserver`   | `GitCliObserver` → `FakeGitObserver`. Injecting one also turns the reconciler's `git fetch` off.                                                                           |
-| `worktrees`     | `WorktreeManager` → `FakeWorktreeManager` (`src/worktree/fakeWorktreeManager.ts`). Records `ensure`/`remove` and hands back a real empty directory; touches no repository. |
-| `errorMirror`   | The stderr echo (tests silence it).                                                                                                                                        |
+| Option          | Replaces                                                                                                                                                                                                                   |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend`       | `NodePtyBackend` → `FakePtyBackend` (`src/pty/fakeBackend.ts`). Drive it with `.last().emit(...)` / `.emitExit(...)`; inspect `.writes`.                                                                                   |
+| `streamSpawner` | The real child process for the stream-JSON runtime.                                                                                                                                                                        |
+| `sink`          | The outbound seam (defaults to the composite connector).                                                                                                                                                                   |
+| `gitObserver`   | `GitCliObserver` → `FakeGitObserver`. Injecting one also turns the reconciler's `git fetch` off.                                                                                                                           |
+| `worktrees`     | `WorktreeManager` → `FakeWorktreeManager` (`src/worktree/fakeWorktreeManager.ts`). Records `ensure`/`remove`, leases slots from a pool as the real one does, and hands back a real empty directory; touches no repository. |
+| `errorMirror`   | The stderr echo (tests silence it).                                                                                                                                                                                        |
 
 Plus `dbPath: ':memory:'` for an in-memory database.
 
@@ -270,8 +270,9 @@ tests reading `listAgentsByStatus(...)[0]!` failed with an opaque `TypeError`.
 
 Both go away at the source: a test with a fake worktree manager never resolves a base commit, so the
 checkout's shape stops mattering. Inject the fake unless git behaviour **is** the subject — reuse-first
-`ensure`, ref collisions, `hasCommitsBeyond`. Those tests point `repoRoot` at a throwaway repository
-from `test/support/gitRepo.ts` and use the real manager.
+`ensure`, the slot lease and the clean/switch sequence ([09](09-execution.md#the-lease)),
+`hasCommitsBeyond`. Those tests point `repoRoot` at a throwaway repository from
+`test/support/gitRepo.ts` and use the real manager.
 
 That combination exercises the whole **inject → dispatch → agent → escalate → answer → done** loop
 without a model, a network or a real terminal. Prefer adding tests at that seam. Put new tests in

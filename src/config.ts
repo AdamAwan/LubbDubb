@@ -304,8 +304,24 @@ export interface Config {
    * Defaults to `.lubbdubb/prompts`; absent directory => all built-in defaults.
    */
   promptTemplatesDir: string;
-  /** Root under which per-branch worktrees are created. */
+  /** Root under which the pool of worktree slot directories lives. */
   worktreeRoot: string;
+  /**
+   * How many worktree directories the pool may hold at once (issue #352).
+   *
+   * Unset — the default — derives it from `maxConcurrentAgents` plus slack, which
+   * is the answer that stays right when an operator changes the cap. Set it only to
+   * override that: a deployment on a small disk wanting fewer full checkouts, or one
+   * whose slots are routinely left carrying uncommitted changes and so needs more.
+   *
+   * It is a **hard bound**, and exhaustion rejects the dispatch rather than blocking
+   * it — the executor already settles a rejected dispatch and the next cycle tries
+   * again, whereas waiting on a directory would hold the pulse. Read once at boot:
+   * the live cap from `POST /api/control` moves the number of *agents*, not the
+   * number of directories, so raising the cap past the pool trades dispatches for
+   * rejections until the bound is raised too.
+   */
+  worktreePoolSize?: number;
   /** Root under which desk (no-code) scratch dirs are created. */
   deskRoot: string;
   /**
