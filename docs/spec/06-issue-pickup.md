@@ -564,6 +564,40 @@ assay overrides, never among them: those change the verdict, this only opens wha
 verdict whose comment has not been written yet, and a provider that cannot build a URL, both draw
 nothing.
 
+### The note it leaves on the pad (issue #353)
+
+Answering the question above means finding the code the ticket is about, and that orientation is the
+assayer's by-product, not its verdict: `assay_issue` takes a verdict, a summary and a profile
+proposal, and the summary is written to justify `workable` or `unclear` rather than to be a map. So
+the prompt asks for **one scratchpad note beside the verdict** — where in the repository the goal
+lives, what was read to decide, and what shape the work looks like from there.
+
+Nothing was added to carry it. The assayer runs on origin `issue:<n>:assay`, `padOriginFor` already
+resolves that to the goal's pad, `scratch_append` is already granted on an issue subtree, and
+`priorWorkBriefing` already renders the pad to every later agent on the goal, capped, oldest-first
+and attributed ([09](09-execution.md#what-earlier-agents-worked-out-reaches-the-next-one)). The whole
+change is the wording of `issue-assay`, and it is deliberately bounded by it:
+
+- **The note is asked for on `unclear` too**, and is worth more there. That hold ends when somebody
+  edits the ticket, and the agent dispatched next benefits from knowing what the assayer went looking
+  for and did not find — which is exactly what the refusal's summary does not say.
+- **It does not blur the "do not implement" line.** The assayer still writes no code, opens no pull
+  request and edits no ticket; the prompt says the note is an observation and not a head start, next
+  to the sentence that refuses the rest.
+- **It is testimony, not instruction**, because that is how the briefing presents it — a reader is
+  told to check anything it relies on. The assay prompt claims no more authority for the note than
+  the framing it will be read under gives it.
+- **A paragraph, not a transcript.** `MAX_PAD_NOTE` is 4 000 and an over-long note is _trimmed_
+  rather than refused (`src/scratch/pad.ts`), so a rambling note fails by silent truncation. The
+  prompt asks for the size that fits.
+
+The assayer writes no files, so `agent_files` records nothing for it and the touched-file briefing
+renders nothing from an assay: the pad is the only channel out.
+
+Prompt templates are operator-overridable, so a deployment that has already overridden `issue-assay`
+keeps its own body and gets no note. That is the ordinary cost of an override and needs no mechanism
+— it is written down here so it is not mistaken for a bug.
+
 ### The watch gate
 
 The assay applies only to issues that already pass the watch gate — it never filters an untagged
