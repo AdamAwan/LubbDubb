@@ -1,0 +1,529 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LubbDubb — Completed tab mockup (issue #329)</title>
+<style>
+  /* Tokens lifted from `web/src/console/console.css` (`--cn-*`) and the reference
+     treatment from `web/src/styles.css`, so this mockup is the same face the
+     cockpit already wears rather than a second opinion about it. Class names are
+     unprefixed here as in `layout-a.html` — this is a picture, not a stylesheet
+     anyone ships. */
+  :root{
+    --bg:#0d0e11; --panel:#15171b; --panel-2:#1b1e23; --line:#24272e; --line-soft:#1e2126;
+    --fg:#e7e9ec; --fg-dim:#9aa1ab; --fg-faint:#6b727c;
+    --accent:#5b8cff; --red:#ff5f5f; --amber:#f5a524; --green:#3ecf8e; --violet:#a78bfa;
+    --r:8px; --r-sm:6px;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    /* the reference treatment's own three values (`styles.css`) */
+    --link-line:#4a7794; --link-fill:#17242c; --link-ink:#7fb8dc; --blue:#5b9ec9;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#08090b;color:var(--fg);font:13px/1.45 var(--ui);-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  a{text-decoration:none;color:inherit}
+
+  /* ---------- the mockup page around the frame ---------- */
+  .sheet{max-width:1500px;margin:0 auto;padding:22px 18px 64px}
+  .cap{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+  .cap h1{margin:0;font-size:15px;font-weight:600;letter-spacing:.2px}
+  .cap .sub{font-size:12.5px;color:var(--fg-faint)}
+  .cap .sub a{color:var(--link-ink)}
+  .frame{border:1px solid #22252b;border-radius:10px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.45)}
+
+  /* ---------- shell ---------- */
+  .app{display:grid;grid-template-rows:auto 1fr;height:780px;background:var(--bg)}
+
+  /* ---------- top bar ---------- */
+  .bar{display:flex;align-items:center;gap:16px;padding:0 14px;min-height:46px;flex-wrap:wrap;
+       border-bottom:1px solid var(--line);background:var(--panel)}
+  .ident{display:flex;align-items:center;gap:8px;font-weight:600;letter-spacing:.2px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(62,207,142,.15)}
+  .bar .sep{width:1px;height:20px;background:var(--line)}
+  .reads{display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+  .read{display:flex;align-items:baseline;gap:6px;padding:4px 9px;border:1px solid var(--line);
+        border-radius:var(--r-sm);background:var(--panel-2);white-space:nowrap}
+  .read b{font:600 12px/1 var(--mono)}
+  .read span{font-size:11px;color:var(--fg-faint);text-transform:uppercase;letter-spacing:.6px}
+  .read .chev{color:var(--fg-faint);font-size:10px}
+  .read.quiet b{color:var(--fg-faint)}
+  .scan{border-color:#2b3a5c;background:#161c2b}
+  .capr{display:flex;align-items:center;gap:5px}
+  .capr .step{width:18px;height:18px;border:1px solid var(--line);border-radius:4px;line-height:16px;text-align:center;color:var(--fg-dim)}
+
+  .nav{display:flex;gap:4px;align-items:center;flex-wrap:nowrap;flex:0 0 auto}
+  .nav button{padding:5px 12px;border:1px solid transparent;border-radius:var(--r-sm);font-size:13px;
+              color:var(--fg-faint);white-space:nowrap}
+  .nav button:hover{background:var(--panel-2);color:var(--fg-dim)}
+  .nav .on{background:var(--panel-2);color:var(--fg);border-color:var(--line)}
+  .nav .n{font:600 10.5px var(--mono);color:var(--fg-faint);font-style:italic}
+
+  /* ---------- body ---------- */
+  .body{display:grid;grid-template-columns:360px 1fr;min-height:0}
+  @media (max-width:1100px){ .body{grid-template-columns:1fr} }
+
+  /* ---------- queue rail (context only — unchanged by this issue) ---------- */
+  .rail{border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+  .rail-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .rail-head h2{margin:0;font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--fg-dim)}
+  .count{margin-left:auto;font:600 11px/1 var(--mono);background:var(--red);color:#180404;padding:3px 7px;border-radius:99px}
+  .rail-list{overflow:auto;padding:8px;display:flex;flex-direction:column;gap:6px}
+  .q{display:grid;grid-template-columns:3px 1fr;gap:10px;border:1px solid var(--line);border-radius:var(--r);
+     background:var(--panel-2);text-align:left;overflow:hidden}
+  .q .stripe{background:var(--amber)}
+  .q.urgent .stripe{background:var(--red)}
+  .q .qin{padding:10px 12px 11px 2px}
+  .qkind{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+  .tag{font:600 10px/1 var(--mono);letter-spacing:.6px;text-transform:uppercase;padding:3px 6px;border-radius:4px;
+       background:#2a2118;color:var(--amber)}
+  .urgent .tag{background:#2b1517;color:var(--red)}
+  .qage{margin-left:auto;font:11px var(--mono);color:var(--fg-faint)}
+  .qtitle{font-size:13px;line-height:1.35;margin:0 0 6px}
+  .qmeta{display:flex;gap:8px;font-size:11.5px;color:var(--fg-faint);flex-wrap:wrap}
+  .railsub{padding:10px 14px 4px;font-size:11px;letter-spacing:.7px;text-transform:uppercase;color:var(--fg-faint)}
+
+  /* ---------- situation ---------- */
+  .sit{overflow:auto;min-height:0;padding:14px}
+  .done{max-width:1100px}
+
+  /* the tab's head: what this surface is, and the two things about it that are
+     not visible from a row — that it was read once, and that it keeps a run the
+     live surfaces have already let go of. */
+  .dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 4px}
+  .dhead h1{margin:0;font-size:19px;line-height:1.3;font-weight:600}
+  .dhead .n{font:600 11px var(--mono);color:var(--fg-faint);background:var(--panel-2);
+            border:1px solid var(--line);padding:2px 7px;border-radius:99px}
+  .dhead .more{margin-left:auto;font-size:11.5px;color:var(--fg-faint)}
+  .dnote{margin:0 0 14px;font-size:12.5px;color:var(--fg-faint);max-width:74ch;line-height:1.55}
+
+  .grpname{display:flex;align-items:center;gap:8px;padding:14px 2px 8px;font-size:11.5px;
+           letter-spacing:.8px;text-transform:uppercase;color:var(--fg-dim)}
+  .grpname .hint{margin-left:auto;text-transform:none;letter-spacing:0;font-size:11.5px;color:var(--fg-faint)}
+
+  .card{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);min-width:0;
+        display:flex;flex-direction:column}
+  /* The four tracks are the *card's*, not the row's, and each row takes them by
+     subgrid — so the outcome, the instant and the reference slot line up down the
+     list however long one row's branch name happens to be. Ragged is what a list
+     of independently-laid-out rows reads as; a column is what makes a history
+     scannable, and it is why the outcome is one word folded on the server rather
+     than four nullable verdicts drawn at whatever width each happens to be. */
+  .rows{display:grid;grid-template-columns:96px minmax(0,1fr) 84px auto}
+  .crow{display:grid;grid-column:1/-1;grid-template-columns:subgrid;gap:10px;align-items:center;
+        padding:10px 13px;border-bottom:1px solid var(--line-soft);min-width:0}
+  .crow:last-child{border-bottom:0}
+  .crow:hover{background:#181b20}
+  .crow .what{min-width:0}
+  .crow .name{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:13px}
+  .crow .sub{display:block;font-size:11.5px;color:var(--fg-faint);white-space:nowrap;overflow:hidden;
+             text-overflow:ellipsis;margin-top:2px}
+  .crow .when{font:12px var(--mono);color:var(--fg-dim);white-space:nowrap;text-align:right}
+  .crow.faded .name{color:var(--fg-dim)}
+
+  /* the reference slot: ruled, right-aligned, drawn whether or not the row has
+     anything to put in it — `.cn-refs` in the console, same rule. */
+  .refs{display:flex;align-items:center;justify-content:flex-end;gap:6px;flex:none;min-width:92px;
+        padding-left:10px;border-left:1px solid var(--line);font:12px var(--mono);white-space:nowrap}
+  .refs:empty{border-left-color:transparent}
+
+  /* the three marks of the reference vocabulary (`web/src/styles.css`): a box means
+     a place you can go, a fill means it stays in the cockpit, an arrow means it
+     leaves. A branch name keeps the arrow and drops the box — a box around
+     `claude/issue-329-…` is a shape, not a signal. */
+  .ext{color:var(--link-ink)}
+  .ext::before{content:'↗';margin-right:3px;font-size:.85em;color:var(--fg-faint)}
+  .ref-goal,.ref-out{display:inline-flex;align-items:center;padding:0 5px;border:1px solid var(--link-line);
+                     line-height:1.5;cursor:pointer;color:var(--link-ink)}
+  .ref-goal{background:var(--link-fill)}
+  .ref-out{border-style:dashed;background:none}
+  .ref-goal:hover,.ref-out:hover{border-color:var(--blue);color:var(--fg)}
+  .ref-out:hover{border-style:solid}
+
+  .chip{font:600 10.5px/1 var(--mono);letter-spacing:.4px;text-transform:uppercase;padding:3px 6px;
+        border-radius:4px;border:1px solid var(--line);color:var(--fg-dim);white-space:nowrap;
+        display:inline-flex;align-items:center}
+  .chip.ok{background:#122a1e;border-color:#1e4733;color:var(--green)}
+  .chip.said{background:#12212e;border-color:#1f3b52;color:#63b3ed}
+  .chip.short{background:#2a2118;border-color:#4a3a1c;color:var(--amber)}
+  .chip.gone{background:transparent;border-style:dashed;color:var(--fg-faint)}
+  .chip.small{font-size:10px;padding:2px 5px}
+  .floorTag{font:10.5px var(--mono);color:var(--fg-faint);border:1px dashed var(--line);
+            border-radius:4px;padding:2px 5px;white-space:nowrap}
+
+  .empty{padding:16px 13px;color:var(--fg-faint);font-size:12px}
+
+  /* ---------- annotations, below the frame ---------- */
+  .notes{max-width:1500px;margin:26px auto 0;display:grid;gap:14px;grid-template-columns:1fr}
+  @media (min-width:1000px){ .notes{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  .note{border:1px solid var(--line);border-left:2px solid var(--accent);border-radius:var(--r);
+        background:var(--panel);padding:12px 14px}
+  .note h2{margin:0 0 8px;font-size:11.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--fg-dim)}
+  .note p{margin:0 0 9px;font-size:12.5px;line-height:1.6;color:var(--fg-dim);max-width:104ch}
+  .note p:last-child{margin-bottom:0}
+  .note ul{margin:0;padding-left:17px;font-size:12.5px;line-height:1.6;color:var(--fg-dim)}
+  .note li{margin-bottom:6px}
+  .note li:last-child{margin-bottom:0}
+  .note code{font:11.5px var(--mono);color:var(--fg);background:var(--panel-2);
+             border:1px solid var(--line);border-radius:4px;padding:1px 4px}
+  .note b{color:var(--fg);font-weight:600}
+  .note .q{border:0;background:none;display:block;color:var(--fg);font-weight:600;margin-bottom:3px}
+  .span2{grid-column:1/-1}
+
+  /* the state gallery: variants that do not fit in one screenshot of the tab */
+  .states{display:grid;gap:12px;grid-template-columns:1fr}
+  @media (min-width:1000px){ .states{grid-template-columns:repeat(2,minmax(0,1fr))} }
+  .state h3{margin:0 0 7px;font-size:11.5px;letter-spacing:.8px;text-transform:uppercase;color:var(--fg-faint)}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="cap">
+    <h1>Completed — a cockpit tab for goals the fleet has finished</h1>
+    <span class="sub">mockup for
+      <a href="https://github.com/AdamAwan/LubbDubb/issues/329">issue #329</a>
+      · vocabulary from <code>web/src/console/console.css</code> and the reference treatment in
+      <code>web/src/styles.css</code></span>
+  </div>
+
+  <div class="frame">
+  <div class="app">
+
+    <!-- ================= TOP BAR ================= -->
+    <header class="bar">
+      <div class="ident"><i class="dot"></i> LubbDubb <span style="color:var(--fg-faint);font-weight:400">· AdamAwan/LubbDubb</span></div>
+      <div class="sep"></div>
+
+      <!-- The nav gains a fourth destination. It carries no count: unlike the
+           backlog's unwatched tally, there is no number here that decides whether
+           it is worth opening. -->
+      <nav class="nav">
+        <button>Overview</button>
+        <button>Backlog <i class="n">3 unwatched</i></button>
+        <button>Work</button>
+        <button class="on">Completed</button>
+      </nav>
+
+      <div class="sep"></div>
+      <button class="read scan"><span>Scan</span><b>0:42</b></button>
+      <div class="read capr"><span>Fleet</span><b>4</b><span style="color:var(--fg-faint)">/6</span>
+        <i class="step">−</i><i class="step">+</i></div>
+      <div class="reads">
+        <button class="read"><span>Spend</span><b>$18.40</b><i class="chev">›</i></button>
+        <button class="read"><span>Yield</span><b>82%</b><i class="chev">›</i></button>
+        <button class="read"><span>Output</span><b>1.4/h</b><i class="chev">›</i></button>
+        <button class="read"><span>Findings</span><b>3</b><i class="chev">›</i></button>
+        <button class="read quiet"><span>Faults</span><b>0</b><i class="chev">›</i></button>
+        <button class="read quiet"><span>Launch</span><b>0</b><i class="chev">›</i></button>
+        <button class="read"><span>Settings</span><i class="chev">›</i></button>
+      </div>
+    </header>
+
+    <div class="body">
+
+      <!-- ================= QUEUE RAIL (unchanged — drawn for context) ============ -->
+      <aside class="rail">
+        <div class="rail-head"><h2>Needs you</h2><i class="count">2</i></div>
+        <div class="rail-list">
+          <div class="q urgent">
+            <div class="stripe"></div>
+            <div class="qin">
+              <div class="qkind"><i class="tag">asking</i><i class="qage">7m</i></div>
+              <p class="qtitle">part-3 · session store abstraction</p>
+              <div class="qmeta"><span>#341</span><span>claude-opus-5</span></div>
+            </div>
+          </div>
+          <div class="q">
+            <div class="stripe"></div>
+            <div class="qin">
+              <div class="qkind"><i class="tag">plan</i><i class="qage">31m</i></div>
+              <p class="qtitle">Approve the plan for #352</p>
+              <div class="qmeta"><span>5 parts · 3 waves</span></div>
+            </div>
+          </div>
+          <div class="railsub">Later</div>
+          <div class="q">
+            <div class="stripe" style="background:#3a3f48"></div>
+            <div class="qin">
+              <div class="qkind"><i class="tag" style="background:#1b1e23;color:var(--fg-faint)">watch</i><i class="qage">2h</i></div>
+              <p class="qtitle">CI red on #350 for the third run</p>
+              <div class="qmeta"><span>not blocking</span></div>
+            </div>
+          </div>
+        </div>
+      </aside>
+
+      <!-- ================= THE COMPLETED TAB ================= -->
+      <main class="sit">
+        <div class="done">
+
+          <div class="dhead">
+            <h1>Completed</h1>
+            <i class="n">7 goals</i>
+            <span class="more">read once when the tab opens · not polled</span>
+          </div>
+          <p class="dnote">
+            Every goal the harness has finished, newest first — including the ones an operator has
+            already dismissed, which no other surface still shows. A row is here because the run
+            record carries a completion instant, or because its run was ended; the outcome word is
+            the standing verdict, folded once on the server.
+          </p>
+
+          <div class="grpname">Today
+            <span class="hint">delivered · concluded · fell short · abandoned</span>
+          </div>
+          <section class="card">
+            <div class="rows">
+
+              <div class="crow">
+                <span><i class="chip ok">delivered</i></span>
+                <span class="what">
+                  <b class="name">Emphasise the part a goal's plan is on</b>
+                  <span class="sub">ran 1d 3h · plan of 3 parts · assessor: every acceptance point met</span>
+                </span>
+                <span class="when" title="16 Aug 2026, 07:12 UTC">2h ago</span>
+                <span class="refs">
+                  <a class="ext ref-out" href="#" title="Open goal #345 in the tracker">#345</a>
+                  <a class="ext ref-out" href="#" title="Open pull request #346">#346</a>
+                  <a class="ext" href="#" title="claude/goal-planning-part-emphasis-vq766s">claude/goal-planning-part-emphasis</a>
+                </span>
+              </div>
+
+              <div class="crow">
+                <span><i class="chip ok">delivered</i></span>
+                <span class="what">
+                  <b class="name">Track token usage per goal, and cohort the trend by closed goal</b>
+                  <span class="sub">ran 2d 6h · plan of 4 parts · 2 pull requests</span>
+                </span>
+                <span class="when" title="16 Aug 2026, 04:38 UTC">5h ago</span>
+                <span class="refs">
+                  <!-- Still on the floor, so its page is in the world the snapshot
+                       shipped: a filled box, and the click stays in the cockpit. -->
+                  <button class="ref-goal" title="Open goal #341 — its plan, its pull requests and anything it is asking you">#341</button>
+                  <a class="ext ref-out" href="#" title="Open pull request #347">#347</a>
+                  <a class="ext ref-out" href="#" title="Open pull request #344">#344</a>
+                </span>
+              </div>
+
+              <div class="crow">
+                <span><i class="chip said">concluded</i></span>
+                <span class="what">
+                  <b class="name">Pin a session id on the stream launch so a run can be restored</b>
+                  <span class="sub">ran 4h 20m · no plan · the working agent declared it done · <i class="floorTag" title="Completed, but nobody has ended the run — it is still on the Goal Floor as well as here">on the floor</i></span>
+                </span>
+                <span class="when" title="16 Aug 2026, 00:51 UTC">9h ago</span>
+                <span class="refs">
+                  <button class="ref-goal" title="Open goal #318">#318</button>
+                  <a class="ext ref-out" href="#" title="Open pull request #319">#319</a>
+                </span>
+              </div>
+
+            </div>
+          </section>
+
+          <div class="grpname">Yesterday</div>
+          <section class="card">
+            <div class="rows">
+
+              <div class="crow faded">
+                <span><i class="chip short">fell short</i></span>
+                <span class="what">
+                  <b class="name">Reap merged branches on the integration remote</b>
+                  <span class="sub">ran 8h 05m · assessor: the reap ran, but protected branches were never excluded</span>
+                </span>
+                <span class="when" title="15 Aug 2026, 18:02 UTC">15h ago</span>
+                <span class="refs">
+                  <a class="ext ref-out" href="#" title="Open goal #322 in the tracker">#322</a>
+                  <a class="ext ref-out" href="#" title="Open pull request #327">#327</a>
+                </span>
+              </div>
+
+              <div class="crow faded">
+                <span><i class="chip gone">abandoned</i></span>
+                <span class="what">
+                  <b class="name">Sweep docs/ for links that no longer resolve</b>
+                  <span class="sub">ran 26m · never reached · ended with “ticket closed upstream, not worth restarting”</span>
+                </span>
+                <span class="when" title="15 Aug 2026, 09:44 UTC">1d ago</span>
+                <span class="refs">
+                  <a class="ext ref-out" href="#" title="Open goal #310 in the tracker">#310</a>
+                </span>
+              </div>
+
+            </div>
+          </section>
+
+          <div class="grpname">Thu 13 Aug</div>
+          <section class="card">
+            <div class="rows">
+
+              <div class="crow faded">
+                <span><i class="chip ok">delivered</i></span>
+                <span class="what">
+                  <b class="name">Split the store into one module per group of related tables</b>
+                  <span class="sub">ran 5d 2h · plan of 6 parts · 3 pull requests</span>
+                </span>
+                <span class="when" title="13 Aug 2026, 16:20 UTC">3d ago</span>
+                <span class="refs">
+                  <a class="ext ref-out" href="#" title="Open goal #297 in the tracker">#297</a>
+                  <a class="ext ref-out" href="#" title="Open pull request #301">#301</a>
+                  <a class="ext ref-out" href="#" title="Open pull request #303">#303</a>
+                  <a class="ext ref-out" href="#" title="Open pull request #305">#305</a>
+                </span>
+              </div>
+
+              <div class="crow faded">
+                <span><i class="chip said">concluded</i></span>
+                <span class="what">
+                  <b class="name">Questionnaire modal loses focus after a submit</b>
+                  <span class="sub">ran 51m · no plan · rolled into #301 · no pull request of its own</span>
+                </span>
+                <span class="when" title="13 Aug 2026, 11:07 UTC">3d ago</span>
+                <!-- The slot is drawn even with one reference in it: a rule that
+                     appears on some rows and not others reads as ragged. -->
+                <span class="refs">
+                  <a class="ext ref-out" href="#" title="Open goal #289 in the tracker">#289</a>
+                </span>
+              </div>
+
+            </div>
+          </section>
+
+          <p class="empty" style="padding-left:2px">
+            That is all of them — 7 runs, all-time. No pagination: the record is one row per goal the
+            fleet has ever worked, and a fleet that has outgrown one screen of them has outgrown this
+            page's shape, not its page size.
+          </p>
+
+        </div>
+      </main>
+    </div>
+  </div>
+  </div>
+
+  <!-- ================= ANNOTATIONS ================= -->
+  <div class="notes">
+
+    <div class="note span2">
+      <h2>The two open questions the ticket left for planning</h2>
+      <p>
+        <b class="q">What counts as a completed goal, given the verdict tables and the exclusion matrix?</b>
+        Neither a delivery nor any other standing verdict. The row is <code>issue_runs</code>, whose
+        <code>completed_at</code> is stamped the first pulse <code>isGoalComplete</code> holds and is never
+        cleared — so the list cannot lose a goal retroactively when an assessor's shortfall deletes the
+        delivery row it was keyed on (<code>VERDICT_EXCLUSIONS</code>, <code>src/store/verdicts.ts</code>),
+        and it still holds the three goals that finish without a delivery at all: a written retrospective,
+        the agent's own <code>done</code>, and a decomposition whose every part rolled up. A shortfall is
+        therefore <b>listed, not excluded</b> — it is history, and the outcome word says which kind. The
+        predicate is <code>completedAt !== null || dismissedAt !== null</code>, and nothing in the route
+        re-implements <code>isGoalComplete</code>: a second definition of “finished” is how this tab and
+        the dispatcher come to disagree.
+      </p>
+      <p>
+        <b class="q">Pagination, or all of them?</b>
+        All of them, and the count is stated at the head so the answer is visible rather than assumed.
+        The route is fetched on open rather than polled, so the cost is one read per visit — the argument
+        that already put the work graph on its own route. A limit is the next change, not this one, and it
+        arrives as a <code>Place</code> field so a shared link still names the page someone was on.
+      </p>
+    </div>
+
+    <div class="note">
+      <h2>The row</h2>
+      <ul>
+        <li><b>Outcome first, in a fixed column.</b> Four words — <i>delivered</i>, <i>concluded</i>,
+          <i>fell short</i>, <i>abandoned</i> — folded on the server from
+          <code>resolveIssueConclusion</code> plus the delivery and shortfall rows. The browser renders a
+          word; a second implementation of a precedence rule is a second opinion about it.</li>
+        <li><b>The title is not a control.</b> A dismissed run is not in the snapshot's issue list, so a
+          goal page keyed on it would render empty. The row names the goal and the reference slot is the
+          way there — which is also why no reference sits inside a button here.</li>
+        <li><b>The sub-line answers “what was this run”</b> — how long it ran, whether it had a plan, and
+          the assessor's summary or the operator's dismissal note where there is one.</li>
+        <li><b>The instant is relative, with the absolute one on hover.</b> Newest first, grouped by the
+          day it completed; the grouping is presentation only and holds no state.</li>
+      </ul>
+    </div>
+
+    <div class="note">
+      <h2>References, and the sharp edge under them</h2>
+      <ul>
+        <li>Three marks, unchanged from the cockpit's vocabulary: a <b>box</b> is a place you can go, a
+          <b>fill</b> means it stays in the cockpit, an <b>arrow</b> means it leaves. A branch keeps the
+          arrow and drops the box.</li>
+        <li>Almost every reference here <b>leaves</b>, and that is correct: a goal this tab remembers left
+          the world long ago, so the tracker is the only destination that exists. The filled tokens above
+          are the two runs still on the floor.</li>
+        <li>The edge: <code>&lt;Ref&gt;</code> resolves against the <code>RefLinks</code> world the
+          <i>shell</i> provides, which holds the snapshot's map — and this route ships its own URLs,
+          resolved off the connector, because <code>buildRefUrls</code> is built from the world these rows
+          have left. A panel that drew <code>&lt;Ref&gt;</code> without merging its map would render every
+          reference as plain text: rows that look right and are dead ends. The fix is a nested provider in
+          <code>refs.tsx</code> that merges over the shell's map and keeps its
+          <code>openGoal</code>/<code>hasGoal</code>.</li>
+      </ul>
+    </div>
+
+    <div class="note">
+      <h2>Where the pieces go</h2>
+      <ul>
+        <li><b>Route:</b> <code>GET /api/completed</code> in a new <code>src/server/routes/completed.ts</code>,
+          wrapped in <code>checked(...)</code>, registered in <code>ROUTE_MODULES</code>; fetched on open,
+          rate-limited, shipping its own <code>refUrls</code> — the <code>/api/work</code> shape.</li>
+        <li><b>Wire:</b> <code>CompletedGoalsPayload</code> in <code>src/wire.ts</code>, beside
+          <code>WorkRootsPayload</code>.</li>
+        <li><b>Place:</b> <code>'completed'</code> joins <code>ConsoleTab</code>, so
+          <code>TAB_LABEL</code> and <code>tabBody</code>'s switch are compile-checked and
+          <code>test/console.test.ts</code> catches the nav — and, the one site nothing checks,
+          <code>TABS</code> in <code>web/src/cockpit/place.ts</code>, without which a shared
+          <code>?tab=completed</code> silently reads as the overview.</li>
+        <li><b>Panel:</b> <code>web/src/components/CompletedPanel.tsx</code>.</li>
+        <li><b>Specs, same change:</b> a tab section in <code>docs/spec/17-cockpit.md</code> stating it is a
+          lens and is fetched rather than polled, its value in the address-bar table, and the route's entry
+          in <code>docs/spec/16-http-api.md</code>.</li>
+      </ul>
+    </div>
+
+    <div class="note">
+      <h2>What is deliberately not here</h2>
+      <ul>
+        <li><b>No filter and no search.</b> Either would be state, and state belongs on <code>Place</code>;
+          shipping one in a <code>useState</code> is the bug this ticket names. If a filter is wanted it is
+          a query parameter, like <code>collapsed</code>.</li>
+        <li><b>No mutation.</b> No un-dismiss, no re-open, no verdict toggle — a history you can edit from
+          is not a history.</li>
+        <li><b>Nothing about how a goal becomes complete.</b> <code>isGoalComplete</code>,
+          <code>runsToRecord</code>, the verdict matrix and <code>dismissIssueRun</code> are read, none is
+          changed. This is a lens, and no rule under <code>src/dispatcher/</code> learns about it.</li>
+      </ul>
+    </div>
+
+    <div class="note span2">
+      <h2>Two states that do not fit in the picture above</h2>
+      <div class="states">
+        <div class="state">
+          <h3>Nothing finished yet</h3>
+          <section class="card">
+            <p class="empty">Nothing has finished yet — a goal appears here the first pulse the harness
+              sees it complete, and stays after you end its run.</p>
+          </section>
+        </div>
+        <div class="state">
+          <h3>Reading the record</h3>
+          <section class="card">
+            <p class="empty">Reading the record…</p>
+          </section>
+          <p style="margin:8px 0 0;font-size:12px;color:var(--fg-faint);line-height:1.55">
+            The same wording the work tree uses while its subtree is in flight — one fetch on open, so this
+            is the only moment the tab is empty for a reason other than there being nothing to show.
+          </p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
