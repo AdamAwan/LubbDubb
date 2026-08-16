@@ -120,7 +120,7 @@ A tracker issue or work item — the thing that becomes a PR.
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `number`, `title`, `body` | Identity and content.                                                                                                                      |
 | `labels`                  | All labels/tags. Drives the watch/ignore gate and label-encoded priority.                                                                  |
-| `labelsAddedByViewer?`    | The subset the authenticated viewer added. `undefined` when authorship is not tracked. Read only when `issuePickupRequireOwnLabel` is on.  |
+| `labelsAddedByViewer?`    | The subset the authenticated viewer added. `undefined` when authorship is not tracked. Read instead of `labels` when `userId` is set.      |
 | `state`                   | `open` \| `closed` — collapsed.                                                                                                            |
 | `workItemState?`          | The provider's **native** workflow state (e.g. Azure `System.State`: "New"/"Ready"/"In Review"). `undefined` for GitHub and the fake.      |
 | `issueType?`              | The provider's **native** item type (Azure `System.WorkItemType`: "Feature"/"User Story"/"Bug"). `undefined` for GitHub and the fake.      |

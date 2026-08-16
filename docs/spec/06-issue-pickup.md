@@ -74,16 +74,16 @@ own structure.
 
 Assembled once in `src/system.ts` from config and handed to whichever dispatcher is selected:
 
-| Field             | From config                  | Effect                                                                               |
-| ----------------- | ---------------------------- | ------------------------------------------------------------------------------------ |
-| `watchLabel`      | derived from `labelPrefix`   | Opt-in gate. Empty = gate off.                                                       |
-| `ignoreLabel`     | derived from `labelPrefix`   | Explicit exclusion. Empty = gate off.                                                |
-| `requireOwnLabel` | `issuePickupRequireOwnLabel` | Read `labelsAddedByViewer` instead of `labels` for the watch check.                  |
-| `priorityLabels`  | `issuePriorityLabels`        | Label → weight.                                                                      |
-| `defaultPriority` | `issueDefaultPriority`       | Weight when no label matches.                                                        |
-| `pickupStates`    | `issuePickupStates`          | Allowed provider-native workflow states.                                             |
-| `containerTypes`  | `issueContainerTypes`        | Item types that are never worked. Unset falls back to the default pair; `[]` is off. |
-| `inReviewState`   | `issueInReviewState`         | The state rule `work-item-in-review` parks an item in.                               |
+| Field             | From config                | Effect                                                                               |
+| ----------------- | -------------------------- | ------------------------------------------------------------------------------------ |
+| `watchLabel`      | derived from `labelPrefix` | Opt-in gate. Empty = gate off.                                                       |
+| `ignoreLabel`     | derived from `labelPrefix` | Explicit exclusion. Empty = gate off.                                                |
+| `requireOwnLabel` | `userId` being set         | Read `labelsAddedByViewer` instead of `labels` for the watch check.                  |
+| `priorityLabels`  | `issuePriorityLabels`      | Label → weight.                                                                      |
+| `defaultPriority` | `issueDefaultPriority`     | Weight when no label matches.                                                        |
+| `pickupStates`    | `issuePickupStates`        | Allowed provider-native workflow states.                                             |
+| `containerTypes`  | `issueContainerTypes`      | Item types that are never worked. Unset falls back to the default pair; `[]` is off. |
+| `inReviewState`   | `issueInReviewState`       | The state rule `work-item-in-review` parks an item in.                               |
 
 A bare `new RuleDispatcher()` takes an empty policy, which means no gate and flat priority — the
 act-on-everything behaviour unit tests rely on.
@@ -184,7 +184,7 @@ Two things make this the correct gate:
 - **`openPrs` must be every open PR**, including the ones the `-ignore` tag hid from the dispatch
   world. Both real providers list only open PRs, so absence otherwise reads as "merged".
 
-Not covered: a `prAuthor` filter narrows the provider's PR list, so a linked PR opened by someone else
+Not covered: `userId` narrows the provider's PR list, so a linked PR opened by someone else
 is invisible here and reads as gone.
 
 ## The per-issue verdict
@@ -194,22 +194,22 @@ checked in the same order rule `issue-pickup` applies them, so it predicts what 
 guessing. `buildStateSnapshot` attaches it to each issue as `pickup`, and the cockpit renders it as a
 chip.
 
-| Status      | Meaning                                                                            |
-| ----------- | ---------------------------------------------------------------------------------- |
-| `done`      | Closed, and the harness holds no run at it.                                        |
-| `retained`  | Closed, but its run lives until the operator dismisses it.                         |
+| Status      | Meaning                                                                              |
+| ----------- | ------------------------------------------------------------------------------------ |
+| `done`      | Closed, and the harness holds no run at it.                                          |
+| `retained`  | Closed, but its run lives until the operator dismisses it.                           |
 | `planning`  | In the plan funnel — a plan is owed, or the issue has one and its parts are running. |
-| `has_pr`    | An open PR resolves it; the PR rules own it now.                                   |
-| `active`    | A task on this origin is queued / running / waiting on you.                        |
-| `ignored`   | Carries the explicit ignore tag.                                                   |
-| `container` | A Feature/Epic — its children are the work, never it.                              |
-| `unwatched` | Not opted in, or parked by the state gate.                                         |
-| `cooldown`  | Attempted recently; waiting out the re-dispatch gap.                               |
-| `escalated` | Attempt cap spent; parked on a human.                                              |
-| `delivered` | Assessed as delivered — parked until the world or the operator says otherwise.     |
-| `assay`     | Its goal is being checked, or was found unworkable — nothing is dispatched for it. |
-| `blocked`   | Eligible, but dispatch is paused or the cap is reached.                            |
-| `eligible`  | Would be picked up next cycle.                                                     |
+| `has_pr`    | An open PR resolves it; the PR rules own it now.                                     |
+| `active`    | A task on this origin is queued / running / waiting on you.                          |
+| `ignored`   | Carries the explicit ignore tag.                                                     |
+| `container` | A Feature/Epic — its children are the work, never it.                                |
+| `unwatched` | Not opted in, or parked by the state gate.                                           |
+| `cooldown`  | Attempted recently; waiting out the re-dispatch gap.                                 |
+| `escalated` | Attempt cap spent; parked on a human.                                                |
+| `delivered` | Assessed as delivered — parked until the world or the operator says otherwise.       |
+| `assay`     | Its goal is being checked, or was found unworkable — nothing is dispatched for it.   |
+| `blocked`   | Eligible, but dispatch is paused or the cap is reached.                              |
+| `eligible`  | Would be picked up next cycle.                                                       |
 
 The closed arm splits on the run, not on the tracker. A close is the tracker's answer and a run
 outlives it (issue #234), so `done` is kept for the case it was always right about — a closed ticket
@@ -443,7 +443,7 @@ decomposes the vagueness and an operator is asked to approve the decomposition o
 could answer — and the first signal that anything was wrong is an agent spending its attempt cap and escalating in a
 way that reads as its own failure.
 
-The goal assay (issue #158, `src/intake/assay.ts`, config `assay.enabled`, **on by default**) is
+The goal assay (issue #158, `src/intake/assay.ts`, **unconditional**) is
 that missing gate. Rule `issue-assay` dispatches a code agent on `assay/issue/<n>` (origin `issue:<n>:assay`,
 cut from the default branch) for a watched open issue nothing has been started for, and the agent
 casts a verdict with the `assay_issue` tool. It is the mirror of the assessor: `hasPriorWork` is the
@@ -454,11 +454,11 @@ assessment — never the origins where the harness is merely deliberating (`:pla
 distinction lives in `issueOriginRole` (`src/issueOrigins.ts`); see
 [`05-dispatcher.md`](05-dispatcher.md) for what counting a planner's own task as work cost.
 
-| Verdict    | Effect                                                                                     |
-| ---------- | ------------------------------------------------------------------------------------------ |
+| Verdict    | Effect                                                                                                                          |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------- |
 | `workable` | None on scheduling, unless its **profile proposal** diverges — see below. Stored so the assay is not asked again for this text. |
-| `unclear`  | Holds the issue out of **both** rule `issue-plan` and rule `issue-pickup` while it stands. |
-| _no row_   | Holds nothing. This is what a crashed, killed or capped assayer leaves behind.             |
+| `unclear`  | Holds the issue out of **both** rule `issue-plan` and rule `issue-pickup` while it stands.                                      |
+| _no row_   | Holds nothing. This is what a crashed, killed or capped assayer leaves behind.                                                  |
 
 ### Block or inform, and why blocking is safe
 
@@ -538,7 +538,7 @@ refuse a ticket and tell only the cockpit, while the person who can end the hold
 usually not looking at it.
 
 It is mechanical bookkeeping in the sense `set_work_item_state` and the plan status comment are — so
-it is not auto-send gated and does not go through the proposal machinery, and what keeps that from
+it does not go through the proposal machinery at all, and what keeps that from
 being a licence to chatter is the one-comment rule. It is written only when the body changes, the
 comment ref is dropped when the ticket's text changes (a genuinely new question gets a new comment
 rather than overwriting the record of the old one), and a hold that has ended is **retracted** on the

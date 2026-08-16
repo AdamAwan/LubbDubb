@@ -19,7 +19,7 @@ import { overridePath } from '../web/src/components/PromptsTab.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { WorldSnapshot } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { spentPlannerAttempts } from './support/plans.js';
+import { pastTheFunnel } from './support/plans.js';
 
 function tmpDir(): string {
   return mkdtempSync(join(tmpdir(), 'lubbdubb-prompts-'));
@@ -231,7 +231,7 @@ test('a custom template flows through the dispatcher into the dispatched prompt'
         { issues: [{ id: 'i1', number: 12, title: 'T', body: 'B', state: 'open', labels: [], linkedPrNumber: null }] },
         // The funnel has failed open, so the rule under test is the pickup
         // rather than the planner in front of it.
-        { recentDecisions: spentPlannerAttempts(12) },
+        { recentDecisions: pastTheFunnel(12) },
       ),
     );
     assert.equal(actions[0]?.type, 'dispatch_code_agent');

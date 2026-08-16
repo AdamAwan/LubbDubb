@@ -36,8 +36,22 @@ export class FakeIssuesIntegration
 
   constructor(private readonly world: FakeWorldStore) {}
 
+  /**
+   * Every label reads as one the viewer added.
+   *
+   * The ownership gate (`userId`) narrows pickup to watch tags *you* applied, and
+   * it reads `labelsAddedByViewer` rather than `labels`. The real providers resolve
+   * that from tag history; a fake world has exactly one actor, so mirroring the
+   * labels is the honest answer rather than a convenience — there is nobody else in
+   * here to have added them.
+   *
+   * Populated unconditionally, not behind a flag the fake would have to be told
+   * about: leaving it unset makes the gate resolve every fake issue's labels to the
+   * empty list, and *nothing is ever picked up* — silently, since an issue that is
+   * simply not eligible looks exactly like one nothing has got to yet.
+   */
   async snapshot(): Promise<WorldSlice> {
-    return { issues: this.world.read().issues };
+    return { issues: this.world.read().issues.map((i) => ({ ...i, labelsAddedByViewer: i.labels })) };
   }
 
   handles(kind: InjectableEvent['kind']): boolean {

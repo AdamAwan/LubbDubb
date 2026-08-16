@@ -12,7 +12,7 @@ import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { Store } from '../src/store/store.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { failPlanningOpen, spentPlannerAttempts } from './support/plans.js';
+import { failPlanningOpen, pastTheFunnel } from './support/plans.js';
 
 // The "Up next" queue (issue #69): the dispatcher's ordered pickup plan with the
 // headroom cut — above-cut candidates dispatch this cycle, below-cut ones wait
@@ -29,7 +29,7 @@ function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {})
     // The funnel has failed open on every issue in these worlds: it is
     // unconditional, so an issue it is still working is one pickup is narrowed
     // away from, and nothing downstream of pickup would fire for it.
-    recentDecisions: (world.issues ?? []).flatMap((i) => spentPlannerAttempts(i.number)),
+    recentDecisions: (world.issues ?? []).flatMap((i) => pastTheFunnel(i.number)),
     agentHeadroom: 3,
     ...over,
   };
@@ -274,7 +274,7 @@ test('an override re-orders a held item but never un-holds it', async () => {
         // Pin the cooling-down PR to the very top.
         priorityOverrides: [{ origin: 'pr:42:mergeable', rank: 0 }],
         recentDecisions: [
-          ...spentPlannerAttempts(5),
+          ...pastTheFunnel(5),
           {
             id: 'd1',
             cycleId: 'c',
@@ -318,9 +318,6 @@ function testConfig(over: Record<string, unknown> = {}) {
     // Pinned off: all four default **on** now, and this file is about the queue —
     // a planner ahead of each pickup would change every origin these assertions
     // read. Each has its own tests.
-    assessment: { enabled: false } as never,
-    assay: { enabled: false } as never,
-    retrospective: { enabled: false } as never,
   });
 }
 
@@ -370,9 +367,6 @@ test('a priority override holds after the next pulse and after a restart', async
       startPaused: true,
       // Pinned off, as in this file's other config: they default on, and each
       // would add a queue item in front of the two pickups under test.
-      assessment: { enabled: false } as never,
-      assay: { enabled: false } as never,
-      retrospective: { enabled: false } as never,
     });
 
   const system = buildSystem(cfg(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });

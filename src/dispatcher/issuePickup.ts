@@ -12,7 +12,7 @@ import type {
 } from '../types.js';
 import { deliveryHold } from '../delivery/delivery.js';
 import { containerPickupReason, isContainerIssue } from '../issueRelations.js';
-import { assayHold, assayOrigin, hasWorkStarted, isAssayed, type AssayPolicy } from '../intake/assay.js';
+import { assayHold, assayOrigin, hasWorkStarted, isAssayed } from '../intake/assay.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatchCooldown.js';
 import { issueOrigin, planOrigin, plannerVerdict, resolvePlanRoute } from '../plans/planning.js';
 import { liveParts, planProgress } from '../plans/parts.js';
@@ -245,12 +245,6 @@ export interface IssuePickupContext {
   assays?: IssueAssay[];
   assaySignals?: WorldEvent[];
   /**
-   * Whether the goal assay is on. Needed as well as the verdicts because the chip
-   * reports the *pending* case too — an issue rule `issue-assay` will assay next cycle is not
-   * eligible, and saying so is the difference between a queue and a silence.
-   */
-  assay?: AssayPolicy;
-  /**
    * The harness's runs at each goal, so a closed issue can be told from a closed
    * *ticket* (issue #234). Absent = nothing retained, which reads exactly as it did
    * before runs existed.
@@ -453,7 +447,6 @@ function assayFor(issue: Issue, ctx: IssuePickupContext): string | null {
   const stored = ctx.assays?.find((a) => a.originRef === origin) ?? null;
   const held = assayHold(stored, issue, { signals: ctx.assaySignals });
   if (held) return held;
-  if (!ctx.assay?.enabled) return null;
   // Same preconditions rule `issue-assay` applies, in its order.
   if (isAssayed(stored, issue)) return null;
   if (hasWorkStarted(issue.number, ctx.tasks)) return null;

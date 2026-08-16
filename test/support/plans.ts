@@ -2,6 +2,7 @@ import type { Decision, Plan } from '../../src/types.js';
 import type { Store } from '../../src/store/store.js';
 import { DEFAULT_COOLDOWN } from '../../src/dispatcher/dispatchCooldown.js';
 import { planOrigin } from '../../src/plans/planning.js';
+import { assayOrigin } from '../../src/intake/assay.js';
 
 /**
  * The state in which rule `issue-pickup` works an issue: **the funnel gave up on
@@ -42,12 +43,67 @@ export function spentPlannerAttempts(issueNumber: number, at = '2026-07-25T00:00
 }
 
 /**
+ * The assay's half of the same story: **the goal assay gave up on it.**
+ *
+ * The assay is unconditional and sits in front of the planner, so a fresh issue is
+ * one an assayer is owed and every rule behind it is narrowed away from. Spending
+ * its attempt cap is the fail-open arm — deliberately the same shape as the
+ * planner's above, because it is the same statement, and a verdict row would say
+ * something stronger (that a goal *was* judged) than a test downstream of the
+ * funnel means.
+ */
+export function spentAssayAttempts(issueNumber: number, at = '2026-07-25T00:00:00.000Z'): Decision[] {
+  const origin = assayOrigin(issueNumber);
+  return Array.from({ length: DEFAULT_COOLDOWN.maxAttempts }, (_, i) => ({
+    id: `dec_assay_${issueNumber}_${i}`,
+    cycleId: `cyc_assay_${issueNumber}_${i}`,
+    action: {
+      type: 'dispatch_code_agent' as const,
+      branch: `assay/issue/${issueNumber}`,
+      title: `Assay issue #${issueNumber}`,
+      prompt: 'assay it',
+      originRef: origin,
+      rule: 'issue-assay',
+      reason: `Issue #${issueNumber} needs a goal check.`,
+    },
+    outcome: 'executed' as const,
+    detail: '',
+    rule: 'issue-assay',
+    admission: null,
+    createdAt: at,
+  }));
+}
+
+/**
+ * Everything in front of rule `issue-pickup`, failed open at once.
+ *
+ * The funnel is two gates deep now — assay, then plan — and a test about anything
+ * downstream of pickup wants to be past both. Naming them together keeps the next
+ * gate from having to be found in twenty test files one failure at a time.
+ */
+export function pastTheFunnel(issueNumber: number, at = '2026-07-25T00:00:00.000Z'): Decision[] {
+  return [...spentAssayAttempts(issueNumber, at), ...spentPlannerAttempts(issueNumber, at)];
+}
+
+/**
  * The same fact, persisted, for a test that runs a whole cycle rather than calling
  * a rule directly — the decisions are read back off the store there rather than
- * handed to a context.
+ * handed to a context. Covers both gates, for {@link pastTheFunnel}'s reason.
  */
 export function failPlanningOpen(store: Store, issueNumber: number): void {
-  for (const decision of spentPlannerAttempts(issueNumber)) {
+  record(store, pastTheFunnel(issueNumber));
+}
+
+/**
+ * Just the assay's gate, persisted — for a whole-cycle test that wants the
+ * *planner* to run, which the assay would otherwise pre-empt.
+ */
+export function failAssayOpen(store: Store, issueNumber: number): void {
+  record(store, spentAssayAttempts(issueNumber));
+}
+
+function record(store: Store, decisions: Decision[]): void {
+  for (const decision of decisions) {
     store.recordDecision({ cycleId: decision.cycleId, action: decision.action, outcome: 'executed', detail: '' });
   }
 }

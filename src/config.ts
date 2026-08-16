@@ -4,33 +4,9 @@ import type { IntegrationSelection } from './integrations/integration.js';
 import { DEFAULT_CONTAINER_TYPES } from './issueRelations.js';
 import { DEFAULT_PLANNING, type PlanningPolicy } from './plans/planning.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from './validation/policy.js';
-import { DEFAULT_ASSESSMENT, type AssessmentPolicy } from './delivery/assessment.js';
-import { DEFAULT_ASSAY, type AssayPolicy } from './intake/assay.js';
-import { DEFAULT_RETROSPECTIVE, type RetrospectivePolicy } from './retro/retro.js';
 import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
 import { validateAgentModels, type AgentModels } from './agents/modelPolicy.js';
-
-/** Operator control over the MCP tool channel. See {@link Config.mcp}. */
-interface McpPolicy {
-  /**
-   * Wire the tool channel into agent launches. Off leaves every agent on the
-   * sentinels and the `plan.json` file path — the same floor a failed socket
-   * degrades to, so this is an escape hatch rather than a distinct mode.
-   */
-  enabled: boolean;
-  /**
-   * The permission backstop (issue #130 phase B). When on, a tool call the
-   * `agentAllowedTools` allow-list doesn't cover is routed to the operator via
-   * Claude Code's `--permission-prompt-tool` — it files an escalation in "Needs
-   * you" and blocks the *same* live agent until the operator allows or denies,
-   * rather than the agent hanging on a prompt no human can answer. Off falls back
-   * to Claude's default headless behaviour for an un-allowlisted tool (a silent
-   * deny). Gated by {@link McpPolicy.enabled} — the tool lives on the MCP server.
-   * Defaults on. See `docs/spec/10-agent-runtimes.md`.
-   */
-  permissionEscalation: boolean;
-}
 
 /**
  * Central configuration. Everything the operator can tune lives here.
@@ -51,8 +27,33 @@ export interface Config {
   startPaused: boolean;
   /** PTY prompt substrings the harness may auto-answer instead of escalating. */
   whitelistedApprovals: WhitelistRule[];
-  /** Confidence-gated auto-send policy for side-effectful actions. Off by default. */
-  autoSend: AutoSendConfig;
+  /**
+   * Who *you* are, to every provider the harness talks to — the one identity the
+   * harness acts on behalf of, and the answer to every "me" the config used to ask
+   * about separately.
+   *
+   * It replaces six keys that were all the same fact spelled per provider and per
+   * use (`issuePickupRequireOwnLabel`, both `defaultAssignee`s, both
+   * `filters.prAuthor`s, and `filters.workItemAssignedTo`). Set it and three gates
+   * turn on together, because they are one intent — *this harness works my
+   * queue*:
+   *
+   * - **Ownership.** The `${labelPrefix}-watch` tag only counts if you added it, so
+   *   nobody else can tag an item onto the fleet.
+   * - **Assignment.** Tickets the harness *files* are assigned to you.
+   * - **Authorship.** Only pull requests you opened are surfaced.
+   *
+   * One string rather than one per provider because one project is worked at a
+   * time and each project carries its own config file: the identity that is
+   * correct is the one belonging to whichever provider `integrations` selects — a
+   * GitHub login where that is `github`, an Azure UPN where that is `azure`.
+   *
+   * Unset, all three gates are off: any tagger counts, filed tickets go
+   * unassigned, and every open pull request is surfaced. That is the first-run and
+   * test posture, and it is why this is optional rather than required — the `fake`
+   * provider resolves no identity at all.
+   */
+  userId?: string;
   /**
    * Which provider fulfils each integration capability. The swap switch: point a
    * capability at a different provider (e.g. `sourceControl: "github"`) to change
@@ -83,15 +84,6 @@ export interface Config {
    * so `lubbdubb-ignore` keeps its historical meaning as the PR exclusion tag.
    */
   labelPrefix: string;
-  /**
-   * Tighten the issue *watch* gate so `${labelPrefix}-watch` only counts if *you*
-   * (the authenticated account the provider runs as) added it — a tag someone else
-   * adds is ignored. Stops another user from tagging a work item / issue to get an
-   * agent onto it. Off by default (any tagger counts). Only meaningful with a real
-   * provider (`github`/`azure`) that can resolve tag authorship; the `fake` provider
-   * doesn't track it, so nothing passes the gate when this is on.
-   */
-  issuePickupRequireOwnLabel: boolean;
   /**
    * Label → priority weight for ordering issue pickup: when headroom is limited,
    * higher-weight issues are dispatched first. Replaced wholesale by an override
@@ -139,38 +131,6 @@ export interface Config {
    */
   planning: PlanningPolicy;
   /**
-   * The assessor (rule `issue-assess`) — the harness asking whether an issue that has had work
-   * and has nothing in flight is actually finished, and parking it as `delivered`
-   * if so. **On by default**, with the cost stated: it spends an agent per assessed
-   * issue and its `delivered` verdict gates pickup. Off, no assessor is dispatched,
-   * no verdict is written, and rule `issue-pickup` behaves as it did before the assessor
-   * existed — which on GitHub means a merged PR's issue is picked up again.
-   * Deep-merged. Only the `rule` dispatcher implements it.
-   */
-  assessment: AssessmentPolicy;
-  /**
-   * The goal assay (rule `issue-assay`) — the harness asking whether a fresh issue's *text*
-   * can be worked from at all, before anything is dispatched against it (issue
-   * #158). **On by default**, with the cost named rather than discovered: with
-   * `planning`, `assessment`, this and the retrospective all on, one issue can
-   * spend an assayer, a planner, its part agents, an assessor and a writer. Only
-   * an explicit `unclear` verdict holds anything, and it ends the moment the
-   * ticket is edited or anyone comments. Off, no assayer is dispatched and every
-   * gate in front of an issue behaves as it did. Deep-merged. Only the `rule`
-   * dispatcher implements it.
-   */
-  assay: AssayPolicy;
-  /**
-   * The retrospective (rule `issue-retro`) — one desk agent writing up a goal the harness has
-   * parked as delivered: what shipped, and what came out of the process of
-   * shipping it, from the issue's scratchpad plus the record the harness kept.
-   * **On by default**, unlike its three neighbours above: it runs once, after the
-   * work is over, and it gates nothing, so it can neither park an issue nor delay
-   * anything. Off, the Goal Floor's Manifest station reads *Nothing written* and
-   * no agent is spent. Deep-merged. Only the `rule` dispatcher implements it.
-   */
-  retrospective: RetrospectivePolicy;
-  /**
    * The validation plan (`src/validation/`) — how anyone checks the *goal* was
    * met, as steps a person or an agent runs rather than as a paragraph nobody
    * ever executes. **On by default**, unlike the three funnels above, because it
@@ -179,18 +139,6 @@ export interface Config {
    * outstanding says so. Off leaves the surface out entirely. Deep-merged.
    */
   validation: ValidationPolicy;
-  /**
-   * The typed tool channel back to the harness — the `lubbdubb` MCP server every
-   * spawned agent is wired to (issue #108).
-   *
-   * **On by default**, because it is purely additive: it adds tools an agent may
-   * use, and changes nothing about how one is dispatched, parked or finished. The
-   * sentinels remain the floor everything degrades to, and the `plan.json` side
-   * channel stays wired, so turning this off — or having it fail to start — leaves
-   * behaviour byte-for-byte as it was. That is the opposite trade from `planning`,
-   * which is off by default precisely because it *does* change what the fleet does.
-   */
-  mcp: McpPolicy;
   /**
    * How far back a provider looks for pull requests that have *left* the open set,
    * so a merged or abandoned PR is observed rather than inferred from its
@@ -225,21 +173,6 @@ export interface Config {
    * forever. Defaults to 7 days; `0` disables pruning entirely (supported).
    */
   upNextOverrideTtlMs: number;
-  /**
-   * How long a pull request may sit on a reviewer before the cockpit puts an age
-   * on its row. Below this it draws nothing, because every open pull request is
-   * waiting on somebody and a number on all of them says nothing about any.
-   *
-   * It changes **display only**: nothing dispatches, escalates, files a task or
-   * enters the "Needs you" queue at this or any other threshold. On a team the
-   * reviewer is somebody else, and a queue of other people's obligations is what
-   * makes an inbox stop being read.
-   *
-   * Defaults to 2 days; `0` shows the age from the first pulse a pull request is
-   * observed waiting, which is the setting for watching the mechanism rather than
-   * the reviews.
-   */
-  reviewReminderMs: number;
   /**
    * How agents are launched.
    * - `stream`: real Claude Code over headless stream-JSON (`-p --output-format
@@ -407,21 +340,6 @@ export interface Config {
    * anywhere, and a wrong guess silently mis-bases work.
    */
   defaultBranch: string;
-  /**
-   * Delete the branch behind a pull request once the harness observes it **merged**
-   * — the worktree and local ref, then the branch on the remote. On by default:
-   * leaving a dead branch on both sides of every landed PR is an omission rather
-   * than a policy, and a long-running deployment accumulates one per merge forever.
-   *
-   * Set `false` on a repository where a merged branch is somebody else's
-   * expectation (a deploy pipeline that reads it, a mirror that tracks it). Nothing
-   * else changes: the reap writes nothing that another rule reads.
-   *
-   * Only the harness's own pull requests are ever reaped, on the same
-   * `filters.prAuthor` test the naming convention uses, and never a branch another
-   * open PR still targets. → `src/branchReap.ts`.
-   */
-  reapMergedBranches: boolean;
   /** SQLite file. */
   dbPath: string;
   /** HTTP/WS port. */
@@ -462,18 +380,6 @@ export interface GitHubConfig {
   owner: string;
   /** Repository name. */
   repo: string;
-  /**
-   * Login that issues **the harness files** are assigned to — the operator who
-   * asked for them. Rides in the tracker coordinates every filing prompt renders
-   * (`src/ticketAssignment.ts`); unset means filed unassigned, which is in
-   * nobody's queue. Not a filter: it never narrows what is picked up.
-   */
-  defaultAssignee?: string;
-  /** Optional filters narrowing what the harness picks up. */
-  filters?: {
-    /** Only surface PRs opened by this login. Unset = all open PRs. */
-    prAuthor?: string;
-  };
 }
 
 export interface AzureDevOpsConfig {
@@ -484,20 +390,16 @@ export interface AzureDevOpsConfig {
   /** Git repository name within the project. */
   repository: string;
   /**
-   * uniqueName (UPN) that work items **the harness files** are assigned to.
-   * Defaults to `filters.workItemAssignedTo` when unset: where that filter is
-   * set, an item filed to anyone else is not surfaced by the harness that filed
-   * it. → `src/ticketAssignment.ts`.
+   * Optional filters narrowing what the harness picks up.
+   *
+   * Identity-based narrowing is **not** here: who the harness acts as is
+   * {@link Config.userId}, which drives PR authorship and work-item assignment for
+   * every provider at once. What remains is the one filter that is about the
+   * *tracker's* shape rather than about you.
    */
-  defaultAssignee?: string;
-  /** Optional filters narrowing what the harness picks up. */
   filters?: {
-    /** Only surface PRs opened by this uniqueName (UPN). Unset = all active PRs. */
-    prAuthor?: string;
     /** Only surface work items carrying this tag. Unset = all open work items. */
     workItemTag?: string;
-    /** Only surface work items assigned to this uniqueName (UPN). Unset = all assignees. */
-    workItemAssignedTo?: string;
   };
   /**
    * Which branch-policy kinds become CI checks, and how.
@@ -522,47 +424,23 @@ export interface WhitelistRule {
   response: string;
 }
 
-/**
- * When may the harness take a side-effectful action (e.g. posting a PR reply)
- * on its own, instead of drafting it and escalating for sign-off?
- *
- * Disabled by default: with `enabled: false` the harness never sends
- * autonomously — it always drafts and escalates, preserving the v1 guarantee
- * that nothing side-effectful leaves without an explicit human action.
- */
-export interface AutoSendConfig {
-  /** Master switch. Off by default. */
-  enabled: boolean;
-  /** Minimum dispatcher confidence (0..1) required to send instead of escalate. */
-  confidenceThreshold: number;
-  /** Which action types are eligible for auto-send (e.g. `["reply_on_pr"]`). */
-  allowedActions: string[];
-}
-
 const DEFAULTS: Config = {
   heartbeatIntervalMs: 5 * 60 * 1000,
   maxConcurrentAgents: 3,
   startPaused: false,
   whitelistedApprovals: [],
-  autoSend: { enabled: false, confidenceThreshold: 0.85, allowedActions: ['reply_on_pr'] },
   integrations: { sourceControl: 'fake', issues: 'fake' },
   labelPrefix: 'lubbdubb',
-  issuePickupRequireOwnLabel: false,
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
   issueContainerTypes: [...DEFAULT_CONTAINER_TYPES],
   // Each policy's own module owns the operator default; the dispatcher's fallback
   // for an *omitted* policy is a separate answer (off) and lives with the rules.
   planning: DEFAULT_PLANNING,
-  assessment: DEFAULT_ASSESSMENT,
-  assay: DEFAULT_ASSAY,
-  retrospective: DEFAULT_RETROSPECTIVE,
   validation: DEFAULT_VALIDATION,
-  mcp: { enabled: true, permissionEscalation: true },
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   ci: { checks: [] },
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
-  reviewReminderMs: 2 * 24 * 60 * 60 * 1000,
   agentMode: 'stream',
   agentPermissionMode: 'acceptEdits',
   // The mechanical validate/commit/push commands a coding agent must run to take
@@ -592,7 +470,6 @@ const DEFAULTS: Config = {
   validationRoot: '.lubbdubb/validation',
   repoRoot: process.cwd(),
   defaultBranch: 'main',
-  reapMergedBranches: true,
   dbPath: '.lubbdubb/lubbdubb.sqlite',
   port: 4300,
   host: '127.0.0.1',
@@ -666,37 +543,67 @@ const REMOVED_KEYS: Readonly<Record<string, string>> = {
   dispatcher:
     'the "claude" dispatcher was removed and the rule dispatcher is the only one, so there is nothing left to select',
   steeringPriorities: 'it was only ever injected into the removed "claude" dispatcher\'s prompt and now steers nothing',
+  autoSend:
+    'the harness never acts on a pull request autonomously — a reply or a merge is always put to you as a proposal',
 };
 
 /**
- * Nested keys that used to be switches and are not any more, each with the reason.
+ * Keys that used to be switches and are not any more, each with the reason.
  *
  * These **warn and are dropped**, where {@link REMOVED_KEYS} refuses — and the
- * difference is what the operator's file is asking for. A removed top-level key
- * names behaviour that no longer exists either way, so refusing is the only
- * honest answer. `planning.enabled` and `validation.enabled` named subsystems
- * that are now unconditional, so a file setting either is asking for something
- * the harness either already does or will never do again: refusing would take a
- * running deployment down at boot over one stale line. Dropped rather than left
- * to merge into nothing, so the value cannot survive on the policy object and be
- * read by something later.
+ * difference is what the operator's file is asking for. A removed key names a
+ * capability that no longer exists on any setting, so refusing is the only honest
+ * answer. Everything here named a subsystem that is now **unconditional**, so a
+ * file setting one is asking for something the harness either already does or
+ * will never do again: refusing would take a running deployment down at boot over
+ * one stale line. Dropped rather than left to merge into nothing, so the value
+ * cannot survive on the policy object and be read by something later.
  *
  * A file asking for `false` is the case the warning is for: that deployment is
  * getting the funnel it switched off, and it has to hear so from the boot log
  * rather than from the fleet's behaviour. The entries are permanent — a config
  * written before the removal outlives the release that made it.
+ *
+ * A key is either a top-level name or one `block.key` path. Both forms are here
+ * because a block whose every field went unconditional is removed whole, and an
+ * operator's file names the block, not just the field inside it.
  */
-const RETIRED_NESTED_KEYS: Readonly<Record<string, string>> = {
+const RETIRED_KEYS: Readonly<Record<string, string>> = {
   'planning.enabled': 'the planning funnel is always on — every goal is planned',
   'validation.enabled': 'validation plans are always on',
+  'validation.desktopSkill': 'the /lubbdubb skill is always installed and refreshed when the desktop channel starts',
+  assessment: 'the assessor is always on — a goal with work behind it and nothing in flight is always assessed',
+  'assessment.enabled': 'the assessor is always on',
+  assay: 'the goal assay is always on — every fresh goal is assayed before anything is dispatched against it',
+  'assay.enabled': 'the goal assay is always on',
+  retrospective: 'the retrospective is always on — every delivered goal is written up',
+  'retrospective.enabled': 'the retrospective is always on',
+  mcp: 'the agent tool channel and its permission backstop are always on',
+  'mcp.enabled': 'the agent tool channel is always on',
+  'mcp.permissionEscalation': 'the permission backstop is always on',
+  reapMergedBranches: 'the branch behind a merged pull request of yours is always reaped',
+  reviewReminderMs: 'the cockpit ages every pull request waiting on a reviewer, with no threshold to cross',
+  issuePickupRequireOwnLabel: 'the ownership gate follows "userId" — set it, and only tags you added count',
+  'github.defaultAssignee': 'tickets the harness files are assigned to "userId"',
+  'azureDevOps.defaultAssignee': 'tickets the harness files are assigned to "userId"',
+  'github.filters': 'pull requests are filtered to the ones "userId" opened',
+  'azureDevOps.filters.prAuthor': 'pull requests are filtered to the ones "userId" opened',
+  'azureDevOps.filters.workItemAssignedTo': 'work items are filtered to the ones assigned to "userId"',
 };
 
 function dropRetiredKeys(fromFile: Partial<Config>, filePath: string): void {
-  for (const [path, why] of Object.entries(RETIRED_NESTED_KEYS)) {
-    const [block, key] = path.split('.') as [keyof Config, string];
-    const nested: unknown = fromFile[block];
-    if (typeof nested !== 'object' || nested === null || !Object.hasOwn(nested, key)) continue;
-    delete (nested as Record<string, unknown>)[key];
+  for (const [path, why] of Object.entries(RETIRED_KEYS)) {
+    // Walk to the object that owns the final segment, so a `block.key` path drops
+    // the field and a bare name drops the whole block.
+    const segments = path.split('.');
+    const key = segments.pop() as string;
+    let owner: unknown = fromFile;
+    for (const segment of segments) {
+      if (typeof owner !== 'object' || owner === null) break;
+      owner = (owner as Record<string, unknown>)[segment];
+    }
+    if (typeof owner !== 'object' || owner === null || !Object.hasOwn(owner, key)) continue;
+    delete (owner as Record<string, unknown>)[key];
     console.warn(
       `[lubbdubb] ${filePath} sets "${path}", which no longer exists — ${why}. Ignoring it; delete the key.`,
     );
@@ -722,20 +629,12 @@ function refuseRemovedKeys(fromFile: object, filePath: string): void {
  */
 function mergeLayers(lower: Partial<Config>, upper: Partial<Config>): Partial<Config> {
   const merged: Partial<Config> = { ...lower, ...upper };
-  if (lower.autoSend ?? upper.autoSend)
-    merged.autoSend = { ...DEFAULTS.autoSend, ...lower.autoSend, ...upper.autoSend };
   if (lower.integrations ?? upper.integrations)
     merged.integrations = { ...DEFAULTS.integrations, ...lower.integrations, ...upper.integrations };
   if (lower.planning ?? upper.planning)
     merged.planning = { ...DEFAULTS.planning, ...lower.planning, ...upper.planning };
-  if (lower.assessment ?? upper.assessment)
-    merged.assessment = { ...DEFAULTS.assessment, ...lower.assessment, ...upper.assessment };
-  if (lower.assay ?? upper.assay) merged.assay = { ...DEFAULTS.assay, ...lower.assay, ...upper.assay };
-  if (lower.retrospective ?? upper.retrospective)
-    merged.retrospective = { ...DEFAULTS.retrospective, ...lower.retrospective, ...upper.retrospective };
   if (lower.validation ?? upper.validation)
     merged.validation = { ...DEFAULTS.validation, ...lower.validation, ...upper.validation };
-  if (lower.mcp ?? upper.mcp) merged.mcp = { ...DEFAULTS.mcp, ...lower.mcp, ...upper.mcp };
   if (lower.auth ?? upper.auth) merged.auth = { ...DEFAULTS.auth, ...lower.auth, ...upper.auth };
   return merged;
 }
@@ -786,26 +685,15 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
 
   resolveRootPaths(merged);
 
-  // autoSend is a nested object: deep-merge it so an override can set just one
-  // field (e.g. only `enabled`) without dropping the defaults for the rest.
-  merged.autoSend = { ...DEFAULTS.autoSend, ...overrides.autoSend };
-
-  // integrations is a nested per-capability map: deep-merge it too, so an
-  // override can swap just one capability's provider without having to re-list
-  // the defaults for the others.
+  // integrations is a nested per-capability map: deep-merge it, so an override
+  // can swap just one capability's provider without having to re-list the
+  // defaults for the others.
   merged.integrations = { ...DEFAULTS.integrations, ...overrides.integrations };
 
-  // planning is nested too — deep-merge so `{"enabled": true}` alone keeps the
-  // default part-concurrency cap instead of leaving it undefined.
+  // planning is nested too — deep-merge so `{"requireApproval": true}` alone keeps
+  // the default part-concurrency cap instead of leaving it undefined.
   merged.planning = { ...DEFAULTS.planning, ...overrides.planning };
-  merged.assessment = { ...DEFAULTS.assessment, ...overrides.assessment };
-  merged.assay = { ...DEFAULTS.assay, ...overrides.assay };
-  merged.retrospective = { ...DEFAULTS.retrospective, ...overrides.retrospective };
   merged.validation = { ...DEFAULTS.validation, ...overrides.validation };
-
-  // Same treatment for the tool channel, so `{"mcp": {}}` is the default rather
-  // than an accidental off.
-  merged.mcp = { ...DEFAULTS.mcp, ...overrides.mcp };
 
   // And for auth, so `{"auth": {"tokenFile": "..."}}` doesn't silently disable it.
   merged.auth = { ...DEFAULTS.auth, ...overrides.auth };

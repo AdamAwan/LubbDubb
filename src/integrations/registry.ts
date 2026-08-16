@@ -27,7 +27,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
       return new GitHubSourceControlIntegration({
         api,
         errors: ctx.errors,
-        prAuthor: gh.filters?.prAuthor,
+        prAuthor: ctx.config.userId,
         owner: gh.owner,
         repo: gh.repo,
         closedPrWindowMs: ctx.config.closedPrWindowMs,
@@ -38,7 +38,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
       return new AzureDevOpsSourceControlIntegration({
         api,
         errors: ctx.errors,
-        prAuthor: az.filters?.prAuthor,
+        prAuthor: ctx.config.userId,
         organization: az.organization,
         project: az.project,
         repository: az.repository,
@@ -68,7 +68,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
         project: az.project,
         repository: az.repository,
         workItemTag: az.filters?.workItemTag,
-        assignedTo: az.filters?.workItemAssignedTo,
+        assignedTo: ctx.config.userId,
         ownershipTag: ownershipLabel(ctx),
       });
     },
@@ -79,12 +79,12 @@ const CAPABILITIES = Object.keys(REGISTRY) as Capability[];
 
 /**
  * The label whose *authorship* the issues provider must resolve, or `undefined` when
- * it needn't bother. Only set when the operator has turned the ownership gate on
- * (`issuePickupRequireOwnLabel`); the gate label is the derived `${labelPrefix}-watch`
- * tag. Otherwise there's nothing to attribute, so the provider skips the history lookups.
+ * it needn't bother. The gate label is the derived `${labelPrefix}-watch` tag, and it
+ * is resolved only when `userId` says who "own" means. Without an identity there is
+ * nothing to attribute a tag to, so the provider skips the history lookups entirely.
  */
 function ownershipLabel(ctx: IntegrationContext): string | undefined {
-  return ctx.config.issuePickupRequireOwnLabel ? watchLabelsFor(ctx.config.labelPrefix).watchLabel : undefined;
+  return ctx.config.userId === undefined ? undefined : watchLabelsFor(ctx.config.labelPrefix).watchLabel;
 }
 
 /**

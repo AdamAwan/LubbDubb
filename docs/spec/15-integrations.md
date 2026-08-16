@@ -67,10 +67,10 @@ carries the assertion instead of only the check's name — see
 for why the excerpt is shaped the way it is. Both providers implement it, and both cover their own
 job system and not their third-party status channel:
 
-| | Structured errors | Raw fallback | Never covered |
-| --- | --- | --- | --- |
-| GitHub | check-run annotations | the Actions job log, downloaded whole | commit statuses (`target_url` names a system with no log API) |
-| Azure | the build timeline's `issues` | the failing task's log | status policies (no build, no timeline, no log) |
+|        | Structured errors             | Raw fallback                          | Never covered                                                 |
+| ------ | ----------------------------- | ------------------------------------- | ------------------------------------------------------------- |
+| GitHub | check-run annotations         | the Actions job log, downloaded whole | commit statuses (`target_url` names a system with no log API) |
+| Azure  | the build timeline's `issues` | the failing task's log                | status policies (no build, no timeline, no log)               |
 
 Two asymmetries are worth knowing before touching either arm. GitHub's job-log endpoint redirects to
 a blob and honours no line range, so a "tail" is a full download that is then discarded; Azure's log
@@ -173,7 +173,7 @@ Behaviour worth knowing:
   be _seen_, never acted on, and the per-PR fan-out is exactly the cost the feature must not have.
   Pagination stops at the first entry outside the window: GitHub sorts by `updated` descending, and
   `updated_at >= closed_at` always holds, so the break is sound.
-- **A `prAuthor` filter** narrows the PR list client-side, for both open and closed PRs.
+- **`userId`** narrows the PR list to the ones you opened, client-side, for both open and closed PRs.
 - **`updatePullBranch(n)` is the one write with no local git behind it.** GitHub merges the base into
   the pull request on its own machines and answers `202` with a job message rather than a commit, so
   there is nothing to return: the next snapshot is what reports the branch no longer behind. A refusal

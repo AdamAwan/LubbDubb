@@ -38,8 +38,7 @@ became of it, and both are lifted into their own decision columns (see
 [Two columns on the decision row](#two-columns-on-the-decision-row)).
 
 `parseActions(raw)` validates an array, partitioning into `actions` and `rejected` (each rejected item
-keeps its raw value and a joined zod error path/message). Absent `confidence` is treated as **0**:
-"no confidence stated" means never auto-send.
+keeps its raw value and a joined zod error path/message).
 
 ## The rule book
 
@@ -441,12 +440,12 @@ launch this produces.
 the population this cooldown was written for — an agent that finishes without clearing its concern —
 and every other ending already has an owner a re-attach would race or override.
 
-| Status                            | Why not                                                              |
-| --------------------------------- | -------------------------------------------------------------------- |
+| Status                             | Why not                                                               |
+| ---------------------------------- | --------------------------------------------------------------------- |
 | `starting` / `running` / `waiting` | Live. A concern reaching a live agent is `respond_to_agent`.          |
-| `crashed`                         | A recovery verdict is outstanding; the desk offers a wider choice.    |
-| `killed` / `interrupted`          | _Decided_ endings. Resurrecting one is what `autoResume` refuses too. |
-| `failed`                          | Has just spent its `resumeAttempts` budget crashing.                  |
+| `crashed`                          | A recovery verdict is outstanding; the desk offers a wider choice.    |
+| `killed` / `interrupted`           | _Decided_ endings. Resurrecting one is what `autoResume` refuses too. |
+| `failed`                           | Has just spent its `resumeAttempts` budget crashing.                  |
 
 **A conversation is inherited at most once.** Stated as a property of the transcript — two agent rows
 already carrying the id — rather than as an attempt number, so it needs no view of the cooldown policy
@@ -526,7 +525,7 @@ to "Ready" in every gap between parts.
 
 ## `issue-assay` — the goal assay
 
-`assay.enabled` (**on by default**) puts an assaying agent in front of the whole funnel. Every other
+Rule `issue-assay` is **unconditional** and puts an assaying agent in front of the whole funnel. Every other
 gate an issue passes asks whether the harness is _allowed_ to act; this is the only one that asks
 whether the ticket says anything to act on. Full argument, the verdict's lifetime and what ends a
 hold are in [06](06-issue-pickup.md); the dispatcher's half is:
@@ -553,7 +552,7 @@ verdict with the fingerprint of an empty goal.
 
 ## `issue-assess` — the assessor
 
-`assessment.enabled` (**on by default**) puts an assessing agent in front of re-pickup. It exists
+Rule `issue-assess` is **unconditional** and puts an assessing agent in front of re-pickup. It exists
 because rule `work-item-in-review`'s park is a **tracker state**, so it only protects providers that have one: on
 GitHub there is no review state, `openPrForIssue` reads only the open list, and the moment a
 delivering PR merges the issue is again "open, watched, no open PR" — rule `issue-pickup`'s entire precondition.
@@ -687,7 +686,7 @@ shortfall gates nothing, so refusing one leaves the issue exactly where it was.
 
 ## `issue-retro` — the retrospective
 
-`retrospective.enabled` (**on by default**) puts one **desk** agent on a goal the harness has already
+Rule `issue-retro` is **unconditional** and puts one **desk** agent on a goal the harness has already
 parked as delivered, to write the run up: what shipped, and what came out of the process of shipping
 it. It is the consumer of a step the cockpit had always named and the harness had never taken — _report
 what was done_, which drew the working agent's conclusion note or an em dash and was read by nothing.
@@ -915,7 +914,7 @@ interpolated into it, are two things:
 
 The evidence is fetched in the **executor**, at dispatch, not in the rule. The rule pipeline is
 synchronous and pure over the world snapshot, and the world read is per pulse — so the only place a
-per-dispatch network read belongs is where the task row is written. It joins the check *names* the
+per-dispatch network read belongs is where the task row is written. It joins the check _names_ the
 CI policy decided on to the `evidenceRef`s the provider wrote onto `CiCheck`, reading the pull
 request out of the world baseline, which `recordWorldChanges` has already set to this cycle's world.
 

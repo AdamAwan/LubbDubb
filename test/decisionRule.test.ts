@@ -5,7 +5,7 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { DISPATCH_RULES } from '../src/dispatcher/rules.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { WorldSnapshot } from '../src/types.js';
-import { spentPlannerAttempts } from './support/plans.js';
+import { pastTheFunnel } from './support/plans.js';
 
 // Rule identity on decisions (issue #58): the rule dispatcher tags every action
 // with a registry id, the store lifts it into its own column, and the cockpit
@@ -22,7 +22,7 @@ function ctx(world: Partial<WorldSnapshot>): DispatchContext {
     // The funnel has failed open on every issue in these worlds: it is
     // unconditional, so an issue it is still working is one pickup is narrowed
     // away from, and nothing downstream of pickup would fire for it.
-    recentDecisions: (world.issues ?? []).flatMap((i) => spentPlannerAttempts(i.number)),
+    recentDecisions: (world.issues ?? []).flatMap((i) => pastTheFunnel(i.number)),
     agentHeadroom: 3,
   };
 }

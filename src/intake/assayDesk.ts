@@ -2,13 +2,12 @@ import type { ErrorRecorder } from '../errorLog.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
 import type { Issue, IssueAssay, WorldEvent, WorldSnapshot } from '../types.js';
-import { type AssayPolicy, assayHold } from './assay.js';
+import { assayHold } from './assay.js';
 
 interface AssayDeskDeps {
   store: Store;
   /** Outbound seam, for the one comment a refused goal maintains on its ticket. */
   sink: ActionSink;
-  assay: AssayPolicy;
   errors?: ErrorRecorder;
 }
 
@@ -67,7 +66,6 @@ export class AssayDesk {
    * events to replay.
    */
   async announce(world: WorldSnapshot, signals: WorldEvent[]): Promise<void> {
-    if (!this.deps.assay.enabled) return;
     const assays = new Map(this.deps.store.listAssays().map((a) => [a.originRef, a]));
     if (assays.size === 0) return;
     for (const issue of world.issues) {

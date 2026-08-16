@@ -5,7 +5,7 @@ import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { issuePickupStatus } from '../src/dispatcher/issuePickup.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import type { Issue, IssueDelivery, WorldEvent } from '../src/types.js';
-import { spentPlannerAttempts } from './support/plans.js';
+import { pastTheFunnel } from './support/plans.js';
 
 // The pure hold predicate: what a `delivered` verdict holds, and what ends it.
 // No store, no world snapshot — the two arms are decidable from a row, an issue
@@ -144,10 +144,13 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
     pullRequests: [],
     issues: [issue()],
   };
-  // The retrospective is pinned off: this test is about rule `issue-pickup` standing down for a
-  // parked issue, and rule `issue-retro` legitimately writes a delivered goal up (covered in
-  // test/retrospective.test.ts). Leaving it on would assert two rules at once.
-  const d = new RuleDispatcher({}, {}, undefined, 'main', {}, {}, {}, {}, { enabled: false });
+  const d = new RuleDispatcher();
+  // A delivered goal also gets a retrospective — unconditionally, and rightly (it
+  // is `test/retrospective.test.ts`'s subject). So the assertion below is about
+  // the *code* agent pickup would have sent, not about the cycle being empty:
+  // there is no longer a switch that would let this file assert one rule alone.
+  const codeDispatches = (actions: { type: string }[]) =>
+    actions.filter((a) => a.type === 'dispatch_code_agent').map((a) => a.type);
 
   const parked = await d.decide({
     world,
@@ -157,18 +160,12 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
     queuedJobs: [],
     // The funnel has failed open: this is about the park standing pickup down,
     // and an issue the planner still owns would never reach pickup at all.
-    recentDecisions: spentPlannerAttempts(12),
+    recentDecisions: pastTheFunnel(12),
     agentHeadroom: 3,
     plans: [],
     deliveries: [delivery()],
   });
-  // Idleness is still a decision, so the cycle records a no_op — what must not be
-  // there is a dispatch.
-  assert.deepEqual(
-    parked.actions.map((a) => a.type),
-    ['no_op'],
-    'the issue is parked, so no pickup agent',
-  );
+  assert.deepEqual(codeDispatches(parked.actions), [], 'the issue is parked, so no pickup agent');
 
   // The same world with a transition after the verdict: the park is over.
   const released = await d.decide({
@@ -177,14 +174,15 @@ test('a standing verdict stops rule `issue-pickup`, and lifting it lets pickup t
     agents: [],
     openEscalations: [],
     queuedJobs: [],
-    recentDecisions: spentPlannerAttempts(12),
+    recentDecisions: pastTheFunnel(12),
     agentHeadroom: 3,
     plans: [],
     deliveries: [delivery()],
     deliverySignals: [event()],
   });
-  assert.equal(released.actions[0]?.type, 'dispatch_code_agent');
-  assert.equal((released.actions[0] as { originRef: string }).originRef, 'issue:12');
+  const pickup = released.actions.find((a) => a.type === 'dispatch_code_agent');
+  assert.ok(pickup, 'the park is over, so pickup runs');
+  assert.equal((pickup as { originRef: string }).originRef, 'issue:12');
 });
 
 test('the chip and the rule answer the same question', () => {
@@ -193,7 +191,7 @@ test('the chip and the rule answer the same question', () => {
     cooldown: DEFAULT_COOLDOWN,
     now: '2026-07-28T12:00:00.000Z',
     tasks: [],
-    recentDecisions: spentPlannerAttempts(12),
+    recentDecisions: pastTheFunnel(12),
     openPrs: [],
     headroom: 3,
     paused: false,

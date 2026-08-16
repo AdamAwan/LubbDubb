@@ -27,9 +27,6 @@ function build() {
     // front of every issue these assertions dispatch. Each has its own tests.
     // (The planning funnel cannot be pinned off; a goal is planned by writing the
     // funnel having failed open on it — `failPlanningOpen`.)
-    assessment: { enabled: false } as never,
-    assay: { enabled: false } as never,
-    retrospective: { enabled: false } as never,
   });
   const backend = new FakePtyBackend();
   return { system: buildSystem(config, { backend }), backend };

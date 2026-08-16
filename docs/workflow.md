@@ -36,7 +36,7 @@ Two entry points, one path. A prompt states a goal and a ticket is found or crea
 states its own. Everything downstream keys on the ticket, so work started from a prompt is as
 recoverable, reviewable and reportable as work started from the tracker.
 
-Three gates carry the loop, and each is a decision someone or something has to *make* rather than a
+Three gates carry the loop, and each is a decision someone or something has to _make_ rather than a
 step that always passes:
 
 - **Enough information to proceed** rejects a goal nothing can act on, before an agent spends
@@ -65,7 +65,7 @@ flowchart LR
 
 The set of arms is the point of variation, not the number three. What the loop requires of an arm is
 only that it produce a deliverable and a declaration that it finished — not that the deliverable is
-a diff. A piece of work whose honest outcome is *"nothing to build, here is why"* completes; it does
+a diff. A piece of work whose honest outcome is _"nothing to build, here is why"_ completes; it does
 not sit forever waiting for a pull request that is never coming.
 
 ## The code arm
@@ -101,22 +101,22 @@ four instances of one shape: something reports a verdict on the pull request, an
 classified into what to do about it. The classification is the configurable part, and it is per
 check rather than per pull request:
 
-| The check is                | The response                                                             |
-| --------------------------- | ------------------------------------------------------------------------ |
-| ours, and failing           | fix it, with guidance specific to that check where the guidance is known |
-| ours, and flaky             | fix it, with more latitude                                               |
-| red, but not ours to fix    | do not send an agent at it — hold, say why, and wait for it to clear     |
-| unrecognised                | fix it, and name it, so a check added later is never silently ignored    |
+| The check is             | The response                                                             |
+| ------------------------ | ------------------------------------------------------------------------ |
+| ours, and failing        | fix it, with guidance specific to that check where the guidance is known |
+| ours, and flaky          | fix it, with more latitude                                               |
+| red, but not ours to fix | do not send an agent at it — hold, say why, and wait for it to clear     |
+| unrecognised             | fix it, and name it, so a check added later is never silently ignored    |
 
 That last row is what keeps a configured gate set honest: a new check nobody has written a rule for
-is treated as actionable and *named*, rather than parked forever as an unknown.
+is treated as actionable and _named_, rather than parked forever as an unknown.
 
 **The third row is the one that changes what the workflow can express**, and the clearest case for
 it is a check on the health of the deployment pipeline itself. It fails when the pipeline is in no
 state to receive changes. It is a real signal, it is correctly blocking — stacking more changes into
 a broken pipeline is exactly what it exists to prevent — and there is no fix an agent could write,
 because nothing about this pull request caused it. Without per-check classification the only
-readings available are *red, therefore fix it* and *ignore this check entirely*, and both are wrong:
+readings available are _red, therefore fix it_ and _ignore this check entirely_, and both are wrong:
 one sends an agent at a wall, the other merges into the broken pipeline the check was warning about.
 The right reading is a third one — **wait** — and it needs a per-check rule to say so.
 
@@ -147,7 +147,7 @@ flowchart LR
     P3 --> P4
 ```
 
-Arrows read *is the base of*. Three consequences shape the code arm above:
+Arrows read _is the base of_. Three consequences shape the code arm above:
 
 - **A part may depend on at most one other part.** With two, both could be in review at once and
   there would be no single branch to base on.
@@ -159,7 +159,7 @@ Arrows read *is the base of*. Three consequences shape the code arm above:
   still in review.
 
 A part can also finish without a pull request at all — see the fan-out above. A part whose answer is
-*"nothing to build here"* reaches a terminal state, so the stack completes and the goal check is
+_"nothing to build here"_ reaches a terminal state, so the stack completes and the goal check is
 reached rather than the whole plan parking on one part that was never going to produce a diff.
 
 ## Where a different workflow slots in
@@ -167,18 +167,18 @@ reached rather than the whole plan parking on one part that was never going to p
 Every stage below is a point of variation. The middle column is the question a team answers
 differently; the right column is how that answer is expressed.
 
-| Stage                    | What varies                                     | Expressed as                                                     |
-| ------------------------ | ----------------------------------------------- | ---------------------------------------------------------------- |
-| Intake                   | which tickets are in scope at all                | watch/ignore tags, tracker workflow states                       |
-| Enough information       | how strict the bar is, and who sets it           | on/off, plus an operator verdict that overrides it               |
-| Plan                     | whether work is decomposed before it starts      | on/off                                                           |
-| Plan accepted            | whether a human sees it first                    | on/off; approval is the default when planning is on              |
-| Work kind                | what a deliverable may be                        | the terminal an agent declares when it finishes                  |
-| Quality gates            | which checks exist and what each failure means   | a per-check rule set, as in the table above                      |
-| Human review             | whether a reply goes out unattended              | a confidence threshold plus an allow-list, else a human accepts  |
-| Readiness to merge into  | what must be true of the target before landing   | a check on the pull request, held by its rule until it clears    |
-| Merge                    | when a pull request is allowed to land           | health predicates plus the stack rules                           |
-| Report and ticket update | what a finished piece of work must leave behind  | prompts, which are operator-overridable files                    |
+| Stage                    | What varies                                     | Expressed as                                                    |
+| ------------------------ | ----------------------------------------------- | --------------------------------------------------------------- |
+| Intake                   | which tickets are in scope at all               | watch/ignore tags, tracker workflow states                      |
+| Enough information       | how strict the bar is, and who sets it          | on/off, plus an operator verdict that overrides it              |
+| Plan                     | whether work is decomposed before it starts     | on/off                                                          |
+| Plan accepted            | whether a human sees it first                   | on/off; approval is the default when planning is on             |
+| Work kind                | what a deliverable may be                       | the terminal an agent declares when it finishes                 |
+| Quality gates            | which checks exist and what each failure means  | a per-check rule set, as in the table above                     |
+| Human review             | whether a reply goes out unattended             | a confidence threshold plus an allow-list, else a human accepts |
+| Readiness to merge into  | what must be true of the target before landing  | a check on the pull request, held by its rule until it clears   |
+| Merge                    | when a pull request is allowed to land          | health predicates plus the stack rules                          |
+| Report and ticket update | what a finished piece of work must leave behind | prompts, which are operator-overridable files                   |
 
 The pattern across the rows is the same one: **the harness owns the loop, the operator owns the
 verdicts.** Where a stage needs judgement — is this goal clear, is this plan right, is this failure
@@ -186,11 +186,12 @@ ours, may this go out — the judgement is configuration or a human decision, no
 code. Where a stage needs wording — how a ticket is written, how a report reads — it is a prompt
 template, so house style is changed by dropping in a file.
 
-Two stages are deliberately *not* variable, because making them so would remove the property they
+Two stages are deliberately _not_ variable, because making them so would remove the property they
 exist for:
 
-- **Every act that reaches the outside world is authorized**, by a human or by an explicit
-  auto-send decision. There is no arm where an agent posts, merges or files unasked.
+- **Every act that reaches the outside world is authorized by you** — either on the act itself, or
+  by a standing landing you clicked over a named stack. The harness authorizes nothing on its own,
+  and there is no arm where an agent posts, merges or files unasked.
 - **An agent declares that it finished; nothing infers it.** Silence never reads as success. The
   failure mode this chooses — work sitting still with a visible marker on it — is the cheap one and
   the visible one.
@@ -204,7 +205,7 @@ plan approval, the plan's dependency-chained parts, per-check CI classification 
 the reply/fix-or-defend loop, stacked-PR attribution and the bottom-up merge
 rule, non-code terminals for a part, the "did this deliver the goal" check, and the tracker state
 update on the way into review. The prompt arm's convergence too: an injected **code blueprint** with
-a tracker configured is filed as a *watched* ticket at route time (a desk agent creates it with
+a tracker configured is filed as a _watched_ ticket at route time (a desk agent creates it with
 `gh`/`az`, tagged with the effective `-watch` label) and enters the funnel like any picked-up issue,
 rather than being coded straight off the prompt.
 
@@ -222,7 +223,7 @@ rule that holds on it is the same rule that holds on any red check nobody here c
 
 **Narrower than drawn:**
 
-- **Start with a prompt.** A *code* blueprint now files a watched ticket and joins the funnel (above).
+- **Start with a prompt.** A _code_ blueprint now files a watched ticket and joins the funnel (above).
   The arms still narrower than drawn: a **desk** blueprint (a direct answer or a report) is dispatched
   as asked without a ticket, and a code blueprint with **no tracker** configured (`fake`/unconfigured)
   has nowhere to file, so it too runs straight off the prompt.

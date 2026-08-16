@@ -33,16 +33,6 @@ export interface ValidationPolicy {
    */
   desktopClaimMinutes: number;
   /**
-   * Install (and refresh) the `/lubbdubb` skill at {@link
-   * ValidationPolicy.desktopSkillPath} when the channel starts.
-   *
-   * The skill is the interface — without it the operator types the same six
-   * sentences at their Claude every time, which is the thing the channel exists
-   * to stop. It is a separate flag only so an operator who keeps their own
-   * version of the file can stop the harness overwriting it.
-   */
-  desktopSkill: boolean;
-  /**
    * The socket the desktop bridge connects on. **Stable, not per-pid**, unlike
    * the fleet's — that is the whole difference, and what lets the MCP server be
    * registered in Claude Code once rather than per run.
@@ -60,14 +50,21 @@ export interface ValidationPolicy {
    * of the MCP registration the operator pastes, and out of `ps`.
    */
   desktopCredentialPath: string;
-  /** Where the skill is installed. */
+  /**
+   * Where the `/lubbdubb` skill is installed. It is written and refreshed
+   * every time the desktop channel starts, and the file says so in its own body.
+   *
+   * The skill is the interface — without it the operator types the same six
+   * sentences at their Claude every time, which is the thing the channel exists
+   * to stop. So it is not separately switchable: a channel running without it is
+   * the channel failing at the job it was turned on for.
+   */
   desktopSkillPath: string;
 }
 
 export const DEFAULT_VALIDATION: ValidationPolicy = {
   desktop: false,
   desktopClaimMinutes: 60,
-  desktopSkill: true,
   // Under the OS tmpdir for the fleet socket's reason: POSIX caps a socket path
   // at about 104 characters, which a repo-relative path clears easily.
   desktopSocketPath:

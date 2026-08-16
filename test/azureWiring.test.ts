@@ -14,15 +14,18 @@ function selection(over: Partial<IntegrationSelection>): IntegrationSelection {
 
 const TARGET = { organization: 'org', project: 'proj', repository: 'repo' };
 
-test('loadConfig carries an azureDevOps block (org/project/repo/filters) from overrides', () => {
+test('loadConfig carries an azureDevOps block (org/project/repo/tag) from overrides', () => {
   const config = loadConfig({
-    azureDevOps: { ...TARGET, filters: { prAuthor: 'bot@acme.com', workItemTag: 'agent-ready' } },
+    azureDevOps: { ...TARGET, filters: { workItemTag: 'agent-ready' } },
+    userId: 'bot@acme.com',
   });
   assert.equal(config.azureDevOps?.organization, 'org');
   assert.equal(config.azureDevOps?.project, 'proj');
   assert.equal(config.azureDevOps?.repository, 'repo');
-  assert.equal(config.azureDevOps?.filters?.prAuthor, 'bot@acme.com');
+  // `workItemTag` stays a filter because it is about the tracker's shape. Identity
+  // does not: PR authorship and work-item assignment both read `userId`.
   assert.equal(config.azureDevOps?.filters?.workItemTag, 'agent-ready');
+  assert.equal(config.userId, 'bot@acme.com');
 });
 
 test('registry builds real azure providers when selected with a target', () => {

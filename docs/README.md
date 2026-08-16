@@ -67,7 +67,7 @@ deliberately left unchecked, and why, is in
 | [06](spec/06-issue-pickup.md)        | Issue pickup and labels     | Watch/ignore tags, priority, workflow states, the per-issue pickup verdict         |
 | [07](spec/07-pull-requests.md)       | Pull requests               | Health predicates, conflicts, stacks, inherited CI, the merge gate                 |
 | [08](spec/08-planning.md)            | The planning funnel         | Plans, parts, the plan document, reconciliation, replan                            |
-| [09](spec/09-execution.md)           | Action execution            | The executor's gates, auto-send, task materialisation, worktrees, git              |
+| [09](spec/09-execution.md)           | Action execution            | The executor's gates, outbound authority, task materialisation, worktrees, git     |
 | [10](spec/10-agent-runtimes.md)      | Agent runtimes              | Sessions, sentinels, PTY and stream runtimes, transcripts, resume, usage           |
 | [11](spec/11-mcp-tools.md)           | The MCP tool channel        | The tools, identity, transport, launch flags, degradation                          |
 | [12](spec/12-artifacts-and-files.md) | Artifacts, files, overlaps  | Flag sentinel, the file-events hook, artifact serving, file-overlap detection      |

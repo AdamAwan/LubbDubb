@@ -63,6 +63,16 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
 
 ## Sharp edges
 
+### Identity
+
+- **`userId` gates pickup, so a provider that cannot report label authorship stops the fleet
+  silently.** With it set, `issuePickup.ts` reads `labelsAddedByViewer` instead of `labels` — so a
+  provider that never populates that field resolves every issue's labels to `[]`, and **nothing is
+  ever picked up**. Nothing errors, and an issue that is simply not eligible looks exactly like one
+  nothing has got to yet. `FakeIssuesIntegration` mirrors `labels` into it for that reason; a new
+  issues provider must resolve it or the deployment quietly does nothing.
+  → [02](docs/spec/02-configuration.md#userid), [06](docs/spec/06-issue-pickup.md)
+
 ### Persistence
 
 - **A column added to an _existing_ table needs an additive `ALTER TABLE`**, guarded by a

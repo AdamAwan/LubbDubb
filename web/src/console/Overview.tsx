@@ -367,7 +367,7 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
                 )}
               </span>
               <CiLadder pr={pr} />
-              <CourtChip pr={pr} reminderMs={view.state.config.reviewReminderMs} now={view.now} />
+              <CourtChip pr={pr} now={view.now} />
               <AsyncButton
                 className="ghost"
                 disabled={ignoreLabel === ''}

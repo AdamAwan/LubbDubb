@@ -20,15 +20,15 @@ Everything below is what that means in practice.
 
 ## What moves off your desk, and what does not
 
-| You used to                                  | Now                                                                    |
-| -------------------------------------------- | ---------------------------------------------------------------------- |
-| Pick the next ticket                          | The dispatcher ranks every candidate; you re-order **Up next** if wrong |
-| Cut the branch, open the PR                   | An agent does, per part, in its own worktree                            |
-| Chase red CI                                  | Each failing check is classified and worked, or held if it isn't ours   |
-| Write the change                              | An agent writes it; you read the plan and the delivered result          |
-| Decide what "done" means                      | **Still you.** Nothing else                                             |
-| Decide whether the goal was even clear        | **Still you**, when the assay says it isn't                             |
-| Decide whether this may leave the building    | **Still you.** No comment, merge or ticket goes out unauthorized        |
+| You used to                                | Now                                                                     |
+| ------------------------------------------ | ----------------------------------------------------------------------- |
+| Pick the next ticket                       | The dispatcher ranks every candidate; you re-order **Up next** if wrong |
+| Cut the branch, open the PR                | An agent does, per part, in its own worktree                            |
+| Chase red CI                               | Each failing check is classified and worked, or held if it isn't ours   |
+| Write the change                           | An agent writes it; you read the plan and the delivered result          |
+| Decide what "done" means                   | **Still you.** Nothing else                                             |
+| Decide whether the goal was even clear     | **Still you**, when the assay says it isn't                             |
+| Decide whether this may leave the building | **Still you.** No comment, merge or ticket goes out unauthorized        |
 
 The pattern is that **the harness owns the loop and you own the judgement**. Where a step needs a
 call — is this goal clear, is this plan right, is this failure ours, may this go out — it is a human
@@ -92,14 +92,14 @@ The left rail is the whole of your inbox. Six kinds, two groups, and the colour 
 **red means an agent is parked on a question only you can answer**; amber means the obligation is
 yours and nothing in the fleet is waiting.
 
-| Kind                   | What it is                                                     | How you answer                              |
-| ---------------------- | -------------------------------------------------------------- | ------------------------------------------- |
-| **Escalation**         | A parked agent asking you something                             | Type the answer; it unparks                 |
-| **Plan proposal**      | A decomposition into parts, before any of it is built           | Accept, or reject with a reason             |
-| **Outbound proposal**  | Something an agent wants to send into the world                 | Accept or reject                            |
-| **Permission request** | An agent hit a command outside the allow-list                   | Allow or refuse                             |
-| **Bench task**         | Work only a person can do — flip a setting, look at a screen    | Do it, then mark done (or decline, w/ note) |
-| **Close-out**          | A delivered goal whose ticket is still open                     | Close it; it settles itself when you do     |
+| Kind                   | What it is                                                   | How you answer                              |
+| ---------------------- | ------------------------------------------------------------ | ------------------------------------------- |
+| **Escalation**         | A parked agent asking you something                          | Type the answer; it unparks                 |
+| **Plan proposal**      | A decomposition into parts, before any of it is built        | Accept, or reject with a reason             |
+| **Outbound proposal**  | Something an agent wants to send into the world              | Accept or reject                            |
+| **Permission request** | An agent hit a command outside the allow-list                | Allow or refuse                             |
+| **Bench task**         | Work only a person can do — flip a setting, look at a screen | Do it, then mark done (or decline, w/ note) |
+| **Close-out**          | A delivered goal whose ticket is still open                  | Close it; it settles itself when you do     |
 
 Two things worth internalising:
 
@@ -218,9 +218,9 @@ flight. A laptop that was off for a week queues one job when it comes back.
 Both exist to make this arrangement safe to leave running, and both are worth understanding before
 you try to work around them:
 
-- **Every act that reaches the outside world is authorized** — by you, or by an explicit auto-send
-  decision you opted a specific action into (off by default). There is no arm where an agent posts,
-  merges or files unasked.
+- **Every act that reaches the outside world is authorized by you** — either on the act itself, or
+  by a standing landing you clicked over a named stack. There is no arm where an agent posts, merges
+  or files unasked, and no setting that adds one.
 - **An agent declares that it finished; nothing infers it.** Silence never reads as success. The
   failure this chooses is the cheap, visible one: work sitting still with a marker on it, rather than
   work quietly assumed complete.
@@ -265,12 +265,12 @@ you try to work around them:
 
 ## Where to read next
 
-| For                                            | Read                                                       |
-| ---------------------------------------------- | ---------------------------------------------------------- |
-| The workflow in full, and where yours slots in | [workflow.md](workflow.md)                                 |
-| Every surface in the cockpit                   | [17 — The cockpit](spec/17-cockpit.md)                     |
-| What gets picked up, and why one didn't        | [06 — Issue pickup and labels](spec/06-issue-pickup.md)    |
-| Plans, parts and approval                      | [08 — The planning funnel](spec/08-planning.md)            |
+| For                                            | Read                                                             |
+| ---------------------------------------------- | ---------------------------------------------------------------- |
+| The workflow in full, and where yours slots in | [workflow.md](workflow.md)                                       |
+| Every surface in the cockpit                   | [17 — The cockpit](spec/17-cockpit.md)                           |
+| What gets picked up, and why one didn't        | [06 — Issue pickup and labels](spec/06-issue-pickup.md)          |
+| Plans, parts and approval                      | [08 — The planning funnel](spec/08-planning.md)                  |
 | Jobs, findings, schedules and human tasks      | [13 — Jobs, findings, human tasks](spec/13-jobs-and-findings.md) |
-| Spend, yield and the fault log                 | [18 — Observability](spec/18-observability.md)             |
-| Every config key and its default               | [02 — Configuration](spec/02-configuration.md)             |
+| Spend, yield and the fault log                 | [18 — Observability](spec/18-observability.md)                   |
+| Every config key and its default               | [02 — Configuration](spec/02-configuration.md)                   |

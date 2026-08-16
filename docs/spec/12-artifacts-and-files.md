@@ -1,7 +1,7 @@
 # 12 — Artifacts, files and overlaps
 
-Three related mechanisms: an agent can *announce* an artifact, the harness *observes* every file an
-agent writes, and it *detects* when two agents wrote the same file at the same time.
+Three related mechanisms: an agent can _announce_ an artifact, the harness _observes_ every file an
+agent writes, and it _detects_ when two agents wrote the same file at the same time.
 
 ## The flag sentinel
 
@@ -9,7 +9,7 @@ agent writes, and it *detects* when two agents wrote the same file at the same t
 doc, a report — **without changing its status**. Payload parsing is pure (`parseFlag` / `extractFlags`,
 `src/agents/sentinels.ts`); see [10](10-agent-runtimes.md).
 
-Both runtimes detect it on the *raw* stream and emit `flag`. It strips from display through the same
+Both runtimes detect it on the _raw_ stream and emit `flag`. It strips from display through the same
 `stripSentinels` / hold machinery as the waiting sentinel — in `PtySession` via the shared
 `sentinelScanner`, which excises every hit from the detection tail (a flag latches no status, so a
 sliding window would otherwise re-emit it).
@@ -25,7 +25,7 @@ The flag sentinel is purely additive detection: on in every agent mode, gated be
 
 The flag sentinel only surfaces an artifact if the agent's **prompt** tells it to print the sentinel —
 so every skill that emits a report has to know the protocol. A Claude Code `PostToolUse` hook removes
-that coupling: it fires for *any* file-writing tool regardless of what the agent was told.
+that coupling: it fires for _any_ file-writing tool regardless of what the agent was told.
 
 `src/agents/fileEvents.ts`.
 
@@ -64,7 +64,7 @@ proves the hook actually ran: its absence when a write clearly happened localise
 
 Verified, not assumed. LubbDubb agents run in a **git worktree of the repo they are working on**, so
 that repo's committed `.claude/settings.json`, `.claude/skills/` and `CLAUDE.md` are present in the cwd
-and load normally. The hook rides on `--settings`, which is an *additional* settings source, and hooks
+and load normally. The hook rides on `--settings`, which is an _additional_ settings source, and hooks
 **merge** across sources (like permission rules, not last-one-wins), so our `PostToolUse` entry and the
 target repo's own hooks **both** fire — confirmed empirically with a nested `claude` run where a project
 hook and a `--settings` hook both fired on one `Write`. Skills and `CLAUDE.md` are filesystem-discovered
@@ -94,7 +94,7 @@ Each record folds in through the pure `classifyArtifact(path, docsFolderPrefix)`
 
 - **Every** path is recorded in `agent_files` (deduped per agent+path) — the drawer's "files changed"
   list, snapshot key `files`.
-- **Report-like** paths are additionally promoted through the *same* `Store.recordFlag` and `flag`
+- **Report-like** paths are additionally promoted through the _same_ `Store.recordFlag` and `flag`
   event as a sentinel flag, so a report becomes a chip via identical dedup / `agent:flag` / confined
   artifact-route machinery.
 
@@ -107,7 +107,7 @@ Promotion rules, in order:
 
 Otherwise `{promoted: false, kind: 'file'}`.
 
-Prefix matching is segment-wise and case-insensitive, and a file *under* the prefix must have strictly
+Prefix matching is segment-wise and case-insensitive, and a file _under_ the prefix must have strictly
 more segments than the prefix itself. A **relative** entry matches the worktree-relative path; an
 **absolute** entry (e.g. `D:/docs`) matches an out-of-worktree write left absolute. The two never
 cross.
@@ -179,7 +179,7 @@ capability-scoping cases in `test/cockpitAuth.test.ts`.
 ## File-overlap detection
 
 `src/fileOverlap.ts`. The three dispatch gates — one code agent per PR branch,
-`findActiveTaskByOrigin`, `maxConcurrentPartsPerIssue` — are keyed on what the dispatcher *dispatches*,
+`findActiveTaskByOrigin`, `maxConcurrentPartsPerIssue` — are keyed on what the dispatcher _dispatches_,
 and are complete for that. **None of them can see what an agent does once running**: two agents on two
 branches, each perfectly within its own gate, both editing one file. Git reports it only when the hunks
 collide; when they do not, the second merge quietly undoes or duplicates the first.
@@ -196,7 +196,7 @@ Three narrowings carry it:
   one's worktree was cut from a base that already held the earlier one's work. Without this filter
   every long-lived file in the repo is an "overlap".
 - **Agent lifetimes, not write timestamps.** A file row is deduped per (agent, path) and its timestamp
-  is bumped on rewrite, so it dates the *last* write. Overlapping lifetimes is the reading the data
+  is bumped on rewrite, so it dates the _last_ write. Overlapping lifetimes is the reading the data
   actually supports.
 
 `lifetime(agent)` is the **one** reading of "was it still going", so the concurrency test and the
@@ -204,7 +204,7 @@ panel's `live` flag cannot disagree. Status decides whether the window is open (
 signal `countLiveAgents` uses) and `endedAt` closes it; a dead row lacking a stamp is closed at its
 start, so a data defect under-reports rather than accuses.
 
-A writer is included only if it overlapped *someone*: three agents on one path where only two were ever
+A writer is included only if it overlapped _someone_: three agents on one path where only two were ever
 concurrent is a two-agent collision, and naming the third would be an accusation the data does not
 support.
 

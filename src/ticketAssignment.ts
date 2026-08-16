@@ -37,28 +37,25 @@ interface TicketAssignment {
 
 /**
  * The assignment for the provider **actually serving issues** — the same
- * selection `trackerCoordinates` reads, so the assignee belongs to the tracker
- * the ticket lands in. A GitHub login and an Azure UPN are different identities;
- * neither is meaningful to the other's provider, which is why this is configured
- * per provider rather than once.
+ * selection `trackerCoordinates` reads, so the flag spelling belongs to the
+ * tracker the ticket lands in.
  *
- * Azure falls back to `filters.workItemAssignedTo`. Where that filter is set the
- * harness surfaces only items assigned to that identity, so an item filed to
- * anyone else — including nobody — is invisible to the harness that filed it:
- * created, then immediately lost. GitHub has no equivalent to fall back to, since
- * `filters.prAuthor` names the account the harness *acts as*, not the operator.
+ * Who it names is `userId`, which is the same fact the ownership gate and the PR
+ * author filter read: the harness works one person's queue, and a ticket it files
+ * belongs to that person. The identity itself is per *deployment* rather than per
+ * provider, because one project is worked at a time — the string is a GitHub login
+ * where `integrations.issues` is `github` and an Azure UPN where it is `azure`,
+ * and only one of those is ever in force.
+ *
+ * Null when `userId` is unset, and the coordinates then read exactly as they did
+ * before: a deployment with nobody to assign to still files tickets.
  */
 export function ticketAssignment(config: Config): TicketAssignment | null {
+  const who = config.userId?.trim();
+  if (!who) return null;
   const provider = config.integrations.issues;
-  if (provider === 'github' && config.github) {
-    const who = config.github.defaultAssignee?.trim();
-    return who ? { flag: ` --assignee ${who}`, note: assignmentNote(who) } : null;
-  }
-  if (provider === 'azure' && config.azureDevOps) {
-    const az = config.azureDevOps;
-    const who = (az.defaultAssignee ?? az.filters?.workItemAssignedTo)?.trim();
-    return who ? { flag: ` --assigned-to "${who}"`, note: assignmentNote(who) } : null;
-  }
+  if (provider === 'github' && config.github) return { flag: ` --assignee ${who}`, note: assignmentNote(who) };
+  if (provider === 'azure' && config.azureDevOps) return { flag: ` --assigned-to "${who}"`, note: assignmentNote(who) };
   return null;
 }
 

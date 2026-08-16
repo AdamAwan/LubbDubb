@@ -177,6 +177,8 @@ const SETTLE_WINDOW_MS = 15 * 60_000;
 /** How a decider reads to an operator. Chosen once, so every surface says it the same way. */
 function decidedByLabel(decidedBy: Proposal['decidedBy']): string {
   if (decidedBy === 'human') return 'you';
+  // Historical only — nothing writes it any more (see `Proposal.decidedBy`), but
+  // an old row must still name its authority rather than read as unrecorded.
   if (decidedBy === 'auto_send') return 'auto-send';
   // Still "you" — a stack landing *is* the operator, deciding once for a whole
   // chain instead of once per rung — and distinguished, because "which click" is
@@ -405,11 +407,12 @@ export function planProposalHold(ref: string, proposals: Proposal[]): string | n
  *
  * The cycle id is the load-bearing one. `human:<proposal id>` marks a decision
  * made outside the pulse, the way `agent-lifecycle` already does, and the
- * cockpit's Decision log keys its "you · accepted" badge on that prefix. Auto-send
- * happens *inside* a cycle, so its row keeps that cycle's id: it stays grouped
- * with the pulse that produced the action, and — because it does not carry the
- * prefix — it cannot read as something the operator clicked. That is the whole
- * reason this is one function and not a string check at each of the three sites.
+ * cockpit's Decision log keys its "you · accepted" badge on that prefix. A
+ * standing landing settles *inside* a cycle, so its row keeps that cycle's id: it
+ * stays grouped with the pulse that produced the action, and — because it does not
+ * carry the prefix — it cannot read as something the operator clicked just then.
+ * That is the whole reason this is one function and not a string check at each of
+ * the three sites.
  *
  * `pulseCycleId` is therefore required in substance and optional in form: a human
  * verdict has no pulse to belong to. A decider that somehow reached here
@@ -423,7 +426,7 @@ export function authorityOf(proposal: Proposal, pulseCycleId: string | null): Au
   // Deliberately **not** the `human:` prefix, though a human is behind it. The
   // prefix marks a decision made *outside* the pulse — a click being applied at a
   // route — and this one is applied inside the cycle that formed the action, so
-  // it belongs grouped with that pulse exactly as auto-send's does. What the
+  // it belongs grouped with that pulse. What the
   // operator clicked, and when, is on the proposal's note; the row that says "you
   // clicked something just now" is the one this must not impersonate.
   if (proposal.decidedBy === 'stack_landing') return { cycleId, by, approved: 'Landing the stack authorized' };

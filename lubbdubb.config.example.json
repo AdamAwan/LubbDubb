@@ -1,5 +1,5 @@
 {
-  "//": "LubbDubb example config. Copy to lubbdubb.config.json (gitignored). Every key is OPTIONAL — omit any to take its default. The '//'-prefixed keys are inline docs; they are ignored at load, so this file stays copy-and-run. As shipped it drives the mock agent (agentMode 'raw' + fake integrations), so `npm start` works with no model or provider auth. Precedence: explicit overrides > env (PORT, LUBBDUBB_HOST, LUBBDUBB_DB, LUBBDUBB_REPO_ROOT) > this file > defaults. Seven keys are DEEP-MERGED rather than replaced, so you can set one field of them alone: autoSend, integrations, planning, assessment, assay, retrospective, mcp, auth. Everything else — including issuePriorityLabels and ci.checks — is replaced wholesale. Full reference: docs/spec/02-configuration.md.",
+  "//": "LubbDubb example config. Copy to lubbdubb.config.json (gitignored). Every key is OPTIONAL — omit any to take its default. The '//'-prefixed keys are inline docs; they are ignored at load, so this file stays copy-and-run. As shipped it drives the mock agent (agentMode 'raw' + fake integrations), so `npm start` works with no model or provider auth. Precedence: explicit overrides > env (PORT, LUBBDUBB_HOST, LUBBDUBB_DB, LUBBDUBB_REPO_ROOT) > this file > defaults. Four keys are DEEP-MERGED rather than replaced, so you can set one field of them alone: integrations, planning, validation, auth. Everything else — including issuePriorityLabels and ci.checks — is replaced wholesale. Full reference: docs/spec/02-configuration.md.",
 
   "// heartbeatIntervalMs": "How often (ms) the heartbeat fires a dispatch cycle. Default 300000 (5 min).",
   "heartbeatIntervalMs": 300000,
@@ -60,34 +60,21 @@
   "// docsFolderPrefix": "Folder(s) the file-events hook treats as the artifacts area: any file an agent writes UNDER a prefix is promoted to an artifact chip regardless of extension, on top of the built-in report/doc heuristic (report extensions + any reports/ folder). Accepts a string or an array; a file promotes under ANY entry. A relative entry is worktree-relative; an ABSOLUTE entry (e.g. D:/docs) also matches files written under that real directory OUTSIDE the worktree and widens the artifact-serving boundary to include it. Unset = heuristic only.",
   "docsFolderPrefix": ["docs", "D:/shared/reports"],
 
-  "// autoSend": "Confidence-gated autonomy for side-effectful actions. Off by default: with enabled=false the harness always drafts + proposes for sign-off. Enabled, it authorizes an action itself only when the dispatcher's confidence >= confidenceThreshold AND the action type is in allowedActions; anything below still becomes a pending proposal, and a failed send escalates. Deep-merged, so you can set just one field.",
-  "autoSend": {
-    "// enabled": "Master switch. Default false.",
-    "enabled": false,
-    "// confidenceThreshold": "Minimum dispatcher confidence (0..1) required to send instead of asking you. Default 0.85.",
-    "confidenceThreshold": 0.85,
-    "// allowedActions": "Action types eligible for auto-send. Default ['reply_on_pr'].",
-    "allowedActions": ["reply_on_pr"]
-  },
+  "// userId": "WHO YOU ARE, to every provider the harness talks to — the one identity it acts on behalf of. Setting it turns on three gates together, because they are one intent (this harness works MY queue): (1) OWNERSHIP — '<labelPrefix>-watch' only counts if YOU added it, so nobody else can tag work onto the fleet; (2) ASSIGNMENT — tickets the harness FILES are assigned to you; (3) AUTHORSHIP — only pull requests you opened are surfaced, which is also what lets a merged branch of yours be reaped. One string rather than one per provider because one project is worked at a time and each project carries its own config file: it is a GitHub login where integrations selects 'github', an Azure UPN where it selects 'azure', and only one of those is ever in force. UNSET (the default) leaves all three gates off — any tagger counts, filed tickets go unassigned, every open PR is surfaced. That is the first-run posture, and it is why the 'fake' provider works with no identity at all.",
+  "userId": "you@acme.com",
 
   "// integrations": "Which provider fulfils each capability — the swap switch. One provider per capability, deep-merged so you can override just one. Providers: 'fake' (editable, injectable world — the demo default), 'github' and 'azure' (real). Capabilities: sourceControl (pull requests), issues (issues / work items).",
   "integrations": { "sourceControl": "fake", "issues": "fake" },
 
   "// github": "Target for the real 'github' provider — required only when integrations.sourceControl or .issues is 'github' (ignored otherwise). owner/repo name the repository; filters.prAuthor narrows the PR slice to one author. All open issues are ingested (the watch/ignore gate decides what's acted on, not an ingest filter). defaultAssignee is the login that issues the harness FILES (a deferred finding, unrecorded work, a blueprint, a raised bug) are assigned to — not a filter, it narrows nothing; unset files them unassigned. Auth is NOT here — set the GITHUB_TOKEN env var so a secret never lands in a committed file.",
-  "github": {
-    "owner": "acme",
-    "repo": "app",
-    "defaultAssignee": "you",
-    "filters": { "prAuthor": "lubbdubb-bot" }
-  },
+  "github": { "owner": "acme", "repo": "app" },
 
   "// azureDevOps": "Target for the real 'azure' provider (Azure DevOps Repos + Boards) — required only when integrations.sourceControl or .issues is 'azure' (ignored otherwise). organization/project/repository name the repo; filters.prAuthor narrows PRs by uniqueName/UPN, filters.workItemTag narrows work items to one tag, filters.workItemAssignedTo narrows work items to one assignee by uniqueName/UPN. When both workItemTag and workItemAssignedTo are set they AND (an item must match both). defaultAssignee is the UPN that work items the harness FILES are assigned to — it narrows nothing, and defaults to filters.workItemAssignedTo, since where that filter is set an item filed to anyone else is invisible to the harness that filed it. Auth is NOT here — set AZURE_DEVOPS_PAT (Basic), or leave it unset to use the logged-in `az` CLI (Bearer).",
   "azureDevOps": {
     "organization": "acme",
     "project": "app",
     "repository": "app",
-    "defaultAssignee": "you@acme.com",
-    "filters": { "prAuthor": "bot@acme.com", "workItemTag": "agent", "workItemAssignedTo": "bot@acme.com" },
+    "filters": { "workItemTag": "agent" },
 
     "// policyChecks": "Which Azure BRANCH-POLICY kinds become CI checks, and how. Kinds: build, status, comments, workItems, reviewers, mergeStrategy, other. Modes: 'check' (an ordinary CiCheck — visible, routable by a ci.checks rule, dispatchable), 'advisory' (visible and structurally unable to dispatch or escalate), 'off' (not emitted). Unset kinds take the defaults: build + status are 'check', comments is 'advisory' (rule pr-review-comment already models threads at higher fidelity), everything else 'off'. An unknown kind or mode throws at load. Nothing here can reach the aggregate ciStatus, so widening it can never make a PR read as unable to merge. The example promotes work-item linking so an agent fixes it — paired with the ci.checks guidance below.",
     "policyChecks": { "workItems": "check" }
@@ -95,9 +82,6 @@
 
   "// labelPrefix": "The prefix behind the cockpit's watch/ignore toggle, shared by PRs and issues. It derives two labels: '<prefix>-watch' ('work this') and '<prefix>-ignore' ('leave this alone'). The no-tag default differs by type: PRs are opt-out (watched unless <prefix>-ignore), issues are opt-in (ignored unless <prefix>-watch). Default 'lubbdubb', so 'lubbdubb-ignore' keeps its historical meaning as the PR exclusion tag. Set it to '' to disable both gates (PRs never excluded, all open issues acted on).",
   "labelPrefix": "lubbdubb",
-
-  "// issuePickupRequireOwnLabel": "Tighten the issue WATCH gate so '<labelPrefix>-watch' only counts when the account the harness authenticates as added it (anti-abuse). Only meaningful with a real provider (github/azure) that can resolve tag authorship; the fake provider fails the gate closed. Default false (any tagger counts).",
-  "issuePickupRequireOwnLabel": false,
 
   "// issuePriorityLabels": "Label -> priority weight for ordering issue pickup when headroom is limited (higher = first). REPLACED wholesale by an override, not merged, so you can define your own scheme (e.g. p0/p1/p2). Default { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 }.",
   "issuePriorityLabels": { "priority:high": 3, "priority:medium": 2, "priority:low": 1 },
@@ -123,25 +107,7 @@
     "gitFetchIntervalMs": 60000
   },
 
-  "// assessment": "The assessor (rule issue-assess) — the harness asking whether an issue that has HAD work and has nothing in flight is actually finished, and parking it as 'delivered' if so. ON by default, with the cost stated: it spends an agent per assessed issue and its verdict gates pickup (reversibly — moving the ticket in the tracker, or any comment/transition on it, releases the hold, and there is an operator clear). It is what stops a merged PR's issue being picked up again on GitHub, which has no 'In Review' state to park it in. A negative verdict names a cause and routes it: a plan shortfall proposes a replan, a part shortfall proposes one follow-up part, a goal shortfall escalates. Off, no assessor is dispatched and rule issue-pickup behaves as it did before it existed. Deep-merged.",
-  "assessment": {
-    "// enabled": "Master switch. Default true.",
-    "enabled": true
-  },
-
-  "// assay": "The goal assay (rule issue-assay) — the harness asking whether a fresh issue's TEXT can be worked from at all, before anything is dispatched against it. Every other gate in front of a ticket asks about policy; this one asks whether there is anything to act on. ON by default. Only an explicit 'unclear' verdict holds anything: an assayer that crashes, is killed or spends its attempt cap writes no row and the issue falls through to ordinary pickup with no escalation. A hold ends the moment the ticket's title/body is edited or anyone comments, and the refusal is kept as ONE living comment on the thread, retracted when the hold ends. There is an operator override (POST /api/issues/:number/assay). Off, no assayer runs and every gate in front of an issue behaves as it did. Deep-merged.",
-  "assay": {
-    "// enabled": "Master switch. Default true.",
-    "enabled": true
-  },
-
-  "// retrospective": "The retrospective (rule issue-retro) — one DESK agent writing up a goal the harness has parked as delivered: what shipped, and what came out of the process of shipping it, from the issue's scratchpad plus the record the harness kept. ON by default, and unlike its three neighbours above it gates nothing: it runs once, after the work is over, so it can neither park an issue nor delay anything. Off, the Goal Floor's Manifest station reads 'Nothing written' and no agent is spent. Deep-merged.",
-  "retrospective": {
-    "// enabled": "Master switch. Default true.",
-    "enabled": true
-  },
-
-  "// COST NOTE": "planning + assessment + assay + retrospective are all on by default, so one issue can spend an assayer, a planner, its part agents, an assessor and a writer before and after the work itself. That is the intended full funnel; set any 'enabled' to false to drop that stage. The stages need not all cost the same, either — 'agentModels' below assigns a model and an effort per kind of work, so clearing a stuck CI gate does not run what planning a decomposition runs.",
+  "// COST NOTE": "planning, the assay, the assessor and the retrospective are all UNCONDITIONAL — there is no switch for any of them. One issue can therefore spend an assayer, a planner, its part agents, an assessor and a writer. Only an 'unclear' assay verdict holds anything, and it ends the moment the ticket is edited or anyone comments on it.",
 
   "// agentModels": "Which model each KIND of work runs on, and how hard — keyed on the dispatch rule that proposed it. A rule points at a NAMED PROFILE, and a profile is a model plus an optional effort level and nothing else (claudeArgs stays the single global escape hatch, so a profile can never clobber the --allowedTools MCP grants). The name is the stable part: when a new model ships, one profile value changes and every rule pointing at it follows. Resolved ONCE at dispatch and stored on the task, so an agent resumed after a restart re-launches on what it started on and the run stays auditable — the cockpit's agent drawer shows it, and 'by task type' spend prices it. NEITHER value is validated here: only the installed claude knows which models exist and which of them take --effort, so a bad one fails at SPAWN as a failed agent, not at boot. What IS refused at boot: a profile written as a bare string, an unknown effort level, a byRule key that is not a pipeline rule id, and any name that resolves to no profile. The whole block is OPTIONAL and merges WHOLE rather than field by field — setting it replaces it, which is what lets you REMOVE an assignment rather than only add one. Omitted entirely, no launch carries either flag and the CLI's own defaults apply — which is NOT a neutral setting: the CLI defaults to the top of the effort ladder, so an unconfigured fleet is the expensive one. The values below are a worked shape, not a recommendation: substitute the models your CLI actually has.",
   "agentModels": {
@@ -175,14 +141,6 @@
       "validate-check": "standard"
     },
     "// PINS": "byRule prices work by KIND, which has no answer for the one issue that is harder than the rule it arrived on. That is a TAG on the ticket, not a config key: '<labelPrefix>-model-<profile>' pins one goal's work to one profile, and it beats byRule for every dispatch on that issue except issue-retro (fixed to its byRule entry — a write-up gates nothing, so a deep pin there is money for a document no dispatch reads) and issue-assay (the stage that PROPOSES the pin, so it cannot run on it). Nothing needs configuring to turn this on; it is on wherever labelPrefix and profiles are both set. The assayer proposes a profile for every workable goal, and a proposal that differs from what is already standing HOLDS the funnel until you confirm it from the cockpit — one click, and an absent proposal holds nothing, so a crashed or capped assayer can never park an issue. A plan may also name a profile per part, which beats the goal's pin for that part alone. See docs/spec/02-configuration.md."
-  },
-
-  "// mcp": "The agents' typed channel BACK to the harness: a tools-only MCP server (a Unix socket / named pipe, never a port) wired into every launch via --mcp-config. Tools: plan_submit (a planner's verdict, validated synchronously so a rejection comes back with its reason instead of silently costing an attempt), escalate (a question with a kind and concrete options the cockpit renders as one-click answers), world_read (the harness's own view of a PR/issue, out of the store — no provider fan-out, no `gh` shell-out), report_finding (something noticed that isn't the task; queues nothing, you promote or file it), note_progress (the agent's own one-line 'what am I doing'), conclude_work / conclude_part (a terminal for work that produced no PR) and link_ticket. Identity rides on a per-agent credential, not a tool argument, so an agent can only ever write its own work. ON by default because it is purely additive — the @@LUBBDUBB_DONE@@/@@LUBBDUBB_WAITING@@ sentinels and the .lubbdubb/plan.json side channel both stay wired, and are exactly what an agent falls back to when the tools are off, unavailable, or simply unused. Deep-merged.",
-  "mcp": {
-    "// enabled": "Master switch. Default true. Off = agents run on the sentinels alone, which is a supported configuration rather than a degraded one.",
-    "enabled": true,
-    "// permissionEscalation": "The permission backstop, via `claude --permission-prompt-tool`. A tool call that agentAllowedTools doesn't cover would otherwise hang a headless agent on a prompt no human can answer; with this on it files an escalation in 'Needs you' and blocks that one agent until you allow or deny. Gated by mcp.enabled — the tool lives on this server. Off falls back to Claude's default headless behaviour (a silent deny). Default true.",
-    "permissionEscalation": true
   },
 
   "// closedPrWindowMs": "How far back a provider looks for pull requests that have LEFT the open set, so a merged or abandoned PR is observed rather than inferred from its disappearance. Feeds the cockpit's 'Recently closed' list, the pr_merged/pr_closed world events, and plan reconciliation's ability to tell a merge from an abandonment. Costs one extra list request per snapshot per provider (no per-PR fan-out). Default 21600000 (6h); 0 disables the lookup, and every consumer falls back to the older 'absence means merged' reading.",
@@ -222,9 +180,6 @@
 
   "// defaultBranch": "The repository's integration branch. A NEW agent branch is cut from it (origin/<defaultBranch> preferred over the local ref), it is the base named in a PR's base-update prompt when the provider reports none, and a PR targeting anything else is treated as stacked. Existing branches/worktrees are reused untouched and never re-based. Not auto-detected — the harness may run against a clone whose HEAD is anywhere, and a wrong guess silently mis-bases work. Default 'main'.",
   "defaultBranch": "main",
-
-  "// reapMergedBranches": "Delete the branch behind a pull request once the harness observes it MERGED: the worktree and the local ref, then the branch on the remote. Only the harness's own PRs (the same filters.prAuthor test the naming convention uses), never the default branch, and never a branch another open PR still targets — deleting an open PR's base orphans it. An abandoned PR keeps its branch: the work under it never landed. A branch already gone on the remote counts as success, which is the common case where the provider deletes head branches on merge. Default true; set false where a merged branch is somebody else's expectation.",
-  "reapMergedBranches": true,
 
   "// worktreeRoot": "Root under which per-branch worktrees are created. A relative value resolves against repoRoot (not the launch dir). Default '.lubbdubb/worktrees'.",
   "worktreeRoot": ".lubbdubb/worktrees",
