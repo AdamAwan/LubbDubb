@@ -1,5 +1,14 @@
 import { nanoid } from 'nanoid';
-import type { Agent, AgentFile, AgentFileInput, AgentFlag, AgentFlagInput, AgentUsage, UsageEvent } from '../types.js';
+import type {
+  Agent,
+  AgentFile,
+  AgentFileInput,
+  AgentFlag,
+  AgentFlagInput,
+  AgentUsage,
+  GoalFile,
+  UsageEvent,
+} from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
@@ -287,6 +296,45 @@ export class AgentStore {
       .prepare(`SELECT * FROM agent_files WHERE agent_id=? ORDER BY created_at ASC`)
       .all(agentId) as AgentFileRow[];
     return rows.map(rowToFile);
+  }
+
+  /**
+   * Every path the agents on one goal have written: `agent_files` joined out
+   * through `agents` to the task whose origin says which goal it was working,
+   * one row per path and newest first.
+   *
+   * **Scoped by the goal's subtree** — the `issue:<n>` root and its `:plan`,
+   * `:assay`, `:assess`, `:retro` and `:part:<slug>` arms, which is the
+   * population `padOriginFor` already resolves. Asked as a prefix rather than
+   * re-derived from a second taxonomy, so this cannot drift from the pad's
+   * membership. The ref is `issue:<n>`, so it carries no `LIKE` wildcards.
+   *
+   * **Code tasks only**, `detectFileOverlaps`'s narrowing for its reason: a desk
+   * agent works in a scratch directory, so a retro's `write-up.md` is not a file
+   * the repository has. Listing it under a heading about where a goal's code
+   * lives would be a *false* statement rather than a stale one.
+   *
+   * **One row per path, dated by the last write.** The row is already deduped per
+   * (agent, path) with its stamp bumped on rewrite, so the newest row for a path
+   * is the one that dates it, and the origin returned is whose that write was.
+   * Ties break on `rowid` so the same database renders the same list twice.
+   */
+  listGoalFiles(goalRef: string): GoalFile[] {
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT path, origin_ref, created_at FROM (
+           SELECT f.path AS path, t.origin_ref AS origin_ref, f.created_at AS created_at,
+                  ROW_NUMBER() OVER (PARTITION BY f.path ORDER BY f.created_at DESC, f.rowid DESC) AS rn
+           FROM agent_files f
+           JOIN agents a ON a.id = f.agent_id
+           JOIN tasks t ON t.id = a.task_id
+           WHERE t.kind = 'code' AND (t.origin_ref = ? OR t.origin_ref LIKE ?)
+         )
+         WHERE rn = 1
+         ORDER BY created_at DESC, path ASC`,
+      )
+      .all(goalRef, `${goalRef}:%`) as { path: string; origin_ref: string; created_at: string }[];
+    return rows.map((r) => ({ path: r.path, originRef: r.origin_ref, createdAt: r.created_at }));
   }
 
   /** Every recorded file across all agents, newest first — the snapshot feed. */

@@ -7,9 +7,10 @@ import { loadConfig } from '../src/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { priorWorkBriefing, type PriorWorkInput } from '../src/briefing/priorWork.js';
+import { Store } from '../src/store/store.js';
 import { gitRepo } from './support/gitRepo.js';
 import { planWithOnePart } from './support/plans.js';
-import type { Plan, ScratchEntry } from '../src/types.js';
+import type { GoalFile, Plan, ScratchEntry } from '../src/types.js';
 
 // -- the pure briefing -------------------------------------------------------
 
@@ -23,7 +24,17 @@ function bare(): PriorWorkInput {
     delivery: null,
     shortfall: null,
     entries: [],
+    files: [],
     forPart: false,
+  };
+}
+
+function file(fields: Partial<GoalFile> = {}): GoalFile {
+  return {
+    path: 'src/store/schema.ts',
+    originRef: 'issue:12:part:schema',
+    createdAt: '2026-07-30T10:00:00.000Z',
+    ...fields,
   };
 }
 
@@ -187,6 +198,43 @@ test('the prose behind each standing verdict is carried, with who cast it', () =
   assert.match(text, /assessor/);
 });
 
+test('the files the goal has been edited in are carried, attributed and in the order given', () => {
+  // The one section that is stored fields rather than stored prose. It is a join —
+  // which agents worked this goal, and which of them wrote a path last — and never a
+  // ranking: the order is the recency the store returned, a stored timestamp.
+  const text = priorWorkBriefing({
+    ...bare(),
+    files: [
+      file({ path: 'src/dispatcher/rules/issuePickup.ts', originRef: 'issue:12:part:pickup' }),
+      file({ path: 'docs/spec/06-issue-pickup.md', createdAt: '2026-07-29T10:00:00.000Z' }),
+    ],
+  });
+  assert.match(text, /src\/dispatcher\/rules\/issuePickup\.ts/);
+  assert.match(text, /issue:12:part:pickup/, 'attributed to the work that wrote it, as the pad is');
+  assert.match(text, /docs\/spec\/06-issue-pickup\.md/, 'a promoted doc is a place this goal has been written too');
+  assert.ok(
+    text.indexOf('issuePickup.ts') < text.indexOf('06-issue-pickup.md'),
+    'most recently written first, as the store returned them',
+  );
+});
+
+test('a part agent keeps the file list, because nothing else tells it where a sibling has been', () => {
+  // `forPart` suppresses the parts section and nothing else: `siblingContext` renders
+  // what a sibling was *for*, and renders nowhere at all where it has been.
+  const files = [file()];
+  assert.match(priorWorkBriefing({ ...bare(), files, forPart: true }), /src\/store\/schema\.ts/);
+});
+
+test('an over-long file list names what it dropped, the oldest first', () => {
+  const files = Array.from({ length: 30 }, (_, i) =>
+    file({ path: `src/file${i}.ts`, createdAt: `2026-07-30T${String(29 - i).padStart(2, '0')}:00:00.000Z` }),
+  );
+  const text = priorWorkBriefing({ ...bare(), files });
+  assert.match(text, /src\/file0\.ts/, 'the most recent writes are the ones kept');
+  assert.doesNotMatch(text, /src\/file29\.ts/, 'the oldest go first');
+  assert.match(text, /5 of the 30 paths are not shown here/);
+});
+
 test('an over-long pad names what it dropped rather than truncating in silence', () => {
   // A partial record read as a whole one is the failure mode; the count and the
   // tool that reaches the rest are both stated.
@@ -223,6 +271,57 @@ function systemFor(): System {
   );
 }
 
+/**
+ * An agent that *has run* on `originRef` and wrote `paths`, as the file-events hook
+ * records it. Finished, not queued: a live task on a goal's arm is a dispatch gate,
+ * and this is history rather than work in flight.
+ */
+function agentThatWrote(store: Store, originRef: string, paths: string[], kind: 'code' | 'desk' = 'code'): void {
+  const task = store.createTask({
+    kind,
+    title: `work on ${originRef}`,
+    prompt: 'do it',
+    branch: null,
+    originRef,
+    status: 'done',
+  });
+  const agent = store.createAgent({ taskId: task.id, cwd: '/tmp/wt', pid: null, status: 'done' });
+  for (const path of paths) store.recordFile(agent.id, { path, tool: 'Edit', promoted: false });
+}
+
+test('the goal file join folds the whole subtree to one row per path, newest write first', () => {
+  // A clock that moves on every write, so "which write was last" is a fact of the
+  // data rather than of how fast the test ran.
+  let tick = 0;
+  const store = new Store(':memory:', () =>
+    new Date(Date.parse('2026-07-30T00:00:00.000Z') + tick++ * 60_000).toISOString(),
+  );
+  try {
+    agentThatWrote(store, 'issue:1:plan', ['src/a.ts']);
+    agentThatWrote(store, 'issue:1:part:schema', ['src/a.ts', 'src/b.ts']);
+    // Neither of these is this goal: another issue whose ref starts with this one's
+    // (the subtree is `issue:1` or `issue:1:…`, never `issue:12`), and a desk agent
+    // whose write-up lives in a scratch directory rather than in the repository.
+    agentThatWrote(store, 'issue:12:part:other', ['src/elsewhere.ts']);
+    agentThatWrote(store, 'issue:1:retro', ['write-up.md'], 'desk');
+
+    const files = store.listGoalFiles('issue:1');
+    assert.deepEqual(
+      files.map((f) => f.path),
+      ['src/b.ts', 'src/a.ts'],
+      'one row per path, most recently written first, and no other goal or scratch directory in it',
+    );
+    assert.equal(
+      files.find((f) => f.path === 'src/a.ts')?.originRef,
+      'issue:1:part:schema',
+      'a path written twice is dated and attributed by its last write',
+    );
+    assert.equal(store.listGoalFiles('issue:3').length, 0, 'a goal nobody has worked has nothing to say');
+  } finally {
+    store.close();
+  }
+});
+
 test("a part's agent is handed what the earlier agents on its issue wrote down", async () => {
   const system = systemFor();
   try {
@@ -246,6 +345,7 @@ test("a part's agent is handed what the earlier agents on its issue wrote down",
       topic: 'gotcha',
       note: 'the fake provider leaves labelsAddedByViewer unset',
     });
+    agentThatWrote(system.store, 'issue:1:plan', ['src/tags/registry.ts']);
     system.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
     await system.harness.runCycle('manual');
 
@@ -254,6 +354,9 @@ test("a part's agent is handed what the earlier agents on its issue wrote down",
     assert.match(task.prompt, /Ship the thing/, 'the rendered template is still first');
     assert.match(task.prompt, /the registry is the only place/i, "the planner's write-up came with it");
     assert.match(task.prompt, /labelsAddedByViewer/, 'so did the pad');
+    // The cheapest orientation there is: where the goal has already been edited,
+    // which turns a grep phase into a Read.
+    assert.match(task.prompt, /src\/tags\/registry\.ts/, 'and the files the earlier agent wrote');
   } finally {
     system.store.close();
   }

@@ -356,6 +356,24 @@ transcript is durable.
 repeat refreshes the row rather than duplicating. `getFlag`, `listFlags(agentId)`, `listAllFlags`,
 `listFiles(agentId)`, `listAllFiles`.
 
+`listGoalFiles(goalRef)` is the one read that asks the files question of a **goal** rather than an
+agent: `agent_files` joined out through `agents` to the task whose `origin_ref` says which goal it was
+working, folded to one `GoalFile` (`path`, `originRef`, `createdAt`) per path and ordered newest write
+first. It is what the prior-work briefing's file section renders
+([09](09-execution.md#what-earlier-agents-worked-out-reaches-the-next-one)). Four things it settles:
+
+- **The subtree is a prefix**, the `issue:<n>` root plus `issue:<n>:…` — the membership `padOriginFor`
+  already resolves, asked as SQL rather than re-derived from a second taxonomy, so it cannot drift from
+  the pad's. `issue:1` therefore does not reach `issue:12`.
+- **Code tasks only**, `detectFileOverlaps`'s narrowing ([12](12-artifacts-and-files.md#file-overlap-detection))
+  for its reason: a desk agent works in a scratch directory, so a retro's write-up is not a file the
+  repository has, and listing it as one would be false rather than merely stale.
+- **One row per path, dated and attributed by its last write.** A row is already deduped per
+  (agent, path) with its stamp bumped on rewrite, so the newest row for a path is the one that dates it.
+  Ties break on `rowid`, so one database renders one list.
+- **No promotion flag and no tool on the returned row.** The reader renders neither, and a field carried
+  but unrendered is one a later reader has to guess the meaning of.
+
 ### Findings
 
 `recordFinding(agentId, taskId, originRef, input)` → `{finding, created}`; a verbatim repeat refreshes

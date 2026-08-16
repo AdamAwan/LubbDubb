@@ -1,6 +1,7 @@
 import { padTestimony } from '../retro/dossier.js';
 import { liveParts } from '../plans/parts.js';
 import type {
+  GoalFile,
   IssueAssay,
   IssueConclusion,
   IssueDelivery,
@@ -40,13 +41,38 @@ import type {
  * - **a part's `rationale` / `acceptance`** — declared by the planner, stored, and
  *   rendered nowhere at all;
  * - **the verdicts' prose** — an assay's summary, a conclusion's note, an
- *   assessment's finding either way.
+ *   assessment's finding either way;
+ * - **the paths the goal has been edited in**, the one entry here that is not prose
+ *   an agent wrote. It is the cheapest orientation there is — it turns a grep phase
+ *   into a Read — and no template renders it either.
  *
  * So it deliberately omits `plan.reason` (rendered by `currentPlanSummary` to a
  * replanner and as `{plan}` to a part agent), a part's status, branch and PR number
  * (`currentPlanSummary` and `siblingContext`), and **every world fact**: a pull
  * request's state is live through `world_read`, and pasted into a prompt it would
  * be a stale second reading of something the agent can ask about properly.
+ *
+ * ## Where the file list sits against those two rules
+ *
+ * It is the one section that is stored *fields* rather than stored prose, so both
+ * rules are answered here rather than left to be re-argued (issue #354).
+ *
+ * **"It derives nothing"** still holds: a path is `agent_files.path` quoted back and
+ * the grouping is a join — which agents worked this goal, and which of them wrote a
+ * path last. What must never appear is ranking, relevance scoring or "the files you
+ * probably want", which would be exactly the second opinion about somebody else's
+ * decision that this module and `retroDossier` both refuse. The order is recency,
+ * which is a stored timestamp, not a judgement about importance.
+ *
+ * **"Every world fact is omitted"** also holds, because a touched-path list is not
+ * one. A pull request's state is a fact about the world *now*, which `world_read`
+ * answers better than a paste can; this is a fact about **the goal's own history** —
+ * where its agents have already been — exactly like the pad, and no live tool
+ * answers it. What it is not is a claim about the branch this dispatch is on: a path
+ * written on a sibling's branch may not exist here, and a later rename leaves the
+ * record pointing at nothing. That is testimony going stale, which the heading's own
+ * framing already covers, so the section inherits that sentence rather than writing
+ * a softer one of its own.
  *
  * ## Why it is bounded
  *
@@ -67,6 +93,16 @@ const MAX_PAD_ENTRIES = 15;
  */
 const MAX_DOCUMENT = 4000;
 
+/**
+ * Paths beyond this are dropped — the oldest first, and said so, `MAX_PAD_ENTRIES`'s
+ * rule for its reason. Higher than the pad's because a line here is a path rather
+ * than a paragraph, and lower than it deserves to look: this is the section that
+ * scales with the *size* of the work rather than with what anyone chose to write
+ * down, and a goal that has been through twelve parts would otherwise spend more of
+ * the briefing on a file index than on the reasoning behind it.
+ */
+const MAX_FILE_PATHS = 25;
+
 export interface PriorWorkInput {
   /** The plan for this goal, whatever its verdict — a `single` plan has a write-up too. */
   plan: Plan | null;
@@ -81,10 +117,17 @@ export interface PriorWorkInput {
   delivery: IssueDelivery | null;
   shortfall: IssueShortfall | null;
   entries: ScratchEntry[];
+  /** Newest write first, one row per path — `Store.listGoalFiles`. */
+  files: GoalFile[];
   /**
    * True when the dispatch is for a part of this plan. `plan-part` already renders
    * every sibling's intent through `siblingContext`, so repeating the parts section
    * there would be the duplication this module's whole rule exists to refuse.
+   *
+   * It suppresses the parts section and **nothing else**. In particular the file
+   * list stays on for a part dispatch: `siblingContext` renders what a sibling was
+   * *for*, and nowhere renders where it has been — so a part agent is the reader
+   * with the most to gain from it, not the one to withhold it from.
    */
   forPart: boolean;
 }
@@ -102,6 +145,7 @@ export function priorWorkBriefing(input: PriorWorkInput): string {
     planSection(input.plan),
     partsSection(input.forPart ? [] : input.parts),
     verdictSection(input),
+    filesSection(input.files),
   ].filter(Boolean);
   if (sections.length === 0) return '';
   return [
@@ -179,6 +223,46 @@ function partsSection(parts: PlanPart[]): string {
     return `- **${p.slug}** (${p.title})${why}${done}`;
   });
   return ['### What each part of the plan was for', '', ...lines].join('\n');
+}
+
+/**
+ * Where this goal's work has actually been: one line per path, most recent write
+ * first, attributed to the origin that made it.
+ *
+ * **Last**, because it is the index and everything above it is the argument — an
+ * agent that reads only the top of a long briefing should get the reasoning, and
+ * one that has read the reasoning is exactly who a list of paths is useful to.
+ *
+ * **Promoted paths are in it, unmarked.** `agent_files.promoted` distinguishes a
+ * report from a code change, and both are places this goal has been written; a
+ * written-up report is often the first thing worth reading, and `docs/…/x.md`
+ * against `src/x.ts` already says which is which. Marking it would be a second
+ * account of what the path already states.
+ *
+ * **No note about staleness here.** The heading above says these are as old as their
+ * timestamps and that the repository is the truth — which is the same warning a
+ * renamed or sibling-branch path needs, and repeating it softer would let the two
+ * readings drift.
+ */
+function filesSection(files: GoalFile[]): string {
+  if (files.length === 0) return '';
+  const dropped = Math.max(0, files.length - MAX_FILE_PATHS);
+  const shown = dropped > 0 ? files.slice(0, MAX_FILE_PATHS) : files;
+  const lines = shown.map((f) => `- \`${f.path}\` — ${f.originRef} · ${f.createdAt}`);
+  if (dropped > 0) {
+    lines.push(
+      `\n(${dropped} of the ${files.length} path${files.length === 1 ? '' : 's'} are not shown here — the oldest went first.)`,
+    );
+  }
+  return [
+    '### Files this goal has been edited in',
+    '',
+    // Not "the agents above": this section renders on a goal whose only record is
+    // its file rows, and there is nothing above it there.
+    'Written by the agents on this goal, most recently written first, and as the paths stood then.',
+    '',
+    ...lines,
+  ].join('\n');
 }
 
 /** The prose behind the verdicts standing on this goal — never the verdicts as a gate reads them. */
