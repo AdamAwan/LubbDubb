@@ -17,6 +17,9 @@ Two operator readings are folded out of those records rather than kept beside th
 [spend breakdown](#the-spend-breakdown), which asks where the money went, and the
 [reliability breakdown](#the-reliability-breakdown), which asks what it bought. Neither has a table.
 
+All of that is retrospective. The [burn watch](#the-burn-watch) is the one cost reading taken while
+the money is still being spent — it acts on nothing and files a visible obligation to go and look.
+
 ## The error log
 
 **`src/errorLog.ts` is the one error-recording path.** Anything that catches a failure calls
@@ -377,6 +380,69 @@ the goal. That is a large part of the argument for cohorting goals rather than b
 
 **Fetched on the tab's first visit**, not with the breakdown: it reads two months of world events on
 top of the same all-time agent walk, and a tab an operator never opens should cost nothing.
+
+## The burn watch
+
+Every reading above is a post-mortem, read by an operator who went looking. `burnPass`
+(`src/spendBurn.ts`) is the one cost reading taken **while the money is still being spent**:
+`recordAgentUsage` folds a cumulative report onto the `agents` row on every `result` event, so
+`Agent.costUsd` climbs turn by turn, and a run that is going to cost forty dollars is answerable long
+before it settles.
+
+`SpendBurnDesk` runs it once a pulse from `Harness.runCycle`, beside the other bookkeeping desks and
+deliberately not in the dispatcher: it staffs nobody, holds nothing, and no rule reads what it
+writes. It is handed the cycle's own `agents` and `tasks` rather than taking its own reads, so the
+pulse walks those two tables once. Configured by `spendBurn` ([02](02-configuration.md#spendburn)).
+
+**The comparison is against the run's own kind of work, and the bucket is the rule _and_ the
+profile.** That pairing is not a refinement — it is what stops the check being useless. A goal pinned
+to a deep profile legitimately costs several times the same rule on a cheap one, so a rule-only
+baseline would flag every pinned run on the deployment and nothing else. Both halves are already on
+the task, resolved once at dispatch.
+
+**The median, never the mean.** The runaway this exists to catch is exactly the observation that
+drags a mean upwards, so a fleet that had three expensive afternoons would quietly raise its own
+threshold until nothing could trip it. `rollUpTaskTypes`' `perRunUsd` is a mean and is deliberately
+not reused here; it answers "what does this cost me", which is a different question and wants every
+run in it.
+
+**Three things must hold together**, because a multiple on its own fires constantly:
+
+- **`minimumRuns` settled runs in the bucket**, or there is no median worth the name. Below that the
+  bucket is **absent rather than zero** — a zero would make every live run in a young bucket
+  infinitely over its median.
+- **`floorUsd` in absolute money.** Four times the median of a rule that costs eight cents is
+  thirty-two cents, and a notice about that is the one that teaches an operator to dismiss the next
+  one unread.
+- **`multiple` itself**, kept generous: the spread inside one bucket is real work, not noise.
+
+`ceilingUsd` is a separate, profile-blind arm for the case the other three cannot cover — a
+deployment with no history at all, where the first runaway is also the first run. Off by default,
+because the right number is a property of the deployment's work and nothing here can guess it. The
+notice says which arm fired: a run flagged for passing a flat ceiling and one flagged against its own
+kind of work are different facts, and the ceiling notice says out loud that it is not a comparison.
+
+**It files a note and kills nothing.** An expensive run is not a wrong run, and this module cannot
+tell the two apart — a bucket mixes a one-line fix with a goal that touches nine files. Killing on a
+threshold would eventually kill work that was going to land. The verdict is a `burn` human task
+([13](13-jobs-and-findings.md#human-tasks)): visible, holding nothing, and answered the same two ways
+a bench row is. What the operator lacked was not the stop button but the prompt to go and look.
+
+**The title carries no figure and the detail carries all of them.** `recordHumanTask` dedups on
+`(agentId, originRef, title, kind)`, so a title naming the dollars would file a fresh row every turn
+the run reported — one notice per pulse, about one agent. The same dedup refreshes the detail in
+place, which is what makes the figure an operator reads the one that is true _now_ rather than the
+one that tripped the watch.
+
+**It settles itself**, for the close-out sweep's reason — the run it names is a thing it watches every
+pulse — with a resolution naming what the run finally cost and how it ended. A notice the operator
+already settled is not re-filed while the run continues. Turning the watch off files nothing and
+**still settles what is standing**, or a row about a run that ended last Tuesday would have no way
+left to close.
+
+**PTY mode reports no usage at all** ([above](#usage-accounting)), so `costUsd` stays null and no run
+there can ever trip this. That is the fail-open direction and the only safe one: unmeasured is not
+free, and a watch that cannot see must not be allowed to conclude anything — in either direction.
 
 ## The reliability breakdown
 

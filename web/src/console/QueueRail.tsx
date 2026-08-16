@@ -13,6 +13,7 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   proposal: 'Plan',
   bench: 'Bench',
   close_out: 'Close-out',
+  burn: 'Spend',
   limit: 'Usage limit',
 };
 

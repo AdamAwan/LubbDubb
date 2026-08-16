@@ -38,6 +38,7 @@ import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/serv
 import { McpDesktopServer } from './mcp/desktop.js';
 import { PrNamingDesk } from './prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
+import { SpendBurnDesk } from './spendBurnDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
 import type { McpToolDeps } from './mcp/tools/context.js';
@@ -594,6 +595,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // the item is precisely the part the harness is not doing.
   const closeOuts = new DeliveryCloseOutDesk(store);
 
+  // The one cost reading taken while the money is still being spent. Store-only
+  // for the close-out desk's reason and one more: an expensive run is not a wrong
+  // run, so the verdict is a visible obligation and never a kill.
+  const burn = new SpendBurnDesk(store, config.spendBurn);
+
   // Where a recurrence becomes a queued job. Store-only, like the close-out desk:
   // it writes the same `jobs` row the launch route writes and leaves every
   // question about what happens to it to rule `manual-job`.
@@ -615,6 +621,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     assays,
     naming,
     closeOuts,
+    burn,
     branchReaps,
     schedules,
     graph,

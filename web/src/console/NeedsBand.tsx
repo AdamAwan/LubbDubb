@@ -70,7 +70,11 @@ export function NeedsBand({
  * @public shared with the ask panel, which draws the body under its own header
  */
 export function needBody(row: NeedRow, view: CockpitView, actions: CockpitActions): ReactNode {
-  if (row.kind === 'bench' || row.kind === 'close_out') {
+  // A burn notice answers the same two ways as a bench row — done, or declined
+  // with a reason — because that is all it ever asks for: it holds nothing, and
+  // the run it names carries on either way. What differs is only where the
+  // operator goes next, and the row's own agent id is what says that.
+  if (row.kind === 'bench' || row.kind === 'close_out' || row.kind === 'burn') {
     const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
     if (!task) return null;
     return (

@@ -532,7 +532,7 @@ interface HumanTask {
   detail: string | null; // what to do and how to know it is done, markdown
   originRef: string | null; // the work it belongs to: "issue:12", "issue:12:part:schema", "pr:42"
   partId: string | null; // the plan part this task *is*, when a planner declared a step for a person
-  kind: 'ask' | 'close_out'; // who it is for the harness — see below
+  kind: 'ask' | 'close_out' | 'burn'; // who it is for the harness — see below
   agentId: string | null; // the requesting agent, from the credential; null when nobody individual asked
   taskId: string | null;
   status: 'open' | 'done' | 'declined';
@@ -661,14 +661,18 @@ amended plan already uses on the human part it dropped.
 
 Tests: `test/deliveryCloseOut.test.ts`.
 
-### The three arms that file one
+### The four arms that file one
 
 - **`request_human_task`**, the MCP tool: `{title, detail?}` and nothing that names work. Identity is
   structural, as for every write tool. It queues nothing and blocks nothing, and the response says so
   outright — an agent that believed filing this arranged something would sit waiting for it.
   → [11](11-mcp-tools.md#request_human_task)
 - **The close-out sweep**, the harness's own: `kind: 'close_out'`, a null `agentId` because nobody
-  individual asked, and the only arm that files without anyone typing anything. See above.
+  individual asked, and one of the two arms that file without anyone typing anything. See above.
+- **The burn watch**, the harness's other: `kind: 'burn'`, and the one arm whose `agentId` is not the
+  agent that _asked_ but the agent the row is _about_ — a live run spending far past what its kind of
+  work costs. It settles itself when that run ends, for the close-out's reason. It holds nothing and
+  stops nothing; what it buys is that somebody looks. → [18](18-observability.md#the-burn-watch)
 - **`POST /api/human-tasks`**, the operator's own: the same row with no agent behind it, which is
   exactly what a null `agentId` means. There is no `requestedBy` column, so nothing can disagree with
   the ids beside it. Both arms validate through the same pure `validateHumanTask`

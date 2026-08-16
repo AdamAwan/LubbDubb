@@ -3,6 +3,7 @@ import { isAbsolute, resolve } from 'node:path';
 import type { IntegrationSelection } from './integrations/integration.js';
 import { DEFAULT_CONTAINER_TYPES } from './issueRelations.js';
 import { DEFAULT_PLANNING, type PlanningPolicy } from './plans/planning.js';
+import { DEFAULT_BURN, validateBurnPolicy, type BurnPolicy } from './spendBurn.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from './validation/policy.js';
 import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
@@ -130,6 +131,14 @@ export interface Config {
    * set alone. Only the `rule` dispatcher implements the funnel.
    */
   planning: PlanningPolicy;
+  /**
+   * The live burn watch (`src/spendBurn.ts`) — what to do about a run that is
+   * spending far past what its kind of work costs, while it is still running.
+   * **On by default**, because it spends no agent and gates nothing: it files a
+   * visible `burn` obligation and settles it when the run ends. Deep-merged, so
+   * one field can be set alone.
+   */
+  spendBurn: BurnPolicy;
   /**
    * The validation plan (`src/validation/`) — how anyone checks the *goal* was
    * met, as steps a person or an agent runs rather than as a paragraph nobody
@@ -437,6 +446,7 @@ const DEFAULTS: Config = {
   // Each policy's own module owns the operator default; the dispatcher's fallback
   // for an *omitted* policy is a separate answer (off) and lives with the rules.
   planning: DEFAULT_PLANNING,
+  spendBurn: DEFAULT_BURN,
   validation: DEFAULT_VALIDATION,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   ci: { checks: [] },
@@ -633,6 +643,8 @@ function mergeLayers(lower: Partial<Config>, upper: Partial<Config>): Partial<Co
     merged.integrations = { ...DEFAULTS.integrations, ...lower.integrations, ...upper.integrations };
   if (lower.planning ?? upper.planning)
     merged.planning = { ...DEFAULTS.planning, ...lower.planning, ...upper.planning };
+  if (lower.spendBurn ?? upper.spendBurn)
+    merged.spendBurn = { ...DEFAULTS.spendBurn, ...lower.spendBurn, ...upper.spendBurn };
   if (lower.validation ?? upper.validation)
     merged.validation = { ...DEFAULTS.validation, ...lower.validation, ...upper.validation };
   if (lower.auth ?? upper.auth) merged.auth = { ...DEFAULTS.auth, ...lower.auth, ...upper.auth };
@@ -693,6 +705,10 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // planning is nested too — deep-merge so `{"requireApproval": true}` alone keeps
   // the default part-concurrency cap instead of leaving it undefined.
   merged.planning = { ...DEFAULTS.planning, ...overrides.planning };
+  // And the burn watch, so `{"spendBurn": {"multiple": 6}}` keeps the default
+  // floor and run minimum rather than leaving them undefined — which would read
+  // as a watch that fires on any run above six times nothing.
+  merged.spendBurn = { ...DEFAULTS.spendBurn, ...overrides.spendBurn };
   merged.validation = { ...DEFAULTS.validation, ...overrides.validation };
 
   // And for auth, so `{"auth": {"tokenFile": "..."}}` doesn't silently disable it.
@@ -712,6 +728,11 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // or a rule id that can never match, would both run as if the operator had
   // configured nothing at all.
   validateAgentModels(merged.agentModels);
+
+  // And the burn watch, for the same reason: a multiple at or below 1, or a
+  // minimum of no runs, leaves a watch that is on, files constantly and teaches
+  // the operator to stop reading it.
+  validateBurnPolicy(merged.spendBurn);
 
   // The one configuration that is never what anyone means. Turning auth off is a
   // supported local choice (it is how the test suite runs); binding a routable
