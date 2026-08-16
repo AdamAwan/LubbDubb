@@ -1,0 +1,785 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LubbDubb — Tickets tab, live: the mirror as the one work surface</title>
+<style>
+  /* Tokens from `web/src/console/console.css` (`--cn-*`) and the reference
+     treatment from `web/src/styles.css`, carried over from `tickets-tab.html`
+     unchanged — this is the same tab, one iteration on. Class names are
+     unprefixed: a picture, not a stylesheet anyone ships. */
+  :root{
+    --bg:#0d0e11; --panel:#15171b; --panel-2:#1b1e23; --line:#24272e; --line-soft:#1e2126;
+    --fg:#e7e9ec; --fg-dim:#9aa1ab; --fg-faint:#6b727c;
+    --accent:#5b8cff; --red:#ff5f5f; --amber:#f5a524; --green:#3ecf8e; --violet:#a78bfa;
+    --r:8px; --r-sm:6px;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --ui:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;
+    --link-line:#4a7794; --link-fill:#17242c; --link-ink:#7fb8dc; --blue:#5b9ec9;
+
+    /* The feature ladder: twelve hues at one lightness and one chroma, so no
+       feature can come out unreadable and no two adjacent ones read as the same
+       colour. Assignment is next-least-used at first sight, then persisted —
+       *not* a random hue per feature. See the note below. */
+    --f1:#6ea8fe; --f2:#f0a3c0; --f3:#7fd4a8; --f4:#e0b25c; --f5:#b39ded; --f6:#5fc9d6;
+    --f7:#e88f6a; --f8:#93c47d; --f9:#c9a0dc; --f10:#7ab8c9; --f11:#d6a86a; --f12:#8fb0e8;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:#08090b;color:var(--fg);font:13px/1.45 var(--ui);-webkit-font-smoothing:antialiased}
+  button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+  a{text-decoration:none;color:inherit}
+
+  /* ---------- the mockup page around the frame ---------- */
+  .sheet{max-width:1620px;margin:0 auto;padding:22px 18px 64px}
+  .cap{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+  .cap h1{margin:0;font-size:15px;font-weight:600;letter-spacing:.2px}
+  .cap .sub{font-size:12.5px;color:var(--fg-faint)}
+  .cap .sub a{color:var(--link-ink)}
+  .frame{border:1px solid #22252b;border-radius:10px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.45)}
+  .framecap{display:flex;align-items:baseline;gap:8px;margin:26px 0 8px;font-size:12px;color:var(--fg-faint)}
+  .framecap b{color:var(--fg-dim);font-weight:600;font-size:12.5px}
+
+  .urlbar{display:flex;align-items:center;gap:9px;padding:7px 12px;background:#101216;
+          border-bottom:1px solid var(--line)}
+  .urlbar .nav{display:flex;gap:6px;color:var(--fg-faint);font-size:13px}
+  .urlbar .box{flex:1;min-width:0;border:1px solid var(--line);border-radius:99px;background:var(--panel);
+               padding:4px 12px;font:11.5px var(--mono);color:var(--fg-dim);overflow:hidden;
+               text-overflow:ellipsis;white-space:nowrap}
+  .urlbar .box em{color:var(--fg);font-style:normal}
+
+  /* ---------- shell ---------- */
+  .app{display:grid;grid-template-rows:auto 1fr;height:880px;background:var(--bg)}
+  .bar{display:flex;align-items:center;gap:16px;padding:0 14px;min-height:46px;flex-wrap:wrap;
+       border-bottom:1px solid var(--line);background:var(--panel)}
+  .ident{display:flex;align-items:center;gap:8px;font-weight:600;letter-spacing:.2px}
+  .dot{width:7px;height:7px;border-radius:50%;background:var(--green);box-shadow:0 0 0 3px rgba(62,207,142,.15)}
+  .bar .sep{width:1px;height:20px;background:var(--line)}
+  .reads{display:flex;align-items:center;gap:6px;margin-left:auto;flex-wrap:wrap;justify-content:flex-end}
+  .read{display:flex;align-items:baseline;gap:6px;padding:4px 9px;border:1px solid var(--line);
+        border-radius:var(--r-sm);background:var(--panel-2);white-space:nowrap}
+  .read b{font:600 12px/1 var(--mono)}
+  .read span{font-size:11px;color:var(--fg-faint);text-transform:uppercase;letter-spacing:.6px}
+  .read.quiet b{color:var(--fg-faint)}
+  .topnav{display:flex;gap:4px;align-items:center;flex-wrap:nowrap;flex:0 0 auto}
+  .topnav button{padding:5px 12px;border:1px solid transparent;border-radius:var(--r-sm);font-size:13px;
+                 color:var(--fg-faint);white-space:nowrap}
+  .topnav .on{background:var(--panel-2);color:var(--fg);border-color:var(--line)}
+  .topnav .n{font:600 10.5px var(--mono);color:var(--fg-faint);font-style:italic}
+
+  .body{display:grid;grid-template-columns:300px 1fr;min-height:0}
+  @media (max-width:1100px){ .body{grid-template-columns:1fr} }
+
+  /* ---------- queue rail (context only, unchanged) ---------- */
+  .rail{border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+  .rail-head{display:flex;align-items:center;gap:8px;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .rail-head h2{margin:0;font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--fg-dim)}
+  .count{margin-left:auto;font:600 11px/1 var(--mono);background:var(--red);color:#180404;padding:3px 7px;border-radius:99px}
+  .rail-list{overflow:auto;padding:8px;display:flex;flex-direction:column;gap:6px}
+  .q{display:grid;grid-template-columns:3px 1fr;gap:10px;border:1px solid var(--line);border-radius:var(--r);
+     background:var(--panel-2);text-align:left;overflow:hidden}
+  .q .stripe{background:var(--amber)}
+  .q.urgent .stripe{background:var(--red)}
+  .q .qin{padding:10px 12px 11px 2px}
+  .qkind{display:flex;align-items:center;gap:7px;margin-bottom:5px}
+  .tag{font:600 10px/1 var(--mono);letter-spacing:.6px;text-transform:uppercase;padding:3px 6px;border-radius:4px;
+       background:#2a2118;color:var(--amber)}
+  .urgent .tag{background:#2b1517;color:var(--red)}
+  .qage{margin-left:auto;font:11px var(--mono);color:var(--fg-faint)}
+  .qtitle{font-size:13px;line-height:1.35;margin:0 0 6px}
+  .qmeta{display:flex;gap:8px;font-size:11.5px;color:var(--fg-faint);flex-wrap:wrap}
+  .railsub{padding:10px 14px 4px;font-size:11px;letter-spacing:.7px;text-transform:uppercase;color:var(--fg-faint)}
+
+  /* ---------- situation ---------- */
+  .sit{overflow:auto;min-height:0;padding:14px;position:relative}
+  .dhead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin:0 0 4px}
+  .dhead h1{margin:0;font-size:19px;line-height:1.3;font-weight:600}
+  .dhead .n{font:600 11px var(--mono);color:var(--fg-faint);background:var(--panel-2);
+            border:1px solid var(--line);padding:2px 7px;border-radius:99px}
+  .dhead .live{font:600 11px var(--mono);color:#8fe3bd;background:#12241d;border:1px solid #1f4436;
+               padding:2px 7px;border-radius:99px}
+  .dhead .more{margin-left:auto;font-size:11.5px;color:var(--fg-faint)}
+  .dnote{margin:0 0 12px;font-size:12.5px;color:var(--fg-faint);max-width:96ch;line-height:1.55}
+  .dnote b{color:var(--fg-dim)}
+
+  /* ---------- filters ---------- */
+  .filters{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:9px 11px;margin-bottom:8px;
+           border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+  .fgroup{display:flex;align-items:center;gap:7px;min-width:0}
+  .flabel{font-size:10.5px;letter-spacing:.7px;text-transform:uppercase;color:var(--fg-faint);white-space:nowrap}
+  .seg{display:flex;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;background:var(--panel-2)}
+  .seg button{padding:4px 10px;font-size:12px;color:var(--fg-faint);border-right:1px solid var(--line);white-space:nowrap}
+  .seg button:last-child{border-right:0}
+  .seg button.on{background:#212832;color:var(--fg)}
+  .fdiv{width:1px;height:22px;background:var(--line)}
+  .fsum{margin-left:auto;font-size:11.5px;color:var(--fg-faint);white-space:nowrap}
+  .fsum b{color:var(--fg-dim);font-weight:600}
+
+  /* the second tier: the tracker's own states, only drawn for a provider that has them */
+  .states2{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 11px;margin-bottom:8px;
+           border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+  .sbtn{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border:1px solid var(--line);
+        border-radius:99px;background:var(--panel-2);font-size:11.5px;color:var(--fg-dim);white-space:nowrap}
+  .sbtn .k{font:600 10px var(--mono);color:var(--fg-faint)}
+  .sbtn.on{border-color:#33507f;background:#161d2b;color:var(--fg)}
+  .sbtn.gate{border-color:#2a4a3a}
+  .sbtn .gatemark{color:#6fce9f;font-size:10px}
+  .states2 .why{margin-left:auto;font-size:11px;color:var(--fg-faint)}
+
+  /* the feature legend, which is also a filter */
+  .legend{display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:8px 11px;margin-bottom:10px;
+          border:1px solid var(--line);border-radius:var(--r);background:var(--panel)}
+  .fchip{display:inline-flex;align-items:center;gap:6px;padding:3px 9px 3px 7px;border:1px solid var(--line);
+         border-radius:99px;background:var(--panel-2);font-size:11.5px;color:var(--fg-dim);white-space:nowrap}
+  .fchip .sw{width:8px;height:8px;border-radius:2px;flex:0 0 auto}
+  .fchip .n{font:600 10px var(--mono);color:var(--fg-faint)}
+  .fchip.on{color:var(--fg);border-color:#3a4150;background:#20242c}
+  .fchip.orphan .sw{background:repeating-linear-gradient(45deg,#3a3f48,#3a3f48 2px,#22262c 2px,#22262c 4px)}
+
+  /* ---------- the table ---------- */
+  .card{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);overflow:visible}
+  .rows{display:grid}
+  .thead,.trow{display:grid;
+    grid-template-columns:64px minmax(300px,2.2fr) 190px 132px 128px 84px 82px 92px;
+    gap:10px;align-items:center;padding:9px 12px}
+  .thead{border-bottom:1px solid var(--line);font-size:10.5px;letter-spacing:.7px;text-transform:uppercase;
+         color:var(--fg-faint);position:sticky;top:0;background:var(--panel);z-index:3}
+  .thead button{font:inherit;letter-spacing:inherit;text-transform:inherit;color:var(--fg-faint)}
+  .thead button.on{color:var(--fg-dim)}
+  .num{text-align:right;justify-self:end}
+  .arrow{font-style:normal;font-size:8px;margin-left:3px}
+  .trow{border-top:1px solid var(--line-soft);position:relative}
+  .trow:hover{background:#171a1f}
+  .trow.frozen{opacity:.62}
+  .trow.frozen:hover{opacity:.86}
+  .id{font:600 12px var(--mono);color:var(--fg-faint)}
+  .what{min-width:0}
+  .name{display:block;font-weight:600;font-size:13px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sub{display:flex;align-items:center;gap:7px;margin-top:3px;font-size:11.5px;color:var(--fg-faint);flex-wrap:wrap}
+  .chip{display:inline-block;font:600 10px/1 var(--mono);letter-spacing:.5px;text-transform:uppercase;
+        padding:3px 6px;border-radius:4px;background:var(--panel-2);color:var(--fg-faint);border:1px solid var(--line);
+        font-style:normal}
+  .chip.verdict{background:#14231c;color:#7fd4a8;border-color:#1f4436}
+  .chip.short{background:#2a2118;color:var(--amber);border-color:#4a3a1d}
+
+  /* feature cell */
+  .feat{display:inline-flex;align-items:center;gap:7px;min-width:0;padding:3px 8px 3px 6px;border-radius:99px;
+        border:1px solid var(--line);background:var(--panel-2);max-width:100%}
+  .feat .sw{width:8px;height:8px;border-radius:2px;flex:0 0 auto}
+  .feat .fn{font:600 10px var(--mono);color:var(--fg-faint);flex:0 0 auto}
+  .feat .ft{font-size:11.5px;color:var(--fg-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .feat.orphan{border-style:dashed;color:var(--fg-faint)}
+  .feat.orphan .sw{background:repeating-linear-gradient(45deg,#3a3f48,#3a3f48 2px,#22262c 2px,#22262c 4px)}
+  .feat.unknown{border-style:dotted}
+
+  /* watch switch — a control, in the table */
+  .sw2{display:inline-flex;border:1px solid var(--line);border-radius:var(--r-sm);overflow:hidden;background:var(--panel-2)}
+  .sw2 button{padding:3px 8px;font-size:11px;color:var(--fg-faint);border-right:1px solid var(--line)}
+  .sw2 button:last-child{border-right:0}
+  .sw2 button.on.w{background:#12241d;color:#8fe3bd}
+  .sw2 button.on.i{background:#2b1517;color:#ff9b9b}
+  .sw2 button.on.u{background:#212832;color:var(--fg-dim)}
+  .sw2.busy{opacity:.5}
+  .casc{display:block;margin-top:3px;font-size:10.5px;color:var(--fg-faint)}
+
+  /* state chips — the tracker's own words */
+  .st{display:inline-flex;align-items:center;gap:6px;padding:3px 8px;border-radius:99px;border:1px solid var(--line);
+      background:var(--panel-2);font-size:11.5px;color:var(--fg-dim);white-space:nowrap}
+  .st .d{width:6px;height:6px;border-radius:50%;background:var(--fg-faint)}
+  .st.new .d{background:#8fb0e8} .st.ready .d{background:#6ea8fe} .st.active .d{background:var(--green)}
+  .st.review .d{background:var(--amber)} .st.resolved .d{background:var(--violet)}
+  .st.closed{color:var(--fg-faint)} .st.closed .d{background:#4b5158}
+  .st.removed{color:var(--fg-faint)} .st.removed .d{background:#4b5158}
+
+  .cost{font:12px var(--mono);text-align:right;justify-self:end}
+  .cost.none{color:var(--fg-faint)}
+  .added{font:11.5px var(--mono);color:var(--fg-faint);text-align:right;justify-self:end}
+  .refs{display:flex;gap:6px;justify-content:flex-end;align-items:center}
+  .ref-goal{border:1px solid var(--link-line);background:var(--link-fill);color:var(--link-ink);
+            border-radius:var(--r-sm);padding:2px 7px;font:600 11px var(--mono)}
+  .ext{border:1px solid var(--line);border-radius:var(--r-sm);padding:2px 7px;font:600 11px var(--mono);color:var(--fg-dim)}
+
+  /* the "why not" marker and its tooltip */
+  .why-b{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;border-radius:50%;
+         border:1px solid #4a3a1d;background:#2a2118;color:var(--amber);font:600 10px var(--mono)}
+  .why-b.quiet{border-color:var(--line);background:var(--panel-2);color:var(--fg-faint)}
+  .tip{position:absolute;z-index:6;left:250px;top:44px;width:430px;padding:10px 12px;border:1px solid #3a4150;
+       border-radius:var(--r);background:#1b1f26;box-shadow:0 14px 34px rgba(0,0,0,.55)}
+  .tip h4{margin:0 0 6px;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--fg-dim)}
+  .tip ul{margin:0;padding-left:16px}
+  .tip li{font-size:12px;line-height:1.5;color:var(--fg-dim);margin:2px 0}
+  .tip li b{color:var(--fg)}
+  .tip .foot{margin-top:7px;padding-top:7px;border-top:1px solid var(--line);font-size:11px;color:var(--fg-faint)}
+  .tip code{font:11px var(--mono);color:var(--link-ink)}
+
+  .sentinel{padding:12px;text-align:center;font-size:12px;color:var(--fg-faint);border-top:1px solid var(--line-soft);margin:0}
+  .spin{display:inline-block;width:10px;height:10px;margin-right:7px;border:2px solid var(--line);
+        border-top-color:var(--fg-faint);border-radius:50%;vertical-align:-1px}
+
+  /* ---------- notes ---------- */
+  .notes{display:grid;grid-template-columns:repeat(2,1fr);gap:14px;margin-top:26px}
+  @media (max-width:1000px){ .notes{grid-template-columns:1fr} }
+  .note{border:1px solid var(--line);border-radius:var(--r);background:var(--panel);padding:14px 16px}
+  .note.span2{grid-column:1/-1}
+  .note h2{margin:0 0 8px;font-size:13px;font-weight:600}
+  .note h3{margin:14px 0 6px;font-size:12px;font-weight:600;color:var(--fg-dim)}
+  .note ul{margin:0;padding-left:18px}
+  .note li{font-size:12.5px;line-height:1.6;color:var(--fg-dim);margin:5px 0}
+  .note li b{color:var(--fg)}
+  .note p{margin:0 0 8px;font-size:12.5px;line-height:1.6;color:var(--fg-dim)}
+  .note code{font:11.5px var(--mono);color:var(--link-ink)}
+  .warn{border-color:#4a3a1d;background:#191713}
+  .warn h2{color:var(--amber)}
+  .q-open{border-color:#33507f;background:#12151c}
+  .q-open h2{color:#8fb0e8}
+  table.k{width:100%;border-collapse:collapse;margin:4px 0 2px}
+  table.k th,table.k td{text-align:left;padding:6px 8px;font-size:12px;border-bottom:1px solid var(--line-soft);vertical-align:top}
+  table.k th{color:var(--fg-faint);font-weight:600;font-size:10.5px;letter-spacing:.6px;text-transform:uppercase}
+  table.k td{color:var(--fg-dim)}
+  table.k td b{color:var(--fg)}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <div class="cap">
+    <h1>Tickets tab, live — the mirror as the one work surface</h1>
+    <span class="sub">
+      builds on <a href="tickets-tab.html">tickets-tab.html</a> (#329) · five changes: rows read live from the
+      local mirror, the watch switch moves into the table, pickup refusals get a tooltip, a parent-feature
+      column with a persisted colour, and the tracker's own states instead of open/closed
+    </span>
+  </div>
+
+  <div class="framecap"><b>The tab</b> — Azure DevOps deployment, <code>labelPrefix: "lubbdubb"</code>, <code>pickupStates: ["Ready","Active"]</code></div>
+
+  <div class="frame">
+    <div class="urlbar">
+      <div class="nav">←&nbsp;&nbsp;→&nbsp;&nbsp;⟳</div>
+      <div class="box">localhost:4317/?tab=tickets&amp;<em>watch=any&amp;state=live&amp;feature=118&amp;order=changed</em></div>
+    </div>
+
+    <div class="app">
+      <div class="bar">
+        <div class="ident"><i class="dot"></i> LubbDubb</div>
+        <div class="sep"></div>
+        <nav class="topnav">
+          <button>Floor</button>
+          <button>Work</button>
+          <button class="on">Tickets <i class="n">96</i></button>
+          <button>Backlog</button>
+          <button>Spend</button>
+          <button>Errors</button>
+        </nav>
+        <div class="reads">
+          <div class="read"><b>3</b><span>agents</span></div>
+          <div class="read"><b>12s</b><span>since pulse</span></div>
+          <div class="read quiet"><b>$142.80</b><span>today</span></div>
+        </div>
+      </div>
+
+      <div class="body">
+        <!-- rail: context only, unchanged from the shipped cockpit -->
+        <aside class="rail">
+          <div class="rail-head"><h2>Needs you</h2><i class="count">2</i></div>
+          <div class="rail-list">
+            <div class="q urgent">
+              <div class="stripe"></div>
+              <div class="qin">
+                <div class="qkind"><i class="tag">escalation</i><i class="qage">6m</i></div>
+                <p class="qtitle">Which of the two payment providers is authoritative?</p>
+                <div class="qmeta"><span>#412 · agent parked</span></div>
+              </div>
+            </div>
+            <div class="q">
+              <div class="stripe"></div>
+              <div class="qin">
+                <div class="qkind"><i class="tag">plan</i><i class="qage">31m</i></div>
+                <p class="qtitle">Plan for #418 awaiting approval</p>
+                <div class="qmeta"><span>6 parts · 1 for a person</span></div>
+              </div>
+            </div>
+            <div class="railsub">Later</div>
+            <div class="q">
+              <div class="stripe" style="background:#3a3f48"></div>
+              <div class="qin">
+                <div class="qkind"><i class="tag" style="background:#1b1e23;color:var(--fg-faint)">close-out</i><i class="qage">2h</i></div>
+                <p class="qtitle">#405 delivered — the work item is still open</p>
+                <div class="qmeta"><span>blocks nothing</span></div>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        <!-- ================= THE TAB ================= -->
+        <main class="sit">
+
+          <div class="dhead">
+            <h1>Tickets</h1>
+            <i class="live">96 live</i>
+            <i class="n">1,284 kept</i>
+            <span class="more">mirror refreshed 12s ago · history from 14 Jul 2026</span>
+          </div>
+          <p class="dnote">
+            Everything on this page is the <b>local mirror</b>, rewritten each pulse — no screen in LubbDubb
+            asks the tracker directly, so a tab that opens instantly and a provider that is briefly down are
+            the same picture. An item the tracker closes is <b>frozen, not dropped</b>: the sweep stops
+            refreshing it and the row keeps what it last said, which is why <i>live</i> and <i>kept</i> are
+            two different numbers. <b>Watch is a switch here</b>, and it is the only thing on the row that
+            writes anything.
+          </p>
+
+          <!-- ---------- tier one: the two coarse axes ---------- -->
+          <div class="filters">
+            <div class="fgroup">
+              <span class="flabel">Watch</span>
+              <div class="seg">
+                <button class="on">Any</button>
+                <button>Watched</button>
+                <button>Unwatched</button>
+                <button>Ignored</button>
+              </div>
+            </div>
+            <div class="fdiv"></div>
+            <div class="fgroup">
+              <span class="flabel">Tracking</span>
+              <div class="seg">
+                <button>Any</button>
+                <button class="on">Live</button>
+                <button>Frozen</button>
+              </div>
+            </div>
+            <span class="fsum"><b>40</b> of <b>96</b> loaded · <b>$1,204.15</b> spent</span>
+          </div>
+
+          <!-- ---------- tier two: the tracker's own states ---------- -->
+          <div class="states2">
+            <span class="flabel">State</span>
+            <button class="sbtn on">Any <i class="k">96</i></button>
+            <button class="sbtn">New <i class="k">31</i></button>
+            <button class="sbtn gate">Ready <i class="gatemark">▲</i> <i class="k">18</i></button>
+            <button class="sbtn gate">Active <i class="gatemark">▲</i> <i class="k">9</i></button>
+            <button class="sbtn">In&nbsp;Review <i class="k">7</i></button>
+            <button class="sbtn">Resolved <i class="k">4</i></button>
+            <button class="sbtn">Closed <i class="k">1,183</i></button>
+            <button class="sbtn">Removed <i class="k">32</i></button>
+            <span class="why"><i class="gatemark" style="color:#6fce9f">▲</i> a state <code style="font:11px var(--mono)">pickupStates</code> lets through</span>
+          </div>
+
+          <!-- ---------- the feature legend, which is also the feature filter ---------- -->
+          <div class="legend">
+            <span class="flabel">Feature</span>
+            <button class="fchip on"><i class="sw" style="background:var(--f1)"></i>Payments <i class="n">118</i></button>
+            <button class="fchip"><i class="sw" style="background:var(--f2)"></i>Onboarding <i class="n">204</i></button>
+            <button class="fchip"><i class="sw" style="background:var(--f3)"></i>Reporting <i class="n">77</i></button>
+            <button class="fchip"><i class="sw" style="background:var(--f4)"></i>Platform hygiene <i class="n">311</i></button>
+            <button class="fchip"><i class="sw" style="background:var(--f5)"></i>Notifications <i class="n">265</i></button>
+            <button class="fchip orphan"><i class="sw"></i>No feature <i class="n">14</i></button>
+          </div>
+
+          <!-- ---------- the table ---------- -->
+          <section class="card">
+            <div class="rows">
+
+              <div class="thead">
+                <span>#</span>
+                <span>Ticket</span>
+                <span>Feature</span>
+                <span>Watch</span>
+                <span>State</span>
+                <span class="num"><button>Cost</button></span>
+                <span class="num"><button class="on">Changed <i class="arrow">▼</i></button></span>
+                <span></span>
+              </div>
+
+              <!-- a watched item an agent is on right now -->
+              <div class="trow">
+                <span class="id">#412</span>
+                <span class="what">
+                  <b class="name">Split the payment capture retry out of the checkout path</b>
+                  <span class="sub"><i class="chip">agent now</i> 1 escalation open · 3 parts of 6 done</span>
+                </span>
+                <span><span class="feat"><i class="sw" style="background:var(--f1)"></i><i class="fn">118</i><i class="ft">Payments</i></span></span>
+                <span>
+                  <span class="sw2"><button class="on w">Watch</button><button>Ignore</button></span>
+                </span>
+                <span><span class="st active"><i class="d"></i>Active</span></span>
+                <span class="cost">$38.40</span>
+                <span class="added">4m ago</span>
+                <span class="refs"><button class="ref-goal" title="Open goal #412">#412</button><a class="ext" href="#" title="Open pull request #421">#421</a></span>
+              </div>
+
+              <!-- THE TOOLTIP CASE: watched, in a pickup state, and still nothing has happened -->
+              <div class="trow">
+                <span class="id">#418</span>
+                <span class="what">
+                  <b class="name">Refund reconciliation report for the finance export</b>
+                  <span class="sub">
+                    <i class="why-b" title="Why is nothing on this?">?</i>
+                    watched 3d ago · never picked up
+                  </span>
+                </span>
+                <span><span class="feat"><i class="sw" style="background:var(--f1)"></i><i class="fn">118</i><i class="ft">Payments</i></span></span>
+                <span>
+                  <span class="sw2"><button class="on w">Watch</button><button>Ignore</button></span>
+                </span>
+                <span><span class="st ready"><i class="d"></i>Ready</span></span>
+                <span class="cost none">—</span>
+                <span class="added">3d ago</span>
+                <span class="refs"><a class="ext" href="#" title="Open #418 in the tracker">#418</a></span>
+
+                <!-- drawn open, because a mockup has to show the state it is about -->
+                <div class="tip">
+                  <h4>Why nothing is on this</h4>
+                  <ul>
+                    <li><b>The plan is waiting for you.</b> Six parts, submitted 31m ago; no part is dispatched until it is approved.</li>
+                    <li><b>One part is for a person</b> — “confirm the finance export column order with Ops” — and three parts depend on it.</li>
+                  </ul>
+                  <div class="foot">
+                    The dispatcher's own words, quoted — <code>isIssuePickupEligible</code> and the funnel's route
+                    for this item, as of the pulse 12s ago. Not re-derived here.
+                  </div>
+                </div>
+              </div>
+
+              <!-- a container: watch cascades, and it is never worked itself -->
+              <div class="trow">
+                <span class="id">#118</span>
+                <span class="what">
+                  <b class="name">Payments</b>
+                  <span class="sub">
+                    <i class="chip">feature</i>
+                    <i class="why-b quiet" title="A container is never worked itself — its children are the work.">?</i>
+                    9 children · 4 watched
+                  </span>
+                </span>
+                <span><span class="feat orphan"><i class="sw"></i><i class="ft">is a feature</i></span></span>
+                <span>
+                  <span class="sw2"><button class="on w">Watch</button><button>Ignore</button></span>
+                  <i class="casc">cascades to 9</i>
+                </span>
+                <span><span class="st active"><i class="d"></i>Active</span></span>
+                <span class="cost">$204.60</span>
+                <span class="added">1h ago</span>
+                <span class="refs"><a class="ext" href="#" title="Open #118 in the tracker">#118</a></span>
+              </div>
+
+              <!-- untagged: the third watch value, and the default -->
+              <div class="trow">
+                <span class="id">#419</span>
+                <span class="what">
+                  <b class="name">Onboarding: resend the verification email after a bounce</b>
+                  <span class="sub">nobody has opted this in</span>
+                </span>
+                <span><span class="feat"><i class="sw" style="background:var(--f2)"></i><i class="fn">204</i><i class="ft">Onboarding</i></span></span>
+                <span>
+                  <span class="sw2"><button>Watch</button><button class="on u">—</button><button>Ignore</button></span>
+                </span>
+                <span><span class="st new"><i class="d"></i>New</span></span>
+                <span class="cost none">—</span>
+                <span class="added">6h ago</span>
+                <span class="refs"><a class="ext" href="#" title="Open #419 in the tracker">#419</a></span>
+              </div>
+
+              <!-- ignored, explicitly -->
+              <div class="trow">
+                <span class="id">#399</span>
+                <span class="what">
+                  <b class="name">Spike: evaluate replacing the queue broker</b>
+                  <span class="sub">tagged leave-alone 8d ago</span>
+                </span>
+                <span><span class="feat"><i class="sw" style="background:var(--f4)"></i><i class="fn">311</i><i class="ft">Platform hygiene</i></span></span>
+                <span>
+                  <span class="sw2"><button>Watch</button><button class="on i">Ignore</button></span>
+                </span>
+                <span><span class="st new"><i class="d"></i>New</span></span>
+                <span class="cost none">—</span>
+                <span class="added">8d ago</span>
+                <span class="refs"><a class="ext" href="#" title="Open #399 in the tracker">#399</a></span>
+              </div>
+
+              <!-- a write in flight: the switch is the one control, so it has a pending state -->
+              <div class="trow">
+                <span class="id">#417</span>
+                <span class="what">
+                  <b class="name">Notifications: collapse duplicate digest sends</b>
+                  <span class="sub">tagging in the tracker…</span>
+                </span>
+                <span><span class="feat"><i class="sw" style="background:var(--f5)"></i><i class="fn">265</i><i class="ft">Notifications</i></span></span>
+                <span>
+                  <span class="sw2 busy"><button class="on w">Watch</button><button>Ignore</button></span>
+                </span>
+                <span><span class="st ready"><i class="d"></i>Ready</span></span>
+                <span class="cost none">—</span>
+                <span class="added">just now</span>
+                <span class="refs"><a class="ext" href="#" title="Open #417 in the tracker">#417</a></span>
+              </div>
+
+              <!-- in review: the harness moved the state itself -->
+              <div class="trow">
+                <span class="id">#409</span>
+                <span class="what">
+                  <b class="name">Charge idempotency keys survive a broker replay</b>
+                  <span class="sub">PR open 5h · moved to In Review by the harness</span>
+                </span>
+                <span><span class="feat"><i class="sw" style="background:var(--f1)"></i><i class="fn">118</i><i class="ft">Payments</i></span></span>
+                <span>
+                  <span class="sw2"><button class="on w">Watch</button><button>Ignore</button></span>
+                </span>
+                <span><span class="st review"><i class="d"></i>In&nbsp;Review</span></span>
+                <span class="cost">$62.15</span>
+                <span class="added">5h ago</span>
+                <span class="refs"><button class="ref-goal">#409</button><a class="ext" href="#">#414</a></span>
+              </div>
+
+              <!-- unknown parent: not the same as no parent -->
+              <div class="trow">
+                <span class="id">#402</span>
+                <span class="what">
+                  <b class="name">Reporting: nightly export drops the last hour</b>
+                  <span class="sub"><i class="chip short">fell short</i> 2 runs · retro filed</span>
+                </span>
+                <span><span class="feat unknown"><i class="sw" style="background:#3a3f48"></i><i class="ft">parent unreadable</i></span></span>
+                <span>
+                  <span class="sw2"><button class="on w">Watch</button><button>Ignore</button></span>
+                </span>
+                <span><span class="st resolved"><i class="d"></i>Resolved</span></span>
+                <span class="cost">$88.90</span>
+                <span class="added">1d ago</span>
+                <span class="refs"><button class="ref-goal">#402</button></span>
+              </div>
+
+              <!-- frozen: closed in the tracker, so the sweep has stopped refreshing it -->
+              <div class="trow frozen">
+                <span class="id">#397</span>
+                <span class="what">
+                  <b class="name">Payments: retire the legacy capture endpoint</b>
+                  <span class="sub"><i class="chip verdict">delivered</i> closed 3d ago · frozen, last read 3d ago</span>
+                </span>
+                <span><span class="feat"><i class="sw" style="background:var(--f1)"></i><i class="fn">118</i><i class="ft">Payments</i></span></span>
+                <span>
+                  <span class="sw2" title="Closed in the tracker — there is nothing here to tag"><button>Watch</button><button>Ignore</button></span>
+                </span>
+                <span><span class="st closed"><i class="d"></i>Closed</span></span>
+                <span class="cost">$121.05</span>
+                <span class="added">3d ago</span>
+                <span class="refs"><button class="ref-goal">#397</button><a class="ext" href="#">#404</a></span>
+              </div>
+
+              <div class="trow frozen">
+                <span class="id">#388</span>
+                <span class="what">
+                  <b class="name">Onboarding: drop the second confirmation screen</b>
+                  <span class="sub">removed in the tracker 6d ago · frozen</span>
+                </span>
+                <span><span class="feat"><i class="sw" style="background:var(--f2)"></i><i class="fn">204</i><i class="ft">Onboarding</i></span></span>
+                <span>
+                  <span class="sw2"><button>Watch</button><button>Ignore</button></span>
+                </span>
+                <span><span class="st removed"><i class="d"></i>Removed</span></span>
+                <span class="cost none">—</span>
+                <span class="added">6d ago</span>
+                <span class="refs"><a class="ext" href="#">#388</a></span>
+              </div>
+
+              <p class="sentinel"><i class="spin"></i> Reading the next page…</p>
+            </div>
+          </section>
+
+        </main>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= NOTES ================= -->
+  <div class="notes">
+
+    <div class="note">
+      <h2>1 · Every screen reads the mirror; the mirror is rewritten each pulse</h2>
+      <p>
+        Today the mirror is a <i>record</i> — swept for the Tickets tab — while the Floor, Backlog and the
+        dispatcher all read the live world snapshot. This makes the mirror the one copy every surface reads,
+        and the pulse the one thing that writes it.
+      </p>
+      <ul>
+        <li><b>A pulse writes what it saw.</b> One sweep per pulse over the assignment filter, upserting by
+          number — the same call the snapshot already makes, so no new provider traffic on the common path.</li>
+        <li><b>Closed means stop tracking, not delete.</b> A row whose state left the open set is marked
+          <code>tracking='frozen'</code> and the sweep skips it from then on. It keeps its last-read title,
+          labels, state and parent, and the tab still shows it under <i>Frozen</i>. Deleting it would take
+          the cost history and the verdict with it, and the close-out sweep recognises its own obligations by
+          finding the item again.</li>
+        <li><b>Thaw is one condition, not a judgement:</b> the tracker returns it in the open set again
+          (reopened). The changed-since read still names it, so the next pulse un-freezes it.</li>
+        <li><b>The dispatcher does not read this table, and must not start.</b> That line is the whole reason
+          the mirror was safe to build: a rule that could see a frozen row would eventually dispatch onto a
+          closed item, and nothing would look wrong. Rules keep deciding from the live snapshot.</li>
+      </ul>
+    </div>
+
+    <div class="note warn">
+      <h2>2 · The table becomes a control — and that is a real change</h2>
+      <p>
+        The shipped tab states <i>“nothing in it is a control that changes the world — a history you can edit
+        from is not a history.”</i> A watch switch on the row contradicts that sentence, so the sentence has
+        to change with the code, in the same commit, in <code>docs/spec/17-cockpit.md</code>.
+      </p>
+      <ul>
+        <li><b>One control, and only on live rows.</b> Watch/ignore, nothing else. A frozen row's switch is
+          inert with a title saying why: there is nothing in the tracker left to tag.</li>
+        <li><b>It is the existing route, not a new one</b> — <code>POST /api/issues/:number/watch</code>, the
+          same call the Backlog's toggle makes, so the two surfaces cannot come to disagree about what a click
+          means. Three-valued display, two-valued write: <i>unwatched</i> is a state you can leave, never one
+          you can select.</li>
+        <li><b>A container cascades, and the row says so before you click.</b> <code>watchCascadeTargets</code>
+          tags every descendant; the row shows <i>cascades to 9</i>. A partial failure is reported on the row
+          — “tagged 6 of 9” — because an operator told “watched” while three children kept the old tag has
+          been lied to about what the harness will pick up.</li>
+        <li><b>Optimistic, then reconciled by the pulse.</b> The switch shows pending until the next mirror
+          write confirms it. Trusting the click alone would leave the tab claiming a tag the tracker refused.</li>
+      </ul>
+    </div>
+
+    <div class="note">
+      <h2>3 · “Why is nothing on this?” — quoted, never re-derived</h2>
+      <p>
+        The refusal already exists as a pure function: <code>isIssuePickupEligible</code> returns
+        <code>{eligible, reasons[]}</code>, and the funnel's route for the item says the rest. The tooltip
+        <i>ships those strings</i>; it does not compute its own opinion. A lens that reasoned about pickup
+        would be a second dispatcher, and the two would drift the first time a gate changed.
+      </p>
+      <ul>
+        <li><b>Only where the question makes sense.</b> The marker is drawn for a live row that is watched and
+          has no agent and no PR — the case an operator actually asks about. A frozen row has no reasons,
+          because eligibility is a reading of the live world.</li>
+        <li><b>Quiet marker for a container:</b> a Feature is never worked itself, its children are the work,
+          and that is an explanation rather than a problem.</li>
+        <li>The reasons it can carry today, verbatim from the gates: tagged leave-alone; no watch tag; the
+          watch tag was added by someone else (<code>issuePickupRequireOwnLabel</code>); a container type; a
+          state outside <code>pickupStates</code>; assay not passed; plan awaiting approval; blocked on a
+          human part; attempt cap reached.</li>
+        <li><b>Hover is not the only way to it.</b> The same list is the row's expanded panel on click — a
+          tooltip nobody can select text out of is where a stack trace goes to die.</li>
+      </ul>
+    </div>
+
+    <div class="note">
+      <h2>4 · Parent feature, and the colour</h2>
+      <p>
+        The provider already resolves it: <code>Issue.parent</code> is the hydrated Feature, with three
+        distinct values that must stay distinct on the row.
+      </p>
+      <table class="k">
+        <tr><th>Value</th><th>Means</th><th>Drawn</th></tr>
+        <tr><td><b>a parent</b></td><td>the Feature this hangs off</td><td>coloured chip, number + name</td></tr>
+        <tr><td><b><code>null</code></b></td><td>an orphan — genuinely no parent</td><td>hatched swatch, “no feature”</td></tr>
+        <tr><td><b><code>undefined</code></b></td><td>the link could not be read, or the provider has no hierarchy</td><td>dotted “parent unreadable”</td></tr>
+      </table>
+      <p>
+        Folding <i>unreadable</i> into <i>orphan</i> would tell the reader this item belongs to no feature,
+        which is a different and wrong thing to say about a link we simply could not fetch — the provider is
+        already careful about exactly this, and the column must not undo it.
+      </p>
+      <h3>On “a random colour persisted in the db”</h3>
+      <ul>
+        <li><b>Persisted: yes.</b> A colour that moved between sessions is worse than no colour — the whole
+          value is that the same feature is the same colour every morning. One row per feature id in a small
+          table the mirror owns, written on first sight.</li>
+        <li><b>Random: recommend not.</b> A random hue at random lightness produces two failures with nothing
+          to catch them — a colour that vanishes against <code>--panel-2</code>, and two features that land
+          near-identical and read as one. Instead: a <b>fixed ladder of twelve hues</b> at one lightness and
+          one chroma (drawn above), assigned <b>next-least-used at first sight</b> and then persisted. Same
+          stability, no unreadable draws, and past twelve features the ladder repeats — which is honest,
+          because a legend with forty colours is not a legend anyone reads.</li>
+        <li><b>The colour is never the only signal.</b> Every chip carries the feature number and name too, so
+          the column works for a colour-blind reader and in a screenshot pasted into a ticket.</li>
+        <li><b>The legend doubles as the filter</b> and is a <code>Place</code> field
+          (<code>feature=118</code>) — a narrowing you cannot link to or come back to with the back button is
+          the cockpit's other repeated bug.</li>
+      </ul>
+    </div>
+
+    <div class="note span2">
+      <h2>5 · States: the tracker's own words, on the deployments that have them</h2>
+      <p>
+        <code>Issue.workItemState</code> already carries the raw <code>System.State</code> beside the
+        open/closed collapse, precisely so the pickup gate and the in-review back-off can see it. The filter
+        stops throwing that away.
+      </p>
+      <ul>
+        <li><b>Two tiers, not one control.</b> <i>Tracking</i> (live / frozen) is the harness's reading and is
+          provider-independent; <i>State</i> is the tracker's own word. One control folding them would state a
+          triage nobody made — <i>Removed</i> and <i>Closed</i> are both frozen and are not the same fact.</li>
+        <li><b>The state list is discovered, never hardcoded.</b> It is the distinct set the mirror has
+          actually seen, with counts. A hardcoded Azure ladder is wrong on the first customised process
+          template, and silently — the missing state's items simply stop being reachable by any filter.</li>
+        <li><b>GitHub and the fake have no native states</b>, so the second tier is not drawn at all and the
+          coarse axis reads Open / Closed as it does today. A filter offering states the provider cannot
+          produce is a control that always returns nothing.</li>
+        <li><b>The ▲ marks a state <code>pickupStates</code> lets through</b>, read from config — the single
+          most-asked question about an Azure deployment (“why is Ready worked and New not?”) answered where
+          the states are, rather than in a settings pane nobody opens.</li>
+      </ul>
+    </div>
+
+    <div class="note span2">
+      <h2>Where the pieces go</h2>
+      <ul>
+        <li><b>Store:</b> <code>src/store/tickets.ts</code> keeps owning the table. New columns on an
+          <i>existing</i> table — <code>tracking</code>, <code>work_item_state</code>, <code>parent_number</code>,
+          <code>parent_title</code>, <code>last_read_at</code> — each need an additive <code>ALTER TABLE</code>
+          entry in that module's <code>ColumnMigrations</code>, or they are invisible on every database from
+          before today with nothing erroring. The feature-colour table is a fresh <code>CREATE TABLE</code>
+          with an empty column list declared anyway.</li>
+        <li><b>Sweep:</b> the pulse's mirror write gains the freeze rule and the parent columns. Still a
+          record: nothing under <code>src/dispatcher/</code> reads it, and
+          <code>test/workGraph.test.ts</code>-style structural assertions are the place to say so.</li>
+        <li><b>Route:</b> <code>GET /api/tickets</code> grows <code>tracking</code>, <code>state</code> (now a
+          provider-native string), and <code>feature</code>; the response ships the discovered state list with
+          counts, the feature legend with colours, and the per-row reasons. Wrapped in
+          <code>checked(...)</code> as every handler is. The watch write reuses
+          <code>POST /api/issues/:number/watch</code> — no new route.</li>
+        <li><b>Wire:</b> <code>TicketRow</code> in <code>src/wire.ts</code> gains
+          <code>workItemState</code>, <code>tracking</code>, <code>parent</code>, <code>featureColor</code>,
+          <code>pickupReasons</code>. A wire type either <i>is</i> a domain type or extends it.</li>
+        <li><b>Place:</b> <code>tracking</code>, <code>state</code>, <code>feature</code> join the tab's
+          existing three fields in <code>web/src/cockpit/place.ts</code> — never a
+          <code>useState</code> in <code>useCockpit</code>.</li>
+        <li><b>Panel:</b> <code>web/src/components/TicketsPanel.tsx</code>. The switch is a control and the
+          ticket number stays a <code>&lt;Ref&gt;</code> beside it in a <code>cn-refs</code> group — a
+          reference never goes inside a button.</li>
+        <li><b>Specs, same change:</b> <code>17-cockpit.md</code> (the tab, the “no controls” sentence, the
+          address bar), <code>16-http-api.md</code> (the route), <code>14-persistence.md</code> (the columns
+          and the freeze rule), <code>15-integrations.md</code> (parent hydration on the history read),
+          <code>06-issue-pickup.md</code> (the reasons being surfaced verbatim).</li>
+      </ul>
+    </div>
+
+    <div class="note span2 q-open">
+      <h2>Open questions — worth settling before any of this is built</h2>
+      <ul>
+        <li><b>Does this replace the Backlog tab?</b> With live rows, a watch switch and a state filter, this
+          tab is a strict superset of Backlog. Two surfaces that can be told different things about the same
+          item is the drift the shared <code>watchLabels</code> function exists to prevent — one of them
+          should go, and it should probably be Backlog.</li>
+        <li><b>Does the mirror become the snapshot's source, or stay beside it?</b> This mockup says every
+          <i>screen</i> reads the mirror and the <i>dispatcher</i> keeps reading the live world. The stronger
+          version — the world snapshot itself being built from the mirror — is a much larger change and puts
+          a stale row one bug away from a dispatch. Recommend not, for now.</li>
+        <li><b>Hierarchy on the history read.</b> <code>listTicketHistory</code> deliberately does not hydrate
+          the parent, because that read is per-item and a month of backfill would cost a request per ticket.
+          A parent column means paying it for live items at least. Cheapest honest version: hydrate parents
+          for the open set only (already fetched for the snapshot), and leave frozen rows with whatever parent
+          they were last seen with.</li>
+        <li><b>Freezing on <code>Removed</code>.</b> Azure's <i>Removed</i> is not <i>Closed</i> — it means
+          “this was never real”. Same freeze, but should it count in the tab's totals or the spend at all?</li>
+        <li><b>Cost on a frozen row</b> still moves if a late run is attributed to it. Either the row is not
+          truly frozen, or cost is read live and only the tracker fields freeze. The second is what this
+          mockup draws.</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
