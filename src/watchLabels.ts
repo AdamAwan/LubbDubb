@@ -51,7 +51,7 @@ interface ResolveWatchOpts extends WatchLabels {
  * Tickets tab filters on the difference. Both readings are this one precedence, so
  * a tag can never mean one thing to the dispatcher and another to the list.
  */
-export type WatchBucket = 'watched' | 'unwatched' | 'ignored';
+type WatchBucket = 'watched' | 'unwatched' | 'ignored';
 
 /** Ignore wins, then watch, else neither. Total — never throws. */
 export function watchBucketOf(labels: string[] | undefined, opts: WatchLabels): WatchBucket {
