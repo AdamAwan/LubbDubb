@@ -752,6 +752,7 @@ test('the fault log keeps its clear even when it is empty', () => {
 test('a reading opens the panel behind it, in front of the console', () => {
   const panels: [ConsolePanel, string][] = [
     ['findings', 'Findings'],
+    ['lessons', 'Lessons'],
     ['faults', 'Faults'],
     ['output', 'Output'],
     ['launch', 'Launch'],
@@ -761,6 +762,18 @@ test('a reading opens the panel behind it, in front of the console', () => {
     assert.ok(html.includes('cn-backdrop'), `${String(panel)} must draw in front of the console`);
     assert.ok(html.includes(`<h2>${title}</h2>`), `${String(panel)} must name itself`);
   }
+});
+
+test('the lessons panel draws the retired ones too', () => {
+  // The load-bearing half of the prune surface (#355): a lesson that vanished on
+  // being retired would leave no way to tell a list you have finished with from
+  // one that lost rows, and "retired" would read as "deleted".
+  const v = view({ consolePanel: 'lessons' });
+  const retired = v.state.lessons.find((l) => l.status === 'retired');
+  assert.ok(retired, 'the demo fixtures must carry a retired lesson to draw');
+  // The first plain run of the fixture's text: markdown renders its inline code
+  // into its own element, so a longer slice would be split across nodes.
+  assert.ok(decode(render(v)).includes(retired.text.slice(0, 28)), 'a pruned lesson stays visible');
 });
 
 /**

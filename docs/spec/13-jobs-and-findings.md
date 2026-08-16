@@ -1,9 +1,10 @@
-# 13 — Jobs, findings and human tasks
+# 13 — Jobs, findings, lessons and human tasks
 
-Three operator-facing queues, split by **who acts on them**. A **job** is work the operator asked
-for, done by an agent. A **finding** is a claim an agent filed, which becomes work only when an
-operator says so. A **human task** is work only a person can do, and the operator is the one who does
-it.
+Four operator-facing queues, split by **who acts on them**. A **job** is work the operator asked for,
+done by an agent. A **finding** is a claim an agent filed, which becomes work only when an operator
+says so. A **lesson** is a claim of a different kind — what working a goal taught about working this
+repository — and it reaches nothing until an operator promotes it. A **human task** is work only a
+person can do, and the operator is the one who does it.
 
 ## Jobs
 
@@ -517,6 +518,95 @@ The finding stays in the list, muted, rather than being deleted: "we looked at t
 409 when absent or already resolved.
 
 Tests: the `report_finding` block in `test/mcpChannel.test.ts`.
+
+## Lessons
+
+A finding is a defect the fleet noticed. A **lesson** is what working the goal taught about _working
+this repository_ — "the suite wants a built web bundle first", "this subsystem's tests sit at an odd
+seam", "a ticket that names only a symptom is under-specified for a planner every time". Before
+this, that knowledge had exactly one destination: a retrospective a person read once. The next goal
+started from zero and the fleet relearned the same thing at full price (#355).
+
+```ts
+interface Lesson {
+  id;
+  text; // the lesson, markdown
+  originRef: string | null; // the goal it was learned on ("issue:41"), or null
+  status: 'proposed' | 'promoted' | 'retired';
+  createdAt;
+  updatedAt;
+}
+```
+
+### Why it is a claim, and not a pad
+
+The obvious version of this feature — an append-only note surface every agent reads — is the thing
+`docs/README.md` argues against most strongly about `CLAUDE.md`. A surface loaded into every agent's
+context has length as a recurring fleet-wide cost and accuracy as a _correctness_ concern: a stale
+line there is a false instruction handed to every agent before it reads any code, and it fails
+silently. Nothing goes red, no test can see it, and in a year the block is forty stale assertions
+making every agent quietly worse.
+
+So a lesson is a **claim**, in exactly the shape a finding already has, and the four properties that
+make the claim safe are the reason the store is allowed to exist at all:
+
+| Property        | What holds it                                                                                       |
+| --------------- | --------------------------------------------------------------------------------------------------- |
+| **Gated**       | `proposed` until a human promotes it. There is no way to write a promoted lesson directly.          |
+| **Provenanced** | `originRef` and `createdAt` on every row — what taught it, and when, which is what dates the claim. |
+| **Prunable**    | `retired`, from either live status, with a cockpit surface to prune from → [17](17-cockpit.md).     |
+| **Bounded**     | 2,000 characters. Not a storage bound: a wall of text is the row nobody reads before promoting it.  |
+
+### Where a lesson does _not_ go
+
+The question that decides it is: does this describe **the repository**, or **working the
+repository**?
+
+| The lesson is…                                                      | Destination                                     | Why                                                            |
+| ------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------- |
+| A fact about the code — a seam, an invariant, a second registration | The repo's own docs, as a change a human merges | It is the repo's knowledge and belongs where the repo keeps it |
+| A fact about working the goal                                       | The lesson store, promoted                      | Ours, not theirs; no business in someone else's tree           |
+| A one-off defect noticed in passing                                 | `report_finding` → promotion → job              | Already built above; needs nothing                             |
+| Something true only of this goal                                    | The goal's scratchpad                           | Already built; dies with the goal, correctly                   |
+
+### The three states, and the two that are one-way
+
+`proposed` → `promoted` is the gate. `proposed` or `promoted` → `retired` is the prune. There is no
+un-retire: retiring must always be available because it is the safety valve, while promoting is the
+risk, so it starts from a proposal every time. A lesson retired in error is written again, which
+re-dates it — and a claim worth bringing back is worth reading first.
+
+Both transitions are guarded **in the write** (`WHERE id=? AND status=…`), the discipline
+`linkFindingTicket` and `decideProposal` use, so two racing clicks cannot both find a promotable row.
+
+### The routes
+
+| Route                           | Does                                                               |
+| ------------------------------- | ------------------------------------------------------------------ |
+| `POST /api/lessons`             | Writes one down. Lands `proposed`; 400 on empty or over-long text. |
+| `POST /api/lessons/:id/promote` | The gate. 404 unknown, 409 already ruled on.                       |
+| `POST /api/lessons/:id/retire`  | The prune. 404 unknown, 409 already retired.                       |
+
+There is no list route: the lessons ride on `/api/state` with everything else the cockpit polls,
+which is what `findings` does and for the same reason — the panel draws them beside refs the
+snapshot's own link map resolves. All three broadcast `dirty` rather than `world:changed` and run no
+cycle: nothing in the world moved.
+
+### Nothing reaches an agent
+
+**No dispatcher rule reads a lesson, no prompt renders one, and promoting one changes no launch
+argument.** Promotion records that an operator vouched for the claim, and that is the whole of what
+it does today. `test/lessons.test.ts` asserts both halves — that `buildClaudeArgs` and
+`buildClaudeStreamArgs` are byte-identical with promoted lessons on the books, and, structurally,
+that nothing under `src/dispatcher/`, `src/agents/`, `src/mcp/` or `src/executor/` so much as names
+one.
+
+What is still to come, and is deliberately not here: the retrospective proposing lessons rather than
+an operator typing them, and rendering promoted ones into the fleet's cached system-prompt append —
+capped, with the cap's drop visible to the operator and never to the agent, which must not see a
+partial list presented as whole. Both are #355's later phases, with their own designs.
+
+Tests: `test/lessons.test.ts`.
 
 ## Human tasks
 

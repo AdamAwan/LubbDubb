@@ -15,6 +15,7 @@ import type {
   Issue,
   Job,
   JobSchedule,
+  LessonStatus,
   OpenPullRequest,
   CiPolicyDescription,
   CiSubject,
@@ -712,6 +713,49 @@ class DemoServer {
     if (finding && finding.status === 'open') {
       finding.status = 'dismissed';
       finding.updatedAt = new Date().toISOString();
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Write a lesson down — the demo mirror of `POST /api/lessons` (#355). It
+   * lands `proposed`, as it does on the real route: the gate has no bypass, and
+   * a demo that showed one would be teaching the wrong thing about the surface.
+   */
+  async proposeLesson(text: string, originRef: string | null): Promise<{ ok: true }> {
+    const at = new Date().toISOString();
+    this.state.lessons = [
+      {
+        id: `lesn-${this.state.lessons.length + 1}-demo`,
+        text,
+        originRef,
+        status: 'proposed',
+        createdAt: at,
+        updatedAt: at,
+      },
+      ...this.state.lessons,
+    ];
+    this.dirty();
+    return { ok: true };
+  }
+
+  /** Vouch for one (demo mirror of POST /api/lessons/:id/promote). */
+  async promoteLesson(id: string): Promise<{ ok: true }> {
+    return this.moveLesson(id, 'promoted', ['proposed']);
+  }
+
+  /** Prune one (demo mirror of POST /api/lessons/:id/retire). */
+  async retireLesson(id: string): Promise<{ ok: true }> {
+    return this.moveLesson(id, 'retired', ['proposed', 'promoted']);
+  }
+
+  /** The legal predecessors, kept here so the demo cannot drift from `LessonStore`. */
+  private moveLesson(id: string, status: LessonStatus, from: LessonStatus[]): { ok: true } {
+    const lesson = this.state.lessons.find((l) => l.id === id);
+    if (lesson && from.includes(lesson.status)) {
+      lesson.status = status;
+      lesson.updatedAt = new Date().toISOString();
       this.dirty();
     }
     return { ok: true };
@@ -2270,6 +2314,9 @@ export const demoApi = {
   promoteFinding: (id: string) => getServer().promoteFinding(id),
   fileFinding: (id: string) => getServer().fileFinding(id),
   dismissFinding: (id: string) => getServer().dismissFinding(id),
+  proposeLesson: (text: string, originRef: string | null) => getServer().proposeLesson(text, originRef),
+  promoteLesson: (id: string) => getServer().promoteLesson(id),
+  retireLesson: (id: string) => getServer().retireLesson(id),
   completeHumanTask: (id: string) => getServer().completeHumanTask(id),
   declineHumanTask: (id: string, note: string) => getServer().declineHumanTask(id, note),
   dismissHumanTask: (id: string) => getServer().dismissHumanTask(id),

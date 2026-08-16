@@ -191,6 +191,25 @@ CREATE TABLE IF NOT EXISTS findings (
   updated_at TEXT NOT NULL
 );
 
+-- What working one goal taught about working *this repository*, kept for the next
+-- one (#355). A lesson is a claim, exactly as a finding is: it stays 'proposed'
+-- until an operator promotes it, and nothing outside the cockpit reads this table
+-- — no agent sees a lesson at any status yet.
+--
+-- The store rather than a file in the tree, because the three properties that
+-- make this safe to have at all are properties a markdown pad cannot hold: the
+-- gate (status), the provenance (origin_ref + created_at) and the prune
+-- (retired). A tracked file is also a file in everyone else's diff, and an
+-- ignored one does not survive a clone.
+CREATE TABLE IF NOT EXISTS lessons (
+  id         TEXT PRIMARY KEY,
+  text       TEXT NOT NULL,          -- the lesson, markdown
+  origin_ref TEXT,                   -- the goal it was learned on ("issue:41"), or null
+  status     TEXT NOT NULL,          -- proposed | promoted | retired
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- Work only a person can do (the request_human_task tool, or an operator filing
 -- one from the cockpit). Not an escalation: nothing is blocked on an open socket,
 -- no agent is parked, and the row outlives every agent and every restart.
@@ -810,6 +829,7 @@ CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_job_attachments_target ON job_attachments(target_ref);
 CREATE INDEX IF NOT EXISTS idx_job_schedules_next ON job_schedules(enabled, next_run_at);
 CREATE INDEX IF NOT EXISTS idx_findings_status ON findings(status);
+CREATE INDEX IF NOT EXISTS idx_lessons_status ON lessons(status);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_status ON human_tasks(status);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_part ON human_tasks(part_id);
 CREATE INDEX IF NOT EXISTS idx_human_tasks_kind_origin ON human_tasks(kind, origin_ref);

@@ -239,6 +239,13 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
           title="Findings nobody has ruled on — open the findings panel"
         />
         <Read
+          label="Lessons"
+          value={`${view.proposedLessonCount}`}
+          quiet={view.proposedLessonCount === 0}
+          onOpen={() => actions.openPanel('lessons')}
+          title="Lessons nobody has ruled on — open the lessons panel"
+        />
+        <Read
           label="Faults"
           value={`${faultCount}`}
           quiet={faultCount === 0}

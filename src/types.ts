@@ -979,6 +979,73 @@ export interface Finding {
 /** A finding as reported, before the store assigns identity and status. */
 export type FindingInput = Pick<Finding, 'kind' | 'ref' | 'summary' | 'where' | 'detail'>;
 
+// ---------------------------------------------------------------------------
+// Lessons (what working one goal taught, kept for the next)
+// ---------------------------------------------------------------------------
+
+/**
+ * Where a lesson sits.
+ *
+ * Deliberately the shape a {@link Finding} already has — a claim until a human
+ * says otherwise — because it is the same problem. What a lesson claims is
+ * "this is worth telling every future agent", and a claim that reached agents
+ * on its author's say-so is the fleet-wide instruction block issue #355 argues
+ * against: a stale line there is a false instruction handed to every agent
+ * before it reads any code, and nothing goes red.
+ *
+ * - `proposed` — written down, visible to the operator, and **read by nothing
+ *   else**. This is where every lesson starts.
+ * - `promoted` — the operator has vouched for it. Fleet-visible, once anything
+ *   renders lessons at all (issue #355, phase 3 — nothing does yet).
+ * - `retired` — pruned. Terminal, and the reason the surface is allowed to
+ *   exist: a store that could only grow is the unprunable pad.
+ *
+ * `retired` is terminal in both directions rather than a fourth "un-retire"
+ * transition. Retiring is the safety valve and must always be available;
+ * promoting is the risk, so it starts from a proposal every time. A lesson
+ * retired in error is re-proposed, which re-dates it — and a lesson worth
+ * bringing back is worth re-reading first.
+ */
+export type LessonStatus = 'proposed' | 'promoted' | 'retired';
+
+/**
+ * Something working one goal taught that is true of *working this repository*,
+ * kept where the next goal can reach it — "the suite needs a built web bundle
+ * first", "this subsystem's tests sit at an odd seam".
+ *
+ * Not a fact about the code: that belongs in the repository's own docs, where
+ * the repository keeps its knowledge and where a human merges it. Not a defect
+ * either — that is a {@link Finding}. And not something true only of one goal —
+ * that is the goal's scratchpad, which dies with the goal, correctly.
+ *
+ * The provenance is not decoration. A reader deciding whether a lesson still
+ * holds needs to know what it was learned on and when, and those are the two
+ * things a rendered block of assertions strips.
+ */
+export interface Lesson {
+  id: string;
+  /**
+   * The lesson itself, in the words it will one day be rendered in. Markdown,
+   * as everything an operator or an agent writes here is, and free-form: a
+   * lesson is prose, and a shape imposed on it now would be a shape guessed at.
+   */
+  text: string;
+  /**
+   * The goal it was learned on (`issue:41`), or null when it was not learned on
+   * one — an operator writing down what they know is a lesson with no goal
+   * behind it, not a lesson with a false one.
+   */
+  originRef: string | null;
+  status: LessonStatus;
+  /** When it was proposed. Half of the provenance, and the half that goes stale. */
+  createdAt: string;
+  /** When it last moved — which, for anything but a proposal, is when the operator ruled on it. */
+  updatedAt: string;
+}
+
+/** A lesson as written, before the store assigns identity and status. */
+export type LessonInput = Pick<Lesson, 'text' | 'originRef'>;
+
 /**
  * Where a piece of work only a person can do has got to. Two terminals, and both
  * are settlements — there is no way for one to lapse, expire or be deleted.

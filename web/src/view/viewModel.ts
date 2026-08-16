@@ -53,6 +53,13 @@ export interface CockpitView {
   openEscalations: Escalation[];
   /** Findings nobody has ruled on — a finding never becomes work on its own. */
   openFindingCount: number;
+  /**
+   * Lessons nobody has ruled on (#355). The reading the Lessons tile draws, and
+   * proposals rather than promotions on purpose: what wants the operator is the
+   * undecided claim, and a count of what is already vouched for would tick up on
+   * their own click and never come down.
+   */
+  proposedLessonCount: number;
   /** Human tasks nobody has settled — work waiting on the operator themselves. */
   openHumanTaskCount: number;
   /** Overlaps still in flight, the only ones an operator can still act on. */
@@ -279,6 +286,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     past,
     openEscalations,
     openFindingCount: (state.findings ?? []).filter((f) => f.status === 'open').length,
+    proposedLessonCount: (state.lessons ?? []).filter((l) => l.status === 'proposed').length,
     openHumanTaskCount: (state.humanTasks ?? []).filter((t) => t.status === 'open').length,
     liveOverlapCount: (state.overlaps ?? []).filter((o) => o.live).length,
 

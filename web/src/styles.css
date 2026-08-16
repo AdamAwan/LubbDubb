@@ -1475,6 +1475,88 @@ body {
   gap: 6px;
   margin-left: auto;
 }
+
+/* Lessons — what working a goal taught, and the gate in front of it (#355).
+   Drawn as findings are, because it is the same shape: a claim, an operator's
+   ruling, and a settled tail that stays visible. */
+.lessons {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.lesson-compose {
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 10px 12px 4px;
+}
+.lesson-compose-foot {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.lesson-compose-foot .spacer {
+  flex: 1;
+}
+.lesson-goal {
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  padding: 4px 8px;
+  width: 22ch;
+}
+.lesson-note {
+  line-height: 1.5;
+  margin: 0;
+}
+.lesson-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.lesson-head {
+  font-size: 13px;
+  margin: 0;
+}
+.lesson-section > p {
+  margin: 0;
+}
+.lesson-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 8px 12px;
+  font-size: 13px;
+}
+.lesson-card.resolved {
+  opacity: 0.55;
+}
+.lesson-text {
+  overflow-wrap: anywhere;
+}
+.lesson-text > :first-child {
+  margin-top: 0;
+}
+.lesson-text > :last-child {
+  margin-bottom: 0;
+}
+.lesson-foot {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  margin-top: 6px;
+}
+.lesson-actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
 .plan-part {
   display: flex;
   align-items: center;

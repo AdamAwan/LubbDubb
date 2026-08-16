@@ -102,7 +102,7 @@ const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched
 const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
 const TICKET_GROUP = ['feature', 'flat'] as const;
 const TICKET_ORDER: readonly TicketOrder[] = ['added', 'changed', 'cost'];
-const PANELS = ['findings', 'faults', 'output', 'launch'] as const;
+const PANELS = ['findings', 'lessons', 'faults', 'output', 'launch'] as const;
 
 /** A parameter's value, with an empty one read as absent — `?goal=` names nothing. */
 function param(query: URLSearchParams, key: string): string | null {

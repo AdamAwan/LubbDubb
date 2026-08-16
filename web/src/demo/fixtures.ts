@@ -1475,6 +1475,42 @@ export function buildDemoState(): DemoSeed {
         updatedAt: ago(58),
       },
     ],
+    // What working a goal taught about working the repository (#355). One of each
+    // status, because the panel's whole claim is that the three are different
+    // things: a claim waiting on a reader, one a human vouched for, and one that
+    // stopped being true and was pruned — which is the state the surface exists for.
+    lessons: [
+      {
+        id: 'lesn-1',
+        text:
+          'The console tests render against `web/dist`, so `npm run build:web` has to run before `npm run check` ' +
+          'or they fail on a bundle from the last branch. The failure names a component, never the stale build.',
+        originRef: 'issue:376',
+        status: 'proposed',
+        createdAt: ago(20),
+        updatedAt: ago(20),
+      },
+      {
+        id: 'lesn-2',
+        text:
+          'A ticket that only names a symptom (“search is slow”) is under-specified for a planner every time. ' +
+          'Ask for the query, the corpus size and what “slow” was measured against before dispatching one.',
+        originRef: 'issue:364',
+        status: 'promoted',
+        createdAt: ago(70),
+        updatedAt: ago(66),
+      },
+      {
+        // Retired rather than deleted, and drawn: the operator has to be able to
+        // see that the list they are reading is the whole list.
+        id: 'lesn-3',
+        text: 'Run the retrieval suite with `--runInBand` — the fixtures share a Postgres schema and trample each other.',
+        originRef: 'issue:318',
+        status: 'retired',
+        createdAt: ago(400),
+        updatedAt: ago(90),
+      },
+    ],
     // Work only a person can do. Four, so the panel shows each shape it has: a
     // plan step holding parts shut, a standalone ask from an agent that could not
     // do it itself, one already declined with the note that stopped it, and the

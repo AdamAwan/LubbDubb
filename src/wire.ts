@@ -79,6 +79,7 @@ import type {
   Job,
   JobAttachment,
   JobSchedule,
+  Lesson,
   Plan,
   PlanPart,
   PlanRevision,
@@ -559,6 +560,16 @@ export interface CockpitState {
   /** What agents noticed outside their own tasks, newest first. */
   findings: Finding[];
   /**
+   * What working a goal taught about working this repository, newest first —
+   * proposals, promotions and the retired tail alike (issue #355).
+   *
+   * The retired ones ship too, and that is the point: the surface that prunes
+   * lessons has to show what it pruned, or "retired" reads as "deleted" and the
+   * operator cannot tell a list they have finished with from one that lost rows.
+   * Nothing here reaches an agent — see {@link Lesson}.
+   */
+  lessons: Lesson[];
+  /**
    * Bugs the operator raised from a story row, oldest first — `filing` while the
    * desk agent writes one, `filed` with a ref once it exists.
    *
@@ -882,6 +893,8 @@ export type {
   JobAttachment,
   JobAttachmentInput,
   JobSchedule,
+  Lesson,
+  LessonStatus,
   Plan,
   PlanEvidence,
   PlanNarrative,
