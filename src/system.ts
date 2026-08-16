@@ -6,6 +6,7 @@ import { CompositeConnector } from './integrations/compositeConnector.js';
 import { buildIntegrations } from './integrations/registry.js';
 import type { ActionSink } from './sink/actionSink.js';
 import type { CiEvidenceReader } from './ci/ciEvidence.js';
+import { ticketAmendCommands } from './goalInstructions.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
 import { defaultSessionRoot } from './agents/sessionTranscript.js';
 import { WorktreeManager, type Worktrees } from './worktree/worktreeManager.js';
@@ -502,6 +503,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // evidence comes from. It answers `[]` when no integration can supply any,
     // so the fake provider composes exactly the prompt it always did.
     ciEvidence: opts.ciEvidence ?? connector,
+    // How an agent amends a goal's ticket, so a standing operator instruction
+    // that changes what the goal asks for can reach the record everyone else
+    // reads. Config, resolved per issue — null under the fake provider, where the
+    // note says there is nothing to update rather than naming a failing command.
+    instructionTracker: (issueNumber) => ticketAmendCommands(config, issueNumber),
   });
 
   // The accept/reject surface for every act the harness will not perform on its

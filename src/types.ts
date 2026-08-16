@@ -1131,6 +1131,39 @@ export interface IssueConclusion {
 }
 
 /**
+ * Something the operator has told the fleet to do on a goal, in their own words —
+ * "change the button to primary", "the loading icon is broken, fix it".
+ *
+ * ## Why it is a row rather than a note on the verdict
+ *
+ * The operator's `more_work` toggle used to be a bare verdict: it bounced the
+ * item back to pickup and carried not one word of *what* was wanted, so the next
+ * agent re-read the same ticket that had already produced the thing the operator
+ * was unhappy with. The words are the whole feature, and a verdict has nowhere to
+ * put them — a conclusion is one overwritten row, so a second instruction would
+ * silently replace the first while both were still outstanding.
+ *
+ * So instructions accumulate. Every one written since the last agent concluded
+ * stands, they are appended to every dispatch on the goal in the order they were
+ * written, and they are settled together by `conclude_work` — the agent's own
+ * statement that it has dealt with what was in front of it. An operator can
+ * withdraw one they did not mean.
+ */
+export interface IssueInstruction {
+  id: string;
+  /** The goal, as `issue:<n>` — the origin every dispatch on it hangs beneath. */
+  originRef: string;
+  /** The operator's words, verbatim. Never rendered by the harness into anything else. */
+  text: string;
+  createdAt: string;
+  /**
+   * When it stopped standing: an agent concluded the goal, or the operator
+   * withdrew it. Null while it stands, which is the only state anything reads.
+   */
+  settledAt: string | null;
+}
+
+/**
  * A finished goal the operator has kept on the Goal Floor, until they dismiss it
  * (issue #203).
  *

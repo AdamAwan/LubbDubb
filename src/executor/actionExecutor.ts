@@ -26,6 +26,7 @@ import {
 import { actOnShortfall, releasePlan } from '../plans/planApproval.js';
 import { shortfallRef } from '../delivery/shortfall.js';
 import { outstandingWorkNote } from '../mcp/conclusion.js';
+import { operatorInstructionsNote } from '../goalInstructions.js';
 import { attachmentsNote } from '../jobs/attachments.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { retroDossier, retroPad } from '../retro/dossier.js';
@@ -81,6 +82,16 @@ interface ExecutorDeps {
    * for every open pull request and would pay for a log nobody dispatches on.
    */
   ciEvidence?: CiEvidenceReader;
+  /**
+   * How an agent amends the goal's ticket, per issue number — the one thing a
+   * standing operator instruction needs that neither the store nor the origin
+   * carries, since it comes from the `issues` provider's config.
+   *
+   * A function of the number rather than a string, because the commands name the
+   * item; optional because a deployment with no tracker has no answer, and the
+   * note then tells the agent to say what changed in its conclusion instead.
+   */
+  instructionTracker?: (issueNumber: number) => string | null;
 }
 
 export interface ExecutionSummary {
@@ -809,7 +820,12 @@ export class ActionExecutor {
     // says the worktree was recreated; a desk retry keeps its scratch dir, so it
     // does not.
     const note = retry ? retryNote(retry.priorAttempts + 1, action.type === 'dispatch_code_agent') : null;
-    const prompt = [note, action.prompt, evidence, guidance, outstanding, prior, briefing, attachments]
+    // What the operator has asked for on this goal since anyone last concluded it.
+    // Appended for the reason the four notes above are, scoped to the *goal* like
+    // the attachments rather than to the exact origin, and placed first among the
+    // appended blocks: it is the only one of them that changes what the work is.
+    const instructions = instructionsFor(action.originRef, store, this.deps.instructionTracker);
+    const prompt = [note, action.prompt, instructions, evidence, guidance, outstanding, prior, briefing, attachments]
       .filter(Boolean)
       .join('\n\n');
     // The model this kind of work runs on and the depth it runs at, resolved once
@@ -922,6 +938,36 @@ export class ActionExecutor {
 function attachmentsFor(originRef: string | null | undefined, store: Store): string | null {
   if (!originRef) return null;
   return attachmentsNote(store.listAttachments(padOriginFor(originRef) ?? originRef)) || null;
+}
+
+/**
+ * The operator's standing instructions on the goal being dispatched for — or null
+ * when it carries none, which is every dispatch on a goal nobody has written on.
+ *
+ * **Scoped by `padOriginFor`**, the attachments' rule for the attachments' reason:
+ * an instruction is about the *goal*, and the agents that go on to work it are
+ * dispatched for `issue:<n>:plan`, `:assay`, `:assess` and `:part:<slug>`. An
+ * exact match would put "change the button to primary" in front of nobody at all
+ * on a decomposed goal — the one shape where it matters most. Everything outside
+ * a goal's subtree (a PR concern, a job) resolves to null, which is
+ * `outstandingForOrigin`'s widening rule: an agent fixing CI on `pr:42` cannot act
+ * on it and cannot tell it apart from its own task.
+ *
+ * The retro origin is deliberately *not* excluded the way the prior-work briefing
+ * excludes it: a retrospective that did not know what the operator asked for
+ * mid-run would be writing up a different run from the one that happened.
+ */
+function instructionsFor(
+  originRef: string | null | undefined,
+  store: Store,
+  tracker: ((issueNumber: number) => string | null) | undefined,
+): string | null {
+  const goal = padOriginFor(originRef ?? null);
+  if (!goal) return null;
+  const standing = store.listStandingInstructions(goal);
+  if (standing.length === 0) return null;
+  const number = Number(goal.slice('issue:'.length));
+  return operatorInstructionsNote(standing, tracker?.(number) ?? null) || null;
 }
 
 function outstandingForOrigin(originRef: string | null | undefined, store: Store): string | null {

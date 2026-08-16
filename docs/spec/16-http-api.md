@@ -311,7 +311,35 @@ It writes the harness's own record and **does not touch the tracker**: concludin
 what stops the re-pickup, while moving the work item to a done state stays a human act. Broadcasts
 `world:changed`, and runs a cycle only for `more_work`, so an operator's "there's more here" bounces
 the item back to pickup immediately rather than on the next heartbeat. 400 on a non-integer issue
-number or a verdict that is not one of the three.
+number or a verdict that is not one of the three. The cockpit writes `more_work` through
+[`/instruction`](#post-apiissuesnumberinstruction) rather than here — a bounce-back carrying none of
+what the operator wants is the weaker half of what they were doing — and this arm stays as the API's
+way to say it, and as what `null` clears.
+
+### `POST /api/issues/:number/instruction`
+
+Body `{text}`, required and non-empty (max 4 000). What the operator wants done on this goal, in their
+own words — _change the button to primary_, _the permission is wrong_. This is what the cockpit's
+**More work** control writes, and what the bare `more_work` toggle became.
+
+It writes **two** rows and both are load-bearing. The instruction is what reaches the agent, appended
+to every dispatch on the goal until one concludes it
+([09](09-execution.md#the-operators-own-instructions-reach-the-agent)); the `more_work` conclusion is
+what makes there _be_ a next dispatch, since rule `work-item-back-to-pickup` acts on an explicit
+verdict and nothing else. The verdict's note deliberately does **not** repeat the instruction — one
+fact rendered twice in one prompt reads as two, and the prior-work briefing renders a conclusion's
+note. Broadcasts `world:changed` and runs a cycle, for the toggle's reason sharpened: an operator who
+has just said what they want should not wait a heartbeat to be listened to. 400 on an empty `text` or
+a non-integer issue number. Returns `{ok: true, instruction, conclusion}`.
+
+### `DELETE /api/issues/:number/instruction/:id`
+
+Take one back — the escape hatch free text sent to an agent has to have, and the only way an
+instruction stops standing other than an agent concluding the goal. Withdrawing the **last** one clears
+the operator's `more_work` with it, so the item is not bounced back to pickup for words nobody is going
+to read; an **agent's** own declaration is left exactly where it was found, because it is about the
+work rather than about the instruction. 409 when there is no standing instruction with that id, so a
+double click is refused rather than silently succeeding. Returns `{ok: true, standing}`.
 
 ### `POST /api/issues/:number/delivered`
 

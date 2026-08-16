@@ -237,6 +237,17 @@ const realApi = {
   // returning the issue to whatever its agent or its plan says.
   setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/conclusion`, { verdict }),
+  // Tell the fleet what to do on this goal, in the operator's own words. It writes
+  // the instruction *and* the `more_work` that makes there be a next dispatch to
+  // read it — one act on this side, because half of it does nothing.
+  addInstruction: (issueNumber: number, text: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/instruction`, { text }),
+  // Take one back. Withdrawing the last one clears the `more_work` it wrote with
+  // it, so the goal is not bounced back to pickup for words nobody will read.
+  withdrawInstruction: (issueNumber: number, id: string) =>
+    authFetch(`/api/issues/${issueNumber}/instruction/${id}`, { method: 'DELETE' }).then((r) =>
+      json<{ ok: true; standing: number }>(r),
+    ),
   // The operator's override of the intake verdict (#158). `unclear` is the one
   // reading that blocks dispatch, so this is the escape hatch that gate has to
   // have; `null` clears it, which is a delete and not a synonym for `workable`.

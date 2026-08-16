@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { issueConclusionOrigin } from '../../issueConclusion.js';
 import { bugTicketFields, bugTrackerCoordinates } from '../../bugFiling.js';
+import { MAX_INSTRUCTION } from '../../goalInstructions.js';
 import { goalFingerprint } from '../../intake/assay.js';
 import { ShortfallBody } from '../../delivery/shortfall.js';
 import { validationHeadline } from '../../delivery/closeOut.js';
@@ -167,6 +168,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // Rule `work-item-back-to-pickup` then reads the verdict on the next cycle, which is why `more_work`
   // runs one immediately — the operator's "no, there's more here" should bounce
   // the item back to pickup now rather than on the next heartbeat.
+  // The cockpit writes `more_work` through `/instruction` rather than here, since a
+  // bounce-back carrying none of what the operator wants is the weaker half of what
+  // they were doing. This arm stays: it is the API's way to say it, and it is what
+  // `null` clears.
   // `null` is a member of the verdict rather than an absence, because it is what
   // clears the row — and absence is refused, since a body that names no verdict
   // asks for nothing.
@@ -201,6 +206,72 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       hub.broadcast({ type: 'world:changed' });
       if (verdict === 'more_work') await harness.runCycle('manual');
       return { ok: true, conclusion };
+    }),
+  );
+
+  // Tell the fleet what to do on a goal, in the operator's own words — "change the
+  // button to primary", "the permission is wrong", "the loading icon is broken".
+  //
+  // This is what the bare `more_work` toggle became. That toggle bounced the item
+  // back to pickup carrying a fixed note, so the next agent re-read the ticket that
+  // had already produced the thing the operator was unhappy with; the words are the
+  // whole feature (see src/goalInstructions.ts).
+  //
+  // It writes **two** rows, and both are load-bearing. The instruction is what
+  // reaches the agent — appended to every dispatch on the goal until one concludes
+  // it — and the conclusion is what makes there *be* a next dispatch: rule
+  // `work-item-back-to-pickup` acts on an explicit `more_work` and on nothing else,
+  // so an instruction without one would sit unread on a parked item. The verdict's
+  // note deliberately does not repeat the instruction: one fact rendered twice in a
+  // prompt reads as two, and the briefing renders a conclusion's note.
+  //
+  // The cycle runs for the toggle's reason, sharpened — an operator who has just
+  // said what they want should not wait a heartbeat to be listened to.
+  const InstructionBody = z.object({
+    text: z
+      .string({ required_error: 'text is required', invalid_type_error: 'text must be a string' })
+      .trim()
+      .min(1, 'text is required — say what you want done')
+      .max(MAX_INSTRUCTION, `text is too long (max ${MAX_INSTRUCTION} characters)`),
+  });
+  app.post(
+    '/api/issues/:number/instruction',
+    checked({ params: IssueNumberParams, body: InstructionBody }, async ({ params, body }) => {
+      const originRef = issueConclusionOrigin(params.number);
+      const instruction = store.addIssueInstruction({ originRef, text: body.text });
+      const conclusion = store.recordIssueConclusion({
+        originRef,
+        verdict: 'more_work',
+        note: 'The operator wrote an instruction for this goal — it is in front of the next agent.',
+        by: 'operator',
+      });
+      hub.broadcast({ type: 'world:changed' });
+      await harness.runCycle('manual');
+      return { ok: true, instruction, conclusion };
+    }),
+  );
+
+  // Take one back. The escape hatch every write on this surface has, and the only
+  // way an instruction stops standing other than an agent concluding the goal.
+  //
+  // Withdrawing the **last** one clears the operator's `more_work` with it, and
+  // only ever that one: the two rows were written together, so leaving the verdict
+  // behind would keep bouncing the item back to pickup for words nobody is going to
+  // read. An agent's own declaration is left exactly where it was found — it is
+  // about the work, not about the instruction.
+  const InstructionParams = IssueNumberParams.extend({ id: z.string() });
+  app.delete(
+    '/api/issues/:number/instruction/:id',
+    checked({ params: InstructionParams }, async ({ params, reply }) => {
+      if (!store.withdrawInstruction(params.id))
+        return reply.code(409).send({ error: 'no standing instruction with that id' });
+      const originRef = issueConclusionOrigin(params.number);
+      const standing = store.listStandingInstructions(originRef);
+      const conclusion = store.getIssueConclusion(originRef);
+      if (standing.length === 0 && conclusion?.by === 'operator' && conclusion.verdict === 'more_work')
+        store.clearIssueConclusion(originRef);
+      hub.broadcast({ type: 'world:changed' });
+      return { ok: true, standing: standing.length };
     }),
   );
 

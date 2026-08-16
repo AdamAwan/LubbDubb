@@ -205,6 +205,25 @@ export interface CockpitActions {
   setIssueAssay(issueNumber: number, verdict: 'workable' | 'unclear' | null): Promise<void>;
 
   /**
+   * Tell the fleet what to do on a goal, in the operator's own words — "change the
+   * button to primary", "the permission is wrong".
+   *
+   * This is what the bare "Work left" toggle became. The verdict it wrote said
+   * only *that* there was more, so the next agent re-read the ticket that had
+   * already produced the thing the operator was unhappy with; the text is the
+   * whole feature. One call writes both halves — the instruction the next agent
+   * reads, and the `more_work` that makes there be a next agent — because either
+   * one alone does nothing.
+   */
+  addInstruction(issueNumber: number, text: string): Promise<void>;
+
+  /**
+   * Withdraw a standing instruction. The last one out takes the `more_work` with
+   * it, so a goal is not bounced back to pickup for words nobody will read.
+   */
+  withdrawInstruction(issueNumber: number, id: string): Promise<void>;
+
+  /**
    * Raise a bug against a story: the operator ran it and it does not do what they
    * expect — the one fact about a goal no agent on it can derive.
    *

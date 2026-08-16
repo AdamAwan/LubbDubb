@@ -71,6 +71,7 @@ import type {
   GoalAssayVerdict,
   HumanTask,
   IssueConclusionVerdict,
+  IssueInstruction,
   IssueRunOutcome,
   IssueState,
   IssueSpend,
@@ -215,6 +216,16 @@ export interface Issue extends WorldIssue {
   retrospective: { summary: string; hasDocument: boolean; updatedAt: string } | null;
   /** The shared pad — how much is there and when, never the trail itself. */
   scratchpad: { entries: number; updatedAt: string } | null;
+  /**
+   * What the operator has told the fleet to do on this goal and no agent has
+   * concluded yet, oldest first — shipped whole where the pad above ships a
+   * count, because these are the operator's own short words and the cockpit's job
+   * is to show them what is still standing.
+   *
+   * Empty is the normal state and is not a synonym for "nothing was ever asked":
+   * an instruction is settled by the conclusion that answers it.
+   */
+  instructions: IssueInstruction[];
   /**
    * The harness's run at this goal (issues #203, #234): minted the first pulse it
    * had work under it, finished when the goal was first observed reached, and

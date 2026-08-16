@@ -219,6 +219,8 @@ export function useCockpit(): CockpitStatus {
       setPartProfile: (planId, slug, profile) => then(api.setPartProfile(planId, slug, profile)),
       setIssueConclusion: (n, verdict) => then(api.setIssueConclusion(n, verdict)),
       setIssueAssay: (n, verdict) => then(api.setIssueAssay(n, verdict)),
+      addInstruction: (n, text) => then(api.addInstruction(n, text)),
+      withdrawInstruction: (n, id) => then(api.withdrawInstruction(n, id)),
       raiseBug: (n, summary, title) => then(api.raiseBug(n, summary, title)),
       dismissRun: (n) => then(api.dismissRun(n)),
 

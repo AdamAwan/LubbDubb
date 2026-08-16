@@ -114,6 +114,7 @@ function injectedIssue(
     | 'assay'
     | 'conclusion'
     | 'delivery'
+    | 'instructions'
     | 'retrospective'
     | 'scratchpad'
     | 'shortfall'
@@ -131,6 +132,7 @@ function injectedIssue(
     assay: null,
     retrospective: null,
     scratchpad: null,
+    instructions: [],
     // A goal injected this second has had no agent on it, so nothing has been
     // measured — which is null, not zero. See `demoIssue`.
     spend: null,
@@ -351,6 +353,69 @@ class DemoServer {
         undefined,
         `issue:${issueNumber}`,
       );
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Write an instruction on a goal — the demo mirror of the operator saying what
+   * they actually want, in words.
+   *
+   * Both halves, as on the server: the instruction the next agent would read, and
+   * the `more_work` that makes there be a next agent. A demo that wrote only the
+   * first would draw the operator's words and quietly park the goal, which is the
+   * exact failure the pair exists to prevent.
+   */
+  async addInstruction(issueNumber: number, text: string): Promise<{ ok: true }> {
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (issue) {
+      const at = new Date().toISOString();
+      issue.instructions = [
+        ...issue.instructions,
+        {
+          id: `ins_${issue.instructions.length + 1}_${issueNumber}`,
+          originRef: `issue:${issueNumber}`,
+          text,
+          createdAt: at,
+          settledAt: null,
+        },
+      ];
+      issue.conclusion = {
+        verdict: 'more_work',
+        by: 'operator',
+        note: 'The operator wrote an instruction for this goal — it is in front of the next agent.',
+        at,
+      };
+      this.addDecision(
+        'no_op',
+        'executed',
+        `issue #${issueNumber} → instruction`,
+        undefined,
+        undefined,
+        undefined,
+        `issue:${issueNumber}`,
+      );
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Take one back. The last one out clears the `more_work` it wrote — the server's
+   * rule, mirrored, because a demo that left the goal bounced back to pickup for
+   * withdrawn words would be teaching the wrong model of the control.
+   */
+  async withdrawInstruction(issueNumber: number, id: string): Promise<{ ok: true }> {
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (issue) {
+      issue.instructions = issue.instructions.filter((i) => i.id !== id);
+      if (
+        issue.instructions.length === 0 &&
+        issue.conclusion.by === 'operator' &&
+        issue.conclusion.verdict === 'more_work'
+      )
+        issue.conclusion = { verdict: 'undeclared', by: null, note: '', at: null };
       this.dirty();
     }
     return { ok: true };
@@ -2170,6 +2235,8 @@ export const demoApi = {
     getServer().setIssueConclusion(issueNumber, verdict),
   setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
     getServer().setIssueAssay(issueNumber, verdict),
+  addInstruction: (issueNumber: number, text: string) => getServer().addInstruction(issueNumber, text),
+  withdrawInstruction: (issueNumber: number, id: string) => getServer().withdrawInstruction(issueNumber, id),
   dismissRun: (issueNumber: number) => getServer().dismissRun(issueNumber),
   replan: (planId: string) => getServer().replan(planId),
   // The demo's plans have one revision each — no replan has landed in a browser

@@ -920,6 +920,14 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         agentId,
         taskId: task.id,
       });
+      // The operator's standing instructions were in this agent's prompt, and this
+      // note is its answer to them — so concluding settles them, whichever verdict
+      // it cast. `more_work` is not an exception: the note reaches the next agent
+      // through `outstandingWorkNote`, and an instruction that also survived would
+      // reach it twice, in two voices, with no way to tell whether the agent had
+      // already acted on it. Settling on *dispatch* instead would lose one to any
+      // agent that died before doing anything — see `src/store/instructions.ts`.
+      this.store.settleInstructions(origin.originRef);
       this.emit('conclusion', { agentId, taskId: task.id, conclusion });
       return { ok: true, conclusion };
     });
