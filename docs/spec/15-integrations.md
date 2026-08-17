@@ -66,8 +66,10 @@ is the honest answer rather than a second, quieter filter invented for this feat
 Both arms take a **changed-since** instant, and that is what makes a sweep incremental instead of a
 re-list of the tracker every pulse: GitHub's issues list takes `since` with `state=all`, Azure's WIQL
 filters on `System.ChangedDate` (with the `T` separator and sub-second precision stripped, which WIQL
-rejects by faulting the whole query, and the query posted with `timePrecision: true` — a WIQL request
-runs at date precision by default and faults on _any_ time supplied under it). It is also why the mirror's one-month floor is a floor rather
+rejects by faulting the whole query, and the request sent with `?timePrecision=true` — a WIQL query
+runs at date precision by default and faults on _any_ time supplied under it. The flag is a
+query-string parameter; the `Wiql` body is `{query}` alone, so putting it there is dropped in
+silence). It is also why the mirror's one-month floor is a floor rather
 than a cut — asking by last-changed brings back older items that are still alive.
 
 `PrBaseUpdateCapable` merges a pull request's **base into it** — the arm of rule `pr-base-update` that

@@ -544,7 +544,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async listWorkItemsChangedSince(since: string, tag?: string, assignedTo?: string): Promise<AzWorkItem[]> {
-    // `timePrecision` because the clause carries a time: see runWorkItemQuery.
+    // Time precision, because the clause carries a time: see runWorkItemQuery.
     return this.runWorkItemQuery(buildWorkItemHistoryQuery(since, tag, assignedTo), true);
   }
 
@@ -554,12 +554,16 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
    * A WIQL query runs at **date** precision unless the request asks otherwise, and a
    * date-precision query faults outright on a comparison that supplies a time — a 400
    * with `VssPropertyValidationException`, every pulse. So a query whose clauses carry
-   * a time must be posted with `timePrecision: true`; only the changed-since read does.
+   * a time must ask for `timePrecision`; only the changed-since read does.
+   *
+   * It goes in the **query string**, not the body: the `Wiql` request body is defined as
+   * `{query}` alone, so the server drops an unknown body field without complaining and
+   * the fault is the one it was meant to fix, unchanged.
    */
   private async runWorkItemQuery(wiql: string, timePrecision = false): Promise<AzWorkItem[]> {
     const query = await this.request<{ workItems?: Array<{ id: number }> }>(
-      this.withApiVersion(`${this.projectUrl}/_apis/wit/wiql`),
-      { method: 'POST', body: JSON.stringify({ query: wiql, timePrecision }) },
+      this.withApiVersion(`${this.projectUrl}/_apis/wit/wiql`, timePrecision ? { timePrecision: 'true' } : {}),
+      { method: 'POST', body: JSON.stringify({ query: wiql }) },
     );
     const ids = (query.workItems ?? []).map((w) => w.id);
     return this.getWorkItems(ids);
