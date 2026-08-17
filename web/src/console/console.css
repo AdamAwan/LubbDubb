@@ -1,8 +1,7 @@
 /*
- * The console — everything under `.cn`. Ported from the approved mockup at
- * `docs/superpowers/mockups/layout-a.html`, which is the layout reference: the
- * shell grid, the rail, the card/row vocabulary and the breakpoints all come
- * from there, every class renamed `cn-`.
+ * The console — everything under `.cn`. This sheet is the layout reference: the
+ * shell grid, the rail, the card/row vocabulary and the breakpoints all live
+ * here, every class prefixed `cn-`.
  *
  * What is deliberately absent: any rule targeting a *shared* component's own
  * class — the escalation card, the recovery banner, the findings panel, the
