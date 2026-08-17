@@ -690,8 +690,12 @@ test('plan_submit carries the validation block, on the verdict as well as the pa
     resources.map((r) => r.name),
     ['fixture-repo.tar.gz', 'test-env login'],
   );
-  // The one it cannot produce is an ask, not a check that mysteriously never runs.
-  assert.ok(resources.find((r) => r.name === 'test-env login')!.humanTaskId);
+  // The one it cannot produce is declared unprovided and nothing more: the ask for
+  // it is filed against the *delivery*, so submitting a plan puts nothing on the
+  // operator's bench about work that is not built yet.
+  assert.equal(resources.find((r) => r.name === 'test-env login')!.provided, false);
+  assert.equal(resources.find((r) => r.name === 'test-env login')!.humanTaskId, null);
+  assert.equal(system.store.listHumanTasks().length, 0);
   system.store.close();
 });
 

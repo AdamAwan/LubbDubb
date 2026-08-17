@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { validatePlanDocument, type PlanDocument } from '../src/plans/planDocument.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { nextCheckLetter } from '../src/validation/checkDocument.js';
+import { ValidationAskDesk } from '../src/validation/askDesk.js';
 import { Store } from '../src/store/store.js';
 import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'node:fs';
@@ -145,9 +146,9 @@ test('a nomination keeps its reason, and a check without one keeps none', () => 
   assert.equal(checks.find((c) => c.id === 'b')!.candidateWhy, null);
 });
 
-test('a resource the planner cannot provide files an ask, once', () => {
-  const store = new Store(':memory:');
-  const document = doc({
+/** The document that declares one resource the planner cannot produce, and one it can. */
+function withResources(): PlanDocument {
+  return doc({
     validation: {
       resources: [
         { name: 'test-env login', kind: 'access', provided: false, note: 'a read-only account on staging' },
@@ -156,17 +157,104 @@ test('a resource the planner cannot provide files an ask, once', () => {
       checks: [check()],
     },
   });
-  const goal = ingest(store, document);
-  const asks = store.listHumanTasks();
-  assert.equal(asks.length, 1, 'only the unprovided one is an ask');
-  assert.match(asks[0]!.title, /test-env login/);
-  assert.match(asks[0]!.detail ?? '', /read-only account on staging/);
-  assert.equal(store.listValidationResources(goal).find((r) => !r.provided)!.humanTaskId, asks[0]!.id);
+}
 
-  // A replan re-declaring the same resource must not file it twice — the
-  // `recordHumanTask` refresh, carried across by name.
-  ingest(store, document);
+test('a resource the planner cannot provide is not an ask until the goal is delivered', () => {
+  const store = new Store(':memory:');
+  const goal = ingest(store, withResources());
+  const asks = new ValidationAskDesk(store);
+
+  // The plan is in — and may still be `awaiting_approval`, and is certainly not
+  // built. A check runs against the delivered goal, so there is nothing a person
+  // could usefully do with this yet, and a row they cannot act on is the whole
+  // cost of filing it early.
+  asks.run();
+  assert.equal(store.listHumanTasks().length, 0, 'nothing is delivered, so nothing is asked for');
+
+  store.recordDelivery({ originRef: goal, summary: 'PR #40 landed it', by: 'assessor' });
+  asks.run();
+  const filed = store.listHumanTasks();
+  assert.equal(filed.length, 1, 'only the unprovided one is an ask');
+  assert.match(filed[0]!.title, /test-env login/);
+  assert.match(filed[0]!.detail ?? '', /read-only account on staging/);
+  assert.equal(store.listValidationResources(goal).find((r) => !r.provided)!.humanTaskId, filed[0]!.id);
+
+  // The sweep runs every pulse, and a replan re-declaring the same resource must
+  // not file it twice — the `recordHumanTask` refresh, carried across by name.
+  asks.run();
+  ingest(store, withResources());
+  asks.run();
   assert.equal(store.listHumanTasks().length, 1);
+});
+
+test('an assessor that sends the goal back stops it being asked about', () => {
+  const store = new Store(':memory:');
+  const goal = ingest(store, withResources());
+  const asks = new ValidationAskDesk(store);
+  store.recordShortfall({ originRef: goal, cause: 'goal', summary: 'the export is still wrong', by: 'assessor' });
+  asks.run();
+  assert.equal(store.listHumanTasks().length, 0, 'a shortfall is not a delivery — there is nothing to validate');
+
+  // And the other order: a shortfall clears the delivery it contradicts, so the
+  // gate closes again rather than the goal staying asked-about forever.
+  store.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
+  store.recordShortfall({ originRef: goal, cause: 'goal', summary: 'still wrong', by: 'assessor' });
+  asks.run();
+  assert.equal(store.listHumanTasks().length, 0);
+});
+
+test('a replan that stops needing a resource withdraws the ask it filed', () => {
+  const store = new Store(':memory:');
+  const goal = ingest(store, withResources());
+  store.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
+  new ValidationAskDesk(store).run();
+  const [filed] = store.listHumanTasks();
+  assert.equal(filed?.status, 'open');
+
+  // The resource row is replaced wholesale by the next document, so an ask nothing
+  // withdraws is an obligation pointing at something no plan asks for — and one
+  // the operator can never settle honestly.
+  ingest(store, doc({ validation: { resources: [{ name: 'fixture.tar.gz', kind: 'fixture' }], checks: [check()] } }));
+  const settled = store.getHumanTask(filed!.id);
+  assert.equal(settled?.status, 'declined');
+  assert.match(settled?.resolution ?? '', /no longer needs this/);
+});
+
+test('a planner that can produce the resource after all withdraws the ask too', () => {
+  const store = new Store(':memory:');
+  const goal = ingest(store, withResources());
+  store.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
+  const asks = new ValidationAskDesk(store);
+  asks.run();
+  const [filed] = store.listHumanTasks();
+
+  ingest(
+    store,
+    doc({
+      validation: {
+        resources: [{ name: 'test-env login', kind: 'access', provided: true }],
+        checks: [check()],
+      },
+    }),
+  );
+  assert.equal(store.getHumanTask(filed!.id)?.status, 'declined');
+  // And the next pulse does not put it straight back: the resource is provided.
+  asks.run();
+  assert.equal(store.listHumanTasks().filter((t) => t.status === 'open').length, 0);
+});
+
+test('a withdrawal never overwrites what the operator already answered', () => {
+  const store = new Store(':memory:');
+  const goal = ingest(store, withResources());
+  store.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
+  new ValidationAskDesk(store).run();
+  const [filed] = store.listHumanTasks();
+  store.settleHumanTask(filed!.id, 'done', 'dropped it in the validation directory');
+
+  ingest(store, doc({ validation: { resources: [], checks: [check()] } }));
+  const settled = store.getHumanTask(filed!.id);
+  assert.equal(settled?.status, 'done');
+  assert.equal(settled?.resolution, 'dropped it in the validation directory');
 });
 
 // -- letters -----------------------------------------------------------------

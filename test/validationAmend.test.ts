@@ -10,6 +10,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { validatePlanDocument } from '../src/plans/planDocument.js';
 import { outstandingChecks } from '../src/validation/verdict.js';
+import { ValidationAskDesk } from '../src/validation/askDesk.js';
 import { renderPlanComment } from '../src/plans/planComment.js';
 import type { Agent, ValidationCheck } from '../src/types.js';
 
@@ -402,7 +403,7 @@ test('an amendment needs a note, needs to do something, and cannot both declare 
 
 // -- resources ---------------------------------------------------------------
 
-test('an amendment adds resources and removes none, and an unprovided one becomes an ask', async () => {
+test('an amendment adds resources and removes none, and an unprovided one is asked for once delivered', async () => {
   const system = build();
   const plan = planWith(
     system,
@@ -423,10 +424,40 @@ test('an amendment adds resources and removes none, and an unprovided one become
   assert.deepEqual(names.sort(), ['seed.sql', 'staging login']);
   assert.deepEqual(byId(system, plan, 'login-works').uses.sort(), ['seed.sql', 'staging login']);
 
-  // An ask rather than a check that mysteriously never runs.
-  const asks = system.store.listHumanTasks().filter((t) => t.title.includes('staging login'));
-  assert.equal(asks.length, 1);
-  assert.match(asks[0]!.detail ?? '', /could not produce it/);
+  // An ask rather than a check that mysteriously never runs — but not before there
+  // is a delivered goal to run it against.
+  const asks = () => system.store.listHumanTasks().filter((t) => t.title.includes('staging login'));
+  const desk = new ValidationAskDesk(system.store);
+  desk.run();
+  assert.equal(asks().length, 0, 'nothing is delivered yet');
+
+  system.store.recordDelivery({ originRef: plan, summary: 'delivered', by: 'assessor' });
+  desk.run();
+  assert.equal(asks().length, 1);
+  assert.match(asks()[0]!.detail ?? '', /could not produce it/);
+});
+
+test('an amendment saying it can produce the resource after all withdraws the ask', async () => {
+  const system = build();
+  const plan = planWith(system, [check()], [{ name: 'staging login', kind: 'access', provided: false }]);
+  system.store.recordDelivery({ originRef: plan, summary: 'delivered', by: 'assessor' });
+  new ValidationAskDesk(system.store).run();
+  const [filed] = system.store.listHumanTasks();
+  assert.equal(filed?.status, 'open');
+
+  const res = await callTool(system, spawnAgent(system, 'issue:12'), 'validation_amend', {
+    note: 'I seeded the account myself while building this',
+    resources: [{ name: 'staging login', kind: 'access', provided: true }],
+    // An amendment must name a check, so this one re-declares the plan's word for
+    // word — which changes nothing about the check and everything about the ask.
+    checks: [check()],
+  });
+  assert.equal(res.isError, false);
+  // An amendment withdraws nothing by omission, but it may say out loud that a
+  // resource is provided — and then the ask is one nobody owes any more.
+  const settled = system.store.getHumanTask(filed!.id);
+  assert.equal(settled?.status, 'declined');
+  assert.match(settled?.resolution ?? '', /no longer needs this/);
 });
 
 // -- the two ways it can be off ----------------------------------------------

@@ -20,6 +20,7 @@ import type { PlanReconciler } from './plans/planReconciler.js';
 import type { AssayDesk } from './intake/assayDesk.js';
 import type { PrNamingDesk } from './prNamingDesk.js';
 import type { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
+import type { ValidationAskDesk } from './validation/askDesk.js';
 import type { SpendBurnDesk } from './spendBurnDesk.js';
 import type { BranchReapDesk } from './branchReapDesk.js';
 import type { ScheduleDesk } from './schedules/scheduleDesk.js';
@@ -68,6 +69,12 @@ interface HarnessDeps {
    * that do not care). It writes `human_tasks` rows and decides no dispatch.
    */
   closeOuts?: DeliveryCloseOutDesk;
+  /**
+   * Files the ask for a validation resource a delivered goal's plan says it needs
+   * and could not produce. Absent = no resource asks (tests that do not care). It
+   * writes `human_tasks` rows and decides no dispatch.
+   */
+  validationAsks?: ValidationAskDesk;
   /**
    * Surfaces a live run spending far past what its kind of work costs. Absent =
    * no burn watch (tests that do not care). It writes `human_tasks` rows, decides
@@ -244,6 +251,12 @@ export class Harness extends EventEmitter {
       // other bookkeeping rather than in the dispatcher, because it is not a
       // dispatch — nothing here staffs anything, and no rule reads what it writes.
       this.deps.closeOuts?.run(world);
+      // The other thing a delivered goal owes a person: the fixtures and accounts
+      // its validation plan says it needs and could not produce. Beside the
+      // close-out for the same reason and against the same gate — a check runs
+      // against the delivered goal, so this is the first pulse on which the ask is
+      // one anybody can act on. It writes `human_tasks` rows and nothing else.
+      this.deps.validationAsks?.run();
       // The operator's standing "every weekday at 09:00": a recurrence that has
       // come due queues its job here, a few lines above the `listQueuedJobs` the
       // dispatcher decides from — so a firing is dispatched on the pulse it fires
