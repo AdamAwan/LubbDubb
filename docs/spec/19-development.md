@@ -213,6 +213,10 @@ it to understand why a decision was made, and check the code before relying on a
 | `npm run audit`          | `npm audit --audit-level=high`.                                                 |
 | `npm run check`          | The one gate: the six stages above, concurrently, via `scripts/check.ts`.       |
 
+**`npm run serve` rebuilds the cockpit on every upgrade it applies**, for the reason the next
+paragraph gives: an upgrade that relaunched on the previous bundle would be silent, and the change
+the operator upgraded for is usually one they expect to see ([21](21-self-update.md#applying-it)).
+
 **`npm start` builds the cockpit first, and that is not a convenience.** The server needs no
 build step — tsx runs it from source — but the SPA does, and `web/dist` is gitignored, so it is
 whatever the last `web:build` on that machine produced. The server serves it on an `existsSync`

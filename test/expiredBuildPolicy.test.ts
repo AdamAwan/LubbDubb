@@ -75,7 +75,7 @@ const REJECTED = evaluation({ status: 'rejected' });
  * state and leave the failing one on the dispatching default. Pending-only, so the
  * `(glob, state)` match never claims the red build.
  */
-const MUTE_EXPIRY: CiPolicy = { checks: [{ match: 'NXG-*', states: ['pending'], onFailure: 'ignore' }] };
+const MUTE_EXPIRY: CiPolicy = { checks: [{ match: 'Example-*', states: ['pending'], onFailure: 'ignore' }] };
 
 function pull(over: Partial<AzPull> = {}): AzPull {
   return {
@@ -236,7 +236,7 @@ test('muting the expiry leaves the failing side of the same policy dispatching',
   const verdict = classifyCiFailures(pr?.ciChecks, MUTE_EXPIRY);
   assert.deepEqual(
     verdict.dispatch.map((m) => ({ name: m.name, rule: m.rule })),
-    [{ name: 'NXG-CI', rule: null }],
+    [{ name: 'Example-CI', rule: null }],
     'the pending-only rule does not claim the red build, so it falls through to the dispatching default',
   );
   assert.deepEqual(verdict.ignored, []);
@@ -245,7 +245,7 @@ test('muting the expiry leaves the failing side of the same policy dispatching',
 
 test('escalate on a pending-only rule is still refused, and says why', () => {
   assert.throws(
-    () => validateCiPolicy({ checks: [{ match: 'NXG-*', states: ['pending'], onFailure: 'escalate' }] }),
+    () => validateCiPolicy({ checks: [{ match: 'Example-*', states: ['pending'], onFailure: 'escalate' }] }),
     /no escalation arm for a check that is merely waiting/,
   );
 });
