@@ -193,6 +193,23 @@ interface AttachmentRelocator {
   ): { id: string; index: number; path: string }[];
 }
 
+/**
+ * A usage-limit park this process is holding: the sentence an operator reads, and
+ * the moment the account works again — null when `claude` did not say, which is a
+ * park only a human can end.
+ */
+interface LimitPark {
+  reason: string;
+  /** ISO, from the `rate_limit_event`'s own `resetsAt`. */
+  resetsAt: string | null;
+}
+
+/** A park whose window turned over but which could not be resumed. */
+export interface LimitResumeFailure {
+  agentId: string;
+  error: string;
+}
+
 interface AgentManagerEvents {
   output: [{ agentId: string; delta: string }];
   /** `ask` is present only when the park came through the `escalate` tool, which can carry structure. */
@@ -288,12 +305,17 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   // detectors, and for the same reason — two detectors that quietly disagree is a
   // bug this codebase has already paid for once.
   private readonly parked = new Set<string>();
-  // agentId → the reason it is parked on a *spent account limit* rather than on a
+  // agentId → the park it is held on for a *spent account limit* rather than for a
   // question (issue #318). A subset of `parked` with a different ending: nobody can
   // answer it, so the way out is {@link resumeParked}, not a reply. In memory
   // because it describes a park this process is holding — a restart hands the same
   // rows to the recovery desk, which asks the operator the wider question.
-  private readonly limited = new Map<string, string>();
+  //
+  // The reset time is kept as a *value* beside the sentence it is also printed in:
+  // {@link resumeExpiredParks} is the one reader that has to compare it to the
+  // clock, and re-parsing it back out of an operator-facing sentence would make the
+  // wording load-bearing.
+  private readonly limited = new Map<string, LimitPark>();
 
   constructor(
     private readonly store: Store,
@@ -480,8 +502,13 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   }
 
   /**
-   * End a usage-limit park: the operator saying the account can work again
-   * (issue #318).
+   * End a usage-limit park: the account can work again (issue #318).
+   *
+   * Two callers, one path. {@link resumeExpiredParks} calls it off the pulse once the
+   * window `claude` named has turned over, and the cockpit's Resume calls it when an
+   * operator says so — for a park that carries no reset time, or ahead of one that
+   * does. Both are the same claim about the account, so both get the same guards, the
+   * same teardown and the same message; a second way in is how the two would drift.
    *
    * Two shapes of the same park, because exhaustion does not always kill the
    * process. If the session is still up, this is one message down the stdin that
@@ -498,8 +525,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * where they were rather than with an agent that is neither parked nor running.
    */
   resumeParked(agentId: string): { ok: true } | { ok: false; error: string } {
-    const reason = this.limited.get(agentId);
-    if (reason === undefined) return { ok: false, error: 'this agent is not parked on a usage limit' };
+    const park = this.limited.get(agentId);
+    if (park === undefined) return { ok: false, error: 'this agent is not parked on a usage limit' };
     return this.withCaller(agentId, ({ agent, task }) => {
       const session = this.sessions.get(agentId);
       if (!session && (!this.opts.resumable || !agent.sessionId)) {
@@ -524,11 +551,53 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       try {
         if (!row || !this.resume(row, task, LIMIT_RESUME_MESSAGE)) throw new Error('the runtime declined the resume');
       } catch (err) {
-        this.reinstateLimitPark(agentId, task, reason);
+        this.reinstateLimitPark(agentId, task, park);
         return { ok: false, error: `could not re-open the session: ${(err as Error).message}` };
       }
       return { ok: true };
     });
+  }
+
+  /**
+   * End every park whose window has already turned over — the harness noticing for
+   * itself what an operator otherwise had to come back and press.
+   *
+   * A usage-limit park is the one park with a **known end**: nobody has to decide
+   * anything, and `claude` says on the way out when the account works again. Waiting
+   * for a human to observe a clock is the whole of what this removes, and it removes
+   * nothing else — every guard on {@link resumeParked} still applies, because this is
+   * that call and not a second way in.
+   *
+   * **A park `claude` gave no `resetsAt` for is left alone, permanently.** There is no
+   * moment to wait for, and picking one (an hour? five?) would be the harness guessing
+   * at another service's accounting and waking an agent into an account still spent —
+   * which costs a launch, a fresh MCP credential and a turn, and re-parks. The operator's
+   * Resume stays the way out of those, so it is still a real button and not a vestige.
+   *
+   * **No headroom check, deliberately.** `countLiveAgents` counts `waiting`, so a parked
+   * agent has held its slot the whole time it was parked; resuming it changes no count
+   * and can crowd out nothing. The cap was already paid when it was dispatched.
+   *
+   * Returns the parks it *could not* end, for the caller to record — a resume that
+   * fails puts the park back (see {@link resumeParked}), so the next pulse retries and
+   * a permanently broken one would otherwise retry in silence forever.
+   */
+  resumeExpiredParks(): LimitResumeFailure[] {
+    const now = Date.now();
+    const failures: LimitResumeFailure[] = [];
+    // Copied before iterating: `resumeParked` deletes from the map it walks.
+    for (const [agentId, park] of [...this.limited]) {
+      if (!park.resetsAt) continue;
+      const resetsAt = Date.parse(park.resetsAt);
+      // An unparseable time is a park with no clock, and takes the no-`resetsAt` arm:
+      // this is someone else's wire format, and a reading we cannot compare is not a
+      // reading that the window has turned over.
+      if (!Number.isFinite(resetsAt) || resetsAt > now) continue;
+      debugLog('agent', `limit park expired agent=${agentId} resetsAt=${park.resetsAt}`);
+      const result = this.resumeParked(agentId);
+      if (!result.ok) failures.push({ agentId, error: result.error });
+    }
+    return failures;
   }
 
   /** Every agent this process is holding parked on a spent account limit. */
@@ -1582,9 +1651,10 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * and deliberately **not** the same event. `waiting` is what raises an escalation,
    * and an escalation is a question put to a human: this one has no answer, so an
    * inbox row carrying it would be a message nobody can reply to holding a slot in
-   * the queue that means "somebody must answer this". What the operator does instead
-   * is wait for the window to turn over and resume, which is why the park is
-   * announced on its own event and drawn on the agent rather than in the inbox.
+   * the queue that means "somebody must answer this". What ends it instead is the
+   * window turning over — {@link resumeExpiredParks} off the pulse, or an operator
+   * ahead of it — which is why the park is announced on its own event and drawn on
+   * the agent rather than in the inbox.
    *
    * Nothing is settled: the row keeps its session id, the task stays `waiting`
    * (outstanding, so the work is neither lost nor re-dispatched on top), and the
@@ -1599,7 +1669,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     this.drainFileEvents(agentId);
     this.store.flushTranscript(agentId);
     const asked = this.parked.has(agentId);
-    this.limited.set(agentId, reason);
+    this.limited.set(agentId, { reason, resetsAt: park.resetsAt });
     this.parked.add(agentId);
     this.store.setAgentResumed(agentId, null);
     // An agent that asked a question and *then* ran the account out keeps its
@@ -1634,10 +1704,10 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   }
 
   /** Put a limit park back after a resume that could not be carried out. */
-  private reinstateLimitPark(agentId: string, task: Task, reason: string): void {
-    this.limited.set(agentId, reason);
+  private reinstateLimitPark(agentId: string, task: Task, park: LimitPark): void {
+    this.limited.set(agentId, park);
     this.parked.add(agentId);
-    this.store.updateAgent(agentId, { status: 'waiting', waitingReason: reason });
+    this.store.updateAgent(agentId, { status: 'waiting', waitingReason: park.reason });
     this.store.updateTask(task.id, { status: 'waiting' });
     this.reflectStatus(agentId, task.id, 'waiting');
   }
@@ -1760,9 +1830,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
  * otherwise re-reads its branch looking for work it did itself minutes ago.
  */
 const LIMIT_RESUME_MESSAGE =
-  'This account hit its usage limit mid-turn, so the harness parked you and an operator has just ' +
-  'resumed you. Nothing else changed — the worktree and the conversation are the ones you left. ' +
-  'Continue the task from where you stopped.';
+  'This account hit its usage limit mid-turn, so the harness parked you. The limit has cleared and ' +
+  'you have been resumed. Nothing else changed — the worktree and the conversation are the ones you ' +
+  'left. Continue the task from where you stopped.';
 
 /** How `claude` names each usage window, in words an operator reads. */
 const LIMIT_WINDOWS: Record<string, string> = {
@@ -1782,6 +1852,12 @@ const LIMIT_WINDOWS: Record<string, string> = {
  *
  * An unknown window name is printed verbatim rather than dropped: `claude` may
  * add one, and a park that names no limit is the failure this exists to prevent.
+ *
+ * It ends on which of the two ways *this* park comes back, because they ask
+ * different things of the person reading it: a park with a reset time needs
+ * nothing from them, and one without needs them to come back. Telling every park
+ * to "resume it once the limit clears" would have the cockpit ask for a press
+ * that, on the overwhelming majority of parks, has already happened by itself.
  */
 function rateLimitParkReason(park: RateLimitPark): string {
   const window = park.limitType ? (LIMIT_WINDOWS[park.limitType] ?? park.limitType) : null;
@@ -1789,7 +1865,10 @@ function rateLimitParkReason(park: RateLimitPark): string {
     ? `this account's overage allowance is spent${window ? ` (${window})` : ''}`
     : `this account's ${window ? `${window} ` : ''}usage limit is spent`;
   const when = park.resetsAt ? `, and it resets at ${park.resetsAt}` : '';
-  return `Parked on a usage limit: ${what}${when}. Nothing is wrong with the run — resume it once the limit clears.`;
+  const ending = park.resetsAt
+    ? 'the run carries on by itself once the window turns over'
+    : 'resume it once the limit clears';
+  return `Parked on a usage limit: ${what}${when}. Nothing is wrong with the run — ${ending}.`;
 }
 
 /**

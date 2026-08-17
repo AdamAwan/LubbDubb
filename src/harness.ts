@@ -15,6 +15,7 @@ import { deliverySignalQuery } from './delivery/delivery.js';
 import { assaySignalQuery } from './intake/assay.js';
 import { retainedRunIssues, runsToRecord } from './floor/runs.js';
 import type { AgentModels } from './agents/modelPolicy.js';
+import type { LimitResumeFailure } from './agents/agentManager.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
 import type { AssayDesk } from './intake/assayDesk.js';
 import type { PrNamingDesk } from './prNamingDesk.js';
@@ -110,6 +111,13 @@ interface HarnessDeps {
    * {@link Harness.runCycle}.
    */
   recovery?: { pendingCount(): number };
+  /**
+   * Ends the usage-limit parks whose window has turned over. Absent = no
+   * auto-resume (tests that do not care), and then a park waits for the cockpit's
+   * Resume as it did before. It staffs nobody and no rule reads what it writes: the
+   * agent it wakes is one already holding its slot.
+   */
+  fleet?: { resumeExpiredParks(): LimitResumeFailure[] };
   /**
    * Clears "Needs you" items whose agent has died. Absent = no sweep (tests that
    * do not care), and then only the terminal-state listeners tidy. It settles
@@ -256,6 +264,28 @@ export class Harness extends EventEmitter {
       // it. Never deleting is the point: `closedPullRequests` forgets a merge after
       // `closedPrWindowMs` and the graph must not.
       this.deps.graph?.record(world);
+      // An agent parked because the *account* ran out is resumed once the window
+      // `claude` named has turned over — the one park with a known end, so the
+      // ordinary case needs no operator (issue #318). Beside the other bookkeeping
+      // and not in the dispatcher for `closeOuts`' reason: it staffs nobody and no
+      // rule reads what it writes. It claims no headroom either — a parked agent
+      // counts as live the whole time it is parked, so it has been holding its own
+      // slot since it was dispatched.
+      //
+      // Immediately above the reads below rather than merely before `decide`, for
+      // `tidyDeadAgents`' reason: an agent this wakes must read as `running` for the
+      // rest of the pulse, not appear parked to the burn watch and the snapshot one
+      // last time.
+      //
+      // A resume that fails puts the park back, so the next pulse retries — recorded
+      // here because one that can never be resumed would otherwise retry forever in
+      // silence, which is the shape of failure the park itself was written to end.
+      for (const { agentId, error } of this.deps.fleet?.resumeExpiredParks() ?? [])
+        this.deps.errors.record({
+          source: 'agent',
+          message: `Agent ${agentId} could not be resumed after its usage limit cleared; it stays parked`,
+          detail: error,
+        });
       const tasks = store.listTasks();
       // How long each open PR has been sitting on a reviewer. Folded here rather
       // than derived on read because it is the one reading about a *span*: the

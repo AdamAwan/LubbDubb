@@ -101,6 +101,16 @@ const REJECTED = {
   isUsingOverage: false,
 };
 
+/**
+ * The same reading with the window turning over `offsetMs` from now, in `claude`'s
+ * own whole unix seconds. Relative rather than a fixed instant because the pulse
+ * now compares it to the wall clock: a pinned date is a test that passes until it
+ * is on the wrong side of it.
+ */
+function rejectedIn(offsetMs: number): Record<string, unknown> {
+  return { ...REJECTED, resetsAt: Math.floor((Date.now() + offsetMs) / 1000) };
+}
+
 function recordingSpawner(): { spawner: Spawner; children: FakeChild[] } {
   const children: FakeChild[] = [];
   const spawner: Spawner = () => {
@@ -335,6 +345,74 @@ test('resume refuses anything that is not a limit park, and says which', async (
   const missing = await app.inject({ method: 'POST', url: '/api/agents/nope/resume' });
   assert.equal(missing.statusCode, 409);
 
+  await app.close();
+  system.store.close();
+});
+
+test('a park whose window has turned over is resumed by the pulse, with nobody asked', async () => {
+  const { system, agent, child, children } = await fleet();
+  child.speak('Halfway through the migration.');
+  // A window that turned over a minute ago — the state an operator used to come
+  // back to and press Resume on.
+  child.rateLimit(rejectedIn(-60_000));
+  child.result('error_during_execution', true);
+  child.exit(1);
+  const before = children.length;
+
+  await system.harness.runCycle('manual');
+
+  assert.equal(children.length, before + 1, 'the conversation is re-opened, not restarted');
+  const relaunch = children[before]!;
+  const row = system.store.getAgent(agent.id)!;
+  assert.equal(row.status, 'running', 'back at work without anyone being asked');
+  assert.equal(row.sessionId, agent.sessionId, 'and in the same conversation');
+  assert.equal(row.waitingReason, null, 'the park sentence is gone with the park');
+  assert.equal(system.store.getTask(agent.taskId)!.status, 'running');
+  assert.deepEqual(system.agents.limitedAgentIds(), [], 'the park is over');
+  assert.ok(
+    relaunch.writes.some((w) => w.includes('usage limit') && w.includes('Continue the task')),
+    'and it is told why it stopped, not that an operator did anything',
+  );
+  assert.equal(system.store.listErrors().length, 0, 'a resume that worked records no failure');
+  assert.equal(system.store.listOpenEscalations().length, 0, 'nobody was asked a question');
+  system.store.close();
+});
+
+test('a park whose window has not turned over yet is left where it is', async () => {
+  const { system, agent, child, children } = await fleet();
+  child.rateLimit(rejectedIn(60 * 60 * 1000));
+  child.result('error_during_execution', true);
+  child.exit(1);
+  const before = children.length;
+
+  await system.harness.runCycle('manual');
+
+  assert.equal(children.length, before, 'nothing is relaunched into an account still spent');
+  assert.equal(system.store.getAgent(agent.id)!.status, 'waiting', 'still parked');
+  assert.deepEqual(system.agents.limitedAgentIds(), [agent.id]);
+  system.store.close();
+});
+
+test('a park claude gave no reset time for waits for a person, however many pulses pass', async () => {
+  // Every field but `status` is optional in the CLI's payload, so a park must
+  // survive a reading that names no moment to wait for — and there being no moment
+  // is precisely why the pulse must not invent one.
+  const { system, agent, child, children } = await fleet();
+  child.rateLimit({ status: 'rejected', rateLimitType: 'five_hour' });
+  child.result('error_during_execution', true);
+  child.exit(1);
+  const before = children.length;
+
+  await system.harness.runCycle('manual');
+  await system.harness.runCycle('manual');
+
+  assert.equal(children.length, before, 'no clock, so no automatic resume — ever');
+  assert.deepEqual(system.agents.limitedAgentIds(), [agent.id]);
+
+  // The operator's Resume is still the way out of one, and still works.
+  const { app } = await buildApp(system);
+  assert.equal((await app.inject({ method: 'POST', url: `/api/agents/${agent.id}/resume` })).statusCode, 200);
+  assert.equal(system.store.getAgent(agent.id)!.status, 'running');
   await app.close();
   system.store.close();
 });

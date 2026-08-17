@@ -498,8 +498,8 @@ credential bound would keep a live bearer token for the length of a park, which 
 is unfinished, and a stale `exited` would make the _resumed_ run's first terminal reap a worktree out
 from under a live agent.
 
-`resumeParked(agentId)` ends it, and is the only thing that does: `POST /api/agents/:id/resume`
-([16](16-http-api.md#post-apiagentsidresume)). If the session somehow survived, one message goes down
+`resumeParked(agentId)` ends it, and is the only thing that does — reached two ways, which is not the
+same as two paths. If the session somehow survived, one message goes down
 the stdin that is already open; otherwise the conversation is re-opened through `resume`, which is why
 the park keeps the session id. The reason is cleared _before_ either arm, since `resume` reads the row
 to decide whether the agent was parked on a question — and this park is the one it must not put back.
@@ -511,6 +511,35 @@ were rather than with an agent that is neither parked nor running.
 Only an agent this process parked is a candidate; anything else is refused by name. `kill` is the one
 other verdict available on a limit park, and it is available _because_ the session is gone: a park that
 outlives its process would otherwise have "resume" as the only thing anyone could ever say to it.
+
+#### Ending it on the clock
+
+`resumeExpiredParks()` is the first of the two callers: the harness cycle
+([04](04-harness-cycle.md)) ends every park whose `resetsAt` has passed, so the ordinary case needs no
+operator at all. It sits with the pulse's other bookkeeping, above the `listTasks`/`listAgents` reads
+so an agent it wakes reads as `running` for the rest of that pulse rather than appearing parked to
+the burn watch and the state snapshot one last time. Worst-case lag is one heartbeat past the reset.
+
+This is the one park with a **known end**: nobody has to decide anything, and `claude` says on the way
+out when the account works again. So the reset time is kept in the `limited` map as a value beside the
+sentence it is also printed in — re-parsing it back out of an operator-facing sentence would make that
+wording load-bearing.
+
+- **A park with no `resetsAt` is never resumed automatically.** Every field but `status` is optional in
+  the CLI's payload, and there is no moment to wait for. Picking one would be the harness guessing at
+  another service's accounting and waking an agent into an account still spent — a launch, a fresh MCP
+  credential and a turn, and then a re-park. An unparseable reading takes the same arm, for the same
+  reason. `POST /api/agents/:id/resume` ([16](16-http-api.md#post-apiagentsidresume)) is the way out of
+  those, and stays the way to end any park ahead of its window.
+- **No headroom check.** `countLiveAgents` counts `waiting`, so a parked agent has held its slot the
+  whole time it was parked: resuming it changes no count and can crowd out nothing.
+- **A resume that fails is recorded**, by the cycle rather than by the manager. The park goes back on,
+  so the next pulse retries — and a park that can never be resumed would otherwise retry forever in
+  silence, which is the shape of failure the park itself was written to stop being.
+
+A park held across a **restart** is not covered: the map is in-memory, so those rows reach the recovery
+desk, which asks the wider question. That is unchanged, and deliberately — two surfaces resuming one
+row would race for its session id.
 
 ### Terminal, exit and reap
 

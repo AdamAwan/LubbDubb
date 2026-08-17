@@ -60,7 +60,8 @@ flowchart TD
         NAME --> CLOSE["file and settle close-outs — a delivered goal's ticket<br/>is still open, and only a person can close it"]
         CLOSE --> SCHED["fire due schedules — a recurrence queues an ordinary job,<br/>above the read below so it dispatches this same pulse"]
         SCHED --> GRAPH["record the work graph — after the reconciler, before decide"]
-        GRAPH --> TIDY["tidy the inbox — dismiss the questions whose agent has died,<br/>immediately above the read that ships them"]
+        GRAPH --> LIMIT["end the usage-limit parks whose window has turned over,<br/>above the read below so a woken agent reads as running this pulse"]
+        LIMIT --> TIDY["tidy the inbox — dismiss the questions whose agent has died,<br/>immediately above the read that ships them"]
         TIDY --> READ["read the fleet and the store<br/>tasks, agents, escalations, queued jobs, plans and parts,<br/>verdicts, proposals, overrides, the last 200 decisions"]
         READ --> ANN["announce the assay's question on the ticket · record issue runs"]
         ANN --> HR["compute headroom — paused ? 0 : cap - live agents,<br/>both read by reference"]
@@ -101,7 +102,15 @@ flowchart TD
    is recorded through `errors.record` and never fails the cycle — nothing reads the graph for a
    decision, so it must not be able to break the pulse.
 8. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
-   and the most recent 200 decisions. Immediately above the escalation read,
+   and the most recent 200 decisions. Immediately **above** the whole read,
+   `fleet.resumeExpiredParks()` ends every usage-limit park whose reset time has passed, so an agent
+   the account stopped mid-turn comes back on its own rather than waiting for someone to notice a
+   clock ([10](10-agent-runtimes.md#ending-it-on-the-clock)). Its position is the point: an agent it
+   wakes must read as `running` for the rest of this pulse, not appear parked to the burn watch and
+   the state snapshot one more time. It claims no headroom — a parked agent counts as live throughout
+   its park, so it has held its own slot since it was dispatched — and a resume that fails is recorded
+   through `errors.record` with the park put back for the next pulse. Immediately above the escalation
+   read,
    `escalations.tidyDeadAgents()` dismisses every open question whose agent has left the fleet — the
    backstop to the terminal-state listeners in `src/system.ts`, so a dead agent's un-answerable card is
    off "Needs you" on this pulse rather than never
