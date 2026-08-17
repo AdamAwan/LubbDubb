@@ -64,9 +64,14 @@ interface CiCheckRule {
    * say "fix it when it breaks, and run the gate when it stalls".
    *
    * `pending` is here for a blocking check that never resolves on its own: an
-   * Azure status policy waiting on a command somebody has to run. Nothing else in
-   * the harness reads a pending check, so without a rule the pull request sits
-   * `elsewhere` / "CI still running" forever.
+   * Azure status policy waiting on a command somebody has to run. Absent a rule
+   * and absent {@link CiCheck.expired}, nothing else in the harness reads a
+   * pending check, so the pull request sits `elsewhere` / "CI still running"
+   * forever.
+   *
+   * A `pending`-only rule with `onFailure: 'ignore'` is therefore the lever for
+   * the opposite need: muting the expiry default on a check that expires on every
+   * push, while leaving its genuine failures on the dispatching default.
    */
   states?: CiWatchState[];
   /**
@@ -190,19 +195,25 @@ export function validateCiPolicy(policy: CiPolicy): void {
           `"${rule.onFailure ?? 'ignore'}" (the default), so nothing is queued.`,
       );
     }
-    // A rule that watches no failing state can only ever be looked at by
-    // `classifyWatchedChecks`, which dispatches or does nothing. `ignore` there is
-    // what already happens to every non-failing check, and `escalate` has no arm
-    // to run in: rule `pr-ci-blocked` asks about a *red* PR whose failures are all
-    // held, and stretching it over a waiting gate would need its own once-only
-    // bookkeeping and its own wording. Both are therefore refused rather than
-    // accepted as a rule that silently does nothing.
-    if (!ruleStates(rule).includes('failing') && (rule.onFailure ?? 'ignore') !== 'dispatch') {
+    // A rule that watches no failing state is only ever looked at by
+    // `classifyWatchedChecks`, which dispatches or does nothing — so `ignore` there
+    // used to be refused as a rule that could never fire. It fires now: the
+    // expiry default watches an **expired** check with no rule naming it, and a
+    // pending-only `ignore` rule is the one way to shadow that default without
+    // also giving up the agent fix when the same check goes genuinely red (which
+    // is what `states: ['failing', 'pending']` costs).
+    //
+    // `escalate` is still refused, for the reason that has not changed: it has no
+    // arm to run in. Rule `pr-ci-blocked` asks about a *red* PR whose failures are
+    // all held, and stretching it over a waiting gate would need its own
+    // once-only bookkeeping and its own wording.
+    if (!ruleStates(rule).includes('failing') && (rule.onFailure ?? 'ignore') === 'escalate') {
       throw new Error(
         `${where} ("${rule.match}"): "states" is [${ruleStates(rule).join(', ')}], which never includes a failing ` +
-          `check, but onFailure is "${rule.onFailure ?? 'ignore'}" (the default). Nothing in the harness acts on a ` +
-          'check that is not failing, so this rule could never fire. Set onFailure to "dispatch", or add "failing" ' +
-          'to "states".',
+          'check, but onFailure is "escalate". The harness has no escalation arm for a check that is merely ' +
+          'waiting — rule `pr-ci-blocked` asks a human about a red pull request whose failures are all held — so ' +
+          'this rule could never fire. Use "dispatch" to send an agent for the waiting check, "ignore" to mute it, ' +
+          'or add "failing" to "states".',
       );
     }
   });
@@ -281,9 +292,10 @@ export function classifyCiFailures(checks: CiCheck[] | undefined, policy: CiPoli
 export interface CiWatchVerdict {
   /**
    * Watched checks an agent should be sent for. Every entry either has a rule
-   * that dispatches — {@link validateCiPolicy} refuses the alternatives, so there
-   * is no held or muted list here to mirror {@link CiVerdict}'s — or is an
-   * **expired** check no rule claimed, which is watched on the provider's word.
+   * that dispatches — a rule with `ignore` drops the check from this walk
+   * entirely, and `escalate` is refused at load, so there is no held or muted
+   * list here to mirror {@link CiVerdict}'s — or is an **expired** check no rule
+   * claimed, which is watched on the provider's word.
    */
   watched: CiMatch[];
   /** Any watched check's rule asked to jump the queue. */
