@@ -60,7 +60,8 @@ flowchart TD
         NAME --> CLOSE["file and settle close-outs — a delivered goal's ticket<br/>is still open, and only a person can close it"]
         CLOSE --> SCHED["fire due schedules — a recurrence queues an ordinary job,<br/>above the read below so it dispatches this same pulse"]
         SCHED --> GRAPH["record the work graph — after the reconciler, before decide"]
-        GRAPH --> READ["read the fleet and the store<br/>tasks, agents, escalations, queued jobs, plans and parts,<br/>verdicts, proposals, overrides, the last 200 decisions"]
+        GRAPH --> TIDY["tidy the inbox — dismiss the questions whose agent has died,<br/>immediately above the read that ships them"]
+        TIDY --> READ["read the fleet and the store<br/>tasks, agents, escalations, queued jobs, plans and parts,<br/>verdicts, proposals, overrides, the last 200 decisions"]
         READ --> ANN["announce the assay's question on the ticket · record issue runs"]
         ANN --> HR["compute headroom — paused ? 0 : cap - live agents,<br/>both read by reference"]
         HR --> SPLIT["split the world for dispatch<br/>hide -ignore PRs · add the runs the tracker forgot"]
@@ -100,7 +101,12 @@ flowchart TD
    is recorded through `errors.record` and never fails the cycle — nothing reads the graph for a
    decision, so it must not be able to break the pulse.
 8. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
-   and the most recent 200 decisions.
+   and the most recent 200 decisions. Immediately above the escalation read,
+   `escalations.tidyDeadAgents()` dismisses every open question whose agent has left the fleet — the
+   backstop to the terminal-state listeners in `src/system.ts`, so a dead agent's un-answerable card is
+   off "Needs you" on this pulse rather than never
+   ([10](10-agent-runtimes.md#the-questions-a-dead-agent-leaves-behind)). It settles inbox rows,
+   decides no dispatch, and writes nothing over a clean inbox.
 9. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
    **by reference** from `RuntimeControl` (never a copy taken at wiring time).
 10. **Split the PR world** — partition open PRs into the dispatch world and `excludedPrs` (below).

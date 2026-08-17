@@ -99,7 +99,9 @@ the re-dispatch cooldown counts attempts from, and what the branch-notify de-dup
 Only **executed** dispatches count as attempts, because a deferred one never ran.
 
 `EscalationInbox.dismissEscalationsForAgent` also writes decision rows, under the synthetic cycle id
-`agent-lifecycle`, recording why an orphaned escalation was auto-dismissed.
+`agent-lifecycle`, recording why an orphaned escalation was auto-dismissed — whether it was reached by
+a terminal-state listener or by the pulse's `tidyDeadAgents` sweep
+([10](10-agent-runtimes.md#the-questions-a-dead-agent-leaves-behind)).
 
 ## The activity feed
 

@@ -526,6 +526,38 @@ exit observed. The two arrive in either order (PTY: sentinel first, exit later; 
 On reap the file-events spool is disposed and the MCP credential is released. Only then is it safe to
 touch resources the process pinned, which is why worktree removal hangs off this event.
 
+### The questions a dead agent leaves behind
+
+An escalation carrying an `agentId` is a question **a process asked** — a park
+([above](#waiting)) or a permission request ([11](11-mcp-tools.md#request_permission)) — and its
+answer routes into that process. Once the process is gone, the answer routes nowhere, so the card is
+un-answerable and must leave "Needs you". Nothing else in the inbox is affected: a proposal, a
+stack-landing stop and every rule-raised item carry no `agentId` and stay answerable whatever the
+fleet did.
+
+`src/system.ts` is the fast path, dismissing through `EscalationInbox.dismissEscalationsForAgent` at
+each terminal transition it hears — `killed` off `status`, and every `done` whatever status it carries
+and whoever declared it. **An agent-declared `done` counts**: an agent that answered its own question
+and finished leaves exactly the same un-answerable card as one that crashed with it open.
+
+`EscalationInbox.tidyDeadAgents()` is the backstop, run once per pulse from `Harness.runCycle`
+immediately before the store read that ships the inbox, so a swept card is gone on the same pulse. It
+scans open escalations, looks up each one's agent, and dismisses whatever names a row in `done`,
+`failed`, `killed` or `interrupted`. It exists because the fast path is an _enumeration of
+transitions_ that has to stay complete: a death arriving by a route nobody wired there leaves the card
+up for good, and nothing about it looks wrong — it renders correctly, and only the agent's absence
+says otherwise. Idempotent, and it writes nothing over a clean inbox.
+
+`crashed` is deliberately not in that set, and neither is an `agentId` naming no row at all. A crashed
+agent is awaiting a recovery decision and may be **restored**, and a restored agent must come back to
+the question it parked on — the dismissal hangs off the requeue/remove verdicts instead
+([below](#the-three-verdicts)). Agent rows are never deleted, so a missing one is a fault elsewhere,
+and dismissing on a read that came back empty is how a store bug becomes a silently emptied inbox.
+
+Both paths record the dismissal in `context.dismissal` and in the decision log under the synthetic
+cycle id `agent-lifecycle` ([18](18-observability.md#the-decision-log)), so a cleared question leaves
+a trace like any other outcome.
+
 ### Auto-resume on a mid-run crash
 
 `failed` is gated before it reaches `handleTerminal`. When the runtime is resumable, the row carries a

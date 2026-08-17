@@ -103,6 +103,12 @@ interface HarnessDeps {
    * {@link Harness.runCycle}.
    */
   recovery?: { pendingCount(): number };
+  /**
+   * Clears "Needs you" items whose agent has died. Absent = no sweep (tests that
+   * do not care), and then only the terminal-state listeners tidy. It settles
+   * inbox rows, decides no dispatch, and no rule reads what it writes.
+   */
+  escalations?: { tidyDeadAgents(): unknown[] };
 }
 
 interface CycleReport {
@@ -260,6 +266,13 @@ export class Harness extends EventEmitter {
       // two reads above rather than taking its own, so the pulse walks the agents
       // and tasks tables once between here and `decide`.
       this.deps.burn?.run({ agents, tasks });
+      // Clear the questions whose agent is gone, immediately before the read that
+      // ships them to the cockpit — so a dead agent's card is off "Needs you" on
+      // the same pulse rather than the next one. The listeners in `src/system.ts`
+      // have usually done this already; this catches the deaths that reached no
+      // listener. Beside the other bookkeeping and not in the dispatcher for
+      // `closeOuts`' reason: it staffs nobody and no rule reads what it writes.
+      this.deps.escalations?.tidyDeadAgents();
       const openEscalations = store.listOpenEscalations();
       const queuedJobs = store.listQueuedJobs();
       // Work a requeue is redoing, keyed on the origin it stands in for rather
