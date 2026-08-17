@@ -9,6 +9,7 @@ import { DEFAULT_VALIDATION, type ValidationPolicy } from './validation/policy.j
 import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
 import { validateAgentModels, type AgentModels } from './agents/modelPolicy.js';
+import { DEFAULT_FILING_TYPES } from './ticketTypes.js';
 
 /**
  * Central configuration. Everything the operator can tune lives here.
@@ -123,6 +124,25 @@ export interface Config {
    * template's names (matched case-insensitively).
    */
   issueContainerTypes: string[];
+  /**
+   * The work item types the harness may **file**, when an operator files a
+   * finding, a blueprint or unrecorded work from the cockpit. The filing agent
+   * picks one from this list and is told it may create nothing else — which of
+   * them a given report is, is a judgement about the report, and only the agent
+   * has read it.
+   *
+   * Defaults to `["User Story", "Bug"]`: the altitude a backlog is groomed at,
+   * on the Agile process template's names. Set your own — a Scrum project files
+   * `["Product Backlog Item", "Bug"]`, and a process extended with a custom type
+   * lists it (`["User Story", "Tech Debt", "Bug"]`). The names are passed to
+   * `az` verbatim, so they must match the project's exactly.
+   *
+   * Meaningful only for Azure DevOps, the one provider whose items carry a type;
+   * GitHub issues have none and are unaffected. Unlike `issueContainerTypes`
+   * there is no "off": `[]` falls back to the default, because a work item is
+   * created *as* something.
+   */
+  issueFilingTypes: string[];
   /**
    * The planning funnel for multi-PR issues. **On by default**: every watched open
    * issue gets a planning agent before any implementation work, and its verdict —
@@ -477,6 +497,7 @@ const DEFAULTS: Config = {
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
   issueContainerTypes: [...DEFAULT_CONTAINER_TYPES],
+  issueFilingTypes: [...DEFAULT_FILING_TYPES],
   // Each policy's own module owns the operator default; the dispatcher's fallback
   // for an *omitted* policy is a separate answer (off) and lives with the rules.
   planning: DEFAULT_PLANNING,

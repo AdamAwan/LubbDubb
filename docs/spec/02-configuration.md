@@ -262,15 +262,16 @@ reading the file is not the same as knowing the policy.
 
 ### Item selection (labels, priority, states)
 
-| Key                    | Type                     | Default                                                           | Behaviour                                                                                                                                                                     |
-| ---------------------- | ------------------------ | ----------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `userId`               | `string` (optional)      | unset                                                             | Who _you_ are to every provider — see [`userId`](#userid). Turns on the ownership gate, ticket assignment and the PR-author filter together. Unset, all three are off.        |
-| `labelPrefix`          | `string`                 | `"lubbdubb"`                                                      | Derives the tag pair `${prefix}-watch` / `${prefix}-ignore`. An **empty** prefix turns both gates off.                                                                        |
-| `issuePriorityLabels`  | `Record<string, number>` | `{ 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 }` | Label → weight for pickup ordering. Replaced wholesale by an override.                                                                                                        |
-| `issueDefaultPriority` | `number`                 | `2`                                                               | Weight for an issue with no matching priority label.                                                                                                                          |
-| `issuePickupStates`    | `string[]` (optional)    | unset                                                             | When non-empty, only items whose provider-native state is listed are eligible. Items with no such state bypass it.                                                            |
-| `issueInReviewState`   | `string` (optional)      | unset                                                             | The state an item is moved to once a PR is open for it. Takes effect only alongside `issuePickupStates`.                                                                      |
-| `issueContainerTypes`  | `string[]`               | `["Feature", "Epic"]`                                             | Item types that **hold** work rather than being work. Never picked up, planned or assayed. Matched case-insensitively; `[]` turns the gate off; items with no type bypass it. |
+| Key                    | Type                     | Default                                                           | Behaviour                                                                                                                                                                                        |
+| ---------------------- | ------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `userId`               | `string` (optional)      | unset                                                             | Who _you_ are to every provider — see [`userId`](#userid). Turns on the ownership gate, ticket assignment and the PR-author filter together. Unset, all three are off.                           |
+| `labelPrefix`          | `string`                 | `"lubbdubb"`                                                      | Derives the tag pair `${prefix}-watch` / `${prefix}-ignore`. An **empty** prefix turns both gates off.                                                                                           |
+| `issuePriorityLabels`  | `Record<string, number>` | `{ 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 }` | Label → weight for pickup ordering. Replaced wholesale by an override.                                                                                                                           |
+| `issueDefaultPriority` | `number`                 | `2`                                                               | Weight for an issue with no matching priority label.                                                                                                                                             |
+| `issuePickupStates`    | `string[]` (optional)    | unset                                                             | When non-empty, only items whose provider-native state is listed are eligible. Items with no such state bypass it.                                                                               |
+| `issueInReviewState`   | `string` (optional)      | unset                                                             | The state an item is moved to once a PR is open for it. Takes effect only alongside `issuePickupStates`.                                                                                         |
+| `issueContainerTypes`  | `string[]`               | `["Feature", "Epic"]`                                             | Item types that **hold** work rather than being work. Never picked up, planned or assayed. Matched case-insensitively; `[]` turns the gate off; items with no type bypass it.                    |
+| `issueFilingTypes`     | `string[]`               | `["User Story", "Bug"]`                                           | The types the harness may **create** when filing a finding, a blueprint or unrecorded work — see [what a filed item is](#what-type-a-filed-item-is). Azure only; `[]` falls back to the default. |
 
 ### Feature policies
 
@@ -589,6 +590,32 @@ leaves its assignee alone), and must not cost the ticket if the tracker refuses 
 Assignment applies to the four filing arms and to nothing the harness merely reads: it is not a
 filter, and it never narrows pickup. The narrowing is the other two gates, and they are separate
 mechanisms that happen to share a name.
+
+### What type a filed item is
+
+`issueFilingTypes` is the closed set of Azure work item types the harness may **create**, and the
+filing agent picks one from it (`ticketTypeGuidance`, `src/ticketTypes.ts`). The three non-bug filing
+arms — a deferred finding, a blueprint, unrecorded work — used to hardcode `--type Task`, which is
+the altitude a story is **broken down** at rather than the one a backlog is filed at: an item created
+there has no story above it, rolls up to nothing, and appears on no backlog anybody grooms. A raised
+bug is the fourth arm and does not consult the list; what it is filing was never in question.
+
+Which type a given report is, is left to the agent on the same argument that leaves it the wording:
+it is a judgement about the report, and only the agent has read it. What the harness supplies is the
+menu and the prohibition — the list is closed, a decomposition type is named and refused outright
+(the failure this exists to stop; "pick the right one" does not read to an agent as excluding the one
+it has always picked), and an imperfect fit resolves to the nearest entry rather than an invented
+type, because Azure refuses a type the project does not define and the ticket is lost with it.
+
+It reaches the agent the same way assignment does and for the same reason: spliced into the create
+command inside `{tracker}`, never as a `{type}` placeholder an older override would drop. The default
+`["User Story", "Bug"]` is the Agile template's names, on the reasoning `issueContainerTypes` already
+uses; a Scrum project sets `["Product Backlog Item", "Bug"]`, and a process extended with a custom
+type lists it (`["User Story", "Tech Debt", "Bug"]`). Names are passed to `az` verbatim. Unlike
+`issueContainerTypes` there is no "off" — a work item is created _as_ something, so `[]` falls back
+to the default rather than emitting a create with no `--type`. A single-entry list is spliced in
+literally and the agent is given no choice to make. GitHub is untouched throughout: an issue carries
+no type, so its coordinates read exactly as they always did.
 
 ### `azureDevOps.policyChecks`
 

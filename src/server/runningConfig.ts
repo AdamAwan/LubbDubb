@@ -75,6 +75,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'issuePickupStates',
       'issueInReviewState',
       'issueContainerTypes',
+      'issueFilingTypes',
     ],
   },
   {
