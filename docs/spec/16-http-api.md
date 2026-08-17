@@ -25,7 +25,7 @@ is about.
 | `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                 |
 | `routes/findings.ts`    | Promote / file / dismiss                                                                      |
 | `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                            |
-| `routes/issues.ts`      | Watch, conclusion, assay, delivered, shortfall, dismiss-run                                   |
+| `routes/issues.ts`      | Watch, priority, conclusion, assay, delivered, shortfall, dismiss-run                         |
 | `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`                                      |
 | `routes/plans.ts`       | Replan, abandon, discuss, discuss/end                                                         |
 | `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it        |
@@ -326,6 +326,25 @@ moves immediately.
 400 when the deployment configures no profiles, when `profile` names one that is not configured
 (by name, with the configured set listed — the boundary half of the boot rejection), and on a provider
 failure, which is recorded on the error log. Returns `{ok: true, profile, answered}`.
+
+### `POST /api/issues/:number/priority`
+
+Body `{priority: boolean}`. Marks this goal a priority, or clears the mark: every origin under it —
+its pickup, its plan, its parts, its assay, its assessor, its validation checks and the pull requests
+its branches opened — is ranked ahead of the natural cross-rule order and ahead of an
+`/api/upnext/order` drag, behind rule `manual-job` only
+([05](05-dispatcher.md#marking-a-goal-a-priority)).
+
+**The harness's own record, not a tracker label** — unlike the watch and profile routes above, and for
+the reason that separates them: those two state something about the _goal_ that a human reading the
+ticket needs, while this states something about **this deployment's queue**, which is not a fact the
+tracker can honour and not one every other board reader should inherit.
+
+Idempotent both ways, and a second flag keeps the original timestamp — the row records when the
+operator decided, and clicking a button that is already on decides nothing new. Broadcasts
+`world:changed` and runs a cycle, safe inline for `/api/upnext/order`'s reason: it re-orders and never
+un-holds. 400 on a non-integer issue number or a missing/non-boolean `priority`. Returns
+`{ok: true, priority, report}`.
 
 ### `POST /api/issues/:number/conclusion`
 

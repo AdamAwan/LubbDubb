@@ -214,6 +214,15 @@ export interface Issue extends WorldIssue {
    * anything, so the only way it is not silent is being drawn.
    */
   modelPin: { profile: string | null; ignoredTags: string[] };
+  /**
+   * The operator marked this goal a priority, and when. Null is not flagged.
+   *
+   * Beside the verdicts rather than inside `pickup`, because it is not one: every
+   * other reading here says something about the goal, and this one says something
+   * about the **queue** — which of the things the harness could do next it does
+   * first. It changes no gate, so a flagged goal that is held is still held.
+   */
+  priority: { since: string } | null;
   /** The run's own write-up — the *reading*; the document is fetched on open. */
   retrospective: { summary: string; hasDocument: boolean; updatedAt: string } | null;
   /** The shared pad — how much is there and when, never the trail itself. */

@@ -16,15 +16,27 @@ interface Rankable {
  * ephemeral projection the panel draws, so the ordering survives pulses and
  * restarts while "Up next" stays a per-pulse projection.
  *
- * Three tiers, and the order between them is the whole contract:
+ * Four tiers, and the order between them is the whole contract:
  *
  *   1. **`manual-job` items stay first**, in their own (oldest-first) order. A manual
  *      job is a distinct request — not a re-prioritisation of existing work — so
  *      an override never moves one: it always takes the next free slot.
- *   2. **Overridden origins next**, in ascending rank order (rank `0` = "do this
+ *   2. **A goal the operator marked a priority**, every origin its work takes
+ *      (`isExpedited`, from `goalPriority.ts`), keeping the **pipeline's own order
+ *      among them**: the flag says which goal comes first and the pipeline already
+ *      says what that goal needs first — assay before plan, plan before parts, a
+ *      review before a red build. A second opinion about the order *within* a goal
+ *      is not what the operator asked for and would be a worse one.
+ *   3. **Overridden origins next**, in ascending rank order (rank `0` = "do this
  *      next"). This is what jumps a world-driven item ahead of the natural
- *      ranking, which is the whole point of the feature.
- *   3. **Everything else** keeps its natural (already-ranked) order.
+ *      ranking, which is the whole point of that feature.
+ *   4. **Everything else** keeps its natural (already-ranked) order.
+ *
+ * A flag outranks a drag because they are statements of different lifetimes: a
+ * drag arranges the queue this pulse and is pruned when its origin stops being
+ * ranked, while a flag stands on the goal until the operator clears it. Dragging a
+ * row above a flagged goal would be honoured for one pulse and silently lost on
+ * the next, which is worse than not honouring it.
  *
  * It only re-orders. It never clears a `held` verdict: a cooldown, cap, pause,
  * ignore tag or unapproved plan holds an item wherever the override places it —
@@ -37,15 +49,18 @@ interface Rankable {
 export function rankByPriorityOverride<T extends Rankable>(
   candidates: readonly T[],
   overrideRank: ReadonlyMap<string, number>,
+  isExpedited: (originRef: string) => boolean = () => false,
 ): T[] {
   const keyed = candidates.map((candidate, index) => {
     const override = overrideRank.get(candidate.origin);
-    // `manual-job` items are pinned to the top regardless of any override, so a stray
-    // override on a `job:` origin can never demote the manual-job tier.
-    const tier = candidate.rule === 'manual-job' ? 0 : override !== undefined ? 1 : 2;
-    // Within the overridden tier, order by the operator's rank; every other tier
-    // keeps its incoming position.
-    const secondary = tier === 1 ? override! : index;
+    // `manual-job` items are pinned to the top regardless of any override or flag,
+    // so a stray override on a `job:` origin can never demote the manual-job tier.
+    const tier =
+      candidate.rule === 'manual-job' ? 0 : isExpedited(candidate.origin) ? 1 : override !== undefined ? 2 : 3;
+    // Within the overridden tier, order by the operator's rank; every other tier —
+    // the flagged goal's included — keeps its incoming position, which is the
+    // pipeline's own answer about what that goal needs first.
+    const secondary = tier === 2 ? override! : index;
     return { candidate, index, tier, secondary };
   });
   keyed.sort((a, b) => a.tier - b.tier || a.secondary - b.secondary || a.index - b.index);

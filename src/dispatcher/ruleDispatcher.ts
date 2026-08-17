@@ -7,6 +7,7 @@ import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispat
 import { type CiPolicy } from '../ci/ciPolicy.js';
 import { DISPATCH_PIPELINE, type RuleConditions, type StageRuleId } from './rules.js';
 import { rankByPriorityOverride } from './priorityOverride.js';
+import { expeditedOrigins } from './goalPriority.js';
 import { deliveryHold } from '../delivery/delivery.js';
 import { candidateParents } from '../issueRelations.js';
 import { assayHold } from '../intake/assay.js';
@@ -203,7 +204,18 @@ export class RuleDispatcher implements Dispatcher {
     // but stays behind `manual-job` and never clears a `held` verdict — the cut
     // below still holds a held candidate wherever the override placed it.
     const overrideRank = new Map((ctx.priorityOverrides ?? []).map((o) => [o.origin, o.rank]));
-    const ranked = rankByPriorityOverride(s.candidates, overrideRank);
+    // A goal the operator marked a priority takes the tier above that drag, and
+    // takes it for *every* origin its work is spread across — see `expeditedOrigins`
+    // for why the flag has to be expanded rather than matched. Built from the same
+    // `openPrs` the rules ranked against, so a PR the ignore tag hid from dispatch
+    // cannot resolve to a different goal here than it did there.
+    const expedited = expeditedOrigins(ctx.goalPriorities ?? [], {
+      openPrs: s.openPrs,
+      issues: ctx.world.issues,
+      plans: ctx.plans ?? [],
+      parts: ctx.planParts ?? [],
+    });
+    const ranked = rankByPriorityOverride(s.candidates, overrideRank, expedited);
 
     // The headroom cut: dispatch the above-cut prefix (each claiming a slot),
     // keep everything ranked as the visible queue. A cooling-down candidate is
@@ -213,8 +225,10 @@ export class RuleDispatcher implements Dispatcher {
     for (const c of ranked) {
       if (s.activeOrigins.has(c.origin)) continue; // staffed — not "up next"
       const { origin, rule, title, kind, branch, reason } = c;
+      // Absent unless it is true, so an unflagged row keeps the shape it had.
+      const flag = expedited(origin) ? { expedited: true } : {};
       if (c.held) {
-        upcoming.push({ origin, rule, title, kind, branch, status: c.held, reason });
+        upcoming.push({ origin, rule, title, kind, branch, status: c.held, reason, ...flag });
       } else if (headroom > 0) {
         // The one place a pin is stamped onto a dispatch. Every agent dispatch
         // routes through the candidate list — an inline `raw.push` of a
@@ -224,9 +238,9 @@ export class RuleDispatcher implements Dispatcher {
         s.raw.push(pinAction(c.action, s.pinFor(c.origin)));
         s.activeOrigins.add(origin);
         headroom -= 1;
-        upcoming.push({ origin, rule, title, kind, branch, status: 'dispatching', reason });
+        upcoming.push({ origin, rule, title, kind, branch, status: 'dispatching', reason, ...flag });
       } else {
-        upcoming.push({ origin, rule, title, kind, branch, status: 'waiting', reason });
+        upcoming.push({ origin, rule, title, kind, branch, status: 'waiting', reason, ...flag });
       }
     }
 

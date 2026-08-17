@@ -254,6 +254,24 @@ function Header({
         >
           {watched === 'watched' ? 'Watching' : 'Watch'}
         </button>
+        {/* "Work this one first." Beside the watch toggle because it is the next
+            thing an operator says after "work this" — and deliberately worded as a
+            queue statement rather than an importance one: it changes what the
+            fleet reaches for while it is short of slots, and it changes nothing
+            about whether the goal is allowed to move. A goal sitting on a cooldown
+            or an unapproved plan is still sitting there, flagged. */}
+        <button
+          type="button"
+          className={`cn-tgl ${issue.priority !== null ? 'cn-watch' : ''}`}
+          onClick={() => void actions.setGoalPriority(issue.number, issue.priority === null)}
+          title={
+            issue.priority === null
+              ? 'Work this goal first: everything under it — its plan, its parts, its pull requests — takes the next free slots ahead of the rest. It does not lift a cooldown, a part cap or an unapproved plan.'
+              : `Marked a priority ${relTime(issue.priority.since, view.now)} — click to hand the queue back to its natural order`
+          }
+        >
+          {issue.priority !== null ? 'Priority' : 'Prioritise'}
+        </button>
         {/* Which profile this goal's work runs on (#342). Beside the watch toggle
             because it is the same kind of statement about the same object — "work
             this" and "work this at this depth" — and because an operator who has

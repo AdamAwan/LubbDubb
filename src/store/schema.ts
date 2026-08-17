@@ -92,6 +92,20 @@ CREATE TABLE IF NOT EXISTS priority_overrides (
   last_seen_at TEXT NOT NULL
 );
 
+-- Goals the operator has marked a priority. One row per flagged goal, keyed on
+-- its issue:<n> origin; presence is the whole value, so there is no rank and no
+-- ordering among flagged goals (the pipeline order decides that, per goal).
+--
+-- Deliberately not pruned the way priority_overrides is. An override arranges one
+-- pulse's queue and is meaningless once its origin stops being ranked; this is a
+-- standing statement about a goal, and a goal with nothing queued — waiting on a
+-- human, on a review, on a base — is exactly when it must survive. It is cleared
+-- by the operator and by nothing else.
+CREATE TABLE IF NOT EXISTS goal_priorities (
+  origin     TEXT PRIMARY KEY,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS agents (
   id             TEXT PRIMARY KEY,
   task_id        TEXT NOT NULL,

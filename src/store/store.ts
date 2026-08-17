@@ -72,6 +72,7 @@ import type {
   Retrospective,
   ScratchEntry,
   ScratchPadSummary,
+  GoalPriority,
   PlanStatus,
   PriorityOverride,
   Proposal,
@@ -327,6 +328,15 @@ export class Store {
   }
   reconcilePriorityOverrides(trackedOrigins: readonly string[], ttlMs: number): void {
     this.priority.reconcilePriorityOverrides(trackedOrigins, ttlMs);
+  }
+
+  // -- Goal priority (the operator's "this goal first, and everything under it") --
+
+  setGoalPriority(originRef: string, priority: boolean): void {
+    this.priority.setGoalPriority(originRef, priority);
+  }
+  listGoalPriorities(): GoalPriority[] {
+    return this.priority.listGoalPriorities();
   }
 
   // -- Findings (what an agent noticed outside its own task) ----------------
