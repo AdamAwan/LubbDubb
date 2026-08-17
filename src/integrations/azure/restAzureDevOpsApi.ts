@@ -544,14 +544,22 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   }
 
   async listWorkItemsChangedSince(since: string, tag?: string, assignedTo?: string): Promise<AzWorkItem[]> {
-    return this.runWorkItemQuery(buildWorkItemHistoryQuery(since, tag, assignedTo));
+    // `timePrecision` because the clause carries a time: see runWorkItemQuery.
+    return this.runWorkItemQuery(buildWorkItemHistoryQuery(since, tag, assignedTo), true);
   }
 
-  /** The shared two-step behind both work-item listings: ids from WIQL, fields from the batch read. */
-  private async runWorkItemQuery(wiql: string): Promise<AzWorkItem[]> {
+  /**
+   * The shared two-step behind both work-item listings: ids from WIQL, fields from the batch read.
+   *
+   * A WIQL query runs at **date** precision unless the request asks otherwise, and a
+   * date-precision query faults outright on a comparison that supplies a time — a 400
+   * with `VssPropertyValidationException`, every pulse. So a query whose clauses carry
+   * a time must be posted with `timePrecision: true`; only the changed-since read does.
+   */
+  private async runWorkItemQuery(wiql: string, timePrecision = false): Promise<AzWorkItem[]> {
     const query = await this.request<{ workItems?: Array<{ id: number }> }>(
       this.withApiVersion(`${this.projectUrl}/_apis/wit/wiql`),
-      { method: 'POST', body: JSON.stringify({ query: wiql }) },
+      { method: 'POST', body: JSON.stringify({ query: wiql, timePrecision }) },
     );
     const ids = (query.workItems ?? []).map((w) => w.id);
     return this.getWorkItems(ids);
@@ -827,8 +835,9 @@ function workItemQuery(extra: string[], tag?: string, assignedTo?: string): stri
  * An ISO instant as WIQL will accept it: `YYYY-MM-DD HH:MM:SSZ`.
  *
  * WIQL rejects the `T` separator and sub-second precision, and rejects them by
- * faulting the whole query — so the sweep would record a fault every pulse rather
- * than silently reading nothing. Quotes are stripped rather than escaped because
+ * faulting the whole query — as it also does to any time at all unless the request
+ * sets `timePrecision` ({@link RestAzureDevOpsApi}), so the format and the flag are
+ * one fix in two places. Quotes are stripped rather than escaped because
  * this value is never operator-supplied: it is the store's own high-water mark, and
  * anything unparseable is a bug here, not input.
  */
