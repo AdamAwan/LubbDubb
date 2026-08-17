@@ -41,9 +41,9 @@ const BUILD_POLICY = '0609b952-1397-4640-95ec-e00a01b2c241';
 function evaluation(over: Partial<AzPolicyEvaluation> = {}): AzPolicyEvaluation {
   return {
     typeId: BUILD_POLICY,
-    displayName: 'NXG-CI',
+    displayName: 'Example-CI',
     typeName: 'Build',
-    buildDefinitionName: 'NXG-CI',
+    buildDefinitionName: 'Example-CI',
     status: 'queued',
     isBlocking: true,
     isEnabled: true,
@@ -63,7 +63,7 @@ function pull(over: Partial<AzPull> = {}): AzPull {
     branch: 'feature/expiry',
     baseBranch: 'Development',
     lastMergeSourceCommit: 'abc123',
-    authorUniqueName: 'bot@nxg.example',
+    authorUniqueName: 'bot@example.com',
     url: 'https://dev.azure.com/o/p/_git/r/pullrequest/31702',
     isDraft: false,
     mergeStatus: 'succeeded',
@@ -79,7 +79,7 @@ function fakeApi(evals: AzPolicyEvaluation[]): AzureDevOpsApi {
   };
   return {
     async viewerUniqueName() {
-      return 'bot@nxg.example';
+      return 'bot@example.com';
     },
     async listActivePullRequests() {
       return [pull()];
@@ -146,14 +146,14 @@ function build(pullRequests: PullRequest[]): System {
 
 test('an expired queued build maps to a pending check flagged expired; a running one does not', () => {
   assert.deepEqual(listPolicyCiChecks([EXPIRED]), [
-    { name: 'NXG-CI', status: 'pending', blocking: true, expired: true },
+    { name: 'Example-CI', status: 'pending', blocking: true, expired: true },
   ]);
   // The distinction Azure's `status` cannot make, and the reason the flag exists.
-  assert.deepEqual(listPolicyCiChecks([RUNNING]), [{ name: 'NXG-CI', status: 'pending', blocking: true }]);
+  assert.deepEqual(listPolicyCiChecks([RUNNING]), [{ name: 'Example-CI', status: 'pending', blocking: true }]);
   // A verdict is a verdict, whatever `isExpired` reads beside it: no flag once the
   // policy has resolved, or a settled check would read as one still waiting.
   assert.deepEqual(listPolicyCiChecks([evaluation({ status: 'approved', isExpired: true })]), [
-    { name: 'NXG-CI', status: 'passing', blocking: true },
+    { name: 'Example-CI', status: 'passing', blocking: true },
   ]);
 });
 
@@ -175,7 +175,7 @@ test('an expired check is watched with no rule; a running one is not', async () 
   const verdict = classifyWatchedChecks(expiredPr?.ciChecks, empty);
   assert.deepEqual(
     verdict.watched.map((m) => ({ name: m.name, rule: m.rule, expired: m.expired })),
-    [{ name: 'NXG-CI', rule: null, expired: true }],
+    [{ name: 'Example-CI', rule: null, expired: true }],
   );
   // The control, and the reason `states: ["pending"]` on the build checks was the
   // wrong fix: it would claim this one too, and send an agent to release a gate
@@ -185,13 +185,13 @@ test('an expired check is watched with no rule; a running one is not', async () 
   // The agent is told what an expired check needs, because no operator guidance
   // exists for a check nobody had to name.
   const note = ciWatchNote(verdict);
-  assert.match(note, /expired, not running — NXG-CI/);
+  assert.match(note, /expired, not running — Example-CI/);
   assert.match(note, /a new run has to be queued against the current head/);
 });
 
 test('an operator rule that does not dispatch still shadows the expiry default', async () => {
   const [pr] = await azurePullRequests([EXPIRED]);
-  const muted: CiPolicy = { checks: [{ match: 'NXG-*', states: ['failing', 'pending'], onFailure: 'ignore' }] };
+  const muted: CiPolicy = { checks: [{ match: 'Example-*', states: ['failing', 'pending'], onFailure: 'ignore' }] };
   assert.deepEqual(classifyWatchedChecks(pr?.ciChecks, muted).watched, []);
 });
 
@@ -203,7 +203,7 @@ test('the harness dispatches a gate agent for the expired build, through buildSy
   assert.ok(task, 'the expired build should be claimed on the gate origin');
   assert.equal(task.branch, 'feature/expiry');
   assert.match(task.prompt, /waiting, not failing/);
-  assert.match(task.prompt, /expired, not running — NXG-CI/);
+  assert.match(task.prompt, /expired, not running — Example-CI/);
 
   const decision = system.store
     .listDecisions()
@@ -236,7 +236,7 @@ test('the lens agrees with the dispatcher: an expired build is the harness’s c
   const [expiredPr] = await azurePullRequests([EXPIRED]);
   const expired = prAttentionStatus(expiredPr!, ctx(expiredPr!));
   assert.equal(expired.status, 'harness');
-  assert.match(expired.reasons[0]!, /NXG-CI waiting on an action/);
+  assert.match(expired.reasons[0]!, /Example-CI waiting on an action/);
 
   // A build that is genuinely running is what it always was: outside the loop.
   const [runningPr] = await azurePullRequests([RUNNING]);

@@ -608,7 +608,7 @@ test('rule `pr-ci-failing`: a stacked PR whose base is red is still suppressed, 
 // Rule `pr-ci-gate` — the check that waits rather than fails
 // --------------------------------------------------------------------------
 
-/** The NXG case: a blocking Azure status policy sitting `queued` on a green PR. */
+/** The motivating case: a blocking Azure status policy sitting `queued` on a green PR. */
 const GATE = { match: 'pr-agent-review*', states: ['pending' as const], onFailure: 'dispatch' as const };
 const gatePr = (over: Partial<PullRequest> = {}) =>
   pr(31676, {

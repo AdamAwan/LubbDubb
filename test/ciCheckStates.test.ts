@@ -21,7 +21,7 @@ import type { PullRequest, WorldSnapshot } from '../src/types.js';
 
 /**
  * The whole path for a check watched in a **non-failing** state, from the Azure
- * evaluation to the agent — the NXG case that motivated `states` (PR 31676).
+ * evaluation to the agent — the case that motivated `states` (PR 31676).
  *
  * A `pr-agent-review` **status** branch policy on `Development` is blocking,
  * enabled, and permanently `queued`: nothing is red, so no rule looked at it, and
@@ -36,7 +36,7 @@ import type { PullRequest, WorldSnapshot } from '../src/types.js';
 const STATUS_POLICY = 'cbdc66da-9728-4af8-aada-9a5a32e4a226';
 const BUILD_POLICY = '0609b952-1397-4640-95ec-e00a01b2c241';
 
-/** The raw shape Azure's `/policy/evaluations` returns for the NXG status policy. */
+/** The raw shape Azure's `/policy/evaluations` returns for the status policy. */
 const RAW_STATUS_EVALUATION = {
   status: 'queued',
   configuration: {
@@ -71,7 +71,7 @@ function pull(over: Partial<AzPull> = {}): AzPull {
     branch: 'feature/thing',
     baseBranch: 'Development',
     lastMergeSourceCommit: 'abc123',
-    authorUniqueName: 'bot@nxg.example',
+    authorUniqueName: 'bot@example.com',
     url: 'https://dev.azure.com/o/p/_git/r/pullrequest/31676',
     isDraft: false,
     mergeStatus: 'succeeded',
@@ -91,7 +91,7 @@ function fakeApi(evals: AzPolicyEvaluation[], pulls: AzPull[] = [pull()]): Azure
   };
   return {
     async viewerUniqueName() {
-      return 'bot@nxg.example';
+      return 'bot@example.com';
     },
     async listActivePullRequests() {
       return pulls;
