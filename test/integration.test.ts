@@ -234,6 +234,45 @@ test('an agent that fails auto-dismisses its open escalations', async () => {
   system.store.close();
 });
 
+test('an agent that finishes with its own question still open auto-dismisses it', async () => {
+  const backend = new FakePtyBackend();
+  const system = buildSystem(testConfig(), { backend });
+  const { escalationId } = await agentWithOpenEscalation(system, backend);
+
+  // The agent answered its own question and carried on to the end. Nobody is left
+  // to hear a reply, so the card must not sit in "Needs you" for good.
+  backend.last().emit('sorted it myself @@LUBBDUBB_DONE@@');
+
+  const after = system.store.getEscalation(escalationId)!;
+  assert.equal(after.status, 'dismissed');
+  assert.equal((after.context.dismissal as { reason: string }).reason, 'agent finished its work');
+  assert.equal(system.store.listOpenEscalations().length, 0, 'dropped out of "Needs you"');
+  system.store.close();
+});
+
+test('the pulse sweeps an escalation whose agent died without a terminal event', async () => {
+  const backend = new FakePtyBackend();
+  const system = buildSystem(testConfig(), { backend });
+  const { agentId, escalationId } = await agentWithOpenEscalation(system, backend);
+
+  // Stand in for a death that reached no listener: the row is terminal, the
+  // question is still open. This is the shape the backstop exists for.
+  system.store.updateAgent(agentId, { status: 'failed', endedAt: new Date().toISOString(), pid: null });
+  assert.equal(system.store.getEscalation(escalationId)!.status, 'open');
+
+  await system.harness.runCycle('manual');
+
+  const after = system.store.getEscalation(escalationId)!;
+  assert.equal(after.status, 'dismissed');
+  assert.match((after.context.dismissal as { reason: string }).reason, /^agent failed;/);
+
+  // Idempotent: a second pulse over a clean inbox dismisses nothing more.
+  await system.harness.runCycle('manual');
+  const dismissals = system.store.listDecisions().filter((d) => d.detail.includes(`Auto-dismissed escalation`));
+  assert.equal(dismissals.length, 1, 'swept once, not once per pulse');
+  system.store.close();
+});
+
 test("a crashed agent's open escalation survives detection and is dismissed only by the verdict", async () => {
   const backend = new FakePtyBackend();
   const system = buildSystem(testConfig(), { backend });

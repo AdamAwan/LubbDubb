@@ -1,7 +1,16 @@
 import { EventEmitter } from 'node:events';
 import type { Store } from '../store/store.js';
 import type { AgentManager } from '../agents/agentManager.js';
-import type { Escalation, EscalationContext, EscalationType } from '../types.js';
+import type { AgentStatus, Escalation, EscalationContext, EscalationType } from '../types.js';
+
+/**
+ * The statuses an agent never comes back from, and so the ones whose open
+ * questions are un-answerable. `crashed` is deliberately absent: a crashed agent
+ * is still awaiting a recovery decision and may be **restored**, and a restored
+ * agent must come back to the question it parked on — `RecoveryDesk` dismisses on
+ * the requeue/remove arms instead, once the operator has closed that door.
+ */
+const DEAD_AGENT_STATUSES: ReadonlySet<AgentStatus> = new Set<AgentStatus>(['done', 'failed', 'killed', 'interrupted']);
 
 interface CreateEscalationInput {
   type: EscalationType;
@@ -136,5 +145,37 @@ export class EscalationInbox extends EventEmitter {
       dismissed.push(updated);
     }
     return dismissed;
+  }
+
+  /**
+   * Sweep every open escalation whose agent has already left the fleet, whatever
+   * route it left by. Run once per pulse, and idempotent — a clean inbox writes
+   * nothing.
+   *
+   * The terminal-state listeners in `src/system.ts` are the fast path, and this is
+   * the backstop, because the fast path is an *enumeration of transitions* that has
+   * to stay complete: a death arriving by a route nobody wired there leaves an
+   * un-answerable "Needs you" card up for good, and nothing about it looks wrong —
+   * the card renders correctly, the agent is simply not there to hear the answer.
+   * Only escalations carrying an `agentId` are in scope, which is exactly the two
+   * kinds raised *by a process* (a park, and a permission request); a proposal or a
+   * stack-landing item carries none and is answerable no matter what the fleet did.
+   *
+   * An `agentId` naming no agent row is left alone: rows are never deleted, so that
+   * would be a fault elsewhere, and dismissing on a read that came back empty is how
+   * a store bug turns into a silently emptied inbox.
+   *
+   * @public reached through `HarnessDeps.escalations`, a structural seam.
+   */
+  tidyDeadAgents(): Escalation[] {
+    const dead = new Map<string, AgentStatus>();
+    for (const esc of this.store.listOpenEscalations()) {
+      if (!esc.agentId || dead.has(esc.agentId)) continue;
+      const agent = this.store.getAgent(esc.agentId);
+      if (agent && DEAD_AGENT_STATUSES.has(agent.status)) dead.set(esc.agentId, agent.status);
+    }
+    return [...dead].flatMap(([agentId, status]) =>
+      this.dismissEscalationsForAgent(agentId, `agent ${status}; nobody is left to answer`),
+    );
   }
 }

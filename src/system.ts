@@ -646,6 +646,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     landings,
     // Holds the pulse while a previous run's agents await a verdict.
     recovery,
+    // Sweeps "Needs you" items whose agent has died, whatever route it died by.
+    escalations,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     errors,
     runtime: runtimeControl,
@@ -691,21 +693,29 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
   // A dead agent can never receive an answer, so cascade-dismiss its open
   // escalations at every terminal-dead transition. Kill surfaces as a `killed`
-  // status; an unexpected exit / crash surfaces as a `failed` done. (An agent
-  // orphaned by a *restart* is not dismissed here on purpose: it may be restored,
-  // and a restored agent must come back to the question it parked on — see
-  // `RecoveryDesk`, where the dismissal hangs off the requeue/remove verdicts.)
+  // status; every other ending surfaces as a `done` event, whichever of the two
+  // statuses it carries and whoever declared it — an agent that finished with a
+  // question of its own still open is the same un-answerable card as one that
+  // crashed with it. (An agent orphaned by a *restart* is not dismissed here on
+  // purpose: it may be restored, and a restored agent must come back to the
+  // question it parked on — see `RecoveryDesk`, where the dismissal hangs off the
+  // requeue/remove verdicts.)
+  //
+  // These two are the fast path only. The pulse sweeps the same set through
+  // `EscalationInbox.tidyDeadAgents`, so a death that reaches neither listener is
+  // still tidied within a heartbeat.
   agents.on('status', ({ agentId, status }) => {
     if (status === 'killed') escalations.dismissEscalationsForAgent(agentId, 'agent killed');
   });
   agents.on('done', ({ agentId, status, by }) => {
-    if (status === 'failed') escalations.dismissEscalationsForAgent(agentId, 'agent failed');
-    // An operator-declared done is the other way an agent leaves the fleet with a
-    // question still open, and the commonest one: the shape `complete` exists for
-    // is an agent parked on "ended its turn without finishing" that has in fact
-    // finished. An agent-declared done is deliberately not swept here — it is the
-    // same latent class, but changing it is a separate call.
-    else if (by === 'operator') escalations.dismissEscalationsForAgent(agentId, 'operator marked the work complete');
+    escalations.dismissEscalationsForAgent(
+      agentId,
+      status === 'failed'
+        ? 'agent failed'
+        : by === 'operator'
+          ? 'operator marked the work complete'
+          : 'agent finished its work',
+    );
   });
 
   // A code agent's worktree slot is released once its process has actually exited
