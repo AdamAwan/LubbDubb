@@ -137,7 +137,15 @@ So the split is:
    process subtree and records the rows `interrupted`, and the process exits **75**
    (`UPGRADE_EXIT_CODE`, `src/selfUpdate/handoff.ts`).
 4. `scripts/serve.ts` sees that code, runs `git pull --ff-only`, runs `npm ci` **only if the pull
-   moved `package-lock.json`**, and relaunches.
+   moved `package-lock.json`**, rebuilds the cockpit bundle, and relaunches.
+
+The cockpit rebuild is **unconditional**, unlike the install beside it. The server needs no build
+step — tsx runs it from source — but the SPA does, `web/dist` is gitignored, and the server serves
+whatever is there on an `existsSync` check with no version stamp and no comparison against `web/src`
+([19](19-development.md#scripts)). An upgrade that skipped it would leave the operator on the
+_previous_ cockpit with nothing anywhere saying so, which is the one failure this feature must not
+introduce: the reason they upgraded is usually something they expect to see. Gating it on `web/`
+having changed would be a second opinion about what Vite reads, and being wrong about it is silent.
 
 75 is `EX_TEMPFAIL`, as close as the conventional codes come to "nothing is wrong, run me again", and
 well clear of the range a crashing Node process picks from. The code is its own module because two

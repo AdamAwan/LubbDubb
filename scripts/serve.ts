@@ -1,11 +1,11 @@
 /**
  * `npm run serve` — the server, with something in front of it that can replace it.
  *
- * **Why the app cannot do this itself.** Applying an update means `git pull` and
- * then `npm ci`, and `npm ci` deletes and rebuilds `node_modules` — including two
- * native modules (`better-sqlite3`, `node-pty`) the running process has open. It
- * also means releasing the port, the SQLite handle and the MCP socket before the
- * replacement claims them. None of that can be done by the process being replaced;
+ * **Why the app cannot do this itself.** Applying an update means `git pull`, then
+ * `npm ci`, then rebuilding the cockpit bundle. `npm ci` deletes and rebuilds
+ * `node_modules` — including two native modules (`better-sqlite3`, `node-pty`) the
+ * running process has open. It also means releasing the port, the SQLite handle and
+ * the MCP socket before the replacement claims them. None of that can be done by the process being replaced;
  * on Windows it cannot even be attempted, since the files are locked. So the split
  * is: the server decides *whether* to upgrade and gets the fleet to a safe place,
  * exits {@link UPGRADE_EXIT_CODE}, and everything that has to happen while it is
@@ -43,9 +43,9 @@ const NPM = process.platform === 'win32' ? 'npm.cmd' : 'npm';
  * the working tree moving between the click and the exit; it just must not be the
  * case that *silently* does something.
  *
- * A failure at either step leaves the old build in place and starts it again. That
- * is the recoverable direction: the fleet comes back on the code it went down on,
- * and the reason is on screen.
+ * A failure at any step leaves the old build in place and starts it again. That is
+ * the recoverable direction: the fleet comes back on the code it went down on, and
+ * the reason is on screen.
  */
 function applyUpdate(): boolean {
   // Recorded *before* the pull: it is the only baseline that can answer what the
@@ -56,7 +56,21 @@ function applyUpdate(): boolean {
   // full delete-and-rebuild of two native modules, which would otherwise be a
   // minute added to every upgrade that touched no dependency.
   if (lockfileChanged(before) && !step('npm ci', NPM, ['ci'])) return false;
-  return true;
+  // **Unconditional, unlike the install above.** The server needs no build step —
+  // tsx runs it from source — but the cockpit does, `web/dist` is gitignored, and
+  // the server serves whatever is there on an `existsSync` check with no version
+  // stamp and no comparison against `web/src`
+  // ([19](../docs/spec/19-development.md#scripts)). So an upgrade that skipped this
+  // would leave the operator on the *previous* cockpit with nothing anywhere saying
+  // so — the one failure this whole feature must not introduce, since the reason
+  // they upgraded is usually something they expect to see.
+  //
+  // It is not gated on `web/` having changed the way the install is gated on the
+  // lockfile. The bundle is a build artifact of the whole tree, the check to decide
+  // would be a second opinion about what Vite reads, and being wrong about it is
+  // silent. Seconds on an operation that already stopped the fleet is the right
+  // trade for never being wrong here.
+  return step('npm run web:build', NPM, ['run', 'web:build']);
 }
 
 /** One command, with its failure reported in the terms the operator will act on. */
