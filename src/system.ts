@@ -673,6 +673,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     recovery,
     // Sweeps "Needs you" items whose agent has died, whatever route it died by.
     escalations,
+    // Resumes the agents parked on a usage limit whose window has turned over.
+    fleet: agents,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     errors,
     runtime: runtimeControl,

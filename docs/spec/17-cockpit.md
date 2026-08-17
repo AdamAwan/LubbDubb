@@ -245,7 +245,9 @@ close-out is the step after a launch and reads as one ([13](13-jobs-and-findings
 `state.parkedOnLimit`, keyed on the agent — because a usage-limit park raises no escalation on purpose:
 there is no question in it to answer ([10](10-agent-runtimes.md#the-limit-park)). Its verdict is
 `Resume`, and its second control is the transcript, which is where an operator decides whether carrying
-on is worth it. It draws no reply box anywhere, because the agent's process is usually gone with the
+on is worth it. Most of these rows clear themselves: the pulse ends a park once the window `claude`
+named has turned over ([10](10-agent-runtimes.md#ending-it-on-the-clock)), so `Resume` is for going
+early, and for the parks that carry no reset time and would otherwise sit there for good. It draws no reply box anywhere, because the agent's process is usually gone with the
 limit and a box that cannot send is worse than no box.
 
 **Two groups, split on who is stopped.** `blocking` means an agent is parked and cannot proceed;
