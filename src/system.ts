@@ -38,6 +38,7 @@ import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/serv
 import { McpDesktopServer } from './mcp/desktop.js';
 import { PrNamingDesk } from './prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
+import { ValidationAskDesk } from './validation/askDesk.js';
 import { SpendBurnDesk } from './spendBurnDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
@@ -621,6 +622,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // the item is precisely the part the harness is not doing.
   const closeOuts = new DeliveryCloseOutDesk(store);
 
+  // The other ask a delivered goal owes: the fixtures and accounts its validation
+  // plan could not produce. Store-only on the close-out desk's terms, and gated on
+  // the same delivery — a resource is what makes a check runnable, and nothing
+  // runs a check before the goal is delivered.
+  const validationAsks = new ValidationAskDesk(store);
+
   // The one cost reading taken while the money is still being spent. Store-only
   // for the close-out desk's reason and one more: an expensive run is not a wrong
   // run, so the verdict is a visible obligation and never a kill.
@@ -660,6 +667,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     assays,
     naming,
     closeOuts,
+    validationAsks,
     burn,
     branchReaps,
     schedules,

@@ -58,7 +58,8 @@ flowchart TD
         DIFF --> REC["reconcile plans — before decide, so a part moved to ready<br/>is dispatchable this same cycle"]
         REC --> NAME["rename PRs onto the convention — idempotent bookkeeping"]
         NAME --> CLOSE["file and settle close-outs — a delivered goal's ticket<br/>is still open, and only a person can close it"]
-        CLOSE --> SCHED["fire due schedules — a recurrence queues an ordinary job,<br/>above the read below so it dispatches this same pulse"]
+        CLOSE --> VASK["file the validation resource asks — the fixtures and accounts<br/>a delivered goal's checks need and the planner could not produce"]
+        VASK --> SCHED["fire due schedules — a recurrence queues an ordinary job,<br/>above the read below so it dispatches this same pulse"]
         SCHED --> GRAPH["record the work graph — after the reconciler, before decide"]
         GRAPH --> LIMIT["end the usage-limit parks whose window has turned over,<br/>above the read below so a woken agent reads as running this pulse"]
         LIMIT --> TIDY["tidy the inbox — dismiss the questions whose agent has died,<br/>immediately above the read that ships them"]
@@ -88,6 +89,14 @@ flowchart TD
    task ([13](13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)). The pass files one,
    and settles a standing one the moment the tracker stops listing the item open. It writes
    `human_tasks` rows and nothing else — no dispatch, no sink, and no rule reads what it writes.
+
+   Immediately after it, and against the same gate, `validationAsks.run()` files the other thing a
+   delivered goal owes a person: the fixtures, reference material and accounts its validation plan
+   says it needs and the planner could not produce ([20](20-validation.md#resources)). A check is
+   executed against the delivered goal, so this is the first pulse on which that ask is one anybody
+   can act on. Same shape as the close-out — `human_tasks` rows and nothing else — and idempotent by
+   `recordHumanTask`'s refresh, so a pulse over a goal it has already asked about writes nothing new.
+
 6. **Fire due schedules** — `schedules.run()`. A recurrence whose slot has come round queues a `jobs`
    row ([13](13-jobs-and-findings.md#schedules)). Positioned **above** step 8's `listQueuedJobs`, which
    is what makes a firing dispatch on the pulse it fires rather than the next one; and beside the other

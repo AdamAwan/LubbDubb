@@ -184,10 +184,37 @@ agent's readable set depend on config it cannot see. That is a real widening, an
 attachments already make.
 
 A resource declared `"provided": false` is the planner saying it needs something it cannot produce: a
-reference screenshot, an account, a sample file from a colleague. Ingestion files a `human_tasks` row
-asking for it ([13](13-jobs-and-findings.md)), so a missing resource is an ask rather than a check
-that mysteriously never runs. `recordHumanTask` refreshes on a repeat and the task id is carried
-across by name, so a replan re-declaring the same resource does not file it twice.
+reference screenshot, an account, a sample file from a colleague. A `human_tasks` row asks for it
+([13](13-jobs-and-findings.md)), so a missing resource is an ask rather than a check that mysteriously
+never runs.
+
+**The ask is filed against the delivery, not against the plan.** `ValidationAskDesk`
+(`src/validation/askDesk.ts`) files it once a pulse for every goal parked as delivered, beside the
+close-out sweep and gated on the same fact. A resource exists to make a check runnable, and a check is
+executed against the delivered goal — `validate-check` will not dispatch one before then and the
+cockpit offers nothing either. Filed at **ingestion**, as it was until #371, the ask landed the moment
+a planner submitted: on a plan still `awaiting_approval`, weeks before there was anything to validate,
+asking a person for a fixture against work that might never be built. That is a row an operator cannot
+act on and cannot get rid of, sitting in the queue beside the ones they can — and the ask is not more
+useful for being older. It is the same argument `closeOutDetail`'s placement makes from the other end:
+an obligation is worth what the moment it is put in front of somebody is worth.
+
+`recordHumanTask` refreshes on a repeat rather than inserting and the task id is carried across by
+name, which is what makes a per-pulse sweep free: a pulse over a goal it has already asked about
+writes nothing new, and a replan re-declaring the same resource does not file it twice.
+
+**And the plan withdraws it**, `withdrawResourceAsks` in `src/validation/ask.ts`, called by both
+writers before the resources are rewritten — the ask is reached through the row that is about to be
+replaced. A resource the new declaration dropped, or now says is `provided` after all, has its ask
+settled `declined`, the settlement a retired part's ask already gets and for its reason: the ingest
+writer replaces the resource list wholesale, so an ask nothing withdraws points at something no plan
+asks for, with nothing left that could ever settle it and no honest answer available to the operator.
+Only an **open** ask is withdrawn — an answered row is the operator's record of what they did, and
+overwriting their resolution with the harness's is the one thing a withdrawal must not do. The two
+writers compute what is still needed for themselves rather than sharing one answer, because they
+disagree about what an omission means: a document speaks for the whole resource list, an amendment
+only for what it names, so the only thing that withdraws an ask through `validation_amend` is the
+amendment saying `provided: true` out loud.
 
 ## Amendment
 
@@ -659,8 +686,9 @@ should not be the one reading that goes nowhere.
 
 ## Tests
 
-`test/validation.test.ts` (the schema's refusals, letters, and what an amendment may do to a check
-somebody has run), `test/validationFlag.test.ts` (the verdict, the close-out obligation, the two
+`test/validation.test.ts` (the schema's refusals, letters, what an amendment may do to a check
+somebody has run, and the resource ask: that it waits for the delivery, that a replan which stops
+needing the resource withdraws it, and that a withdrawal never overwrites the operator's own answer), `test/validationFlag.test.ts` (the verdict, the close-out obligation, the two
 notes, and that a flagged goal still blocks nothing), `test/validationAmend.test.ts` (the
 tool: who may amend, that an amendment withdraws nothing by omission, what a rewording costs, and
 the band), `test/validationFleet.test.ts` (the hand-over: the rule's gates and its position in

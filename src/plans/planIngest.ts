@@ -3,7 +3,7 @@ import type { Plan, PlanStatus } from '../types.js';
 import type { PlanDocument } from './planDocument.js';
 import { planNarrative, planPartInputs } from './planDocument.js';
 import { validationCheckInputs, validationResourceInputs } from '../validation/checkDocument.js';
-import { fileResourceAsks } from '../validation/ask.js';
+import { withdrawResourceAsks } from '../validation/ask.js';
 import { ingestedPlanStatus, partIsHuman, partOrigin, partsToRetire, planIssueNumber } from './parts.js';
 
 /** What a human task says when the plan that asked for it stopped asking. */
@@ -126,18 +126,29 @@ export function ingestPlanDocument(
   // produces plans without one, and treating that as "the planner withdrew every
   // check" would supersede a validation plan somebody is halfway through.
   if (doc.validation) {
+    const resources = validationResourceInputs(doc.validation.resources);
+    // Before the write, because the ask is reached through the resource row this
+    // is about to replace. A document speaks for the *whole* resource list, so
+    // what it does not declare it has withdrawn — and an ask nothing withdraws is
+    // an obligation on the operator that nothing can ever settle, the retired
+    // part's failure one layer down.
+    //
+    // The ask itself is filed by `ValidationAskDesk`, once the goal is delivered
+    // and a check is something anybody can run.
+    withdrawResourceAsks(
+      store,
+      originRef,
+      resources.filter((r) => !r.provided).map((r) => r.name),
+    );
     store.ingestValidation(originRef, {
       checks: validationCheckInputs(
         doc.validation,
         written.map((p) => p.slug),
       ),
-      resources: validationResourceInputs(doc.validation.resources),
+      resources,
       supersededReason: SUPERSEDED_CHECK_REASON,
       amendNote: AMENDED_CHECK_NOTE,
     });
-    // A resource the planner says it cannot produce is an ask, not a check that
-    // mysteriously never runs.
-    fileResourceAsks(store, originRef);
   }
 
   // An amended plan is what *ends* a discussion — the agent has said its piece and

@@ -1,7 +1,7 @@
 import { issueOrigin } from '../../plans/planning.js';
 import { validationCheckAmendments, validationResourceInputs } from '../../validation/checkDocument.js';
 import { amendmentNote, validateAmendment, validationAmendIssue, withdrawalReason } from '../../validation/amend.js';
-import { fileResourceAsks } from '../../validation/ask.js';
+import { withdrawResourceAsks } from '../../validation/ask.js';
 import type { ValidationCheck } from '../../types.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
@@ -76,7 +76,7 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
         description:
           'Things a check needs that are not in the repository: a seeded fixture, a reference screenshot, an ' +
           'account. Merged by name; nothing here removes one. Set "provided": false for something you cannot ' +
-          'produce yourself and the harness files an ask for it.',
+          'produce yourself and the harness asks a person for it once the goal is delivered.',
         items: {
           type: 'object',
           properties: {
@@ -119,6 +119,20 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
     const known = [
       ...new Set([...deps.store.listValidationResources(origin).map((r) => r.name), ...resources.map((r) => r.name)]),
     ];
+    // An amendment removes nothing, so the one thing that withdraws an ask here is
+    // this amendment saying the resource is provided after all. Before the write,
+    // because the ask is reached through the row it is about to update — and the
+    // ask itself is filed by `ValidationAskDesk` once the goal is delivered, which
+    // is when a check is something anybody can run.
+    const nowProvided = new Set(resources.filter((r) => r.provided).map((r) => r.name));
+    withdrawResourceAsks(
+      deps.store,
+      origin,
+      deps.store
+        .listValidationResources(origin)
+        .filter((r) => !nowProvided.has(r.name))
+        .map((r) => r.name),
+    );
     const result = deps.store.amendValidation(origin, {
       checks: validationCheckAmendments(
         amendment.checks,
@@ -129,7 +143,6 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
       resources,
       note: amendmentNote(amendment.note),
     });
-    fileResourceAsks(deps.store, origin);
 
     // The letters go back, because they are what a person types and what the
     // agent should use if it refers to a check in its conclusion.
