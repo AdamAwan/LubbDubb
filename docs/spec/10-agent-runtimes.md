@@ -191,6 +191,30 @@ so "how agents run" is usually _not_ a terminal.
 Each `result` event carries **cumulative** `total_cost_usd`, `usage` and `num_turns`, which become a
 `usage` session event.
 
+### A `result` is the end of a turn, not of the session
+
+Turn end is where done-vs-waiting is decided, so which `result` counts as one matters. `pendingTurns`
+counts the messages written to stdin that have not yet ended in a `result`: `send` raises it, each
+`result` lowers it, and only the `result` that leaves **nothing queued** is scanned for sentinels. The
+others emit their `usage`, drop the turn's text, and return.
+
+The two come apart whenever a message is sent into a turn that is still running, and the `escalate`
+tool makes that ordinary rather than exotic: it parks the agent **mid-turn** and returns at once
+([Waiting](#waiting)), so the answer — a human's, or a `whitelistedApprovals` rule's, both of which
+reach `respond` — routinely lands before the turn it interrupted has ended. `claude` queues that
+message and runs it as the next turn. Judging the interrupted turn's `result` therefore parked an
+agent that was already working on the answer, under a question nobody asked ("Agent ended its turn
+without finishing"), and — because `respond` had just released the park latch — filed a second
+escalation for it. The agent kept going and the alert was cascade-dismissed when it finished, so the
+only trace was an inbox item that contradicted the transcript, and an answer to it would have typed a
+stray message into a working agent.
+
+Each turn is judged on **its own** text: the text is taken and cleared before the queued-turn check,
+so a sentinel printed in the interrupted turn cannot be read again at the end of the queued one.
+
+A path that never calls `send` (a resume delivering no first message) leaves the count at zero and is
+judged exactly as before.
+
 ### Transcript legibility
 
 The raw event stream is never dumped. Each message's content blocks go through the pure `renderBlocks`
@@ -442,6 +466,11 @@ the `escalate` MCP tool and the WAITING sentinel:
   latch, because the agent is running again and its next question is a fresh park.
 - Otherwise the agent goes to `waiting` with its reason, the task goes to `waiting`, and `waiting` is
   emitted with the optional structured `ask`.
+
+The tool arm parks the agent **mid-turn** — the tool returns at once — so the park and the end of the
+turn that raised it are two separate events, and an answer can land between them. That is why the
+stream runtime does not judge a turn with a message queued behind it
+([above](#a-result-is-the-end-of-a-turn-not-of-the-session)).
 
 `src/system.ts` listens for `waiting` and creates the escalation, idempotently per agent (an agent has
 at most one open escalation), enriched with the task title, the origin ref, a tail of recent output,

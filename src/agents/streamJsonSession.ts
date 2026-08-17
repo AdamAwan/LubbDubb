@@ -52,6 +52,9 @@ const defaultSpawner: Spawner = (command, args, opts) => {
  *   - WAITING seen              -> it needs a human; escalate, then send the answer
  *   - turn ended with neither   -> treated as waiting (it stopped without finishing)
  *
+ * Only the turn that leaves nothing queued behind it is scanned that way — see
+ * {@link StreamJsonSession.pendingTurns}.
+ *
  * One turn ending is not a sentinel question at all: an account whose usage limit
  * is exhausted. That ends the turn — and usually the process — with nothing the
  * agent did wrong, so it emits `limited` rather than `waiting` or `failed`; see
@@ -63,6 +66,18 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
   private stdoutBuf = '';
   /** Assistant text accumulated within the current turn, for sentinel scanning. */
   private turnText = '';
+  /**
+   * Messages written to stdin that have not yet ended in a `result`.
+   *
+   * A `result` is the end of *a* turn, not of the session, and the two differ
+   * whenever a message is sent while a turn is still in flight — which the
+   * `escalate` tool makes routine, since it parks the agent mid-turn and returns
+   * at once, so the human's answer (or a whitelist rule's) can land before the
+   * turn it interrupted has ended. `claude` queues that message and runs it next,
+   * so judging the interrupted turn's `result` would park an agent that is about
+   * to keep working, on a question nobody asked.
+   */
+  private pendingTurns = 0;
   /**
    * The exhaustion the last `rate_limit_event` reported, or null while the account
    * is inside its limits. Held rather than acted on immediately because the event
@@ -114,6 +129,7 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     if (!this.child) throw new Error('StreamJsonSession not started');
     const msg = { type: 'user', message: { role: 'user', content: text } };
     this.child.stdin.write(JSON.stringify(msg) + '\n');
+    this.pendingTurns += 1;
     this.turnText = '';
     if (this._status === 'waiting') this.setStatus('running');
   }
@@ -210,8 +226,17 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
       // it ahead of the waiting/done fan-out.
       const usage = resultUsage(ev);
       if (usage) this.emit('usage', usage);
+      const turnText = this.turnText;
+      this.turnText = '';
+      if (this.pendingTurns > 0) this.pendingTurns -= 1;
+      // Only the turn that leaves nothing queued is the session coming to rest; a
+      // message sent into the turn this ends is one `claude` runs next, and reading
+      // this as an unannounced stop is a park on an agent still working (see
+      // {@link pendingTurns}). Judged on the text of the turn that ended, so a
+      // sentinel is never carried into the queued one.
+      if (this.pendingTurns > 0) return;
       // End of a turn: decide done vs waiting from the sentinels the agent printed.
-      if (this.turnText.includes(DONE_SENTINEL)) {
+      if (turnText.includes(DONE_SENTINEL)) {
         this.finish('done');
       } else if (this.limit) {
         // Ordered after the done sentinel deliberately: an agent that finished the
@@ -219,11 +244,9 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
         // a settled ending.
         this.parkOnLimit();
       } else {
-        const reason =
-          extractWaitingReason(this.turnText) ?? 'Agent ended its turn without finishing; awaiting direction.';
+        const reason = extractWaitingReason(turnText) ?? 'Agent ended its turn without finishing; awaiting direction.';
         this.setWaiting(reason);
       }
-      this.turnText = '';
     }
   }
 
