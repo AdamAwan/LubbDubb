@@ -35,6 +35,7 @@
 
 import type { Config } from '../config.js';
 import { ticketAssignment } from '../ticketAssignment.js';
+import { ticketTypeGuidance } from '../ticketTypes.js';
 import type { Finding, FindingInput, FindingKind } from '../types.js';
 
 /**
@@ -204,12 +205,21 @@ export function findingJobRequest(finding: Finding): { title: string; prompt: st
  * does — a desk agent cannot infer who asked for the work either. See
  * {@link file://../ticketAssignment.ts}; unconfigured, this string reads exactly
  * as it did before.
+ *
+ * So does the **work item type**, and on a third turn of the same argument: this
+ * function used to hardcode `--type Task`, which is the altitude a story is
+ * broken down at rather than the altitude a backlog is filed at. Which of the
+ * configured types a given report is remains the agent's judgement — see
+ * {@link file://../ticketTypes.ts}.
  */
 export function trackerCoordinates(config: Config): string | null {
   const provider = config.integrations.issues;
   const assignment = ticketAssignment(config);
   const assign = assignment?.flag ?? '';
-  const note = assignment ? `\n\n${assignment.note}` : '';
+  const types = ticketTypeGuidance(config);
+  // Type before assignee: the type is the thing being chosen, and the paragraph
+  // about who it belongs to reads after the one about what it is.
+  const note = [types ? `\n\n${types.note}` : '', assignment ? `\n\n${assignment.note}` : ''].join('');
   if (provider === 'github' && config.github) {
     const slug = `${config.github.owner}/${config.github.repo}`;
     return (
@@ -221,8 +231,8 @@ export function trackerCoordinates(config: Config): string | null {
     const { organization, project } = config.azureDevOps;
     return (
       `the Azure DevOps project "${project}" in organization "${organization}". Create it with: ` +
-      `az boards work-item create --org https://dev.azure.com/${organization} --project "${project}" ` +
-      `--type Task --title "<title>" --description "<body>"${assign}${note}`
+      `az boards work-item create --org https://dev.azure.com/${organization} --project "${project}"` +
+      `${types?.flag ?? ''} --title "<title>" --description "<body>"${assign}${note}`
     );
   }
   return null;

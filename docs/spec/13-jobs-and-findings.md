@@ -470,6 +470,16 @@ of those is "deal with this later".
   prompt override that predates the key still assigns; unset, the coordinates are unchanged and the
   item is filed unassigned. One pure function (`ticketAssignment`, `src/ticketAssignment.ts`), so all
   four filing arms assign identically.
+- **And what type of item it is.** `issueFilingTypes` ([02](02-configuration.md#what-type-a-filed-item-is))
+  is the closed set the agent chooses from, defaulting to `["User Story", "Bug"]`. The three arms here
+  hardcoded `--type Task` until they did not: a Task is how a story is broken down once somebody is
+  working it, so one filed from the cockpit had nothing above it to roll up to and reached no backlog.
+  _Which_ of the configured types a report is stays the agent's judgement, like the wording; the harness
+  supplies the menu, names the decomposition type it must not reach for, and says an imperfect fit
+  rounds to the nearest entry rather than to a type the project would refuse. In the coordinates rather
+  than a `{type}` placeholder, on the same override argument as the assignee (`ticketTypeGuidance`,
+  `src/ticketTypes.ts`). Azure only — a GitHub issue has no type. The **raised bug** arm files `Bug` on
+  its own coordinates and consults none of this.
 - **A desk job, not a code one.** Filing touches no repository, so cutting a worktree and a branch
   would be pure cost. The consequence is that a desk agent runs in a scratch directory with no git
   remote for `gh` to read the repo off — which is precisely why the coordinates are explicit.
