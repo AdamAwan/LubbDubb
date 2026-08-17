@@ -427,6 +427,14 @@ function QueueRow({ item }: { item: QueueItem }): JSX.Element {
       <span className="cn-grow">
         <b className="cn-name">
           <Ref to={item.origin} /> {item.title}
+          {/* Why this row is where it is. Without it a flagged goal's parts sit at
+              the top of the panel with their own rule's reason underneath and
+              nothing anywhere connecting the order to the click that caused it. */}
+          {item.expedited === true && (
+            <i className="cn-chip" title="Its goal is marked a priority, so everything under it is ranked first">
+              priority
+            </i>
+          )}
         </b>
         <span className={`cn-sub cn-wrap ${item.status === 'dispatching' ? '' : 'cn-held'}`}>
           <RefText text={item.reason} />

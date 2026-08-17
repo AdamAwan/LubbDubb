@@ -241,6 +241,10 @@ const realApi = {
         ),
   setIssueWatched: (issueNumber: number, watched: boolean) =>
     post<{ ok: true; watched: boolean }>(`/api/issues/${issueNumber}/watch`, { watched }),
+  // Put this goal at the front of the queue, or take it back out. It re-orders and
+  // never un-holds, so the answer is the next pulse's queue and nothing else.
+  setGoalPriority: (issueNumber: number, priority: boolean) =>
+    post<{ ok: true; priority: boolean }>(`/api/issues/${issueNumber}/priority`, { priority }),
   // Pin this goal's work to a model profile, or clear the pin (#342). The same
   // call answers a standing proposal from the assayer, whichever way it went —
   // the route settles the question on any write, which is what makes "keep mine"

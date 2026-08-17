@@ -207,6 +207,15 @@ export interface CockpitActions {
   setStackLanding(ref: string, landing: boolean): Promise<void>;
   setIssueWatched(issueNumber: number, watched: boolean): Promise<void>;
   /**
+   * Put this goal at the front of the queue, or take it back out. On the seam for
+   * every mutation's reason: `console/` may not import `api.js`.
+   *
+   * It orders and nothing else — a goal held by a cooldown, a cap, an unapproved
+   * plan or an ignore tag stays held — which is why it is a separate control from
+   * the watch toggle beside it rather than a stronger version of one.
+   */
+  setGoalPriority(issueNumber: number, priority: boolean): Promise<void>;
+  /**
    * Pin a goal's work to a model profile, or clear the pin with `null` (#342).
    * On the seam for every mutation's reason: `console/` may not import `api.js`.
    *

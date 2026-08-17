@@ -2,6 +2,7 @@ import type {
   Agent,
   Decision,
   Escalation,
+  GoalPriority,
   IssueConclusion,
   IssueAssay,
   IssueDelivery,
@@ -103,6 +104,17 @@ export interface DispatchContext {
    */
   priorityOverrides?: PriorityOverride[];
   /**
+   * The goals the operator marked a priority. Every origin under a flagged goal —
+   * its pickup, its plan, its parts, its assay, its assessor, its validation checks
+   * and the pull requests its branches opened — ranks ahead of the natural order and
+   * ahead of a `priorityOverrides` drag, behind rule `manual-job` only.
+   *
+   * Ordering and nothing else, exactly as an override is: a cooldown, a cap, an
+   * unapproved plan or an ignore tag holds a flagged goal's work where it holds
+   * anything else's. Absent/empty means the natural ranking stands.
+   */
+  goalPriorities?: GoalPriority[];
+  /**
    * Standing "is this issue finished" verdicts, keyed on the `issue:<n>` origin —
    * declared by the agent that worked the issue (`conclude_work`) or toggled by
    * an operator. Read by rule `work-item-back-to-pickup`, which returns a reviewed item to pickup only on
@@ -203,6 +215,17 @@ export interface QueueItem {
    */
   status: QueueStatus;
   reason: string;
+  /**
+   * This row belongs to a goal the operator marked a priority, which is why it is
+   * where it is. Shipped as a fact rather than re-derived in the browser, and
+   * shipped at all because an ordering nothing explains is the same queue with a
+   * wrong-looking answer: the flag is set on a goal, the row names an origin, and
+   * without this nothing on the panel connects the two.
+   *
+   * Absent rather than `false` when it is not, so an unflagged row is the row it
+   * was before goal priority existed.
+   */
+  expedited?: boolean;
 }
 
 export interface DispatchResult extends ParseResult {

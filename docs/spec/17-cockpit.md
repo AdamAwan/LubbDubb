@@ -402,12 +402,21 @@ tail**. Below that, the two stacks are one column.
 
 ### The header's controls
 
-Watch, the conclusion, raising a bug, the ticket, and ending the run.
+Watch, the priority flag, the profile pin, the conclusion, raising a bug, the ticket, and ending the
+run.
 
 - **The watch toggle writes both tags.** `setIssueWatched` tags the watch label and clears the ignore
   label, or the reverse — so the title names both. Saying only "remove the watch label" understates a
   click that also tags the goal ignored, and the difference is visible: the goal lands in the
   tickets tab's Ignored filter rather than back in Unwatched.
+- **Prioritise / Priority** puts this goal at the front of the queue — everything under it, its plan,
+  its parts and its pull requests included — and clicking it again hands the queue back to its natural
+  order ([05](05-dispatcher.md#marking-a-goal-a-priority)). It sits beside the watch toggle because it
+  is the next thing an operator says after "work this", and its title is worded as a **queue**
+  statement rather than an importance one: it changes what the fleet reaches for while it is short of
+  slots, and it changes nothing about whether the goal is allowed to move. A goal held by a cooldown,
+  a part cap or an unapproved plan is still held, flagged. The flagged state and its age are read off
+  `Issue.priority`, so the button cannot claim a priority the dispatcher is not honouring.
 - **Three conclusion controls, not two.** `Mark done` / `Unfinish` writes or withdraws `done`. **More
   work** opens `InstructionModal` and writes what the operator wants done next, in words — it is a
   third control rather than the finished toggle's other end because what it writes is not the opposite
@@ -662,7 +671,10 @@ vanishes when quiet is indistinguishable from one that broke.
   thing", so it wraps rather than being clipped and nothing here re-words it. A held item is toned off
   `status`, which is a fact the same sentence already states in words. The origin is drawn as a ref, so
   a goal-scoped one opens its page; the reason goes through `RefText`, so the `#341` inside the
-  sentence links out.
+  sentence links out. A row whose goal is marked a priority draws a `priority` chip off
+  `QueueItem.expedited`: the flag is set on a goal and the row names an origin, so without it a
+  flagged goal's parts sit at the top of the panel with nothing anywhere connecting the order to the
+  click that caused it.
 - **World signals** — `worldEvents` grouped by `(kind, ref)` with a count, ten rows. Three review
   comments on one pull request are one signal, not three unrelated rows. **The server's order (newest
   first) is kept**: re-sorting by count would move the row an operator is watching the moment it moves

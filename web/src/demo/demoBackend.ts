@@ -558,6 +558,20 @@ class DemoServer {
   }
 
   /**
+   * Mark a goal a priority, or clear it. The demo does not re-rank anything — its
+   * queue is scripted — so this writes the reading the chip and the button draw and
+   * stops there, which is the honest half: the ordering is the server's.
+   */
+  async setGoalPriority(issueNumber: number, priority: boolean): Promise<{ ok: true; priority: boolean }> {
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (issue) {
+      issue.priority = priority ? { since: new Date().toISOString() } : null;
+      this.dirty();
+    }
+    return { ok: true, priority };
+  }
+
+  /**
    * Send a plan back for replanning — the demo mirror of `POST /api/plans/:id/replan`.
    * Like the real endpoint it only flips the plan's status; the part rows are left
    * alone, because what an amendment does to them is decided when a planner's new
@@ -1298,6 +1312,7 @@ class DemoServer {
             labels,
             state: 'open',
             modelPin: { profile: null, ignoredTags: [] },
+            priority: null,
             linkedPrNumber: null,
           }),
         ];
@@ -2284,6 +2299,7 @@ export const demoApi = {
   setPrExcluded: (prNumber: number, excluded: boolean) => getServer().setPrExcluded(prNumber, excluded),
   setStackLanding: (ref: string, landing: boolean) => getServer().setStackLanding(ref, landing),
   setIssueWatched: (issueNumber: number, watched: boolean) => getServer().setIssueWatched(issueNumber, watched),
+  setGoalPriority: (issueNumber: number, priority: boolean) => getServer().setGoalPriority(issueNumber, priority),
   setIssueProfile: (issueNumber: number, profile: string | null) => getServer().setIssueProfile(issueNumber, profile),
   setPartProfile: (planId: string, slug: string, profile: string | null) =>
     getServer().setPartProfile(planId, slug, profile),

@@ -158,6 +158,34 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
+  // Mark this goal a priority, or clear the mark: everything the harness dispatches
+  // under it ranks ahead of the natural cross-rule order until it is cleared.
+  //
+  // The harness's own record and not a tracker label, unlike the watch and profile
+  // routes above. Those two are statements about the *goal* that a human reading
+  // the ticket needs; this is a statement about **this deployment's queue** — what
+  // its fleet works next while it is short of slots — and a label saying so would
+  // claim something the tracker cannot honour and every other deployment reading
+  // the same board would inherit.
+  //
+  // A cycle is run immediately for the reason `/api/upnext/order` runs one: the
+  // ranking is what changed, so the operator should see the new queue rather than
+  // wait a heartbeat to find out whether the click did anything. It is safe to run
+  // for the same reason too — the flag only re-orders, and never un-holds an item
+  // held by a cooldown, a cap, an unapproved plan or an ignore tag.
+  const PriorityBody = z.object({ priority: requiredBoolean('priority must be a boolean') });
+  app.post(
+    '/api/issues/:number/priority',
+    checked({ params: IssueNumberParams, body: PriorityBody }, async ({ params, body }) => {
+      const { number: issueNumber } = params;
+      const { priority } = body;
+      store.setGoalPriority(issueConclusionOrigin(issueNumber), priority);
+      hub.broadcast({ type: 'world:changed' });
+      const report = await harness.runCycle('manual');
+      return { ok: true, priority, report };
+    }),
+  );
+
   // Set (or clear) an issue's conclusion by hand — the operator's override of what
   // the agent that worked it said, and of what its plan derives.
   //

@@ -302,7 +302,7 @@ flowchart TD
     CTX(["DispatchContext"]) --> WALK["walk DISPATCH_PIPELINE in order,<br/>running each rule whose enabled predicate says the operator has it on"]
     WALK --> NA["non-dispatch acts, pushed straight through<br/>merge_pr · propose_plan · set_work_item_state · update_pr_branch<br/>escalate_to_human · respond_to_agent"]
     WALK --> CAND["one Candidate list, appended as the walk proceeds —<br/>so the pipeline order is the priority"]
-    CAND --> OV["rankByPriorityOverride<br/>manual jobs first · overridden origins next · the rest in their natural order"]
+    CAND --> OV["rankByPriorityOverride<br/>manual jobs first · a flagged goal's whole subtree next · overridden origins after that · the rest in their natural order"]
     OV --> CUT{"the headroom cut — one walk"}
     CUT -- origin already staffed --> SK["skipped entirely: it is being worked, so it is not up next"]
     CUT -- "held: cooldown · capped · unapproved · superseded" --> Q1["queued with that status,<br/>never dispatched whatever the headroom"]
@@ -390,15 +390,60 @@ independently of position. Overriding a hold _into_ dispatch is a different feat
 An override is written by `POST /api/upnext/order` (replace-all) and pruned once its origin stops
 being tracked — see [16](16-http-api.md) and [14](14-persistence.md).
 
+### Marking a goal a priority
+
+The override above arranges **one pulse's queue, origin by origin**, and that is the wrong grain for
+the thing an operator most often wants to say: _get this goal over the line first_. A goal's work
+changes origin as it progresses — `issue:<n>` while pickup owns it, three `issue:<n>:part:<slug>`
+once a plan is approved, `pr:<m>:comments` and `pr:<m>:ci` once the pull requests are open — so a
+drag on the row that was queued when the operator dragged it moves exactly that one candidate and
+silently stops applying the moment the goal takes its next step. The flag survives all of it.
+
+It is stored in `goal_priorities` keyed on `issue:<n>` (presence is the whole value — there is no
+rank), reaches the dispatcher as `DispatchContext.goalPriorities`, and is expanded to the origins it
+covers by the pure `expeditedOrigins` (`src/dispatcher/goalPriority.ts`). Two families reach it:
+
+- **The `issue:<n>` subtree**, through `issueOriginRole` — the pickup root, the parts, the planner,
+  the assay, the assessor, the retrospective and the validation checks. Asked through that function
+  rather than by `startsWith` for its own reason: a bare prefix test matches `issue:19:plan` for
+  goal 1.
+- **The pull requests the goal's work opened**, whose origins name the PR and never the goal.
+  Resolved the three ways the cockpit's `goalOfPr` resolves it — a part's own `prNumber`, the issue's
+  `linkedPrNumber`, and the branch convention read off `issueBranch`/`partBranch` rather than a
+  fourth regex. A PR concern is usually the _last_ thing between a goal and the line, so a priority
+  that stopped at the goal's own dispatches would rank everything except the work that finishes it.
+
+`rankByPriorityOverride` gives it **the tier above the drag and below `manual-job`**, and within the
+tier the candidates keep their natural order — which is the pipeline's own answer about what that
+goal needs first (assay before planner, planner before parts, a review before a red build). A second
+opinion about the order _within_ a goal is not what the operator asked for and would be a worse one.
+
+**A flag outranks a drag** because the two have different lifetimes: a drag is pruned when its origin
+stops being ranked, while a flag stands until the operator clears it, so honouring a drag above a
+flagged goal would work for one pulse and be silently lost on the next.
+
+**It orders and does nothing else** — the same contract the override keeps. A cooldown, the part cap,
+an unapproved plan, a superseding rule, an ignore tag or the assay's hold holds a flagged goal's work
+exactly where it holds anything else's, and the flag never raises `maxConcurrentPartsPerIssue`. The
+queue rows a flagged goal contributes carry `expedited`, which is the only reason the panel can say
+why they are where they are.
+
+**Nothing prunes it, deliberately.** A goal waiting on a human, on a review or on a base contributes
+no candidate at all, which is exactly when the flag must still be there — so it is cleared by
+`POST /api/issues/:number/priority` and by nothing else, and it is a boolean on the goal page rather
+than a queue arrangement that decays.
+
 ## `QueueItem`
 
 ```ts
-{ origin, rule, title, kind, branch, status: 'dispatching' | HeldReason, reason }
+{ origin, rule, title, kind, branch, status: 'dispatching' | HeldReason, reason, expedited? }
 ```
 
 `status` is `dispatching` or one of the held reasons in [Admission](#admission) — `waiting`,
 `cooldown`, `capped`, `unapproved`, `superseded`. `rule` is always the rule that **proposed** the
-candidate; what held it is the status.
+candidate; what held it is the status. `expedited` is present only on a row whose goal the operator marked a
+priority ([above](#marking-a-goal-a-priority)) — the ordering's own explanation, shipped as a fact so
+the cockpit does not re-derive it.
 
 `Harness` caches the last plan as `harness.upcoming` (`{cycleId, at, items}`), and
 `buildStateSnapshot` ships it as `upcoming`. It is a **per-pulse projection recomputed from the world

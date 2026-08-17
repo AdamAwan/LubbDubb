@@ -740,6 +740,29 @@ export interface PriorityOverride {
 }
 
 /**
+ * A goal the operator has marked a priority: everything the harness dispatches
+ * under `issue:<n>` — and against the pull requests that goal's branches opened —
+ * is ranked ahead of the natural cross-rule order until the flag is cleared.
+ *
+ * A **boolean on a goal**, not a rank on an origin, and the two are deliberately
+ * different objects. {@link PriorityOverride} arranges one pulse's queue and is
+ * pruned when its origin stops being tracked; this is a standing statement about
+ * a goal, which is why it survives the goal's work changing shape — an issue that
+ * is picked up as `issue:<n>` this pulse is three `issue:<n>:part:<slug>` origins
+ * and a `pr:<m>:ci` after its plan is approved, and an operator who said "this
+ * one first" meant all of them.
+ *
+ * It orders and nothing more: a cooldown, a cap, an unapproved plan or an ignore
+ * tag holds a flagged goal's work exactly as it holds anything else.
+ */
+export interface GoalPriority {
+  /** The goal's origin, `issue:<n>` — the same key every verdict on a goal is written against. */
+  originRef: string;
+  /** When the operator flagged it. Shown as the age of the decision, never read by the dispatcher. */
+  since: string;
+}
+
+/**
  * `crashed` is the one status no agent transition writes: it is stamped at boot on
  * a row that still claimed to be live when its process died, and it means only
  * that an operator's recovery verdict is outstanding (see

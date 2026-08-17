@@ -369,6 +369,11 @@ export class Harness extends EventEmitter {
       // Operator "Up next" re-ordering (issue #128), keyed on candidate origin,
       // so it re-orders the ranking without persisting the projection itself.
       const priorityOverrides = store.listPriorityOverrides();
+      // The standing statement above that per-origin arrangement: the goals the
+      // operator marked a priority, whose whole subtree the ranking lifts. Not
+      // reconciled with the tracked origins below — a flagged goal waiting on a
+      // human is queueing nothing, and that is exactly when the flag must survive.
+      const goalPriorities = store.listGoalPriorities();
       // While paused, advertise zero headroom so the dispatcher plans no new
       // dispatches; the executor also hard-defers them (belt and braces).
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - store.countLiveAgents());
@@ -437,6 +442,7 @@ export class Harness extends EventEmitter {
         proposals,
         rejectionSignals,
         priorityOverrides,
+        goalPriorities,
         // The goal tags and the profiles they may name, so a dispatch on a pinned
         // issue is priced by the pin rather than by its rule.
         modelPins: this.deps.modelPins,

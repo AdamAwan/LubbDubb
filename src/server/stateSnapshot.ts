@@ -351,6 +351,9 @@ export function buildStateSnapshot(
   // completion synthesized below go through one path — the reasons the pickup and
   // conclusion verdicts are computed here rather than in the browser apply to both,
   // and two enrichment paths would drift exactly on a finished goal.
+  // The flagged goals, as the goal page's chip reads them: keyed on the same
+  // `issue:<n>` origin the flag is written against.
+  const goalPriorities = new Map(store.listGoalPriorities().map((g) => [g.originRef, { since: g.since }]));
   const validationChecksFor = (origin: string): ReturnType<typeof validationVerdict> | null => {
     const checks = checksByGoal.get(origin) ?? [];
     return checks.length === 0 ? null : validationVerdict(checks);
@@ -384,6 +387,10 @@ export function buildStateSnapshot(
       modelPin: (({ profile, ignored }) => ({ profile, ignoredTags: ignored }))(
         resolveModelTag(issue.labels, config.labelPrefix, config.agentModels),
       ),
+      // Whether the operator has put this goal at the front of the queue, from the
+      // same rows the dispatcher ranks by — so the chip cannot claim a priority the
+      // ranking is not honouring.
+      priority: goalPriorities.get(origin) ?? null,
       // The run's own write-up (rule `issue-retro`) — the reading, never the writing.
       retrospective: retroReading(store.getRetrospective(origin)),
       // The shared pad the agents on this goal left each other — the reading, for

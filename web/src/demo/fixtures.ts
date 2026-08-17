@@ -46,6 +46,7 @@ type IssueSeed = Omit<
   | 'delivery'
   | 'instructions'
   | 'modelPin'
+  | 'priority'
   | 'retrospective'
   | 'scratchpad'
   | 'shortfall'
@@ -75,6 +76,10 @@ function demoIssue(seed: IssueSeed): Issue {
     // Null is "no validation plan", which is a third reading and not a synonym
     // for clear — the fixtures that have one set it.
     validation: null,
+    // Not flagged, which is where every goal starts: a priority is a statement the
+    // operator made about this deployment's queue, so the fixture that is about it
+    // sets it and the rest read as the ordinary case.
+    priority: null,
     ...seed,
   };
 }
