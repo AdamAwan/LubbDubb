@@ -1354,6 +1354,29 @@ export function buildDemoState(): DemoSeed {
     // omitted because the wire sends them unconditionally — a demo that left them
     // out was a payload the real cockpit never receives.
     recovery: [],
+    // A current build, which is the state the gauge is in almost always and the
+    // one worth demonstrating: muted, in its fixed place, saying nothing. The demo
+    // has no process to upgrade, so the panel behind it is a reading and no controls.
+    build: {
+      state: 'current',
+      label: 'current',
+      live: 0,
+      upgradable: false,
+      blocked: 'this build is current — there is nothing to take',
+      supervised: false,
+      standing: {
+        head: '4f2a91c7e0d3b6a58f1c0e9d7b4a2c85f36e0d19',
+        upstream: '4f2a91c7e0d3b6a58f1c0e9d7b4a2c85f36e0d19',
+        behind: 0,
+        ahead: 0,
+        commits: [],
+        dirty: false,
+        branch: 'main',
+        checkedAt: ago(12),
+        unavailable: null,
+      },
+      intent: { state: 'idle', targetSha: null, requestedAt: null, pausedByDrain: false },
+    },
     retainedRuns: [],
     flags: [],
     artifactUrls: {},

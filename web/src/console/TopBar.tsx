@@ -132,6 +132,50 @@ function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions })
 }
 
 /**
+ * Where the harness's own build stands — the one reading on this bar that is about
+ * the process rather than the work.
+ *
+ * It wears the ordinary reading chrome and **stays in place at every state**,
+ * including the one it spends almost all its life in: `current`, muted, saying
+ * nothing. That is the whole design. A notification that appears only when there is
+ * news is one an operator has to notice; a gauge in a fixed spot is one they can
+ * glance at, and the mute is what keeps it from competing with the readings beside
+ * it for the 99% of the time nothing has changed.
+ *
+ * It is deliberately not the recovery banner's treatment. That is a stop sign, and
+ * it is loud because the harness is running *no cycles* while it is up. An update
+ * being available stops nothing, so borrowing the banner would say something untrue
+ * — and after the second time, be scrolled past.
+ */
+function Build({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const build = view.state.build;
+  const quiet = build.state === 'current' || build.state === 'unknown';
+  const title =
+    build.state === 'behind'
+      ? `LubbDubb is ${build.standing.behind} commit(s) behind upstream — open to see what changed`
+      : build.state === 'draining'
+        ? 'Upgrade pending: dispatch is paused while the fleet finishes — open to apply or cancel'
+        : build.state === 'ready'
+          ? 'Ready to upgrade — open to apply'
+          : build.state === 'unknown'
+            ? `This build could not be checked: ${build.standing.unavailable ?? 'no reason given'}`
+            : 'This build is up to date with upstream — open for details';
+  return (
+    <button
+      type="button"
+      className={`cn-read cn-act cn-build ${quiet ? 'cn-quiet' : ''} ${build.state === 'behind' || build.state === 'ready' ? 'cn-build-due' : ''}`}
+      onClick={() => actions.openPanel('build')}
+      title={title}
+      aria-label={title}
+    >
+      <span>Build</span>
+      <b>{build.label}</b>
+      <i className="cn-chev">›</i>
+    </button>
+  );
+}
+
+/**
  * The control-room strip: ident, the nav, the pulse, the fleet cap, and seven
  * readings. The nav is here because this is the only row of the shell that never
  * scrolls — everything else lives inside `.cn-sit`, which does.
@@ -259,6 +303,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
           onOpen={() => actions.openPanel('launch')}
           title="Blueprints waiting for a free slot — open the launch desk"
         />
+        <Build view={view} actions={actions} />
         <Read label="Settings" value={null} quiet={false} onOpen={() => actions.openSettings(true)} title="Settings" />
       </div>
     </div>

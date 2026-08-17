@@ -65,7 +65,7 @@ export function buildStateSnapshot(
   system: System,
   opts?: { artifactSigner?: (flagId: string) => string; attachmentSigner?: (attachmentId: string) => string },
 ): CockpitState {
-  const { store, connector, config, runtimeControl, harness, recovery, agents: fleet } = system;
+  const { store, connector, config, runtimeControl, harness, recovery, updates, agents: fleet } = system;
   const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
   const baseline = store.getWorldBaseline();
   const world: WorldSnapshot = baseline ?? {
@@ -458,6 +458,11 @@ export function buildStateSnapshot(
     // panel: the absence of activity everywhere else has exactly one cause, and
     // it is this.
     recovery: recovery.pending(),
+    // Where the harness's own build stands, and how far along a deliberate upgrade
+    // of it is. Served from the desk's last reading rather than taken here: a
+    // snapshot is built on every cockpit poll and on every broadcast, and a git
+    // round trip on that path would put the network in front of the whole UI.
+    build: updates.reading(),
     // Fold each PR's signals into a health verdict, and each issue's gates into
     // a pickup verdict, so the cockpit can show *why* an item is stuck or
     // untouched rather than leaving it implied by the absence of activity.

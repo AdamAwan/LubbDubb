@@ -593,6 +593,24 @@ A decided ending is never re-opened. `kill` and `complete` drop the session from
 process exit that follows finds a session that is no longer the agent's and the gate declines it — the
 same reason `ORPHAN_STATUSES` excludes `killed`/`done`/`failed`.
 
+### Auto-restore after an upgrade
+
+An ordinary restart parks every orphan for a verdict, and the pulse is held until each one is
+answered. A restart the harness asked for **on its own behalf** is the one exception: under an
+`applying` upgrade intent, `RecoveryDesk.settleUpgrade` restores each orphan that is `interrupted`
+and restorable, without asking.
+
+The verdict was decided before the shutdown, not on the way back up. An operator who pressed apply
+with agents running was told in the refusal they overrode that those agents come back, so this is the
+second half of a decision already taken — not the harness deciding for them, which is the thing this
+desk exists to have stopped.
+
+Two fences keep it that narrow. **Only under `applying`**, so a restart that was not the upgrade's
+restores nothing. And **only `interrupted`**: a `crashed` row never got the chance to write an
+ending, so something else killed that agent between the handoff and the restart, and its work is in a
+state nobody has looked at. Anything not restorable — no session id, worktree gone — lands in the
+panel with the reason `restorability` already wrote. Full flow: [21](21-self-update.md#coming-back-up).
+
 ### Kill vs interrupt vs interruptAll
 
 | Call             | Agent status  | Task status   | Resumable on next boot | Worktree |

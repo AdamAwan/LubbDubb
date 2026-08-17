@@ -140,6 +140,63 @@ export class RecoveryDesk {
   }
 
   /**
+   * Restore the agents this harness interrupted **on purpose**, on the way back up
+   * from an upgrade it asked for.
+   *
+   * **The verdict was decided before the shutdown, not here.** An operator who
+   * pressed apply with agents running was told in the refusal they overrode that
+   * those agents come back, so this is the second half of a decision already taken
+   * — not the harness quietly deciding for them, which is the thing
+   * {@link RecoveryDesk} exists to have stopped doing.
+   *
+   * Two fences keep it that narrow, and both matter:
+   *
+   * - **Only under `applying`.** The intent row is written before the process goes
+   *   and cleared once this has run, so any other state means this restart was not
+   *   the upgrade's — and an operator who kills the server midway through one is
+   *   asking a different question.
+   * - **Only `interrupted`.** A `crashed` row is one that never got the chance to
+   *   write an ending, so *something else* killed that agent between the handoff and
+   *   the restart. That is a genuine crash inside an upgrade window, its work is in
+   *   an unknown state, and it lands in the panel like any other. Anything not
+   *   restorable — no session id, worktree gone — lands there too, with the reason
+   *   `restorability` already wrote.
+   *
+   * Returns what it restored and what it left, so boot can say both out loud: a
+   * partial auto-restore that mentioned only its successes would read as a clean
+   * upgrade with a held pulse and no stated cause.
+   *
+   * @public called by `src/server/main.ts` at boot, after `detect`.
+   */
+  settleUpgrade(): { restored: OrphanedWork[]; left: OrphanedWork[] } {
+    const restored: OrphanedWork[] = [];
+    const left: OrphanedWork[] = [];
+    if (this.deps.store.readUpgradeIntent().state !== 'applying') return { restored, left: this.pending() };
+    for (const item of this.pending()) {
+      if (item.died !== 'interrupted' || !item.restorable) {
+        left.push(item);
+        continue;
+      }
+      const result = this.decide(item.taskId, 'restore');
+      if (result.ok) {
+        restored.push(item);
+        continue;
+      }
+      // A restore that fails leaves the row exactly as it was, so the operator gets
+      // the same three choices they would have had — and a fault line saying why the
+      // automatic one did not take, which is otherwise invisible against a panel
+      // that simply appeared.
+      left.push(item);
+      this.deps.errors?.record({
+        source: 'boot',
+        message: `Could not restore ${item.taskId} after the upgrade: ${result.error}`,
+        detail: item.originRef ?? null,
+      });
+    }
+    return { restored, left };
+  }
+
+  /**
    * The outstanding decisions, derived from the rows rather than held in a field —
    * so a restart, a second cockpit and this process always agree.
    *

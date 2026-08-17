@@ -196,20 +196,22 @@ it to understand why a decision was made, and check the code before relying on a
 
 ## Scripts
 
-| Script                   | Does                                                                      |
-| ------------------------ | ------------------------------------------------------------------------- |
-| `npm start`              | Builds the cockpit bundle, then runs the server via tsx.                  |
-| `npm run start:server`   | The server alone, serving whatever `web/dist` already holds.              |
-| `npm run dev`            | The server with `--watch`, no cockpit build (see below).                  |
-| `npm test`               | `node --import tsx --test test/**/*.test.ts`.                             |
-| `npm run test:coverage`  | The suite under c8 (`.c8rc.json`; `src/server/main.ts` excluded).         |
-| `npm run smoke`          | The real end-to-end run (see below).                                      |
-| `npm run build`          | `tsc -p tsconfig.json`.                                                   |
-| `npm run web:dev`        | Vite dev server for the cockpit.                                          |
-| `npm run web:build`      | Production bundle into `web/dist`.                                        |
-| `npm run web:build:demo` | The demo bundle for GitHub Pages — the only demo build there is.          |
-| `npm run audit`          | `npm audit --audit-level=high`.                                           |
-| `npm run check`          | The one gate: the six stages above, concurrently, via `scripts/check.ts`. |
+| Script                   | Does                                                                            |
+| ------------------------ | ------------------------------------------------------------------------------- |
+| `npm start`              | Builds the cockpit bundle, then runs the server via tsx.                        |
+| `npm run start:server`   | The server alone, serving whatever `web/dist` already holds.                    |
+| `npm run serve`          | The cockpit bundle, then the server **under a supervisor** that can replace it. |
+| `npm run serve:server`   | The supervised server alone. See [21](21-self-update.md#applying-it).           |
+| `npm run dev`            | The server with `--watch`, no cockpit build (see below).                        |
+| `npm test`               | `node --import tsx --test test/**/*.test.ts`.                                   |
+| `npm run test:coverage`  | The suite under c8 (`.c8rc.json`; `src/server/main.ts` excluded).               |
+| `npm run smoke`          | The real end-to-end run (see below).                                            |
+| `npm run build`          | `tsc -p tsconfig.json`.                                                         |
+| `npm run web:dev`        | Vite dev server for the cockpit.                                                |
+| `npm run web:build`      | Production bundle into `web/dist`.                                              |
+| `npm run web:build:demo` | The demo bundle for GitHub Pages — the only demo build there is.                |
+| `npm run audit`          | `npm audit --audit-level=high`.                                                 |
+| `npm run check`          | The one gate: the six stages above, concurrently, via `scripts/check.ts`.       |
 
 **`npm start` builds the cockpit first, and that is not a convenience.** The server needs no
 build step — tsx runs it from source — but the SPA does, and `web/dist` is gitignored, so it is

@@ -1,13 +1,26 @@
 import { loadDeploymentConfig } from '../config.js';
+import { UPGRADE_EXIT_CODE } from '../selfUpdate/handoff.js';
 import { buildSystem } from '../system.js';
 import { installDesktopSkill } from '../validation/desktopSkill.js';
 import { buildApp } from './app.js';
+
+/** How long the upgrade handoff waits for the reply that asked for it to reach the wire. */
+const HANDOFF_GRACE_MS = 250;
 
 /**
  * Entry point. Wires the system, parks any agents orphaned by a previous run for
  * an operator's decision *before* anything else reacts to the world, starts the
  * HTTP/WebSocket server, then starts the heartbeat and runs one boot cycle so
  * the harness reacts to whatever the world looks like on startup.
+ *
+ * **The shutdown handlers are registered before anything can start an agent**, and
+ * that ordering is the whole of why this function is shaped the way it is. They
+ * used to be installed at the very end, after the boot cycle had already run —
+ * which left a window covering exactly the two things that launch processes, an
+ * upgrade's auto-restore and the boot cycle's dispatches, in which a Ctrl-C took
+ * Node's default path. That path runs no handler, so the agents were not
+ * interrupted, not reaped, and not recorded: real orphans, holding their worktrees
+ * open, with rows still claiming to be live.
  */
 async function main(): Promise<void> {
   const config = loadDeploymentConfig();
@@ -58,16 +71,59 @@ async function main(): Promise<void> {
     console.log(`[lubbdubb] /lubbdubb skill installed at ${config.validation.desktopSkillPath}`);
   }
 
-  if (crashed.length > 0) {
+  // Everything that can start an agent is below this line. See the note above.
+  const shutdown = (exitCode: number) => async (): Promise<void> => {
+    console.log(
+      exitCode === UPGRADE_EXIT_CODE ? '\n[lubbdubb] going down for an upgrade...' : '\n[lubbdubb] shutting down...',
+    );
+    system.harness.stop();
+    // Interrupt (not kill) so the next boot offers this in-flight work for restore.
+    system.agents.interruptAll();
+    await system.mcp.close();
+    await system.desktop.close();
+    await app.close();
+    system.store.close();
+    process.exit(exitCode);
+  };
+  process.on('SIGINT', shutdown(0));
+  process.on('SIGTERM', shutdown(0));
+  // How the cockpit's Apply gets this process to exit *distinguishably*: the
+  // supervisor relaunches on this code alone, and treats every other ending as the
+  // server's own. Wired here rather than in `buildSystem` because shutdown is this
+  // file's — a harness embedded in a test has no port, no supervisor and nothing to
+  // hand off to, and its `apply` correctly stops at recording the intent.
+  //
+  // **Deferred, and that is not a cosmetic delay.** The desk calls this from inside
+  // the route handler, before the reply has been written; going down synchronously
+  // would close the server out from under the response, and the cockpit that asked
+  // for the upgrade would see a dropped socket rather than the confirmation and the
+  // broadcast. A tick is not enough — the reply has to reach the wire — so this
+  // waits, and the shutdown itself is what the operator is told is happening.
+  system.updates.onHandoff = () => {
+    setTimeout(() => void shutdown(UPGRADE_EXIT_CODE)(), HANDOFF_GRACE_MS);
+  };
+
+  // The other half of a deliberate upgrade: the agents this harness interrupted on
+  // its way down come back without anyone being asked, because they were already
+  // asked. Anything it will not restore itself — a real crash inside the upgrade
+  // window, a worktree that has gone — still holds the pulse and still needs a
+  // verdict, so both halves are announced.
+  const upgrade = system.recovery.settleUpgrade();
+  system.updates.clearIntent();
+  for (const item of upgrade.restored)
+    console.log(`[lubbdubb] restored ${item.taskId} (${item.agentId}) after the upgrade — ${item.title}`);
+  const held = upgrade.restored.length > 0 ? upgrade.left : crashed;
+
+  if (held.length > 0) {
     // Loud, and printed after the cockpit URL so it is the last thing on screen:
     // the harness will now do nothing at all until these are answered, and an
     // operator who reads this as a warning rather than a stop sign will conclude
     // the heartbeat is broken.
     console.log(
-      `[lubbdubb] ${crashed.length} piece(s) of work did not survive the last run — the pulse is HELD until ` +
+      `[lubbdubb] ${held.length} piece(s) of work did not survive the last run — the pulse is HELD until ` +
         'you restore, requeue or remove each of them in the cockpit',
     );
-    for (const c of crashed)
+    for (const c of held)
       console.log(
         `[lubbdubb]   ${c.taskId}${c.agentId ? ` (${c.agentId})` : ' — no agent ever started'} — ${c.title}` +
           `${c.originRef ? ` (${c.originRef})` : ''}`,
@@ -76,20 +132,6 @@ async function main(): Promise<void> {
 
   system.harness.start();
   await system.harness.runCycle('boot');
-
-  const shutdown = async (): Promise<void> => {
-    console.log('\n[lubbdubb] shutting down...');
-    system.harness.stop();
-    // Interrupt (not kill) so the next boot offers this in-flight work for restore.
-    system.agents.interruptAll();
-    await system.mcp.close();
-    await system.desktop.close();
-    await app.close();
-    system.store.close();
-    process.exit(0);
-  };
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
 }
 
 main().catch((err) => {

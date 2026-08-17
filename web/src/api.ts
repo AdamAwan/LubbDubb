@@ -1,4 +1,12 @@
-import type { AppState, BugFiling, JobAttachmentInput, RecoveryVerdict, StackLanding } from './types.js';
+import type {
+  AppState,
+  BugFiling,
+  BuildReading,
+  JobAttachmentInput,
+  RecoveryVerdict,
+  StackLanding,
+  UpgradeAction,
+} from './types.js';
 // The fetched-on-open routes, as whole payloads rather than shapes re-typed at
 // each call site: the server declares each one as its return type, so a renamed
 // or re-nested key is a compile error here instead of an empty panel.
@@ -365,6 +373,13 @@ const realApi = {
   // may never have had an agent at all.
   decideRecovery: (taskId: string, verdict: RecoveryVerdict) =>
     post<{ ok: true; remaining: number }>(`/api/recovery/${taskId}`, { verdict }),
+  // The harness's own build. `upgrade('apply')` is the one call on this surface
+  // that ends the process it is talking to, so a dropped connection after it is
+  // the expected outcome rather than a failure — the cockpit's reconnect is what
+  // reports the new build.
+  checkBuild: () => post<{ ok: true; build: BuildReading }>('/api/upgrade/check'),
+  upgrade: (action: UpgradeAction, opts?: { interrupt?: boolean }) =>
+    post<{ ok: true; build: BuildReading }>('/api/upgrade', { action, ...opts }),
   killAgent: (id: string) => post(`/api/agents/${id}/kill`),
   completeAgent: (id: string) => post(`/api/agents/${id}/complete`),
   interruptAgent: (id: string) => post(`/api/agents/${id}/interrupt`),

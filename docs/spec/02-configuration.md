@@ -290,6 +290,23 @@ reading the file is not the same as knowing the policy.
 | `spendBurn.floorUsd`                  | `number`         | `1`                                  | Absolute money a run must **also** have spent, so four times the median of a rule that costs pennies is not an alarm.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `spendBurn.ceilingUsd`                | `number \| null` | `null`                               | A flat per-run ceiling that fires with no history whatever — the arm for a deployment where the first runaway is also the first run. `null` = no such arm, because the right number is a property of your work and nothing here can guess it.                                                                                                                                                                                                                                                                                                                    |
 
+| `selfUpdate.enabled` | `boolean` | `true` | Whether the harness checks its **own** build for updates. Off means no check, no gauge and no upgrade route — the behaviour before this existed. |
+| `selfUpdate.remote` | `string` | `"origin"` | The remote the install directory's updates come from. |
+| `selfUpdate.branch` | `string` | `"main"` | The branch on it that releases land on. **Not `defaultBranch`**, which is the _worked_ repo's integration branch and a different repository's. |
+| `selfUpdate.checkIntervalMs` | `number` | `3600000` | A floor on how often the remote is touched, not on how fresh the served answer is: the reading is held in memory and served from there in between. |
+
+#### `selfUpdate`
+
+The one config group that is not about the repository the fleet works on. It watches the directory
+LubbDubb is **installed** in, resolved from the running module rather than from `repoRoot` — the two
+coincide only when the harness is dogfooding itself, and a deployment working on another codebase
+still wants to hear that its own build moved. There is deliberately no key pointing the watch at an
+arbitrary path; only the remote and branch it tracks are configurable, because a fork tracks
+somewhere else.
+
+Cheap by construction: the steady state is one `ls-remote` an hour, which transfers no objects. Full
+behaviour, including the drain and the handoff, is [21](21-self-update.md).
+
 #### `spendBurn`
 
 Every other cost reading is a post-mortem. This one is taken while the money is still being spent: a

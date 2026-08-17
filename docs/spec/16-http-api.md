@@ -257,6 +257,33 @@ refetch, and returns `{ ok: true, cap, paused }`.
 
 Changes are **in-memory and ephemeral**; a restart reverts to `maxConcurrentAgents` / `startPaused`.
 
+### The harness's own build
+
+`src/server/routes/upgrade.ts`. Its own module rather than two more routes on `control.ts`: that
+file owns the _fleet's_ live controls, and this owns the process they run inside. They share a pause
+flag and nothing else. Full behaviour is [21](21-self-update.md).
+
+#### `POST /api/upgrade/check`
+
+Takes a fresh reading of the install directory against its upstream, skipping the interval that
+otherwise bounds how often the remote is touched. Rate-limited to 30/minute — it is the one route on
+this surface that reaches the network on request rather than on the pulse. Broadcasts `dirty` to
+every open cockpit (a reading one operator took is a fact for the others) and returns
+`{ ok: true, build }`.
+
+#### `POST /api/upgrade`
+
+Body `{action: 'drain' | 'cancel' | 'apply', interrupt?: boolean}`; anything else is a 400. Applies
+the transition and returns `{ ok: true, build }`.
+
+A refused transition is a **409 with the desk's own wording**, not a 400: the request was well-formed
+and the operator is not wrong, the world moved — an agent started, a second cockpit already drained,
+the build is current. That is the shape the recovery route uses for a verdict someone else settled.
+
+`apply` ends the process it is talking to. The reply and the broadcast are written first — the
+handoff is deferred past them in `main.ts` — so a cockpit learns the answer from the response rather
+than from a dropped socket.
+
 ### `POST /api/prs/:number/exclude`
 
 Body `{excluded: boolean}`. Adds or removes the `${labelPrefix}-ignore` label through the provider,

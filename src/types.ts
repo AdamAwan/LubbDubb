@@ -2550,3 +2550,28 @@ export interface Decision {
   admission: string | null;
   createdAt: string;
 }
+
+/**
+ * How far along a deliberate upgrade of the harness's *own* build is — see
+ * `src/selfUpdate/upgradePlan.ts` for the transitions and
+ * `src/store/upgrades.ts` for why it is persisted when the pause flag is not.
+ */
+export type UpgradeState = 'idle' | 'draining' | 'ready' | 'applying';
+
+/** What the operator asked the upgrade to do, and what a cancel must undo. */
+export interface UpgradeIntent {
+  state: UpgradeState;
+  /**
+   * The upstream commit the operator accepted. Carried so the next boot can say
+   * which build it came up on, including when the supervisor landed somewhere
+   * else because upstream moved again mid-handoff.
+   */
+  targetSha: string | null;
+  requestedAt: string | null;
+  /**
+   * Whether the *drain* is what paused dispatch. Load-bearing on cancel: a fleet
+   * the operator had already paused themselves must stay paused, and a blanket
+   * un-pause on cancel would silently start dispatching for them.
+   */
+  pausedByDrain: boolean;
+}
