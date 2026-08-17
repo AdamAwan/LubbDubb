@@ -439,18 +439,19 @@ test('validateCiPolicy: a states list that could never fire is refused at load',
     () => validateCiPolicy(policy({ match: 'gate', states: ['passing' as never], onFailure: 'dispatch' })),
     /asks nothing of anyone/,
   );
-  // Watching only a non-failing state with anything but `dispatch` is a rule that
-  // does nothing: nothing in the harness acts on a check that is not failing, so
-  // `ignore` is already the behaviour and `escalate` has no arm to run in.
-  assert.throws(() => validateCiPolicy(policy({ match: 'gate', states: ['pending'] })), /could never fire/);
+  // `escalate` on a non-failing watch has no arm to run in: rule `pr-ci-blocked`
+  // asks about a red PR whose failures are all held, not about a waiting gate.
   assert.throws(
     () => validateCiPolicy(policy({ match: 'gate', states: ['pending'], onFailure: 'escalate' })),
-    /could never fire/,
+    /no escalation arm for a check that is merely waiting/,
   );
-  // The legal shapes pass: the gate rule itself, and a rule that still covers
-  // failing, where `ignore` means something.
+  // The legal shapes pass: the gate rule itself, a rule that still covers failing,
+  // and — since the expiry default gave it a job — a pending-only `ignore`, which
+  // shadows that default without muting the same check's failures.
   validateCiPolicy(policy({ match: 'gate', states: ['pending'], onFailure: 'dispatch', guidance: 'Run it.' }));
   validateCiPolicy(policy({ match: 'gate', states: ['failing', 'pending'], onFailure: 'ignore' }));
+  validateCiPolicy(policy({ match: 'gate', states: ['pending'], onFailure: 'ignore' }));
+  validateCiPolicy(policy({ match: 'gate', states: ['pending'] }));
 });
 
 test('loadConfig: the ci block defaults to empty, round-trips, and is validated at load', () => {
@@ -464,7 +465,14 @@ test('loadConfig: the ci block defaults to empty, round-trips, and is validated 
 
   const gate = [{ match: 'pr-agent-review*', states: ['pending' as const], onFailure: 'dispatch' as const }];
   assert.deepEqual(loadConfig({ ci: { checks: gate } }).ci.checks, gate);
-  assert.throws(() => loadConfig({ ci: { checks: [{ match: 'gate', states: ['pending' as never] }] } }), /never fire/);
+  // A pending-only `ignore` is legal — it shadows the expiry default — and still
+  // round-trips; only `escalate` has no arm to reach.
+  const mute = [{ match: 'gate', states: ['pending' as const], onFailure: 'ignore' as const }];
+  assert.deepEqual(loadConfig({ ci: { checks: mute } }).ci.checks, mute);
+  assert.throws(
+    () => loadConfig({ ci: { checks: [{ match: 'gate', states: ['pending' as never], onFailure: 'escalate' }] } }),
+    /never fire/,
+  );
 });
 
 // --------------------------------------------------------------------------

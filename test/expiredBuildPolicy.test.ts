@@ -12,7 +12,13 @@ import {
   aggregatePolicyCiStatus,
   listPolicyCiChecks,
 } from '../src/integrations/azure/sourceControl.js';
-import { ciWatchNote, classifyWatchedChecks, type CiPolicy } from '../src/ci/ciPolicy.js';
+import {
+  ciWatchNote,
+  classifyCiFailures,
+  classifyWatchedChecks,
+  validateCiPolicy,
+  type CiPolicy,
+} from '../src/ci/ciPolicy.js';
 import { prHealth } from '../src/prHealth.js';
 import { prAttentionStatus, type PrAttentionContext } from '../src/prAttention.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
@@ -34,6 +40,12 @@ import type { PullRequest, WorldSnapshot } from '../src/types.js';
  * the running one is not, and nothing downstream of `ciStatus` moves for either —
  * a build that has not run is not a failing build, and must never claim the pull
  * request cannot merge.
+ *
+ * And the operator's way out, for a deployment where required builds expire on
+ * every push: a `pending`-only `ignore` rule mutes the chase and leaves the same
+ * check's genuine failures on the dispatching default. That combination used to be
+ * refused at load on the grounds that nothing acts on a non-failing check — a
+ * justification the expiry default itself made false.
  */
 
 const BUILD_POLICY = '0609b952-1397-4640-95ec-e00a01b2c241';
@@ -55,6 +67,15 @@ function evaluation(over: Partial<AzPolicyEvaluation> = {}): AzPolicyEvaluation 
 const EXPIRED = evaluation({ isExpired: true });
 /** The same policy with a build genuinely in flight — one word apart, and the whole point. */
 const RUNNING = evaluation({ status: 'running' });
+/** The same policy having actually run and failed — the side muting the expiry must not touch. */
+const REJECTED = evaluation({ status: 'rejected' });
+
+/**
+ * The operator's lever for a check that expires on every push: mute the *waiting*
+ * state and leave the failing one on the dispatching default. Pending-only, so the
+ * `(glob, state)` match never claims the red build.
+ */
+const MUTE_EXPIRY: CiPolicy = { checks: [{ match: 'NXG-*', states: ['pending'], onFailure: 'ignore' }] };
 
 function pull(over: Partial<AzPull> = {}): AzPull {
   return {
@@ -123,8 +144,8 @@ async function azurePullRequests(evals: AzPolicyEvaluation[]): Promise<PullReque
   return slice.pullRequests ?? [];
 }
 
-/** A whole system on fakes, pulsing on the Azure-derived world. `ci.checks` is empty throughout. */
-function build(pullRequests: PullRequest[]): System {
+/** A whole system on fakes, pulsing on the Azure-derived world. `ci.checks` is empty unless a policy is given. */
+function build(pullRequests: PullRequest[], ci: CiPolicy = { checks: [] }): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-expired-'));
   const system = buildSystem(
     loadConfig({
@@ -135,7 +156,7 @@ function build(pullRequests: PullRequest[]): System {
       worktreeRoot: join(dir, 'wt'),
       heartbeatIntervalMs: 999_999,
       defaultBranch: 'Development',
-      ci: { checks: [] },
+      ci,
     }),
     { backend: new FakePtyBackend(), worktrees: new FakeWorktreeManager(dir), errorMirror: () => {} },
   );
@@ -195,6 +216,40 @@ test('an operator rule that does not dispatch still shadows the expiry default',
   assert.deepEqual(classifyWatchedChecks(pr?.ciChecks, muted).watched, []);
 });
 
+test('a pending-only ignore rule mutes the expiry chase and is legal config', async () => {
+  // The refusal this used to hit was justified by "nothing in the harness acts on a
+  // check that is not failing" — which stopped being true when the expiry default
+  // landed. The rule has a job now: shadowing that default.
+  validateCiPolicy(MUTE_EXPIRY);
+
+  const [pr] = await azurePullRequests([EXPIRED]);
+  assert.deepEqual(classifyWatchedChecks(pr?.ciChecks, MUTE_EXPIRY).watched, []);
+});
+
+test('muting the expiry leaves the failing side of the same policy dispatching', async () => {
+  // The whole reason a pending-only rule had to become legal. The shape the old
+  // validation forced — `states: ["failing", "pending"]` with `ignore` — would put
+  // this build in `ignored` instead, giving up agent auto-fix on genuine failures.
+  const [pr] = await azurePullRequests([REJECTED]);
+  assert.equal(pr?.ciStatus, 'failing');
+
+  const verdict = classifyCiFailures(pr?.ciChecks, MUTE_EXPIRY);
+  assert.deepEqual(
+    verdict.dispatch.map((m) => ({ name: m.name, rule: m.rule })),
+    [{ name: 'NXG-CI', rule: null }],
+    'the pending-only rule does not claim the red build, so it falls through to the dispatching default',
+  );
+  assert.deepEqual(verdict.ignored, []);
+  assert.equal(verdict.actionable, true);
+});
+
+test('escalate on a pending-only rule is still refused, and says why', () => {
+  assert.throws(
+    () => validateCiPolicy({ checks: [{ match: 'NXG-*', states: ['pending'], onFailure: 'escalate' }] }),
+    /no escalation arm for a check that is merely waiting/,
+  );
+});
+
 test('the harness dispatches a gate agent for the expired build, through buildSystem', async () => {
   const system = build(await azurePullRequests([EXPIRED]));
   await system.harness.runCycle('manual');
@@ -209,6 +264,23 @@ test('the harness dispatches a gate agent for the expired build, through buildSy
     .listDecisions()
     .find((d) => d.action.type === 'dispatch_code_agent' && d.action.originRef === 'pr:31702:ci-gate');
   assert.equal(decision?.rule, 'pr-ci-gate');
+  system.store.close();
+});
+
+test('with the expiry muted, the same world dispatches no gate agent', async () => {
+  const system = build(await azurePullRequests([EXPIRED]), MUTE_EXPIRY);
+  await system.harness.runCycle('manual');
+
+  assert.equal(
+    system.store.listTasks().find((t) => t.originRef === 'pr:31702:ci-gate'),
+    undefined,
+    'the muted expiry must not reach rule `pr-ci-gate`',
+  );
+  assert.deepEqual(system.store.listTasks(), []);
+  assert.equal(
+    system.store.listDecisions().find((d) => d.action.type === 'dispatch_code_agent'),
+    undefined,
+  );
   system.store.close();
 });
 

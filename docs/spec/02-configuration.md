@@ -175,12 +175,15 @@ Three decisions worth stating, because none of them is the only defensible one:
   — but it is the action field in every deployed config and in `describeCiPolicy`, and
   renaming a key to improve a noun breaks files in the field in exchange for nothing an
   operator can do differently.
-- **A non-failing watch may only `dispatch`.** `loadConfig` **throws** on `states`
-  without `failing` combined with `ignore` or `escalate`: nothing in the harness acts
-  on a check that is not failing, so `ignore` is already the behaviour and `escalate`
-  has no arm to run in — rule `pr-ci-blocked` asks about a _red_ PR whose failures are
-  all held. Both would be rules that quietly do nothing. `passing` is refused as a
-  state for the same reason: a check that passed asks nothing of anyone.
+- **A non-failing watch may `dispatch` or `ignore`, never `escalate`.** `loadConfig`
+  **throws** on `states` without `failing` combined with `escalate`: the harness has no
+  escalation arm for a check that is merely waiting — rule `pr-ci-blocked` asks about a
+  _red_ PR whose failures are all held — so the rule could never fire. `ignore` there is
+  not idle, because of the expiry default below: it is how an operator mutes a check the
+  provider reports as `expired` while leaving that same check's genuine failures on the
+  dispatching default, which `states: ["failing", "pending"]` would give up. `passing` is
+  refused as a state on the could-never-fire grounds: a check that passed asks nothing of
+  anyone.
 
 **One waiting check needs no rule at all.** A check the provider reports as `expired` — an Azure
 build-validation policy whose last run predates the branch's commits, so nothing is in flight and
@@ -188,7 +191,16 @@ nothing starts on its own — is watched with nothing in `ci.checks` naming it, 
 _failing_ check dispatches. Writing `{ "match": "<build>", "states": ["pending"] }` for that case is
 the wrong lever and is not needed: it fires equally on a build that is genuinely running, sending an
 agent to release a gate that was about to release itself. A rule claiming the check in `pending` with
-a non-dispatch action shadows the default, which is how an operator turns it off.
+a non-dispatch action shadows the default, which is how an operator turns it off:
+
+```json
+{ "match": "NXG-CI", "states": ["pending"], "onFailure": "ignore" }
+```
+
+That is the whole lever for a deployment where required builds expire on **every** push, and the
+reason the pending-only `ignore` is legal. Because `states` scopes rather than extends, the rule says
+nothing about the same build going red, so the failure still falls through to the dispatching default
+and an agent still fixes it — the half `states: ["failing", "pending"]` with `ignore` would destroy.
 → [07](07-pull-requests.md#ci-checks)
 
 The dispatch itself, its own origin, and what stops it looping are rule `pr-ci-gate`'s
@@ -213,8 +225,8 @@ one job:
 `loadConfig` **throws** on `guidance` or `urgent` attached to a rule that never
 dispatches: both are written for an agent that would never be sent, and dropping
 them silently is the failure worth catching at boot. It throws on the same grounds
-for an empty `states`, an unrecognised state, and a non-failing watch that does not
-dispatch — a rule that cannot fire is a rule the operator believes is running.
+for an empty `states`, an unrecognised state, and a non-failing watch that
+`escalate`s — a rule that cannot fire is a rule the operator believes is running.
 
 The resolved policy is readable **from the cockpit** since #244 — the settings modal's CI tab
 ([17](17-cockpit.md#the-ci-policy-tab)), off `GET /api/ci-policy`
@@ -241,7 +253,8 @@ reading the file is not the same as knowing the policy.
         "states": ["pending"],
         "onFailure": "dispatch",
         "guidance": "Run `/pr-agent-review` on this branch; the gate clears when it posts its status."
-      }
+      },
+      { "match": "NXG-CI", "states": ["pending"], "onFailure": "ignore" }
     ]
   }
 }
