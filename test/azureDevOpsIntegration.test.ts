@@ -631,15 +631,16 @@ function fakeAuth(): { auth: AzureAuth; state: { refreshes: number } } {
   return { auth, state };
 }
 
-/** A fetch that returns each scripted response in turn (sticking on the last), recording request bodies. */
+/** A fetch that returns each scripted response in turn (sticking on the last), recording urls and bodies. */
 function scriptedFetch(responses: Array<() => Response>): {
   fetch: typeof fetch;
-  state: { calls: number; bodies: string[] };
+  state: { calls: number; urls: string[]; bodies: string[] };
 } {
-  const state = { calls: 0, bodies: [] as string[] };
-  const fetchFn = (async (_url: string, init?: RequestInit) => {
+  const state = { calls: 0, urls: [] as string[], bodies: [] as string[] };
+  const fetchFn = (async (url: string, init?: RequestInit) => {
     const make = responses[Math.min(state.calls, responses.length - 1)]!;
     state.calls++;
+    state.urls.push(String(url));
     if (typeof init?.body === 'string') state.bodies.push(init.body);
     return make();
   }) as unknown as typeof fetch;
@@ -671,20 +672,22 @@ function restApi(responses: Array<() => Response>) {
   return { api, authState, fetchState, logs };
 }
 
-test('runWorkItemQuery: the changed-since read posts timePrecision, the open list does not', async () => {
+test('runWorkItemQuery: the changed-since read asks for timePrecision in the url, the open list does not', async () => {
   // A WIQL request runs at date precision by default and faults — 400,
   // VssPropertyValidationException — on a comparison that supplies a time.
   const changed = restApi([() => json({ workItems: [] })]);
   await changed.api.listWorkItemsChangedSince('2026-08-01T09:30:00.123Z');
-  const changedBody = JSON.parse(changed.fetchState.bodies[0]!) as { query: string; timePrecision: boolean };
-  assert.equal(changedBody.timePrecision, true, 'the dated query asks for time precision');
+  // The query string, not the body: `Wiql` is defined as `{query}` alone, so a
+  // `timePrecision` body field is dropped silently and the fault is unchanged.
+  assert.match(changed.fetchState.urls[0]!, /[?&]timePrecision=true(&|$)/, changed.fetchState.urls[0]!);
+  const changedBody = JSON.parse(changed.fetchState.bodies[0]!) as { query: string };
+  assert.deepEqual(Object.keys(changedBody), ['query'], 'the body carries the query and nothing else');
   assert.ok(changedBody.query.includes("[System.ChangedDate] >= '2026-08-01 09:30:00Z'"), changedBody.query);
 
   // The open list carries no time, so it stays on the server's default.
   const open = restApi([() => json({ workItems: [] })]);
   await open.api.listOpenWorkItems();
-  const openBody = JSON.parse(open.fetchState.bodies[0]!) as { timePrecision: boolean };
-  assert.equal(openBody.timePrecision, false);
+  assert.doesNotMatch(open.fetchState.urls[0]!, /timePrecision/);
 });
 
 test('request: a transient sign-in-HTML 2xx is retried with a fresh token, then succeeds', async () => {
