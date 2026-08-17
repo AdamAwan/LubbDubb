@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { NOWHERE, placeQuery, readPlace, type Place } from '../web/src/cockpit/place.js';
 
 const at = (over: Partial<Place> = {}): Place => ({ ...NOWHERE, ...over });
@@ -31,6 +32,31 @@ test('every place round-trips through the query string', () => {
     at({ spend: true, reliability: true }),
   ];
   for (const place of places) assert.deepEqual(readPlace(placeQuery(place)), place, placeQuery(place));
+});
+
+/**
+ * Every panel `ConsolePanel` admits survives the query string.
+ *
+ * Read off the type rather than listed here, because the list above is exactly
+ * what this is guarding: `place.ts` keeps its own whitelist of panel names, and a
+ * panel added to the type but not to that list does not merely lose its URL — the
+ * place round-trips through the query string on every change, so the name is
+ * parsed straight back to null and **the panel never opens at all**. That is a
+ * dead control with no error anywhere, and it happened once (`build`).
+ *
+ * The `{ ask }` member is excluded: it carries an opaque row id in its own
+ * parameter and is covered above.
+ */
+test('every panel the type admits round-trips through the URL', () => {
+  const source = readFileSync('web/src/cockpit/actions.ts', 'utf8');
+  const declaration = /export type ConsolePanel =([\s\S]*?);/.exec(source)?.[1];
+  assert.ok(declaration, 'ConsolePanel is declared where this test looks for it');
+  const panels = [...declaration.matchAll(/'([a-z]+)'/g)].map((m) => m[1]!);
+  assert.ok(panels.length >= 5, `found ${panels.length} panels, which is too few to be the real list`);
+  for (const panel of panels) {
+    const place = at({ panel: panel as Place['panel'] });
+    assert.deepEqual(readPlace(placeQuery(place)), place, `panel=${panel} is dropped by readPlace`);
+  }
 });
 
 // The one input to the cockpit an operator can type. A place that does not

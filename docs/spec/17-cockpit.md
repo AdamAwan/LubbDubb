@@ -919,8 +919,8 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 ## The top bar and the panels
 
-The strip carries the ident, the nav, the pulse, the fleet cap, and eight readings: **Spend**, **Yield**,
-**Output**, **Findings**, **Lessons**, **Faults**, **Launch** and **Settings**. Each is one subject stated once, in
+The strip carries the ident, the nav, the pulse, the fleet cap, and nine readings: **Spend**, **Yield**,
+**Output**, **Findings**, **Lessons**, **Faults**, **Launch**, **Build** and **Settings**. Each is one subject stated once, in
 a plain label-and-number face. None reaches `api.js`: every one is a method on `CockpitActions`, and
 the fleet cap is the shared `FleetControl`, which is already on that seam.
 
@@ -952,7 +952,20 @@ the type exists to rule out. A `Panel` has **three ways out** — the backdrop, 
 because a thing that covers the console must not have exactly one exit; `test/console.test.ts` pins
 them.
 
-Five panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings, Spend and Yield are shell-owned modals beside them:
+### The Build gauge
+
+The one reading on this bar that is about the process rather than the work: where the harness's own
+build stands against its upstream ([21](21-self-update.md)). It follows the mute rule above rather
+than being an exception to it — `current`, muted, in a fixed place, is the state it is in almost all
+of the time, and that is the point. A notification that appears only when there is news is one an
+operator has to notice; a gauge in a fixed spot is one they can glance at.
+
+It goes amber only at `behind` and `ready`, the two states where something is waiting on a decision.
+It is deliberately **not** drawn as the crash-recovery banner. That treatment is a stop sign, and it
+is loud because the harness is running no cycles at all while it is up; an available update stops
+nothing, so borrowing it would say something untrue — and after the second time, be scrolled past.
+
+Six panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings, Spend and Yield are shell-owned modals beside them:
 
 - **Findings** — the shared `FindingsPanel`, with promote / file / dismiss. The count is findings at
   `open` and nothing else: promoted, filed and dismissed are done, and `filing` is decided. Nothing in
@@ -973,6 +986,7 @@ Five panels open from the bar, the ask panel opens from a queue row ([the rail](
   it was learned on drawn as a `<Ref>` and the date beside it, since those are exactly the two things
   a rendered block of assertions strips. Retire is a `ConfirmButton`: it is the one irreversible act
   on the surface.
+
 - **Faults** — the recorded failures, forty rows, the surface you went looking for rather than a crop
   for a column. It offers a **two-step clear**, drawn **above** the rows and **at zero rows as well**:
   nothing in the harness reads the fault log back, so a clear costs nothing anything decides on, but it
@@ -993,6 +1007,15 @@ Five panels open from the bar, the ask panel opens from a queue row ([the rail](
   change, which only the static demo has any use for — a real run against a fake provider is still a
   real run, and a panel that lies to the harness there is a way to lie to yourself about what it is
   reacting to. There is no server route behind it for a second predicate to disagree with.
+
+- **Build** — what is waiting for the running build and how to take it, `BuildPanel`. It puts the two
+  facts that decide which control to press next to each other: what changed upstream, and what the
+  fleet is doing right now. **Draining is drawn first** and interrupting second — applying with agents
+  live is not lossy, since they are restored on the way back up, but it is still a thing done to work
+  in flight, so it sits behind the recommended path and says what it will do. A deployment started
+  without a supervisor gets the commands instead of the buttons, and a line saying what to run to get
+  the button; the commit list says when it has been capped, since a truncated history with no note
+  reads as the whole of it.
 
 ### Launching work
 

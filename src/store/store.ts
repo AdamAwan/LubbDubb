@@ -15,6 +15,7 @@ import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS
 import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './validation.js';
 import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS } from './issueVerdicts.js';
 import { ScratchStore } from './scratch.js';
+import { UpgradeStore } from './upgrades.js';
 import { InstructionStore } from './instructions.js';
 import { AgentStore, AGENT_COLUMNS } from './agents.js';
 import { TranscriptStore } from './transcripts.js';
@@ -78,6 +79,7 @@ import type {
   StackLandingStatus,
   Task,
   TrackerItem,
+  UpgradeIntent,
   UsageEvent,
   ValidationAmendment,
   ValidationAmendResult,
@@ -142,6 +144,7 @@ export class Store {
   private readonly bugFilings: BugFilingStore;
   private readonly floor: FloorStore;
   private readonly tickets: TicketStore;
+  private readonly upgrades: UpgradeStore;
 
   constructor(dbPath: string, clock: Clock = systemClock) {
     if (dbPath !== ':memory:') mkdirSync(dirname(dbPath), { recursive: true });
@@ -212,6 +215,7 @@ export class Store {
     this.bugFilings = new BugFilingStore(ctx);
     this.floor = new FloorStore(ctx);
     this.tickets = new TicketStore(ctx);
+    this.upgrades = new UpgradeStore(ctx);
   }
 
   close(): void {
@@ -608,6 +612,15 @@ export class Store {
   }
   listRetrospectiveOrigins(): string[] {
     return this.scratch.listRetrospectiveOrigins();
+  }
+
+  // -- The harness's own build ----------------------------------------------
+
+  readUpgradeIntent(): UpgradeIntent {
+    return this.upgrades.readUpgradeIntent();
+  }
+  writeUpgradeIntent(intent: UpgradeIntent): UpgradeIntent {
+    return this.upgrades.writeUpgradeIntent(intent);
   }
 
   // -- Agents (plus usage, flags and files) ---------------------------------

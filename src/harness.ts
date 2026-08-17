@@ -98,6 +98,13 @@ interface HarnessDeps {
    */
   tickets?: { run(): Promise<void> };
   /**
+   * Watches the harness's own build, and advances a drain that has run dry. Absent
+   * = the watch is off, which is a supported configuration and every test that does
+   * not name one. It decides no dispatch: what it can pause is the same `paused`
+   * flag the operator's own pause writes, and it writes that only when asked.
+   */
+  updates?: { run(): Promise<void> };
+  /**
    * The crash-recovery gate: how many agents orphaned by the previous run are
    * still waiting on an operator's verdict. Any at all holds the pulse — see
    * {@link Harness.runCycle}.
@@ -237,6 +244,13 @@ export class Harness extends EventEmitter {
       // reads what it writes. What it queues is an ordinary job, so the cap, the
       // pause flag and rule `manual-job` see exactly what a hand-launched one is.
       this.deps.schedules?.run();
+      // The harness reading its own build, beside the other bookkeeping for the
+      // same reason and one more: it is the only pass here about *this process*
+      // rather than the world, so nothing it writes is derived from `world` and
+      // nothing downstream reads it. Awaited but never blocking — a check that is
+      // not due returns the reading it already has, and one that fails records
+      // itself rather than throwing into the cycle.
+      await this.deps.updates?.run();
       // Record what the world and the store now say happened, after the reconciler
       // so part→PR observations are fresh, and before `decide` so stage 2 can read
       // it. Never deleting is the point: `closedPullRequests` forgets a merge after

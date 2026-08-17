@@ -205,6 +205,9 @@ export function useCockpit(): CockpitStatus {
       endPlanDiscussion: (planId) => then(api.endPlanDiscussion(planId)),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
 
+      upgrade: (action, opts) => then(api.upgrade(action, opts)),
+      checkBuild: () => then(api.checkBuild()),
+
       promoteFinding: (id) => then(api.promoteFinding(id)),
       fileFinding: (id) => then(api.fileFinding(id)),
       dismissFinding: (id) => then(api.dismissFinding(id)),

@@ -4,6 +4,7 @@ import type { IntegrationSelection } from './integrations/integration.js';
 import { DEFAULT_CONTAINER_TYPES } from './issueRelations.js';
 import { DEFAULT_PLANNING, type PlanningPolicy } from './plans/planning.js';
 import { DEFAULT_BURN, validateBurnPolicy, type BurnPolicy } from './spendBurn.js';
+import type { SelfUpdatePolicy } from './selfUpdate/upgradePlan.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from './validation/policy.js';
 import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
@@ -139,6 +140,23 @@ export interface Config {
    * one field can be set alone.
    */
   spendBurn: BurnPolicy;
+  /**
+   * The self-update watch (`src/selfUpdate/`) — whether the harness checks its
+   * **own** build against its upstream, and how often.
+   *
+   * Note what it does not name: a repo. The check runs against the directory
+   * LubbDubb is installed in, resolved from the running module, and never against
+   * `repoRoot` — the two are the same only when the harness is dogfooding itself,
+   * and a deployment working on someone else's codebase still wants to hear that
+   * its own build moved. `remote` and `branch` are configurable because a fork
+   * tracks somewhere else; there is deliberately no way to point them at an
+   * arbitrary path.
+   *
+   * **On by default and cheap**: the steady state is one `ls-remote` an hour,
+   * which transfers no objects, and a real fetch only once the tip has moved.
+   * Deep-merged, so one field can be set alone.
+   */
+  selfUpdate: SelfUpdatePolicy;
   /**
    * The validation plan (`src/validation/`) — how anyone checks the *goal* was
    * met, as steps a person or an agent runs rather than as a paragraph nobody
@@ -463,6 +481,7 @@ const DEFAULTS: Config = {
   // for an *omitted* policy is a separate answer (off) and lives with the rules.
   planning: DEFAULT_PLANNING,
   spendBurn: DEFAULT_BURN,
+  selfUpdate: { enabled: true, remote: 'origin', branch: 'main', checkIntervalMs: 60 * 60 * 1000 },
   validation: DEFAULT_VALIDATION,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   ci: { checks: [] },
@@ -661,6 +680,8 @@ function mergeLayers(lower: Partial<Config>, upper: Partial<Config>): Partial<Co
     merged.planning = { ...DEFAULTS.planning, ...lower.planning, ...upper.planning };
   if (lower.spendBurn ?? upper.spendBurn)
     merged.spendBurn = { ...DEFAULTS.spendBurn, ...lower.spendBurn, ...upper.spendBurn };
+  if (lower.selfUpdate ?? upper.selfUpdate)
+    merged.selfUpdate = { ...DEFAULTS.selfUpdate, ...lower.selfUpdate, ...upper.selfUpdate };
   if (lower.validation ?? upper.validation)
     merged.validation = { ...DEFAULTS.validation, ...lower.validation, ...upper.validation };
   if (lower.auth ?? upper.auth) merged.auth = { ...DEFAULTS.auth, ...lower.auth, ...upper.auth };
@@ -725,6 +746,10 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // floor and run minimum rather than leaving them undefined — which would read
   // as a watch that fires on any run above six times nothing.
   merged.spendBurn = { ...DEFAULTS.spendBurn, ...overrides.spendBurn };
+  // And the self-update watch, so `{"selfUpdate": {"enabled": false}}` keeps the
+  // remote and branch rather than blanking them — a disabled watch that is later
+  // re-enabled must not come back pointed at nothing.
+  merged.selfUpdate = { ...DEFAULTS.selfUpdate, ...overrides.selfUpdate };
   merged.validation = { ...DEFAULTS.validation, ...overrides.validation };
 
   // And for auth, so `{"auth": {"tokenFile": "..."}}` doesn't silently disable it.

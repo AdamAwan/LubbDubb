@@ -41,6 +41,7 @@ import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import { SpendBurnDesk } from './spendBurnDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
+import { UpdateDesk } from './selfUpdate/updateDesk.js';
 import type { McpToolDeps } from './mcp/tools/context.js';
 import { PERMISSION_PROMPT_TOOL } from './mcp/names.js';
 import { PermissionDesk } from './agents/permissionDesk.js';
@@ -101,6 +102,14 @@ export interface System {
    * and different facts.
    */
   tickets: TicketSweep;
+  /**
+   * Where the harness watches its **own** build and drives a deliberate upgrade of
+   * it. Always constructed and always exposed — the route and the snapshot need a
+   * handle on it either way, and with the watch off it simply never takes a
+   * reading, so the gauge reads unknown and every action refuses with that reason.
+   * `main.ts` is what gives it a way to hand this process off.
+   */
+  updates: UpdateDesk;
   /** Live, ephemeral dispatch controls (cap + pause). Seeded from config at boot. */
   runtimeControl: RuntimeControl;
   /**
@@ -622,6 +631,19 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // question about what happens to it to rule `manual-job`.
   const schedules = new ScheduleDesk({ store, errors });
 
+  // The harness watching its own build. Store-and-flag only: it takes a reading,
+  // and a drain writes the same `paused` flag the operator's own pause writes. The
+  // repo it reads is resolved from this module's own path, never `config.repoRoot`
+  // — see `src/selfUpdate/buildStanding.ts` for why those are different questions.
+  const updates = new UpdateDesk({
+    store,
+    runtimeControl,
+    errors,
+    remote: config.selfUpdate.remote,
+    branch: config.selfUpdate.branch,
+    checkIntervalMs: config.selfUpdate.checkIntervalMs,
+  });
+
   const graph = new WorkGraphRecorder({ store, errors });
 
   // The ticket mirror's keeper: one month of backfill on a fresh database, then an
@@ -641,6 +663,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     burn,
     branchReaps,
     schedules,
+    // Only when the watch is on: absent, the pulse takes no reading and the gauge
+    // reads unknown, which is the behaviour of every deployment before this existed.
+    updates: config.selfUpdate.enabled ? updates : undefined,
     graph,
     tickets,
     landings,
@@ -755,6 +780,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     harness,
     graph,
     tickets,
+    updates,
     runtimeControl,
     issuePickup,
     prompts,

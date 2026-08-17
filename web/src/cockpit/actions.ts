@@ -1,4 +1,4 @@
-import type { RecoveryVerdict, WorkNodeView } from '../types.js';
+import type { RecoveryVerdict, UpgradeAction, WorkNodeView } from '../types.js';
 import type { Place } from './place.js';
 
 /**
@@ -28,7 +28,7 @@ export type ValidationAct =
  * unrepresentable: a second field would let an ask and the fault log both be in
  * front, which is the state this type exists to rule out.
  */
-export type ConsolePanel = 'findings' | 'lessons' | 'faults' | 'output' | 'launch' | { ask: string } | null;
+export type ConsolePanel = 'findings' | 'lessons' | 'faults' | 'output' | 'launch' | 'build' | { ask: string } | null;
 
 /**
  * Which destination the situation area is on. One value rather than a boolean
@@ -135,6 +135,14 @@ export interface CockpitActions {
   selectGoal(ref: string | null): void;
   /** Bring a full-surface panel in front, or dismiss it with null. */
   openPanel(panel: ConsolePanel): void;
+  /**
+   * Drive an upgrade of the harness's own build. `apply` takes this process down,
+   * so the call it makes may never return a settled promise — the cockpit's
+   * reconnect is what shows the new build, exactly as it does for any restart.
+   */
+  upgrade(action: UpgradeAction, opts?: { interrupt?: boolean }): Promise<void>;
+  /** Take a fresh reading of the build, rather than waiting for the pulse's. */
+  checkBuild(): Promise<void>;
   /** Move the nav to a destination. A selected goal still outranks it. */
   openTab(tab: ConsoleTab): void;
   /**

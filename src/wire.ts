@@ -45,6 +45,7 @@ import type { DispatchRule } from './dispatcher/rules.js';
 import type { QueueItem } from './dispatcher/dispatcher.js';
 import type { PromptTemplateDescription } from './dispatcher/promptTemplates.js';
 import type { OrphanedWork } from './agents/crashRecovery.js';
+import type { BuildReading } from './selfUpdate/upgradePlan.js';
 import type { FileOverlap } from './fileOverlap.js';
 import type { UnrecordedWork } from './graph/unrecorded.js';
 import type { PrAttention } from './prAttention.js';
@@ -462,6 +463,13 @@ export interface CockpitState {
    * which is why the cockpit draws it as a blocking banner rather than a panel.
    */
   recovery: OrphanedWork[];
+  /**
+   * Where the running build stands against its own upstream, and how far along a
+   * deliberate upgrade of it is — the `Build` gauge in the top bar and the panel
+   * it opens. The repo it describes is the one LubbDubb is *installed* in, never
+   * the one the fleet is working on.
+   */
+  build: BuildReading;
   /**
    * Runs whose issue the world has forgotten (issues #203, #234) — rebuilt from
    * the run's own snapshot and enriched through the same path as a live issue, so
@@ -916,6 +924,8 @@ export type {
   WorldEventKind,
 } from './types.js';
 export type { RecoveryVerdict, OrphanedWork } from './agents/crashRecovery.js';
+export type { BuildReading, UpgradeAction } from './selfUpdate/upgradePlan.js';
+export type { BuildStanding } from './selfUpdate/buildStanding.js';
 export type { CiPolicyDescription, CiRuleDescription, PolicyKindDescription } from './ci/describeCiPolicy.js';
 export type { QueueItem } from './dispatcher/dispatcher.js';
 export type { DispatchRule } from './dispatcher/rules.js';

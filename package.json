@@ -13,6 +13,8 @@
     "dev": "node --import tsx --watch src/server/main.ts",
     "start": "npm run web:build && node --import tsx src/server/main.ts",
     "start:server": "node --import tsx src/server/main.ts",
+    "serve": "npm run web:build && node --import tsx scripts/serve.ts",
+    "serve:server": "node --import tsx scripts/serve.ts",
     "test": "node --import tsx --test test/**/*.test.ts",
     "test:coverage": "c8 --config .c8rc.json node --import tsx --test test/**/*.test.ts",
     "smoke": "node --import tsx scripts/smoke.ts",

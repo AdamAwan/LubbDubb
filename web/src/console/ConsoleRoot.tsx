@@ -14,6 +14,7 @@ import { WorkTreePanel } from '../components/WorkTreePanel.js';
 import { FindingsPanel } from '../components/FindingsPanel.js';
 import { LessonsPanel } from '../components/LessonsPanel.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
+import { BuildPanel } from '../components/BuildPanel.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
 import { InjectPanel } from '../components/InjectPanel.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
@@ -177,6 +178,7 @@ const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string>
   faults: 'Faults',
   output: 'Output',
   launch: 'Launch',
+  build: 'Build',
 };
 
 /**
@@ -300,6 +302,15 @@ function panelBody(
             fiveHourCostUsd: state.usage.windows.fiveHourCostUsd,
             now: view.now,
           })}
+        />
+      );
+    case 'build':
+      return (
+        <BuildPanel
+          build={state.build}
+          now={view.now}
+          onUpgrade={(action, opts) => actions.upgrade(action, opts)}
+          onCheck={() => actions.checkBuild()}
         />
       );
     case 'launch':

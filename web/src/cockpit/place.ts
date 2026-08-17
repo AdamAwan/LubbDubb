@@ -102,7 +102,11 @@ const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched
 const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
 const TICKET_GROUP = ['feature', 'flat'] as const;
 const TICKET_ORDER: readonly TicketOrder[] = ['added', 'changed', 'cost'];
-const PANELS = ['findings', 'lessons', 'faults', 'output', 'launch'] as const;
+// Every member of `ConsolePanel` bar the ask, which carries its own parameter. A
+// panel missing from here is not merely unshareable: the place round-trips through
+// the query string, so an unlisted name is parsed straight back to null and the
+// panel will not open at all.
+const PANELS = ['findings', 'lessons', 'faults', 'output', 'launch', 'build'] as const;
 
 /** A parameter's value, with an empty one read as absent — `?goal=` names nothing. */
 function param(query: URLSearchParams, key: string): string | null {

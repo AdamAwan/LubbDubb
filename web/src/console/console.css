@@ -142,6 +142,17 @@
   border-color: #2b3a5c;
   background: #161c2b;
 }
+/* The build gauge. Amber only when there is something to take or take now: its
+   resting state is the muted `current` reading, which is where it spends nearly
+   all of its life, and a gauge that is always coloured is one nobody reads. */
+.cn-build-due {
+  border-color: #5a4413;
+  background: #241d0c;
+}
+.cn-build-due b {
+  color: var(--cn-amber);
+}
+
 .cn-cap {
   display: flex;
   align-items: center;

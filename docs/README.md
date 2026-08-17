@@ -79,6 +79,7 @@ deliberately left unchecked, and why, is in
 | [18](spec/18-observability.md)       | Observability              | The error log, decision log, activity feed, usage accounting, debug logging          |
 | [19](spec/19-development.md)         | Development and quality    | The `check` gate, test seams, the smoke run, build outputs                           |
 | [20](spec/20-validation.md)          | Validation                 | Checks on the delivered goal, resources, the verdict, and the close-out flag         |
+| [21](spec/21-self-update.md)         | Self-update                | The harness's own build: the watch, the drain, the handoff, the supervisor           |
 
 ## Conventions used throughout
 

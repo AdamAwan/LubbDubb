@@ -10,6 +10,7 @@ import type {
   TicketRow,
   TicketsPayload,
   AppState,
+  BuildReading,
   CockpitDecision,
   Decision,
   Issue,
@@ -672,6 +673,11 @@ class DemoServer {
    * `POST /api/findings/:id/promote`, and the only path from a finding to work in
    * either backend: the operator's click is the gate.
    */
+  /** The build fixture, unchanged — see the note on `demoApi.checkBuild`. */
+  getBuild(): BuildReading {
+    return this.state.build;
+  }
+
   async promoteFinding(id: string): Promise<{ ok: true }> {
     const finding = (this.state.findings ?? []).find((f) => f.id === id);
     if (finding && finding.status === 'open') {
@@ -2326,6 +2332,12 @@ export const demoApi = {
   // decide — the panel is absent and this exists only to keep the two API shapes
   // interchangeable.
   decideRecovery: (_taskId: string, _verdict: string) => Promise.resolve({ ok: true as const, remaining: 0 }),
+  // The demo is a browser tab with no process behind it, so there is no build to
+  // upgrade. Both calls hand back the fixture unchanged: the gauge and the panel
+  // render exactly as they do live, and neither control pretends to have worked.
+  checkBuild: () => Promise.resolve({ ok: true as const, build: getServer().getBuild() }),
+  upgrade: (_action: string, _opts?: { interrupt?: boolean }) =>
+    Promise.resolve({ ok: true as const, build: getServer().getBuild() }),
   killAgent: (id: string) => getServer().killAgent(id),
   completeAgent: (id: string) => getServer().completeAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),

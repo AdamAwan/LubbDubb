@@ -160,6 +160,18 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   above — and, because two agent rows sharing one `sessionId` is the _correct_ shape here, nothing
   about it looks wrong. → [10](docs/spec/10-agent-runtimes.md#inheriting-a-conversation-on-re-dispatch)
 
+- **Anything in `main.ts` that can start an agent goes _below_ the signal handlers.** They are
+  registered before the upgrade's auto-restore and before the boot cycle, and that ordering is the
+  whole of why those lines sit where they do: a Ctrl-C above them takes Node's default path, which
+  runs no handler — so the agents it just launched are not interrupted, not reaped and not recorded.
+  Real orphans holding worktrees open, with rows still claiming to be live.
+  → [21](docs/spec/21-self-update.md#where-the-shutdown-handlers-are-registered)
+- **The upgrade exit code is `UPGRADE_EXIT_CODE` in `src/selfUpdate/handoff.ts`, never a literal.**
+  The server and `scripts/serve.ts` must agree on it: a server that exits for an upgrade the
+  supervisor reads as a crash comes back on the **old** build with its agents restored, which looks
+  exactly like a successful upgrade until you wonder why the fix is not in.
+  → [21](docs/spec/21-self-update.md#applying-it)
+
 The **default `agentMode` is `stream`, not a PTY.** Do not assume terminal semantics on the default
 path. Everything below is PTY-only, and every one of them is a silent failure — the agent keeps
 running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-edges)

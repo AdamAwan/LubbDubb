@@ -4393,3 +4393,89 @@ body {
   background: none;
   color: var(--cn-fg-faint);
 }
+
+/* -- The build panel ------------------------------------------------------ */
+/* Tokens only, like every shared component: the console sheet must not reach in
+   here, so this reads the same on any theme the console later takes. */
+.build-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.build-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.build-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.build-meta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.build-blocked {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+/* The waiting history. A list of subjects, not a table: the only column anyone
+   reads is the sentence, and the sha is there to be quoted at git, not compared. */
+.build-commits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border-top: 1px solid var(--border);
+}
+.build-commits li {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 12px;
+}
+.build-commits code {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  color: var(--link-ink);
+}
+.build-commits span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.build-more {
+  color: var(--muted);
+}
+.build-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+/* The consequence, beside the button rather than inside it: what an upgrade does
+   to work in flight is the whole of the decision, and it does not fit on a label. */
+.build-note {
+  flex: 1 0 100%;
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.build-manual p {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.build-manual pre {
+  margin: 0;
+  padding: 9px 11px;
+  background: var(--well);
+  border: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow-x: auto;
+}
