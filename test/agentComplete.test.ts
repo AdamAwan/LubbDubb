@@ -34,6 +34,10 @@ function build() {
     repoRoot: gitRepo(),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
+    // A pool of one, so "the slot went back" is observable: with room to grow, a
+    // second branch is handed a *new* slot rather than the released one, because
+    // reuse is scoped to the branch and a hand-over wipes the tree.
+    worktreePoolSize: 1,
     // The assessor and the assay are pinned off: they default **on**, and this
     // file is about something else — leaving them on would put an extra agent in
     // front of every issue these assertions dispatch. Each has its own tests.

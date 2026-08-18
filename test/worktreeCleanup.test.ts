@@ -22,6 +22,10 @@ function build() {
     repoRoot: gitRepo(),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
+    // A pool of one, so "is the slot free again" is observable: with room to grow,
+    // a second branch is handed a *new* slot rather than the released one, because
+    // reuse is scoped to the branch and a hand-over wipes the tree.
+    worktreePoolSize: 1,
     // The assessor and the assay are pinned off: they default **on**, and this
     // file is about something else — leaving them on would put an extra agent in
     // front of every issue these assertions dispatch. Each has its own tests.
@@ -42,9 +46,17 @@ async function codeAgent(sys: ReturnType<typeof build>['system'], issueNumber: n
   return task!;
 }
 
-/** Whether the slot is free — asked the only way that is observable from here. */
+/**
+ * Whether the slot is free — asked the only way that is observable from here. With
+ * the pool at one, a held slot makes `ensure` throw rather than hand back another
+ * directory, and that refusal is the same answer.
+ */
 async function reissued(sys: ReturnType<typeof build>['system'], cwd: string, branch: string): Promise<boolean> {
-  return (await sys.worktrees.ensure(branch, 'main')) === cwd;
+  try {
+    return (await sys.worktrees.ensure(branch, 'main')) === cwd;
+  } catch {
+    return false;
+  }
 }
 
 test('a finished code agent has its worktree slot released once the process exits', async () => {
@@ -67,7 +79,7 @@ test('a finished code agent has its worktree slot released once the process exit
   await reaped;
   await tick(20);
 
-  assert.ok(existsSync(cwd), 'nothing is deleted — the ignored build state is what makes the next run warm');
+  assert.ok(existsSync(cwd), 'nothing is deleted — the ignored build state is what makes the branch’s next run warm');
   assert.equal(await reissued(system, cwd, 'someone/later'), true, 'and the slot is back in the pool');
   system.store.close();
 });

@@ -15,14 +15,15 @@ import { runGit, resolveCommit } from '../git/gitCli.js';
  */
 export interface Worktrees {
   /**
-   * Path to a worktree for `branch`, leasing a pool slot and switching it onto the
-   * branch. Throws when no slot is free — the dispatch is rejected rather than
-   * queued behind a directory.
+   * Path to a worktree for `branch`, leasing a pool slot for it. A slot already on
+   * the branch is handed back with everything in it; any other slot is wiped to
+   * what a fresh checkout would hold before it is switched over. Throws when no
+   * slot is free — the dispatch is rejected rather than queued behind a directory.
    */
   ensure(branch: string, base?: string): Promise<string>;
   /**
-   * Release the lease `ensure` took. **The directory stays**, with everything git
-   * ignores in it, for whichever branch gets the slot next.
+   * Release the lease `ensure` took. **The directory stays**, still on the branch and
+   * with everything git ignores in it, so the same branch coming back starts warm.
    */
   remove(branch: string): Promise<void>;
   /**
@@ -37,14 +38,23 @@ export interface Worktrees {
  *
  * **Why a pool and not a directory per branch.** Every goal mints branches — the
  * assay, the pickup, one per plan part — and the old manager created a directory
- * per branch and deleted it when the work ended. So every code agent landed in a
- * tree with nothing installed and paid to install it before it could run one
- * check: minutes of wall clock and several tool turns per dispatch, for setup
- * whose answer was already on disk in the sibling worktree deleted an hour ago.
- * A slot that is switched rather than recreated keeps everything git ignores,
- * which is where a project's build state lives — so warm dependencies are a
- * *consequence* of reuse rather than something the harness manages. Nothing here
- * knows what a package manager is, and nothing here should learn.
+ * per branch and deleted it when the work ended. So a branch that came back — a CI
+ * failure to chase, a review comment to answer, a part picked up again — landed in
+ * a tree with nothing installed and paid to install it before it could run one
+ * check: minutes of wall clock and several tool turns per dispatch, for setup whose
+ * answer had been sitting on disk an hour earlier. A slot left standing on its
+ * branch keeps everything git ignores, which is where a project's build state
+ * lives — so warm dependencies are a *consequence* of a branch finding its own tree
+ * again, not something the harness manages. Nothing here knows what a package
+ * manager is, and nothing here should learn.
+ *
+ * **Reuse is scoped to the branch, and nothing crosses.** A slot handed to a
+ * *different* branch is wiped back to what a fresh checkout would hold (see
+ * {@link handOver}). The previous occupant's ignored output is an answer to its own
+ * branch's source, and an agent that reads a `dist/` its branch never built is
+ * wrong in a way nothing marks as stale and no test catches. The cost is the cold
+ * install on a branch's first dispatch, and that is the trade: a tree is only warm
+ * for the work that warmed it.
  *
  * **What a directory per branch was silently providing.** It was the only thing
  * stopping two agents sharing a checkout: one branch, one path, so a second agent
@@ -102,21 +112,31 @@ export class WorktreeManager implements Worktrees {
   /**
    * Return the path to a worktree for `branch`, leasing a slot for it.
    *
-   * **Reuse comes first, and `base` is then ignored entirely** — a slot already
-   * checked out on the branch, or an existing local branch, is handed back as-is.
-   * That is deliberate (you don't move an in-flight agent's branch out from under
-   * it), but it means `ensure(branch, base)` does *not* guarantee the branch is
-   * based on `base`; it only decides where a branch that didn't exist starts. Two
-   * tasks on one branch therefore share a checkout rather than fighting over it,
-   * exactly as they did before there was a pool.
+   * **Reuse comes first, it is scoped to the branch, and `base` is then ignored
+   * entirely** — a slot already checked out on the branch is handed back untouched,
+   * with everything in it. That is deliberate (you don't move an in-flight agent's
+   * branch out from under it), but it means `ensure(branch, base)` does *not*
+   * guarantee the branch is based on `base`; it only decides where a branch that
+   * didn't exist starts. Two tasks on one branch therefore share a checkout rather
+   * than fighting over it, exactly as they did before there was a pool.
    *
-   * Otherwise a **free** slot is cleaned and switched onto the branch (see
-   * {@link handOver}), and only when there is none does the pool grow, up to its
-   * bound. A `base` that resolves to nothing throws rather than quietly falling back
-   * to HEAD: silently picking an incidental base is the bug this parameter exists to
-   * fix. So does an exhausted pool, and so does a switch that git refuses. The
-   * executor records each as a rejected dispatch — **never** a silent fall back to a
-   * fresh directory, which would reintroduce the cold start invisibly.
+   * Failing that, in order:
+   *
+   * 1. A **spare** slot — free, and on a detached HEAD or a branch whose ref is
+   *    gone, so it holds nothing anybody can come back for.
+   * 2. A **new** slot, while the pool is below its bound. Minting comes ahead of
+   *    eviction because a slot handed to another branch is wiped either way, so
+   *    taking one that still carries a live branch would burn that branch's tree for
+   *    nothing — and that tree is exactly what a CI fix or a review comment on it
+   *    comes back to.
+   * 3. The first **evictable** slot: free, but still on a branch that exists. It is
+   *    wiped and switched (see {@link handOver}).
+   *
+   * With none of the three, `ensure` **throws**. So does a `base` that resolves to
+   * nothing — silently picking an incidental base is the bug that parameter exists
+   * to fix — and so does a switch git refuses. The executor records each as a
+   * rejected dispatch, **never** a silent fall back to a fresh directory, which
+   * would put two agents in one tree.
    */
   async ensure(branch: string, base?: string): Promise<string> {
     // Cheap, idempotent, and it must run before the slot scan rather than inside
@@ -131,16 +151,21 @@ export class WorktreeManager implements Worktrees {
     mkdirSync(this.worktreeRoot, { recursive: true });
     const slots = await this.slots();
     const survey = await this.survey(slots);
-    if (survey.free) {
-      await this.handOver(survey.free, branch, base);
-      return this.lease(branch, survey.free);
+    if (survey.spare !== null) {
+      await this.handOver(survey.spare, branch, base);
+      return this.lease(branch, survey.spare);
     }
 
     const minted = this.nextSlotPath(slots);
-    if (!minted) throw new Error(this.exhausted(branch, survey.blocked));
-    await this.reclaim(minted);
-    await this.create(minted, branch, base);
-    return this.lease(branch, minted);
+    if (minted !== null) {
+      await this.reclaim(minted);
+      await this.create(minted, branch, base);
+      return this.lease(branch, minted);
+    }
+
+    if (survey.evictable === null) throw new Error(this.exhausted(branch, survey.blocked));
+    await this.handOver(survey.evictable, branch, base);
+    return this.lease(branch, survey.evictable);
   }
 
   /** Path of an existing worktree checked out on the branch, or null. */
@@ -152,9 +177,11 @@ export class WorktreeManager implements Worktrees {
   }
 
   /**
-   * Release the lease. Nothing is deleted, which is the whole change: the slot keeps
-   * its checkout and everything git ignores in it, and the next branch to be handed
-   * this slot starts warm.
+   * Release the lease. Nothing is deleted, which is the whole change: the slot stays
+   * on the branch with everything git ignores in it, so the *same* branch coming
+   * back — the CI fix, the answer to a review comment — starts warm. Another branch
+   * being handed the slot wipes it; the lease ending is what makes it eligible for
+   * that, not what does it.
    *
    * A failed or killed agent's tree therefore survives for inspection the way it
    * always did — until the slot is reissued, which is the trade pooling makes. What
@@ -201,22 +228,30 @@ export class WorktreeManager implements Worktrees {
   }
 
   /**
-   * The first free slot, and — when there is none — why each of the others was not.
+   * The free slots worth taking, in the two flavours {@link ensure} chooses between —
+   * and, when there are none, why each of the others was not free.
    *
-   * Two conditions make a slot unavailable, and the second is a correctness rule
-   * rather than a convenience. **A slot carrying uncommitted tracked changes is
-   * never handed to another branch**: `git switch` happily *carries* uncommitted
-   * edits across when they do not conflict, so a failed agent's half-finished work
-   * would land on an unrelated branch and be committed there by an agent that has no
-   * idea where it came from. Refusing the slot is also what makes a switch failure
+   * A **spare** holds nothing anybody can come back for: it sits on a detached HEAD
+   * or on a branch whose ref is gone, which is what {@link deleteBranch} leaves
+   * behind when a pull request merges. An **evictable** slot is free but still on a
+   * branch that exists, so handing it over burns a tree that branch may yet want —
+   * which is why {@link ensure} grows the pool before it reaches for one.
+   *
+   * Two conditions make a slot neither, and the second is a correctness rule rather
+   * than a convenience. **A slot carrying uncommitted tracked changes is never
+   * handed to another branch**: `git switch` happily *carries* uncommitted edits
+   * across when they do not conflict, so a failed agent's half-finished work would
+   * land on an unrelated branch and be committed there by an agent that has no idea
+   * where it came from. Refusing the slot is also what makes a switch failure
    * exceptional enough to reject a dispatch over.
    *
    * The reason each blocked slot is blocked is collected as it goes, because the
    * message an exhausted pool throws is the operator's only handle on it — "no free
    * slot" alone names neither what is holding them nor what to do.
    */
-  private async survey(slots: WorktreeEntry[]): Promise<{ free: string | null; blocked: string[] }> {
+  private async survey(slots: WorktreeEntry[]): Promise<Survey> {
     const blocked: string[] = [];
+    let evictable: string | null = null;
     for (const slot of slots) {
       const holder = this.holder(slot);
       if (holder !== null) {
@@ -227,9 +262,13 @@ export class WorktreeManager implements Worktrees {
         blocked.push(`${slot.path} (uncommitted changes on ${shortBranch(slot.branch) ?? 'a detached HEAD'})`);
         continue;
       }
-      return { free: slot.path, blocked };
+      const occupant = shortBranch(slot.branch);
+      // A spare beats everything below it, so there is nothing left to survey once
+      // one turns up — and `blocked` is read only by the refusal, unreachable from here.
+      if (occupant === null || !(await this.branchExists(occupant))) return { spare: slot.path, evictable, blocked };
+      evictable ??= slot.path;
     }
-    return { free: null, blocked };
+    return { spare: null, evictable, blocked };
   }
 
   /**
@@ -265,19 +304,22 @@ export class WorktreeManager implements Worktrees {
   }
 
   /**
-   * Clean a free slot and switch it onto `branch`.
+   * Wipe a free slot back to a fresh checkout and switch it onto `branch`.
    *
-   * **`-fd`, never `-fdx`.** The ignored files are the warm state this pool exists
-   * to keep; `-x` would delete the dependencies and defeat the whole change, and
-   * excluding named paths would be the repo-specific configuration the harness must
-   * not grow. What is left behind is a stale ignored build output — a `dist/`, a
-   * generated file — that can mislead a later agent on a different branch. That is
-   * an accepted trade, recorded in [09](../../docs/spec/09-execution.md#worktrees).
+   * **`-ffdx`, and the reach is the whole point.** This runs only for a branch the
+   * slot is *not* already on — {@link ensure}'s reuse arm has taken every other
+   * case — so everything standing in the directory belongs to some other branch: a
+   * dependency tree resolved from a different lockfile, a `dist/` built from source
+   * this branch has never seen. `-x` is what takes those, and the second `-f` is for
+   * a nested repository inside them (a git-sourced dependency), which a single `-f`
+   * skips — leaving exactly the half-deleted dependency tree this exists to avoid
+   * handing anyone. Nothing is excluded by name: an ignore list of paths to keep is
+   * the repo-specific configuration the harness must not grow.
    *
-   * **Ordering.** The clean runs before the switch because `git switch` refuses when
+   * **Ordering.** The wipe runs before the switch because `git switch` refuses when
    * an untracked file would be overwritten. The start point is resolved before
    * either, so an unresolvable `base` leaves the slot exactly as it was rather than
-   * cleaned and half-prepared.
+   * wiped and half-prepared.
    *
    * **The reset forms are unreachable, and that is the point.** `git switch -C` and
    * `git checkout -B` *reset* an existing branch to the start point, which on a slot
@@ -290,7 +332,7 @@ export class WorktreeManager implements Worktrees {
     const exists = await this.branchExists(branch);
     const start = exists ? null : await this.startPoint(branch, base);
     try {
-      await runGit(dir, ['clean', '-fd']);
+      await runGit(dir, ['clean', '-ffdx']);
       await runGit(dir, start === null ? ['switch', '--quiet', branch] : ['switch', '--quiet', '-c', branch, start]);
     } catch (err) {
       throw new Error(`Cannot hand worktree slot ${dir} to branch ${branch}: ${(err as Error).message}`);
@@ -499,6 +541,13 @@ function reclaimFailure(dir: string, err: NodeJS.ErrnoException): string {
     `Stop that process and the branch dispatches again on the next cycle; until then every dispatch ` +
     `onto it will fail here.`
   );
+}
+
+/** What {@link WorktreeManager.survey} found: see there for what each arm means. */
+interface Survey {
+  spare: string | null;
+  evictable: string | null;
+  blocked: string[];
 }
 
 interface WorktreeEntry {

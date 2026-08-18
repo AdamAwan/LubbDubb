@@ -24,16 +24,21 @@ interface FakeWorktreeCall {
  * is kept in step: a fake still keyed on the branch would hand every branch its own
  * path and keep every test green while the real manager leased slots. So:
  *
- * - `ensure` leases a **free slot**, minting one only when none is free and the pool
- *   is below its bound; past the bound it rejects, as the real one does.
  * - A branch already holding a lease gets **the same directory** whatever `base`
  *   says. That property is load-bearing in production (`Store.findActiveTaskByBranch`
  *   exists because of it), and so is its consequence: a slot leased to one branch is
  *   never handed to another.
  * - A released slot keeps its occupant, so asking again for the branch that last had
  *   it gets the same directory back — the real manager's reuse-first arm.
- * - `remove` releases the lease and **deletes nothing**; the directory is the warm
- *   state the pool exists to keep.
+ * - Any *other* branch takes a slot with **no occupant** first, then a newly minted
+ *   one while the pool is below its bound, and only then evicts a slot still standing
+ *   on a branch. That order is the real manager's, and it is not a detail: reuse
+ *   there is scoped to the branch, so a hand-over wipes the tree. A fake that handed
+ *   the next branch the slot just released would let a test assert two consecutive
+ *   dispatches share a directory, which production stopped doing.
+ * - Past the bound it rejects, as the real one does.
+ * - `remove` releases the lease and **deletes nothing**; the directory stays on its
+ *   branch, which is the warm state the pool exists to keep.
  *
  * `base` is recorded, never honoured — there is no commit graph here to honour it
  * against.
@@ -63,16 +68,19 @@ export class FakeWorktreeManager implements Worktrees {
     this.ensured.push(base === undefined ? { branch } : { branch, base });
     const warm = this.leases.get(branch) ?? this.slots.find((dir) => this.occupants.get(dir) === branch);
     if (warm !== undefined) return Promise.resolve(this.lease(branch, warm));
-    const free = this.slots.find((dir) => !this.isLeased(dir));
-    if (free !== undefined) return Promise.resolve(this.lease(branch, free));
-    if (this.slots.length >= this.size)
-      return Promise.reject(
-        new Error(`No free worktree slot for branch ${branch}: all ${this.size} slots under ${this.root} are leased.`),
-      );
-    const dir = resolve(this.root, slotDirName(this.slots.length));
-    mkdirSync(dir, { recursive: true });
-    this.slots.push(dir);
-    return Promise.resolve(this.lease(branch, dir));
+    const spare = this.slots.find((dir) => !this.isLeased(dir) && !this.occupants.has(dir));
+    if (spare !== undefined) return Promise.resolve(this.lease(branch, spare));
+    if (this.slots.length < this.size) {
+      const dir = resolve(this.root, slotDirName(this.slots.length));
+      mkdirSync(dir, { recursive: true });
+      this.slots.push(dir);
+      return Promise.resolve(this.lease(branch, dir));
+    }
+    const evictable = this.slots.find((dir) => !this.isLeased(dir));
+    if (evictable !== undefined) return Promise.resolve(this.lease(branch, evictable));
+    return Promise.reject(
+      new Error(`No free worktree slot for branch ${branch}: all ${this.size} slots under ${this.root} are leased.`),
+    );
   }
 
   deleteBranch(branch: string): Promise<void> {
