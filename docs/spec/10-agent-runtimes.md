@@ -235,24 +235,30 @@ dominate it, and neither has anything for a person to answer:
   sentinel is stated once in the system prompt, thousands of tokens before the moment it matters
   ([11](11-mcp-tools.md#the-finish-reminder-on-a-terminal-tool) covers the terminal-tool half of this);
 - an agent that started a **build, a test run or a CI check** and stopped as though something would
-  wake it when that finished. Nothing does.
+  wake it when that finished. Nothing does — and the two halves of that have different right answers,
+  which the wording below is careful to separate: a command the agent started is one it can wait for,
+  while CI on a pushed pull request is the **harness's** to watch. The pulse dispatches a fresh agent
+  at `pr-ci-failing` when it turns red ([05](05-dispatcher.md#the-rule-book)), so an agent holding a
+  worktree lease to poll it is doing worse, for a scarce slot, what happens for free. The cockpit
+  already draws that PR as `elsewhere` — "CI is still running" ([07](07-pull-requests.md)) — which is
+  the point: it is *visible*, and it is nobody's turn.
 
 Both arrived in the inbox as one fixed sentence — "Agent ended its turn without finishing; awaiting
 direction" — which named neither the agent's situation nor which of the two it was, so answering one
 began by opening the transcript to find out what had actually happened. The items were cheap to file
 and expensive to read, which is the ratio that makes an inbox stop being read.
 
-`PROTOCOL_SYSTEM_PROMPT` states the rule against the second case directly (do not end a turn waiting
-for something you started; the WAITING sentinel is for a *person*), and the two mechanisms below deal
-with the stops that happen anyway.
+`PROTOCOL_SYSTEM_PROMPT` states the rule against the second case directly — never end a turn to wait:
+wait for what you started, finish for what is on the world's clock, and keep the WAITING sentinel for
+what a *person* must decide — and the two mechanisms below deal with the stops that happen anyway.
 
 #### The nudge
 
 `AgentManager.handleStalled` asks the agent before it asks the operator. Up to `agentStallNudges`
 times (default 2) it types `STALL_NUDGE` (`src/agents/agentProtocol.ts`) into the session, which
-states the three exits — print the done sentinel, park with the waiting sentinel if a *person* is what
-you are blocked on, or otherwise carry on and go and look at that build yourself — and picks none of
-them. Guessing is the thing the harness cannot do and the agent can: an agent told "carry on" that had
+states the three exits — you are done (a pushed PR waiting on CI or review included), a *person* is
+what you are blocked on, or you are still working and should go and check that build yourself — and
+picks none of them. Guessing is the thing the harness cannot do and the agent can: an agent told "carry on" that had
 genuinely finished invents work, and one told "you are done" that had not abandons it.
 
 - **The budget is per agent, for its whole life**, not per stop. A counter reset by intervening work

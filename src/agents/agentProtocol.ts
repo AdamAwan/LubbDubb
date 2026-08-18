@@ -29,10 +29,11 @@ export const PROTOCOL_SYSTEM_PROMPT = [
   '   print this on its own line as the very last thing you output:',
   '   @@LUBBDUBB_DONE@@',
   '',
-  '3. Do not end your turn to wait for something you started — a build, a test run, a CI check, a',
-  '   long command. Nothing wakes you when it finishes: wait for it or poll it yourself, and use',
-  '   the WAITING sentinel only when a *person* is what you are blocked on. A turn ending with',
-  '   neither sentinel is a stop the harness cannot read, and it costs a round trip at best.',
+  '3. Never end your turn to wait. Nothing wakes you. If you started it yourself — a build, a test',
+  '   run, a long command — wait for it or go and check it, then carry on in the same turn. If it is',
+  "   on the world's clock — CI on a pull request you have pushed, a review, a merge — then you are",
+  '   finished: print the DONE sentinel. The harness watches pull requests and dispatches an agent',
+  '   again when CI turns red or a comment lands, so waiting only holds a worktree open for nothing.',
   '',
   'Do not print either sentinel for any other reason. Keep working autonomously between them.',
 ].join('\n');
@@ -124,7 +125,11 @@ export const DONE_REMINDER =
  * The stop itself is not evidence of anything: the commonest causes are an agent
  * that finished the job and narrated it instead of printing {@link DONE_SENTINEL},
  * and one that kicked off a build, a test run or a CI check and stopped as if
- * something would wake it when that finished. Neither wants a human, and both used
+ * something would wake it when that finished. The second is two cases wearing one
+ * face, and the wording separates them: a command the agent started is one it can
+ * wait for, while CI on a pushed pull request is the *harness's* to watch — the
+ * pulse dispatches again when it turns red, so an agent holding a worktree open to
+ * poll it is doing worse, for a slot, what happens for free. Neither wants a human, and both used
  * to get one — an inbox item saying only that the agent stopped, which the operator
  * could answer only by reading the transcript to work out what had actually
  * happened. Asking the agent first costs one turn and answers it from the only
@@ -139,11 +144,14 @@ export const STALL_NUDGE = [
   'Your turn ended without a status sentinel, so the harness cannot tell whether you finished, are',
   'blocked, or just stopped. Settle it now, in this turn, with exactly one of:',
   '',
-  `- ${DONE_SENTINEL} on its own line, if everything your task asked for is done.`,
+  `- ${DONE_SENTINEL} on its own line, if everything your task asked for is done — including work now`,
+  "  on the world's clock. A pull request you have pushed that is waiting on CI or on a review is",
+  '  finished as far as you are concerned: the harness watches it and dispatches an agent again when',
+  '  CI turns red or a comment lands. Sitting here waiting for it holds a worktree open for nothing.',
   '- @@LUBBDUBB_WAITING:<what you need>@@ (or the escalate tool), if a *person* is what you are',
-  '  blocked on — not a build, not CI, not a command you started.',
-  '- Otherwise carry on with the work. If you were waiting on a build, a test run or a CI check,',
-  '  nothing wakes you when it finishes: go and look at it yourself, then keep going.',
+  '  blocked on: a decision only someone can make. Not CI, not a build, not a command.',
+  '- Otherwise carry on with the work. If you were waiting on something you started yourself — a',
+  '  build, a test run, a long command — nothing wakes you when it ends: check it now, then keep going.',
 ].join('\n');
 
 /** How much of an agent's last words the park reason quotes before it elides the front. */

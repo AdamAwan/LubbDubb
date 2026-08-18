@@ -98,7 +98,7 @@ test('a stop is put to the agent before it is ever put to a human', async () => 
   assert.equal(system.store.getAgent(agentId)!.status, 'running', 'and it is still the harness working, not you');
   assert.match(
     system.store.getTranscript(agentId),
-    /go and look at it yourself/,
+    /check it now, then keep going/,
     'the nudge is in the transcript, so the agent carrying on is not an unexplained jump',
   );
 
