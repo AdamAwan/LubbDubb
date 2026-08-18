@@ -330,6 +330,22 @@ Placeholders: `{number} {title} {position} {total} {type} {scope} {kind} {summar
 default is `#{number} {position}{kind}{summary}`. The spec commits to the placeholders, not the
 arrangement.
 
+### The body is not templated
+
+Only the title is. There is no `pr-body` entry in the prompt book, and there will not be one: a title
+is a convention over a fixed set of known fields, and a body is an account of a change only the agent
+that made it has. A template could produce a shape, not a reading — and a shape filled in by an agent
+with nothing to say is exactly the thirty-line `## Summary` / `## Changes` / `## Testing` restatement
+of the diff the reviewer already has.
+
+What the harness does own is the **reference**, appended by `open_pr` after the agent's text and never
+a closing keyword ([11](11-mcp-tools.md#open_pr)). Everything above it ships as written.
+
+That leaves the form of the body expressible in exactly one place: the description of `open_pr`'s
+`body` argument, which states it — a bullet list, five bullets at most, why the change is needed
+first, one line each, no headings and no prose paragraphs. It reads as an odd place for a house style
+until you notice it is the only place the agent reads before writing.
+
 ### `renamablePrs(prs, ctx)` — and what may be renamed
 
 `userId` is the gate, because it is already the operator's answer to "which pull requests

@@ -29,11 +29,16 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
         type: 'string',
         description: 'Optional module the change lands in, e.g. "store". Omit it if the change is broad.',
       },
+      // Unlike the title, which `pr-title` renders, the body ships as written —
+      // the harness appends the reference and rewrites nothing. So this
+      // description is the only place a form is expressible, and it states one.
       body: {
         type: 'string',
         description:
           'Optional PR body. The harness adds the issue reference itself, so describe the change, not ' +
-          'which ticket it belongs to.',
+          'which ticket it belongs to. Write it as a bullet list: at most five bullets, why the change ' +
+          'is needed first and what it does after, one line each. No headings, no prose paragraphs — a ' +
+          'reviewer reads this before the diff, not instead of it.',
       },
     },
     required: ['summary'],

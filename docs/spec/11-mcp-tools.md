@@ -437,7 +437,18 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
   thing the agent knows and the harness does not.
 - **The issue reference is appended, never a closing keyword.** Whether a PR closes its issue is the
   agent's judgement — a harness-written "closes" would shut a ticket whose remaining parts are open.
-  A part gets `Part <n>/<m> of #<issue>.`, a whole-issue pickup `Relates to #<issue>.`
+  A part gets `Part <n>/<m> of #<issue>.`, a whole-issue pickup `Relates to #<issue>.` So the prompts
+  keep telling the agent to write `closes #<n>` / `part of #<n>` itself: that clause is its call, and
+  this tool deliberately never makes it.
+- **The `body` argument's schema description states a shape** — a bullet list, five bullets at most,
+  why first, one line each, no headings and no prose paragraphs. Unlike the title, the body ships as
+  the agent wrote it (the reference is appended and nothing is rewritten), so the schema is the only
+  place a form is expressible at all. Left unsaid, agents write thirty lines under `##` headings.
+- **It is named in `MCP_PROTOCOL_ADDENDUM`, and that is load-bearing.** No dispatch prompt names it at
+  its point of use, so for its first release nothing named it anywhere and every dispatched agent
+  shelled out to `gh`/`az` instead — wired, allow-listed, unused. `test/mcpChannel.test.ts` now
+  classifies every entry of `MCP_TOOL_NAMES` as named in the addendum or named at its point of use,
+  so the same gap cannot open again silently.
 
 **The floor is unchanged.** Unwired — no sink, a `listen()` that failed, a `claude` that ignores the
 server — the tool is still advertised (so `names.ts` stays honest) and reports that it is unavailable,
@@ -644,6 +655,28 @@ This is why `src/mcp/names.ts` exists. Three things must agree — the `mcpServe
 them yields a _connected_ server whose every call is refused, invisible until an agent needs it.
 `test/mcpChannel.test.ts` asserts all three against each other. **Adding a tool to `buildTools` without
 adding its name to `MCP_TOOL_NAMES` is the sharp edge of the whole module.**
+
+### Where a tool is named to the agent
+
+Granting a tool is not telling an agent it exists. `tools/list` advertises it, but a model working a
+task reaches for what its instructions named, and a tool nothing names loses to `gh`, `az` and a
+hand-rolled equivalent — with nothing red anywhere, since the tool is wired, granted and simply never
+called. `open_pr` spent its first release exactly there.
+
+So every tool is named in one of two places, and which one is a decision, not a default:
+
+- **`MCP_PROTOCOL_ADDENDUM`** for the tools any agent may choose to call at any point in any dispatch:
+  `escalate`, `plan_submit`, `world_read`, `open_pr`, `report_finding`, `request_human_task`,
+  `note_progress`. Nothing else names these.
+- **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
+  a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
+  `assay_issue`, `retro_submit`, `link_ticket`, the scratch pair, the validation pair. Keeping them out
+  of the addendum is what keeps it short enough to be read. `request_permission` is named in neither,
+  because no agent calls it: Claude Code invokes it through `--permission-prompt-tool`.
+
+`test/mcpChannel.test.ts` holds that classification as a `Record<McpToolName, …>` and asserts each side
+of it, so a new tool does not compile until it has been placed — and one placed in the addendum that
+the addendum does not name fails.
 
 ## Degradation
 

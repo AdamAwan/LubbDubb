@@ -12,7 +12,13 @@ import {
 } from '../src/agents/agentProtocol.js';
 import { DONE_SENTINEL } from '../src/agents/sentinels.js';
 import { handleRequest, parseFrame, type McpTool, toolJson } from '../src/mcp/protocol.js';
-import { ALLOWED_MCP_TOOLS, MCP_SERVER_ID, MCP_TOOL_NAMES, PERMISSION_PROMPT_TOOL } from '../src/mcp/names.js';
+import {
+  ALLOWED_MCP_TOOLS,
+  MCP_SERVER_ID,
+  MCP_TOOL_NAMES,
+  type McpToolName,
+  PERMISSION_PROMPT_TOOL,
+} from '../src/mcp/names.js';
 import { defaultSocketPath, McpBridgeServer } from '../src/mcp/server.js';
 import { parseWorldRef, readWorldItem, WORLD_READ_KINDS } from '../src/mcp/worldRead.js';
 import {
@@ -148,6 +154,55 @@ test('the granted permission names are exactly the tools the server exposes', ()
   // call to it is refused — the exact trap names.ts exists to prevent (#130).
   assert.ok(ALLOWED_MCP_TOOLS.includes(PERMISSION_PROMPT_TOOL));
   assert.equal(PERMISSION_PROMPT_TOOL, `mcp__${MCP_SERVER_ID}__request_permission`);
+});
+
+/**
+ * Where each tool is named to the agent that has to call it.
+ *
+ * `addendum` — nothing else names it, so if {@link MCP_PROTOCOL_ADDENDUM} does not,
+ * the tool is discoverable from `tools/list` alone and an agent reaches for `gh`/`az`
+ * instead. That was `open_pr`'s state: wired, allow-listed, and never once named.
+ *
+ * `point-of-use` — named by the prompt or the instruction that dispatches the work
+ * it belongs to, which is the better place for a tool only one kind of agent ever
+ * calls. Keeping them *out* of the addendum is what keeps it short enough to read.
+ *
+ * A `Record` over `McpToolName`, so a new tool does not compile until it has been
+ * classified — the decision this test exists to force.
+ */
+const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
+  escalate: 'addendum',
+  plan_submit: 'addendum',
+  world_read: 'addendum',
+  open_pr: 'addendum',
+  report_finding: 'addendum',
+  note_progress: 'addendum',
+  request_human_task: 'addendum',
+  // Terminal or task-scoped: the dispatch prompt names these where they are used.
+  link_ticket: 'point-of-use',
+  conclude_work: 'point-of-use',
+  conclude_part: 'point-of-use',
+  assess_issue: 'point-of-use',
+  assay_issue: 'point-of-use',
+  retro_submit: 'point-of-use',
+  scratch_append: 'point-of-use',
+  scratch_read: 'point-of-use',
+  validation_report: 'point-of-use',
+  validation_amend: 'point-of-use',
+  // The one tool an agent is never told about: Claude Code calls it through
+  // --permission-prompt-tool, so naming it would invite a call that means nothing.
+  request_permission: 'point-of-use',
+};
+
+test('the addendum names every tool an agent has to choose to call', () => {
+  for (const name of MCP_TOOL_NAMES) {
+    const named = MCP_PROTOCOL_ADDENDUM.includes(name);
+    if (TOOL_NAMING[name] === 'addendum') {
+      assert.ok(named, `${name} is named nowhere else — the addendum must describe it`);
+    } else {
+      assert.equal(named, false, `${name} is named at its point of use; the addendum stays short`);
+    }
+  }
 });
 
 test('the addendum keeps the sentinels as the floor rather than withdrawing them', () => {
