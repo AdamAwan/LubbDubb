@@ -24,13 +24,19 @@ export type NeedKind =
  * Who is stopped. `blocking` means an agent is parked and cannot proceed;
  * `yours` means the obligation is the operator's and nothing is waiting inside
  * the fleet — which is where the goal-profile gate sits, holding a whole goal's
- * dispatch with no agent parked on it. The colour rule is about a held slot, not
- * about how much is stopped, and widening it for a gate nobody is sitting in
- * would cost the rule the only thing red currently means. Red/amber, and the split is strict — red means an agent is parked
- * and only you can un-park it, and nothing else.
+ * dispatch with no agent parked on it. The split is strict and it is about a
+ * *held slot*, not about how much is stopped: widening it for a gate nobody is
+ * sitting in would cost the group the only thing it means.
  *
- * A usage-limit park (issue #318) is `blocking` for that reason and not by
- * analogy: the agent is stopped, its worktree and its slot are held, and the
+ * It is drawn as **weight, not hue** — hue belongs to the kind (`KIND_TONE`,
+ * `web/src/console/QueueRail.tsx`). The rail once spent its whole palette on this
+ * one bit, red against amber, which made every ask on the bench read as an alarm
+ * and left a delivered goal's close-out indistinguishable from a crash. The group
+ * is now said three ways instead: the `Blocking` sub-heading, the sort order, and
+ * a full-strength stripe with a filled tag against a softened one.
+ *
+ * A usage-limit park (issue #318) is `blocking` for the rule's own reason and not
+ * by analogy: the agent is stopped, its worktree and its slot are held, and the
  * harness will not resume it on its own. What differs from a question is only
  * *what* the operator does — wait for the window to turn over, then resume.
  */

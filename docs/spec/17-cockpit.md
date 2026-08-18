@@ -280,14 +280,63 @@ limit and a box that cannot send is worse than no box.
 **Two groups, split on who is stopped.** `blocking` means an agent is parked and cannot proceed;
 `yours` means the obligation is the operator's and nothing inside the fleet is waiting. A profile gate
 is `yours` for that reason and against how much it stops: it holds a whole goal's dispatch, and no
-agent is sitting in it. The rule is about a held slot, and widening it here would cost red the only
-thing it means. That is the
-whole of the colour rule: **red means an agent is parked and only you can un-park it, and nothing
-else.** A bench task genuinely blocks no agent, so it is amber, and the merge of eight surfaces into
-one list preserves the distinction rather than flattening it. A limit park is red for the rule's own
-reason and not by analogy: the agent is stopped, its worktree and its slot are held, and the harness
-will not resume it on its own — all that differs from a question is what the operator does, which is
-wait for the window to turn over.
+agent is sitting in it. The rule is about a held slot, and widening it here would cost the group the
+only thing it means. A limit park is `blocking` for the rule's own reason and not by analogy: the agent
+is stopped, its worktree and its slot are held, and the harness will not resume it on its own — all
+that differs from a question is what the operator does, which is wait for the window to turn over.
+
+### Hue is the kind, weight is the group
+
+The rail once spent its whole palette on that one bit — red for `blocking`, amber for `yours` — and the
+cost of it was that **everything that ever landed on the bench arrived in an alarm colour**. A goal
+delivered and waiting to be closed out drew in the same two hues as a restart that orphaned six runs,
+and an operator glancing at the rail could not tell a queue of successes from a queue of faults without
+reading every row. The palette now answers *what the ask is*, and the group is carried as weight
+within it.
+
+| Kind | Tag | Tone | Glyph | Why that tone |
+| --- | --- | --- | --- | --- |
+| `recovery` | Recovery | red | `↺` | A restart left runs orphaned. Something went wrong. |
+| `escalation` | Escalation | red | `?` | An agent hit a question it cannot get past. |
+| `permission` | Permission | amber | `⊘` | A gate, not a fault — a command is waiting on a yes. |
+| `limit` | Usage limit | amber | `‖` | Nothing broke; an allowance window has to turn over. |
+| `burn` | Spend | amber | `▲` | A heads-up on a run that carries on either way. |
+| `proposal` | Plan | blue | `◇` | A plan to read and decide on. |
+| `profile` | Profile | blue | `⊙` | Which profile a goal runs on. |
+| `bench` | Bench | blue | `◆` | Work only a person can do. Informative, not broken. |
+| `close_out` | Close-out | green | `⚑` | A goal was **delivered**; this is the step after it. |
+| `validate` | Validate | green | `✓` | The other step after a delivery — run its checks. |
+
+`KIND_TONE` and `KIND_SYMBOL` (`web/src/console/QueueRail.tsx`) are total over `NeedKind`, beside
+`KIND_LABEL`, so a new kind fails the typecheck rather than drawing in whatever the last rule in the
+sheet said.
+
+**The glyph is a second reading of the word, never a replacement for it.** The tag still spells the
+kind out beside it, which is what makes the set need no legend, and the glyph is `aria-hidden` — a
+screen reader announcing "black diamond bench" is worse than one announcing "bench". The set is drawn
+from BMP codepoints that have **no emoji variant at all**: a character that has one is rendered by the
+platform's colour font on some machines and its text font on others, which puts a full-colour sticker
+inside a 10px monospace tag on exactly the operator's machine nobody tested on. There is nothing here
+for a variation selector to fix, which is the point — `✔`, `☑` and `🏳` are out for that reason and `✓`,
+`⚑` and `◆` are in.
+
+**The group is said three ways instead of one.** The `Blocking` sub-heading, the sort order, and each
+row's own weight: `blocking` draws `cn-parked` — a full-strength stripe and a filled tag — against the
+softened stripe and outlined tag of a row nothing is waiting on. Opacity within one hue rather than a
+second colour per tone, so the two readings cannot drift apart. `test/console.test.ts` renders every
+kind with the group alternating beneath it, so a rail that quietly went back to colouring by group
+fails rather than merely looking wrong.
+
+**The band carries the tone and the glyph but not the weight**, and that is the one thing the two
+surfaces differ on. Weight is a triage aid for a list of asks competing for attention; the band is a
+single ask already in front of the operator with its verdict controls under it, and there is nothing
+there to rank it against. Hue and glyph are what make a row and the band it opened read as one ask, and
+both hold — asserted in `test/console.test.ts`.
+
+A tone is five custom properties on the row or the band — `--cn-tone`, `--cn-tone-fill`, `--cn-tone-bg`,
+`--cn-tone-line`, `--cn-tone-ink` — set by one `.cn-t-*` class and inherited by everything inside. Five
+values that have to move together, and the alternative is the near-identical copy of each rule per tone
+this replaced.
 
 **The order is the derivation's, and the rail never re-sorts.** `buildNeedsYou` sorts:
 
