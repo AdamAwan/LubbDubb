@@ -481,16 +481,24 @@ called by the plan reconciler rather than the executor.
 branches** — created lazily, only when a code task needs one, and switched rather than recreated.
 Desk tasks never call this.
 
-The key used to be the branch: one directory per branch, deleted when the work ended. Every goal
-mints branches — the assay, the pickup, one per plan part — so a directory was born and died per unit
-of work, and **every code agent landed in a tree with no dependencies installed** and paid to install
-them before it could run one check. In this repo that is `npm ci` over native builds: minutes of wall
-clock and several tool turns per dispatch, for setup whose answer was already on disk in the sibling
-worktree deleted an hour ago. A slot that is switched keeps everything git ignores, which is where a
-project's build state lives — so **warm dependencies are a consequence of reuse, not something the
-harness manages**. Nothing here knows what a package manager is, there is no install command and no
-config key naming one; if the harness ever needs to know the project's toolchain, this has gone
-wrong.
+The key used to be the branch: one directory per branch, deleted when the work ended. So a branch
+that came back — a CI failure to chase, a review comment to answer, a part picked up again — **landed
+in a tree with no dependencies installed** and paid to install them before it could run one check. In
+this repo that is `npm ci` over native builds: minutes of wall clock and several tool turns per
+dispatch, for setup that had been sitting on disk an hour earlier. A slot left standing on its branch
+keeps everything git ignores, which is where a project's build state lives — so **warm dependencies
+are a consequence of a branch finding its own tree again, not something the harness manages**.
+Nothing here knows what a package manager is, there is no install command and no config key naming
+one; if the harness ever needs to know the project's toolchain, this has gone wrong.
+
+**Reuse is scoped to the branch, and nothing crosses.** A slot handed to a _different_ branch is
+**wiped** back to what a fresh checkout would hold ([below](#handing-a-slot-over)). The first cut of
+the pool carried the previous occupant's ignored files across — that is what made a hand-over cheap —
+and it is the bug this replaced: a `dist/`, a generated file, a dependency tree resolved from another
+branch's lockfile, all reading to an agent as its own branch's output, with nothing anywhere marking
+them stale. The cost is the cold install on a branch's **first** dispatch. That is the trade the pool
+now makes: a tree is only warm for the work that warmed it, and the work that comes back to a branch
+is exactly the work that pays for a cold one twice.
 
 The executor depends on the `Worktrees` **interface**, not the class: `ensure`/`remove`/`deleteBranch`
 is the whole of what it and the reap in `system.ts` ask for, and a seam wider than its consumer is a
@@ -504,12 +512,23 @@ write side is the half that mutates a repository.
 `ensure(branch, base?)`:
 
 1. `git worktree prune`, so a slot whose directory vanished stops counting against the bound.
-2. A worktree already checked out on the branch is returned as-is, and re-leased.
-3. Otherwise the first **free** slot is cleaned and switched onto the branch (below).
-4. With no free slot the pool grows: a stale target directory is **reclaimed**, then
-   `git worktree add` puts a new slot straight on the branch. Slot directories are `slot-<n>`, the
-   lowest unused index.
-5. With the pool at its bound, `ensure` **throws** — see [exhaustion](#exhaustion).
+2. A worktree already checked out on the branch is returned as-is, and re-leased — untouched, with
+   everything in it. This is the only arm that reuses anything.
+3. Otherwise a **spare** slot: free, and on a detached HEAD or a branch whose ref is gone, so it
+   holds nothing anybody can come back for. Wiped and switched (below).
+4. Otherwise the pool **grows**, while it is below its bound: a stale target directory is
+   **reclaimed**, then `git worktree add` puts a new slot straight on the branch. Slot directories
+   are `slot-<n>`, the lowest unused index.
+5. Otherwise the first **evictable** slot: free, but still on a branch that exists. Wiped and
+   switched.
+6. With none of those, `ensure` **throws** — see [exhaustion](#exhaustion).
+
+**Minting comes ahead of eviction**, and the order is load-bearing rather than a preference. A slot
+handed to another branch is wiped either way, so taking one that still carries a live branch burns
+that branch's tree and buys nothing a fresh slot would not have given — and that tree is exactly what
+a CI fix or a review comment on the branch comes back to. The consequence is that a quiet deployment
+grows to its full pool size over time instead of churning one directory: disk is still bounded by
+`worktreePoolSize`, and what the extra slots hold is the warm state of the last few branches worked.
 
 A branch that does not exist yet starts at a commit: `base` resolved through `resolveCommit`, or the
 repo root's HEAD when there is no `base`. The start point is named **explicitly** even in the HEAD
@@ -556,13 +575,17 @@ agent's tree readable, which is what deleting the directory used to provide.
 
 ### Handing a slot over
 
-In this order, and the order is load-bearing:
+This runs **only for a branch the slot is not already on** — `ensure`'s reuse arm has taken every
+other case — so everything standing in the directory belongs to some other branch. In this order, and
+the order is load-bearing:
 
-1. **`git clean -fd`** — untracked files, **never `-fdx`**. The ignored files _are_ the warm state
-   this pool exists to keep; `-x` would delete the dependencies and defeat the whole thing, and
-   excluding named paths would be the repo-specific configuration the harness refuses to grow.
+1. **`git clean -ffdx`** — everything untracked, ignored files included. `-x` is what takes the
+   previous occupant's dependency tree and build output, and the second `-f` is for a nested
+   repository inside them (a git-sourced dependency), which a single `-f` skips — leaving exactly the
+   half-deleted dependency tree this is trying not to hand anyone. Nothing is excluded by name: an
+   ignore list of paths to keep is the repo-specific configuration the harness refuses to grow.
 2. **`git switch <branch>`** when the ref exists, `git switch -c <branch> <commit>` when it does not.
-   The clean must precede it because `git switch` refuses when an untracked file would be
+   The wipe must precede it because `git switch` refuses when an untracked file would be
    overwritten.
 
 **`git switch -C` and `git checkout -B` are unreachable, deliberately.** They _reset_ an existing
@@ -572,16 +595,7 @@ anywhere. Existence is checked first and the create form is only ever reached fo
 not exist.
 
 A failure at either step is a **rejected dispatch naming the branch and the slot**, never a silent
-fall back to a fresh directory — which would reintroduce the cold start invisibly, which is the one
-outcome that would leave this whole change looking like it worked.
-
-**The accepted trade: stale ignored output.** `-fd` leaves behind whatever the previous occupant's
-build produced — a `dist/`, a generated file, a compiled artifact — on a branch that never built it.
-A later agent can read that as its own branch's output and be misled by it. This is a trade, not an
-oversight: the alternatives are `-x` (which deletes the dependencies and defeats the ticket) or an
-ignore list of paths to keep (which is exactly the repo-specific configuration the harness must not
-learn). Agents run their own builds; a stale artifact is a wrong answer they can correct, where a
-cold tree is minutes they cannot get back.
+fall back to a fresh directory — which would put two agents in one tree.
 
 ### Exhaustion
 
@@ -655,8 +669,8 @@ process's cwd, so there is nothing there to reproduce).
 
 ### Release
 
-`remove(branch)` releases the lease and **deletes nothing**. That is the whole change: the slot keeps
-its checkout and everything git ignores in it, and a failed or killed agent's tree stays readable
+`remove(branch)` releases the lease and **deletes nothing**. That is the whole change: the slot stays
+on its branch with everything git ignores in it, and a failed or killed agent's tree stays readable
 until the slot is reissued.
 
 `deleteBranch(branch)` — the local half of the reap after a pull request merges — releases the lease

@@ -243,9 +243,17 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
   branch that already has commits — a re-dispatch, a retry, a part picked up again — loses them, with
   nothing red. Check the ref exists first and only ever reach `switch -c` for one that does not.
   → [09](docs/spec/09-execution.md#handing-a-slot-over)
-- **A slot is cleaned with `git clean -fd`, never `-fdx`.** The ignored files are the warm dependency
-  tree the pool exists to keep; `-x` deletes it and every dispatch pays for a cold install again,
-  which nothing measures and no test sees. → [09](docs/spec/09-execution.md#handing-a-slot-over)
+- **Reuse is scoped to the branch: a slot handed to a _different_ branch is wiped with
+  `git clean -ffdx` first.** Only `ensure`'s same-branch arm hands a tree back with anything in it.
+  Weakening the wipe puts another branch's `dist/`, generated files and lockfile-resolved
+  dependencies in front of an agent as its own branch's output, which nothing marks as stale and no
+  test sees. The cold install on a branch's first dispatch is the price, and it is the trade on
+  purpose. → [09](docs/spec/09-execution.md#handing-a-slot-over)
+- **`ensure` grows the pool before it evicts a free slot that is still on a branch.** A hand-over
+  wipes, so evicting early burns the tree a CI fix or a review comment on that branch would have come
+  back to — and buys nothing a fresh slot would not have. A reordering compiles and passes; all it
+  costs is every re-dispatch paying for a cold install, which nothing measures.
+  → [09](docs/spec/09-execution.md#worktrees)
 - **The lease is the only thing keeping two agents out of one directory now.** A directory per branch
   used to provide that implicitly. Anything that hands out a slot goes through
   `WorktreeManager.ensure`, and anything that frees one goes through `remove` / `deleteBranch` — a

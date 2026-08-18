@@ -44,6 +44,23 @@ function manager(repo: string, size = 4, held: (branch: string) => boolean = () 
   return new WorktreeManager(repo, join(repo, '.wt'), { size, held });
 }
 
+/**
+ * A manager over a repo that ignores `deps/` — the dependency tree in miniature,
+ * and the only thing the warm-versus-wiped distinction can be observed through.
+ */
+function warmable(repo: string, size = 4): WorktreeManager {
+  writeFileSync(join(repo, '.gitignore'), 'deps/\n');
+  git(repo, ['add', '.']);
+  git(repo, ['commit', '-q', '-m', 'ignore deps']);
+  return manager(repo, size);
+}
+
+/** The warm state a dispatch leaves behind: an installed dependency tree, ignored. */
+function install(dir: string, note: string): void {
+  mkdirSync(join(dir, 'deps'), { recursive: true });
+  writeFileSync(join(dir, 'deps', 'installed.txt'), note);
+}
+
 test('creates a new slot on a new branch and reuses it', async () => {
   const repo = initRepo();
   const wt = manager(repo);
@@ -233,7 +250,7 @@ test('a reclaim held up by a live process says so, rather than reporting an errn
 test('an omitted base still forks from the repo root HEAD, not from the slot the branch inherits', async () => {
   const repo = initRepo();
   commitOn(repo, 'trunk', 'trunk.txt');
-  const wt = manager(repo);
+  const wt = manager(repo, 1);
 
   const first = await wt.ensure('issue/12/schema');
   assert.equal(git(first, ['rev-parse', 'HEAD']), git(repo, ['rev-parse', 'HEAD']));
@@ -255,27 +272,70 @@ test('an omitted base still forks from the repo root HEAD, not from the slot the
 // The pool: the lease, the warm state, and the bound.
 // ---------------------------------------------------------------------------
 
-test('a slot is reused across branches, keeping what git ignores and clearing what it does not', async () => {
+test('the same branch coming back gets its tree exactly as it left it', async () => {
   const repo = initRepo();
-  writeFileSync(join(repo, '.gitignore'), 'deps/\n');
-  git(repo, ['add', '.']);
-  git(repo, ['commit', '-q', '-m', 'ignore deps']);
-  const wt = manager(repo);
+  const wt = warmable(repo);
 
   const first = await wt.ensure('issue/1');
-  // The dependency tree, in miniature: ignored, and the whole reason this ticket
-  // exists — a dispatch that has to rebuild it pays minutes for nothing.
-  mkdirSync(join(first, 'deps'));
-  writeFileSync(join(first, 'deps', 'installed.txt'), 'warm');
+  // Ignored, and the whole reason the pool exists — a dispatch that has to rebuild
+  // it pays minutes for nothing.
+  install(first, 'warm');
+  writeFileSync(join(first, 'scratch.txt'), 'a stray from the run');
+  await wt.remove('issue/1');
+
+  // What a CI failure or a review comment on that branch dispatches into.
+  const again = await wt.ensure('issue/1');
+
+  assert.equal(again, first);
+  assert.equal(readFileSync(join(again, 'deps', 'installed.txt'), 'utf8'), 'warm', 'the whole point of the pool');
+  assert.ok(existsSync(join(again, 'scratch.txt')), 'and nothing is cleaned out from under it either');
+});
+
+test('a slot handed to a different branch is wiped, ignored files and all', async () => {
+  const repo = initRepo();
+  // A bound of one, so the slot has nowhere else to go — the pool would otherwise
+  // mint rather than take a tree the previous branch may still want.
+  const wt = warmable(repo, 1);
+
+  const first = await wt.ensure('issue/1');
+  install(first, 'resolved from issue/1’s lockfile');
   writeFileSync(join(first, 'scratch.txt'), 'a stray from the last goal');
   await wt.remove('issue/1');
 
   const second = await wt.ensure('issue/2');
 
-  assert.equal(second, first, 'two consecutive dispatches on different branches land in one directory');
-  assert.equal(readFileSync(join(second, 'deps', 'installed.txt'), 'utf8'), 'warm', '`clean -fd`, never `-fdx`');
-  assert.equal(existsSync(join(second, 'scratch.txt')), false, "the previous occupant's untracked strays are gone");
+  assert.equal(second, first, 'the slot is the pool’s and gets reissued');
+  // The bug this rule exists for: an agent reading a `dist/` its branch never built
+  // as its own output, with nothing anywhere marking it stale.
+  assert.equal(existsSync(join(second, 'deps')), false, 'no ignored state crosses to another branch');
+  assert.equal(existsSync(join(second, 'scratch.txt')), false, "and neither do the previous occupant's strays");
   assert.equal(git(second, ['rev-parse', '--abbrev-ref', 'HEAD']), 'issue/2');
+});
+
+test('the pool grows before it takes a tree off a branch that still exists', async () => {
+  const repo = initRepo();
+  const wt = manager(repo, 2);
+
+  const first = await wt.ensure('issue/1');
+  await wt.remove('issue/1');
+  const second = await wt.ensure('issue/2');
+
+  // Handing over wipes, so evicting a live branch early costs its warm tree and
+  // buys nothing — the branch it belongs to is exactly what comes back from CI.
+  assert.notEqual(second, first, 'a free slot still on a live branch is not the first choice');
+  assert.equal(await wt.ensure('issue/1'), first, 'and issue/1 still has its own tree to come back to');
+});
+
+test('a slot whose branch was reaped is taken before the pool grows', async () => {
+  const repo = initRepo();
+  const wt = manager(repo, 3);
+
+  const first = await wt.ensure('issue/1');
+  await wt.deleteBranch('issue/1');
+
+  // Detached by the reap: nothing is coming back for it, so it is the slot to take
+  // rather than one more directory on disk.
+  assert.equal(await wt.ensure('issue/2'), first);
 });
 
 test('a branch with commits, handed a slot, still has them: the reset form is unreachable', async () => {
@@ -323,13 +383,13 @@ test('a slot leased to a live agent is never handed to a second branch', async (
 
 test('`remove` releases the lease and deletes nothing', async () => {
   const repo = initRepo();
-  const wt = manager(repo);
+  const wt = manager(repo, 1);
   const first = await wt.ensure('issue/1');
 
   await wt.remove('issue/1');
   assert.ok(existsSync(first), 'the directory is the warm state — removing it is the bug being fixed');
 
-  assert.equal(await wt.ensure('issue/2'), first, 'and the released slot is the next dispatch’s');
+  assert.equal(await wt.ensure('issue/2'), first, 'and with nowhere else to go the released slot is reissued');
 });
 
 test('a released slot still on the branch is handed back to it, warm', async () => {
@@ -386,20 +446,20 @@ test('the pool bound defaults to the concurrency cap plus slack', () => {
 test('a restart holds the slot of work still outstanding, and releases it once recovery settles', async () => {
   const repo = initRepo();
   const root = join(repo, '.wt');
-  const before = new WorktreeManager(repo, root, { size: 3, held: () => false });
+  const before = new WorktreeManager(repo, root, { size: 2, held: () => false });
   const restored = await before.ensure('issue/1');
 
   // The restart. A fresh manager's in-memory leases are empty by construction, so
   // what is left is the branch the slot is checked out on and whether the harness
   // still has work in flight on it — which a restored orphan does.
   const outstanding = new Set(['issue/1']);
-  const after = new WorktreeManager(repo, root, { size: 3, held: (b) => outstanding.has(b) });
+  const after = new WorktreeManager(repo, root, { size: 2, held: (b) => outstanding.has(b) });
   assert.notEqual(await after.ensure('issue/2'), restored, "a restored agent's slot is not reissued under it");
 
   // `requeue` and `remove` settle the task, and that is the boot release: nothing
   // in the manager had to remember anything for it to happen.
   outstanding.clear();
-  const later = new WorktreeManager(repo, root, { size: 3, held: () => false });
+  const later = new WorktreeManager(repo, root, { size: 2, held: () => false });
   assert.equal(await later.ensure('issue/3'), restored);
 });
 
@@ -465,7 +525,7 @@ test('the fake is reuse-first, like the real one, and ignores base on reuse', as
 });
 
 test('the fake leases slots too: a live branch keeps its directory, a released one gives it up', async () => {
-  const wt = new FakeWorktreeManager();
+  const wt = new FakeWorktreeManager(undefined, 2);
 
   const live = await wt.ensure('issue/12', 'main');
   const other = await wt.ensure('issue/13', 'main');
@@ -481,7 +541,21 @@ test('the fake leases slots too: a live branch keeps its directory, a released o
   // Released, and still on its old occupant, so that branch gets it straight back.
   assert.equal(await wt.ensure('issue/12'), live);
   await wt.remove('issue/12');
-  assert.equal(await wt.ensure('issue/14'), live, 'and any other branch takes the free slot');
+  assert.equal(await wt.ensure('issue/14'), live, 'and with the pool at its bound another branch evicts it');
+});
+
+test('the fake grows the pool before evicting, and takes a reaped slot before either', async () => {
+  const wt = new FakeWorktreeManager(undefined, 4);
+
+  const first = await wt.ensure('issue/12');
+  await wt.remove('issue/12');
+
+  // The real manager's order, which is load-bearing now that a hand-over wipes the
+  // tree: a slot still standing on a branch is the last thing taken, and one whose
+  // branch was reaped is the first.
+  assert.notEqual(await wt.ensure('issue/13'), first);
+  await wt.deleteBranch('issue/12');
+  assert.equal(await wt.ensure('issue/14'), first);
 });
 
 test('the fake refuses past its bound, as the real one does', async () => {
