@@ -101,7 +101,8 @@ export interface AgentToolTarget {
     agentId: string,
     summary: string,
     document: string,
-  ): { ok: true; issueOrigin: string } | { ok: false; error: string };
+    lessons: string[],
+  ): { ok: true; issueOrigin: string; lessonsFiled: number } | { ok: false; error: string };
 }
 
 export interface McpToolDeps {

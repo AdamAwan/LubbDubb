@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { validateLessonText } from '../../lessons.js';
 import { checked, IdParams, optionalText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -24,14 +25,20 @@ import type { RouteContext } from './context.js';
  * prompt renders one, and promoting one changes no launch argument; promotion
  * records that an operator vouched for it and nothing more. Rendering is #355's
  * phase 3, and it is a separate change with its own cap and its own spec.
+ *
+ * These routes are the *operator's* arm of the store. The other writer is the
+ * retrospective (phase 2), which reaches `proposeLesson` through the tool channel
+ * rather than through here — deliberately, since an agent holding an HTTP
+ * credential is a different security story than an agent holding a scoped MCP
+ * one. Both land `proposed`; there is no arm that writes a promoted lesson.
  */
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store } = system;
 
-  // Write one down. The operator's own arm — and in this phase the only writer
-  // there is, since the retrospective's submission channel is #355 phase 2. It
-  // lands `proposed` like everything else rather than `promoted`: the surface is
-  // one gate, not one gate and a bypass for whoever happens to be typing.
+  // Write one down. The operator's own arm, and the one a person types into. It
+  // lands `proposed` like everything the retrospective files rather than
+  // `promoted`: the surface is one gate, not one gate and a bypass for whoever
+  // happens to be typing.
   //
   // `originRef` is the goal it was learned on, and it is optional because a
   // lesson written from what an operator already knows has no goal behind it. A
@@ -44,16 +51,14 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/lessons',
     checked({ body: ProposeBody }, async ({ body, reply }) => {
-      const text = body.text.trim();
-      if (text.length === 0) return reply.code(400).send({ error: 'text is required' });
-      // Bounded here rather than at the table, for the reason the cap in #355
-      // exists at all: what makes this safe is that a person reads every lesson
-      // before it goes anywhere, and nobody reads an essay pasted into a list.
-      if (text.length > MAX_LESSON_CHARS)
-        return reply
-          .code(400)
-          .send({ error: `text must be ${MAX_LESSON_CHARS} characters or fewer — a lesson is a line or two` });
-      const lesson = store.proposeLesson({ text, originRef: body.originRef ?? null });
+      // Bounded through the shared rule rather than here, for the reason the cap
+      // in #355 exists at all: what makes this safe is that a person reads every
+      // lesson before it goes anywhere, and nobody reads an essay pasted into a
+      // list. The retrospective writes to the same store (phase 2), so the two
+      // writers must agree on what a lesson is — hence `src/lessons.ts`.
+      const parsed = validateLessonText(body.text);
+      if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
+      const lesson = store.proposeLesson({ text: parsed.text, originRef: body.originRef ?? null });
       // `dirty` rather than `world:changed`: nothing in the world moved and no
       // cycle is run — the cockpit simply has a row more to draw. The same
       // reading `dismissFinding` takes.
@@ -100,11 +105,3 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 }
-
-/**
- * How long a lesson may be. Not a storage bound — SQLite does not care — but a
- * *readability* one: every safeguard on this surface rests on a person having
- * actually read the row before promoting it, and a wall of text is the row
- * nobody reads. Roughly a short paragraph, which is what a lesson is.
- */
-const MAX_LESSON_CHARS = 2_000;

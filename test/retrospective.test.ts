@@ -7,6 +7,7 @@ import { Store } from '../src/store/store.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { MAX_RETRO_DOCUMENT, retroOrigin, retroSubmitOrigin, validateRetrospective } from '../src/retro/retro.js';
+import { MAX_LESSON_CHARS } from '../src/lessons.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
@@ -155,6 +156,116 @@ test('a submission with no summary is refused, and an over-long document is kept
   assert.equal(long.isError, false);
   assert.match(long.text, /"trimmed":\s*true/);
   assert.equal(system.store.getRetrospective('issue:9')?.document.length, MAX_RETRO_DOCUMENT);
+  system.store.close();
+});
+
+// -- lessons (issue #355 phase 2) ---------------------------------------------
+
+test('lessons are optional, bounded, and dropped rather than trimmed', () => {
+  const none = validateRetrospective({ summary: 'ok', document: 'd' });
+  assert.equal(none.ok, true);
+  if (!none.ok) return;
+  // A run that taught nothing general is the ordinary case, and it must not be a
+  // refusal: the write-up is the thing at stake.
+  assert.deepEqual(none.lessons, []);
+  assert.equal(none.lessonsDropped, 0);
+  assert.deepEqual(validateRetrospective({ summary: 'ok', document: 'd', lessons: 'not a list' }).ok, true);
+
+  const parsed = validateRetrospective({
+    summary: 'ok',
+    document: 'd',
+    lessons: ['  The suite wants a built web bundle first.  ', '', 'x'.repeat(MAX_LESSON_CHARS + 1), 42],
+  });
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  // The over-long one is *gone*, not truncated: half a lesson is a different
+  // claim, still promotable, and the gate is a person reading the claim.
+  assert.deepEqual(parsed.lessons, ['The suite wants a built web bundle first.']);
+  assert.equal(parsed.lessonsDropped, 3, 'an empty, an over-long and a non-string each count as a drop');
+});
+
+test('the lesson count is capped, and the overflow is counted rather than silent', () => {
+  const parsed = validateRetrospective({
+    summary: 'ok',
+    document: 'd',
+    lessons: Array.from({ length: 9 }, (_, i) => `lesson ${i}`),
+  });
+  assert.equal(parsed.ok, true);
+  if (!parsed.ok) return;
+  assert.ok(parsed.lessons.length < 9, 'a write-up that files nine has stopped discriminating');
+  assert.equal(parsed.lessonsDropped, 9 - parsed.lessons.length);
+  assert.deepEqual(parsed.lessons[0], 'lesson 0', 'the ones it led with are the ones it keeps');
+});
+
+test('a retro files its lessons as proposals against the goal it wrote up', async () => {
+  const system = build();
+  const retro = spawnAgent(system, 'issue:12:retro');
+
+  const filed = await callTool(system, retro, 'retro_submit', {
+    summary: 'Three parts, one red base.',
+    document: '# What shipped\n\nThe schema part.',
+    lessons: ['The suite wants a built web bundle first.', 'Tickets naming only a symptom under-specify a planner.'],
+  });
+  assert.equal(filed.isError, false);
+  assert.match(filed.text, /"lessonsFiled":\s*2/);
+
+  const lessons = system.store.listLessons();
+  assert.equal(lessons.length, 2);
+  for (const lesson of lessons) {
+    // The gate, asserted from the writer's side: an agent's own claim lands
+    // `proposed` and there is no argument it can pass to land it promoted.
+    assert.equal(lesson.status, 'proposed');
+    // Provenance is the issue, not the retro origin: the goal is what taught it,
+    // and `issue:12:retro` is an implementation detail of who wrote it down.
+    assert.equal(lesson.originRef, 'issue:12');
+    assert.ok(lesson.createdAt);
+  }
+  system.store.close();
+});
+
+test('a resubmission revises the write-up without doubling its lessons', async () => {
+  const system = build();
+  const retro = spawnAgent(system, 'issue:12:retro');
+  const lessons = ['The suite wants a built web bundle first.'];
+
+  await callTool(system, retro, 'retro_submit', { summary: 'first', document: 'first', lessons });
+  const again = await callTool(system, retro, 'retro_submit', { summary: 'revised', document: 'revised', lessons });
+
+  assert.equal(again.isError, false);
+  assert.equal(system.store.getRetrospective('issue:12')?.summary, 'revised', 'the document is upserted');
+  assert.equal(system.store.listLessons().length, 1, 'the lessons are not appended a second time');
+  // Told the truth about what the operator will see, rather than "0 filed" — which
+  // would read as two of them having failed.
+  assert.match(again.text, /"lessonsFiled":\s*1/);
+  system.store.close();
+});
+
+test('a submission whose lessons are all refused still lands its write-up', async () => {
+  const system = build();
+  const retro = spawnAgent(system, 'issue:9:retro');
+
+  const filed = await callTool(system, retro, 'retro_submit', {
+    summary: 'ok',
+    document: 'the whole story',
+    lessons: ['y'.repeat(MAX_LESSON_CHARS + 1)],
+  });
+  assert.equal(filed.isError, false, 'a lesson that does not fit never sinks the retrospective');
+  assert.match(filed.text, /"lessonsDropped":\s*1/, 'and the drop is named rather than silent');
+  assert.match(system.store.getRetrospective('issue:9')?.document ?? '', /whole story/);
+  assert.deepEqual(system.store.listLessons(), []);
+  system.store.close();
+});
+
+test('a working agent cannot file a lesson through the retro tool', async () => {
+  const system = build();
+  const worker = spawnAgent(system, 'issue:12');
+  const refused = await callTool(system, worker, 'retro_submit', {
+    summary: 'mine',
+    document: 'mine',
+    lessons: ['I should be able to tell the fleet things.'],
+  });
+  assert.equal(refused.isError, true);
+  assert.deepEqual(system.store.listLessons(), [], 'the origin check gates the lessons with the document');
   system.store.close();
 });
 

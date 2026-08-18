@@ -565,7 +565,8 @@ A finding is a defect the fleet noticed. A **lesson** is what working the goal t
 this repository_ — "the suite wants a built web bundle first", "this subsystem's tests sit at an odd
 seam", "a ticket that names only a symptom is under-specified for a planner every time". Before
 this, that knowledge had exactly one destination: a retrospective a person read once. The next goal
-started from zero and the fleet relearned the same thing at full price (#355).
+started from zero and the fleet relearned the same thing at full price (#355). The retrospective now
+proposes them directly, which is where most lessons come from.
 
 ```ts
 interface Lesson {
@@ -619,6 +620,27 @@ re-dates it — and a claim worth bringing back is worth reading first.
 Both transitions are guarded **in the write** (`WHERE id=? AND status=…`), the discipline
 `linkFindingTicket` and `decideProposal` use, so two racing clicks cannot both find a promotable row.
 
+### The two writers
+
+A lesson is proposed from one of two places, and both land `proposed`. There is no arm that writes a
+promoted lesson.
+
+| Writer                | Reaches the store through                  | Provenance                                     |
+| --------------------- | ------------------------------------------ | ---------------------------------------------- |
+| The operator, typing  | `POST /api/lessons`                        | Whatever `originRef` they give, or null        |
+| The retrospective     | `retro_submit`'s `lessons` field (phase 2) | The issue it wrote up — `issue:<n>`, never null |
+
+Both go through `validateLessonText` in `src/lessons.ts`, which is where the 2,000-character bound
+lives. It is there rather than in either writer because a bound written twice is a bound that
+drifts, and it drifts in the direction that matters: whichever writer is looser decides what an
+operator ends up being asked to read.
+
+`proposeLesson` **dedupes against the live rows on the same goal** — `recordFinding`'s shape, for its
+reason. `retro_submit` upserts its document on `origin_ref`, so a retrospective filed twice revises
+one write-up; without the dedupe it would leave two of every lesson behind it. Scoped to `proposed`
+and `promoted` only, so a retired lesson can be written again — which is the re-proposal "no
+un-retire" rests on, and it re-dates the claim.
+
 ### The routes
 
 | Route                           | Does                                                               |
@@ -632,21 +654,52 @@ which is what `findings` does and for the same reason — the panel draws them b
 snapshot's own link map resolves. All three broadcast `dirty` rather than `world:changed` and run no
 cycle: nothing in the world moved.
 
+### What a retrospective may file
+
+The `lessons` field on `retro_submit` is optional, and a run that taught nothing general is the
+ordinary case. What it may not be is unbounded: the scarce resource is not storage but the reader's
+attention, since every lesson is worth nothing until a person has vouched for it, and fifteen
+plausible claims are read less carefully than two. So at most five land, and the prompt asks for the
+one or two a reader would thank the agent for.
+
+Two rules decide what happens to the rest, and they differ from the document's on purpose:
+
+| Not filed because…    | What happens        | Why                                                                                                                                                 |
+| --------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Over the length bound | **Dropped whole**   | Half a write-up is a shorter write-up; half a lesson is a _different claim_, still promotable — and the safeguard is a person reading the claim.     |
+| Over the count cap    | **Dropped whole**   | Same reason, one level up: the cap exists to protect the reading, so trimming to fit would defeat it.                                                |
+| Anything at all       | **Never a refusal** | The write-up must not sink after the work of assembling it — `MAX_RETRO_DOCUMENT`'s rule, applied to the field beside it.                            |
+
+Every drop is counted back to the agent as `lessonsDropped`. A lesson that did not land is one an
+operator will never be asked about, and an agent that believes it filed eight has no other way to
+find out — which is the silence this whole feature is built to avoid, in miniature.
+
+The **discriminator** — repository, or _working_ the repository? — is stated in two places, and that
+duplication is deliberate. `issue-retro`'s template is operator-overridable, so a deployment running
+an override written before phase 2 would otherwise dispatch an agent that never hears the store
+exists: the customised deployments losing the feature silently. `retro_submit`'s tool description
+always arrives.
+
 ### Nothing reaches an agent
 
 **No dispatcher rule reads a lesson, no prompt renders one, and promoting one changes no launch
-argument.** Promotion records that an operator vouched for the claim, and that is the whole of what
-it does today. `test/lessons.test.ts` asserts both halves — that `buildClaudeArgs` and
+argument.** Filing a proposal is all the tool channel got; promotion is a click in the cockpit and
+stays one. `test/lessons.test.ts` asserts both halves — that `buildClaudeArgs` and
 `buildClaudeStreamArgs` are byte-identical with promoted lessons on the books, and, structurally,
-that nothing under `src/dispatcher/`, `src/agents/`, `src/mcp/` or `src/executor/` so much as names
-one.
+that `src/dispatcher/` and `src/executor/` never touch the store in any direction while `src/mcp/`
+and `src/agents/` reach `proposeLesson` and nothing else.
 
-What is still to come, and is deliberately not here: the retrospective proposing lessons rather than
-an operator typing them, and rendering promoted ones into the fleet's cached system-prompt append —
-capped, with the cap's drop visible to the operator and never to the agent, which must not see a
-partial list presented as whole. Both are #355's later phases, with their own designs.
+That structural test used to ban the *word*, across four directories. It matches the store's methods
+instead as of phase 2, because a prompt that tells an agent the channel exists is the dispatcher
+describing a tool rather than a rule consulting the table — and the thing that would actually break
+the invariant is a call.
 
-Tests: `test/lessons.test.ts`.
+What is still to come, and is deliberately not here: rendering promoted lessons into the fleet's
+cached system-prompt append — capped, with the cap's drop visible to the operator and never to the
+agent, which must not see a partial list presented as whole. That is #355 phase 3, with its own
+design.
+
+Tests: `test/lessons.test.ts`, and the lessons block in `test/retrospective.test.ts`.
 
 ## Human tasks
 
