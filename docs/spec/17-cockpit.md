@@ -840,6 +840,19 @@ Facets are counted over the **whole mirror**, not the filtered set. A facet coun
 filter shows `1` beside whichever value is selected and nothing beside the rest — a control that
 erases its own alternatives the moment it is used.
 
+**A closing state is on the tier, and picking it widens the tracking axis.** The two axes are
+near-disjoint on a tracker with native states: every `Closed` row has by definition left the open set,
+so under the tab's default `live` narrowing a pick of it would return an empty list while the chip
+that was just clicked counted sixty-eight. Each facet therefore carries `live` beside `count`, and
+`statePick` (`web/src/cockpit/place.ts`) widens `tracking` to `any` on exactly the picks that number
+says are unreachable — never on any other, so a state with live rows narrows as it always did and
+nothing here ever makes the list smaller than the chip's own count implies. The chip's tooltip says it
+before the click, because a filter that moves a control the reader did not touch has to say so.
+
+That the closed rows are _in_ the mirror with their own word on them at all is the store's business
+and was not always true — the state used to be taken only from the live overlay, so a closed item
+carried none. → [14](14-persistence.md#the-ticket-mirror)
+
 The harness's own outcome for a goal — `delivered`, `fell short`, `concluded`, `abandoned` — rides on
 the row as a chip and is deliberately **not a filter**: it answers a different question from any axis.
 It is folded to one word on the server (`src/tickets/outcomes.ts`) from `resolveIssueConclusion` plus

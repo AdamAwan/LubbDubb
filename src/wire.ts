@@ -692,6 +692,18 @@ export type TicketOrder = 'added' | 'changed' | 'cost';
 export interface TicketStateFacet {
   state: string;
   count: number;
+  /**
+   * How many of those rows are still live — **zero** for a state every one of
+   * whose items has left the tracker's open set, which on a provider with native
+   * states is every closing state it has.
+   *
+   * Beside `count` because the two filter axes are near-disjoint there: `Closed`
+   * is a real state the mirror holds and it appears on no live row, so a pick of
+   * it under the `live` narrowing would return nothing. The cockpit reads this to
+   * widen the tracking axis on exactly those picks rather than drawing a control
+   * that answers empty. → `docs/spec/17-cockpit.md#three-axes-because-they-are-three-questions`
+   */
+  live: number;
   /** True where `pickupStates` lets this state through — config, not a guess. */
   pickup: boolean;
 }

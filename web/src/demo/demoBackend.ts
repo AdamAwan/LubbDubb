@@ -2508,11 +2508,20 @@ function demoTickets(query: {
     states: [
       ...all.reduce((counts, row) => {
         const state = row.workItemState;
-        if (state !== null) counts.set(state, (counts.get(state) ?? 0) + 1);
+        if (state !== null) {
+          const seen = counts.get(state);
+          // `live` beside the count for the real route's reason: `Closed` is on
+          // frozen rows only, and the tier reads this to widen the tracking axis
+          // rather than answering an empty list.
+          counts.set(state, {
+            count: (seen?.count ?? 0) + 1,
+            live: (seen?.live ?? 0) + (row.tracking === 'live' ? 1 : 0),
+          });
+        }
         return counts;
-      }, new Map<string, number>()),
+      }, new Map<string, { count: number; live: number }>()),
     ]
-      .map(([state, count]) => ({ state, count, pickup: state === 'Ready' || state === 'Active' }))
+      .map(([state, seen]) => ({ ...seen, state, pickup: state === 'Ready' || state === 'Active' }))
       .sort((a, b) => b.count - a.count || a.state.localeCompare(b.state)),
     features: features
       .map((f) => ({

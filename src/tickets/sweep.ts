@@ -85,7 +85,15 @@ export class TicketSweep {
     // would state a history it does not have.
     if (!source.tracksTicketHistory) return;
     const mark = store.ensureTrackerSweep(this.opts.backfillMs ?? TICKET_BACKFILL_MS);
-    const askedFrom = mark.sweptTo ?? mark.anchorAt;
+    // One re-read of the whole history, once per database. The mirror used to take
+    // an item's native state only from the live overlay, so every row that had
+    // already left the open set carried none — and a state filter discovered from
+    // the mirror could reach none of them, which is exactly the silence the
+    // discovery exists to prevent. Asking from the anchor re-upserts every row the
+    // mirror holds (nothing older than the anchor is in it), and `recordSweep`
+    // stamps the mark, so the next pulse is incremental again.
+    const restating = mark.restatedAt === null && mark.sweptTo !== null;
+    const askedFrom = restating ? mark.anchorAt : (mark.sweptTo ?? mark.anchorAt);
     try {
       const items = await source.listTicketHistory(askedFrom);
       // Recorded even when the tracker had nothing to give: a completed sweep that

@@ -828,11 +828,16 @@ CREATE TABLE IF NOT EXISTS feature_colors (
 -- first sweep and is **frozen** — a rolling window would drop the far end of the
 -- history every night, silently, which is the opposite of what the mirror is for.
 -- swept_to is the high-water mark the next changed-since read asks from.
+-- restated_at is stamped by the first sweep that lands and never moves: it marks
+-- that the history has been read once with the provider's native state carried on
+-- every row. Null on a database written before the sweep read that field, which is
+-- what makes the one-time re-read from the anchor fire exactly once.
 CREATE TABLE IF NOT EXISTS tracker_sweep (
-  id         INTEGER PRIMARY KEY CHECK (id = 1),
-  anchor_at  TEXT NOT NULL,
-  swept_to   TEXT,
-  updated_at TEXT NOT NULL
+  id          INTEGER PRIMARY KEY CHECK (id = 1),
+  anchor_at   TEXT NOT NULL,
+  swept_to    TEXT,
+  restated_at TEXT,
+  updated_at  TEXT NOT NULL
 );
 
 -- A deliberate upgrade of the harness's own build: one row, id 1. Persisted where

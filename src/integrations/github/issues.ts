@@ -75,6 +75,9 @@ export class GitHubIssuesIntegration
         title: i.title,
         labels: i.labels,
         state: normalizeState(i.state),
+        // GitHub has no workflow states beyond open/closed, and null is what says
+        // so: the tab draws no state tier at all where every row answers null.
+        workItemState: null,
         url: i.url,
         createdAt: i.createdAt,
         changedAt: i.updatedAt,

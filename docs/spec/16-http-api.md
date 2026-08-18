@@ -578,8 +578,11 @@ an infinite list with no total says nothing about whether a reader is near the e
 `live` describe the mirror itself, which no filter changes. `states` and `features` are the facets, and
 they are counted over the **whole mirror** rather than the filtered set: a facet counted after its own
 filter shows `1` beside whichever value was selected and nothing beside the rest, which is a control
-that erases its own alternatives. `states` is **empty for a provider with no native states**, which is
-what tells the cockpit not to draw that filter tier at all. `anchorAt` is the frozen one-month floor and
+that erases its own alternatives. Each state facet carries `live` beside `count` — how many of its rows
+are still in the open set, and **zero** for every closing state the tracker has, which is what lets the
+cockpit widen the `tracking` axis on a pick that would otherwise return nothing
+([17](17-cockpit.md#three-axes-because-they-are-three-questions)). `states` is **empty for a provider
+with no native states**, which is what tells the cockpit not to draw that filter tier at all. `anchorAt` is the frozen one-month floor and
 `backfilling` says whether the first sweep has landed; both are shipped because the tab has to _say_
 them, an empty list mid-backfill being indistinguishable from an empty tracker. `refUrls` covers the
 page's own rows, resolved through the connector's `resolveRefUrl` rather than read off the snapshot —

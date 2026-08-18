@@ -20,6 +20,10 @@ export const TICKET_COLUMNS: ColumnMigrations = {
     parent_known: 'INTEGER NOT NULL DEFAULT 0',
     last_read_at: 'TEXT',
   },
+  // The mark that the one-time re-read of the history has happened. On an existing
+  // database it is null, which is what tells the sweep to ask from the anchor once
+  // — see `TrackerSweepMark.restatedAt`.
+  tracker_sweep: { restated_at: 'TEXT' },
   feature_colors: {},
 };
 
@@ -73,6 +77,18 @@ export interface TrackerSweepMark {
    * first sweep lands. The next changed-since read asks from here.
    */
   sweptTo: string | null;
+  /**
+   * When the mirror last re-read its whole history to fill in the native states,
+   * or **null** on a database that has not.
+   *
+   * `work_item_state` used to be written only by the live overlay, so every row
+   * that had already left the tracker's open set carried no state at all — and a
+   * state filter discovered from the mirror therefore could not reach any of them,
+   * which is the one failure the discovery is there to prevent. Stamped by the
+   * first sweep that lands, so a fresh database is restated by construction and
+   * only an upgraded one pays for the re-read, once.
+   */
+  restatedAt: string | null;
 }
 
 /**
@@ -118,15 +134,15 @@ export class TicketStore {
     this.ctx.db
       .prepare(`INSERT OR IGNORE INTO tracker_sweep (id, anchor_at, swept_to, updated_at) VALUES (1, ?, NULL, ?)`)
       .run(anchor, ts);
-    return this.readTrackerSweep() ?? { anchorAt: anchor, sweptTo: null };
+    return this.readTrackerSweep() ?? { anchorAt: anchor, sweptTo: null, restatedAt: null };
   }
 
   /** The mark as it stands, or null on a database that has never swept. */
   readTrackerSweep(): TrackerSweepMark | null {
-    const row = this.ctx.db.prepare(`SELECT anchor_at, swept_to FROM tracker_sweep WHERE id = 1`).get() as
-      | { anchor_at: string; swept_to: string | null }
+    const row = this.ctx.db.prepare(`SELECT anchor_at, swept_to, restated_at FROM tracker_sweep WHERE id = 1`).get() as
+      | { anchor_at: string; swept_to: string | null; restated_at: string | null }
       | undefined;
-    return row ? { anchorAt: row.anchor_at, sweptTo: row.swept_to } : null;
+    return row ? { anchorAt: row.anchor_at, sweptTo: row.swept_to, restatedAt: row.restated_at } : null;
   }
 
   /**
@@ -150,12 +166,18 @@ export class TicketStore {
   recordSweep(askedFrom: string, items: readonly TrackerItem[], live: readonly LiveTicketFacts[] = []): void {
     const ts = this.ctx.now();
     const upsert = this.ctx.db.prepare(
-      `INSERT INTO tracker_items (number, title, labels, state, url, added_at, changed_at, first_seen_at, updated_at)
-       VALUES (@number, @title, @labels, @state, @url, @addedAt, @changedAt, @ts, @ts)
+      `INSERT INTO tracker_items (number, title, labels, state, work_item_state, url, added_at, changed_at, first_seen_at, updated_at)
+       VALUES (@number, @title, @labels, @state, @workItemState, @url, @addedAt, @changedAt, @ts, @ts)
        ON CONFLICT(number) DO UPDATE SET
          title=excluded.title,
          labels=excluded.labels,
          state=excluded.state,
+         -- COALESCE, never assignment: a provider with no native states hands null
+         -- on every sweep, and assigning would wipe what the live overlay wrote.
+         -- The history read is the *only* source for a row that has left the open
+         -- set, and the two never disagree about one that has not -- both are the
+         -- provider's own word for the same item.
+         work_item_state=COALESCE(excluded.work_item_state, tracker_items.work_item_state),
          url=excluded.url,
          added_at=excluded.added_at,
          changed_at=excluded.changed_at,
@@ -181,7 +203,11 @@ export class TicketStore {
       // `MAX` rather than assignment: a batch is not ordered, and a provider that
       // returns one stale row would otherwise walk the mark backwards and re-read
       // the same window forever.
-      `UPDATE tracker_sweep SET swept_to = MAX(COALESCE(swept_to, ''), ?), updated_at = ? WHERE id = 1`,
+      // `restated_at` is stamped by whichever sweep lands first and never moves
+      // again: a fresh database's first read is from the anchor and therefore
+      // already carries every row's native state, and an upgraded one has just
+      // paid for the same read once (see `TicketSweep.run`).
+      `UPDATE tracker_sweep SET swept_to = MAX(COALESCE(swept_to, ''), ?), restated_at = COALESCE(restated_at, ?), updated_at = ? WHERE id = 1`,
     );
     this.ctx.db.transaction(() => {
       let newest = askedFrom;
@@ -191,6 +217,7 @@ export class TicketStore {
           title: item.title,
           labels: JSON.stringify(item.labels),
           state: item.state,
+          workItemState: item.workItemState,
           url: item.url,
           addedAt: item.createdAt,
           changedAt: item.changedAt,
@@ -226,7 +253,7 @@ export class TicketStore {
         stmt.run(ts, ...live.map((f) => f.number));
       }
 
-      mark.run(newest, ts);
+      mark.run(newest, ts, ts);
     })();
   }
 
@@ -295,8 +322,6 @@ export interface MirroredTicket extends TrackerItem {
    * the tab counts *live* and *kept* as two numbers.
    */
   tracking: 'live' | 'frozen';
-  /** The provider's own word for its state, or null where the provider has none. */
-  workItemState: string | null;
   issueType: string | null;
   /**
    * The feature it hangs off. `undefined` is the third value and not a tidier
