@@ -25,6 +25,46 @@ re-litigated:
 | A credential store  | `validationRoot` holds fixtures and reference material. Which account a check needs is a note; the account stays where it is.                |
 | A blocker           | Nothing a check says holds a dispatch, a merge, a conclusion or a close. It changes what closing a goal _looks like_, and nothing else.      |
 
+## The bar
+
+**A check is something that can only be found out by running the delivered goal.** Whatever the diff,
+the test suite, the type checker or a green build settles is settled already — on every branch, before
+anybody opens the sheet — so "the unit tests pass", "CI is green" or "the new module is wired into the
+composition root" sends a person out to redo work that is done. Per-part `acceptance` is where a claim
+a reviewer ticks off from the diff belongs ([08](08-planning.md)); a check is executed against the
+goal.
+
+The cost is not the wasted trip. The sheet is read as the list of things somebody still has to do, so
+filler crowds out the one check that genuinely had to be carried out by hand, and an operator who
+finds the first three trivial does not read the fourth. That is the same silence the rest of this
+document is built against: the rows render, the counts are right, and the goal closes on a reading
+nobody took.
+
+What clears the bar is what a running system, a real environment or a person's eyes answers and
+nothing else does:
+
+- the built thing driven end to end somewhere real, and watched;
+- the state it left behind — database rows, what a migration did to a database that existed _before_
+  the change, files on disk, refs in a repository, a queued job;
+- the logs, the error records and the metrics, for what is in them and what is not;
+- a screen: what renders against real data, what survives a reload, where the back button goes;
+- conditions no test stages — a restart mid-run, two at once, a slow or missing dependency, a real
+  credential, real volume;
+- the judgement call, where the answer is somebody's reading of the wording or of whether a number is
+  believable beside the source it came from.
+
+**Declaring no checks is a legitimate answer**, and the right one for a goal with nothing to run: a
+refactor whose whole claim is that behaviour did not change has nothing left once the suite is green.
+Its per-goal reading is null — nothing was declared — which is a third fact and not a synonym for
+clear ([The flag](#the-flag)). Nothing counts checks and nothing rewards a longer list.
+
+**Nothing enforces this.** It is stated where the writing happens — the `issue-plan` and
+`issue-replan` prompts, and the `validation_amend` tool's description — and not in `ValidationSchema`,
+because a schema that recognised a test-suite check by its words would refuse the legitimate one that
+runs a suite _inside a fixture repository_ — the shape of the example in
+[The document block](#the-document-block). The bar is about what is worth writing, and worth is not a
+thing zod can parse.
+
 ## The check
 
 One row per check, keyed on `(goal, id)` — the goal's `origin_ref` (`issue:<n>`), `src/store/validation.ts`.

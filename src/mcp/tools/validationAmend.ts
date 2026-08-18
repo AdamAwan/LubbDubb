@@ -14,7 +14,10 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
     'worth checking. Merge-only: checks you do not name are left exactly as they are, so you can correct one ' +
     'check without knowing about the others. Rewording a check withdraws whatever result somebody had already ' +
     'recorded against it, and you are told when that happens — so fix a wrong check, but do not rewrite a ' +
-    'check you merely failed.',
+    'check you merely failed. A check you add answers to the bar the plan does: it is something that can only ' +
+    'be found out by *running* the delivered goal — a real environment, the state it wrote, the logs, the ' +
+    'screen. Anything the diff, the test suite, the type checker or a green build already settles is not a ' +
+    'check, and adding one sends a person out to redo work that is done.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -34,10 +37,17 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
           properties: {
             id: { type: 'string', description: 'Stable lowercase kebab-case id, and the merge key.' },
             title: { type: 'string', description: 'One line, the headline.' },
-            do: { type: 'string', description: 'The procedure a person follows, in markdown. Concrete steps.' },
+            do: {
+              type: 'string',
+              description:
+                'The procedure a person follows, in markdown: the commands, the URL, the clicks. Concrete ' +
+                'steps, written for somebody who has not read the plan.',
+            },
             expect: {
               type: 'string',
-              description: 'What a pass looks like. A check that cannot say this is not a check.',
+              description:
+                'What they would see, and where — the row, the log line, the ref that is gone, the screen. ' +
+                'A check that cannot say this is not a check.',
             },
             uses: {
               type: 'array',

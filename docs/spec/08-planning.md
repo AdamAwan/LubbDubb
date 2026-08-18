@@ -175,8 +175,10 @@ is a plan with one part`), because the deployments most likely to submit a partl
 `validation` is the executable form of the `verification` narrative below — how anyone checks the
 _goal_ was met, as steps rather than as a paragraph. Optional, read whatever the plan's size, and owned
 entirely by [20](20-validation.md), which states its schema, its refusals and what an amendment may do
-to a check somebody has already run. The one thing worth knowing here: a check declares no actor, and
-a document that gives one is refused.
+to a check somebody has already run. Two things are worth knowing here: a check declares no actor, and
+a document that gives one is refused; and a check is only ever something running the _delivered_ goal
+can answer ([the bar](20-validation.md#the-bar)) — what the diff, the suite or a green build settles
+is `acceptance`'s business, not validation's.
 
 `parsePlanDocument(raw)` parses JSON then validates; `validatePlanDocument(value)` validates an
 already-decoded object. The `plan_submit` tool enters at the second, the file path at the first —
