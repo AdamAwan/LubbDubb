@@ -4,6 +4,7 @@ import type { WsClient } from '../api.js';
 import type { AppState } from '../types.js';
 import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
+import { ticketPlace } from './place.js';
 import { useNavigation } from './useNavigation.js';
 import type { CockpitActions } from './actions.js';
 import { fireNotifications, loadNotifyPrefs, notifiableChanges, notifySnapshot } from './notify.js';
@@ -264,9 +265,10 @@ export function useCockpit(): CockpitStatus {
       consolePanel: place.panel,
       tab: place.tab,
       collapsed: place.collapsed,
-      ticketWatch: place.ticketWatch,
-      ticketState: place.ticketState,
-      ticketOrder: place.ticketOrder,
+      // Spread, never listed: a `ticket*` field named here one at a time is one
+      // that can be left off, and a filter the view never receives is a control
+      // that moves the address bar and nothing else. → `ticketPlace`
+      ...ticketPlace(place),
     }),
   };
 }

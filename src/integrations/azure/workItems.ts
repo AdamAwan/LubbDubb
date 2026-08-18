@@ -88,6 +88,10 @@ export class AzureDevOpsWorkItemsIntegration
       title: w.title,
       labels: w.tags,
       state: normalizeState(w.state),
+      // The raw System.State kept alongside the open/closed collapse, exactly as
+      // the snapshot keeps it — and the only place a *closed* item's own word is
+      // ever read, since the live overlay only ever sees the open set.
+      workItemState: w.state,
       url: w.url,
       createdAt: w.createdAt,
       changedAt: w.changedAt,

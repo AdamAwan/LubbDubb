@@ -99,15 +99,25 @@ export function buildTicketPage(input: BuildInput): TicketPage {
   const matching: TicketRow[] = [];
   let totalCostUsd = 0;
   let live = 0;
-  const stateCounts = new Map<string, number>();
+  const stateCounts = new Map<string, { count: number; live: number }>();
   const featureCounts = new Map<number, { title: string; count: number }>();
   let orphanCount = 0;
 
   for (const item of items) {
     if (item.tracking === 'live') live += 1;
     // Facets are counted over the whole mirror, before any filter — see `states`.
-    if (item.workItemState !== null)
-      stateCounts.set(item.workItemState, (stateCounts.get(item.workItemState) ?? 0) + 1);
+    if (item.workItemState !== null) {
+      const seen = stateCounts.get(item.workItemState);
+      stateCounts.set(item.workItemState, {
+        count: (seen?.count ?? 0) + 1,
+        // Counted beside the total rather than instead of it, because the two axes
+        // are near-disjoint on a tracker with native states: every `Closed` row has
+        // left the open set, so a facet that said only "68" under the `live`
+        // narrowing would be a control that returns nothing. → the cockpit widens
+        // the tracking axis on a pick this number says is unreachable.
+        live: (seen?.live ?? 0) + (item.tracking === 'live' ? 1 : 0),
+      });
+    }
     if (item.parent) {
       const seen = featureCounts.get(item.parent.number);
       featureCounts.set(item.parent.number, { title: item.parent.title, count: (seen?.count ?? 0) + 1 });
@@ -181,7 +191,7 @@ export function buildTicketPage(input: BuildInput): TicketPage {
     // Descending by count, so the states and features a reader actually has land
     // first — and, for features, so the hue ladder is spent on the ones they see.
     states: [...stateCounts]
-      .map(([state, count]) => ({ state, count, pickup: pickupStates.includes(state) }))
+      .map(([state, seen]) => ({ ...seen, state, pickup: pickupStates.includes(state) }))
       .sort((a, b) => b.count - a.count || a.state.localeCompare(b.state)),
     features: [...featureCounts]
       .map(([number, f]) => ({ number, title: f.title, slot: featureSlots.get(number) ?? 0, count: f.count }))

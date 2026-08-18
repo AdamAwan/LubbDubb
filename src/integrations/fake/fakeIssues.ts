@@ -89,6 +89,7 @@ export class FakeIssuesIntegration
         title: issue.title,
         labels: issue.labels,
         state: issue.state,
+        workItemState: issue.workItemState ?? null,
         url: null,
         createdAt,
         changedAt: ts,

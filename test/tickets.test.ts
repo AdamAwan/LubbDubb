@@ -1,5 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import Database from 'better-sqlite3';
 import { Store } from '../src/store/store.js';
 import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
@@ -12,6 +16,7 @@ import { TicketSweep } from '../src/tickets/sweep.js';
 import type { LiveTicketFacts, MirroredTicket } from '../src/store/tickets.js';
 import type { TicketsPayload } from '../src/wire.js';
 import type { TrackerItem } from '../src/types.js';
+import { statePick } from '../web/src/cockpit/place.js';
 
 const MONTH_MS = 30 * 24 * 60 * 60 * 1000;
 /** What a sweep asked from, when a test is not about the mark itself. */
@@ -22,6 +27,7 @@ function item(over: Partial<TrackerItem> & Pick<TrackerItem, 'number'>): Tracker
     title: `Ticket ${over.number}`,
     labels: [],
     state: 'open',
+    workItemState: null,
     url: null,
     createdAt: '2026-08-01T00:00:00.000Z',
     changedAt: '2026-08-01T00:00:00.000Z',
@@ -34,7 +40,6 @@ function mirrored(over: Partial<MirroredTicket> & Pick<MirroredTicket, 'number'>
     ...item(over),
     firstSeenAt: '2026-08-01T00:00:00.000Z',
     tracking: 'live',
-    workItemState: null,
     issueType: null,
     lastReadAt: null,
     ...over,
@@ -112,6 +117,60 @@ test('the sweep asks from the anchor first and from its own mark after', async (
 
   await sweep.run();
   assert.equal(asked[1], '2026-08-09T00:00:00.000Z', 'the next reads from what was actually taken in');
+  store.close();
+});
+
+test('a fresh mirror is restated by its own first read', async () => {
+  const store = new Store(':memory:');
+  const sweep = new TicketSweep({
+    store,
+    backfillMs: MONTH_MS,
+    source: {
+      tracksTicketHistory: true,
+      listTicketHistory: () => Promise.resolve([]),
+    },
+  });
+  await sweep.run();
+  assert.notEqual(
+    store.readTrackerSweep()?.restatedAt,
+    null,
+    'so an upgrade pays for the re-read and a new deployment does not',
+  );
+  store.close();
+});
+
+test('a mirror written before the history carried states re-reads itself once', async () => {
+  // The database an upgrade actually finds: swept by a build whose history read
+  // dropped the provider's own word, so every row that had already closed carries
+  // no state and no state filter can reach it. The column does not exist yet
+  // either — which is what makes its absence mean *not restated*.
+  const path = join(mkdtempSync(join(tmpdir(), 'lubbdubb-tickets-')), 'db.sqlite');
+  const raw = new Database(path);
+  raw.exec(`CREATE TABLE tracker_sweep (
+    id INTEGER PRIMARY KEY CHECK (id = 1), anchor_at TEXT NOT NULL, swept_to TEXT, updated_at TEXT NOT NULL);
+    INSERT INTO tracker_sweep VALUES (1, '${SINCE}', '2026-08-08T00:00:00.000Z', '${SINCE}');`);
+  raw.close();
+
+  const store = new Store(path);
+  const asked: string[] = [];
+  const sweep = new TicketSweep({
+    store,
+    backfillMs: MONTH_MS,
+    source: {
+      tracksTicketHistory: true,
+      async listTicketHistory(since: string) {
+        asked.push(since);
+        return [item({ number: 7, changedAt: '2026-08-09T00:00:00.000Z', state: 'closed', workItemState: 'Closed' })];
+      },
+    },
+  });
+
+  await sweep.run();
+  assert.equal(asked[0], SINCE, 'the sweep asks from the floor again rather than from its own mark');
+  assert.equal(store.listTrackerItems()[0]?.workItemState, 'Closed', 'and every row is re-upserted with its state');
+
+  await sweep.run();
+  assert.equal(asked[1], '2026-08-09T00:00:00.000Z', 'then it is incremental again — the re-read happens once');
   store.close();
 });
 
@@ -438,6 +497,40 @@ test('an item that leaves the open set freezes, keeps everything, and thaws if i
   store.close();
 });
 
+test('a closed item keeps the tracker’s own word for why it closed', () => {
+  // The live overlay is the open set by construction, so it is the *history* read
+  // that has to carry the native state — otherwise every closed row answers null
+  // and no state filter can reach it, which is the silence a discovered state list
+  // exists to prevent.
+  const store = new Store(':memory:');
+  store.ensureTrackerSweep(MONTH_MS);
+  store.recordSweep(
+    SINCE,
+    [item({ number: 1, state: 'closed', workItemState: 'Closed' }), item({ number: 2, workItemState: 'Removed' })],
+    [],
+  );
+  assert.deepEqual(
+    store.listTrackerItems().map((r) => [r.number, r.workItemState]),
+    [
+      [2, 'Removed'],
+      [1, 'Closed'],
+    ],
+    'two ways of closing an item are two facts, and the mirror keeps both',
+  );
+  store.close();
+});
+
+test('a provider with no native states never wipes one the overlay wrote', () => {
+  // GitHub and the fake hand back null on every history read. Assigning it would
+  // erase what the snapshot knew, silently, on every pulse.
+  const store = new Store(':memory:');
+  store.ensureTrackerSweep(MONTH_MS);
+  store.recordSweep(SINCE, [item({ number: 1 })], [fact(1, { workItemState: 'Active' })]);
+  store.recordSweep(SINCE, [item({ number: 1 })], []);
+  assert.equal(store.listTrackerItems()[0]?.workItemState, 'Active');
+  store.close();
+});
+
 test('an empty live set freezes nothing at all', () => {
   // A provider whose snapshot failed hands back its last good read, but one that is
   // down on a first boot hands back nothing — and freezing the whole board off that
@@ -524,6 +617,44 @@ test('the facets count the whole mirror, not the filtered set', () => {
     page(items, { feature: 'none' }).rows.map((r) => r.number),
     [1],
   );
+});
+
+test('a state facet says how much of itself is still live', () => {
+  // `Closed` is on frozen rows by definition. Counting only the total would leave
+  // the cockpit no way to tell a pick that narrows from one that returns nothing.
+  const facets = page([
+    mirrored({ number: 3, workItemState: 'New' }),
+    mirrored({ number: 2, workItemState: 'Closed', tracking: 'frozen', state: 'closed' }),
+    mirrored({ number: 1, workItemState: 'Closed', tracking: 'frozen', state: 'closed' }),
+  ]).states;
+  assert.deepEqual(
+    facets.map((f) => [f.state, f.count, f.live]),
+    [
+      ['Closed', 2, 0],
+      ['New', 1, 1],
+    ],
+  );
+  // And the rows are there to be had, which is the whole point of carrying the
+  // state on a frozen row at all.
+  assert.deepEqual(
+    page(
+      [
+        mirrored({ number: 2, workItemState: 'Closed', tracking: 'frozen', state: 'closed' }),
+        mirrored({ number: 1, workItemState: 'New' }),
+      ],
+      { state: 'Closed' },
+    ).rows.map((r) => r.number),
+    [2],
+  );
+});
+
+test('picking a state nothing live carries widens the tracking axis rather than emptying the list', () => {
+  const closed = { state: 'Closed', count: 68, live: 0, pickup: false };
+  const active = { state: 'Active', count: 4, live: 4, pickup: true };
+  assert.deepEqual(statePick(closed, 'live'), { state: 'Closed', tracking: 'any' });
+  assert.deepEqual(statePick(active, 'live'), { state: 'Active' }, 'a state with live rows narrows as it always did');
+  assert.deepEqual(statePick(closed, 'frozen'), { state: 'Closed' }, 'and an axis already wide enough is left alone');
+  assert.deepEqual(statePick(null, 'live'), { state: 'any' }, 'Any clears the state and moves nothing else');
 });
 
 test('the pickup states config marks the states it lets through', () => {

@@ -11,6 +11,7 @@ import type {
   TicketTrackingFilter,
   TicketWatchFilter,
 } from '../types.js';
+import { statePick } from '../cockpit/place.js';
 import type { CockpitView } from '../view/viewModel.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Ref, RefLinksExtended } from './refs.js';
@@ -219,7 +220,9 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
 
       {/* Drawn only where the provider has native states. A filter offering states
           the tracker cannot produce is a control that always returns nothing. */}
-      {states.length > 0 && <StateTier states={states} value={query.state} onPick={(state) => onQuery({ state })} />}
+      {states.length > 0 && (
+        <StateTier states={states} value={query.state} onPick={(facet) => onQuery(statePick(facet, query.tracking))} />
+      )}
 
       {(features.length > 0 || orphanCount > 0) && (
         <FeatureLegend
@@ -347,7 +350,7 @@ function StateTier({
 }: {
   states: readonly TicketStateFacet[];
   value: string;
-  onPick: (next: string) => void;
+  onPick: (next: TicketStateFacet | null) => void;
 }): JSX.Element {
   return (
     <div className="tickets-states">
@@ -357,7 +360,7 @@ function StateTier({
       <button
         type="button"
         className={value === 'any' ? 'on' : ''}
-        onClick={() => onPick('any')}
+        onClick={() => onPick(null)}
         aria-pressed={value === 'any'}
       >
         Any
@@ -368,12 +371,8 @@ function StateTier({
           type="button"
           className={`${value === facet.state ? 'on' : ''} ${facet.pickup ? 'gate' : ''}`}
           aria-pressed={value === facet.state}
-          onClick={() => onPick(facet.state)}
-          title={
-            facet.pickup
-              ? `"${facet.state}" is one of the states pickupStates lets the harness work`
-              : `"${facet.state}" is not a state the harness picks up from`
-          }
+          onClick={() => onPick(facet)}
+          title={stateWhy(facet)}
         >
           {facet.state}
           {facet.pickup && <i className="tickets-gate">▲</i>}
@@ -385,6 +384,19 @@ function StateTier({
       </span>
     </div>
   );
+}
+
+/** Why a state chip is what it is: the pickup gate, and whether anything under it is still live. */
+function stateWhy(facet: TicketStateFacet): string {
+  const gate = facet.pickup
+    ? `"${facet.state}" is one of the states pickupStates lets the harness work`
+    : `"${facet.state}" is not a state the harness picks up from`;
+  // Said before the click rather than discovered after it: the tracking row above
+  // is about to change, and a filter that moves a control the reader did not touch
+  // has to say so.
+  return facet.live === 0
+    ? `${gate}. Nothing under it is still in the tracker's open set, so picking it shows the whole history`
+    : gate;
 }
 
 /**

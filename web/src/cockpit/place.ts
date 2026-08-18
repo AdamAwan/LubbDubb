@@ -1,5 +1,11 @@
 import type { ConsolePanel, ConsoleTab } from './actions.js';
-import type { TicketOrder, TicketStateFilter, TicketTrackingFilter, TicketWatchFilter } from '../types.js';
+import type {
+  TicketOrder,
+  TicketStateFacet,
+  TicketStateFilter,
+  TicketTrackingFilter,
+  TicketWatchFilter,
+} from '../types.js';
 
 /**
  * Where the cockpit is — every piece of state that answers *what am I looking
@@ -179,6 +185,54 @@ function readTracking(
     ticketTracking: TICKET_TRACKING.find((t) => t === tracking) ?? 'live',
     ticketState: state ?? 'any',
   };
+}
+
+/** Every `ticket*` field a place carries — the tab's whole filter, as one value. */
+type TicketPlace = Pick<
+  Place,
+  'ticketWatch' | 'ticketTracking' | 'ticketState' | 'ticketFeature' | 'ticketGroup' | 'ticketOrder'
+>;
+
+/**
+ * The tab's filter, lifted off the place in one piece.
+ *
+ * Spread into the view model rather than listed field by field, because a field
+ * left off that list is a **control that moves the address bar and nothing else**:
+ * the URL says `tracking=frozen`, the segment stays on Live, the list never
+ * re-reads, and every one of those is what a working filter looks like from the
+ * outside. `ticketTracking`, `ticketFeature` and `ticketGroup` were all missing
+ * that way — three inert controls, no error anywhere, and the one route to the
+ * closed items among them. One value is what makes forgetting one impossible.
+ */
+export function ticketPlace(place: Place): TicketPlace {
+  const { ticketWatch, ticketTracking, ticketState, ticketFeature, ticketGroup, ticketOrder } = place;
+  return { ticketWatch, ticketTracking, ticketState, ticketFeature, ticketGroup, ticketOrder };
+}
+
+/**
+ * Where picking a state chip lands — the state itself, and the tracking axis it
+ * has to be reachable under.
+ *
+ * A closing state is on frozen rows by definition, so under the tab's default
+ * `live` narrowing a pick of `Closed` would return an empty list while the chip
+ * that was just clicked counted sixty-eight. Widening is the only reading of that
+ * click that is not a lie: the reader asked for the closed items, and the axis
+ * they are behind is not one anything told them about. **Only ever widened, and
+ * only where the two axes actually conflict** — a state with live rows narrows
+ * exactly as it always did, and nothing here ever makes the list smaller than the
+ * chip's own count implies.
+ *
+ * Here rather than in the panel because it is a statement about two `Place`
+ * fields, and because a `.tsx` is a module no test can import.
+ * → `docs/spec/17-cockpit.md#three-axes-because-they-are-three-questions`
+ */
+export function statePick(
+  facet: TicketStateFacet | null,
+  tracking: TicketTrackingFilter,
+): { state: TicketStateFilter; tracking?: TicketTrackingFilter } {
+  if (facet === null) return { state: 'any' };
+  if (facet.live === 0 && tracking === 'live') return { state: facet.state, tracking: 'any' };
+  return { state: facet.state };
 }
 
 /** A feature number, the orphan bucket, or null. Junk narrows nothing, as everywhere here. */

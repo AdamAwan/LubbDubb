@@ -201,7 +201,9 @@ once.
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                          |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                 |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched` / `ignored`; `any` is the absent value                                    |
-| `state`                              | its tracker axis: `open` / `closed`; `any` is the absent value                                                                    |
+| `tracking`                           | its harness reading: `any` / `frozen`; `live` is the absent value                                                                 |
+| `state`                              | its tracker axis: the tracker's own word (`open` / `closed` alias the old two-valued axis); `any` is the absent value             |
+| `feature` / `group`                  | the feature it is narrowed to (or `none`), and `flat` for one list; `feature` grouping is the absent value                        |
 | `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                               |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
@@ -226,8 +228,17 @@ place that does not exist, and the answer to that is the overview. The entry the
 normalised with `replaceState` for the same reason the push is skipped: a URL saying something the
 console does not would make the first real move look like a change when it is not.
 
+**The Tickets tab's filter is lifted off the place in one piece** — `ticketPlace(place)`, spread into
+the view model rather than listed field by field. A field named there one at a time is a field that
+can be left off, and a filter the view never receives is a **control that moves the address bar and
+nothing else**: the URL says `tracking=frozen`, the segment stays on Live, the list never re-reads,
+and every one of those looks like a working filter from the outside. `tracking`, `feature` and `group`
+were all inert that way, with nothing red and no type able to say so — every field of the view
+model's input is optional, because the defaults are what a bare URL means.
+
 `test/cockpitPlace.test.ts` pins the codec — the round trip for every destination, the bare URL, the
-single spelling, an unknown value reading as the overview, and an ask id surviving encoding.
+single spelling, an unknown value reading as the overview, an ask id surviving encoding, and that
+every `ticket*` field the place holds reaches the view.
 
 ## The queue rail — "Needs you"
 
@@ -248,7 +259,7 @@ are answered the same two ways — done, or declined with a reason — which is 
 
 **`profile` is the second kind with no row of its own underneath it** — it is read off
 `issue.assay.awaitingProfileAnswer`, the goal-profile gate ([06](06-issue-pickup.md#the-second-arm-an-unanswered-profile-proposal-issue-342)),
-because the harness raises no escalation and files no task for it: the proposal *is* the ask. It is in
+because the harness raises no escalation and files no task for it: the proposal _is_ the ask. It is in
 the queue for what makes that gate different from every other hold — it expires on nothing but the
 answer, so a gate nobody sees is a goal stopped for good. It was drawn on the goal's own page and
 nowhere else, which is the page an operator has no reason to open for a goal that looks like it merely
@@ -828,6 +839,19 @@ answered where the states are.
 Facets are counted over the **whole mirror**, not the filtered set. A facet counted after its own
 filter shows `1` beside whichever value is selected and nothing beside the rest — a control that
 erases its own alternatives the moment it is used.
+
+**A closing state is on the tier, and picking it widens the tracking axis.** The two axes are
+near-disjoint on a tracker with native states: every `Closed` row has by definition left the open set,
+so under the tab's default `live` narrowing a pick of it would return an empty list while the chip
+that was just clicked counted sixty-eight. Each facet therefore carries `live` beside `count`, and
+`statePick` (`web/src/cockpit/place.ts`) widens `tracking` to `any` on exactly the picks that number
+says are unreachable — never on any other, so a state with live rows narrows as it always did and
+nothing here ever makes the list smaller than the chip's own count implies. The chip's tooltip says it
+before the click, because a filter that moves a control the reader did not touch has to say so.
+
+That the closed rows are _in_ the mirror with their own word on them at all is the store's business
+and was not always true — the state used to be taken only from the live overlay, so a closed item
+carried none. → [14](14-persistence.md#the-ticket-mirror)
 
 The harness's own outcome for a goal — `delivered`, `fell short`, `concluded`, `abandoned` — rides on
 the row as a chip and is deliberately **not a filter**: it answers a different question from any axis.

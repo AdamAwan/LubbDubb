@@ -1339,6 +1339,18 @@ export interface TrackerItem {
   title: string;
   labels: string[];
   state: IssueState;
+  /**
+   * The provider's own workflow word — `Closed`, `Removed`, `Ready` — or null
+   * where it has none (GitHub, the fake).
+   *
+   * Read on the *history* sweep and not only on the live overlay, which is the
+   * whole difference between a closed item that says `Closed` and one no state
+   * filter can reach: the overlay is built from the open set by construction, so
+   * an item that has left it would otherwise keep whatever state it was last seen
+   * live with — or, for everything closed before the harness ever saw it open,
+   * none at all. → `docs/spec/14-persistence.md#the-ticket-mirror`
+   */
+  workItemState: string | null;
   /** The provider's web URL, when it gave one. */
   url: string | null;
   /** When the tracker says the item was filed — the list's `added` reading. */
