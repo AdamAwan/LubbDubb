@@ -859,6 +859,15 @@ It is folded to one word on the server (`src/tickets/outcomes.ts`) from `resolve
 the delivery and run rows, because a precedence rule re-implemented in a component is a second opinion
 about it.
 
+**A goal being worked has no outcome word.** `resolveIssueConclusion` resolves a plan in flight —
+`planning`, `awaiting_approval` or `active` — to `more_work` with `by: 'plan'`, which is a derivation
+about where the fleet is and not a judgement anyone cast. `fell short` is reserved for a `more_work`
+somebody actually said: an assessor's shortfall, the operator's toggle, or the working agent's own
+`conclude_work`. Reading the verdict without its author put the chip on every goal with a live plan,
+which on a running fleet is most of the ones in progress — the column then said "fell short" about
+work that had not finished yet. Where the goal has got to is the row's state and the dispatcher's own
+pickup reasons; this chip is for how the harness _left_ it.
+
 ### The type is tinted by family, never by name
 
 A row's work-item type is drawn as a chip tinted by **family** — bug, story, debt, container, task —
