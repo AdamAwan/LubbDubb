@@ -652,6 +652,30 @@ never a replacement, and `@@LUBBDUBB_DONE@@` has **no tool at all**: MCP has no 
 a `finish()` the model forgets to call is silence, and silence is indistinguishable from thinking. The
 `result` event plus the sentinel is what disambiguates _finished_ from _stopped mid-task_.
 
+### The finish reminder on a terminal tool
+
+Having no tool for done has one cost, and it lands on the tools that _are_ the whole of a dispatch:
+`assess_issue`, `conclude_work` and `conclude_part`. Their success responses read as the end of the
+job — "Recorded. The harness will schedule nothing further for this issue" — while the sentinel was
+stated once, in the system prompt, thousands of tokens earlier. An agent that records its verdict,
+narrates it and stops has therefore done everything its prompt asked and still ends its turn with no
+sentinel in it, which
+[10](10-agent-runtimes.md#a-result-is-the-end-of-a-turn-not-of-the-session) can only read as a park:
+the done/waiting decision has no third branch, so the operator gets "Agent ended its turn without
+finishing" over a job that finished.
+
+So each of those three appends `DONE_REMINDER` (`src/agents/agentProtocol.ts`, built from
+`DONE_SENTINEL` so there is never a second copy of the string) to its success note. It states the
+_condition_ — "when you have finished everything your task asked for" — rather than announcing the
+end, because the call is not itself the end: an assayer has a `scratch_append` note to leave after
+`assay_issue`, and wording that read as "you are finished now" would cut that short. For that reason
+`assay_issue` does not carry the reminder; the last thing its prompt asks for is the note, not the
+verdict.
+
+The reminder does not make a tool call imply done. That asymmetry is `note_progress`'s, for the same
+reason: what the agent says and what the harness observes answer different questions, and neither
+substitutes.
+
 Every one of these leaves behaviour byte-for-byte as it was without the channel, and
 `test/mcpChannel.test.ts` asserts that floor rather than merely intending it:
 

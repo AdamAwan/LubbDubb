@@ -1,6 +1,7 @@
 import { ASSESSMENT_VERDICT_HELP, ASSESSMENT_VERDICTS, validateAssessment } from '../assessment.js';
 import { SHORTFALL_CAUSE_HELP, SHORTFALL_CAUSES, shortfallRecordedNote } from '../../delivery/shortfall.js';
 import { toolError } from '../protocol.js';
+import { DONE_REMINDER } from '../../agents/agentProtocol.js';
 import type { ToolFactory } from './context.js';
 
 export const assessIssue: ToolFactory = ({ deps, agent, ok }) => ({
@@ -77,12 +78,16 @@ export const assessIssue: ToolFactory = ({ deps, agent, ok }) => ({
       issue: result.issueOrigin,
       status: result.verdict,
       cause: parsed.cause,
+      // The finish reminder rides on every terminal tool's response — see
+      // {@link DONE_REMINDER} for why the system prompt alone is not enough.
       note:
-        parsed.verdict === 'delivered'
+        (parsed.verdict === 'delivered'
           ? 'Recorded. The harness will not pick this issue up again while the verdict stands — it ends ' +
             'when the issue changes in the tracker or someone clears it. The ticket is not closed; that ' +
             'stays a human decision.'
-          : shortfallRecordedNote(parsed.cause),
+          : shortfallRecordedNote(parsed.cause)) +
+        ' ' +
+        DONE_REMINDER,
     });
   },
 });

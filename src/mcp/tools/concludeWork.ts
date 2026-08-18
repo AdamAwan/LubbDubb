@@ -1,5 +1,6 @@
 import { CONCLUSION_VERDICT_HELP, CONCLUSION_VERDICTS, validateConclusion } from '../conclusion.js';
 import { toolError } from '../protocol.js';
+import { DONE_REMINDER } from '../../agents/agentProtocol.js';
 import type { ToolFactory } from './context.js';
 
 export const concludeWork: ToolFactory = ({ deps, agent, ok }) => ({
@@ -43,13 +44,16 @@ export const concludeWork: ToolFactory = ({ deps, agent, ok }) => ({
       status: result.conclusion.verdict,
       // Said in the response as well as the description: an agent that
       // believes "done" closed the ticket would stop looking at it, and an
-      // agent that believes "more_work" scheduled something would wait.
+      // agent that believes "more_work" scheduled something would wait. The
+      // finish reminder rides along for {@link DONE_REMINDER}'s reason.
       note:
-        parsed.verdict === 'done'
+        (parsed.verdict === 'done'
           ? 'Recorded. The harness will schedule nothing further for this issue. It does not close the ' +
             'ticket in the tracker — that stays a human decision.'
           : 'Recorded. The issue returns to pickup once its pull request is out of review, and your note ' +
-            'goes to whoever picks it up. Nothing is dispatched right now.',
+            'goes to whoever picks it up. Nothing is dispatched right now.') +
+        ' ' +
+        DONE_REMINDER,
     });
   },
 });

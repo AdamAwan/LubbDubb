@@ -4,7 +4,13 @@ import { connect } from 'node:net';
 import { mkdtempSync, existsSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildClaudeArgs, buildClaudeStreamArgs, MCP_PROTOCOL_ADDENDUM } from '../src/agents/agentProtocol.js';
+import {
+  buildClaudeArgs,
+  buildClaudeStreamArgs,
+  DONE_REMINDER,
+  MCP_PROTOCOL_ADDENDUM,
+} from '../src/agents/agentProtocol.js';
+import { DONE_SENTINEL } from '../src/agents/sentinels.js';
 import { handleRequest, parseFrame, type McpTool, toolJson } from '../src/mcp/protocol.js';
 import { ALLOWED_MCP_TOOLS, MCP_SERVER_ID, MCP_TOOL_NAMES, PERMISSION_PROMPT_TOOL } from '../src/mcp/names.js';
 import { defaultSocketPath, McpBridgeServer } from '../src/mcp/server.js';
@@ -1686,6 +1692,63 @@ test('conclude_part refuses "code": a merge is observed, never declared', async 
   const kind = advertisedSchema(system, agent, 'conclude_part').properties.kind as { enum: string[] };
   assert.deepEqual(kind.enum, ['report', 'determination']);
   system.store.close();
+});
+
+// -- the finish reminder on a terminal tool ---------------------------------
+
+test('every terminal tool tells the caller to print the done sentinel', async () => {
+  // The failure this closes is silent and looks like the agent's fault: an
+  // assessor that records its verdict, narrates it and stops has done everything
+  // its prompt asked, and `StreamJsonSession` still parks it — a turn with no
+  // sentinel in it has nowhere else to go. The sentinel is stated once, in the
+  // system prompt, and these responses read as the end of the job, so it is said
+  // again at the point of use.
+  const system = build();
+  const plan = system.store.upsertPlan({
+    originRef: 'issue:12',
+    title: 'Investigate',
+    status: 'active',
+    reason: 'Measure before building.',
+  });
+  system.store.upsertPlanParts(plan.id, [
+    {
+      slug: 'probe',
+      seq: 1,
+      title: 'Investigate',
+      scope: 'src/',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+      touches: [],
+      size: null,
+      expectedKind: 'report',
+    },
+  ]);
+  system.store.updatePlanPart(system.store.listPlanParts(plan.id)[0]!.id, { status: 'dispatched' });
+
+  const calls = [
+    ['issue:12:assess', 'assess_issue', { status: 'delivered', summary: 'all present' }],
+    ['issue:13:assess', 'assess_issue', { status: 'more_work', summary: 'the migration is missing' }],
+    ['issue:14', 'conclude_work', { status: 'done', note: 'shipped in #40' }],
+    ['issue:15', 'conclude_work', { status: 'more_work', note: 'the CLI half is left' }],
+    ['issue:12:part:probe', 'conclude_part', { kind: 'report', summary: 'measured; nothing to build' }],
+  ] as const;
+
+  for (const [origin, tool, args] of calls) {
+    const agent = spawnAgent(system, origin);
+    const res = await callTool(system, agent, tool, args);
+    assert.equal(res.isError, false, `${tool} accepted the call for ${origin}`);
+    assert.ok(res.text.includes(DONE_SENTINEL), `${tool} (${origin}) names the sentinel in its success note`);
+  }
+  system.store.close();
+});
+
+test('the finish reminder states a condition rather than announcing the end', () => {
+  // A terminal tool's call is not itself "done" — an assayer, for one, has a
+  // scratchpad note to leave after it. Wording that read as "you are finished
+  // now" would cut that short, so the reminder is conditional on the task.
+  assert.ok(DONE_REMINDER.includes(DONE_SENTINEL), 'the reminder is built from the sentinel, never a second copy');
+  assert.match(DONE_REMINDER, /when you have finished everything/i);
 });
 
 test('open_pr opens the pull request for the calling agent, titled by the convention', async () => {
