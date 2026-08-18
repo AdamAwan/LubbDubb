@@ -687,11 +687,17 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * forge. Unlike {@link ask} this does not require a *live* session — a finding
    * is a durable note, and one filed on an agent's last breath is still true.
    */
-  recordFinding(agentId: string, input: FindingInput): { ok: true; finding: Finding } | { ok: false; error: string } {
+  recordFinding(
+    agentId: string,
+    input: FindingInput,
+  ): { ok: true; finding: Finding; created: boolean } | { ok: false; error: string } {
     return this.withCaller(agentId, ({ task }) => {
       const { finding, created } = this.store.recordFinding(agentId, task.id, task.originRef, input);
       this.emit('finding', { agentId, taskId: task.id, finding, created });
-      return { ok: true, finding };
+      // `created` reaches the tool too: an agent told its report merged into a
+      // standing one knows the claim is already on an operator's list, which is
+      // the answer to "should I say this again, louder".
+      return { ok: true, finding, created };
     });
   }
 

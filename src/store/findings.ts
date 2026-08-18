@@ -26,14 +26,28 @@ export class FindingStore {
    * own, resolved from its credential by the tool layer — there is no argument
    * for them, so a finding cannot be filed as another agent.
    *
-   * A repeat (same agent, kind, ref and summary) refreshes the existing row
-   * instead of inserting: an agent that reports the same thing on every turn
-   * should not fill the operator's list. The summary is the whole key because it
-   * is the claim — `where` and `detail` are the same claim's supporting text, so
-   * a repeat carrying better evidence overwrites them rather than being filed
-   * again beside the thinner one. The status is deliberately *not* reset: a
-   * dismissed finding repeated stays dismissed, which is what dismissing it
-   * meant.
+   * ## Two ways an existing row is found again
+   *
+   * A **repeat** — same agent, kind, ref and summary — refreshes that row instead
+   * of inserting: an agent that reports the same thing on every turn should not
+   * fill the operator's list. The summary is the whole key because it is the
+   * claim; `where` and `detail` are the same claim's supporting text, so a repeat
+   * carrying better evidence overwrites them rather than being filed again beside
+   * the thinner one. The status is deliberately *not* reset here: a dismissed
+   * finding repeated by its own author stays dismissed, which is what dismissing
+   * it meant.
+   *
+   * A **restatement** — a different agent, or the same one wording the claim
+   * differently — merges into the standing row for the same claim. Two agents on
+   * two tasks land in the same file and see the same unrelated bug, and the exact
+   * key above cannot see that at all: it is the first key's blind spot, and the
+   * duplicate pairs in the cockpit's list were nearly all of this shape. The
+   * match is on {@link claimKey} over kind, ref and summary, and it is scoped to
+   * rows that are **not dismissed** — a dismissed finding is a claim an operator
+   * has already answered, so it is not something a later report should be folded
+   * silently into. A restatement by *another* agent only **backfills** evidence —
+   * it may supply a `where` the first reporter had none for, but it does not get
+   * to rewrite their words on a row that carries their name.
    */
   recordFinding(
     agentId: string,
@@ -42,18 +56,23 @@ export class FindingStore {
     input: FindingInput,
   ): { finding: Finding; created: boolean } {
     const ts = this.ctx.now();
-    // `IS` rather than `=` so a null ref matches a null ref (SQL equality doesn't).
-    const existing = this.ctx.db
-      .prepare(`SELECT * FROM findings WHERE agent_id=? AND kind=? AND ref IS ? AND summary=?`)
-      .get(agentId, input.kind, input.ref, input.summary) as FindingRow | undefined;
+    // The standing row for this claim first, then — only if there is none — the
+    // author's own identical row, which at this point can only be a dismissed
+    // one. That order is what "don't match a dismissed finding" means in
+    // practice: a live row wins over an answered one, and an author repeating a
+    // claim nobody else has restated still lands back on their dismissed row
+    // rather than refiling it.
+    const existing = this.findStandingClaim(input) ?? this.findOwnRepeat(agentId, input);
     if (existing) {
+      // Its author may rewrite its evidence; anyone else may only fill in what
+      // is missing.
+      const own = existing.agentId === agentId;
+      const where = own ? input.where : (existing.where ?? input.where);
+      const detail = own ? input.detail : (existing.detail ?? input.detail);
       this.ctx.db
         .prepare(`UPDATE findings SET where_at=?, detail=?, updated_at=? WHERE id=?`)
-        .run(input.where, input.detail, ts, existing.id);
-      return {
-        finding: { ...rowToFinding(existing), where: input.where, detail: input.detail, updatedAt: ts },
-        created: false,
-      };
+        .run(where, detail, ts, existing.id);
+      return { finding: { ...existing, where, detail, updatedAt: ts }, created: false };
     }
     const finding: Finding = {
       id: `find_${nanoid(10)}`,
@@ -78,6 +97,40 @@ export class FindingStore {
       )
       .run(finding);
     return { finding, created: true };
+  }
+
+  /**
+   * The finding already standing for this claim, if one is — oldest first, so a
+   * restatement joins the row an operator has been looking at rather than the
+   * newest near-copy of it.
+   *
+   * Candidates are narrowed in SQL to the same kind and ref and to rows nobody
+   * has dismissed; the claim comparison itself is in TypeScript because it is
+   * normalisation, not a predicate SQL can index. The list is short — a
+   * deployment's open findings are tens of rows, not thousands — and keeping the
+   * rule in one readable function is worth more here than an index would be.
+   */
+  private findStandingClaim(input: FindingInput): Finding | null {
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT * FROM findings WHERE kind=? AND ref IS ? AND status<>'dismissed' ORDER BY created_at ASC, rowid ASC`,
+      )
+      .all(input.kind, input.ref) as FindingRow[];
+    const key = claimKey(input.summary);
+    const match = rows.find((r) => claimsMatch(key, claimKey(r.summary)));
+    return match ? rowToFinding(match) : null;
+  }
+
+  /**
+   * The caller's own row for exactly this report, whatever its status.
+   *
+   * `IS` rather than `=` so a null ref matches a null ref (SQL equality doesn't).
+   */
+  private findOwnRepeat(agentId: string, input: FindingInput): Finding | null {
+    const row = this.ctx.db
+      .prepare(`SELECT * FROM findings WHERE agent_id=? AND kind=? AND ref IS ? AND summary=?`)
+      .get(agentId, input.kind, input.ref, input.summary) as FindingRow | undefined;
+    return row ? rowToFinding(row) : null;
   }
 
   getFinding(id: string): Finding | null {
@@ -175,4 +228,38 @@ function rowToFinding(r: FindingRow): Finding {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
+}
+
+/**
+ * A summary reduced to the claim it makes: case, markdown emphasis, backticks,
+ * quotes and punctuation dropped, whitespace collapsed. Two agents describing one
+ * discovery rarely type the same string, but they very often type the same string
+ * modulo exactly this — "`ingest.ts` buffers the whole body" and "ingest.ts
+ * buffers the whole body." are one claim.
+ */
+function claimKey(summary: string): string {
+  return summary
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/**
+ * Whether two claim keys are the same claim.
+ *
+ * Equal, or one wholly contains the other — a restatement that appends its own
+ * qualifier ("… on large uploads") is the same claim, and folding it in is the
+ * point. The length floor is what keeps containment from being a merge-everything
+ * rule: a very short key is a substring of far too much, and a wrong merge is
+ * worse than a duplicate because it hides one agent's report inside another's.
+ */
+const MIN_CONTAINMENT = 24;
+
+function claimsMatch(a: string, b: string): boolean {
+  if (a === b) return true;
+  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
+  if (short.length < MIN_CONTAINMENT) return false;
+  // Padded, so containment lands on whole words: "rate limit" is not a claim
+  // about "rate limiter" merely because one string sits inside the other.
+  return ` ${long} `.includes(` ${short} `);
 }
