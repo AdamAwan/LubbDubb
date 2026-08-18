@@ -8,12 +8,24 @@ import { goalIssue, goalOfPr } from './goalPage.js';
  * free text. Drawing them as one kind is how a surface ends up offering the
  * wrong control.
  */
-export type NeedKind = 'recovery' | 'escalation' | 'permission' | 'proposal' | 'bench' | 'close_out' | 'burn' | 'limit';
+export type NeedKind =
+  | 'recovery'
+  | 'escalation'
+  | 'permission'
+  | 'proposal'
+  | 'profile'
+  | 'bench'
+  | 'close_out'
+  | 'burn'
+  | 'limit';
 
 /**
  * Who is stopped. `blocking` means an agent is parked and cannot proceed;
  * `yours` means the obligation is the operator's and nothing is waiting inside
- * the fleet. Red/amber, and the split is strict — red means an agent is parked
+ * the fleet — which is where the goal-profile gate sits, holding a whole goal's
+ * dispatch with no agent parked on it. The colour rule is about a held slot, not
+ * about how much is stopped, and widening it for a gate nobody is sitting in
+ * would cost the rule the only thing red currently means. Red/amber, and the split is strict — red means an agent is parked
  * and only you can un-park it, and nothing else.
  *
  * A usage-limit park (issue #318) is `blocking` for that reason and not by
@@ -218,6 +230,42 @@ export function buildNeedsYou(state: AppState): NeedRow[] {
       // The park has no row of its own to be stamped, so the agent's own clock is
       // the honest reading: it is the last thing that happened to it.
       raisedAt: agent.startedAt,
+    });
+  }
+
+  // The goal-profile gate (#342). It is the one hold the harness raises with no
+  // row of its own anywhere — no escalation, no human task, no parked agent — so
+  // a queue reading only those four sources left it legible on one page, the
+  // goal's, which is the page an operator has no reason to open for a goal that
+  // looks like it simply has not come up yet. It expires on nothing but the
+  // answer, so unseen meant stopped for good.
+  //
+  // Read off `world.issues` rather than the retained runs too: a goal the world
+  // no longer carries is not one the funnel is refusing to dispatch, and a row
+  // for it would be an ask about nothing.
+  for (const issue of state.world.issues) {
+    const assay = issue.assay;
+    if (!assay?.awaitingProfileAnswer || assay.proposedProfile === null) continue;
+    const goalRef = `issue:${issue.number}`;
+    rows.push({
+      // Prefixed, because the row is derived from the goal rather than from a row
+      // of its own: an id of `issue:12` alone would collide with anything else
+      // keyed on the goal, and the panel resolves an ask by this id.
+      id: `profile:${goalRef}`,
+      kind: 'profile',
+      group: 'yours',
+      title: `The goal assay wants this run on “${assay.proposedProfile}”`,
+      goalRef,
+      originRef: goalRef,
+      opens: opensAt(goalRef, state),
+      // The assayer that proposed it is gone, and it was never parked on the
+      // answer — an id here would point at a run that ended.
+      agentId: null,
+      // Nothing is holding parts: the gate stops the goal before there is a plan
+      // to hold any, and a count invented here would sort it against asks that
+      // really are blocking work.
+      holding: 0,
+      raisedAt: assay.decidedAt,
     });
   }
 

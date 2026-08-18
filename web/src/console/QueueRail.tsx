@@ -11,6 +11,7 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   escalation: 'Escalation',
   permission: 'Permission',
   proposal: 'Plan',
+  profile: 'Profile',
   bench: 'Bench',
   close_out: 'Close-out',
   burn: 'Spend',

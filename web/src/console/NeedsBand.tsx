@@ -6,6 +6,7 @@ import { AsyncButton } from '../components/AsyncButton.js';
 import { EscalationCard } from '../components/EscalationCard.js';
 import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
+import { goalIssue } from '../view/goalPage.js';
 import { relTime } from '../components/util.js';
 import { KIND_LABEL, holdingLabel } from './QueueRail.js';
 
@@ -88,6 +89,59 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
             onDone={(id) => actions.completeHumanTask(id)}
             onDecline={(id, note) => actions.declineHumanTask(id, note)}
           />
+        </div>
+      </>
+    );
+  }
+  // The goal-profile gate (#342). Its two buttons are the whole of it, and both
+  // go through the same write: the pin is re-affirmed and the question settled in
+  // one act, so "keep mine" leaves the tag deliberately disagreeing with the
+  // assayer rather than re-readable as an unanswered disagreement for ever.
+  //
+  // Drawn here rather than on the goal page, though the goal page is where it is
+  // usually read: the page draws its own rows through this same band, so one arm
+  // serves both it and the rail's panel. A second copy on the page is a second
+  // set of buttons to keep in step with the write.
+  if (row.kind === 'profile') {
+    const issue = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
+    const assay = issue?.assay;
+    if (!issue || !assay?.awaitingProfileAnswer || assay.proposedProfile === null) return null;
+    const { config } = view.state;
+    const proposed = assay.proposedProfile;
+    const pinned = issue.modelPin.profile;
+    const standing = pinned ?? config.defaultProfile;
+    const described = config.profiles.find((p) => p.name === proposed)?.description;
+    return (
+      <>
+        <p>
+          <strong>The goal assay wants this run on “{proposed}”</strong>
+          {standing !== null &&
+            ` — ${pinned === null ? 'it would otherwise run on' : 'you pinned it to'} “${standing}”`}
+          {standing === null && ' — nothing is pinned to it yet'}
+        </p>
+        <p className="cn-tick">
+          {described ?? assay.summary} Nothing is dispatched for this goal until you say which to use — that is one
+          click either way, and it is not a rejection.
+        </p>
+        <div className="cn-acts">
+          <AsyncButton
+            className="cn-btn cn-primary"
+            onClick={() => actions.setIssueProfile(issue.number, proposed)}
+            title={`Pin this goal to “${proposed}” and let the funnel move`}
+          >
+            Use “{proposed}”
+          </AsyncButton>
+          <AsyncButton
+            className="cn-btn"
+            onClick={() => actions.setIssueProfile(issue.number, pinned)}
+            title={
+              pinned === null
+                ? 'Leave this goal unpinned, so each rule runs on its own profile'
+                : `Keep “${pinned}” and let the funnel move`
+            }
+          >
+            {pinned === null ? 'Leave it unpinned' : `Keep “${pinned}”`}
+          </AsyncButton>
         </div>
       </>
     );

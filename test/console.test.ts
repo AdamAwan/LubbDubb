@@ -429,6 +429,43 @@ test('a goal can still be sent back for more work, not only marked done', () => 
 });
 
 /**
+ * The goal-profile gate (#342) reaches the rail, and it draws through the same
+ * band on both surfaces.
+ *
+ * It holds every dispatch for its goal and expires on nothing but the answer, so
+ * a gate legible only on the goal's own page is a goal stopped for good with
+ * nobody told — the page is not one an operator opens for a goal that looks like
+ * it merely has not come up yet.
+ */
+test('an unanswered profile proposal reaches the rail, not only the goal page', () => {
+  const ref = goalRef();
+  const gated = (state: CockpitView['state']) => {
+    const issue = state.world.issues.find((i) => `issue:${i.number}` === ref);
+    assert.ok(issue, 'the fixture goal must be in the world');
+    issue.assay = {
+      verdict: 'workable',
+      summary: 'Three subsystems and an auth guard between them.',
+      by: 'assayer',
+      decidedAt: new Date(Date.now() - 3600_000).toISOString(),
+      commentRef: null,
+      proposedProfile: 'deep',
+      awaitingProfileAnswer: true,
+    };
+  };
+
+  const html = decode(render(goalView(gated)));
+  assert.ok(html.includes(KIND_LABEL.profile), 'the rail names the kind');
+  assert.ok(html.includes('The goal assay wants this run on “deep”'), 'and says what is being asked');
+  assert.ok(html.includes('Use “deep”'), 'the band offers the proposal');
+  assert.ok(html.includes('Leave it unpinned') || /Keep “/.test(html), 'and the way to keep what is standing');
+
+  // One band, not two: the page draws the gate through the rail's own component,
+  // so a second copy here would be a second set of buttons to keep in step with
+  // the write.
+  assert.equal(html.split('Use “deep”').length - 1, 1, 'the gate is drawn once on the goal page');
+});
+
+/**
  * The shared card is embedded rather than reimplemented compactly, and this is
  * what that buys: the options an agent offered through `escalate` stay one click
  * on the goal page, and a proposal arrives with its verdict buttons instead of a
