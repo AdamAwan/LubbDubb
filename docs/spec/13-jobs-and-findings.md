@@ -662,7 +662,7 @@ interface HumanTask {
   detail: string | null; // what to do and how to know it is done, markdown
   originRef: string | null; // the work it belongs to: "issue:12", "issue:12:part:schema", "pr:42"
   partId: string | null; // the plan part this task *is*, when a planner declared a step for a person
-  kind: 'ask' | 'close_out' | 'burn'; // who it is for the harness — see below
+  kind: 'ask' | 'close_out' | 'burn' | 'validate'; // who it is for the harness — see below
   agentId: string | null; // the requesting agent, from the credential; null when nobody individual asked
   taskId: string | null;
   status: 'open' | 'done' | 'declined';
@@ -791,7 +791,48 @@ amended plan already uses on the human part it dropped.
 
 Tests: `test/deliveryCloseOut.test.ts`.
 
-### The four arms that file one
+### The other step after the launch: the validation
+
+A delivered goal usually owes a person two things, and until this existed only one of them was
+written down. The other is the validation plan: an ordered set of checks a planner declared weeks
+earlier, which become runnable at exactly one moment — the delivery — and which announced that moment
+to nobody. The goal sheet drew a chip and the close-out obligation carried a line, and both are
+surfaces an operator reaches _after_ deciding to go and look. That is a reminder rather than an
+obligation, the close-out's own shortfall one step back: nothing held it, nothing settled it, and
+nothing said on Thursday that nobody ever ran them.
+
+`ValidationReadyDesk` runs once a pulse ([04](04-harness-cycle.md)) and files a `validate` task for
+every goal with a standing delivery whose checks include one a **person** still has to run. Standalone
+— no `part_id` — so it blocks nothing, which is also what validation itself promises
+([20](20-validation.md)): a row on a list starts nothing and holds nothing.
+
+**What counts as a person's.** Everything outstanding except a check an operator handed to the fleet
+and which has not come back: rule `validate-check` is about to dispatch that one, and a bench row
+asking a person for it is a row that answers itself. A **failed** check counts, because somebody has
+to do something about it, and a **deferred** one counts, because letting deferral take a check off
+the bench would make it the quiet exit the verdict already refuses to let it be. A hand-back puts the
+check straight back on, with the agent's own sentence about what stopped it.
+
+**Why this one may settle itself.** The close-out's asymmetry, argument for argument: the harness
+cannot watch a console switch being flipped, but the check rows are ones it reads every pulse and the
+operator records through its own cockpit. Leaving it to a click would ask them to say the same thing
+twice, and the second telling is the one that gets forgotten. It settles `done` the moment nothing is
+left for a person — every check passed, waived, or handed to the fleet — and the note says which of
+those it was.
+
+**The detail is refreshed on every pulse**, which is the one place this differs in shape from the
+close-out: the row is re-filed while it is still owed, and `recordHumanTask` folds the repeat onto it,
+so it lists what is outstanding _now_ rather than on the day it was filed. A **settled** row is left
+entirely alone — re-filing would rewrite the detail underneath an operator's own verdict, and nothing
+here reopens one.
+
+**Clearing the delivery retracts it**, the close-out's rule and for its reason: the goal went back
+into production, so there is nothing delivered to validate and the checks will be asked for again
+against whatever is delivered next. Settled `declined`, with that as the note.
+
+Tests: `test/validationReady.test.ts`.
+
+### The five arms that file one
 
 - **`request_human_task`**, the MCP tool: `{title, detail?}` and nothing that names work. Identity is
   structural, as for every write tool. It queues nothing and blocks nothing, and the response says so
@@ -799,6 +840,8 @@ Tests: `test/deliveryCloseOut.test.ts`.
   → [11](11-mcp-tools.md#request_human_task)
 - **The close-out sweep**, the harness's own: `kind: 'close_out'`, a null `agentId` because nobody
   individual asked, and one of the two arms that file without anyone typing anything. See above.
+- **The validate sweep**, the harness's third: `kind: 'validate'`, a null `agentId` for the close-out
+  sweep's reason, and settled by the check rows rather than by a click. See above.
 - **The burn watch**, the harness's other: `kind: 'burn'`, and the one arm whose `agentId` is not the
   agent that _asked_ but the agent the row is _about_ — a live run spending far past what its kind of
   work costs. It settles itself when that run ends, for the close-out's reason. It holds nothing and

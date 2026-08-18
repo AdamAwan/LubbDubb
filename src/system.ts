@@ -39,6 +39,7 @@ import { McpDesktopServer } from './mcp/desktop.js';
 import { PrNamingDesk } from './prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import { ValidationAskDesk } from './validation/askDesk.js';
+import { ValidationReadyDesk } from './validation/readyDesk.js';
 import { SpendBurnDesk } from './spendBurnDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
@@ -628,6 +629,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // runs a check before the goal is delivered.
   const validationAsks = new ValidationAskDesk(store);
 
+  // The moment the checks become somebody's to run. Store-only on the close-out
+  // desk's terms and gated on the same delivery — and beside it deliberately: a
+  // goal is delivered, and the two things it then owes a person are a close and a
+  // validation.
+  const validationReady = new ValidationReadyDesk(store);
+
   // The one cost reading taken while the money is still being spent. Store-only
   // for the close-out desk's reason and one more: an expensive run is not a wrong
   // run, so the verdict is a visible obligation and never a kill.
@@ -668,6 +675,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     naming,
     closeOuts,
     validationAsks,
+    validationReady,
     burn,
     branchReaps,
     schedules,

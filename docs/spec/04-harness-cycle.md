@@ -59,7 +59,8 @@ flowchart TD
         REC --> NAME["rename PRs onto the convention — idempotent bookkeeping"]
         NAME --> CLOSE["file and settle close-outs — a delivered goal's ticket<br/>is still open, and only a person can close it"]
         CLOSE --> VASK["file the validation resource asks — the fixtures and accounts<br/>a delivered goal's checks need and the planner could not produce"]
-        VASK --> SCHED["fire due schedules — a recurrence queues an ordinary job,<br/>above the read below so it dispatches this same pulse"]
+        VASK --> VREADY["file and settle the validate rows — a delivered goal's checks<br/>are now somebody's to run, and the bench is where they say so"]
+        VREADY --> SCHED["fire due schedules — a recurrence queues an ordinary job,<br/>above the read below so it dispatches this same pulse"]
         SCHED --> GRAPH["record the work graph — after the reconciler, before decide"]
         GRAPH --> LIMIT["end the usage-limit parks whose window has turned over,<br/>above the read below so a woken agent reads as running this pulse"]
         LIMIT --> TIDY["tidy the inbox — dismiss the questions whose agent has died,<br/>immediately above the read that ships them"]
@@ -96,6 +97,13 @@ flowchart TD
    executed against the delivered goal, so this is the first pulse on which that ask is one anybody
    can act on. Same shape as the close-out — `human_tasks` rows and nothing else — and idempotent by
    `recordHumanTask`'s refresh, so a pulse over a goal it has already asked about writes nothing new.
+
+   And immediately after **that**, against the same gate again, `validationReady.run(world)` files the
+   obligation those resources are _for_: a delivered goal with checks a person still has to run says so
+   on the bench ([13](13-jobs-and-findings.md#the-other-step-after-the-launch-the-validation)). It
+   settles itself as the results are recorded, the close-out's asymmetry — the check rows are ones the
+   harness reads every pulse. Re-filed on every pulse it is still owed rather than only when absent,
+   which is what keeps the row's detail stating what is outstanding _now_.
 
 6. **Fire due schedules** — `schedules.run()`. A recurrence whose slot has come round queues a `jobs`
    row ([13](13-jobs-and-findings.md#schedules)). Positioned **above** step 8's `listQueuedJobs`, which

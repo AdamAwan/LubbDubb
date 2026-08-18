@@ -158,6 +158,31 @@ is whether the goal works. `covers` does not change that; it only lets a check s
 exercises, which is what lets a reader see which parts nothing checks. An absent check looks exactly
 like a check that passed until someone counts.
 
+## Saying so on the bench
+
+A goal parked as delivered is the one moment a check becomes runnable, and that moment used to
+announce itself nowhere an operator was already looking. The sheet drew the chip and the close-out
+obligation carried the count, and both are read by somebody who had already decided to go and look —
+so the realistic failure was never a check that failed, it was the set nobody knew had arrived. That
+is the reading `unrun` exists to weigh like a failure, one layer out: a verdict nobody was asked for
+is not a verdict.
+
+`ValidationReadyDesk` (`src/validation/ready.ts`, `readyDesk.ts`) files a `validate` human task on
+every delivered goal with a check a **person** still has to run, once a pulse, beside the resource
+asks and against the same gate ([13](13-jobs-and-findings.md#the-other-step-after-the-launch-the-validation)).
+It states what is outstanding through the same `outstandingChecks` the close-out reads, refreshed
+every pulse, so the bench row and the obligation beneath it cannot disagree about what a goal owes.
+
+**It blocks nothing**, which is the table at the top of this document holding: the row gates no
+dispatch, no merge, no conclusion and no close, and no rule reads it. What changes is that running
+the checks is an obligation with a place to sit rather than a thing somebody remembers.
+
+A check handed to the fleet is **not** on it — rule `validate-check` is about to dispatch that one —
+and a hand-back puts it straight back, carrying the agent's reason. The row settles itself the moment
+nothing is left for a person, on the close-out's asymmetry: these are rows the harness reads every
+pulse, so asking the operator to tick off a second copy of what they have just recorded is asking
+them to tell it something it can see.
+
 ## Resources
 
 `validationRoot`, default `.lubbdubb/validation`, one directory per goal (`<root>/issue-284/`,
@@ -562,7 +587,7 @@ all.
 ### Where it lands
 
 Flagged blocks nothing. `conclude_work` is untouched, no dispatch is held, no merge is gated. It
-changes four readings:
+changes five readings:
 
 - **The close-out obligation** (`closeOutDetail`) states the counts and lists what is outstanding
   with its reasons. That is the moment: the row that says "close this ticket" is where an operator is
@@ -576,6 +601,9 @@ changes four readings:
 - **`POST /api/issues/:number/dismiss-run` refuses without a note**, kept on the run as
   `dismissNote`. The sharper of the two, because this is the button that ends the harness's run at a
   goal and it is one-way.
+- **The bench row** that says the goal is ready to be validated lists the same outstanding checks,
+  from the moment of the delivery rather than at the point of closing —
+  [above](#saying-so-on-the-bench).
 - **The plan's status comment** carries the checklist, open rather than folded — a reader of the
   ticket next month is trying to find out whether it was checked, and that reader is not on the
   operator's machine.
@@ -692,7 +720,9 @@ needing the resource withdraws it, and that a withdrawal never overwrites the op
 notes, and that a flagged goal still blocks nothing), `test/validationAmend.test.ts` (the
 tool: who may amend, that an amendment withdraws nothing by omission, what a rewording costs, and
 the band), `test/validationFleet.test.ts` (the hand-over: the rule's gates and its position in
-the pipeline, who may report, what a hand-back does not write, and what withdraws a hand-over), and
+the pipeline, who may report, what a hand-back does not write, and what withdraws a hand-over),
+`test/validationReady.test.ts` (the bench row: what files it, that a check with the fleet does not and
+a hand-back does, that a settled row is never written over, and that the results settle it), and
 `test/validationDesktop.test.ts` (the desktop channel: that no fleet tool is reachable from it, the
 credential's mode, that a second harness cannot take the stable socket, one claim at a time, the
 three ways a claim is released, and that a reading is attributed to `desktop`).

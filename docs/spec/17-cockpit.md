@@ -232,15 +232,19 @@ single spelling, an unknown value reading as the overview, and an ask id survivi
 ## The queue rail — "Needs you"
 
 A permanent left column holding **every** blocking item in one list: escalations, plan proposals,
-permission requests, unanswered goal-profile proposals, usage-limit parks, bench tasks, close-outs and
-the recovery hold. `buildNeedsYou`
+permission requests, unanswered goal-profile proposals, usage-limit parks, bench tasks, close-outs,
+validate rows and the recovery hold. `buildNeedsYou`
 (`web/src/view/needsYou.ts`) is the merge, and it is pure.
 
-**Eight kinds, and the split is about what answers them.** `permission` and `proposal` are escalations
+**Nine kinds, and the split is about what answers them.** `permission` and `proposal` are escalations
 underneath, named apart because the verdict differs — a permission goes to `/permission`, a proposal
 carries accept/reject, a plain question takes free text. Drawing them as one kind is how a surface ends
 up offering the wrong control. `bench` and `close_out` are human tasks, likewise split, since a
 close-out is the step after a launch and reads as one ([13](13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)).
+`validate` is split from both for the same reason one layer on: it is the _other_ step after a launch
+([13](13-jobs-and-findings.md#the-other-step-after-the-launch-the-validation)), and a row that read
+`Bench` would tell an operator nothing about why it appeared the day the goal was delivered. All three
+are answered the same two ways — done, or declined with a reason — which is why they share a body.
 
 **`profile` is the second kind with no row of its own underneath it** — it is read off
 `issue.assay.awaitingProfileAnswer`, the goal-profile gate ([06](06-issue-pickup.md#the-second-arm-an-unanswered-profile-proposal-issue-342)),
