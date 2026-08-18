@@ -1,5 +1,6 @@
 import { PART_OUTCOME_KIND_HELP, PART_OUTCOME_KINDS, validatePartConclusion } from '../partOutcome.js';
 import { toolError } from '../protocol.js';
+import { DONE_REMINDER } from '../../agents/agentProtocol.js';
 import type { ToolFactory } from './context.js';
 
 export const concludePart: ToolFactory = ({ deps, agent, ok }) => ({
@@ -47,10 +48,12 @@ export const concludePart: ToolFactory = ({ deps, agent, ok }) => ({
       part: result.part.slug,
       outcome: result.part.outcomeKind,
       // Said in the response as well as the description, for `conclude_work`'s
-      // reason: an agent that believed this settled the issue would stop.
+      // reason: an agent that believed this settled the issue would stop. The
+      // finish reminder rides along for {@link DONE_REMINDER}'s reason.
       note:
         'Recorded. This part is finished and nothing further is dispatched for it. The rest of the ' +
-        'plan is unaffected, and whether the issue itself is done is decided by the plan as a whole.',
+        'plan is unaffected, and whether the issue itself is done is decided by the plan as a whole. ' +
+        DONE_REMINDER,
     });
   },
 });

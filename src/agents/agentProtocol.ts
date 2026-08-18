@@ -2,6 +2,7 @@ import type { Task } from '../types.js';
 import { STATUS_LINE_SETTINGS } from './statusLine.js';
 import { FILE_EVENTS_SETTINGS } from './fileEvents.js';
 import { ALLOWED_MCP_TOOLS } from '../mcp/names.js';
+import { DONE_SENTINEL } from './sentinels.js';
 
 /**
  * How a real Claude Code session is made to speak the harness's PTY protocol.
@@ -73,6 +74,28 @@ export const MCP_PROTOCOL_ADDENDUM = [
   'If a tool call fails or the tools are unavailable, fall back to the sentinels above — they always work.',
   'Still print @@LUBBDUBB_DONE@@ when finished. There is no tool for that.',
 ].join('\n');
+
+/**
+ * The reminder a *terminal* tool folds into its success response — the tools whose
+ * call is the whole of what an agent was dispatched to do (`assess_issue`,
+ * `conclude_work`, `conclude_part`).
+ *
+ * The sentinel is stated once, in the system prompt, thousands of tokens before the
+ * moment it matters, and these tools' responses read as the end of the job
+ * ("Recorded. The harness will schedule nothing further"). So an agent that records
+ * its verdict, narrates it and stops has done everything asked of it and still ends
+ * its turn with no sentinel in it — which {@link StreamJsonSession} can only read as
+ * a park, the done/waiting decision having no third branch. Saying it here puts the
+ * instruction at the point of use instead of resting on recall.
+ *
+ * It does **not** make the call imply done: an agent may have more to do after one,
+ * so this states the condition rather than announcing the end.
+ */
+export const DONE_REMINDER =
+  'Nothing else is needed from this call. When you have finished everything your task asked for, print ' +
+  DONE_SENTINEL +
+  ' on its own line as the last thing you output: the harness has no other signal that you are done, and a ' +
+  'turn ending without it parks you as waiting for a human who has nothing to answer.';
 
 /** The system prompt for a launch: the protocol, plus the tool addendum when tools are wired. */
 function protocolPrompt(opts: ClaudeArgsOptions): string {
