@@ -958,13 +958,25 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * every other caller by name, so the agent that *did* the work cannot write the
    * account of it. Idempotence is in the store's upsert: a second submission
    * revises one row.
+   *
+   * The lessons ride on the same call (issue #355 phase 2) rather than on a tool
+   * of their own, which is what makes them **atomic with the write-up**: there is
+   * no submission that filed lessons but no document, or a document whose lessons
+   * were lost to a second call the agent never got to make. They land `proposed`,
+   * carrying the issue as provenance, and reach no agent — promotion is a click in
+   * the cockpit and stays one.
+   *
+   * The `retrospective` event already repaints the cockpit, and the lessons ride
+   * that repaint: they are written *before* it is emitted, so a listener never
+   * sees a retrospective whose lessons have not landed yet.
 
    */
   recordRetrospective(
     agentId: string,
     summary: string,
     document: string,
-  ): { ok: true; issueOrigin: string } | { ok: false; error: string } {
+    lessons: string[],
+  ): { ok: true; issueOrigin: string; lessonsFiled: number } | { ok: false; error: string } {
     return this.withCaller(agentId, ({ task }) => {
       const origin = retroSubmitOrigin(task.originRef);
       if (!origin.ok) return { ok: false, error: origin.error };
@@ -975,8 +987,14 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         agentId,
         taskId: task.id,
       });
+      // Deduped in the store against the live rows on this goal, so a resubmission
+      // revises the document without leaving a second copy of every lesson behind
+      // it. `lessonsFiled` counts what was asked for rather than what was new: an
+      // agent told "3 filed" on a resubmission has not been lied to about what the
+      // operator will see, and the alternative reads as two of them having failed.
+      for (const text of lessons) this.store.proposeLesson({ text, originRef: origin.issueOrigin });
       this.emit('retrospective', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin });
-      return { ok: true, issueOrigin: origin.issueOrigin };
+      return { ok: true, issueOrigin: origin.issueOrigin, lessonsFiled: lessons.length };
     });
   }
 

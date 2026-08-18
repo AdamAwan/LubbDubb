@@ -14,8 +14,9 @@ import type { StoreContext } from './context.js';
  * **Nothing outside the cockpit reads this table.** No dispatcher rule consults
  * it, no prompt renders it and no launch argument carries it; a promoted lesson
  * is a lesson an operator has vouched for, and that is all it is until #355's
- * later phases give it a reader. The three writes below are all operator-driven,
- * exactly as every finding transition is.
+ * phase 3 gives it a reader. The two *verdicts* below are operator-driven,
+ * exactly as every finding transition is — what changed in phase 2 is only who
+ * may propose, never who may promote.
  */
 export class LessonStore {
   constructor(private readonly ctx: StoreContext) {}
@@ -24,12 +25,21 @@ export class LessonStore {
    * Write a lesson down. It lands `proposed`, which is the whole gate: the
    * proposal is visible to the operator and to nothing else.
    *
-   * There is no dedupe against an existing row, unlike `recordFinding`. A
-   * finding is deduped because an agent re-reports the same claim on every turn
-   * of a run it does not remember; a lesson is written once, by a person, from a
-   * surface that is showing them the list they are adding to.
+   * **Deduped against the live rows on the same goal**, in `recordFinding`'s
+   * shape and for its reason. Phase 2 gave this table a second writer that is not
+   * a person reading the list it is adding to: `retro_submit` upserts its
+   * document on `origin_ref`, so a retrospective filed twice — an agent calling
+   * the tool again in the same turn, a resubmission after a rejected field —
+   * replaces one write-up and would otherwise leave two of every lesson behind
+   * it. Two identical claims on one goal are one claim.
+   *
+   * Scoped to the *live* statuses, so a retired lesson can be written again: that
+   * is the re-proposal the spec's "no un-retire" rests on, and it re-dates the
+   * claim, which is the point.
    */
   proposeLesson(input: LessonInput): Lesson {
+    const existing = this.findLiveClaim(input);
+    if (existing) return existing;
     const ts = this.ctx.now();
     const lesson: Lesson = {
       id: `lesn_${nanoid(10)}`,
@@ -46,6 +56,30 @@ export class LessonStore {
       )
       .run(lesson);
     return lesson;
+  }
+
+  /**
+   * The standing row for this exact claim on this exact goal, if there is one.
+   *
+   * Exact text, not a fuzzy match: a lesson is prose, and two claims that differ
+   * by a word are two claims an operator should be shown rather than one the
+   * store picked between. `origin_ref` is part of the key because the same
+   * sentence learned on two goals is genuinely twice-learned — that is
+   * corroboration, and flattening it would hide the strongest signal the store
+   * has.
+   */
+  private findLiveClaim(input: LessonInput): Lesson | null {
+    const row = this.ctx.db
+      .prepare(
+        // `IS` rather than `=` so a null origin matches a null origin: a lesson
+        // with no goal behind it is still deduped against its own twin, which
+        // `=` would silently never match.
+        `SELECT * FROM lessons
+         WHERE text=? AND origin_ref IS ? AND status IN ('proposed','promoted')
+         ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+      )
+      .get(input.text, input.originRef) as LessonRow | undefined;
+    return row ? rowToLesson(row) : null;
   }
 
   getLesson(id: string): Lesson | null {

@@ -31,7 +31,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `conclude_part`      | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                                                                                                   |
 | `scratch_append`     | Leave a note on the shared scratchpad for the issue this agent is working. Append-only, attributed from the credential. Refused outside an issue subtree.                                                                                                                                                               |
 | `scratch_read`       | Read that pad — every note left by every agent on the goal, oldest first. Same access rule as the write. The operator reads the same trail in the cockpit's notepad modal (`GET /api/scratchpads/:ref`), which resolves a ref through the same `padOriginFor`.                                                          |
-| `retro_submit`       | Submit the retrospective for a delivered goal: what shipped, and how the run went. Fenced to `issue:<n>:retro` origins.                                                                                                                                                                                                 |
+| `retro_submit`       | Submit the retrospective for a delivered goal: what shipped, how the run went, and the lessons it taught about working the repository. Fenced to `issue:<n>:retro` origins. → [13](13-jobs-and-findings.md#lessons)                                                                                                      |
 | `validation_amend`   | Correct the validation plan for the goal this agent is working: add or amend checks, withdraw one with a reason, declare a resource. **Merge-only** — an omitted check is untouched. Open to every agent on the goal; refused to the planner, which has `plan_submit`. → [20](20-validation.md)                         |
 | `validation_report`  | Record the reading of the one validation check this agent was dispatched to run: `passed`, `failed`, or `handback` — could not run it, which records nothing and returns the check to the operator with the reason. Refused to every caller but that check's own agent, by name. → [20](20-validation.md#the-hand-over) |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`).                                                                               |
@@ -677,6 +677,21 @@ So every tool is named in one of two places, and which one is a decision, not a 
 `test/mcpChannel.test.ts` holds that classification as a `Record<McpToolName, …>` and asserts each side
 of it, so a new tool does not compile until it has been placed — and one placed in the addendum that
 the addendum does not name fails.
+
+### Why lessons are a field and not a tool
+
+The retrospective's lesson channel (#355 phase 2) is a `lessons` array on `retro_submit` rather than a
+`propose_lesson` of its own, for two reasons that both cut the same way.
+
+It keeps the submission **atomic**: there is no run that filed lessons but no write-up, and none whose
+lessons were lost to a second call the agent never got to make. And it leaves the three-way agreement
+above untouched — a new tool name is a new entry in `MCP_TOOL_NAMES`, a new module in the registry and
+a new `mcp__lubbdubb__*` grant, and the failure when those drift is a connected server whose call is
+refused with nothing in the logs. A field on a tool that already exists needs none of it.
+
+The general rule it is an instance of: **a new capability belongs on an existing tool when it is part
+of the same submission, and on its own tool when a different caller would reach for it.** Nobody but a
+retro agent proposes a lesson.
 
 ## Degradation
 
