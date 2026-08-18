@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { api } from '../api.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import { cascadeNote, featureBlocks, type TicketFeatureBlock } from '../issueGroups.js';
+import { cascadeNote, featureBlocks, issueTypeTone, type TicketFeatureBlock } from '../issueGroups.js';
 import type {
   Issue,
   TicketFeatureFacet,
@@ -594,7 +594,9 @@ function TicketRowView({
             <b className="tickets-name">{row.title}</b>
             <span className="tickets-sub">
               {row.outcome !== null && <i className="chip small tickets-verdict">{row.outcome}</i>}
-              {row.issueType !== null && <span>{row.issueType}</span>}
+              {row.issueType !== null && (
+                <i className={`tickets-type ${issueTypeTone(row.issueType)}`}>{row.issueType}</i>
+              )}
               {frozen && <span>frozen{row.changedAt ? ` · last change ${relAge(row.changedAt, now)}` : ''}</span>}
               {reasons[0] !== undefined && <span className="tickets-reason">{reasons[0]}</span>}
             </span>

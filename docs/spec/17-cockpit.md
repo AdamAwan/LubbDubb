@@ -835,6 +835,20 @@ It is folded to one word on the server (`src/tickets/outcomes.ts`) from `resolve
 the delivery and run rows, because a precedence rule re-implemented in a component is a second opinion
 about it.
 
+### The type is tinted by family, never by name
+
+A row's work-item type is drawn as a chip tinted by **family** — bug, story, debt, container, task —
+by `issueTypeTone` (`web/src/issueGroups.ts`), which the goal page's header chip reads too, so a Bug
+is the same red on the row it was opened from.
+
+The families are the stock vocabulary [`src/issueRelations.ts`](../../src/issueRelations.ts) states
+its own defaults in, and **a type outside them draws untinted** rather than being sorted into the
+nearest one. That fall-through is the invariant: the vocabulary belongs to the tracker, a process
+template can name its types anything, and a colour that guessed would be a claim about an item's kind
+made by the surface that is only supposed to be reporting it. It is a tone and never a verdict — the
+container hue tracks the default names, not the operator's `issueContainerTypes`, so a customised
+container name is uncoloured here while the dispatcher's gate still knows exactly what it is.
+
 ### Intake is pulled out, never greyed inside the list
 
 An `unclear` assay is the one intake reading that **stops dispatch** ([06](06-issue-pickup.md)). Among
