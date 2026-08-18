@@ -266,6 +266,59 @@
   flex-shrink: 0;
 }
 
+/* The needs-you palette. A tone answers *what the ask is* — red a fault, amber a
+   gate, blue something to read, green the step after a delivery — and every rule
+   below reads it through these five properties rather than naming a colour. That
+   is the same seam the sheet's `--cn-*` tokens exist for, one level in: a tone is
+   five values that have to move together, and the alternative is the four
+   near-identical copies of each rule this replaced.
+
+   `--cn-tone` is the hue itself; `--cn-tone-fill` the tinted ground a filled tag
+   and a band header sit on; `--cn-tone-bg` the fainter one a band's body sits on;
+   `--cn-tone-line` a border that reads as the hue without competing with the
+   text; `--cn-tone-ink` the hue lightened enough to carry running words at 11px,
+   which the raw token is not on this ground.
+
+   Set on the row and the band, so anything inside either inherits them. */
+.cn-t-red {
+  --cn-tone: var(--cn-red);
+  --cn-tone-fill: #291518;
+  --cn-tone-line: #4a2226;
+  --cn-tone-ink: #ff8f8f;
+  --cn-tone-bg: #1a1214;
+}
+.cn-t-amber {
+  --cn-tone: var(--cn-amber);
+  --cn-tone-fill: #271f11;
+  --cn-tone-line: #4a3a1c;
+  --cn-tone-ink: #e8c37a;
+  --cn-tone-bg: #1a1610;
+}
+.cn-t-blue {
+  --cn-tone: var(--cn-accent);
+  --cn-tone-fill: #16203a;
+  --cn-tone-line: #27395c;
+  --cn-tone-ink: #9dbaff;
+  --cn-tone-bg: #111725;
+}
+.cn-t-green {
+  --cn-tone: var(--cn-green);
+  --cn-tone-fill: #12271e;
+  --cn-tone-line: #1f4838;
+  --cn-tone-ink: #7fdcb4;
+  --cn-tone-bg: #101c17;
+}
+
+/* The glyph inside a tag or a band header. Sized down from the word it precedes:
+   at the tag's own 10px the geometric ones (◆ ▲ ⊘) out-weigh the lettering and
+   the row reads as a bullet list. */
+.cn-sym {
+  margin-right: 5px;
+  font-size: 1.1em;
+  line-height: 0;
+  vertical-align: -0.05em;
+}
+
 .cn-q {
   display: grid;
   grid-template-columns: 3px 1fr;
@@ -296,11 +349,15 @@
 .cn-q.cn-dim:focus-visible {
   opacity: 1;
 }
+/* Hue from the kind, strength from the group: a softened stripe is an ask only
+   the operator is waiting on, a full one is an agent parked. Opacity rather than
+   a second colour per tone, so the two readings cannot drift apart. */
 .cn-q .cn-stripe {
-  background: var(--cn-amber);
+  background: var(--cn-tone);
+  opacity: 0.45;
 }
-.cn-q.cn-urgent .cn-stripe {
-  background: var(--cn-red);
+.cn-q.cn-parked .cn-stripe {
+  opacity: 1;
 }
 .cn-q .cn-qin {
   padding: 10px 12px 11px 2px;
@@ -311,18 +368,21 @@
   gap: 7px;
   margin-bottom: 5px;
 }
+/* The border is always drawn — transparent on the filled variant — so the two
+   weights are the same box and a rail of mixed rows keeps one baseline. */
 .cn-tag {
   font: 600 10px/1 var(--cn-mono);
   letter-spacing: 0.6px;
   text-transform: uppercase;
-  padding: 3px 6px;
+  padding: 2px 5px;
+  border: 1px solid var(--cn-tone-line);
   border-radius: 4px;
-  background: #2a2118;
-  color: var(--cn-amber);
+  background: none;
+  color: var(--cn-tone);
 }
-.cn-urgent .cn-tag {
-  background: #2b1517;
-  color: var(--cn-red);
+.cn-parked .cn-tag {
+  border-color: transparent;
+  background: var(--cn-tone-fill);
 }
 .cn-qage {
   margin-left: auto;
@@ -342,10 +402,7 @@
   flex-wrap: wrap;
 }
 .cn-qmeta .cn-hold {
-  color: var(--cn-amber);
-}
-.cn-urgent .cn-qmeta .cn-hold {
-  color: var(--cn-red);
+  color: var(--cn-tone);
 }
 .cn-railsub {
   padding: 10px 14px 4px;
@@ -443,33 +500,27 @@
   gap: 7px;
   flex-wrap: wrap;
 }
+/* Same four tone properties as the rail row, and that is the whole of why a band
+   and the row that opened it read as one ask. No weight split here: see
+   `NeedsBand`. */
 .cn-needs {
-  border: 1px solid #4a2226;
-  background: #1a1214;
+  border: 1px solid var(--cn-tone-line);
+  background: var(--cn-tone-bg);
   border-radius: var(--cn-r);
   margin-bottom: 14px;
   overflow: hidden;
-}
-.cn-needs.cn-soft {
-  border-color: #4a3a1c;
-  background: #1a1610;
 }
 .cn-needs > header {
   display: flex;
   align-items: center;
   gap: 9px;
   padding: 9px 13px;
-  background: #241417;
-  border-bottom: 1px solid #4a2226;
+  background: var(--cn-tone-fill);
+  border-bottom: 1px solid var(--cn-tone-line);
   font: 600 11px var(--cn-mono);
   letter-spacing: 0.9px;
   text-transform: uppercase;
-  color: #ff8f8f;
-}
-.cn-needs.cn-soft > header {
-  background: #241d10;
-  border-bottom-color: #4a3a1c;
-  color: #e8c37a;
+  color: var(--cn-tone-ink);
 }
 .cn-needs > header .cn-age {
   margin-left: auto;

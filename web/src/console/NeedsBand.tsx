@@ -8,12 +8,18 @@ import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { goalIssue } from '../view/goalPage.js';
 import { relTime } from '../components/util.js';
-import { KIND_LABEL, holdingLabel } from './QueueRail.js';
+import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel } from './QueueRail.js';
 
 /**
- * One open ask, pinned. Red when an agent is parked on it, amber when the
- * obligation is only the operator's — the rail's own split, carried over so the
- * row and the band it opens read the same.
+ * One open ask, pinned, in the tone and under the glyph its kind wears on the
+ * rail — the row and the band it opens have to read as one ask, and hue plus
+ * symbol is most of how an operator recognises that they have.
+ *
+ * The rail's *weight* split (`cn-parked`) is not carried over, and that is the
+ * one thing the two surfaces deliberately differ on: weight is a triage aid for a
+ * list of asks competing for attention, and the band is a single ask already in
+ * front of the operator with its verdict controls under it. There is nothing here
+ * to rank it against.
  *
  * The band draws nothing at all when the row's source is gone from the snapshot.
  * A header over an empty box would claim something is waiting while offering no
@@ -37,8 +43,11 @@ export function NeedsBand({
   const body = needBody(row, view, actions);
   if (body === null) return null;
   return (
-    <div className={`cn-needs ${row.group === 'blocking' ? '' : 'cn-soft'}`}>
+    <div className={`cn-needs cn-t-${KIND_TONE[row.kind]}`}>
       <header>
+        <span className="cn-sym" aria-hidden="true">
+          {KIND_SYMBOL[row.kind]}
+        </span>
         Needs you · {KIND_LABEL[row.kind]}
         <span className="cn-age">
           {row.raisedAt !== '' && relTime(row.raisedAt, view.now)}

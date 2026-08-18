@@ -9,7 +9,7 @@ import { buildViewModel } from '../web/src/view/viewModel.js';
 import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { GoalPartView } from '../web/src/view/goalPage.js';
 import type { CockpitActions, ConsolePanel } from '../web/src/cockpit/actions.js';
-import { KIND_LABEL } from '../web/src/console/QueueRail.js';
+import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../web/src/console/QueueRail.js';
 
 // `tsx` compiles JSX with the classic runtime, which emits bare
 // `React.createElement`; the bundle uses the automatic one. The global goes in
@@ -326,9 +326,10 @@ test('every row that opens something is a button; only the recovery hold is not'
 
   const html = render(view({ needsYou: rows }));
 
-  // The row wrapper is the element whose class is `cn-q` alone or `cn-q
-  // cn-urgent` — anchoring on the whole attribute rules out `cn-qin`/`cn-qkind`,
-  // which are unrelated inner elements that happen to share the `cn-q` prefix.
+  // The row wrapper is the element whose class starts `cn-q ` and is followed by
+  // its tone and, when an agent is parked on it, its weight — anchoring on the
+  // whole attribute rules out `cn-qin`/`cn-qkind`, which are unrelated inner
+  // elements that happen to share the `cn-q` prefix.
   const rowWrapper = (title: string): string => {
     const titlePos = html.indexOf(title);
     assert.ok(titlePos !== -1, `row "${title}" must render`);
@@ -337,7 +338,7 @@ test('every row that opens something is a button; only the recovery hold is not'
     // class="…">` vs `<div class="…">`), so match the whole opening tag and
     // check its attributes rather than assuming `class` comes first.
     const matches = [...before.matchAll(/<(button|div)\b([^>]*)>/g)].filter(([, , attrs]) =>
-      /class="cn-q(?: cn-urgent)?"/.test(attrs ?? ''),
+      /class="cn-q cn-t-(?:red|amber|blue|green)(?: cn-parked)?(?: cn-dim)?"/.test(attrs ?? ''),
     );
     const last = matches.at(-1);
     assert.ok(last, `no cn-q wrapper found before "${title}"`);
@@ -357,6 +358,100 @@ test('every row that opens something is a button; only the recovery hold is not'
     'div',
     'the recovery row opens nothing and must not be wrapped in a button',
   );
+});
+
+/**
+ * The rail's two readings, and the one thing that keeps them from collapsing back
+ * into each other: **hue is the kind, weight is the group**. The palette used to
+ * spend both on the group — red blocking, amber yours — which meant every ask
+ * that ever landed on the bench arrived in an alarm colour, a delivered goal's
+ * close-out included.
+ *
+ * Totality is the typechecker's, so what is left to assert is what a `Record`
+ * cannot say: that no two kinds are told apart by the word alone, and that the
+ * glyphs carry no emoji presentation — a codepoint with one renders as a
+ * full-colour sticker inside a 10px monospace tag on some platforms and as
+ * lettering on others, which is a difference no test on this machine would show.
+ */
+test('every kind of ask draws in its own tone, under its own glyph', () => {
+  const kinds = Object.keys(KIND_LABEL) as (keyof typeof KIND_LABEL)[];
+
+  const symbols = kinds.map((k) => KIND_SYMBOL[k]);
+  assert.equal(new Set(symbols).size, symbols.length, 'two kinds sharing a glyph is a glyph that says nothing');
+  for (const sym of symbols) {
+    assert.equal([...sym].length, 1, `"${sym}" must be a single character`);
+    const cp = sym.codePointAt(0) ?? 0;
+    assert.ok(cp < 0x10000, `"${sym}" must be a BMP glyph, not an emoji codepoint`);
+    // U+FE0F would force emoji presentation; U+FE0E would force text. Neither
+    // belongs here — the set is chosen from codepoints that have no emoji variant
+    // at all, so the platform has nothing to choose between.
+    assert.ok(!/[\uFE0E\uFE0F]/.test(sym), `"${sym}" must carry no variation selector`);
+  }
+
+  const rows = kinds.map((kind, i) => ({
+    id: `row-${i}`,
+    kind,
+    // Alternated on purpose: the group must not be what decides the tone, so a
+    // sweep that held it constant would pass on a rail that had quietly gone back
+    // to colouring by group.
+    group: i % 2 === 0 ? 'blocking' : 'yours',
+    title: `The ${kind} row`,
+    goalRef: null,
+    originRef: null,
+    opens: kind === 'recovery' ? null : 'ask',
+    agentId: null,
+    holding: 0,
+    raisedAt: '2026-01-01T00:00:00.000Z',
+  })) as CockpitView['needsYou'];
+
+  const html = render(view({ needsYou: rows }));
+  for (const kind of kinds) {
+    const pos = html.indexOf(`The ${kind} row`);
+    assert.ok(pos !== -1, `the ${kind} row must render`);
+    const row = html.slice(html.lastIndexOf('<', html.lastIndexOf('cn-q cn-t-', pos)), pos);
+    assert.ok(row.includes(`cn-q cn-t-${KIND_TONE[kind]}`), `the ${kind} row must wear its own tone, not the group's`);
+    assert.ok(row.includes(KIND_SYMBOL[kind]), `the ${kind} row must draw its glyph beside the word`);
+    assert.ok(row.includes(KIND_LABEL[kind]), `and the word beside the glyph — the symbol is a second reading`);
+  }
+});
+
+/**
+ * The other half: the group is still said, and it is said on the row rather than
+ * only in the sub-heading above it. Two rows of one kind, one parked and one not,
+ * must differ — a rail that dropped the weight when it took the hue would have
+ * lost the bit it sorts by, silently, since both rows still render.
+ */
+test("the group is drawn as weight within the kind's own hue", () => {
+  const rows = [
+    {
+      id: 'parked',
+      kind: 'escalation',
+      group: 'blocking',
+      title: 'An agent is parked on this',
+      goalRef: null,
+      originRef: null,
+      opens: 'ask',
+      agentId: 'a1',
+      holding: 0,
+      raisedAt: '2026-01-01T00:00:00.000Z',
+    },
+    {
+      id: 'unparked',
+      kind: 'escalation',
+      group: 'yours',
+      title: 'Nothing is waiting on this',
+      goalRef: null,
+      originRef: null,
+      opens: 'ask',
+      agentId: null,
+      holding: 0,
+      raisedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ] as CockpitView['needsYou'];
+
+  const html = render(view({ needsYou: rows }));
+  assert.ok(html.includes('class="cn-q cn-t-red cn-parked"'), 'a blocking row carries the parked weight');
+  assert.ok(html.includes('class="cn-q cn-t-red"'), 'and a row nothing is parked on carries the tone alone');
 });
 
 /**
@@ -463,6 +558,25 @@ test('an unanswered profile proposal reaches the rail, not only the goal page', 
   // so a second copy here would be a second set of buttons to keep in step with
   // the write.
   assert.equal(html.split('Use “deep”').length - 1, 1, 'the gate is drawn once on the goal page');
+});
+
+/**
+ * A row and the band it opens are one ask, and hue plus glyph is most of how an
+ * operator recognises that they are. The band's own weight is deliberately *not*
+ * carried over — it is a single ask already in front of them, with nothing to
+ * rank it against — so tone and symbol are the whole of the agreement, and both
+ * have to hold.
+ */
+test('the band on the goal page wears the tone and glyph its rail row does', () => {
+  const ref = goalRef();
+  const v = goalView();
+  const row = v.needsYou.find((n) => n.goalRef === ref && n.opens === 'goal');
+  assert.ok(row, 'the demo goal must carry an ask read on its own page');
+
+  const html = render(v);
+  assert.ok(html.includes(`cn-needs cn-t-${KIND_TONE[row.kind]}`), "the band takes the kind's tone");
+  assert.ok(html.includes(`cn-q cn-t-${KIND_TONE[row.kind]}`), 'and the rail row it came from takes the same one');
+  assert.ok(html.includes(KIND_SYMBOL[row.kind]), 'the glyph is drawn on both');
 });
 
 /**
@@ -831,7 +945,10 @@ test('an ask with no goal page is answered in the ask panel', () => {
 
   const html = render({ ...v, consolePanel: { ask: row.id } });
   assert.ok(html.includes('cn-backdrop'), 'the ask must draw in front of the console');
-  assert.ok(html.includes(`<h2>Needs you · ${KIND_LABEL[row.kind]}</h2>`), 'the panel names the ask the rail named');
+  assert.ok(
+    html.includes(`<h2>${KIND_SYMBOL[row.kind]} Needs you · ${KIND_LABEL[row.kind]}</h2>`),
+    'the panel names the ask the rail named, under the same glyph',
+  );
   // The shared card, not a second wiring: its own controls are what answer the ask.
   assert.ok(html.includes('escalation-prompt'), 'the panel embeds the shared escalation card');
 });

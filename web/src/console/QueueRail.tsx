@@ -19,8 +19,70 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   limit: 'Usage limit',
 };
 
+/**
+ * The hue a kind wears, and it answers *what the ask is* — not who is stopped.
+ *
+ * Red is something wrong: a restart that orphaned runs, an agent that hit a
+ * question it cannot get past. Amber is a gate rather than a fault — nothing
+ * broke, something is simply waiting on a yes, an allowance window or a look at
+ * the spend. Blue is informative: a plan, a profile, a piece of work only a
+ * person can do, all of which want reading rather than repair. Green is the step
+ * *after* a delivery — a goal landed and this is what follows it.
+ *
+ * **Who is stopped is weight, not hue** (see {@link Row}). The rail used to spend
+ * its whole palette on that one bit, which left every ask on the bench reading as
+ * an alarm; it is now carried by the solid/soft split within each hue, by the
+ * `Blocking` sub-heading and by the sort order — three statements of it, none of
+ * them costing the operator the ability to tell a delivered goal from a fault at
+ * a glance.
+ *
+ * Total over {@link NeedKind}, like {@link KIND_LABEL}, so a new kind fails the
+ * typecheck here rather than drawing in whatever the last rule in the sheet said.
+ *
+ * @public shared with the needs band, which dresses the same ask in the same tone
+ */
+export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
+  recovery: 'red',
+  escalation: 'red',
+  permission: 'amber',
+  proposal: 'blue',
+  profile: 'blue',
+  bench: 'blue',
+  close_out: 'green',
+  validate: 'green',
+  burn: 'amber',
+  limit: 'amber',
+};
+
+/**
+ * The glyph drawn before the word, a second reading of the same thing rather
+ * than a replacement for it — the tag still spells the kind out, so a symbol
+ * nobody has learnt yet costs nothing and needs no legend.
+ *
+ * Text-presentation BMP glyphs only. A character with an emoji variant (`✔`,
+ * `☑`, `🏳`) is rendered by the platform's colour font on some machines and the
+ * text font on others, which puts a full-colour sticker in a monospace tag on
+ * exactly the operator's machine nobody tested on.
+ *
+ * @public shared with the needs band and the ask panel, which name the ask the same
+ */
+export const KIND_SYMBOL: Record<NeedKind, string> = {
+  recovery: '\u21ba',
+  escalation: '?',
+  permission: '\u2298',
+  proposal: '\u25c7',
+  profile: '\u2299',
+  bench: '\u25c6',
+  close_out: '\u2691',
+  validate: '\u2713',
+  burn: '\u25b2',
+  limit: '\u2016',
+};
+
 // The mockup's two railsub headings, in the order they're drawn — 'blocking'
-// above 'yours' per the brief, matching the group's own red/amber urgency.
+// above 'yours' per the brief. Since the palette went to `NeedKind`, these two
+// words are one of the three places the group is still stated; the others are
+// the sort order and each row's own weight.
 const GROUP_LABEL: Record<NeedGroup, string> = {
   blocking: 'Blocking',
   yours: 'Yours to do',
@@ -56,9 +118,17 @@ export function holdingLabel(holding: number): string {
 }
 
 /**
- * One row. `group === 'blocking'` is the red half of a red/amber split — an agent
- * is parked on this, not merely queued for the operator — so it alone earns the
- * urgent stripe and tag.
+ * One row, wearing two readings at once: **hue is the kind** ({@link KIND_TONE}),
+ * **weight is the group**. `group === 'blocking'` means an agent is parked on
+ * this rather than merely queued for the operator, and it draws as `cn-parked` —
+ * a full-strength stripe and a filled tag, against the softened stripe and
+ * outlined tag of a row that is only the operator's to get to.
+ *
+ * The two are deliberately separate channels. Spending the whole palette on the
+ * group is what made every ask on the bench read as an alarm, and a delivered
+ * goal's close-out is not an alarm; spending it on the kind alone would drop the
+ * one bit the rail is sorted by. Weight carries the second without taking the
+ * first.
  *
  * `focus` is the goal the situation area is currently drawing, when it is drawing
  * one. A row about that goal is marked `aria-current` and every other row is
@@ -83,19 +153,29 @@ function Row({
   focus: string | null;
   actions: CockpitActions;
 }): JSX.Element {
-  const urgent = row.group === 'blocking';
+  const parked = row.group === 'blocking';
   const current = focus !== null && row.goalRef === focus;
   // The recovery hold is never dimmed: while it stands no pulse runs at all, so
   // it is not another goal's business — it is everyone's, including this one's.
   const dim = focus !== null && !current && row.kind !== 'recovery';
-  const cls = ['cn-q', urgent ? 'cn-urgent' : '', dim ? 'cn-dim' : ''].filter((c) => c !== '').join(' ');
+  const cls = ['cn-q', `cn-t-${KIND_TONE[row.kind]}`, parked ? 'cn-parked' : '', dim ? 'cn-dim' : '']
+    .filter((c) => c !== '')
+    .join(' ');
   const goal = subjectLabel(row);
   const inner = (
     <>
       <i className="cn-stripe" />
       <div className="cn-qin">
         <div className="cn-qkind">
-          <i className="cn-tag">{KIND_LABEL[row.kind]}</i>
+          <i className="cn-tag">
+            {/* Hidden from the reading order on purpose: the word beside it is
+                the label, and a screen reader announcing "black diamond bench"
+                is worse than one announcing "bench". */}
+            <span className="cn-sym" aria-hidden="true">
+              {KIND_SYMBOL[row.kind]}
+            </span>
+            {KIND_LABEL[row.kind]}
+          </i>
           {row.raisedAt !== '' && <i className="cn-qage">{relTime(row.raisedAt, now)}</i>}
         </div>
         <p className="cn-qtitle">{row.title}</p>

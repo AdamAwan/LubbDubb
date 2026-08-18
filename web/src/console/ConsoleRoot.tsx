@@ -3,7 +3,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsolePanel, ConsoleTab } from '../cockpit/actions.js';
 import type { NeedRow } from '../view/needsYou.js';
 import { TAB_LABEL, TopBar } from './TopBar.js';
-import { KIND_LABEL, QueueRail, subjectLabel } from './QueueRail.js';
+import { KIND_LABEL, KIND_SYMBOL, QueueRail, subjectLabel } from './QueueRail.js';
 import { needBody } from './NeedsBand.js';
 import { GoalPage } from './GoalPage.js';
 import { Overview } from './Overview.js';
@@ -201,7 +201,7 @@ function renderPanel(view: CockpitView, actions: CockpitActions): JSX.Element | 
     const body = needBody(row, view, actions);
     if (body === null) return null;
     return (
-      <Panel title={`Needs you · ${KIND_LABEL[row.kind]}`} onClose={close}>
+      <Panel title={`${KIND_SYMBOL[row.kind]} Needs you · ${KIND_LABEL[row.kind]}`} onClose={close}>
         <AskSubject row={row} actions={actions} />
         <div className="cn-pbody">{body}</div>
       </Panel>
