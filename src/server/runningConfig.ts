@@ -55,6 +55,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'agentSubmitDelayMs',
       'agentIdleWaitMs',
       'agentWaitingPatterns',
+      'agentStallNudges',
       'agentResumeAttempts',
       'whitelistedApprovals',
       'claudeCommand',

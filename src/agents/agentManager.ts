@@ -60,6 +60,8 @@ import { ingestPlanDocument } from '../plans/planIngest.js';
 import { issueOrigin, planOriginIssue } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
 import type { AgentSession, SessionFactory } from './session.js';
+import { STALL_NUDGE, stallReason } from './agentProtocol.js';
+import { HUMAN_BLOCK, renderBlocks } from './streamTranscript.js';
 import type { RateLimitPark } from './streamJsonSession.js';
 import { debugEnabled, debugLog } from '../debug.js';
 
@@ -127,6 +129,14 @@ interface AgentManagerOptions {
   promptDelayMs?: number;
   /** Extra literal substrings a PTY session treats as "waiting for input". */
   waitingPatterns?: string[];
+  /**
+   * `agentStallNudges` — how many times an agent that ends a turn with no sentinel
+   * in it is asked to account for itself before the stop is put to a human.
+   *
+   * Unset or 0 restores the behaviour this replaced: the first unannounced stop
+   * parks the agent and files an escalation.
+   */
+  stallNudges?: number;
   /**
    * Whether this runtime can capture a session id and be resumed after a restart.
    * True only for the interactive PTY `claude`; the mock and stream runtimes leave
@@ -316,6 +326,14 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   // clock, and re-parsing it back out of an operator-facing sentence would make the
   // wording load-bearing.
   private readonly limited = new Map<string, LimitPark>();
+  // agentId → how many stall nudges it has been sent (see {@link handleStalled}).
+  // A whole-life budget rather than a per-stop one, and deliberately the blunter of
+  // the two: a counter reset by intervening work reads better and has no ceiling,
+  // so an agent that does one tool call between every stop would be nudged for as
+  // long as it cared to keep doing that, spending tokens with nothing to show and
+  // nobody told. In memory because it describes this launch's conversation; a
+  // resume starts the budget over, which is the same fresh start the agent gets.
+  private readonly nudges = new Map<string, number>();
 
   constructor(
     private readonly store: Store,
@@ -1501,6 +1519,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     session.on('activity', () => this.noteResumed(agentId, task.id));
 
     session.on('waiting', (reason: string) => this.handleWaiting(agentId, task, reason));
+    session.on('stalled', (lastWords: string) => this.handleStalled(session, agentId, task, lastWords));
     session.on('limited', (park: RateLimitPark) => this.handleLimited(agentId, task, park));
     // Both runtimes emit `exit` (with the process exit code) before `failed`, so
     // the code is in hand by the time the terminal transition is recorded.
@@ -1619,6 +1638,53 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     this.reflectStatus(agent.id, task.id, 'waiting');
     const hasOpen = this.store.listOpenEscalations().some((e) => e.agentId === agent.id);
     if (!hasOpen) this.emit('waiting', { agentId: agent.id, taskId: task.id, reason });
+  }
+
+  /**
+   * An agent ended a turn with no sentinel in it — it stopped, and did not say
+   * whether that was finished, blocked or neither.
+   *
+   * **The stop is not itself a question, and treating it as one is what filled the
+   * inbox.** The two things that actually produce it are an agent that did the work
+   * and narrated it instead of printing the done sentinel, and an agent that started
+   * a build, a test run or a CI check and stopped as though something would wake it
+   * when that finished. Neither wants a human, and a human sent to one of them can
+   * only read the transcript to find out which it was — the diagnosis cost that made
+   * these items expensive out of proportion to what they were.
+   *
+   * So the agent is asked first, up to `stallNudges` times, and only a stop that
+   * survives the budget is put to a person. {@link STALL_NUDGE} states the three
+   * exits rather than picking one, because the harness genuinely cannot tell them
+   * apart and the agent can.
+   *
+   * The nudge is written to the transcript as a sent message before it goes out. It
+   * is the harness taking a turn in the agent's conversation, and a transcript that
+   * showed the agent apparently answering a question nobody asked would be the same
+   * unexplained gap in a different place.
+   */
+  private handleStalled(session: AgentSession, agentId: string, task: Task, lastWords: string): void {
+    // A park already owns this agent: it asked mid-turn (`escalate`) and the turn
+    // that asked has now ended, or the account ran out. Neither is an unannounced
+    // stop, and nudging either would type into an agent that is waiting on a person.
+    if (this.parked.has(agentId)) return;
+    const budget = this.opts.stallNudges ?? 0;
+    const spent = this.nudges.get(agentId) ?? 0;
+    // A dead process cannot be asked anything — the stop is all there is, so park it.
+    if (spent < budget && !this.exited.has(agentId)) {
+      this.nudges.set(agentId, spent + 1);
+      const note = renderBlocks([{ type: HUMAN_BLOCK, text: STALL_NUDGE }]);
+      this.store.appendTranscript(agentId, note);
+      this.emit('output', { agentId, delta: note });
+      debugLog('agent', `stall nudge agent=${agentId} attempt=${spent + 1}/${budget}`);
+      try {
+        session.send(STALL_NUDGE);
+        return;
+      } catch {
+        // The session went away between the turn ending and the nudge. Fall through:
+        // an agent that cannot be asked is one the operator has to be told about.
+      }
+    }
+    this.handleWaiting(agentId, task, stallReason(lastWords));
   }
 
   private handleWaiting(agentId: string, task: Task, reason: string, ask?: AgentAsk): void {
@@ -1774,6 +1840,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     this.drainFileEvents(agentId); // catch a report written just before finishing
     this.parked.delete(agentId);
     this.limited.delete(agentId);
+    this.nudges.delete(agentId);
     this.store.flushTranscript(agentId); // make the finished agent's transcript durable
     this.store.updateAgent(agentId, { status, endedAt: new Date().toISOString(), pid: null });
     this.store.updateTask(taskId, { status });

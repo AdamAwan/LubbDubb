@@ -476,6 +476,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     resumeInput: agentSetup.resumeInput,
     promptDelayMs: agentSetup.promptDelayMs,
     waitingPatterns: config.agentWaitingPatterns,
+    stallNudges: config.agentStallNudges,
     resumable: agentSetup.resumable,
     resumeAttempts: config.agentResumeAttempts,
     statusFile: rateLimits ? (sessionId): string => rateLimits.fileFor(sessionId) : undefined,

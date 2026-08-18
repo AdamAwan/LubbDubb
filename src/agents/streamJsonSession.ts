@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events';
 import { spawn as nodeSpawn } from 'node:child_process';
 import type { AgentSession, AgentSessionSpec, AgentSessionStatus } from './session.js';
-import { DONE_SENTINEL, extractFlags, extractWaitingReason } from './sentinels.js';
+import { DONE_SENTINEL, extractFlags, extractWaitingReason, stripSentinels } from './sentinels.js';
 import { resolveExecutable } from './resolveCommand.js';
 import type { ProcessReaper } from './processTree.js';
 import { assistantText, renderBlocks, type ContentBlock } from './streamTranscript.js';
@@ -50,7 +50,8 @@ const defaultSpawner: Spawner = (command, args, opts) => {
  * `result` event. We scan assistant text for the harness sentinels:
  *   - DONE seen                 -> the agent finished the whole task
  *   - WAITING seen              -> it needs a human; escalate, then send the answer
- *   - turn ended with neither   -> treated as waiting (it stopped without finishing)
+ *   - turn ended with neither   -> `stalled`: it stopped without saying why, which is a
+ *                                  nudge before it is ever a question (see {@link stall})
  *
  * Only the turn that leaves nothing queued behind it is scanned that way — see
  * {@link StreamJsonSession.pendingTurns}.
@@ -244,10 +245,34 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
         // a settled ending.
         this.parkOnLimit();
       } else {
-        const reason = extractWaitingReason(turnText) ?? 'Agent ended its turn without finishing; awaiting direction.';
-        this.setWaiting(reason);
+        const reason = extractWaitingReason(turnText);
+        if (reason !== null) this.setWaiting(reason);
+        else this.stall(turnText);
       }
     }
+  }
+
+  /**
+   * A turn that ended with **no** sentinel in it: the agent stopped without saying
+   * whether it finished, what it needs, or nothing at all.
+   *
+   * Announced on its own event rather than as `waiting`, because they are not the
+   * same claim and only one of them is a question. `waiting` means an agent asked
+   * for a human; this means an agent went quiet, which is usually a forgotten
+   * sentinel or a wait on a build or a CI run that nothing was ever going to wake
+   * it from. What to do about it — nudge it, or park it for a human once the
+   * nudges are spent — is {@link AgentManager}'s to decide, and the runtime's job
+   * is only to report which of the two happened.
+   *
+   * The status still moves to `waiting`, because the session really has stopped:
+   * `send` — the nudge, or a human's answer — is what puts it back to `running`,
+   * and its own first line is what keeps an agent already parked on a question
+   * from being read as stopping over and over.
+   */
+  private stall(turnText: string): void {
+    if (this._status === 'waiting' || this._status === 'done') return;
+    this.setStatus('waiting');
+    this.emit('stalled', stripSentinels(turnText).trim());
   }
 
   private setWaiting(reason: string): void {

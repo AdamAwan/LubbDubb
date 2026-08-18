@@ -22,6 +22,14 @@ import type { EventEmitter } from 'node:events';
  * narrowed to *tool calls* rather than any block: prose after an escalation is
  * usually the agent explaining that it is waiting.
  *
+ * The stream runtime alone emits 'stalled'(lastWords) — a turn that ended with
+ * *no* sentinel in it, carrying the agent's own last words for the reason a park
+ * would eventually quote. It is deliberately not 'waiting': a stop is not a
+ * question, and an agent that forgot the done sentinel or stopped as if something
+ * would wake it when its build finished is answered by asking *it*, not a human.
+ * `AgentManager` decides which of the two it becomes. The PTY runtime has no turn
+ * boundary to read one off, and parks on silence (`agentIdleWaitMs`) instead.
+ *
  * The stream runtime
  * additionally emits 'usage'(AgentUsage) at each turn end — cumulative
  * cost/tokens/turns off the `result` event; the PTY runtime has no such channel

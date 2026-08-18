@@ -115,7 +115,11 @@ test('the turn behind a queued message is still judged on its own text', () => {
     () => child as StreamChild,
   );
   const waits: string[] = [];
+  // A turn ending with no sentinel is reported as a stall rather than a park, so
+  // that is the event this test's second half counts (see `stall`).
   session.on('waiting', (reason) => waits.push(reason));
+  const stalls: string[] = [];
+  session.on('stalled', (lastWords: string) => stalls.push(lastWords));
   session.start();
 
   session.send('go'); // turn 1
@@ -126,12 +130,14 @@ test('the turn behind a queued message is still judged on its own text', () => {
   session.send('Azure AD'); // queued into turn 1, so turn 1's sentinel is spent
   child.emitLine({ type: 'result', subtype: 'success' }); // turn 1 ends
   assert.deepEqual(waits, [], 'the interrupted turn is not judged');
+  assert.deepEqual(stalls, [], 'and it is not read as a stop either');
   assert.equal(session.status, 'running');
 
   // Turn 2 ends with nothing, and that *is* a park — read off turn 2's own text,
   // not turn 1's leftovers.
   child.emitLine({ type: 'assistant', message: { content: [{ type: 'text', text: 'Hmm.' }] } });
   child.emitLine({ type: 'result', subtype: 'success' });
-  assert.deepEqual(waits, ['Agent ended its turn without finishing; awaiting direction.']);
+  assert.deepEqual(waits, [], "turn 1's sentinel is spent, so nothing reads as a question");
+  assert.deepEqual(stalls, ['Hmm.'], "and the stop is judged on turn 2's own text");
   assert.equal(session.status, 'waiting');
 });

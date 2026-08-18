@@ -693,9 +693,8 @@ job — "Recorded. The harness will schedule nothing further for this issue" —
 stated once, in the system prompt, thousands of tokens earlier. An agent that records its verdict,
 narrates it and stops has therefore done everything its prompt asked and still ends its turn with no
 sentinel in it, which
-[10](10-agent-runtimes.md#a-result-is-the-end-of-a-turn-not-of-the-session) can only read as a park:
-the done/waiting decision has no third branch, so the operator gets "Agent ended its turn without
-finishing" over a job that finished.
+[10](10-agent-runtimes.md#the-unannounced-stop) can only read as a stop — which costs the fleet a
+nudge over a job that finished, and the operator an inbox item once the nudges are spent.
 
 So each of those three appends `DONE_REMINDER` (`src/agents/agentProtocol.ts`, built from
 `DONE_SENTINEL` so there is never a second copy of the string) to its success note. It states the

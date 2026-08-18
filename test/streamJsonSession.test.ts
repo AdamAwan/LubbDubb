@@ -72,15 +72,22 @@ test('WAITING sentinel at turn end parks the session with the reason', () => {
   assert.equal(reason, 'Postgres or MySQL?');
 });
 
-test('a turn ending with no sentinel is treated as waiting', () => {
+test('a turn ending with no sentinel is a stall, not a question', () => {
+  // The runtime reports *which* of the two happened and decides neither: an agent
+  // that went quiet has not asked anybody anything, and what it costs to treat the
+  // two alike is an inbox item nobody can answer (see AgentManager.handleStalled).
   const { spawner, child } = fakeSpawner();
   const s = new StreamJsonSession({ command: 'claude', args: [], cwd: '/tmp' }, spawner);
   let waited = false;
+  const stalls: string[] = [];
   s.on('waiting', () => (waited = true));
+  s.on('stalled', (lastWords: string) => stalls.push(lastWords));
   s.start();
-  child.emitLine(assistant('I did some stuff.'));
+  child.emitLine(assistant('Kicked off the build; waiting for it to go green.'));
   child.emitLine(result);
-  assert.equal(waited, true);
+  assert.equal(waited, false, 'no question was asked, so none is reported');
+  assert.deepEqual(stalls, ['Kicked off the build; waiting for it to go green.'], 'its last words ride along');
+  assert.equal(s.status, 'waiting', 'the session really has stopped, whatever is done about it');
 });
 
 test('send writes a JSON user message and un-parks', () => {
