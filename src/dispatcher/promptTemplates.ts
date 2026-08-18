@@ -258,9 +258,11 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'If you find there is nothing to build here — it is already done, it duplicates other work, or the ' +
       'premise is wrong — do not open an empty pull request and do not simply stop. Call conclude_part ' +
       'with kind "determination" and say what you found, and the part closes cleanly.\n\n' +
-      'Work on branch {branch}, which is cut from {base}. Open a pull request from {branch} **into {base}** — if ' +
-      'that is not the default branch, this PR is stacked on another part and must target it, not the default. ' +
-      'Say in the PR body which part of #{number} this is and what it stacks on. Reference the issue as ' +
+      'Work on branch {branch}, which is cut from {base}. Open the pull request with the open_pr tool: it ' +
+      'resolves the branch and the base from your own origin, so a stacked part targets the rung beneath it, ' +
+      'and it writes which part of #{number} this is itself. If that tool is unavailable, open the pull ' +
+      'request yourself from {branch} **into {base}** — if that is not the default branch, this PR is stacked ' +
+      'on another part and must target it, not the default. Either way, reference the issue as ' +
       '"part of #{number}" and never as "closes #{number}": other parts still have to land.',
     doc: "Sent to a code agent for one part of a multi-PR plan (rule `plan-part`). {plan} is the planner's justification, {done}/{remaining} the sibling parts either side of this one, {base} the branch this part stacks on (the default branch when it stacks on nothing). Placeholders: {number} {title} {part} {scope} {branch} {base} {plan} {done} {remaining}.",
   },
@@ -291,7 +293,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
   'issue-pickup': {
     placeholders: ['number', 'title', 'body', 'branch'],
     template:
-      'GitHub issue #{number} ("{title}") needs resolving.\n\n{body}\n\nImplement the fix on branch {branch} and open a pull request that resolves it. Reference the issue as "closes #{number}" only if this PR completes the whole thing; if work remains afterwards, reference it as "part of #{number}" so it stays open for the rest.',
+      'GitHub issue #{number} ("{title}") needs resolving.\n\n{body}\n\nImplement the fix on branch {branch} and open a pull request that resolves it, using the open_pr tool — it resolves the branch and the base from your own origin and writes the issue reference itself. If that tool is unavailable, open the pull request yourself from {branch}. Whether the issue closes is yours to say in the body: reference the issue as "closes #{number}" only if this PR completes the whole thing; if work remains afterwards, reference it as "part of #{number}" so it stays open for the rest.',
     doc: 'Sent to a code agent when an open work item / issue has no open PR and no agent is on it (rule `issue-pickup`). Placeholders: {number} {title} {body} {branch}.',
   },
   'issue-pickup-escalation': {

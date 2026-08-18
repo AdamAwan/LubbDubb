@@ -45,6 +45,13 @@ export const PROTOCOL_SYSTEM_PROMPT = [
  * `plan_submit` is stated as replacing the `.lubbdubb/plan.json` write; that file
  * path stays wired and stays documented in the planner's own prompt template, so
  * a planner that never sees the tool behaves exactly as it does today.
+ *
+ * This is also the *only* place several of these tools are named. A tool an agent
+ * has to decide to call, and that no dispatch prompt mentions at its point of use,
+ * is discoverable from `tools/list` alone — which in practice means an agent shells
+ * out to `gh`/`az` instead. `test/mcpChannel.test.ts` classifies every entry of
+ * `MCP_TOOL_NAMES` as named here or named at its point of use, so a new tool cannot
+ * be added without that decision being made.
  */
 export const MCP_PROTOCOL_ADDENDUM = [
   '',
@@ -62,10 +69,18 @@ export const MCP_PROTOCOL_ADDENDUM = [
   "  It returns the harness's own view — CI status, review comments, merge state, an issue",
   '  body and its plan graph — from the same snapshot the dispatcher decided on, whichever provider',
   '  is configured. Call it with no ref to read the item you were dispatched for.',
+  '- open_pr(summary, type, scope, body) instead of shelling out to `gh`/`az` to open the pull request for',
+  '  the work you were dispatched to do. The branch and the base come from your own origin, never from an',
+  '  argument — so a part stacked on another part targets the rung beneath it rather than the default',
+  '  branch — and the title convention and the issue reference are written for you. Whether the pull',
+  '  request *closes* its issue is still yours to say, in the body.',
   '- report_finding(kind, summary, ref) when you notice something that is not your task: a duplicate,',
   '  work blocked on something outside your reach, an unrelated problem. It reaches an operator instead',
   '  of being buried in a PR comment. It queues no work and dispatches nobody — report it and carry on',
   '  with your own task rather than going to fix it.',
+  '- request_human_task(title, detail) when your task needs something only a person can do — a credential',
+  '  issued, an account provisioned, a decision made off this repo. It files durable work for an operator',
+  '  and parks nobody, so it is not a way to wait: use escalate for that.',
   '- note_progress(note) to say in one line what you are working on, so the operator watching the fleet',
   '  can see it without opening your transcript. Worth a call when you move on to a different part of the',
   '  task, or before a long quiet step. Nothing treats a gap between notes as being stuck, so there is no',
