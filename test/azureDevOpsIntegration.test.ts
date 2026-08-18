@@ -80,6 +80,7 @@ interface Recorded {
   labelSets: Array<{ prId: number; label: string; present: boolean }>;
   stateSets: Array<{ id: number; state: string }>;
   tagSets: Array<{ id: number; tag: string; present: boolean }>;
+  workItemLinks: Array<{ id: number; pullRequestId: number }>;
   comments: Array<{ id: number; commentId: number | null; text: string }>;
   closedSince: string[];
   timelineReads: number[];
@@ -103,6 +104,7 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     labelSets: [],
     stateSets: [],
     tagSets: [],
+    workItemLinks: [],
     comments: [],
     closedSince: [],
     timelineReads: [],
@@ -200,6 +202,9 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async setWorkItemTag(id, tag, present) {
       recorded.tagSets.push({ id, tag, present });
+    },
+    async linkWorkItemToPull(id, pullRequestId) {
+      recorded.workItemLinks.push({ id, pullRequestId });
     },
     async createWorkItemComment(id, text) {
       recorded.comments.push({ id, commentId: null, text });
@@ -690,6 +695,58 @@ test('runWorkItemQuery: the changed-since read asks for timePrecision in the url
   assert.doesNotMatch(open.fetchState.urls[0]!, /timePrecision/);
 });
 
+test('linkWorkItemToPull: the artifact link carries both GUIDs, encoded into one vstfs path segment', async () => {
+  // Three requests: the project GUID, the repository GUID, then the PATCH. Both ids
+  // are resolved rather than the configured names used, because Azure stores the
+  // artifact id verbatim and only the GUID form is the link its policy reads.
+  const { api, fetchState } = restApi([
+    () => json({ id: 'proj-guid' }),
+    () => json({ id: 'repo-guid' }),
+    () => json({ id: 12 }),
+  ]);
+  await api.linkWorkItemToPull(12, 88);
+
+  assert.equal(fetchState.calls, 3);
+  assert.match(fetchState.urls[2]!, /_apis\/wit\/workitems\/12/);
+  const patch = JSON.parse(fetchState.bodies.at(-1)!) as Array<{ op: string; path: string; value: unknown }>;
+  assert.deepEqual(patch, [
+    {
+      op: 'add',
+      path: '/relations/-',
+      value: {
+        rel: 'ArtifactLink',
+        url: 'vstfs:///Git/PullRequestId/proj-guid%2Frepo-guid%2F88',
+        attributes: { name: 'Pull Request' },
+      },
+    },
+  ]);
+  // And the harness reads its own write back: this is the shape `linkedPrFromRelations`
+  // resolves to a PR number, which is what makes the desk idempotent from the world.
+  assert.equal(linkedPrFromRelations(['vstfs:///Git/PullRequestId/proj-guid%2Frepo-guid%2F88']), 88);
+});
+
+test('linkWorkItemToPull: a duplicate relation is a success, and both GUIDs are resolved once', async () => {
+  const { api, fetchState } = restApi([
+    () => json({ id: 'proj-guid' }),
+    () => json({ id: 'repo-guid' }),
+    () => json({ message: 'Relation already exists.', typeKey: 'WorkItemRelationAlreadyExistsException' }, 400),
+  ]);
+  await api.linkWorkItemToPull(12, 88);
+  // The second link pays for no GUID reads — both are cached for the client's life.
+  await api.linkWorkItemToPull(13, 88);
+  assert.equal(fetchState.calls, 4);
+  assert.match(fetchState.urls[3]!, /_apis\/wit\/workitems\/13/);
+});
+
+test('linkWorkItemToPull: a permission failure is not swallowed with the duplicate', async () => {
+  const { api } = restApi([
+    () => json({ id: 'proj-guid' }),
+    () => json({ id: 'repo-guid' }),
+    () => json({ message: 'TF401027: You need Work Item write permission' }, 403),
+  ]);
+  await assert.rejects(api.linkWorkItemToPull(12, 88), /TF401027/);
+});
+
 test('request: a transient sign-in-HTML 2xx is retried with a fresh token, then succeeds', async () => {
   const { api, authState, fetchState, logs } = restApi([() => signInHtml(), () => json({ value: [] })]);
   const pulls = await api.listActivePullRequests();
@@ -1063,6 +1120,14 @@ test('createPullRequest returns the new id (the REST arm adds the refs/heads pre
   assert.deepEqual(recorded.createdPulls, [
     { head: 'issue/12/cursor', base: 'issue/12/schema', title: '#12 [2/2] feat(store): cursor', body: 'part of #12' },
   ]);
+});
+
+test('linkWorkItem hangs the pull request off the work item, provider-side', async () => {
+  const { api, recorded } = fakeApi();
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
+  const res = await issues.linkWorkItem({ number: 101, prNumber: 88 });
+  assert.equal(res.ok, true);
+  assert.deepEqual(recorded.workItemLinks, [{ id: 101, pullRequestId: 88 }]);
 });
 
 test('deleteBranch reaps a merged branch, and an already-absent one is still a success', async () => {

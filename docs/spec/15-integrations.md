@@ -43,8 +43,8 @@ providers share one `FakeWorldStore` so their world stays coherent.
 
 `PrReplyCapable`, `PrMergeCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
 `PrBaseCapable`, `PrBaseUpdateCapable`, `BranchDeleteCapable`, `IssueLabelCapable`,
-`WorkItemStateCapable`, `IssueCommentCapable`, `CiEvidenceCapable`, `RefResolvable`,
-`TicketHistoryCapable`, and the fake-only `Injectable`.
+`WorkItemStateCapable`, `WorkItemLinkCapable`, `IssueCommentCapable`, `CiEvidenceCapable`,
+`RefResolvable`, `TicketHistoryCapable`, and the fake-only `Injectable`.
 
 `BranchDeleteCapable` deletes a branch outright — the reap after a pull request merges. Both
 providers implement it, and both report **already gone as success**: GitHub's "automatically delete
@@ -78,6 +78,18 @@ costs no agent ([05](05-dispatcher.md#pr-base-update--two-arms)). GitHub impleme
 implement it**, which is exactly the asymmetry a per-capability interface exists for. Note that it is
 _not_ `PrBaseCapable`: one changes which branch a pull request merges into, the other merges that
 branch in.
+
+`WorkItemLinkCapable` hangs a **pull-request artifact link off a work item** — the relation Azure's
+**Check for linked work items** branch policy reads, and the only thing that satisfies it. **GitHub
+does not implement it and does not need to**: a `#12` in a pull request's body cross-references the
+issue by itself, which is precisely the asymmetry a per-capability interface exists for, and it is
+why the composite answers `ok: false` here rather than throwing. It is on the **issues** provider,
+not the source-control one, because the write is a work-item PATCH: Azure derives a pull request's
+`workItemRefs` from these relations and its create-PR payload's copy is read-only, so there is no way
+to open a pull request already linked. The artifact id is `{projectId}/{repositoryId}/{prId}` encoded
+into a single vstfs path segment, so both GUIDs are resolved (and cached for the client's life)
+rather than the configured names used. A duplicate relation comes back as a 400 and is absorbed;
+anything else — a PAT without **Work Items (write)** — surfaces. → [07](07-pull-requests.md#linking-the-work-item)
 
 `CiEvidenceCapable` is the one that reads rather than writes, and it is here because it is asked per
 act rather than per pulse. It fetches the **failing output** of a red check so a CI-fix dispatch
@@ -113,11 +125,15 @@ Implements both seams:
 - **Reads** — fans `snapshot()` out across integrations (in parallel) and merges the slices,
   stamping `takenAt` from an injectable clock.
 - **Outbound** — routes each action to the **first** integration that can handle it, by type guard.
-  No handler throws a clear message naming the missing capability — with **one deliberate exception**:
-  `updatePrBranch` answers `{ok: false}` instead. It is the only outbound act with a second way to get
+  No handler throws a clear message naming the missing capability — with **two deliberate exceptions**.
+  `updatePrBranch` answers `{ok: false}` instead: it is the outbound act with a second way to get
   done (the code agent the rule falls back to), so a provider without the endpoint is a configuration
   rather than a fault, and throwing would fill an Azure deployment's Errors panel with a fact about
   its provider. → [09](09-execution.md#update_pr_branch--the-base-merge-without-an-agent)
+  `linkWorkItem` answers it for the mirror-image reason: on GitHub the link is **already made**, by the
+  reference in the body, so there is nothing to do and nothing failed. Its caller writes no
+  `pr_work_item_links` row for an `ok: false`, which is what keeps the retry alive if that deployment
+  ever moves to Azure. → [07](07-pull-requests.md#linking-the-work-item)
 - **`resolveRefUrl(ref)`** — the first `RefResolvable`, or `null`.
 - **`listTicketHistory(since)`** — the first `TicketHistoryCapable`, or `[]`. The **second** routed
   read that answers rather than throwing, for `readCiFailureEvidence`'s reason: the mirror it fills is

@@ -322,6 +322,7 @@ function relationApi(
     createWorkItemComment: unused,
     updateWorkItemComment: unused,
     setWorkItemTag: unused,
+    linkWorkItemToPull: unused,
     createPull: unused,
     setPullTitle: unused,
     setPullBase: unused,

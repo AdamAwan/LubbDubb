@@ -1,5 +1,11 @@
 import type { ErrorRecorder } from '../../errorLog.js';
-import type { IssueCommentInput, IssueLabelInput, SendResult, WorkItemStateInput } from '../../sink/actionSink.js';
+import type {
+  IssueCommentInput,
+  IssueLabelInput,
+  SendResult,
+  WorkItemLinkInput,
+  WorkItemStateInput,
+} from '../../sink/actionSink.js';
 import type { Issue, IssueRelative, IssueState, TrackerItem } from '../../types.js';
 import type {
   Capability,
@@ -8,6 +14,7 @@ import type {
   IssueLabelCapable,
   RefResolvable,
   TicketHistoryCapable,
+  WorkItemLinkCapable,
   WorkItemStateCapable,
   WorldSlice,
 } from '../integration.js';
@@ -52,6 +59,7 @@ export class AzureDevOpsWorkItemsIntegration
     Integration,
     RefResolvable,
     WorkItemStateCapable,
+    WorkItemLinkCapable,
     IssueLabelCapable,
     IssueCommentCapable,
     TicketHistoryCapable
@@ -220,6 +228,21 @@ export class AzureDevOpsWorkItemsIntegration
   async setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
     await this.opts.api.setWorkItemState(input.number, input.state);
     return { ok: true };
+  }
+
+  /**
+   * The work item's side of "every pull request has a work item".
+   *
+   * On the `issues` provider rather than the source-control one because the write
+   * is a work-item PATCH — Azure derives a pull request's `workItemRefs` from these
+   * relations and offers no way to set them from the pull request. The next snapshot
+   * reads the relation straight back out as `linkedPrNumber`, which is what closes
+   * the loop: the desk's own idempotence check is the provider's answer, not a
+   * belief the harness holds separately.
+   */
+  async linkWorkItem(input: WorkItemLinkInput): Promise<SendResult> {
+    await this.opts.api.linkWorkItemToPull(input.number, input.prNumber);
+    return { ok: true, ref: `#${input.number} -> PR ${input.prNumber}` };
   }
 
   /**

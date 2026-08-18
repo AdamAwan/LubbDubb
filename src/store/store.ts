@@ -23,6 +23,7 @@ import { EscalationStore } from './escalations.js';
 import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
+import { WorkItemLinkStore } from './workItemLinks.js';
 import { ReviewWaitStore } from './reviewWaits.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore } from './world.js';
@@ -140,6 +141,7 @@ export class Store {
   private readonly landings: StackLandingStore;
   private readonly branchReaps: BranchReapStore;
   private readonly prWatchSeeds: PrWatchSeedStore;
+  private readonly workItemLinks: WorkItemLinkStore;
   private readonly reviewWaitStore: ReviewWaitStore;
   private readonly decisions: DecisionStore;
   private readonly world: WorldStore;
@@ -212,6 +214,7 @@ export class Store {
     this.landings = new StackLandingStore(ctx);
     this.branchReaps = new BranchReapStore(ctx);
     this.prWatchSeeds = new PrWatchSeedStore(ctx);
+    this.workItemLinks = new WorkItemLinkStore(ctx);
     this.reviewWaitStore = new ReviewWaitStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
@@ -791,6 +794,13 @@ export class Store {
   }
   seededPrs(): ReadonlySet<number> {
     return this.prWatchSeeds.seededPrs();
+  }
+
+  recordWorkItemLink(prNumber: number, workItem: number): void {
+    this.workItemLinks.recordWorkItemLink(prNumber, workItem);
+  }
+  linkedWorkItemPrs(): ReadonlySet<number> {
+    return this.workItemLinks.linkedWorkItemPrs();
   }
 
   // -- Review waits (how long a PR has sat on a reviewer) -------------------

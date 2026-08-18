@@ -72,6 +72,13 @@ export interface WorkItemStateInput {
   state: string;
 }
 
+export interface WorkItemLinkInput {
+  /** The work item / issue number the link hangs off. */
+  number: number;
+  /** The pull request it is linked to. */
+  prNumber: number;
+}
+
 export interface IssueLabelInput {
   /** The issue / work item number to label. */
   number: number;
@@ -121,6 +128,20 @@ export interface ActionSink {
    * fails. Only providers with a comment API implement it.
    */
   upsertIssueComment(input: IssueCommentInput): Promise<SendResult>;
+  /**
+   * Link a work item to the pull request that resolves it — the tracker-side
+   * relation, not a mention in prose.
+   *
+   * **`ok: false` is "this provider does not need it", not a failure**, the way
+   * {@link updatePrBranch}'s is. GitHub links an issue to a pull request from the
+   * body's `#12` itself, so nothing there implements this and there is nothing to
+   * fix; Azure DevOps links only through a work-item artifact link, which is what
+   * its **Check for linked work items** branch policy reads. Throws only when the
+   * provider *has* the operation and it failed.
+   *
+   * Idempotent: linking a pull request a work item already carries is a success.
+   */
+  linkWorkItem(input: WorkItemLinkInput): Promise<SendResult>;
   /**
    * Open a pull request. `ref` on the result is the new PR number, so the audit log
    * records what was created. Throws if creation fails.

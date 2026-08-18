@@ -440,6 +440,13 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
   A part gets `Part <n>/<m> of #<issue>.`, a whole-issue pickup `Relates to #<issue>.` So the prompts
   keep telling the agent to write `closes #<n>` / `part of #<n>` itself: that clause is its call, and
   this tool deliberately never makes it.
+- **The work-item link is written too, not just the reference.** The body's `#<issue>` is a link on
+  GitHub and prose on Azure, where a work item and a pull request are joined only by an artifact
+  relation — so the tool links it through `linkPrWorkItem` the moment the provider returns a number,
+  the same shared-write-path arrangement `seedPrWatch` has. Without it an Azure deployment's pull
+  requests are born blocked by the **Check for linked work items** policy, and clearing that cost a
+  code agent rediscovering the number this handler is holding.
+  → [07](07-pull-requests.md#linking-the-work-item)
 - **The `body` argument's schema description states a shape** — a bullet list, five bullets at most,
   why first, one line each, no headings and no prose paragraphs. Unlike the title, the body ships as
   the agent wrote it (the reference is appended and nothing is rewritten), so the schema is the only

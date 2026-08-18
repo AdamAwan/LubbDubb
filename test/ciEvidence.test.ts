@@ -199,6 +199,7 @@ function azApi(script: AzScript): AzureDevOpsApi {
     createWorkItemComment: unused('createWorkItemComment'),
     updateWorkItemComment: unused('updateWorkItemComment'),
     setWorkItemTag: unused('setWorkItemTag'),
+    linkWorkItemToPull: unused('linkWorkItemToPull'),
     createPull: unused('createPull'),
     setPullTitle: unused('setPullTitle'),
     setPullBase: unused('setPullBase'),

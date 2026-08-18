@@ -14,6 +14,7 @@ import type {
   PrReplyInput,
   PrTitleInput,
   SendResult,
+  WorkItemLinkInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
@@ -254,6 +255,23 @@ export interface WorkItemStateCapable {
 
 export function isWorkItemStateCapable(x: Integration): x is Integration & WorkItemStateCapable {
   return typeof (x as Partial<WorkItemStateCapable>).setWorkItemState === 'function';
+}
+
+/**
+ * An integration that can hang a pull-request link off a work item — the relation
+ * Azure's **Check for linked work items** policy reads.
+ *
+ * Its own capability rather than a method on {@link WorkItemStateCapable}, for
+ * {@link PrBaseUpdateCapable}'s reason: GitHub genuinely does not have it and does
+ * not need it, since a `#12` in the body links the issue itself. So the composite
+ * answers `ok: false` when nothing serves it, instead of throwing.
+ */
+export interface WorkItemLinkCapable {
+  linkWorkItem(input: WorkItemLinkInput): Promise<SendResult>;
+}
+
+export function isWorkItemLinkCapable(x: Integration): x is Integration & WorkItemLinkCapable {
+  return typeof (x as Partial<WorkItemLinkCapable>).linkWorkItem === 'function';
 }
 
 /** An integration that can comment on an issue / work item — the plan's status comment. */

@@ -43,6 +43,7 @@ import { ValidationReadyDesk } from './validation/readyDesk.js';
 import { SpendBurnDesk } from './spendBurnDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
 import { PrWatchDesk } from './prWatchDesk.js';
+import { PrWorkItemDesk } from './prWorkItemDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
 import { UpdateDesk } from './selfUpdate/updateDesk.js';
 import type { McpToolDeps } from './mcp/tools/context.js';
@@ -628,6 +629,19 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
+  // The other thing a pull request owes the moment it exists: the work item it was
+  // opened for, linked on the tracker rather than named in prose. Azure's "check for
+  // linked work items" policy blocks a pull request without one, and the harness has
+  // known the number since pickup — so this is a row read, not an agent. `open_pr`
+  // links one as it creates it; this is the floor under that, on the same terms as
+  // the watch seeding beside it.
+  const prWorkItems = new PrWorkItemDesk({
+    sink: opts.sink ?? connector,
+    store,
+    prAuthorConfigured,
+    errors,
+  });
+
   const branchReaps = new BranchReapDesk({
     sink: opts.sink ?? connector,
     store,
@@ -699,6 +713,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     burn,
     branchReaps,
     prWatch,
+    prWorkItems,
     schedules,
     // Only when the watch is on: absent, the pulse takes no reading and the gauge
     // reads unknown, which is the behaviour of every deployment before this existed.

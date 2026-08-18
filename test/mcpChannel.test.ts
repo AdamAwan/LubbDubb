@@ -1828,6 +1828,13 @@ test('open_pr opens the pull request for the calling agent, titled by the conven
   assert.ok(opened, 'the PR is in the world');
   assert.equal(opened.branch, 'issue/182');
   assert.match(opened.title, /^#182 feat\(store\)/);
+
+  // Linked to the work item as it is created, not a pulse later by the desk. On
+  // Azure the `Relates to #182` in the body satisfies nothing, so a pull request
+  // opened without this is blocked by the linked-work-items policy from the moment
+  // it exists — and clearing that used to cost an agent.
+  assert.equal(world.issues.find((i) => i.number === 182)?.linkedPrNumber, payload.pullRequest);
+  assert.ok(system.store.linkedWorkItemPrs().has(payload.pullRequest), 'and the link is recorded, so it happens once');
   system.store.close();
 });
 

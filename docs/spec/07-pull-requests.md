@@ -522,6 +522,64 @@ The one thing the seeding will not do is tag a pull request carrying the retired
 label is inert, and this is the single path that could wake the fleet on work somebody parked under
 the old model.
 
+## Linking the work item
+
+**A pull request the harness opened carries a link to the work item it was opened for, written on the
+tracker rather than named in prose.** The two providers disagree about what a link is, and that
+disagreement is the whole reason this exists:
+
+- **GitHub** reads the `Relates to #12` `open_pr` appends to the body and cross-references the issue
+  itself. There is nothing to write.
+- **Azure DevOps** does not. A work item and a pull request are linked by an **artifact link relation
+  on the work item** — `vstfs:///Git/PullRequestId/{projectId}%2F{repositoryId}%2F{prId}` — and
+  nothing else. Azure derives a pull request's `workItemRefs` from those relations and the create-PR
+  payload's copy is read-only, so a pull request cannot be opened already linked. Prose in the
+  description satisfies nothing.
+
+That mattered because of one branch policy. **Check for linked work items** blocks a pull request
+carrying no relation, so on Azure the fleet was opening pull requests that were blocked from the
+moment they existed, and the only thing that moved them was a code agent — a model call, a worktree
+and a context window spent rediscovering a number the harness had held on a row since pickup. The
+work item is not a judgement. It is `issueForPr(pr, issues)` in `src/prIssue.ts`: the pull request
+the issue links, else the issue its `issue/<n>` branch names — **the same predicate the rename reads**,
+asked once so the number in a pull request's title and the number on its tracker link cannot
+disagree.
+
+So the link is written the way the tag is, and in the same two places:
+
+- **At creation.** `open_pr` links the moment the provider returns a number, so a pull request is
+  never briefly blocked by the policy that was about to be satisfied.
+- **On the pulse.** `PrWorkItemDesk` links any open pull request that `isOurPr` claims and
+  `issueForPr` resolves. The floor under the first, for the watch seeding's reasons.
+
+Both go through `linkPrWorkItem` in `src/prWorkItemDesk.ts`, the one write path, exactly as both
+tagging paths go through `seedPrWatch`.
+
+**`ok: false` is "this provider does not need it", not a failure.** `CompositeConnector.linkWorkItem`
+answers it when no integration is `WorkItemLinkCapable` — GitHub, where the body already links — and
+that is the second act with that contract, after `updatePrBranch`. No row is written for it: recording
+one would be the harness claiming credit for a write it never made, and would suppress the retry if
+that deployment ever moved to Azure.
+
+**Exactly once per pull request, and `pr_work_item_links` is what makes it once.** Two things make
+the world's own answer insufficient. Deleting a link is how somebody says the harness picked the wrong
+work item, and a desk re-deriving from the world would write it straight back next pulse — the watch
+seeding's argument. And `linkedPrNumber` folds a work item's relations down to the **last** pull
+request to cross-reference it, so on a plan whose parts each open one, the earlier parts read as
+unlinked however many links really exist. The row goes down only after the link write succeeds.
+
+The one world reading kept beside the row is `linkedPrNumber === pr.number`, which is the provider
+stating that this exact link is already there. It is what stops a deployment upgrading onto the desk
+from re-sending a link for every pull request already carrying one.
+
+A duplicate relation is absorbed rather than raised: Azure answers one with a 400, `isRelationAlreadyExists`
+recognises it, and "the link you asked for is there" is not an entry the operator's Errors panel needs.
+A permission failure — a PAT without **Work Items (write)** — is not absorbed, and surfaces as itself.
+
+**The `workItems` policy kind stays `off` by default** ([15](15-integrations.md)). Nothing about this
+changes what the harness *dispatches* for; it changes whether the gate is ever unsatisfied. An operator
+who wants the policy visible as a check can now promote it knowing the fleet clears it mechanically.
+
 ## The PR rules end to end
 
 For each open, unmerged PR in the dispatch world, the dispatcher builds every concern that would on
