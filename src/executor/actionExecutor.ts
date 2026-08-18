@@ -355,6 +355,7 @@ export class ActionExecutor {
             // to the prompt must not push it further from the buttons.
             context: {
               originRef: action.originRef,
+              issueNumber: action.issueNumber,
               planId: action.planId,
               detail: action.detail,
               detailFrom: 'What the assessor found',

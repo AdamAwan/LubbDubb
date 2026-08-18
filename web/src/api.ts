@@ -265,6 +265,13 @@ const realApi = {
   // read it — one act on this side, because half of it does nothing.
   addInstruction: (issueNumber: number, text: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/instruction`, { text }),
+  // Overrule a standing shortfall: the assessment is wrong, and this is why. It
+  // records the delivery — which clears the shortfall, parks the assessor that
+  // would re-derive it, and releases the retrospective and any handed-over
+  // validation check — and files the same words as an instruction, which is what
+  // gets them onto the ticket. 409 when nothing is standing to overrule.
+  overruleShortfall: (issueNumber: number, text: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/shortfall/overrule`, { text }),
   // Take one back. Withdrawing the last one clears the `more_work` it wrote with
   // it, so the goal is not bounced back to pickup for words nobody will read.
   withdrawInstruction: (issueNumber: number, id: string) =>

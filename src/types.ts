@@ -2367,6 +2367,14 @@ export interface EscalationContext {
   // -- propose_plan escalations -------------------------------------------
   /** The plan whose decomposition this item asks you to authorize (issue #109 phase 3). */
   planId?: string;
+  // -- issue-shortfall escalations ----------------------------------------
+  /**
+   * The goal a shortfall item is about. Carried on both of the rule's arms —
+   * the escalation and the proposal — so the card's overrule can name the issue
+   * it writes a verdict for rather than stripping the number back out of
+   * `originRef`, which is `refLabel`'s job and nothing else's.
+   */
+  issueNumber?: number;
   // -- grant_permission escalations (issue #130 phase B) ------------------
   /**
    * Set when this escalation is a live permission request: an agent's tool call

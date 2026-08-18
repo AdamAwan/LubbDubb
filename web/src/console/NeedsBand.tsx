@@ -133,6 +133,7 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       onAnswer={(text) => actions.answerEscalation(escalation.id, text)}
       onAnswerQuestions={(answers) => actions.answerQuestions(escalation.id, answers)}
       onDecide={(id, verdict, note) => actions.decideProposal(id, verdict, note)}
+      onOverrule={(issueNumber, proposalId, text) => actions.overruleShortfall(issueNumber, proposalId, text)}
       onPermission={(id, allow, note) => actions.decidePermission(id, allow, note)}
       onDismiss={(id, note) => actions.dismissEscalation(id, note)}
       onOpenAgent={(id) => actions.select(id)}

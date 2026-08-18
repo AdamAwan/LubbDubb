@@ -368,6 +368,10 @@ class DemoServer {
    * the `more_work` that makes there be a next agent. A demo that wrote only the
    * first would draw the operator's words and quietly park the goal, which is the
    * exact failure the pair exists to prevent.
+   *
+   * And the server's exception, mirrored with it: on a delivered goal the second
+   * half is skipped, because there a `more_work` conclusion would clear the
+   * delivery instead of scheduling anything.
    */
   async addInstruction(issueNumber: number, text: string): Promise<{ ok: true }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
@@ -383,16 +387,56 @@ class DemoServer {
           settledAt: null,
         },
       ];
-      issue.conclusion = {
-        verdict: 'more_work',
-        by: 'operator',
-        note: 'The operator wrote an instruction for this goal — it is in front of the next agent.',
-        at,
-      };
+      if (!issue.delivery)
+        issue.conclusion = {
+          verdict: 'more_work',
+          by: 'operator',
+          note: 'The operator wrote an instruction for this goal — it is in front of the next agent.',
+          at,
+        };
       this.addDecision(
         'no_op',
         'executed',
         `issue #${issueNumber} → instruction`,
+        undefined,
+        undefined,
+        undefined,
+        `issue:${issueNumber}`,
+      );
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /**
+   * Overrule a standing shortfall — the demo mirror of "that assessment is wrong,
+   * and here is why".
+   *
+   * Both rows again, and the shortfall going is the *delivery's* doing rather than
+   * a line of its own: the exclusion matrix is what clears it on the server, and a
+   * demo that deleted it separately would draw a control whose effects do not come
+   * from where the real one's come from.
+   */
+  async overruleShortfall(issueNumber: number, text: string): Promise<{ ok: true }> {
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (issue?.shortfall) {
+      const at = new Date().toISOString();
+      issue.delivery = { summary: text, by: 'operator', decidedAt: at };
+      issue.shortfall = null;
+      issue.instructions = [
+        ...issue.instructions,
+        {
+          id: `ins_${issue.instructions.length + 1}_${issueNumber}`,
+          originRef: `issue:${issueNumber}`,
+          text,
+          createdAt: at,
+          settledAt: null,
+        },
+      ];
+      this.addDecision(
+        'no_op',
+        'executed',
+        `issue #${issueNumber} → shortfall overruled`,
         undefined,
         undefined,
         undefined,
@@ -2308,6 +2352,7 @@ export const demoApi = {
   setIssueAssay: (issueNumber: number, verdict: 'workable' | 'unclear' | null) =>
     getServer().setIssueAssay(issueNumber, verdict),
   addInstruction: (issueNumber: number, text: string) => getServer().addInstruction(issueNumber, text),
+  overruleShortfall: (issueNumber: number, text: string) => getServer().overruleShortfall(issueNumber, text),
   withdrawInstruction: (issueNumber: number, id: string) => getServer().withdrawInstruction(issueNumber, id),
   dismissRun: (issueNumber: number) => getServer().dismissRun(issueNumber),
   replan: (planId: string) => getServer().replan(planId),

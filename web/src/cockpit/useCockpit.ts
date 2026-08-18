@@ -177,6 +177,8 @@ export function useCockpit(): CockpitStatus {
       dismissEscalation: (id, note) => then(api.dismissEscalation(id, note)),
       decideProposal: (id, verdict, note) =>
         then(verdict === 'accept' ? api.acceptProposal(id, note) : api.rejectProposal(id, note)),
+      overruleShortfall: (issueNumber, proposalId, text) =>
+        then(api.overruleShortfall(issueNumber, text).then(() => api.rejectProposal(proposalId, text))),
       decidePermission: (id, allow, note) => then(api.decidePermission(id, allow, note)),
       decideRecovery: (taskId, verdict) => then(api.decideRecovery(taskId, verdict)),
 

@@ -378,6 +378,14 @@ note. Broadcasts `world:changed` and runs a cycle, for the toggle's reason sharp
 has just said what they want should not wait a heartbeat to be listened to. 400 on an empty `text` or
 a non-integer issue number. Returns `{ok: true, instruction, conclusion}`.
 
+**On a goal with a standing delivery the conclusion is skipped**, and `conclusion` comes back null.
+The conclusion is a means rather than the operator's statement, and there it would not schedule
+anything: it would _clear the delivery_ (`VERDICT_EXCLUSIONS.conclusion` lists it), un-parking rule
+`issue-assess` and re-blocking `issue-retro`, `validate-check` and the close-out obligation, all
+three of which gate on `deliveryParked`. There is already a next dispatch on a delivered goal — the
+retrospective, which `instructionsFor` deliberately includes — so the instruction is read either way,
+and writing the verdict would cost a finished goal another trip round the funnel with nothing red.
+
 ### `DELETE /api/issues/:number/instruction/:id`
 
 Take one back — the escape hatch free text sent to an agent has to have, and the only way an
@@ -414,6 +422,44 @@ until the arm it named has been performed, and **rejecting** rule `issue-shortfa
 it standing — the verdict is still true; you simply declined to act on it. Without this route the row
 and its cockpit chip would stand for good, with no way to settle it short of marking the issue
 delivered, which claims something different.
+
+### `POST /api/issues/:number/shortfall/overrule`
+
+Body `{text}`, required and non-empty (max 4 000). The operator saying the assessment itself is
+**wrong**, and why. 409 when no shortfall is standing — the route says one specific thing, and with
+nothing standing there is no verdict to be wrong; an operator who means the plain thing has
+[`/delivered`](#post-apiissuesnumberdelivered). 400 on empty `text` or a non-integer issue number.
+Returns `{ok: true, delivery, instruction}`.
+
+It exists because neither arm of the card says this. Accepting spends an agent on a follow-up part
+for work already done; rejecting leaves the verdict standing, so rule `issue-assess` dispatches
+again, the fresh assessor reads the same repository and records the same shortfall. Nothing typed
+into that card survives the loop either — `shortfallRef` is nobody's dispatch origin, so
+`rejectionGuidance` reaches no agent with the note. Without this the operator has no way to say
+"that finding is mistaken" that anything reads.
+
+It writes **two** rows, `/instruction`'s arrangement for its reason — half of it does nothing.
+
+The **delivery** is the verdict. It clears the shortfall through `VERDICT_EXCLUSIONS` rather than a
+`DELETE` of its own, parks the assessor that would otherwise re-derive the finding, and releases the
+three things gated on `deliveryParked`: rule `issue-retro`, rule `validate-check` and the close-out
+obligation. Those are the steps that follow delivery, and while a shortfall stands none of them can
+run at all — which is why overruling is what _unblocks_ verification rather than skipping it.
+
+The **instruction** is what gets the correction into the record. The harness never edits the ticket
+itself — only an agent can tell "this changes the goal" from "this is a note about how to do the
+work" ([09](09-execution.md#the-operators-own-instructions-reach-the-agent)) — so the instruction
+block, which already carries the tracker's own read/amend commands, is the one mechanism there is.
+On a delivered goal it lands in front of the retrospective agent, dispatched by the delivery this
+same call writes. One `text` fills both: the operator's words are the reason the goal is delivered
+_and_ the correction to be written down, and quoting them twice from one field is what keeps the two
+from drifting.
+
+The proposal is **not** settled here — rejecting it is the cockpit's existing call and the honest
+verb for "no follow-up part". Folding it in would give this route a second opinion about a
+settlement `POST /api/proposals/:id/reject` already owns. Broadcasts
+`world:changed` and runs a cycle, so the retrospective it releases is dispatched now rather than on
+the next heartbeat.
 
 Unlike the delivery it gates nothing, so recording one never parks an issue; see
 [06](06-issue-pickup.md#the-shortfall--the-same-verdicts-other-polarity).

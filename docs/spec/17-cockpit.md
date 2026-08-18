@@ -1878,6 +1878,25 @@ other.
   what it ruled out — is behind it. One control on the card, not two: it was rendered in both arms of
   the agent-actions row before, which is how it ended up looking like an afterthought in each.
 
+A **shortfall proposal carries a third arm**, `Overrule the assessment`, beside Approve and Reject.
+The other two settle what to _do_ about the assessor's finding; this one settles the finding itself.
+Without it the card has no arm that says "that is wrong": approving spends an agent on a follow-up
+part for work already done, and rejecting leaves the verdict standing, so rule `issue-assess`
+dispatches again and the next assessor records the same shortfall from the same evidence — a loop
+with no exit on the surface that raises it. It posts to
+[`/api/issues/:number/shortfall/overrule`](16-http-api.md#post-apiissuesnumbershortfalloverrule) and
+then rejects the proposal, which is the honest verb for "no follow-up part"; the two are separate
+calls because they settle two different things, ordered verdict-first so a failed rejection leaves
+the goal correct with a stale card rather than a settled card with the loop still running.
+
+Two properties of the arm are deliberate. It is drawn **only when `context.issueNumber` is present**,
+since it writes a verdict against a goal and a button that would 400 is worse than two arms. And its
+note is **required** where the other two take one optionally — the words are the act: they become the
+delivery's reason and the correction the ticket gets, and an overrule with an empty box records
+"delivered" for a reason nobody can read, which is the assessment problem again with the operator's
+name on it. So the button is disabled rather than hidden until there is text, and the placeholder
+says which of the three arms needs it.
+
 A **permission request** (`context.permission`, #130) renders the command and **Allow / Deny** instead
 of the answer box — the agent is blocked in a tool call, so the verdict goes to
 `POST /api/escalations/:id/permission`, not `/answer`. A **questionnaire** (`context.questions`) is the
