@@ -551,14 +551,29 @@ arrives on an ordinary sweep and is then kept like any other row. The history is
 anchor, plus whatever older work is still alive" — worth knowing, because a reader expecting a clean
 cut-off will one day find an older ticket in the list and think the floor is broken.
 
-**Reads hand back the whole table**, ordered by `number` descending, which is arrival order because a
-tracker id is auto-incremental. There is no `WHERE` and no `LIMIT` because neither thing the list is
-filtered and ordered by is this table's to know: the watch bucket is a function of the operator's
+**The list read hands back the whole table**, ordered by `number` descending, which is arrival order
+because a tracker id is auto-incremental. There is no `WHERE` on it and no `LIMIT` because neither
+thing the list is filtered and ordered by is this table's to know: the watch bucket is a function of the operator's
 label prefix and cost is `buildSpendGoals`' answer, and either as a stored column would be a stale
 copy of a verdict that moves. The filtering, ordering and paging are one pure function over the rows
 (`src/tickets/ticketList.ts`). What that costs is reading the mirror per request, affordable for a
 stated reason rather than by luck: one line per row with no body, bounded by the tracker's assigned
 backlog rather than by time, and the route is fetched on open rather than polled.
+
+**The mirror is also the spend trend's closure source.** `listTicketsClosedSince(since)` is the one
+narrowed read on this table: the rows in the `closed` state whose `changed_at` is at or after an
+instant. It exists because the closure event the trend would otherwise use never fires on a real
+deployment — `issue_closed` needs an `open → closed` transition seen in place, and both real issue
+providers snapshot the tracker's *open* set, so a closed item leaves the world without one ever being
+evaluated ([18](18-observability.md#the-spend-trend)). This table is fed by `listTicketHistory`, which
+asks by last-changed and returns closed items explicitly, so it is the only place a closure is durably
+recorded at all. `changed_at` is a last-modified rather than a close date, so an item edited after it
+closed drifts to a later week; there is no close-date column to prefer, and the read is documented as
+taking that trade rather than hiding it.
+
+It reads the mirror and nothing more. Which goal has spend against it stays `buildSpendGoals`'
+question, for the reason no cost column lives here: a closed row and a goal's money are two records
+that meet in the fold, never in the schema.
 
 **Live and frozen.** Since #351 every cockpit surface reads this table, so it carries what the harness
 makes of an item as well as what the tracker said: `tracking` is `live` while the item is in the

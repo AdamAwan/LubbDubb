@@ -34,6 +34,7 @@ import {
   TICKET_COLUMNS,
   type LiveTicketFacts,
   type MirroredTicket,
+  type TicketClosure,
   type TrackerSweepMark,
 } from './tickets.js';
 import type {
@@ -913,6 +914,9 @@ export class Store {
   }
   ensureFeatureColors(numbers: readonly number[]): Map<number, number> {
     return this.tickets.ensureFeatureColors(numbers);
+  }
+  listTicketsClosedSince(since: string): TicketClosure[] {
+    return this.tickets.listTicketsClosedSince(since);
   }
   listTrackerItems(): MirroredTicket[] {
     return this.tickets.listTrackerItems();

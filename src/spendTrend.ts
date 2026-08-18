@@ -1,4 +1,5 @@
 import type { Agent, AgentStatus, Issue, WorldEvent } from './types.js';
+import type { TicketClosure } from './store/tickets.js';
 import { roundUsd } from './issueSpend.js';
 import { PHASE_ORDER, phaseLabel, zeroPhases, type SpendGoal, type SpendPhase } from './spendInsights.js';
 import { ciStatusOf } from './world/worldDiff.js';
@@ -55,11 +56,18 @@ import { ciStatusOf } from './world/worldDiff.js';
  * ## Derived, never stored
  *
  * `buildSpendInsights`'s reason: goal spend is already durable on the `agents`
- * rows, closures are already durable in `world_events`, and nothing here needs a
- * column that does not exist. It reads correctly on every database from before it
- * was written — which is the whole argument for cohorting goals rather than
+ * rows, closures are already durable in the ticket mirror, and nothing here needs
+ * a column that does not exist. It reads correctly on every database from before
+ * it was written — which is the whole argument for cohorting goals rather than
  * bucketing tokens, since `usage_events` dates dollars and has never dated
  * tokens.
+ *
+ * The mirror is the closure source and `world_events` is not: `issue_closed` needs
+ * an `open → closed` transition seen in place, and both real providers snapshot
+ * the open set only, so a closed item leaves the world and the event never fires.
+ * The mirror is fed by `listTicketHistory`, which returns closed items explicitly.
+ * The separate absence of `issue_closed` on a real provider is not this module's
+ * to fix.
  */
 
 /** How far back the trend reaches, and at what resolution. */
@@ -208,8 +216,13 @@ interface SpendTrendInput {
    * prevent.
    */
   goals: readonly SpendGoal[];
-  /** `issue_closed` rows inside the window. */
-  closures: readonly WorldEvent[];
+  /**
+   * The goals the ticket mirror holds as closed inside the window
+   * (`Store.listTicketsClosedSince`). A number and an instant is all the cohort
+   * needs, and `closedAt` is the tracker's last-modified rather than a close date
+   * — see the store method for why that trade is taken.
+   */
+  closures: readonly TicketClosure[];
   /** The world's issues as they stand — for the reopen check, and nothing else. */
   issues: readonly Issue[];
   /** Every agent the harness has run; the period half selects by `endedAt` itself. */
@@ -224,12 +237,6 @@ function median(samples: readonly number[]): number | null {
   if (samples.length === 0) return null;
   const sorted = [...samples].sort((a, b) => a - b);
   return sorted[Math.floor(sorted.length / 2)] ?? null;
-}
-
-/** `issue:12` → 12. Null for a ref naming anything else, which a closure never does. */
-function issueNumberOf(ref: string | null): number | null {
-  const found = ref === null ? undefined : /^issue:(\d+)$/.exec(ref)?.[1];
-  return found === undefined ? null : Number(found);
 }
 
 /** An empty week — every field present, so a week nothing happened in is a row and not a gap. */
@@ -272,15 +279,15 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
   const openNow = new Set(issues.filter((i) => i.state === 'open').map((i) => i.number));
 
   // The last closure per goal, because a goal that closed, reopened and closed
-  // again belongs to the week it last landed in — not to the first attempt.
+  // again belongs to the week it last landed in — not to the first attempt. The
+  // mirror keeps one row a goal and so already states the last, which is why the
+  // rule is folded here rather than trusted to the source.
   const closedAt = new Map<number, number>();
-  for (const event of closures) {
-    const issueNumber = issueNumberOf(event.ref);
-    if (issueNumber === null) continue;
-    const at = Date.parse(event.createdAt);
+  for (const closure of closures) {
+    const at = Date.parse(closure.closedAt);
     if (Number.isNaN(at)) continue;
-    const seen = closedAt.get(issueNumber);
-    if (seen === undefined || at > seen) closedAt.set(issueNumber, at);
+    const seen = closedAt.get(closure.number);
+    if (seen === undefined || at > seen) closedAt.set(closure.number, at);
   }
 
   // -- Cohort: goals, by the week they closed --------------------------------

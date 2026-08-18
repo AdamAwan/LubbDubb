@@ -336,9 +336,29 @@ more awkward denominator — goals differ in size — so the **whole cohort's co
 median with no spread beside it lets a week that happened to close three small goals read as
 progress.
 
-**A goal lands in the week it closed and carries spend from whenever that spend happened.** Closures
-come from `world_events` (`issue_closed`), the last one per goal, so a goal that came back and landed
-again counts once and in the week it finally landed.
+**A goal lands in the week it closed and carries spend from whenever that spend happened.** The last
+closure per goal, so a goal that came back and landed again counts once and in the week it finally
+landed.
+
+**Closures come from the ticket mirror, not from `world_events`.** `Store.listTicketsClosedSince`
+([14](14-persistence.md#the-ticket-mirror)) returns the `tracker_items` rows in the closed state whose
+`changed_at` falls inside the window. The obvious source — the `issue_closed` world event — is the one
+that has nothing in it on a real deployment: `diffWorlds` emits that event only for an `open → closed`
+transition seen **in place**, and both real issue providers snapshot the tracker's open set
+(`listOpenWorkItems`, `listOpenIssues`), so a closed item simply leaves `next.issues` and the
+transition is never evaluated. `FakeIssuesIntegration` keeps closed issues in its world, which is why
+the suite and the demo site were the only places the cohort ever filled. The mirror is fed by
+`listTicketHistory`, which asks by last-changed and returns both states, so the closures are already
+there on every existing database — no migration, and nothing to wait a sweep for.
+
+**`changed_at` is a last-modified, not a close date, and that is the trade.** The tracker gives no
+close timestamp to mirror and inventing a column would only date closures from the day it shipped, so
+a closed item edited afterwards drifts to a later week. A cohort a few items out of place is what this
+is measured against — the alternative on every real deployment is no trend at all.
+
+`issue_closed` still exists and is still read elsewhere — the [activity feed](#the-activity-feed) and
+anything else that consumes the world's event kinds ([03](03-world-model.md)). Nothing in the trend
+depends on it.
 
 ### Cohort and period are different weeks
 
@@ -388,8 +408,9 @@ was written.** `usage_events` dates dollars and has never dated tokens, so a per
 would start empty on the day it shipped; a goal's tokens come off the `agents` rows and are as old as
 the goal. That is a large part of the argument for cohorting goals rather than bucketing tokens.
 
-**Fetched on the tab's first visit**, not with the breakdown: it reads two months of world events on
-top of the same all-time agent walk, and a tab an operator never opens should cost nothing.
+**Fetched on the tab's first visit**, not with the breakdown: it reads two months of world events and
+the closed end of the ticket mirror on top of the same all-time agent walk, and a tab an operator
+never opens should cost nothing.
 
 ## The burn watch
 
