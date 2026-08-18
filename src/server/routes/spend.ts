@@ -32,8 +32,11 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         tasks: store.listTasks(),
         nodes: store.listWorkNodes(),
         // Titles only, and a goal missing from the baseline still gets its row —
-        // the money was spent whether or not the world still lists the ticket.
+        // the money was spent whether or not the world still lists the ticket. The
+        // run records name those rows: the tracker's open set forgets a goal the
+        // moment it closes, and the harness's own record of what it worked does not.
         issues: store.getWorldBaseline()?.issues ?? [],
+        runs: store.listIssueRuns(),
         usageEvents: store.listUsageEventsSince(spendTimelineSince(now)),
         // The same two sums `buildUsage` puts on the snapshot, asked the same way,
         // so the panel and the chip an operator opened it from state one figure.
@@ -69,6 +72,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           tasks: store.listTasks(),
           nodes: store.listWorkNodes(),
           issues: world?.issues ?? [],
+          runs: store.listIssueRuns(),
         }).goals,
         closures: store.listWorldEventsOfKindsSince(since, ['issue_closed']),
         // The world as it stands, for the reopen check: a goal that closed inside

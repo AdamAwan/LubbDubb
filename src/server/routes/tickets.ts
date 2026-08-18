@@ -78,6 +78,9 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     TICKETS_RATE_LIMIT,
     checked({ query: TicketQuery }, async ({ query }) => {
       const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
+      // Read once: the goal names below and the outcomes further down are two
+      // readings of the same record.
+      const runs = store.listIssueRuns();
       // Titles only, and a goal missing from the baseline still gets its row — the
       // money was spent whether or not the world still lists the ticket.
       const { goals } = buildSpendGoals({
@@ -85,6 +88,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         tasks: store.listTasks(),
         nodes: store.listWorkNodes(),
         issues: store.getWorldBaseline()?.issues ?? [],
+        runs,
       });
       const items = store.listTrackerItems();
       // Assigned here rather than by the sweep, because a feature earns a colour by
@@ -99,7 +103,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         pickupStates: config.issuePickupStates ?? [],
         costs: new Map(goals.map((g) => [g.issueNumber, g.costUsd])),
         outcomes: ticketOutcomes({
-          runs: store.listIssueRuns(),
+          runs,
           conclusions: store.listIssueConclusions(),
           deliveries: store.listDeliveries(),
           shortfalls: store.listShortfalls(),

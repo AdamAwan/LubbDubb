@@ -759,7 +759,7 @@ function Goals({
                 <b>
                   <Ref to={`issue:${g.issueNumber}`} />
                 </b>{' '}
-                {g.title ?? <i className="sp-gone">no longer in the world</i>}
+                {g.title ?? <i className="sp-gone">title not recorded</i>}
               </span>
             </td>
             <td className="n b">{fmtUsd(g.costUsd)}</td>

@@ -308,6 +308,14 @@ the trend below. Its own function because two readings want the goals and only o
 run ranking and a check table — and because the alternative, a second roll-up in the trend module, is
 the second opinion this section spends four paragraphs refusing to have.
 
+**A goal is named from the world, then from the run record.** The world baseline is the tracker's
+_open_ set, so every goal that has closed, been retired or been dismissed is missing from it — while
+the money the fleet spent under it stays on the table forever. `buildSpendGoals` therefore takes
+`runs` as well as `issues`: a live issue's title wins, because it is the current one, and a goal the
+world has forgotten is named from the run record the harness minted while it _was_ live
+([03](03-world-model.md)), which is never rewritten. `title` stays nullable and the panel still has a
+fallback, but it now means one thing only — a goal older than the run record itself.
+
 ## The spend trend
 
 `buildSpendTrend` (`src/spendTrend.ts`) answers the question the breakdown cannot, being all-time:
