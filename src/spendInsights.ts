@@ -1,4 +1,4 @@
-import type { Agent, Issue, IssueSpend, Task, UsageEvent, WorkNode } from './types.js';
+import type { Agent, Issue, IssueRun, IssueSpend, Task, UsageEvent, WorkNode } from './types.js';
 import { issueOriginRole } from './issueOrigins.js';
 import { rollUpIssueSpend, roundUsd } from './issueSpend.js';
 import { rollUpChecks, rollUpTaskTypes, type ChecksSpend, type TaskTypeSpend } from './taskTypeSpend.js';
@@ -176,7 +176,12 @@ export interface SpendPhaseTotal {
  * went and when it last moved.
  */
 export interface SpendGoal extends IssueSpend {
-  /** From the world baseline, so a goal that has aged out of it draws as its number alone. */
+  /**
+   * The goal's name. From the world baseline while the tracker still lists it, and
+   * from the run record the harness kept once it does not — a goal the fleet spent
+   * money on was worked, and a run captures its title while it is still live. Null
+   * only for a goal older than the run record itself.
+   */
   title: string | null;
   /** Cost per phase, summing to `costUsd`. Every phase is keyed, most are zero. */
   byPhase: Record<SpendPhase, number>;
@@ -256,6 +261,8 @@ interface SpendInsightsInput {
   nodes: readonly WorkNode[];
   /** The world's issues, for titles only. A goal absent from it still gets a row. */
   issues: readonly Issue[];
+  /** The run records, for the titles the world has forgotten. See {@link buildSpendGoals}. */
+  runs: readonly IssueRun[];
   /** The dated cost deltas behind the trend — already windowed by the caller. */
   usageEvents: readonly UsageEvent[];
   fiveHourCostUsd: number;
@@ -341,10 +348,27 @@ export function buildSpendGoals(input: {
   tasks: readonly Task[];
   nodes: readonly WorkNode[];
   issues: readonly Issue[];
+  /**
+   * The run records — the harness's own memory of every goal it has worked, whose
+   * titles were captured while the issue was live and are never rewritten.
+   *
+   * Second to the world and not instead of it: a live issue's title is the current
+   * one, and a run's is the one it had when the tracker last returned it. But the
+   * world baseline is the tracker's *open* set, so a goal that was closed, retired
+   * or dismissed drops out of it — while the money the fleet spent under it stays
+   * on this table forever. Naming those rows off the world alone left every one of
+   * them drawn as its number and an apology, which is the failure this exists to
+   * end: the harness does know what they were.
+   */
+  runs: readonly IssueRun[];
 }): SpendGoalRollup {
   const { agents, tasks, issues } = input;
   const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
-  const titleOfIssue = new Map(issues.map((i) => [i.number, i.title]));
+  // The world wins where it has an answer, so a retitled ticket reads as it does now.
+  const titleOfIssue = new Map<number, string>([
+    ...input.runs.map((r): [number, string] => [r.issueNumber, r.title]),
+    ...issues.map((i): [number, string] => [i.number, i.title]),
+  ]);
   const rollup = rollUpIssueSpend({ agents, tasks, nodes: input.nodes });
 
   const goalPhases = new Map<number, Record<SpendPhase, number>>();
@@ -384,7 +408,7 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
   const titleOfTask = new Map(tasks.map((t) => [t.id, t.title]));
   // The per-goal totals and the attribution behind them, computed once by the
   // fold that owns the question — never a second walk of the graph. See above.
-  const rollup = buildSpendGoals({ agents, tasks, nodes, issues });
+  const rollup = buildSpendGoals({ agents, tasks, nodes, issues, runs: input.runs });
 
   const totals: SpendTotals = {
     costUsd: 0,
