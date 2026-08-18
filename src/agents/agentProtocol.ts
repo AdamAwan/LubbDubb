@@ -29,6 +29,11 @@ export const PROTOCOL_SYSTEM_PROMPT = [
   '   print this on its own line as the very last thing you output:',
   '   @@LUBBDUBB_DONE@@',
   '',
+  '3. Do not end your turn to wait for something you started — a build, a test run, a CI check, a',
+  '   long command. Nothing wakes you when it finishes: wait for it or poll it yourself, and use',
+  '   the WAITING sentinel only when a *person* is what you are blocked on. A turn ending with',
+  '   neither sentinel is a stop the harness cannot read, and it costs a round trip at best.',
+  '',
   'Do not print either sentinel for any other reason. Keep working autonomously between them.',
 ].join('\n');
 
@@ -111,6 +116,59 @@ export const DONE_REMINDER =
   DONE_SENTINEL +
   ' on its own line as the last thing you output: the harness has no other signal that you are done, and a ' +
   'turn ending without it parks you as waiting for a human who has nothing to answer.';
+
+/**
+ * What the harness types into an agent whose turn ended with **no** sentinel in it
+ * — the unannounced stop.
+ *
+ * The stop itself is not evidence of anything: the commonest causes are an agent
+ * that finished the job and narrated it instead of printing {@link DONE_SENTINEL},
+ * and one that kicked off a build, a test run or a CI check and stopped as if
+ * something would wake it when that finished. Neither wants a human, and both used
+ * to get one — an inbox item saying only that the agent stopped, which the operator
+ * could answer only by reading the transcript to work out what had actually
+ * happened. Asking the agent first costs one turn and answers it from the only
+ * party that knows.
+ *
+ * It states the three exits rather than any one of them, because guessing which
+ * applies is the thing the harness cannot do: an agent told "carry on" that had
+ * genuinely finished would invent work, and one told "you are done" that had not
+ * would abandon it.
+ */
+export const STALL_NUDGE = [
+  'Your turn ended without a status sentinel, so the harness cannot tell whether you finished, are',
+  'blocked, or just stopped. Settle it now, in this turn, with exactly one of:',
+  '',
+  `- ${DONE_SENTINEL} on its own line, if everything your task asked for is done.`,
+  '- @@LUBBDUBB_WAITING:<what you need>@@ (or the escalate tool), if a *person* is what you are',
+  '  blocked on — not a build, not CI, not a command you started.',
+  '- Otherwise carry on with the work. If you were waiting on a build, a test run or a CI check,',
+  '  nothing wakes you when it finishes: go and look at it yourself, then keep going.',
+].join('\n');
+
+/** How much of an agent's last words the park reason quotes before it elides the front. */
+const LAST_WORDS_MAX = 240;
+
+/**
+ * The park reason for an unannounced stop, once the nudges are spent.
+ *
+ * It quotes the agent rather than describing it, and quotes the **end** of the turn
+ * specifically: "Waiting for CI to go green on #412" is the whole diagnosis, and it
+ * is always the last thing said rather than the first. The generic sentence this
+ * replaces sent the operator to the transcript every time to learn something the
+ * agent had already written down.
+ *
+ * The blank line is load-bearing — the cockpit's escalation card splits a prompt on
+ * the first one into a headline and a body, so the quote reads as evidence under
+ * the claim rather than as part of it.
+ */
+export function stallReason(lastWords: string): string {
+  const head = 'Stopped without finishing, and without saying why — it may only need telling to carry on.';
+  const tail = lastWords.replace(/\s+/g, ' ').trim();
+  if (!tail) return head;
+  const quoted = tail.length > LAST_WORDS_MAX ? '…' + tail.slice(tail.length - LAST_WORDS_MAX) : tail;
+  return `${head}\n\nIt last said: "${quoted}"`;
+}
 
 /** The system prompt for a launch: the protocol, plus the tool addendum when tools are wired. */
 function protocolPrompt(opts: ClaudeArgsOptions): string {

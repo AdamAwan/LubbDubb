@@ -302,6 +302,25 @@ export interface Config {
   /** Extra literal substrings that mean "the CLI is waiting for input" (backup escalation). */
   agentWaitingPatterns: string[];
   /**
+   * How many times an agent that ends a turn with **no** sentinel in it is asked to
+   * account for itself before the stop is put to a human.
+   *
+   * The stream runtime has exactly two things it can read at a turn boundary — the
+   * done sentinel and the waiting one — so a turn carrying neither used to raise an
+   * escalation on the spot. In practice that population is dominated by agents that
+   * finished and narrated it rather than printing the sentinel, and by agents that
+   * started a build, a test run or a CI check and stopped as if something would wake
+   * them: two stops with nothing for a person to answer, and no way to tell which
+   * without reading the transcript. Asking the agent costs one turn and is answered
+   * by the only party that knows.
+   *
+   * A whole-life budget per agent, not a per-stop one, so a stop that keeps
+   * repeating still reaches the operator. 0 disables it and restores the immediate
+   * park. Only the stream runtime has a turn boundary to read a stop off; the PTY
+   * runtime parks on silence instead (`agentIdleWaitMs`) and ignores this.
+   */
+  agentStallNudges: number;
+  /**
    * How many times a *live* agent whose process dies mid-run is re-attached to
    * its own session before the harness settles it as failed (issue #318).
    *
@@ -532,6 +551,7 @@ const DEFAULTS: Config = {
   agentSubmitDelayMs: 60,
   agentIdleWaitMs: 90_000,
   agentWaitingPatterns: [],
+  agentStallNudges: 2,
   agentResumeAttempts: 3,
   claudeCommand: 'claude',
   claudeArgs: [],

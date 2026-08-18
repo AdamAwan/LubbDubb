@@ -45,6 +45,9 @@
   "// agentWaitingPatterns": "Extra literal substrings that mean 'the CLI is waiting for input' (backup escalation heuristic, PTY). Default [].",
   "agentWaitingPatterns": [],
 
+  "// agentStallNudges": "How many times an agent that ends a turn with no sentinel in it is asked to account for itself before the stop is put to a human. Most such stops are a forgotten done sentinel, or an agent waiting on a build or CI that nothing would have woken it from — neither has anything for a person to answer. A whole-life budget per agent; 0 parks on the first one. Stream runtime only. Default 2.",
+  "agentStallNudges": 2,
+
   "// agentResumeAttempts": "How many times an agent whose process dies mid-run is re-attached to its own conversation before the harness settles it as failed. Counted on the agent row, so it survives a restart and bounds the agent's whole life, not one launch. 0 disables. Default 3.",
   "agentResumeAttempts": 3,
 

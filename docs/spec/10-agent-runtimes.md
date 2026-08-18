@@ -59,6 +59,12 @@ The protocol is injected as an appended system prompt (`PROTOCOL_SYSTEM_PROMPT`,
 permission prompts are a separate CLI concern, handled by `--permission-mode` and the permission
 model below, never by scraping output.
 
+Alongside the two sentinels it states one prohibition, because the commonest way an agent goes
+missing is not a forgotten sentinel: **do not end a turn waiting for something you started** — a
+build, a test run, a CI check, a long command. Nothing wakes an agent when one finishes, and the
+WAITING sentinel is for a *person*. A turn ending with neither sentinel is an
+[unannounced stop](#the-unannounced-stop).
+
 ### The flag payload
 
 A bare ref (a worktree-relative path or an `http(s)` URL) or a JSON object
@@ -193,7 +199,7 @@ Each `result` event carries **cumulative** `total_cost_usd`, `usage` and `num_tu
 
 ### A `result` is the end of a turn, not of the session
 
-Turn end is where done-vs-waiting is decided, so which `result` counts as one matters. `pendingTurns`
+Turn end is where done-vs-waiting-vs-stopped is decided, so which `result` counts as one matters. `pendingTurns`
 counts the messages written to stdin that have not yet ended in a `result`: `send` raises it, each
 `result` lowers it, and only the `result` that leaves **nothing queued** is scanned for sentinels. The
 others emit their `usage`, drop the turn's text, and return.
@@ -203,8 +209,8 @@ tool makes that ordinary rather than exotic: it parks the agent **mid-turn** and
 ([Waiting](#waiting)), so the answer — a human's, or a `whitelistedApprovals` rule's, both of which
 reach `respond` — routinely lands before the turn it interrupted has ended. `claude` queues that
 message and runs it as the next turn. Judging the interrupted turn's `result` therefore parked an
-agent that was already working on the answer, under a question nobody asked ("Agent ended its turn
-without finishing"), and — because `respond` had just released the park latch — filed a second
+agent that was already working on the answer, under a question nobody asked (an
+[unannounced stop](#the-unannounced-stop)), and — because `respond` had just released the park latch — filed a second
 escalation for it. The agent kept going and the alert was cascade-dismissed when it finished, so the
 only trace was an inbox item that contradicted the transcript, and an answer to it would have typed a
 stray message into a working agent.
@@ -214,6 +220,68 @@ so a sentinel printed in the interrupted turn cannot be read again at the end of
 
 A path that never calls `send` (a resume delivering no first message) leaves the count at zero and is
 judged exactly as before.
+
+### The unannounced stop
+
+A turn that comes to rest with **neither** sentinel in it is the third case, and it is not a question.
+The runtime reports it as its own event — `stalled`, carrying the turn's text with the sentinels
+stripped — rather than as `waiting`, and the session status moves to `waiting` because the session
+really has stopped. What the stop *means* is `AgentManager`'s to decide, below.
+
+Treating it as a question is what it used to do, and the population is why that was wrong. Two things
+dominate it, and neither has anything for a person to answer:
+
+- an agent that **finished** the work and narrated it instead of printing `@@LUBBDUBB_DONE@@` — the
+  sentinel is stated once in the system prompt, thousands of tokens before the moment it matters
+  ([11](11-mcp-tools.md#the-finish-reminder-on-a-terminal-tool) covers the terminal-tool half of this);
+- an agent that started a **build, a test run or a CI check** and stopped as though something would
+  wake it when that finished. Nothing does.
+
+Both arrived in the inbox as one fixed sentence — "Agent ended its turn without finishing; awaiting
+direction" — which named neither the agent's situation nor which of the two it was, so answering one
+began by opening the transcript to find out what had actually happened. The items were cheap to file
+and expensive to read, which is the ratio that makes an inbox stop being read.
+
+`PROTOCOL_SYSTEM_PROMPT` states the rule against the second case directly (do not end a turn waiting
+for something you started; the WAITING sentinel is for a *person*), and the two mechanisms below deal
+with the stops that happen anyway.
+
+#### The nudge
+
+`AgentManager.handleStalled` asks the agent before it asks the operator. Up to `agentStallNudges`
+times (default 2) it types `STALL_NUDGE` (`src/agents/agentProtocol.ts`) into the session, which
+states the three exits — print the done sentinel, park with the waiting sentinel if a *person* is what
+you are blocked on, or otherwise carry on and go and look at that build yourself — and picks none of
+them. Guessing is the thing the harness cannot do and the agent can: an agent told "carry on" that had
+genuinely finished invents work, and one told "you are done" that had not abandons it.
+
+- **The budget is per agent, for its whole life**, not per stop. A counter reset by intervening work
+  reads better and has no ceiling: an agent that made one tool call between every stop would be nudged
+  for as long as it kept doing that, spending tokens with nothing to show and nobody told. It is held
+  in memory, so a resume starts it over — the same fresh start the agent itself gets.
+- **An agent already parked is never nudged.** The `escalate` tool parks mid-turn and returns at once,
+  so the turn that asked ends with no sentinel in it — a stop by the letter of it, a real question in
+  fact. Nudging there types "carry on" into an agent waiting on a person.
+- **A dead process is not nudged**, because it cannot answer; the stop is all there is, so it parks.
+- **The nudge is written to the transcript** as a sent message (`renderBlocks` with a `human` block)
+  before it goes out. It is the harness taking a turn in the agent's conversation, and a transcript
+  showing the agent apparently answering a question nobody asked is the same unexplained gap moved.
+
+`agentStallNudges: 0` restores the immediate park exactly.
+
+#### What the park says when it happens anyway
+
+A stop that survives the budget goes through `handleWaiting` like any other park, with a reason built
+by the pure `stallReason(lastWords)`: a headline saying the agent stopped without saying why, a blank
+line, and then a quote of the **end** of its last turn (capped at 240 characters, elided from the
+front). "Blocked until CI goes green on PR #412" is the whole diagnosis, and it is always the last
+thing said rather than the first. The blank line is load-bearing — the cockpit's escalation card
+splits a prompt on the first one into a headline and a body ([17](17-cockpit.md)), so the quote reads
+as evidence under the claim rather than as part of it.
+
+Tests: `test/stallNudge.test.ts` (the nudge, the budget, the quoted park, the parked-agent guard),
+`test/streamJsonSession.test.ts` and `test/streamQueuedTurn.test.ts` (the runtime's half — which event
+a turn end produces, and on whose text).
 
 ### Transcript legibility
 
@@ -455,7 +523,9 @@ cwd against the previous agent's and drops the inheritance if they differ.
 ### Waiting
 
 `handleWaiting(agentId, task, reason, ask?)` is the convergence point for the two ways an agent asks —
-the `escalate` MCP tool and the WAITING sentinel:
+the `escalate` MCP tool and the WAITING sentinel — and for the one way it does not ask at all: an
+[unannounced stop](#the-unannounced-stop) whose nudges are spent arrives here too, carrying a reason
+built from the agent's own last words rather than a question it asked.
 
 - The `parked` set is the latch. An agent already parked is **not** parked again: re-running the
   whitelist would auto-answer the same prompt twice, and re-emitting `waiting` would race the inbox's

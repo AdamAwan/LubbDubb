@@ -223,7 +223,10 @@ test('a crash with no limit is a resume, not a park', async () => {
 });
 
 test('a warning is not an exhaustion, and a cleared limit un-arms the park', async () => {
-  const { system, agent, child } = await fleet();
+  // Nudges off: the subject is which *park* an ordinary turn end falls into, and a
+  // fleet that asks the agent first would answer that a turn later (see
+  // `agentStallNudges`).
+  const { system, agent, child } = await fleet(701, { agentStallNudges: 0 });
   // Near the line, still allowed to work: parking here would stop a fleet that has
   // room left.
   child.rateLimit({ status: 'allowed_warning', resetsAt: 1_776_000_000, rateLimitType: 'five_hour', utilization: 0.9 });
@@ -236,7 +239,7 @@ test('a warning is not an exhaustion, and a cleared limit un-arms the park', asy
   );
 
   // The window turned over mid-run: the newer reading wins.
-  const { system: s2, agent: a2, child: c2 } = await fleet(702);
+  const { system: s2, agent: a2, child: c2 } = await fleet(702, { agentStallNudges: 0 });
   c2.rateLimit(REJECTED);
   c2.rateLimit({ ...REJECTED, status: 'allowed' });
   c2.result();
