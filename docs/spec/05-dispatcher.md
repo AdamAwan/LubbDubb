@@ -383,7 +383,7 @@ candidates **once, immediately before the headroom cut**, into three tiers:
 3. **Everything else** keeps its natural (already-ranked) order, so an item the harness surfaces
    later slots in behind the arranged prefix until the operator re-arranges.
 
-It **only re-orders**. It never clears a `held` verdict: a cooldown, cap, pause, ignore tag or
+It **only re-orders**. It never clears a `held` verdict: a cooldown, cap, pause, absent watch tag or
 unapproved plan holds an item wherever the override places it, because the cut walk reads `held`
 independently of position. Overriding a hold _into_ dispatch is a different feature, out of scope.
 
@@ -423,7 +423,7 @@ stops being ranked, while a flag stands until the operator clears it, so honouri
 flagged goal would work for one pulse and be silently lost on the next.
 
 **It orders and does nothing else** — the same contract the override keeps. A cooldown, the part cap,
-an unapproved plan, a superseding rule, an ignore tag or the assay's hold holds a flagged goal's work
+an unapproved plan, a superseding rule, an absent watch tag or the assay's hold holds a flagged goal's work
 exactly where it holds anything else's, and the flag never raises `maxConcurrentPartsPerIssue`. The
 queue rows a flagged goal contributes carry `expedited`, which is the only reason the panel can say
 why they are where they are.

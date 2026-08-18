@@ -249,7 +249,7 @@ test('a completed sweep that found nothing still stops the tab saying it is fill
 // The list
 // ---------------------------------------------------------------------------
 
-const LABELS = { watchLabel: 'lubbdubb-watch', ignoreLabel: 'lubbdubb-ignore' };
+const LABELS = { watchLabel: 'lubbdubb-watch' };
 
 function page(
   items: MirroredTicket[],
@@ -267,12 +267,12 @@ function page(
   });
 }
 
-test('the axes are independent, and an untagged item is unwatched rather than ignored', () => {
+test('the axes are independent, and an item is watched only if it carries the tag', () => {
   const items = [
     mirrored({ number: 4, labels: ['lubbdubb-watch'], state: 'open', tracking: 'live' }),
     mirrored({ number: 3, labels: ['lubbdubb-watch'], state: 'closed', tracking: 'frozen' }),
     mirrored({ number: 2, labels: [], state: 'open', tracking: 'live' }),
-    mirrored({ number: 1, labels: ['lubbdubb-ignore'], state: 'closed', tracking: 'frozen' }),
+    mirrored({ number: 1, labels: ['bug'], state: 'closed', tracking: 'frozen' }),
   ];
 
   // The four questions the ticket asks, in the order it asks them. `tracking` is
@@ -288,7 +288,7 @@ test('the axes are independent, and an untagged item is unwatched rather than ig
   assert.deepEqual(
     page(items, { watch: 'unwatched', tracking: 'live' }).rows.map((r) => r.number),
     [2],
-    'an item nobody has opted in is unwatched — folding it into ignored would report a triage nobody made',
+    'an item nobody has opted in is unwatched, whatever else it is tagged',
   );
   assert.deepEqual(
     page(items).rows.map((r) => r.number),
@@ -296,9 +296,9 @@ test('the axes are independent, and an untagged item is unwatched rather than ig
     'and all of them, newest tracker id first',
   );
   assert.deepEqual(
-    page(items, { watch: 'ignored' }).rows.map((r) => r.number),
-    [1],
-    'leave-alone is its own answer',
+    page(items, { watch: 'unwatched' }).rows.map((r) => r.number),
+    [2, 1],
+    'the retired ignore tag decides nothing — only the watch tag does',
   );
 });
 
@@ -430,7 +430,7 @@ test('GET /api/tickets ships the mirror, filtered, ordered and paged', async () 
 
   system.connector.inject({ kind: 'new_issue', number: 12, title: 'Watched work', labels: ['lubbdubb-watch'] });
   system.connector.inject({ kind: 'new_issue', number: 13, title: 'Nobody triaged this' });
-  system.connector.inject({ kind: 'new_issue', number: 14, title: 'Leave alone', labels: ['lubbdubb-ignore'] });
+  system.connector.inject({ kind: 'new_issue', number: 14, title: 'Leave alone', labels: ['wontfix'] });
   await system.harness.runCycle('manual');
 
   const { app } = await buildApp(system);
@@ -449,14 +449,15 @@ test('GET /api/tickets ships the mirror, filtered, ordered and paged', async () 
   assert.notEqual(body.anchorAt, '', 'and the floor under the history is stated');
   assert.deepEqual(
     body.rows.map((r) => r.watch),
-    ['ignored', 'unwatched', 'watched'],
+    ['unwatched', 'unwatched', 'watched'],
     'the harness reading rides on every row',
   );
 
   const unwatched = await app.inject({ method: 'GET', url: '/api/tickets?watch=unwatched&tracking=live' });
   assert.deepEqual(
     (unwatched.json() as TicketsPayload).rows.map((r) => r.number),
-    [13],
+    [14, 13],
+    'both untagged items, whatever else they carry',
   );
 
   // A closed ticket is in the mirror and out of the world, which is the whole

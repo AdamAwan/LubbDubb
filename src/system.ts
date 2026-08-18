@@ -42,6 +42,7 @@ import { ValidationAskDesk } from './validation/askDesk.js';
 import { ValidationReadyDesk } from './validation/readyDesk.js';
 import { SpendBurnDesk } from './spendBurnDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
+import { PrWatchDesk } from './prWatchDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
 import { UpdateDesk } from './selfUpdate/updateDesk.js';
 import type { McpToolDeps } from './mcp/tools/context.js';
@@ -53,7 +54,7 @@ import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
 import { loadPromptTemplates, type PromptTemplates } from './dispatcher/promptTemplates.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
 import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
-import { watchLabelsFor } from './watchLabels.js';
+import { watchLabelFor } from './watchLabels.js';
 import { resolveModelTag } from './modelLabels.js';
 import { orderedProfiles } from './agents/modelPolicy.js';
 import { Harness } from './harness.js';
@@ -424,6 +425,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       sink: opts.sink ?? connector,
       defaultBranch: config.defaultBranch,
       prompts,
+      // So the pull request the tool opens is watched the moment it exists, rather
+      // than on the next pulse — the fleet's own work is never briefly invisible
+      // to the fleet.
+      watchLabel,
     }),
     errors,
   });
@@ -547,10 +552,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
 
   // Dispatcher-level issue-pickup policy (gate + label-encoded priority), honoured
   // by whichever dispatcher is selected — provider-agnostic.
-  const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
+  const watchLabel = watchLabelFor(config.labelPrefix);
   const issuePickup: IssuePickupPolicy = {
     watchLabel,
-    ignoreLabel,
     // The ownership gate follows the operator's identity: with `userId` set, only a
     // watch tag *they* added counts. Unset — the fake provider, a first run — there
     // is no identity to attribute a tag to, so any tagger counts.
@@ -608,6 +612,21 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // The other half of tidying up after a pull request: once it has merged, the
   // branch behind it goes — worktree, local ref, then the remote. Only ever the
   // operator's own pull requests, and never a branch another open PR still targets.
+  // The harness's own pull requests, tagged as watched so the fleet keeps working
+  // what it opened. `open_pr` tags one as it creates it; this is the floor under
+  // that — an agent that opened its own, a code job's, and everything already open
+  // the first pulse a deployment runs it. Once per pull request, so an operator's
+  // un-watch is never written back over.
+  const prWatch = new PrWatchDesk({
+    sink: opts.sink ?? connector,
+    store,
+    watchLabel,
+    // The retired tag, read here and nowhere else: seeding is the one path that
+    // could put the fleet back on a pull request somebody explicitly parked.
+    legacyIgnoreLabel: config.labelPrefix ? `${config.labelPrefix}-ignore` : '',
+    errors,
+  });
+
   const branchReaps = new BranchReapDesk({
     sink: opts.sink ?? connector,
     store,
@@ -678,6 +697,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     validationReady,
     burn,
     branchReaps,
+    prWatch,
     schedules,
     // Only when the watch is on: absent, the pulse takes no reading and the gauge
     // reads unknown, which is the behaviour of every deployment before this existed.
@@ -694,7 +714,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     errors,
     runtime: runtimeControl,
-    prIgnoreLabel: ignoreLabel,
+    prWatchLabel: watchLabel,
     // Only when both halves exist: pins are labels naming profiles, so a
     // deployment with no `labelPrefix` has nowhere to write one and a deployment
     // with no `agentModels` has nothing for one to name.

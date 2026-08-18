@@ -448,7 +448,7 @@ whose issue is open and passes `issueWatchGateReason`:
 
 - Parts are read from `ctx.plans`/`ctx.planParts` **directly, not from `eligibleIssues`**. That list
   gates on the issue having no open PR, and a part's PR is exactly what makes the parent look taken.
-- Only the **watch/ignore tag** is applied, evaluated once on the parent. Not the workflow-state gate
+- Only the **watch tag** is applied, evaluated once on the parent. Not the workflow-state gate
   — rule `work-item-in-review` parks a decomposed item in the review state for the life of the plan.
 - `inFlight` counts **live tasks** on part origins, not the `dispatched` status, so a part whose agent
   died is not occupying a slot. `room = maxConcurrentPartsPerIssue - inFlight`.

@@ -3,42 +3,53 @@
 ## One label model
 
 `src/watchLabels.ts` is the single source. An operator configures one `labelPrefix` (default
-`"lubbdubb"`), from which two labels are derived:
+`"lubbdubb"`), from which one label is derived:
 
 - `${prefix}-watch` — "work this"
-- `${prefix}-ignore` — "leave this alone"
 
-`watchLabelsFor(prefix)` derives the pair. An **empty prefix yields empty labels**, which every gate
-reads as "feature off": PRs are never excluded, issues are never watch-gated. That is the
-escape hatch tests use.
+`watchLabelFor(prefix)` derives it. An **empty prefix yields an empty label**, which every gate reads
+as "feature off": nothing is watch-gated, and everything open is worked. That is the escape hatch
+tests use.
 
-`resolveWatchState(labels, {watchLabel, ignoreLabel, defaultWatched})` folds the precedence, and it is
-total — it never throws:
+`isWatched(labels, watchLabel)` is the whole of the gate, and it is total — it never throws. There is
+one question and two answers:
 
-1. An explicit **ignore** always wins.
-2. Then an explicit **watch**.
-3. Otherwise the type default.
+| Reading     | Means                                             |
+| ----------- | ------------------------------------------------- |
+| `watched`   | The item carries the tag.                         |
+| `unwatched` | It does not. Nobody opted it in; it is left alone. |
 
-The default differs by item type, and only the default differs:
-
-| Type    | Default     | Meaning                                  |
-| ------- | ----------- | ---------------------------------------- |
-| PRs     | opt-**out** | Worked unless explicitly `-ignore`d.     |
-| Issues  | opt-**in**  | Left alone unless explicitly `-watch`ed. |
-| Stories | opt-**in**  | Left alone unless explicitly `-watch`ed. |
+**Everything is opt-in, of every type.** A pull request, an issue and a story are all left alone
+until something tags them, and there is no per-type default to remember. What keeps the fleet moving
+under a rule that strict is that **the harness tags its own work**: a pull request opened on a branch
+only a dispatch cuts is tagged by the harness itself, so the loop from a watched issue through to a
+merged pull request needs exactly one human tag, at the start. → [07](07-pull-requests.md#watching)
 
 **There is no ingest filter.** Every open issue is fetched and displayed. The gate decides only what
 is _acted on_.
 
 Where each gate lives:
 
-- **PRs** — `isPrExcluded(pr, ignoreLabel)` in `src/prHealth.ts`. `Harness.runCycle` filters excluded
+- **PRs** — `isPrWatched(pr, watchLabel)` in `src/prHealth.ts`. `Harness.runCycle` filters unwatched
   PRs out of the dispatch world.
 - **Issues** — `isIssuePickupEligible` / `issuePickupStatus` in `src/dispatcher/issuePickup.ts`.
 
-The cockpit's per-row toggles write the tags back through outbound capabilities on the `ActionSink`
-seam (`POST /api/prs/:n/exclude`, `POST /api/issues/:n/watch`). The issue toggle writes the pair —
-adding one label and removing the other — so the two stay mutually exclusive. These are **label writes, not dispatcher actions**.
+The cockpit's per-row toggles write the tag back through outbound capabilities on the `ActionSink`
+seam (`POST /api/prs/:n/watch`, `POST /api/issues/:n/watch`). Each writes one label, added or taken
+off. These are **label writes, not dispatcher actions**.
+
+### The retired ignore tag
+
+A second label, `${prefix}-ignore`, used to mean "leave this alone" and beat `-watch` wherever both
+appeared. It is gone, and **nothing had to be migrated**: an item carrying it has no watch tag, so it
+stays unworked under the rule that leaves every untagged item alone. The harness no longer reads it
+anywhere — with one carve-out, in the seeding above, which skips a pull request carrying it rather
+than tagging the fleet back onto work somebody explicitly parked.
+
+Two readings folded into one because the third state was never load-bearing. A gate only ever needed
+"act, or don't", and the surfaces that did want the distinction were drawing "you told me to leave
+this" and "nobody has looked at this yet" as different kinds of row — a difference that costs an
+operator a decision on every triage pass and changes nothing about what happens next.
 
 ### Watching a container cascades
 
@@ -48,14 +59,14 @@ breadth-first and in issue number order.
 
 **Watching a Feature means watching the work it stands for.** A container is never dispatched at, so
 the tag on one alone changes nothing an operator can observe; what the click promises is about the
-stories under it. `POST /api/issues/:n/watch` therefore writes the pair on every target, and
+stories under it. `POST /api/issues/:n/watch` therefore writes the tag on every target, and
 un-watching walks the same tree — a dropped feature that left its children tagged would go on being
 worked after the operator said to stop.
 
 The walk descends through a child **only when the world snapshot holds it as an issue of its own**,
 so an Epic reaches its features' stories while an id the provider never returned is written as a leaf
 rather than silently skipped. A `seen` set makes a cycle in the tracker's hierarchy terminate rather
-than repeat. An issue the snapshot does not carry still gets its own pair written — the toggle keeps
+than repeat. An issue the snapshot does not carry still gets its own tag written — the toggle keeps
 working over an aged-out world — it simply has no hierarchy to walk.
 
 **A partial failure is reported, never rounded up to success.** Each write is attempted, every failure
@@ -77,7 +88,6 @@ Assembled once in `src/system.ts` from config and handed to whichever dispatcher
 | Field             | From config                | Effect                                                                               |
 | ----------------- | -------------------------- | ------------------------------------------------------------------------------------ |
 | `watchLabel`      | derived from `labelPrefix` | Opt-in gate. Empty = gate off.                                                       |
-| `ignoreLabel`     | derived from `labelPrefix` | Explicit exclusion. Empty = gate off.                                                |
 | `requireOwnLabel` | `userId` being set         | Read `labelsAddedByViewer` instead of `labels` for the watch check.                  |
 | `priorityLabels`  | `issuePriorityLabels`      | Label → weight.                                                                      |
 | `defaultPriority` | `issueDefaultPriority`     | Weight when no label matches.                                                        |
@@ -94,21 +104,20 @@ act-on-everything behaviour unit tests rely on.
 policy alone, and it collects _every_ blocking reason rather than short-circuiting, so the cockpit can
 explain an untouched item:
 
-1. **Ignore** — `ignored ("<label>")`. Wins over everything else.
-2. **Type gate** — an item whose `issueType` is in `containerTypes` reports
+1. **Type gate** — an item whose `issueType` is in `containerTypes` reports
    `<Type> is a container — work its N child items`. Asked before the state gate because it is the
    more fundamental refusal: a container in a pickup state is still a container, and no tag or state
    makes one workable. Items with no `issueType` bypass it entirely.
-3. **State gate** — only when `pickupStates` is non-empty **and** the issue carries a
+2. **State gate** — only when `pickupStates` is non-empty **and** the issue carries a
    `workItemState`. Items with no native state bypass it entirely. A state matching `inReviewState`
    reports `in review`; any other non-listed state reports `state "<x>" not in pickup states`.
-4. **Watch gate** — the issue must carry `watchLabel`. With `requireOwnLabel` on, the check reads
+3. **Watch gate** — the issue must carry `watchLabel`. With `requireOwnLabel` on, the check reads
    `labelsAddedByViewer`, and an item tagged by someone else reports
    `watch label "<x>" not added by you` rather than `no watch label "<x>"`, so the operator knows
    which knob to turn. A provider that does not populate authorship leaves the field unset, so the
    gate fails closed.
 
-`issueWatchGateReason(issue, policy)` is the **label half only** — ignore, then watch, and
+`issueWatchGateReason(issue, policy)` is the **label half only** — the watch tag, and
 deliberately **not** the state gate. It is what plan parts inherit: the tag is evaluated once on the
 parent issue. Re-applying the state gate there would be wrong, because rule `work-item-in-review` parks a decomposed item
 in the review state for the life of its plan, which would stop the remaining parts ever being
@@ -181,8 +190,8 @@ Two things make this the correct gate:
 - **`linkedPrNumber` is sticky** — it is the last PR that ever cross-referenced the issue, with no
   open/merged filter, so it stays set after that PR merges. Gating on it alone would retire an issue
   the first time any PR touched it, killing an issue that needs a second PR.
-- **`openPrs` must be every open PR**, including the ones the `-ignore` tag hid from the dispatch
-  world. Both real providers list only open PRs, so absence otherwise reads as "merged".
+- **`openPrs` must be every open PR**, including the unwatched ones hidden from the dispatch world.
+  Both real providers list only open PRs, so absence otherwise reads as "merged".
 
 Not covered: `userId` narrows the provider's PR list, so a linked PR opened by someone else
 is invisible here and reads as gone.
@@ -201,7 +210,6 @@ chip.
 | `planning`  | In the plan funnel — a plan is owed, or the issue has one and its parts are running. |
 | `has_pr`    | An open PR resolves it; the PR rules own it now.                                     |
 | `active`    | A task on this origin is queued / running / waiting on you.                          |
-| `ignored`   | Carries the explicit ignore tag.                                                     |
 | `container` | A Feature/Epic — its children are the work, never it.                                |
 | `unwatched` | Not opted in, or parked by the state gate.                                           |
 | `cooldown`  | Attempted recently; waiting out the re-dispatch gap.                                 |

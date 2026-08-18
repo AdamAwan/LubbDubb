@@ -200,7 +200,7 @@ once.
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                    |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                          |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                 |
-| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched` / `ignored`; `any` is the absent value                                    |
+| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                |
 | `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on    |
 | `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis     |
 | `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                         |
@@ -486,10 +486,9 @@ tail**. Below that, the two stacks are one column.
 Watch, the priority flag, the profile pin, the conclusion, raising a bug, the ticket, and ending the
 run.
 
-- **The watch toggle writes both tags.** `setIssueWatched` tags the watch label and clears the ignore
-  label, or the reverse — so the title names both. Saying only "remove the watch label" understates a
-  click that also tags the goal ignored, and the difference is visible: the goal lands in the
-  tickets tab's Ignored filter rather than back in Unwatched.
+- **The watch toggle writes one tag.** `setIssueWatched` adds the watch label or takes it off, and
+  the title says which — un-watching writes nothing in its place, so the goal lands back in the
+  tickets tab's Unwatched filter rather than in a bucket of its own.
 - **Prioritise / Priority** puts this goal at the front of the queue — everything under it, its plan,
   its parts and its pull requests included — and clicking it again hands the queue back to its natural
   order ([05](05-dispatcher.md#marking-a-goal-a-priority)). It sits beside the watch toggle because it
@@ -737,16 +736,18 @@ vanishes when quiet is indistinguishable from one that broke.
   folded into one. Each row is a way into that goal's page, carries its segment track, and takes a
   **court chip read off `needsYou`** — a goal is in your court exactly when the rail is holding an ask
   about it. Anything else would let a chip say "you" with nothing to answer.
-- **Pull requests** — every open PR with its court chip, its CI ladder, and the watch/ignore toggle.
-  An **ignored** PR stays in the list, with its health, and is drawn **spent** — the same dimming a
-  closed PR and an ignored goal take, off `attention.status === 'ignored'` rather than a
+- **Pull requests** — every open PR with its court chip, its CI ladder, and the watch toggle.
+  An **unwatched** PR stays in the list, with its health, and is drawn **spent** — the same dimming a
+  closed PR and an unwatched goal take, off `attention.status === 'unwatched'` rather than a
   second reading of the labels. The chip alone left the one row nothing will happen on sitting at the
-  same weight as the ones being worked, which is the whole thing the tag is meant to say.
+  same weight as the ones being worked, which is the whole thing the absent tag is meant to say.
+  Most pull requests here are tagged by the harness itself ([07](07-pull-requests.md#watching)), so
+  the button is normally an **un-watch**: the way to stop a runaway agent's pull request.
   A PR is joined to its goal through **`goalOfPr`** — the server's own three-way match (a part's
   `prNumber`, the tracker's `linkedPrNumber`, the branch convention), read backwards — and the goal is
   drawn as a way onto its page. Through the parts alone it was drawn for almost no PR at all: a goal
   the funnel failed open on has no parts and its PR is on the flat `issue/<n>` branch. A PR no ticket owns
-  resolves to nothing and draws nothing, which is honest about what is known. The toggle is **disabled rather than absent** with no ignore label configured: the gate
+  resolves to nothing and draws nothing, which is honest about what is known. The toggle is **disabled rather than absent** with no watch label configured: the gate
   being off is a fact about the deployment worth seeing, and a control that comes and goes with a
   config key reads as a bug in the page. The merged count is drawn only where the snapshot carries a
   closed list at all — absent means the retention window is off, which is not the claim "none merged".
@@ -836,7 +837,7 @@ backlog is deleted and every part of it is named a destination here rather than 
 
 | The backlog had                                | It is now                                                  |
 | ---------------------------------------------- | ---------------------------------------------------------- |
-| four groups (watched/intake/unwatched/ignored) | the **Watch** filter's four values                         |
+| four groups (watched/intake/unwatched/ignored) | the **Watch** filter's values, now two                     |
 | intake pulled out of Watched                   | the **intake call-out** above the list                     |
 | `Override → workable` on intake rows           | the same button, the same call, on the same rows           |
 | features as headings, folds on `Place`         | `group=feature`, the same `collapsed` field                |
@@ -868,10 +869,12 @@ every time something closes. → [14](14-persistence.md#the-ticket-mirror)
 
 ### Three axes, because they are three questions
 
-**Watch is the harness's reading** — the `${labelPrefix}-watch` / `-ignore` pair, resolved through
-`watchBucketOf` (`src/watchLabels.ts`), the same precedence the dispatcher's gate resolves through.
-It is **three-valued**: an item nobody has opted in is `unwatched`, one tagged leave-alone is
-`ignored`, and folding the two would report a triage nobody made.
+**Watch is the harness's reading** — the `${labelPrefix}-watch` tag, resolved through `isWatched`
+(`src/watchLabels.ts`), the same question the dispatcher's gate asks. It is **two-valued**: an item
+carrying the tag is `watched` and every other item is `unwatched`. It used to be three, with a second
+`-ignore` tag for "leave this alone"; that reading is retired
+([06](06-issue-pickup.md#the-retired-ignore-tag)) and an item still carrying the old tag simply reads
+`unwatched`, which is what it meant.
 
 **Tracking is what the harness is doing about it** — live or frozen. **State is the tracker's own
 word**, and it is a _second tier_ rather than a value on the first: a provider with native states
@@ -939,7 +942,7 @@ call-out **above** the list: what is held, the assayer's own sentence quoted who
 `Override → workable` beside it. A lamp marks the same rows in the table.
 
 The sentence is quoted and never reworded — it is the only account of why the goal is held, so a
-paraphrase would be the only account there is, and wrong. An **ignored** item is never intake,
+paraphrase would be the only account there is, and wrong. An **unwatched** item is never intake,
 whatever a stale verdict says: "leave this alone" is the operator's own instruction and outranks a
 reading about a goal nobody is going to work.
 
@@ -954,8 +957,8 @@ narrower and holds: **the watch switch and the intake override, and nothing else
 
 - Both write through calls that already existed — `POST /api/issues/:number/watch` and
   `setIssueAssay` — so the merged surface introduces no new way to change the world.
-- The switch is **three-valued to display and two-valued to write**: `unwatched` is a state you can
-  leave and never one you can select.
+- The switch is **two-valued**, in both directions: Watch adds the tag, Unwatch takes it off, and
+  there is no third state to draw or to land in.
 - **A container cascades, and the heading says so before the click** — `cascadeNote` states the
   number it will reach, because a click that writes eight tags must say eight. A container is still
   never dispatched at; the rows under it are the work.
@@ -2034,10 +2037,10 @@ disagree with what the dispatcher does:
   `CI failing on base PR #n`.
 - **PR attention** — `prAttentionStatus(pr, ctx)`, attached per PR and drawn as the court chip. The
   chip names the **court** and nothing else — `you`, `harness`, `elsewhere`, `settled`, `stalled`,
-  `done`, `ignored` — because scanning a list for "what is mine" is what it exists for; the full
+  `done`, `unwatched` — because scanning a list for "what is mine" is what it exists for; the full
   reasons are in the `title`. Four of the seven take a tone (`courtTone`); the rest print plain —
-  `ignored` says which arm it is in the chip and dims its whole row instead, since it is the one arm
-  that is a standing instruction rather than a reading of where the work got to.
+  `unwatched` says which arm it is in the chip and dims its whole row instead, since it is the one arm
+  that is about whether the item was opted in rather than where the work got to.
 - **Issue pickup** — `issuePickupStatus(issue, ctx)`, attached per issue. The tickets tab draws its first
   reason as the row's sentence, and its `container` arm is what disables a watch toggle.
 
@@ -2102,16 +2105,16 @@ the first time is trying to follow one story across nine panels, and a fixture s
 unrelated products reads to them as a console that is showing them noise. A new fixture joins that story
 or it does not go in.
 
-**Every pickup status has a goal in the fixtures.** `issuePickupStatus` answers fourteen ways
+**Every pickup status has a goal in the fixtures.** `issuePickupStatus` answers thirteen ways
 ([06](06-issue-pickup.md)), and each answer is somebody's whole explanation of why nothing is happening
-to their ticket — so `done`, `retained`, `has_pr`, `active`, `ignored`, `container`, `unwatched`,
-`planning`, `delivered`, `assay`, `cooldown`, `escalated`, `blocked` and `eligible` are each carried by
-at least one issue, with the reason string the real gate would have written. A demo showing eight of
-them teaches an operator that the other six are a bug on the day they first appear. The roll-call is
+to their ticket — so `done`, `retained`, `has_pr`, `active`, `container`, `unwatched`, `planning`,
+`delivered`, `assay`, `cooldown`, `escalated`, `blocked` and `eligible` are each carried by at least
+one issue, with the reason string the real gate would have written. A demo showing eight of them
+teaches an operator that the rest are a bug on the day they first appear. The roll-call is
 stated in a comment above the `issues` array, and the arithmetic around it has to hold as well: the cap
 is 3 with two agents live, so exactly one goal is `eligible` and the rest of the ready ones are
 `blocked` — a world with six eligible goals under a cap of three is one the dispatcher could not have
-produced. Twelve of the fourteen are reachable by clicking, through the tickets tab's watch filter; `done`
+produced. Eleven of the thirteen are reachable by clicking, through the tickets tab's watch filter; `done`
 and `retained` are carried without being listed anywhere, because no surface lists a closed goal — both
 are still readings the wire ships and the goal page draws.
 

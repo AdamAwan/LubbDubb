@@ -1,73 +1,42 @@
 /**
- * The one label model behind the cockpit's watch/ignore toggle, shared by PRs,
- * issues. An operator configures a single `labelPrefix` (e.g.
- * `"lubbdubb"`); from it we derive the pair of labels the toggle writes and the
- * gates read:
+ * The one label model behind the cockpit's watch toggle, shared by PRs and issues.
+ * An operator configures a single `labelPrefix` (e.g. `"lubbdubb"`); from it we
+ * derive the one label the toggle writes and the gates read:
  *
  * - `${prefix}-watch` — "work this"
- * - `${prefix}-ignore` — "leave this alone"
  *
- * Both labels are meaningful on every item type; only the *no-tag default*
- * differs: PRs are opt-out (watched unless ignored), issues are opt-in
- * (ignored unless watched). Keeping the precedence in one pure function means the
- * dispatcher, `prHealth`, the server and the cockpit can't drift apart.
- */
-
-interface WatchLabels {
-  /** `${prefix}-watch` — an explicit "work this" tag. */
-  watchLabel: string;
-  /** `${prefix}-ignore` — an explicit "leave this alone" tag (always wins). */
-  ignoreLabel: string;
-}
-
-/**
- * Derive the watch/ignore label pair from the operator's prefix. An empty prefix
- * yields empty labels, which the gates read as "feature off" (PRs never excluded,
- * issues never watch-gated) — the escape hatch tests use to exercise
- * dispatch mechanics without the opt-in gate.
- */
-export function watchLabelsFor(prefix: string): WatchLabels {
-  if (!prefix) return { watchLabel: '', ignoreLabel: '' };
-  return { watchLabel: `${prefix}-watch`, ignoreLabel: `${prefix}-ignore` };
-}
-
-type WatchState = 'watched' | 'ignored';
-
-interface ResolveWatchOpts extends WatchLabels {
-  /**
-   * What an item with neither tag defaults to: `true` for PRs (opt-out), `false`
-   * for issues (opt-in).
-   */
-  defaultWatched: boolean;
-}
-
-/**
- * The three readings the labels actually carry: tagged leave-alone, tagged
- * work-this, or neither.
+ * There is no second tag and no third state. **Untagged means unwatched**, on every
+ * item type: work is opt-in, and the harness tags the pull requests it opens itself
+ * (`src/prWatch.ts`) so its own work is watched without anybody clicking anything.
+ * An operator's un-watch is therefore the removal of a tag, which nothing writes
+ * back — the one shape in which "leave this alone" cannot be argued with.
  *
- * The gate below folds the third into `ignored`, because a gate only needs to know
- * whether to act. A *surface* has to keep them apart — "you told me to leave this"
- * and "nobody has looked at this yet" are different states of a backlog, and the
- * Tickets tab filters on the difference. Both readings are this one precedence, so
- * a tag can never mean one thing to the dispatcher and another to the list.
+ * This replaced a `${prefix}-ignore` tag and the three readings that came with it.
+ * Both are still legible: an item carrying the old ignore tag carries no watch tag,
+ * so it stays unworked, and nothing has to be migrated. The harness simply does not
+ * read `-ignore` any more.
  */
-type WatchBucket = 'watched' | 'unwatched' | 'ignored';
 
-/** Ignore wins, then watch, else neither. Total — never throws. */
-export function watchBucketOf(labels: string[] | undefined, opts: WatchLabels): WatchBucket {
-  const present = labels ?? [];
-  if (opts.ignoreLabel && present.includes(opts.ignoreLabel)) return 'ignored';
-  if (opts.watchLabel && present.includes(opts.watchLabel)) return 'watched';
-  return 'unwatched';
+/**
+ * Derive the watch label from the operator's prefix. An empty prefix yields an empty
+ * label, which the gates read as "feature off" — everything is watched, PRs and
+ * issues alike. That is the escape hatch tests use to exercise dispatch mechanics
+ * without the opt-in gate.
+ */
+export function watchLabelFor(prefix: string): string {
+  return prefix ? `${prefix}-watch` : '';
 }
 
 /**
- * The single precedence rule for watch vs ignore: an explicit ignore always
- * wins, then an explicit watch, else the type default. Total — never throws;
- * missing/empty labels (feature effectively off) fall through to the default.
+ * The whole of the gate: does this item carry the watch tag? Total — never throws;
+ * a missing/empty label (feature off) reads as watched, and so does an item with no
+ * labels under it.
+ *
+ * Pure and provider-agnostic — reads the label list alone, so the fake, github and
+ * azure providers gate identically, and the dispatcher, `prAttention`, the server
+ * and the cockpit cannot form different opinions about one item.
  */
-export function resolveWatchState(labels: string[] | undefined, opts: ResolveWatchOpts): WatchState {
-  const bucket = watchBucketOf(labels, opts);
-  if (bucket !== 'unwatched') return bucket;
-  return opts.defaultWatched ? 'watched' : 'ignored';
+export function isWatched(labels: string[] | undefined, watchLabel: string): boolean {
+  if (!watchLabel) return true;
+  return (labels ?? []).includes(watchLabel);
 }

@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { trackerCoordinates } from '../../mcp/findings.js';
 import { blueprintTicketFields } from '../../blueprintTicket.js';
-import { watchLabelsFor } from '../../watchLabels.js';
+import { watchLabelFor } from '../../watchLabels.js';
 import { ATTACHMENT_BODY_LIMIT, AttachmentsField, prepareAttachments } from '../../jobs/attachments.js';
 import { deriveJobTitle } from '../../jobs.js';
 import { checked, IdParams, optionalText } from '../validation.js';
@@ -90,7 +90,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // so it too dispatches directly.
       const tracker = kind === 'code' ? trackerCoordinates(system.config) : null;
       if (tracker) {
-        const { watchLabel } = watchLabelsFor(config.labelPrefix);
+        const watchLabel = watchLabelFor(config.labelPrefix);
         const derived = blueprintTicketFields(prompt, tracker, watchLabel);
         // Desk, not code: filing touches no repository, so a worktree and a branch
         // would be cut for a task that never writes a file. It is also what stops

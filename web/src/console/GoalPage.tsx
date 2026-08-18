@@ -98,11 +98,7 @@ function Header({
   const { issue } = page;
   const { config, refUrls } = view.state;
   const [raisingBug, setRaisingBug] = useState(false);
-  const watched = watchBucket(issue.labels, {
-    watchLabel: config.watchLabel,
-    ignoreLabel: config.ignoreLabel,
-    defaultWatched: false,
-  });
+  const watched = watchBucket(issue.labels, config.watchLabel);
   const finished = issue.conclusion.verdict === 'done';
   // `more_work` is not the opposite of `done` — it is the verdict that puts a
   // goal back in front of the harness once no PR is open, so it needs its own
@@ -183,14 +179,13 @@ function Header({
           type="button"
           className={`cn-tgl ${watched === 'watched' ? 'cn-watch' : ''}`}
           onClick={() => void actions.setIssueWatched(issue.number, watched !== 'watched')}
-          // The route writes both labels on every toggle, so the title names both.
-          // Saying only "remove the watch label" understates a click that also
-          // tags the goal ignored — and the difference shows up in the backlog,
-          // where the goal lands in Ignored rather than back in Unwatched.
+          // One label, both ways: un-watching takes the tag off and writes nothing
+          // in its place, which is why the goal lands back in Unwatched rather than
+          // in a bucket of its own.
           title={
             watched === 'watched'
-              ? `Remove "${config.watchLabel}"${config.ignoreLabel ? ` and tag "${config.ignoreLabel}"` : ''} so the harness leaves this goal alone`
-              : `Tag this goal "${config.watchLabel}"${config.ignoreLabel ? ` and remove "${config.ignoreLabel}"` : ''} so the harness picks it up`
+              ? `Remove "${config.watchLabel}" so the harness leaves this goal alone`
+              : `Tag this goal "${config.watchLabel}" so the harness picks it up`
           }
         >
           {watched === 'watched' ? 'Watching' : 'Watch'}
@@ -560,10 +555,10 @@ function PullRequests({ page, view }: { page: GoalPageView; view: CockpitView })
       <div className="cn-rows">
         {open.length === 0 && closed.length === 0 && <p className="cn-empty">No pull request names this goal yet.</p>}
         {open.map((pr) => (
-          // An ignored PR is drawn spent, the same as a closed one below and as an
-          // ignored goal in the backlog: nothing will happen on it, and a row at
-          // full weight says the opposite.
-          <div className={`cn-row ${pr.attention.status === 'ignored' ? 'cn-spent' : ''}`} key={pr.number}>
+          // An unwatched PR is drawn spent, the same as a closed one below and as
+          // an unwatched goal in the backlog: nothing will happen on it, and a row
+          // at full weight says the opposite.
+          <div className={`cn-row ${pr.attention.status === 'unwatched' ? 'cn-spent' : ''}`} key={pr.number}>
             <span className="cn-grow">
               <b className="cn-name">
                 <Ref to={`pr:${pr.number}`} /> {pr.title}

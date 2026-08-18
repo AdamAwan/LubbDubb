@@ -21,7 +21,7 @@ is about.
 | `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/health`                  |
 | `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt                             |
 | `routes/artifacts.ts`   | `/artifacts/:id` and `/attachments/:id`, their capability signers, and the path confinement   |
-| `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/exclude`                 |
+| `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/watch`                   |
 | `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                 |
 | `routes/findings.ts`    | Promote / file / dismiss                                                                      |
 | `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                            |
@@ -170,7 +170,7 @@ PRs), and the cockpit refetches this route on every `dirty`, one of which rides 
 writes_: reading the provider here made the request rate a function of agent tool-call volume and of how
 many cockpit tabs were open. The pulse is the only provider reader. Two properties make it sound: the
 baseline is written **before** the dispatch world is filtered, so it is the unfiltered world and an
-`-ignore`d PR stays visible here with its health; and the reading's age is shipped as
+unwatched PR stays visible here with its health; and the reading's age is shipped as
 `worldObservedAt` rather than implied, the same way `world_read` hands an agent an `observedAt`.
 
 Before the first cycle there is no baseline, and the route ships an **empty** world with
@@ -284,19 +284,22 @@ the build is current. That is the shape the recovery route uses for a verdict so
 handoff is deferred past them in `main.ts` — so a cockpit learns the answer from the response rather
 than from a dropped socket.
 
-### `POST /api/prs/:number/exclude`
+### `POST /api/prs/:number/watch`
 
-Body `{excluded: boolean}`. Adds or removes the `${labelPrefix}-ignore` label through the provider,
-broadcasts `world:changed`, and runs a cycle so a now-included PR is picked up (or a now-excluded one
-dropped). 400 on a non-integer PR number, a non-boolean `excluded`, or a provider failure.
+Body `{watched: boolean}`. Adds or removes the `${labelPrefix}-watch` label through the provider,
+broadcasts `world:changed`, and runs a cycle so a now-watched PR is picked up (or a now-unwatched one
+dropped). 400 on a non-integer PR number, a non-boolean `watched`, or a provider failure.
+
+It also records a `pr_watch_seeds` row, in **both** directions: the seeding desk
+([07](07-pull-requests.md#watching)) must not answer for a pull request a person has answered for, or
+un-watching one the harness opened would be undone on the next pulse.
 
 ### `POST /api/issues/:number/watch`
 
-Body `{watched: boolean}`. Writes the **pair** — sets `${prefix}-watch` to `watched` and
-`${prefix}-ignore` to `!watched` — so the two labels stay mutually exclusive. Broadcasts and runs a
-cycle.
+Body `{watched: boolean}`. Writes the one label — sets `${prefix}-watch` to `watched`. Broadcasts and
+runs a cycle.
 
-**On a container it cascades.** The pair is written on every item `watchCascadeTargets` names — the
+**On a container it cascades.** The tag is written on every item `watchCascadeTargets` names — the
 issue itself and, for a Feature or Epic, every descendant beneath it — because a container is never
 dispatched at and a tag on one alone would change nothing
 ([06](06-issue-pickup.md#watching-a-container-cascades)). Un-watching walks the same tree. On success:
@@ -551,7 +554,7 @@ Six query parameters, every one defaulting so a bare call is the tab's own first
 
 | Parameter  | Values                                                                      |
 | ---------- | --------------------------------------------------------------------------- |
-| `watch`    | `any` \| `watched` \| `unwatched` \| `ignored`                              |
+| `watch`    | `any` \| `watched` \| `unwatched`                                           |
 | `tracking` | `any` \| `live` \| `frozen` — the harness's reading. **Defaults to `live`** |
 | `state`    | `any`, or a provider-native state exactly as the tracker spells it          |
 | `feature`  | a feature number, or `none` for the items the tracker says have no parent   |
@@ -1180,7 +1183,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 
 | Key                             | Contents                                                                                                                                                                                                                      |
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `config`                        | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `ignoreLabel`, `containerTypes`, `canFileTickets`.                                                                                                                |
+| `config`                        | `heartbeatIntervalMs`, `maxConcurrentAgents`, `watchLabel`, `containerTypes`, `canFileTickets`.                                                                                                                               |
 | `control`                       | The **live** cap and pause state. The cockpit reads these, not the frozen `config` block.                                                                                                                                     |
 | `worldObservedAt`               | When `world` was observed — the baseline's `takenAt`. **Null** before the first cycle, when `world` is empty.                                                                                                                 |
 | `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay`, `completion` and `spend` per issue.                                                                    |

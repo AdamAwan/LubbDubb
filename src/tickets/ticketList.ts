@@ -1,5 +1,5 @@
 import type { MirroredTicket } from '../store/tickets.js';
-import { watchBucketOf } from '../watchLabels.js';
+import { isWatched } from '../watchLabels.js';
 import type {
   TicketFeatureFacet,
   TicketOrder,
@@ -71,7 +71,6 @@ interface BuildInput {
    */
   pickupStates: readonly string[];
   watchLabel: string;
-  ignoreLabel: string;
   query: TicketQuery;
 }
 
@@ -94,7 +93,7 @@ interface BuildInput {
  * taken only then, because it trades this module's one honest source for two.
  */
 export function buildTicketPage(input: BuildInput): TicketPage {
-  const { items, costs, outcomes, featureSlots, pickupStates, watchLabel, ignoreLabel, query } = input;
+  const { items, costs, outcomes, featureSlots, pickupStates, watchLabel, query } = input;
 
   const matching: TicketRow[] = [];
   let totalCostUsd = 0;
@@ -135,7 +134,7 @@ export function buildTicketPage(input: BuildInput): TicketPage {
         if (item.parent !== null) continue;
       } else if (item.parent?.number !== query.feature) continue;
     }
-    const watch = watchBucketOf(item.labels, { watchLabel, ignoreLabel });
+    const watch = isWatched(item.labels, watchLabel) ? 'watched' : 'unwatched';
     if (query.watch !== 'any' && watch !== query.watch) continue;
     // Absent, not zero: a goal nobody ever staffed and a goal that somehow cost
     // nothing are different facts, and `$0.00` would state the wrong one.

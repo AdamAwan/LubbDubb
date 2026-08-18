@@ -48,9 +48,8 @@ The snapshot above is the connector's answer and stays that way — everything t
 (the cockpit's world panels, the work graph, `world_read`, the assay desk) reads it verbatim. What
 `decide` is given is a **derived** view, built in `Harness.runCycle`, and two things shape it:
 
-- **PRs carrying the operator's `-ignore` tag are removed** and handed over separately as
-  `excludedPrs`, so nothing acts on one while gates that must not read "absent" as "merged" can still
-  see it.
+- **PRs carrying no `-watch` tag are removed** and handed over separately as `unwatchedPrs`, so
+  nothing acts on one while gates that must not read "absent" as "merged" can still see it.
 - **Runs the tracker has forgotten are added** (#234). A goal the harness has worked, whose issue no
   longer comes back from the connector, and which the operator has not dismissed, is rebuilt from its
   `issue_runs` row by `retainedRunIssues` and appended to `issues`. Their numbers ride alongside as
@@ -119,7 +118,7 @@ A tracker issue or work item — the thing that becomes a PR.
 | Field                     | Meaning                                                                                                                                    |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
 | `number`, `title`, `body` | Identity and content.                                                                                                                      |
-| `labels`                  | All labels/tags. Drives the watch/ignore gate and label-encoded priority.                                                                  |
+| `labels`                  | All labels/tags. Drives the watch gate and label-encoded priority.                                                                         |
 | `labelsAddedByViewer?`    | The subset the authenticated viewer added. `undefined` when authorship is not tracked. Read instead of `labels` when `userId` is set.      |
 | `state`                   | `open` \| `closed` — collapsed.                                                                                                            |
 | `workItemState?`          | The provider's **native** workflow state (e.g. Azure `System.State`: "New"/"Ready"/"In Review"). `undefined` for GitHub and the fake.      |

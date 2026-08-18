@@ -1,36 +1,23 @@
 /**
  * Which World-panel tab an item belongs in, from its labels alone.
  *
- * Deliberately **not** `resolveWatchState` (`src/watchLabels.ts`), which the web
- * bundle couldn't import anyway: that answers the *gate's* question and is
- * therefore binary — an untagged issue resolves to `ignored`, because the gate
- * only cares that it won't be worked. The panel has to tell those two apart, since
- * "you tagged this leave-alone" and "you haven't looked at this yet" are the
- * ignored/unwatched split `issuePickupStatus` already reports and the difference
- * between a row that is settled and a row that is waiting on a triage pass. The
- * precedence is the server's, though: ignore wins, then watch, else the type
- * default (PRs opt-out, issues opt-in).
+ * A mirror of `isWatched` (`src/watchLabels.ts`), which the web bundle cannot
+ * import: one tag, and an item without it is unwatched. There is no third reading
+ * and no type default — pull requests and issues are both opt-in, and the harness
+ * tags the pull requests it opened itself, so "untagged" means the same thing on
+ * every row a person is looking at: nobody has opted this in.
  */
-type WatchBucket = 'watched' | 'unwatched' | 'ignored';
-
-interface WatchBucketOpts {
-  watchLabel: string;
-  ignoreLabel: string;
-  /** What an untagged item defaults to: `true` for PRs, `false` for issues. */
-  defaultWatched: boolean;
-}
+type WatchBucket = 'watched' | 'unwatched';
 
 /**
- * Total — never throws. Empty labels mean the operator turned the gates off
- * (`labelPrefix: ''`), so every item falls through to its type default and the
- * `unwatched`/`ignored` buckets stay empty; the panel hides the tab bar in that
- * case rather than offer two tabs that can only ever be empty.
+ * Total — never throws. An empty label means the operator turned the gate off
+ * (`labelPrefix: ''`), so every item reads `watched` and the `unwatched` bucket
+ * stays empty; the panel hides the tab bar in that case rather than offer a tab
+ * that can only ever be empty.
  */
-export function watchBucket(labels: string[] | undefined, opts: WatchBucketOpts): WatchBucket {
-  const present = labels ?? [];
-  if (opts.ignoreLabel && present.includes(opts.ignoreLabel)) return 'ignored';
-  if (opts.watchLabel && present.includes(opts.watchLabel)) return 'watched';
-  return opts.defaultWatched ? 'watched' : 'unwatched';
+export function watchBucket(labels: string[] | undefined, watchLabel: string): WatchBucket {
+  if (!watchLabel) return 'watched';
+  return (labels ?? []).includes(watchLabel) ? 'watched' : 'unwatched';
 }
 
 /**
@@ -44,16 +31,13 @@ export function watchBucket(labels: string[] | undefined, opts: WatchBucketOpts)
  * the items held at intake would be a promise the list does not keep.
  *
  * Closed items are left out for the reason they always were: a closed ticket is
- * neither watchable nor ignorable, so it is not waiting on anybody.
+ * not waiting on anybody.
  */
-export function untriagedCount(
-  issues: readonly { state: string; labels: string[] }[],
-  opts: { watchLabel: string; ignoreLabel: string },
-): number {
+export function untriagedCount(issues: readonly { state: string; labels: string[] }[], watchLabel: string): number {
   let n = 0;
   for (const issue of issues) {
     if (issue.state !== 'open') continue;
-    if (watchBucket(issue.labels, { ...opts, defaultWatched: false }) === 'unwatched') n += 1;
+    if (watchBucket(issue.labels, watchLabel) === 'unwatched') n += 1;
   }
   return n;
 }

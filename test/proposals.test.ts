@@ -69,7 +69,14 @@ function reviewCommentPrompt(number: number, branch: string, comment: string, id
 
 /** A PR rule `pr-merge-ready` wants to merge: green, approved, mergeable, nothing else pending. */
 function mergeReadyPr(system: ReturnType<typeof buildSystem>, number: number): void {
-  system.connector.inject({ kind: 'new_pr', number, title: 'Add the widget', branch: `feat/widget-${number}` });
+  system.connector.inject({
+    kind: 'new_pr',
+    number,
+    title: 'Add the widget',
+    branch: `feat/widget-${number}`,
+    // Pull requests are opt-in: untagged, the harness never reaches these rules.
+    labels: ['lubbdubb-watch'],
+  });
   system.connector.inject({ kind: 'ci_passed', prNumber: number });
   system.connector.inject({ kind: 'pr_approved', prNumber: number });
   system.connector.inject({ kind: 'pr_mergeable', prNumber: number, mergeable: true, mergeableState: 'clean' });
@@ -204,7 +211,13 @@ test('a pending proposal suppresses re-proposal on the next cycle', async () => 
   const system = buildSystem(testConfig(), { backend: new FakePtyBackend(), sink });
 
   // A PR rule `pr-merge-ready` wants to merge: green, approved, mergeable, nothing else pending.
-  system.connector.inject({ kind: 'new_pr', number: 7, title: 'Add the widget', branch: 'feat/widget' });
+  system.connector.inject({
+    kind: 'new_pr',
+    number: 7,
+    title: 'Add the widget',
+    branch: 'feat/widget',
+    labels: ['lubbdubb-watch'],
+  });
   system.connector.inject({ kind: 'ci_passed', prNumber: 7 });
   system.connector.inject({ kind: 'pr_approved', prNumber: 7 });
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 7, mergeable: true, mergeableState: 'clean' });
@@ -287,7 +300,7 @@ test("a rejection reaches the next agent on that ref, in the operator's own word
     errorMirror: () => {},
   });
   const commented = async (number: number, branch: string, body: string): Promise<string> => {
-    system.connector.inject({ kind: 'new_pr', number, title: `PR ${number}`, branch });
+    system.connector.inject({ kind: 'new_pr', number, title: `PR ${number}`, branch, labels: ['lubbdubb-watch'] });
     system.connector.inject({ kind: 'pr_comment', prNumber: number, author: 'reviewer', body });
     const world = await system.connector.getState();
     return world.pullRequests.find((p) => p.number === number)!.unresolvedComments[0]!.id;

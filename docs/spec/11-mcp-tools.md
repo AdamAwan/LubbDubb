@@ -114,7 +114,7 @@ PR's CI status or review comments had to shell out, which is provider-coupled (n
   the first cycle it errors informatively rather than throwing. **This must never be routed to a
   connector** — that coupling is what the tool exists to remove.
 - **Same verdicts as the cockpit, from the same functions**: `prHealth`, `basePrOf`,
-  `inheritedCiFailure`, over the **unfiltered** open list so an `-ignore`d base still attributes. An
+  `inheritedCiFailure`, over the **unfiltered** open list so an unwatched base still attributes. An
   agent told `CI failing on base PR #7` and an operator reading the same phrase are reading one fact.
 - **A closed PR is still readable** — "did the PR my branch is stacked on actually merge, or was it
   abandoned?" is exactly the question the closed-PR window answers.

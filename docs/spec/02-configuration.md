@@ -265,7 +265,7 @@ reading the file is not the same as knowing the policy.
 | Key                    | Type                     | Default                                                           | Behaviour                                                                                                                                                                                        |
 | ---------------------- | ------------------------ | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `userId`               | `string` (optional)      | unset                                                             | Who _you_ are to every provider — see [`userId`](#userid). Turns on the ownership gate, ticket assignment and the PR-author filter together. Unset, all three are off.                           |
-| `labelPrefix`          | `string`                 | `"lubbdubb"`                                                      | Derives the tag pair `${prefix}-watch` / `${prefix}-ignore`. An **empty** prefix turns both gates off.                                                                                           |
+| `labelPrefix`          | `string`                 | `"lubbdubb"`                                                      | Derives the one tag `${prefix}-watch`. Everything is opt-in: an item without it is left alone. An **empty** prefix turns the gate off.                                                           |
 | `issuePriorityLabels`  | `Record<string, number>` | `{ 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 }` | Label → weight for pickup ordering. Replaced wholesale by an override.                                                                                                                           |
 | `issueDefaultPriority` | `number`                 | `2`                                                               | Weight for an issue with no matching priority label.                                                                                                                                             |
 | `issuePickupStates`    | `string[]` (optional)    | unset                                                             | When non-empty, only items whose provider-native state is listed are eligible. Items with no such state bypass it.                                                                               |
@@ -462,7 +462,7 @@ ${labelPrefix}-model-<profile>
 ```
 
 written through `connector.setIssueLabel` — the same seam, and the same gesture, as the watch toggle,
-so Azure DevOps needs no separate answer. Writing one clears the others, as `watch` clears `ignore`.
+so Azure DevOps needs no separate answer. Writing one clears the others.
 
 The chain a dispatch resolves through is then three levels, in `resolveAgentProfile`:
 

@@ -553,6 +553,16 @@ CREATE TABLE IF NOT EXISTS branch_reaps (
   at        TEXT NOT NULL
 );
 
+-- Pull requests the harness has already tagged with the watch label because it
+-- opened them (see PrWatchSeedStore). Stored because the live labels cannot answer
+-- it: a pull request an operator has un-watched looks exactly like one never
+-- reached, and re-tagging it would undo the operator's own click every pulse.
+CREATE TABLE IF NOT EXISTS pr_watch_seeds (
+  pr_number INTEGER PRIMARY KEY,
+  branch    TEXT NOT NULL,      -- what it was tagged for, for the audit trail
+  at        TEXT NOT NULL
+);
+
 -- How long a pull request has been sitting on a reviewer, as one watermark per PR
 -- (see ReviewWaitStore). Stored because the question is about a *span* and every
 -- other reading here is about an instant: no provider payload says "reviewable

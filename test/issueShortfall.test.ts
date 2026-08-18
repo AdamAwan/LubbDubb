@@ -93,7 +93,7 @@ test('an issue carrying a shortfall is pickup-eligible, and the chip says so', (
   const store = new Map<string, IssueShortfall>([['issue:12', shortfallRow()]]);
   assert.ok(store.get('issue:12'));
   const verdict = issuePickupStatus(issue(), {
-    policy: { watchLabel: '', ignoreLabel: '', priorityLabels: {}, defaultPriority: 0, requireOwnLabel: false },
+    policy: { watchLabel: '', priorityLabels: {}, defaultPriority: 0, requireOwnLabel: false },
     cooldown: DEFAULT_COOLDOWN,
     now: NOW,
     tasks: [],
@@ -275,15 +275,15 @@ test('with no plan row both plan-shaped arms degrade rather than parking the iss
   assert.equal(actions.filter((a) => a.type === 'escalate_to_human').length, 1);
 });
 
-test('an ignored or closed issue’s shortfall drives nothing', async () => {
-  const tagged = await dispatcher().decide(
+test('an unwatched or closed issue’s shortfall drives nothing', async () => {
+  const untagged = await dispatcher().decide(
     ctx({
-      world: { takenAt: NOW, pullRequests: [], issues: [issue({ labels: ['lubbdubb-ignore'] })] },
+      world: { takenAt: NOW, pullRequests: [], issues: [issue({ labels: [] })] },
       shortfalls: [shortfallRow({ cause: 'plan' })],
       plans: [planRow()],
     }),
   );
-  assert.equal(tagged.actions.filter((a) => a.type === 'propose_shortfall').length, 0);
+  assert.equal(untagged.actions.filter((a) => a.type === 'propose_shortfall').length, 0);
 
   const closed = await dispatcher().decide(
     ctx({
@@ -508,7 +508,9 @@ function issue(over: Partial<Issue> = {}): Issue {
     number: 12,
     title: 'Add the thing',
     body: 'please add the thing',
-    labels: [],
+    // Watched by default: work is opt-in, so an untagged issue is one the funnel
+    // never reaches — which is a different test, below.
+    labels: ['lubbdubb-watch'],
     state: 'open',
     linkedPrNumber: null,
     ...over,
@@ -665,7 +667,7 @@ function ctx(over: Partial<DispatchContext> = {}): DispatchContext {
 }
 
 function dispatcher(): RuleDispatcher {
-  return new RuleDispatcher({ ignoreLabel: 'lubbdubb-ignore' }, {}, undefined, 'main');
+  return new RuleDispatcher({ watchLabel: 'lubbdubb-watch' }, {}, undefined, 'main');
 }
 
 async function decide(context: DispatchContext): Promise<{ actions: { type: string; [k: string]: unknown }[] }> {

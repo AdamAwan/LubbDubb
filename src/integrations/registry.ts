@@ -9,7 +9,7 @@ import { GitHubIssuesIntegration } from './github/issues.js';
 import { RestAzureDevOpsApi, resolveAzureAuth } from './azure/restAzureDevOpsApi.js';
 import { AzureDevOpsSourceControlIntegration } from './azure/sourceControl.js';
 import { AzureDevOpsWorkItemsIntegration } from './azure/workItems.js';
-import { watchLabelsFor } from '../watchLabels.js';
+import { watchLabelFor } from '../watchLabels.js';
 
 type ProviderFactory = (ctx: IntegrationContext, world: FakeWorldStore) => Integration;
 
@@ -84,7 +84,7 @@ const CAPABILITIES = Object.keys(REGISTRY) as Capability[];
  * nothing to attribute a tag to, so the provider skips the history lookups entirely.
  */
 function ownershipLabel(ctx: IntegrationContext): string | undefined {
-  return ctx.config.userId === undefined ? undefined : watchLabelsFor(ctx.config.labelPrefix).watchLabel;
+  return ctx.config.userId === undefined ? undefined : watchLabelFor(ctx.config.labelPrefix);
 }
 
 /**

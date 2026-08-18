@@ -78,13 +78,19 @@ export interface Config {
    */
   azureDevOps?: AzureDevOpsConfig;
   /**
-   * The prefix behind the cockpit's watch/ignore toggle, shared by PRs and
-   * issues. It derives two labels — `${labelPrefix}-watch` ("work this") and
-   * `${labelPrefix}-ignore` ("leave this alone") — read by the dispatcher gates and
-   * written by the toggle (see {@link watchLabelsFor}/{@link resolveWatchState}).
-   * The no-tag default differs by type: PRs are opt-out (watched unless ignored),
-   * issues are opt-in (ignored unless watched). Defaults to `"lubbdubb"`,
-   * so `lubbdubb-ignore` keeps its historical meaning as the PR exclusion tag.
+   * The prefix behind the cockpit's watch toggle, shared by PRs and issues. It
+   * derives one label — `${labelPrefix}-watch` ("work this") — read by the
+   * dispatcher gates and written by the toggle (see {@link watchLabelFor}/{@link
+   * isWatched}). Everything is **opt-in**: an item without the tag is left alone,
+   * pull requests and issues alike, and the harness tags the pull requests it opens
+   * itself (`src/prWatch.ts`) so its own work never waits on a click.
+   *
+   * An empty prefix turns the gate off entirely — every open item is worked, which
+   * is the first-run and test posture. Defaults to `"lubbdubb"`.
+   *
+   * A retired `${labelPrefix}-ignore` tag used to mean "leave this alone" and is no
+   * longer read anywhere except the seeding carve-out: an item carrying it has no
+   * watch tag, so it stays unworked by itself and needs no migration.
    */
   labelPrefix: string;
   /**

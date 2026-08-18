@@ -115,7 +115,7 @@ test('the number-param routes refuse a non-numeric path, each in its own words',
     assert.equal(res.statusCode, 400, route.url);
     assert.deepEqual(res.json(), { error: 'invalid issue number' }, route.url);
   }
-  const pr = await app.inject({ method: 'POST', url: '/api/prs/abc/exclude', payload: { excluded: true } });
+  const pr = await app.inject({ method: 'POST', url: '/api/prs/abc/watch', payload: { watched: true } });
   assert.equal(pr.statusCode, 400);
   assert.deepEqual(pr.json(), { error: 'invalid PR number' });
 

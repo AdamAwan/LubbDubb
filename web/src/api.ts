@@ -227,11 +227,11 @@ const realApi = {
   respondAgent: (id: string, text: string) => post(`/api/agents/${id}/respond`, { text }),
   setControl: (patch: { cap?: number; paused?: boolean }) =>
     post<{ ok: true; cap: number; paused: boolean }>('/api/control', patch),
-  setPrExcluded: (prNumber: number, excluded: boolean) =>
-    post<{ ok: true; excluded: boolean }>(`/api/prs/${prNumber}/exclude`, { excluded }),
+  setPrWatched: (prNumber: number, watched: boolean) =>
+    post<{ ok: true; watched: boolean }>(`/api/prs/${prNumber}/watch`, { watched }),
   // Land a whole chain: one standing authorization that keeps accepting each
   // rung's merge as the harness proposes it, cycle after cycle. A DELETE calls it
-  // off, for the reason the ignore toggle uses one — the store's undo is a
+  // off, for the reason the watch toggle uses one — the store's undo is a
   // settlement, not a second flag.
   setStackLanding: (ref: string, landing: boolean) =>
     landing

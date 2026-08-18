@@ -23,9 +23,9 @@ import { isActiveTask } from '../tasks.js';
  *
  * This is *dispatcher-level* and provider-agnostic (fake, github or azure): it
  * decides which visible issues an agent is started for. Issues are **opt-in**: an
- * issue is only picked up when it carries the `watchLabel` (and no `ignoreLabel`);
- * an untagged issue stays visible in the world/cockpit but is left alone. Mirrors
- * the PR side's opt-out exclusion — see `src/watchLabels.ts` for the shared model.
+ * issue is only picked up when it carries the `watchLabel`; an untagged issue stays
+ * visible in the world/cockpit but is left alone. Pull requests gate the same way —
+ * see `src/watchLabels.ts` for the shared model.
  */
 export interface IssuePickupPolicy {
   /**
@@ -34,11 +34,6 @@ export interface IssuePickupPolicy {
    * open issue — the backward-compatible default the no-arg `RuleDispatcher` uses.
    */
   watchLabel?: string;
-  /**
-   * The `${labelPrefix}-ignore` tag. An issue carrying it is never picked up, even
-   * if it also carries the watch label (ignore wins). Empty/unset = no ignore gate.
-   */
-  ignoreLabel?: string;
   /**
    * When set, the watch label only counts if the authenticated viewer added it
    * themselves — the gate reads `labelsAddedByViewer` instead of `labels`. Stops a
@@ -92,11 +87,11 @@ export function issueBranch(number: number): string {
  * instead is what keeps the loop moving. The branch convention is checked too, so a
  * PR the provider hasn't linked yet still counts.
  *
- * `openPrs` must be **every** open PR — including ones the operator's `-ignore` tag
- * hides from the dispatch world (`Harness.runCycle` filters them out, so the
- * dispatcher passes them back in via `DispatchContext.excludedPrs`). Both providers
- * list only open/active PRs, so absence otherwise reads as "merged" — and an ignored
- * PR would get its issue re-picked and a second agent onto the very same branch.
+ * `openPrs` must be **every** open PR — including the unwatched ones hidden from the
+ * dispatch world (`Harness.runCycle` filters them out, so the dispatcher passes them
+ * back in via `DispatchContext.unwatchedPrs`). Both providers list only open/active
+ * PRs, so absence otherwise reads as "merged" — and an unwatched PR would get its
+ * issue re-picked and a second agent onto the very same branch.
  *
  * Not covered: a `prAuthor` filter narrows the provider's PR list, so a linked PR
  * opened by someone else is invisible here and reads as gone.
@@ -124,10 +119,6 @@ interface IssuePickupEligibility {
  */
 export function isIssuePickupEligible(issue: Issue, policy: IssuePickupPolicy): IssuePickupEligibility {
   const reasons: string[] = [];
-  // Ignore wins over everything else: an explicitly-ignored item is left alone
-  // regardless of state or watch tag (mirrors the PR exclusion tag).
-  const ignored = issueIgnoreReason(issue, policy);
-  if (ignored) reasons.push(ignored);
   // The type gate (Azure work items): a Feature/Epic is a statement of intent its
   // children deliver, so an agent is never put on one — no watch tag or workflow
   // state makes a container workable. Asked before the state gate because it is
@@ -148,12 +139,6 @@ export function isIssuePickupEligible(issue: Issue, policy: IssuePickupPolicy): 
   const unwatched = issueWatchReason(issue, policy);
   if (unwatched) reasons.push(unwatched);
   return { eligible: reasons.length === 0, reasons };
-}
-
-/** The explicit "leave it alone" tag, as a reason — or null when it isn't set. */
-function issueIgnoreReason(issue: Issue, policy: IssuePickupPolicy): string | null {
-  if (policy.ignoreLabel && issue.labels.includes(policy.ignoreLabel)) return `ignored ("${policy.ignoreLabel}")`;
-  return null;
 }
 
 /**
@@ -181,7 +166,7 @@ function issueWatchReason(issue: Issue, policy: IssuePickupPolicy): string | nul
  * state gate there would stop the plan's remaining parts from ever being scheduled.
  */
 export function issueWatchGateReason(issue: Issue, policy: IssuePickupPolicy): string | null {
-  return issueIgnoreReason(issue, policy) ?? issueWatchReason(issue, policy);
+  return issueWatchReason(issue, policy);
 }
 
 /** What LubbDubb is doing (or not) with one issue, and why. */
@@ -190,7 +175,6 @@ type IssuePickupStatusKind =
   | 'retained' // closed, but its run lives until dismissed (issue #234)
   | 'has_pr' // resolved into a PR; the PR rules own it now
   | 'active' // an agent/task is on it right now
-  | 'ignored' // carries the ignore tag — the operator said leave it alone
   | 'container' // a Feature/Epic — its children are the work, never it
   | 'unwatched' // not opted in (no watch tag) or parked by a state gate
   | 'planning' // in the plan funnel — a verdict is owed, or it split into parts
@@ -219,8 +203,8 @@ export interface IssuePickupContext {
   recentDecisions: Decision[];
   /**
    * Every open PR the world knows about, for {@link openPrForIssue}. The cockpit
-   * reads the connector directly, so it passes the unfiltered list — an `-ignore`
-   * tagged PR is hidden from dispatch but is still an open PR for this gate.
+   * reads the connector directly, so it passes the unfiltered list — an unwatched PR
+   * is hidden from dispatch but is still an open PR for this gate.
    */
   openPrs: PullRequest[];
   /**
@@ -367,13 +351,10 @@ export function issuePickupStatus(issue: Issue, ctx: IssuePickupContext): IssueP
 
   const intrinsic = isIssuePickupEligible(issue, ctx.policy);
   if (!intrinsic.eligible) {
-    // Explicit ignore vs "just not opted in" — so the cockpit can mark the two
-    // apart the way it marks an ignored PR (the ignore tag always wins above).
-    const ignored = ctx.policy.ignoreLabel !== undefined && issue.labels.includes(ctx.policy.ignoreLabel);
-    // A container is neither: it is not the operator declining the item and not an
-    // item waiting to be opted in — tagging it changes nothing, and a chip saying
-    // "unwatched" would send an operator to the one control that cannot help.
-    const status = ignored ? 'ignored' : isContainerIssue(issue, ctx.policy.containerTypes) ? 'container' : 'unwatched';
+    // A container is its own answer: it is not an item waiting to be opted in —
+    // tagging it changes nothing, and a chip saying "unwatched" would send an
+    // operator to the one control that cannot help.
+    const status = isContainerIssue(issue, ctx.policy.containerTypes) ? 'container' : 'unwatched';
     return { eligible: false, status, reasons: intrinsic.reasons };
   }
 

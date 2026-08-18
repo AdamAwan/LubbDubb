@@ -34,7 +34,7 @@ import { classifyCiFailures } from '../ci/ciPolicy.js';
 import { validationVerdict } from '../validation/verdict.js';
 import { validationResourcePath } from '../validation/resources.js';
 import { withLiveClaim } from '../validation/desktop.js';
-import { watchLabelsFor } from '../watchLabels.js';
+import { watchLabelFor } from '../watchLabels.js';
 import { resolveModelTag } from '../modelLabels.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
 
@@ -66,7 +66,7 @@ export function buildStateSnapshot(
   opts?: { artifactSigner?: (flagId: string) => string; attachmentSigner?: (attachmentId: string) => string },
 ): CockpitState {
   const { store, connector, config, runtimeControl, harness, recovery, updates, agents: fleet } = system;
-  const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
+  const watchLabel = watchLabelFor(config.labelPrefix);
   const baseline = store.getWorldBaseline();
   const world: WorldSnapshot = baseline ?? {
     takenAt: new Date().toISOString(),
@@ -259,10 +259,10 @@ export function buildStateSnapshot(
   const signals = rejectionSignalQuery(proposals);
   const attentionCtx: PrAttentionContext = {
     // Unfiltered, exactly as `inheritedCiFailure`/`basePrOf` need it (and as the
-    // pickup context above takes it): an `-ignore`d base still attributes.
+    // pickup context above takes it): an unwatched base still attributes.
     openPrs: world.pullRequests,
     defaultBranch: config.defaultBranch,
-    ignoreLabel,
+    watchLabel,
     tasks,
     proposals,
     rejectionSignals: signals ? store.listWorldEventsSince(signals.since, signals.refs) : [],
@@ -429,10 +429,10 @@ export function buildStateSnapshot(
     config: {
       heartbeatIntervalMs: config.heartbeatIntervalMs,
       maxConcurrentAgents: config.maxConcurrentAgents,
-      // The watch/ignore tag pair, so the cockpit knows which labels its toggles
-      // set and how to render an item's effective watched/ignored state.
+      // The watch tag, so the cockpit knows which label its toggle writes and how
+      // to render an item's effective watched state. One tag: an item without it is
+      // unwatched, and there is no third reading to draw.
       watchLabel,
-      ignoreLabel,
       // The profiles a goal or a part may be pinned to, cheapest first — the
       // options every dropdown draws, and the order it draws them in. Empty for a
       // deployment with no `agentModels`, which is what turns the control off:

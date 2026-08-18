@@ -64,7 +64,7 @@ deliberately left unchecked, and why, is in
 | [03](spec/03-world-model.md)         | World model                | Domain types, the world snapshot, the ref vocabulary, world diffing, closed PRs      |
 | [04](spec/04-harness-cycle.md)       | The harness cycle          | Heartbeat, pulse ordering, coalescing, the world baseline, headroom, exclusion       |
 | [05](spec/05-dispatcher.md)          | Dispatch                   | The dispatcher seam, the rule book, ranking, the Up next queue, cooldowns, actions   |
-| [06](spec/06-issue-pickup.md)        | Issue pickup and labels    | Watch/ignore tags, priority, workflow states, the per-issue pickup verdict           |
+| [06](spec/06-issue-pickup.md)        | Issue pickup and labels    | The watch tag, priority, workflow states, the per-issue pickup verdict               |
 | [07](spec/07-pull-requests.md)       | Pull requests              | Health predicates, conflicts, stacks, inherited CI, the merge gate                   |
 | [08](spec/08-planning.md)            | The planning funnel        | Plans, parts, the plan document, reconciliation, replan                              |
 | [09](spec/09-execution.md)           | Action execution           | The executor's gates, outbound authority, task materialisation, worktrees, git       |

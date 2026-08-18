@@ -164,7 +164,6 @@ export class RuleDispatcher implements Dispatcher {
     this.templates = templates;
     this.pickup = {
       watchLabel: pickup.watchLabel,
-      ignoreLabel: pickup.ignoreLabel,
       requireOwnLabel: pickup.requireOwnLabel,
       priorityLabels: pickup.priorityLabels ?? {},
       defaultPriority: pickup.defaultPriority ?? 0,
@@ -287,12 +286,14 @@ export class RuleDispatcher implements Dispatcher {
     // funnel off.
     const plansByOrigin = new Map((ctx.plans ?? []).map((p) => [p.originRef, p]));
 
-    // Every open PR the world knows about: the dispatch view plus the ones the
-    // operator's ignore tag hid from it. Nothing acts on an excluded PR — they're
-    // here only so "no PR in the world" can't be mistaken for "the PR merged",
-    // which would put a second agent on an ignored PR's own branch, and so a
-    // stack's base PR is still found when the operator has ignored it.
-    const openPrs = ctx.excludedPrs?.length ? [...ctx.world.pullRequests, ...ctx.excludedPrs] : ctx.world.pullRequests;
+    // Every open PR the world knows about: the dispatch view plus the unwatched
+    // ones hidden from it. Nothing acts on an unwatched PR — they are here only so
+    // "no PR in the world" cannot be mistaken for "the PR merged", which would put a
+    // second agent on an unwatched PR's own branch, and so a stack's base PR is
+    // still found when it is one nobody opted in.
+    const openPrs = ctx.unwatchedPrs?.length
+      ? [...ctx.world.pullRequests, ...ctx.unwatchedPrs]
+      : ctx.world.pullRequests;
 
     // Standing `delivered` verdicts, keyed on the `issue:<n>` origin. Unlike a
     // conclusion this one gates: an assessed issue is parked until the world moves

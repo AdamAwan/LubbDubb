@@ -1,3 +1,4 @@
+import { isWatched } from './watchLabels.js';
 import type { PrState, PullRequest } from './types.js';
 
 /**
@@ -186,14 +187,18 @@ export function inheritedCiFailure(pr: PullRequest, openPrs: PullRequest[]): Pul
 }
 
 /**
- * The operator's "leave this PR alone" tag: true when the PR carries the
- * configured exclusion label. Pure and provider-agnostic — reads `PullRequest.labels`,
- * so it gates the fake/github/azure providers identically. An empty `label` (feature
- * off) or a PR with no labels is never excluded.
+ * Is this pull request opted in? True when it carries the configured watch tag.
+ * Pure and provider-agnostic — reads `PullRequest.labels` through `isWatched`, so it
+ * gates the fake/github/azure providers identically. An empty `watchLabel` (feature
+ * off) means every PR is watched.
+ *
+ * Pull requests are **opt-in**, exactly as issues are: an untagged one is left
+ * alone. The harness tags the ones it opens itself (`src/prWatch.ts`), so its own
+ * work never depends on an operator noticing it — and removing that tag is how you
+ * take a PR off the fleet, permanently, because nothing writes it back.
  */
-export function isPrExcluded(pr: PullRequest, label: string): boolean {
-  if (!label) return false;
-  return (pr.labels ?? []).includes(label);
+export function isPrWatched(pr: PullRequest, watchLabel: string): boolean {
+  return isWatched(pr.labels, watchLabel);
 }
 
 /**

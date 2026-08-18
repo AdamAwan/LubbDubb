@@ -215,7 +215,6 @@ export function buildDemoState(): DemoSeed {
       maxConcurrentAgents: 3,
       watchLabel: 'lubbdubb-watch',
       containerTypes: ['Feature', 'Epic'],
-      ignoreLabel: 'lubbdubb-ignore',
       // Cheapest first, as `rank` orders them — the demo's profile controls draw
       // this list in this order.
       profiles: [
@@ -369,9 +368,12 @@ export function buildDemoState(): DemoSeed {
           baseBranch: 'main',
           mergeableState: 'clean',
           merged: false,
-          labels: ['lubbdubb-ignore'],
+          labels: [],
           health: { blocked: true, reasons: ['CI failing'] },
-          attention: { status: 'ignored', reasons: ['tagged "lubbdubb-ignore" — the harness is leaving it alone'] },
+          attention: {
+            status: 'unwatched',
+            reasons: ['not tagged "lubbdubb-watch" — the harness is leaving it alone'],
+          },
         }),
       ],
       // What the World panel used to lose: a PR you were watching disappears when
@@ -815,20 +817,20 @@ export function buildDemoState(): DemoSeed {
           },
           spend: demoSpend(357, 5.51, 3),
         }),
-        // Tagged leave-alone. Listed, with its health, and never touched — the
-        // ignore tag as a state rather than an absence.
+        // Nobody opted it in. Listed, with its health, and never touched — the
+        // absent tag as a state rather than an absence.
         demoIssue({
           id: 'iss-366',
           number: 366,
           title: 'Rewrite the review console in Svelte',
           body: 'The console is Next.js with Emotion. This proposes starting again.',
-          labels: ['lubbdubb-ignore'],
+          labels: [],
           state: 'open',
           linkedPrNumber: null,
           pickup: {
             eligible: false,
-            status: 'ignored',
-            reasons: ['tagged "lubbdubb-ignore" — the harness is leaving it alone'],
+            status: 'unwatched',
+            reasons: ['no watch label "lubbdubb-watch"'],
           },
         }),
       ],

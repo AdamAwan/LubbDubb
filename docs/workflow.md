@@ -169,7 +169,7 @@ differently; the right column is how that answer is expressed.
 
 | Stage                    | What varies                                     | Expressed as                                                    |
 | ------------------------ | ----------------------------------------------- | --------------------------------------------------------------- |
-| Intake                   | which tickets are in scope at all               | watch/ignore tags, tracker workflow states                      |
+| Intake                   | which tickets are in scope at all               | the watch tag, tracker workflow states                          |
 | Enough information       | how strict the bar is, and who sets it          | on/off, plus an operator verdict that overrides it              |
 | Plan                     | whether work is decomposed before it starts     | on/off                                                          |
 | Plan accepted            | whether a human sees it first                   | on/off; approval is the default when planning is on             |
