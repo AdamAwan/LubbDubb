@@ -1112,14 +1112,18 @@ export type HumanTaskStatus = 'open' | 'done' | 'declined';
  * itself — the ticket it names is a thing it watches every pulse. `burn` is the
  * same shape one step further in: the run it names is one the harness is
  * *watching spend*, so it both files and settles it, and the row is about an
- * agent rather than a tracker item (see `src/spendBurn.ts`).
+ * agent rather than a tracker item (see `src/spendBurn.ts`). `validate` is the
+ * third of that family: the goal it names is delivered with checks a person still
+ * has to run, and the check rows it is waiting on are ones the harness reads
+ * every pulse — so it settles itself as they are recorded (see
+ * `src/validation/ready.ts`).
  *
  * A discriminator rather than a title match. The close-out sweep has to find its
  * own row again on the next pulse, and the alternative is recognising it by the
  * sentence it wrote — parsing prose the harness composed, which is the failure
  * mode `signalPolarity` and the reason plates already refuse.
  */
-export type HumanTaskKind = 'ask' | 'close_out' | 'burn';
+export type HumanTaskKind = 'ask' | 'close_out' | 'burn' | 'validate';
 
 /**
  * A unit of work only a person can do: flipping a setting in a console nobody
@@ -1168,7 +1172,8 @@ export interface HumanTask {
   /**
    * What kind of obligation this is — see {@link HumanTaskKind}. `ask` for
    * everything a person or an agent filed; `close_out` for the harness's own
-   * "the goal is delivered, close its ticket", which it files and settles.
+   * "the goal is delivered, close its ticket", and `validate` for its "the goal is
+   * delivered, run its checks" — both of which it files and settles.
    */
   kind: HumanTaskKind;
   /** The agent that asked for it, from its credential. Null when an operator filed it themselves. */

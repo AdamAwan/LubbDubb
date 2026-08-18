@@ -21,6 +21,7 @@ import type { AssayDesk } from './intake/assayDesk.js';
 import type { PrNamingDesk } from './prNamingDesk.js';
 import type { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import type { ValidationAskDesk } from './validation/askDesk.js';
+import type { ValidationReadyDesk } from './validation/readyDesk.js';
 import type { SpendBurnDesk } from './spendBurnDesk.js';
 import type { BranchReapDesk } from './branchReapDesk.js';
 import type { ScheduleDesk } from './schedules/scheduleDesk.js';
@@ -75,6 +76,13 @@ interface HarnessDeps {
    * writes `human_tasks` rows and decides no dispatch.
    */
   validationAsks?: ValidationAskDesk;
+  /**
+   * Files the "this goal is ready to be validated" obligation on a delivered goal,
+   * and settles it once nothing is left for a person to run. Absent = no validate
+   * rows (tests that do not care). It writes `human_tasks` rows and decides no
+   * dispatch.
+   */
+  validationReady?: ValidationReadyDesk;
   /**
    * Surfaces a live run spending far past what its kind of work costs. Absent =
    * no burn watch (tests that do not care). It writes `human_tasks` rows, decides
@@ -257,6 +265,12 @@ export class Harness extends EventEmitter {
       // against the delivered goal, so this is the first pulse on which the ask is
       // one anybody can act on. It writes `human_tasks` rows and nothing else.
       this.deps.validationAsks?.run();
+      // And the obligation those resources are for: a delivered goal with checks a
+      // person still has to run says so on the bench, where the rest of their work
+      // is, rather than only on a sheet somebody has to think to open. Same gate,
+      // same register — it writes `human_tasks` rows, blocks nothing, and settles
+      // itself as the results are recorded.
+      this.deps.validationReady?.run(world);
       // The operator's standing "every weekday at 09:00": a recurrence that has
       // come due queues its job here, a few lines above the `listQueuedJobs` the
       // dispatcher decides from — so a firing is dispatched on the pulse it fires

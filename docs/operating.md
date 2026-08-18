@@ -100,6 +100,7 @@ yours and nothing in the fleet is waiting.
 | **Permission request** | An agent hit a command outside the allow-list                | Allow or refuse                             |
 | **Bench task**         | Work only a person can do — flip a setting, look at a screen | Do it, then mark done (or decline, w/ note) |
 | **Close-out**          | A delivered goal whose ticket is still open                  | Close it; it settles itself when you do     |
+| **Validate**           | A delivered goal whose checks are now yours to run           | Run them, record each result on the goal    |
 
 Two things worth internalising:
 
@@ -149,6 +150,11 @@ Your part is the header controls on the goal page:
 Note what the harness will not do: **it never closes your ticket.** A delivered goal whose item is
 still open files a close-out on your bench, which settles itself the moment the tracker stops listing
 the item open.
+
+A delivered goal with a validation plan files a second row beside it: **run the checks**. It lists
+what is outstanding, refreshes itself every pulse, and settles once nothing is left for you — every
+check passed, waived, or handed to the fleet. It blocks nothing; it is there so the checks are not a
+thing you have to remember on the day you happen to open the goal.
 
 ### 5. Conclude, or let it end
 

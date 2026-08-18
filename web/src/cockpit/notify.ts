@@ -156,6 +156,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   profile: 'A goal is waiting on which profile to run on',
   bench: 'Work only you can do',
   close_out: 'A delivered goal needs closing',
+  validate: 'A delivered goal is ready to be validated',
   burn: 'A run is spending far more than usual',
   limit: 'An agent is out of account limit',
 };

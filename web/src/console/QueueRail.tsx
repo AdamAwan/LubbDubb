@@ -14,6 +14,7 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   profile: 'Profile',
   bench: 'Bench',
   close_out: 'Close-out',
+  validate: 'Validate',
   burn: 'Spend',
   limit: 'Usage limit',
 };
