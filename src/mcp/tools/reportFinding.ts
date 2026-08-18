@@ -8,7 +8,9 @@ export const reportFinding: ToolFactory = ({ deps, agent, ok }) => ({
     'outside your reach, an unrelated problem you ran into. It lands in the harness and shows up ' +
     'in the cockpit for an operator, instead of being buried in a PR comment nobody reads. ' +
     'It does NOT create work or dispatch anyone: an operator decides whether it becomes a job. ' +
-    'So report it and carry on with your own task — do not wait, and do not go fix it yourself.',
+    'So report it and carry on with your own task — do not wait, and do not go fix it yourself. ' +
+    'Report it plainly either way: if another agent already filed the same claim, yours merges ' +
+    'into theirs rather than filing a second copy.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -70,7 +72,12 @@ export const reportFinding: ToolFactory = ({ deps, agent, ok }) => ({
       },
       // Said again in the response, not only in the description: an agent that
       // believes reporting a bug scheduled its fix will stop watching for it.
-      note: 'Filed for an operator. It queues no work by itself — keep going with your own task.',
+      // And an agent whose report merged is told so rather than left to conclude
+      // from a returned id that it filed something new.
+      note: result.created
+        ? 'Filed for an operator. It queues no work by itself — keep going with your own task.'
+        : 'This claim was already on the operator’s list, so your report merged into the standing ' +
+          'finding rather than filing a second one. Nothing more to do — keep going with your own task.',
     });
   },
 });

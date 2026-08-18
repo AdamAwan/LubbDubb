@@ -397,10 +397,40 @@ carries it. The `Hub` broadcasts `agent:finding` plus a `dirty`.
 Unlike `escalate`, it does **not** require a live session: a finding is a durable note, and one filed on
 an agent's last breath is still true.
 
-A **repeat** (same agent, kind, ref, summary) refreshes the row **without resetting status**, so
-dismissing one means something. The summary is the whole key because it is the claim; `where` and
-`detail` are that claim's supporting text, so a repeat carrying better evidence **overwrites** them
-rather than being filed again beside the thinner one.
+### Finding the finding that already exists
+
+A report does not become a row until the store has looked for the claim it makes. Two lookups, in
+this order:
+
+1. **The standing claim** — any finding with the same `kind` and `ref` whose summary reduces to the
+   same claim, and whose status is **not `dismissed`**, oldest first. The comparison is on a
+   normalised key: lower-cased, with markdown emphasis, backticks, quotes and punctuation dropped and
+   whitespace collapsed. Two keys match when they are equal, or when one wholly contains the other on
+   word boundaries and the shorter is at least 24 characters — a restatement that appends its own
+   qualifier is the same claim, while a short key would be a substring of far too much, and a wrong
+   merge is worse than a duplicate because it hides one agent's report inside another's.
+2. **The author's own repeat** — same agent, kind, ref and summary, whatever its status. At this
+   point that can only be a row someone dismissed, since a live one would have matched above.
+
+Dismissed rows are out of the first lookup on purpose: a dismissed finding is a claim an operator has
+already answered, and folding a fresh report into it would file it straight into the bin. They stay
+in the second because an agent repeating its _own_ dismissed claim should still land back on that
+row — dismissing one has to mean something, and it means nothing if the next turn refiles it.
+
+The first lookup is what the exact key alone could never see. Two agents on two tasks land in the
+same file and see the same unrelated bug, and neither the agent id nor the character-for-character
+summary matches; before it existed, that pair arrived in the cockpit as two cards saying one thing.
+
+On a match the row is refreshed rather than inserted, and `updated_at` moves. The status is **not**
+reset. Evidence follows authorship: the **author** of the matched row may overwrite its `where` and
+`detail` — the summary is the claim and those are its supporting text, so a repeat carrying better
+evidence replaces the thinner version rather than being filed beside it — while **another agent** may
+only backfill fields the row has none for. It does not get to rewrite words on a card that carries
+someone else's name.
+
+The tool tells the agent which happened: a merged report comes back saying the claim was already on
+the operator's list, so an agent does not read a returned id as proof it filed something new and does
+not say it again, louder.
 
 **Rows filed before the split are not migrated.** They hold a whole report in `summary` and null in
 both new columns. No content migration guesses at where the seams were; the card clamps the headline

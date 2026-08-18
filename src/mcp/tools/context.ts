@@ -34,7 +34,10 @@ import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
  */
 export interface AgentToolTarget {
   ask(agentId: string, ask: AgentAsk): { ok: true; escalationId: string | null } | { ok: false; error: string };
-  recordFinding(agentId: string, input: FindingInput): { ok: true; finding: Finding } | { ok: false; error: string };
+  recordFinding(
+    agentId: string,
+    input: FindingInput,
+  ): { ok: true; finding: Finding; created: boolean } | { ok: false; error: string };
   requestHumanTask(
     agentId: string,
     input: HumanTaskInput,
