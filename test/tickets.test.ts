@@ -364,6 +364,36 @@ test('a shortfall outranks a delivery, so a re-judged goal reads as fell short',
   assert.equal(outcomes.get(5), 'fell short');
 });
 
+test('a plan in flight is no outcome at all — the harness working is not a goal that fell short', () => {
+  const plan = { id: 'p1', originRef: 'issue:20', status: 'active' } as never;
+  const outcomes = ticketOutcomes({
+    runs: [{ issueNumber: 20, originRef: 'issue:20', outcome: null } as never],
+    conclusions: [],
+    deliveries: [],
+    shortfalls: [],
+    plans: [plan],
+    planParts: [{ planId: 'p1', slug: 'one', status: 'ready' } as never],
+  });
+  assert.equal(
+    outcomes.get(20),
+    undefined,
+    'the resolver reads an in-flight plan as more_work, and that is where the fleet is — not how it left the goal',
+  );
+});
+
+test('an assessor’s shortfall on a planned goal still reads fell short', () => {
+  const plan = { id: 'p1', originRef: 'issue:21', status: 'active' } as never;
+  const outcomes = ticketOutcomes({
+    runs: [],
+    conclusions: [],
+    deliveries: [],
+    shortfalls: [{ originRef: 'issue:21', by: 'assessor' } as never],
+    plans: [plan],
+    planParts: [{ planId: 'p1', slug: 'one', status: 'ready' } as never],
+  });
+  assert.equal(outcomes.get(21), 'fell short', 'somebody said it, which is the whole distinction');
+});
+
 test('a delivery reads delivered, an agent’s own done reads concluded, and a dropped run reads abandoned', () => {
   const outcomes = ticketOutcomes({
     runs: [{ issueNumber: 8, originRef: 'issue:8', outcome: 'abandoned' } as never],
