@@ -76,6 +76,15 @@ export interface CockpitActions {
   answerQuestions(id: string, answers: (string | null)[]): Promise<void>;
   dismissEscalation(id: string, note?: string): Promise<void>;
   decideProposal(id: string, verdict: 'accept' | 'reject', note?: string): Promise<void>;
+  /**
+   * The third arm of a shortfall proposal: the assessment itself is wrong, and
+   * `text` is why. Two calls because they settle two different things — the
+   * verdict about the goal, and the card asking what to do about it — and the
+   * rejection is the honest verb for the second, since no follow-up part is
+   * wanted. Ordered verdict-first so a failed rejection leaves the goal correct
+   * with a stale card, rather than a settled card with the loop still running.
+   */
+  overruleShortfall(issueNumber: number, proposalId: string, text: string): Promise<void>;
   decidePermission(id: string, allow: boolean, note?: string): Promise<void>;
   /** Keyed on the task: orphaned work may never have had an agent. */
   decideRecovery(taskId: string, verdict: RecoveryVerdict): Promise<void>;

@@ -267,12 +267,23 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ params: IssueNumberParams, body: InstructionBody }, async ({ params, body }) => {
       const originRef = issueConclusionOrigin(params.number);
       const instruction = store.addIssueInstruction({ originRef, text: body.text });
-      const conclusion = store.recordIssueConclusion({
-        originRef,
-        verdict: 'more_work',
-        note: 'The operator wrote an instruction for this goal — it is in front of the next agent.',
-        by: 'operator',
-      });
+      // The conclusion is a *means* — it is what makes there be a next dispatch to
+      // read the words — and on a delivered goal there already is one: rule
+      // `issue-retro` fires on the delivery, and `instructionsFor` deliberately
+      // includes the retro origin. Writing it anyway would clear the delivery
+      // (`VERDICT_EXCLUSIONS.conclusion`), which un-parks the assessor and re-blocks
+      // the retrospective and every handed-over validation check — all three gate on
+      // `deliveryParked`. Nothing errors and the instruction still lands, so the
+      // whole cost is silent: a goal that was finished goes back round for pickup
+      // because somebody wrote a note on it.
+      const conclusion = store.getDelivery(originRef)
+        ? null
+        : store.recordIssueConclusion({
+            originRef,
+            verdict: 'more_work',
+            note: 'The operator wrote an instruction for this goal — it is in front of the next agent.',
+            by: 'operator',
+          });
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
       return { ok: true, instruction, conclusion };
@@ -438,6 +449,74 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       });
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, shortfall };
+    }),
+  );
+
+  // Overrule a standing shortfall: the assessment is wrong, and here is the
+  // correction in the operator's own words.
+  //
+  // ## The gap this closes
+  //
+  // The shortfall card offers accept and reject, and neither says this. Accepting
+  // spends an agent on a follow-up part for work that is already done; rejecting
+  // means "do not act on it", which deliberately leaves the verdict standing — so
+  // rule `issue-assess` dispatches again, the fresh assessor reads the same
+  // repository, and records the same shortfall. Nothing the operator can type into
+  // that card survives the loop either: `shortfallRef` is nobody's dispatch origin,
+  // so `rejectionGuidance` reaches no agent with the note (see
+  // {@link file://../../delivery/shortfall.ts}). An operator who knew exactly why
+  // the assessment was wrong had no way to say it that anything would read.
+  //
+  // ## Why it writes two rows
+  //
+  // `/instruction`'s arrangement, for its reason — half of this does nothing.
+  //
+  // The **delivery** is the verdict: it clears the shortfall through the exclusion
+  // matrix rather than by a hand-rolled `DELETE`, parks the assessor that would
+  // otherwise re-derive it, and releases the three things gated on `deliveryParked`
+  // — `issue-retro`, `validate-check` and the close-out obligation. Those are the
+  // steps that come after delivery, and while a shortfall stands none of them can
+  // run at all.
+  //
+  // The **instruction** is what gets the correction into the record. The harness
+  // never edits the ticket itself — only an agent can tell "this changes the goal"
+  // from "this is a note about how to do the work" — so the instruction block is
+  // the one mechanism there is, and it already carries the tracker's own read/amend
+  // commands. On a delivered goal it lands in front of the retrospective agent,
+  // which is dispatched by the delivery this same call writes.
+  //
+  // One text, in both: the operator's words are the summary of *why* it is
+  // delivered and the correction to be written down, and quoting them twice from
+  // one field is what keeps the two from drifting.
+  //
+  // The **proposal is not settled here.** Rejecting it is the cockpit's existing
+  // call and the honest verb for "no follow-up part" — folding it in would give
+  // this route a second opinion about a settlement `/api/proposals/:id/reject`
+  // already owns.
+  const OverruleBody = z.object({
+    text: z
+      .string({ required_error: 'text is required', invalid_type_error: 'text must be a string' })
+      .trim()
+      .min(1, 'text is required — say why the assessment is wrong')
+      .max(MAX_INSTRUCTION, `text is too long (max ${MAX_INSTRUCTION} characters)`),
+  });
+  app.post(
+    '/api/issues/:number/shortfall/overrule',
+    checked({ params: IssueNumberParams, body: OverruleBody }, async ({ params, body, reply }) => {
+      const originRef = issueConclusionOrigin(params.number);
+      // Refused rather than degraded into a plain "mark it delivered": this route
+      // says one specific thing — *that* verdict is wrong — and with nothing
+      // standing there is no verdict to be wrong. An operator who means the plain
+      // thing has `/delivered` for it.
+      if (!store.getShortfall(originRef)) return reply.code(409).send({ error: 'no standing shortfall to overrule' });
+      const delivery = store.recordDelivery({ originRef, summary: body.text, by: 'operator' });
+      const instruction = store.addIssueInstruction({ originRef, text: body.text });
+      hub.broadcast({ type: 'world:changed' });
+      // The retrospective this releases should be dispatched now rather than on the
+      // next heartbeat — the operator has just answered the question that was
+      // holding the goal, and the write-up is what carries their answer onward.
+      await harness.runCycle('manual');
+      return { ok: true, delivery, instruction };
     }),
   );
 

@@ -14,6 +14,7 @@ export function EscalationCard({
   onAnswer,
   onAnswerQuestions,
   onDecide,
+  onOverrule,
   onPermission,
   onDismiss,
   onOpenAgent,
@@ -42,6 +43,14 @@ export function EscalationCard({
    */
   onAnswerQuestions?: (answers: (string | null)[]) => Promise<unknown> | unknown;
   onDecide?: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
+  /**
+   * A shortfall proposal's third arm: the assessment is wrong, and the note says
+   * why. Separate from {@link onDecide} because it is not a verdict on the act
+   * being proposed but on the one behind it — accepting spends an agent on work
+   * already done, rejecting leaves the assessment standing to be re-derived, and
+   * neither is "no, that finding is mistaken".
+   */
+  onOverrule?: (issueNumber: number, proposalId: string, text: string) => Promise<unknown> | unknown;
   /** Allow or deny a permission request an agent is blocked on (issue #130). */
   onPermission?: (id: string, allow: boolean, note?: string) => Promise<unknown> | unknown;
   /** Clear the item without answering it — the note rides along and is recorded. */
@@ -90,6 +99,13 @@ export function EscalationCard({
   // that panel. Reading it is the thing to do before approving, so it is the
   // thing the card looks like it wants.
   const planId = proposal?.kind === 'plan' && onViewPlan && typeof context.planId === 'string' ? context.planId : null;
+  // The shortfall card's third arm. Offered only where it can act: it writes a
+  // verdict against a goal, so a proposal whose context lost the issue number gets
+  // the two arms it always had rather than a button that would 400.
+  const overrulable =
+    decidable?.kind === 'shortfall' && onOverrule && typeof context.issueNumber === 'number'
+      ? { proposalId: decidable.id, issueNumber: context.issueNumber }
+      : null;
 
   return (
     <div className="card escalation">
@@ -231,7 +247,9 @@ export function EscalationCard({
       ) : decidable ? (
         <div className="esc-decide">
           <input
-            placeholder="Why (optional) — recorded either way"
+            placeholder={
+              overrulable ? 'Why — optional to decide, required to overrule' : 'Why (optional) — recorded either way'
+            }
             value={text}
             onChange={(e) => setText(e.target.value)}
           />
@@ -249,6 +267,24 @@ export function EscalationCard({
           >
             Reject
           </AsyncButton>
+          {overrulable && (
+            <AsyncButton
+              className="ghost"
+              // Disabled rather than hidden until there are words, because the words
+              // *are* the act: an overrule with nothing in the box records "delivered"
+              // for a reason nobody can read, which is the assessment problem again
+              // with the operator's name on it.
+              disabled={text.trim().length === 0}
+              title={
+                text.trim().length === 0
+                  ? 'Say why the assessment is wrong — it becomes the delivery’s reason and the correction the ticket gets'
+                  : 'Records the goal delivered with your reason, and puts the same words in front of the retrospective to get them onto the ticket'
+              }
+              onClick={() => onOverrule!(overrulable.issueNumber, overrulable.proposalId, text.trim())}
+            >
+              Overrule the assessment
+            </AsyncButton>
+          )}
         </div>
       ) : questions ? (
         <div className="esc-quick">
