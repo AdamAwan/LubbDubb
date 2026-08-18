@@ -1,13 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { watchLabelsFor } from '../../watchLabels.js';
+import { watchLabelFor } from '../../watchLabels.js';
 import { checked, PrNumberParams, requiredBoolean } from '../validation.js';
 import type { RouteContext } from './context.js';
 
-/** The harness's own controls: beat it, clear its faults, cap it, exclude a PR. */
+/** The harness's own controls: beat it, clear its faults, cap it, watch or un-watch a PR. */
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store, connector, harness, config, runtimeControl } = system;
-  const { ignoreLabel } = watchLabelsFor(config.labelPrefix);
+  const watchLabel = watchLabelFor(config.labelPrefix);
 
   app.post('/api/pulse', async () => {
     const report = await harness.runCycle('manual');
@@ -58,23 +58,32 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
-  // Toggle the PR exclusion tag from the cockpit: add/remove the configured
-  // exclusion label on the PR through the provider. The next snapshot reflects
-  // the label and the harness leaves a tagged PR alone. Provider-agnostic — it
-  // routes through the same outbound seam as replies/merges.
-  const ExcludeBody = z.object({ excluded: requiredBoolean('excluded must be a boolean') });
+  // Toggle a pull request's watch tag from the cockpit: add or remove the one
+  // configured label through the provider. The next snapshot reflects it, and the
+  // harness works only what carries it. Provider-agnostic — it routes through the
+  // same outbound seam as replies/merges.
+  //
+  // Two-valued to write and to read, which is the whole of the model: there is no
+  // "leave this alone" tag to set, only a tag to take off.
+  const WatchBody = z.object({ watched: requiredBoolean('watched must be a boolean') });
   app.post(
-    '/api/prs/:number/exclude',
-    checked({ params: PrNumberParams, body: ExcludeBody }, async ({ params, body, reply }) => {
+    '/api/prs/:number/watch',
+    checked({ params: PrNumberParams, body: WatchBody }, async ({ params, body, reply }) => {
       const { number: prNumber } = params;
-      const { excluded } = body;
+      const { watched } = body;
       try {
-        const result = await connector.setPrLabel({ prNumber, label: ignoreLabel, present: excluded });
+        const result = await connector.setPrLabel({ prNumber, label: watchLabel, present: watched });
+        // A human has now answered for this pull request, so the seeding desk must
+        // not answer again: without the row, un-watching one the harness opened
+        // before it was ever seeded would be undone on the next pulse, silently.
+        // Written for *both* directions — the seed means "decided", not "tagged".
+        const branch = store.getWorldBaseline()?.pullRequests.find((pr) => pr.number === prNumber)?.branch ?? '';
+        store.recordPrWatchSeed(prNumber, branch);
         // Reflect the change immediately: refetch on the next state read, and run a
-        // cycle so a now-included PR is picked up (or a now-excluded one dropped).
+        // cycle so a now-watched PR is picked up (or a now-unwatched one dropped).
         hub.broadcast({ type: 'world:changed' });
         await harness.runCycle('manual');
-        return { ok: true, ref: result.ref, excluded };
+        return { ok: true, ref: result.ref, watched };
       } catch (err) {
         return reply.code(400).send({ error: (err as Error).message });
       }

@@ -356,10 +356,9 @@ test('each part gets its own throttle, and a repeatedly failing one escalates', 
   );
 });
 
-test('parts inherit the parent issue, not its PR: the ignore tag stops them, a part PR does not', async () => {
+test('parts inherit the parent issue, not its PR: un-watching stops them, a part PR does not', async () => {
   const pickup = {
     watchLabel: 'lubbdubb-watch',
-    ignoreLabel: 'lubbdubb-ignore',
     priorityLabels: {},
     defaultPriority: 0,
   };
@@ -386,9 +385,9 @@ test('parts inherit the parent issue, not its PR: the ignore tag stops them, a p
     ['issue/12/b'],
   );
 
-  // Tagged `-ignore` mid-flight: no *new* part is dispatched.
-  const ignored = { ...watched, labels: ['lubbdubb-watch', 'lubbdubb-ignore'] };
-  const stopped = await dispatcher.decide(context([ignored], { plans: [plan()], planParts: [part('a', 1)] }));
+  // Un-watched mid-flight: no *new* part is dispatched.
+  const dropped = { ...watched, labels: [] };
+  const stopped = await dispatcher.decide(context([dropped], { plans: [plan()], planParts: [part('a', 1)] }));
   assert.deepEqual(
     stopped.actions.map((a) => a.rule),
     ['idle'],

@@ -39,7 +39,7 @@ function ctx(over: Partial<PrAttentionContext> = {}): PrAttentionContext {
   return {
     openPrs: [],
     defaultBranch: 'main',
-    ignoreLabel: 'lubbdubb-ignore',
+    watchLabel: '',
     tasks: [],
     proposals: [],
     recentDecisions: [],
@@ -105,7 +105,7 @@ function attempt(origin: string, at: string): Decision {
   } as unknown as Decision;
 }
 
-// --- done / ignored: the two arms that are nobody's turn by construction -----
+// --- done / unwatched: the two arms that are nobody's turn by construction ---
 
 test('a merged or abandoned PR is off the board', () => {
   assert.deepEqual(prAttentionStatus(pr({ merged: true }), ctx()), { status: 'done', reasons: ['merged'] });
@@ -115,20 +115,22 @@ test('a merged or abandoned PR is off the board', () => {
   });
 });
 
-test('an -ignore tagged PR is a status of its own, and it wins over every signal', () => {
-  // Failing CI *and* an unresolved comment: without the tag this is the harness's
-  // court. `Harness.runCycle` filters it out of the dispatch world, so saying so
-  // would be describing rules that cannot fire.
-  const tagged = pr({
-    labels: ['lubbdubb-ignore'],
+test('an untagged PR is a status of its own, and it wins over every signal', () => {
+  // Failing CI *and* an unresolved comment: with the tag this is the harness's
+  // court. `Harness.runCycle` filters an unwatched PR out of the dispatch world, so
+  // saying so would be describing rules that cannot fire.
+  const untagged = pr({
     ciStatus: 'failing',
     unresolvedComments: [{ id: 'c1', author: 'reviewer', body: 'hm', handled: false }],
   });
-  const verdict = prAttentionStatus(tagged, ctx());
-  assert.equal(verdict.status, 'ignored');
-  assert.match(verdict.reasons[0]!, /lubbdubb-ignore/);
-  // Gate off (empty label) => nothing is ignored, same as `isPrExcluded`.
-  assert.notEqual(prAttentionStatus(tagged, ctx({ ignoreLabel: '' })).status, 'ignored');
+  const gate = { watchLabel: 'lubbdubb-watch' };
+  const verdict = prAttentionStatus(untagged, ctx(gate));
+  assert.equal(verdict.status, 'unwatched');
+  assert.match(verdict.reasons[0]!, /lubbdubb-watch/);
+  // The tag on it => the arm is skipped and the signals are read again.
+  assert.notEqual(prAttentionStatus(pr({ ...untagged, labels: ['lubbdubb-watch'] }), ctx(gate)).status, 'unwatched');
+  // Gate off (empty label) => nothing is unwatched, same as `isPrWatched`.
+  assert.notEqual(prAttentionStatus(untagged, ctx()).status, 'unwatched');
 });
 
 // --- your court -------------------------------------------------------------
@@ -414,7 +416,15 @@ test('/api/state ships an attention verdict per PR, beside health rather than in
     backend: new FakePtyBackend(),
     errorMirror: () => {},
   });
-  system.connector.inject({ kind: 'new_pr', number: 11, title: 'Add the widget', branch: 'feat/widget' });
+  // Tagged, because pull requests are opt-in: an untagged one is `unwatched`, and
+  // that arm answers before every verdict this test is about.
+  system.connector.inject({
+    kind: 'new_pr',
+    number: 11,
+    title: 'Add the widget',
+    branch: 'feat/widget',
+    labels: ['lubbdubb-watch'],
+  });
   system.connector.inject({ kind: 'ci_failed', prNumber: 11 });
   // The snapshot draws the world the *pulse* observed, never a fresh provider
   // read. Seeded rather than pulsed: a cycle would put an agent on the red CI and
@@ -436,7 +446,13 @@ test('a pending proposal and a standing rejection read differently through the w
     backend: new FakePtyBackend(),
     errorMirror: () => {},
   });
-  system.connector.inject({ kind: 'new_pr', number: 12, title: 'Add the widget', branch: 'feat/widget' });
+  system.connector.inject({
+    kind: 'new_pr',
+    number: 12,
+    title: 'Add the widget',
+    branch: 'feat/widget',
+    labels: ['lubbdubb-watch'],
+  });
   system.connector.inject({ kind: 'ci_passed', prNumber: 12 });
   system.connector.inject({ kind: 'pr_approved', prNumber: 12 });
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 12, mergeable: true, mergeableState: 'clean' });
@@ -478,8 +494,9 @@ test('the verdict is a lens: nothing in the dispatcher reads it, and computing i
   // is merge-ready, so the pulse's only effect is rule `pr-merge-ready`'s proposal — which is the
   // one the verdict could conceivably influence, and must not.
   const world = (system: ReturnType<typeof buildSystem>): void => {
-    system.connector.inject({ kind: 'new_pr', number: 21, title: 'Widget', branch: 'feat/widget' });
-    system.connector.inject({ kind: 'new_pr', number: 22, title: 'Gadget', branch: 'feat/gadget' });
+    const watched = ['lubbdubb-watch'];
+    system.connector.inject({ kind: 'new_pr', number: 21, title: 'Widget', branch: 'feat/widget', labels: watched });
+    system.connector.inject({ kind: 'new_pr', number: 22, title: 'Gadget', branch: 'feat/gadget', labels: watched });
     system.connector.inject({ kind: 'ci_passed', prNumber: 22 });
     system.connector.inject({ kind: 'pr_approved', prNumber: 22 });
     system.connector.inject({ kind: 'pr_mergeable', prNumber: 22, mergeable: true, mergeableState: 'clean' });

@@ -59,7 +59,7 @@ flowchart TD
 
 | Step                         | What happens                                                                                                                                                     |
 | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Intake**                   | Every open issue/PR is fetched and shown. What is _acted on_ is decided by the watch/ignore tags, plus tracker workflow states where the provider has them.      |
+| **Intake**                   | Every open issue/PR is fetched and shown. What is _acted on_ is decided by the watch tag, plus tracker workflow states where the provider has them.              |
 | **Enough information?**      | One agent reads the ticket against the repository and says whether there is a goal here to work from. Only an explicit `unclear` holds anything.                 |
 | **Plan the work**            | A planning agent reads the repo and returns either _one PR will do_ or a decomposition into dependency-chained parts, each with its own branch and scope.        |
 | **Plan accepted?**           | A decomposition appears in **Needs you** as accept/reject. Accepting releases the parts to be scheduled; rejecting falls the issue back to the single-PR path.   |
@@ -196,6 +196,7 @@ state; this is how it got there.
 | **Aug 4–6** — structure, and what an operator hands over     | `Store` split into domain modules behind a delegating facade, and the issue-verdict exclusion matrix declared as data. A run lives until dismissed. Every plan verdict is gated on approval, not only decompositions. Attachments follow the issue, so an operator's screenshot reaches the agent working it.                                                                                         |
 | **Aug 10–11** — reading what happened                        | A whole stack lands from the rack as a standing intent, and a merged PR's branch is reaped. A review is answered before the CI and the conflict it invalidates. Findings get named slots, and every ref links out — Azure's too. Work only a person can do has somewhere to live, an escalation leads with a headline, and tool calls fold to one line.                                               |
 | **Aug 14** — reaching you, and reading the world honestly    | The cockpit raises desktop notifications for what is waiting on you, so an ask no longer depends on a tab being watched. A pull request slow on review wears its age — and nothing more, because the reviewer is somebody else. GitHub retries a rate limit as Azure always has, and a cycle that decided against a stale world now says so in the decision log.                                      |
+| **Aug 18** — one tag, and the harness tags its own           | Watching went two-valued: one `-watch` label, opt-in for pull requests as well as issues, and the retired `-ignore` tag decides nothing. Nothing outside is worked without a person saying so, and nothing the harness opened waits on one — it tags the pull requests it opens itself, once each, so taking the tag off still stops it.                                                              |
 
 ## Documentation
 

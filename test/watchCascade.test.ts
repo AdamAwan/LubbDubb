@@ -12,7 +12,7 @@ import type { Issue, IssueRelative } from '../src/types.js';
 
 // Watching a Feature means watching the work it stands for. A container is never
 // dispatched at, so a tag on one alone changes nothing an operator can see — the
-// route walks its tree and writes the pair on every descendant, and un-watching
+// route walks its tree and writes the tag on every descendant, and un-watching
 // walks the same tree so a dropped feature cannot leave its stories running.
 
 function build(): System {
@@ -96,16 +96,8 @@ test('watching a Feature tags every item beneath it, the whole tree deep', async
     watched.every((w) => w.present),
     true,
   );
-  // The pair is kept mutually exclusive on every one of them, not just the parent.
-  const ignored = writes.filter((w) => w.label === 'lubbdubb-ignore');
-  assert.deepEqual(
-    ignored.map((w) => w.number),
-    [1, 2, 3, 4],
-  );
-  assert.equal(
-    ignored.some((w) => w.present),
-    false,
-  );
+  // One label and no other: there is no second tag to keep it exclusive with.
+  assert.deepEqual(new Set(writes.map((w) => w.label)), new Set(['lubbdubb-watch']));
 });
 
 test('un-watching a Feature walks the same tree, so no child is left running', async () => {
@@ -117,12 +109,12 @@ test('un-watching a Feature walks the same tree, so no child is left running', a
   const res = await app.inject({ method: 'POST', url: '/api/issues/1/watch', payload: { watched: false } });
   assert.equal(res.statusCode, 200);
   assert.deepEqual(
-    writes.filter((w) => w.label === 'lubbdubb-ignore' && w.present).map((w) => w.number),
+    writes.filter((w) => w.label === 'lubbdubb-watch' && !w.present).map((w) => w.number),
     [1, 2, 3, 4],
   );
 });
 
-test('a leaf writes its own pair and nothing else', async () => {
+test('a leaf writes its own tag and nothing else', async () => {
   const system = build();
   seed(system);
   const writes = recordLabels(system);
@@ -134,7 +126,7 @@ test('a leaf writes its own pair and nothing else', async () => {
   assert.deepEqual(new Set(writes.map((w) => w.number)), new Set([9]));
 });
 
-test('an issue the snapshot does not carry still writes its own pair', async () => {
+test('an issue the snapshot does not carry still writes its own tag', async () => {
   const system = build();
   seed(system);
   const writes = recordLabels(system);

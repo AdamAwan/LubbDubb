@@ -22,6 +22,7 @@ import { TranscriptStore } from './transcripts.js';
 import { EscalationStore } from './escalations.js';
 import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
+import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { ReviewWaitStore } from './reviewWaits.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore } from './world.js';
@@ -138,6 +139,7 @@ export class Store {
   private readonly escalations: EscalationStore;
   private readonly landings: StackLandingStore;
   private readonly branchReaps: BranchReapStore;
+  private readonly prWatchSeeds: PrWatchSeedStore;
   private readonly reviewWaitStore: ReviewWaitStore;
   private readonly decisions: DecisionStore;
   private readonly world: WorldStore;
@@ -209,6 +211,7 @@ export class Store {
     this.escalations = new EscalationStore(ctx);
     this.landings = new StackLandingStore(ctx);
     this.branchReaps = new BranchReapStore(ctx);
+    this.prWatchSeeds = new PrWatchSeedStore(ctx);
     this.reviewWaitStore = new ReviewWaitStore(ctx);
     this.decisions = new DecisionStore(ctx);
     this.world = new WorldStore(ctx);
@@ -779,6 +782,15 @@ export class Store {
   }
   reapedPrs(): ReadonlySet<number> {
     return this.branchReaps.reapedPrs();
+  }
+
+  // -- PR watch seeds (the harness's own PRs, already tagged) ---------------
+
+  recordPrWatchSeed(prNumber: number, branch: string): void {
+    this.prWatchSeeds.recordPrWatchSeed(prNumber, branch);
+  }
+  seededPrs(): ReadonlySet<number> {
+    return this.prWatchSeeds.seededPrs();
   }
 
   // -- Review waits (how long a PR has sat on a reviewer) -------------------

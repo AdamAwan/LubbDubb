@@ -56,7 +56,8 @@ flowchart TD
         START --> W["snapshot the world — connector.getState()"]
         W --> DIFF["diff against the last baseline<br/>persist world events, emit world:events, replace the baseline"]
         DIFF --> REC["reconcile plans — before decide, so a part moved to ready<br/>is dispatchable this same cycle"]
-        REC --> NAME["rename PRs onto the convention — idempotent bookkeeping"]
+        REC --> SEED["tag the harness's own pull requests — once each, so an un-watch sticks"]
+        SEED --> NAME["rename PRs onto the convention — idempotent bookkeeping"]
         NAME --> CLOSE["file and settle close-outs — a delivered goal's ticket<br/>is still open, and only a person can close it"]
         CLOSE --> VASK["file the validation resource asks — the fixtures and accounts<br/>a delivered goal's checks need and the planner could not produce"]
         VASK --> VREADY["file and settle the validate rows — a delivered goal's checks<br/>are now somebody's to run, and the bench is where they say so"]
@@ -67,7 +68,7 @@ flowchart TD
         TIDY --> READ["read the fleet and the store<br/>tasks, agents, escalations, queued jobs, plans and parts,<br/>verdicts, proposals, overrides, the last 200 decisions"]
         READ --> ANN["announce the assay's question on the ticket · record issue runs"]
         ANN --> HR["compute headroom — paused ? 0 : cap - live agents,<br/>both read by reference"]
-        HR --> SPLIT["split the world for dispatch<br/>hide -ignore PRs · add the runs the tracker forgot"]
+        HR --> SPLIT["split the world for dispatch<br/>hide unwatched PRs · add the runs the tracker forgot"]
         SPLIT --> DEC["dispatcher.decide(ctx)"]
         DEC --> UP["cache the Up next plan · reconcile priority overrides"]
         UP --> RAT["record the rationale as a no_op decision — an idle cycle audits too"]
@@ -83,9 +84,13 @@ flowchart TD
 2. **Snapshot the world** — `connector.getState()`.
 3. **Record world changes** — diff against the previous snapshot, persist the events, emit
    `world:events`. See below.
-4. **Reconcile plans** — `plans.reconcile(world)`. This runs **before** `decide`, so a part it moves
+4. **Tag the harness's own pull requests** — `prWatch.run(world)`. See [the watch split](#the-watch-split).
+   A pull request tagged here is worked from the *next* pulse, since the snapshot below was read
+   before the label landed — the same lag the retarget and the reap accept, and one nothing pays on
+   the ordinary path, where `open_pr` tagged it at creation.
+5. **Reconcile plans** — `plans.reconcile(world)`. This runs **before** `decide`, so a part it moves
    to `ready` is dispatchable in the same cycle. Safe because every fold is idempotent.
-5. **File and settle close-outs** — `closeOuts.run(world)`. A goal with a standing delivery whose
+6. **File and settle close-outs** — `closeOuts.run(world)`. A goal with a standing delivery whose
    tracker item is still open owes a person one close, and that obligation is a `close_out` human
    task ([13](13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)). The pass files one,
    and settles a standing one the moment the tracker stops listing the item open. It writes
@@ -105,20 +110,20 @@ flowchart TD
    harness reads every pulse. Re-filed on every pulse it is still owed rather than only when absent,
    which is what keeps the row's detail stating what is outstanding _now_.
 
-6. **Fire due schedules** — `schedules.run()`. A recurrence whose slot has come round queues a `jobs`
+7. **Fire due schedules** — `schedules.run()`. A recurrence whose slot has come round queues a `jobs`
    row ([13](13-jobs-and-findings.md#schedules)). Positioned **above** step 8's `listQueuedJobs`, which
    is what makes a firing dispatch on the pulse it fires rather than the next one; and beside the other
    bookkeeping rather than in the dispatcher for `closeOuts`' reason — it staffs nothing, and what it
    writes is an ordinary job that rule `manual-job` drains under the same cap and pause flag as one the
    operator launched by hand. A schedule that throws is recorded through `errors.record` and the rest
    still fire.
-7. **Record the work graph** — `graph.record(world)` folds the world plus the store's own rows into
+8. **Record the work graph** — `graph.record(world)` folds the world plus the store's own rows into
    node observations and upserts them (see [14](14-persistence.md#work-graph)). Positioned here for
    both neighbours: **after** the reconciler, so the part→PR observations it just made are the ones
    recorded, and **before** `decide`, which is where a later stage would read the graph from. A failure
    is recorded through `errors.record` and never fails the cycle — nothing reads the graph for a
    decision, so it must not be able to break the pulse.
-8. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
+9. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
    and the most recent 200 decisions. Immediately **above** the whole read,
    `fleet.resumeExpiredParks()` ends every usage-limit park whose reset time has passed, so an agent
    the account stopped mid-turn comes back on its own rather than waiting for someone to notice a
@@ -133,20 +138,20 @@ flowchart TD
    off "Needs you" on this pulse rather than never
    ([10](10-agent-runtimes.md#the-questions-a-dead-agent-leaves-behind)). It settles inbox rows,
    decides no dispatch, and writes nothing over a clean inbox.
-9. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
+10. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
    **by reference** from `RuntimeControl` (never a copy taken at wiring time).
-10. **Split the PR world** — partition open PRs into the dispatch world and `excludedPrs` (below).
-11. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
-12. **Cache the Up next plan** — `plan.upcoming` becomes `harness.upcoming`, tagged with the cycle id
+11. **Split the PR world** — partition open PRs into the dispatch world and `unwatchedPrs` (below).
+12. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
+13. **Cache the Up next plan** — `plan.upcoming` becomes `harness.upcoming`, tagged with the cycle id
     and the world's `takenAt`. Null before the first cycle, since the plan is a per-pulse projection
     rather than a persisted queue. The operator priority overrides (issue #128) are then reconciled:
     `store.reconcilePriorityOverrides` refreshes every origin still queued in the plan or staffed by an
     active task and prunes any untracked longer than `upNextOverrideTtlMs`, so a stale override never
     lingers forever.
-13. **Record the rationale** — a `no_op` decision with outcome `skipped` and detail
+14. **Record the rationale** — a `no_op` decision with outcome `skipped` and detail
     `` `[${source}] ${plan.rationale}` ``, so even an idle cycle leaves an audit row.
-14. **`executor.execute(cycleId, plan)`**.
-15. **Emit `cycle:end`** with the report.
+15. **`executor.execute(cycleId, plan)`**.
+16. **Emit `cycle:end`** with the report.
 
 ## Failure handling
 
@@ -171,21 +176,28 @@ uncaught throw would otherwise vanish as an unhandled rejection. `cycleInFlight`
 The persisted baseline is also what the `world_read` MCP tool reads, so an agent sees exactly the
 world the dispatch decision was made against.
 
-## PR exclusion
+## The watch split
 
-A PR carrying `${labelPrefix}-ignore` is the operator's "leave this alone" signal.
-`isPrExcluded(pr, label)` partitions the open list:
+Pull requests are opt-in, exactly as issues are: only one carrying `${labelPrefix}-watch` is acted
+on. `isPrWatched(pr, label)` partitions the open list:
 
 - `dispatchWorld.pullRequests` — the PRs rules may act on.
-- `ctx.excludedPrs` — the hidden ones, passed alongside.
+- `ctx.unwatchedPrs` — the hidden ones, passed alongside.
 
-Excluded PRs are **hidden from dispatch but still open**, and that distinction matters: gates that
+Unwatched PRs are **hidden from dispatch but still open**, and that distinction matters: gates that
 must not read "absent from the world" as "merged" — issue pickup (`openPrForIssue`), the work-item
 state back-off, base-PR attribution for stacks — resolve against the combined list. Without it, an
-ignored PR would read as merged and its issue would get a second agent onto the very same branch.
+unwatched PR would read as merged and its issue would get a second agent onto the very same branch.
 
 The world used for diffing and for the baseline is untouched, and the cockpit's state snapshot reads
-the connector directly, so an excluded PR stays fully visible with its health verdict and its tag.
+the connector directly, so an unwatched PR stays fully visible with its health verdict and its tags.
+
+**The harness tags its own.** A gate this shape would otherwise stop the fleet acting on the pull
+requests it opened itself, so the pulse seeds the tag: `open_pr` writes it as it creates one, and
+`PrWatchDesk` catches every other way one appears on a branch only a dispatch cuts — `issue/<n>`,
+`issue/<n>/<slug>`, `job/<id>`. Once per pull request, recorded in `pr_watch_seeds`, because an
+operator who takes the tag off must not have it written back on the next pulse.
+→ [07](07-pull-requests.md#watching)
 
 ## `DispatchContext`
 
@@ -194,7 +206,7 @@ What the dispatcher gets to look at (`src/dispatcher/dispatcher.ts`):
 | Field                | Contents                                                                |
 | -------------------- | ----------------------------------------------------------------------- |
 | `world`              | The snapshot with excluded PRs removed.                                 |
-| `excludedPrs?`       | The removed ones, so "still open" stays knowable.                       |
+| `unwatchedPrs?`      | The removed ones, so "still open" stays knowable.                       |
 | `tasks`, `agents`    | The full fleet, from the store.                                         |
 | `openEscalations`    | Open escalations.                                                       |
 | `queuedJobs`         | Operator jobs awaiting a slot, oldest first.                            |

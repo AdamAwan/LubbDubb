@@ -160,11 +160,11 @@ test('openPrForIssue: a merged linked PR no longer parks the issue', () => {
   assert.equal(openPrForIssue(issue({ linkedPrNumber: 41 }), [pr({ number: 41, merged: true })]), null);
 });
 
-test('openPrForIssue: an ignore-tagged PR still parks its issue', () => {
-  // The harness hides `-ignore` PRs from the dispatch world, so callers pass them
+test('openPrForIssue: an unwatched PR still parks its issue', () => {
+  // The harness hides untagged PRs from the dispatch world, so callers pass them
   // back in — otherwise "absent" reads as "merged" and a second agent lands on the
-  // very branch the operator said to leave alone.
-  const hidden = pr({ number: 41, branch: 'issue/1', labels: ['lubbdubb-ignore'] });
+  // very branch nobody opted in.
+  const hidden = pr({ number: 41, branch: 'issue/1', labels: [] });
   assert.equal(openPrForIssue(issue({ linkedPrNumber: 41 }), [hidden])?.number, 41);
 });
 
@@ -320,10 +320,15 @@ test('issuePickupStatus: an un-watched issue surfaces as unwatched with the intr
   assert.deepEqual(v, { eligible: false, status: 'unwatched', reasons: ['no watch label "agent-ready"'] });
 });
 
-test('issuePickupStatus: an ignore-tagged issue surfaces as ignored (ignore wins over the watch tag)', () => {
-  const policy = { watchLabel: 'agent-ready', ignoreLabel: 'agent-ignore', priorityLabels: {}, defaultPriority: 0 };
-  const v = issuePickupStatus(issue({ labels: ['agent-ready', 'agent-ignore'] }), ctx({ policy }));
-  assert.deepEqual(v, { eligible: false, status: 'ignored', reasons: ['ignored ("agent-ignore")'] });
+test('issuePickupStatus: the watch tag is the whole gate — no other label overrides it', () => {
+  // The retired `-ignore` tag was the third state and is read nowhere now. An item
+  // carrying it and the watch tag is watched: the operator's live answer is the tag
+  // that is there, not the one left over from before.
+  const policy = { watchLabel: 'agent-ready', priorityLabels: {}, defaultPriority: 0 };
+  const both = issuePickupStatus(issue({ labels: ['agent-ready', 'agent-ignore'] }), ctx({ policy }));
+  assert.deepEqual(both, { eligible: true, status: 'eligible', reasons: [] });
+  const neither = issuePickupStatus(issue({ labels: ['agent-ignore'] }), ctx({ policy }));
+  assert.deepEqual(neither, { eligible: false, status: 'unwatched', reasons: ['no watch label "agent-ready"'] });
 });
 
 test('issuePickupStatus: a recent attempt puts the issue on cooldown', () => {

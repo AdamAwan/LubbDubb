@@ -245,7 +245,7 @@ test('the lens agrees with the dispatcher: the gate is the harness’s court, no
   const ctx = (ci: CiPolicy): PrAttentionContext => ({
     openPrs: [pr!],
     defaultBranch: 'Development',
-    ignoreLabel: '',
+    watchLabel: '',
     tasks: [],
     proposals: [],
     recentDecisions: [],

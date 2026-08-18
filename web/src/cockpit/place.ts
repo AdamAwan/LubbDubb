@@ -104,7 +104,7 @@ const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets'];
  * An alias is one entry; a stranded link is a bug report.
  */
 const TAB_ALIASES: Readonly<Record<string, ConsoleTab>> = { backlog: 'tickets' };
-const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched', 'ignored'];
+const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched'];
 const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
 const TICKET_GROUP = ['feature', 'flat'] as const;
 const TICKET_ORDER: readonly TicketOrder[] = ['added', 'changed', 'cost'];

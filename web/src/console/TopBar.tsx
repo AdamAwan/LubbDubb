@@ -40,7 +40,7 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
  */
 function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const goal = view.goalPage;
-  const untriaged = untriagedCount(view.state.world.issues, view.state.config);
+  const untriaged = untriagedCount(view.state.world.issues, view.state.config.watchLabel);
   const go = (tab: ConsoleTab) => () => {
     actions.selectGoal(null);
     actions.openTab(tab);

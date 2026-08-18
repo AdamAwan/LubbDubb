@@ -12,6 +12,7 @@ import type {
   TicketWatchFilter,
 } from '../types.js';
 import { statePick } from '../cockpit/place.js';
+import { watchBucket } from '../worldBuckets.js';
 import type { CockpitView } from '../view/viewModel.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Ref, RefLinksExtended } from './refs.js';
@@ -41,8 +42,11 @@ interface TicketsPanelProps {
 const WATCH_OPTIONS: ReadonlyArray<{ value: TicketWatchFilter; label: string; title: string }> = [
   { value: 'any', label: 'Any', title: 'Every item, however it is tagged' },
   { value: 'watched', label: 'Watched', title: 'Tagged work-this — the harness will pick these up' },
-  { value: 'unwatched', label: 'Unwatched', title: 'Nobody has opted these in yet' },
-  { value: 'ignored', label: 'Ignored', title: 'Tagged leave-alone — the dispatcher skips these' },
+  {
+    value: 'unwatched',
+    label: 'Unwatched',
+    title: 'Untagged — nobody has opted these in, so the harness leaves them alone',
+  },
 ];
 
 const TRACKING_OPTIONS: ReadonlyArray<{ value: TicketTrackingFilter; label: string; title: string }> = [
@@ -289,16 +293,16 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
  *
  * Read off the world rather than the mirror because it is a live reading: the
  * assay moves, and a copy of it in a record would be a verdict that outlived its
- * own evidence. An **ignored** item is never intake, whatever a stale verdict
- * says — "leave this alone" is the operator's own instruction and outranks a
- * reading about a goal nobody is going to work.
+ * own evidence. An **unwatched** item is never intake, whatever a stale verdict
+ * says — nothing assays a goal nobody opted in, so a verdict on one is left over
+ * from before it was dropped, and the drop outranks it.
  */
-function intakeHeld(issues: readonly Issue[], config: { watchLabel: string; ignoreLabel: string }): Issue[] {
+function intakeHeld(issues: readonly Issue[], config: { watchLabel: string }): Issue[] {
   return issues.filter(
     (issue) =>
       issue.state === 'open' &&
       issue.assay?.verdict === 'unclear' &&
-      !(config.ignoreLabel !== '' && issue.labels.includes(config.ignoreLabel)),
+      watchBucket(issue.labels, config.watchLabel) === 'watched',
   );
 }
 
@@ -736,11 +740,11 @@ function WatchSwitch({
   view: CockpitView;
   actions: CockpitActions;
 }): JSX.Element {
-  const { watchLabel, ignoreLabel, containerTypes } = view.state.config;
+  const { watchLabel, containerTypes } = view.state.config;
   const frozen = row?.tracking === 'frozen';
   const off =
     watchLabel === ''
-      ? 'No watch label configured — the watch/ignore gate is off'
+      ? 'No watch label configured — the watch gate is off'
       : frozen
         ? 'Closed in the tracker — there is nothing here to tag'
         : issue === null
@@ -750,7 +754,7 @@ function WatchSwitch({
   // What the click will also reach — the words are a pure function, so the
   // invariant that a click writing eight tags says eight is tested without a render.
   const also = issue === null ? '' : cascadeNote(issue, containerTypes);
-  const bucket = row?.watch ?? bucketOf(issue, watchLabel, ignoreLabel);
+  const bucket = row?.watch ?? watchBucket(issue?.labels, watchLabel);
 
   return (
     <span className={`tickets-switch ${off !== null ? 'off' : ''}`}>
@@ -762,29 +766,18 @@ function WatchSwitch({
       >
         Watch
       </AsyncButton>
-      {bucket === 'unwatched' && (
-        <i className="on u" title="Nobody has opted this in — a state you can leave, not one you can select">
-          —
-        </i>
-      )}
       <AsyncButton
-        className={bucket === 'ignored' ? 'on i' : ''}
-        disabled={off !== null || bucket === 'ignored'}
+        className={bucket === 'unwatched' ? 'on u' : ''}
+        disabled={off !== null || bucket === 'unwatched'}
         onClick={() => actions.setIssueWatched(issue?.number ?? row?.number ?? 0, false)}
-        title={off ?? `Tag #${issue?.number ?? row?.number}${also} "${ignoreLabel}", so the harness leaves it alone`}
+        title={
+          off ?? `Take "${watchLabel}" off #${issue?.number ?? row?.number}${also}, so the harness leaves it alone`
+        }
       >
-        Ignore
+        Unwatch
       </AsyncButton>
     </span>
   );
-}
-
-/** A heading's bucket, where there is no mirrored row to read it off. */
-function bucketOf(issue: Issue | null, watchLabel: string, ignoreLabel: string): string {
-  if (issue === null) return 'unwatched';
-  if (ignoreLabel !== '' && issue.labels.includes(ignoreLabel)) return 'ignored';
-  if (watchLabel !== '' && issue.labels.includes(watchLabel)) return 'watched';
-  return 'unwatched';
 }
 
 /**

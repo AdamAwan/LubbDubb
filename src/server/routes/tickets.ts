@@ -4,7 +4,7 @@ import type { TicketStateFilter, TicketTrackingFilter, TicketsPayload } from '..
 import { buildSpendGoals } from '../../spendInsights.js';
 import { buildTicketPage, NO_FEATURE } from '../../tickets/ticketList.js';
 import { ticketOutcomes } from '../../tickets/outcomes.js';
-import { watchLabelsFor } from '../../watchLabels.js';
+import { watchLabelFor } from '../../watchLabels.js';
 import { checked } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -18,7 +18,7 @@ import type { RouteContext } from './context.js';
  * have to agree about what an absent parameter means.
  */
 const TicketQuery = z.object({
-  watch: z.enum(['any', 'watched', 'unwatched', 'ignored']).default('any'),
+  watch: z.enum(['any', 'watched', 'unwatched']).default('any'),
   /**
    * Defaults to `live`, and that is a deliberate change of what a bare
    * `/api/tickets` means: the tab is a work surface now rather than a record of
@@ -77,7 +77,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     '/api/tickets',
     TICKETS_RATE_LIMIT,
     checked({ query: TicketQuery }, async ({ query }) => {
-      const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
+      const watchLabel = watchLabelFor(config.labelPrefix);
       // Read once: the goal names below and the outcomes further down are two
       // readings of the same record.
       const runs = store.listIssueRuns();
@@ -111,7 +111,6 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           planParts: store.listAllPlanParts(),
         }),
         watchLabel,
-        ignoreLabel,
         query: {
           watch: query.watch,
           ...coarseAxes(query.tracking, query.state),

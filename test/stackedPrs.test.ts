@@ -202,13 +202,13 @@ test('rule `pr-ci-failing` fires on the bottom of a red stack and is suppressed 
 });
 
 test('an ignored PR still counts as the base its children inherit from', async () => {
-  // The operator tagged the bottom PR `-ignore`, so the harness hides it from the
-  // dispatch world. If attribution only looked at that filtered view, the child's
-  // inherited failure would read as its own and get an agent it cannot use.
-  const bottom = pr(40, 'issue/12/schema', { ciStatus: 'failing', labels: ['lubbdubb-ignore'] });
+  // The operator took the watch tag off the bottom PR, so the harness hides it from
+  // the dispatch world. If attribution only looked at that filtered view, the
+  // child's inherited failure would read as its own and get an agent it cannot use.
+  const bottom = pr(40, 'issue/12/schema', { ciStatus: 'failing', labels: [] });
   const child = pr(41, 'issue/12/api', { baseBranch: 'issue/12/schema', ciStatus: 'failing' });
   const result = await new RuleDispatcher().decide({
-    ...context([], { excludedPrs: [bottom] }),
+    ...context([], { unwatchedPrs: [bottom] }),
     world: world([], [child]),
   });
   assert.deepEqual(

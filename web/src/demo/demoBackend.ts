@@ -63,21 +63,18 @@ const CHATTER = [
   'thinking about the next step …',
 ];
 
-type WatchConfig = { watchLabel: string; ignoreLabel: string };
+type WatchConfig = { watchLabel: string };
 
-/** Opt-in effective state: watched only with the watch tag and no ignore tag. */
+/** Opt-in effective state: watched only with the watch tag. */
 function isWatched(labels: string[] | undefined, config: WatchConfig): boolean {
-  const set = labels ?? [];
-  if (set.includes(config.ignoreLabel)) return false;
-  return set.includes(config.watchLabel);
+  return (labels ?? []).includes(config.watchLabel);
 }
 
-/** Set the watch/ignore tags to reflect a toggle, keeping the two mutually exclusive. */
+/** Set the watch tag to reflect a toggle — one label, added or taken off. */
 function applyWatch(labels: string[] | undefined, config: WatchConfig, watched: boolean): string[] {
   const set = new Set(labels ?? []);
-  set.delete(config.watchLabel);
-  set.delete(config.ignoreLabel);
-  set.add(watched ? config.watchLabel : config.ignoreLabel);
+  if (watched) set.add(config.watchLabel);
+  else set.delete(config.watchLabel);
   return [...set];
 }
 
@@ -311,19 +308,19 @@ class DemoServer {
     return { ok: true };
   }
 
-  /** Toggle the exclusion tag on a PR — the demo mirror of the real label write-back. */
-  async setPrExcluded(prNumber: number, excluded: boolean): Promise<{ ok: true; excluded: boolean }> {
-    const tag = this.state.config.ignoreLabel;
+  /** Toggle the watch tag on a PR — the demo mirror of the real label write-back. */
+  async setPrWatched(prNumber: number, watched: boolean): Promise<{ ok: true; watched: boolean }> {
+    const tag = this.state.config.watchLabel;
     const pr = this.state.world.pullRequests.find((p) => p.number === prNumber);
     if (pr) {
       const labels = new Set(pr.labels ?? []);
-      if (excluded) labels.add(tag);
+      if (watched) labels.add(tag);
       else labels.delete(tag);
       pr.labels = [...labels];
       this.addDecision(
         'no_op',
         'executed',
-        `${excluded ? 'tagged' : 'untagged'} PR #${prNumber} (${tag})`,
+        `${watched ? 'tagged' : 'untagged'} PR #${prNumber} (${tag})`,
         undefined,
         undefined,
         undefined,
@@ -331,7 +328,7 @@ class DemoServer {
       );
       this.dirty();
     }
-    return { ok: true, excluded };
+    return { ok: true, watched };
   }
 
   /**
@@ -1067,13 +1064,13 @@ class DemoServer {
     originRef: string | null,
     prompt?: string,
   ): string | null {
-    // A PR tagged with the exclusion label is left alone — mirrors the server
-    // harness filtering tagged PRs out of the dispatch view, so the ignore toggle
-    // visibly matters in the demo.
+    // A PR without the watch label is left alone — mirrors the server harness
+    // filtering unwatched PRs out of the dispatch view, so the watch toggle visibly
+    // matters in the demo.
     const prNumber = originRef?.startsWith('pr:') ? Number(originRef.slice(3)) : NaN;
     const taggedPr = this.state.world.pullRequests.find((p) => p.number === prNumber);
-    if (taggedPr && (taggedPr.labels ?? []).includes(this.state.config.ignoreLabel)) {
-      this.addDecision(dispatchAction(kind), 'skipped', `PR #${prNumber} is ignored — held ${title}`, 'pr excluded');
+    if (taggedPr && !isWatched(taggedPr.labels, this.state.config)) {
+      this.addDecision(dispatchAction(kind), 'skipped', `PR #${prNumber} is unwatched — held ${title}`, 'pr unwatched');
       return null;
     }
     if (this.state.control.paused) {
@@ -2340,7 +2337,7 @@ export const demoApi = {
   dismissEscalation: (id: string, note?: string) => getServer().dismissEscalation(id, note),
   respondAgent: (id: string, text: string) => getServer().respondAgent(id, text),
   setControl: (patch: { cap?: number; paused?: boolean }) => getServer().setControl(patch),
-  setPrExcluded: (prNumber: number, excluded: boolean) => getServer().setPrExcluded(prNumber, excluded),
+  setPrWatched: (prNumber: number, watched: boolean) => getServer().setPrWatched(prNumber, watched),
   setStackLanding: (ref: string, landing: boolean) => getServer().setStackLanding(ref, landing),
   setIssueWatched: (issueNumber: number, watched: boolean) => getServer().setIssueWatched(issueNumber, watched),
   setGoalPriority: (issueNumber: number, priority: boolean) => getServer().setGoalPriority(issueNumber, priority),
@@ -2458,13 +2455,13 @@ function demoTickets(query: {
     parent: featureOf(seed.issueNumber),
     featureSlot: featureSlotOf(featureOf(seed.issueNumber)),
   }));
-  // A tail nobody has triaged, so `unwatched` and `ignored` are not empty answers.
+  // A tail nobody has triaged, so `unwatched` is not an empty answer.
   const untouched: TicketRow[] = DEMO_UNTRIAGED.map((seed) => ({
     number: seed.number,
     title: seed.title,
     state: 'open' as const,
-    watch: seed.ignored ? ('ignored' as const) : ('unwatched' as const),
-    labels: seed.ignored ? ['lubbdubb-ignore'] : [],
+    watch: 'unwatched' as const,
+    labels: [],
     costUsd: null,
     outcome: null,
     addedAt: iso(seed.hoursAgo),
@@ -2537,7 +2534,7 @@ function demoTickets(query: {
   };
 }
 
-/** Backlog the demo's fleet has never been pointed at — the unwatched/ignored tail. */
+/** Backlog the demo's fleet has never been pointed at — the unwatched tail. */
 // The types are spread across the families deliberately: a demo where everything is
 // a Task shows the tickets list with one tone in it, which reads as a list that has
 // no tones. `Capability` is the untinted case, and is the one worth seeing.
@@ -2545,7 +2542,6 @@ const DEMO_UNTRIAGED: {
   number: number;
   title: string;
   hoursAgo: number;
-  ignored?: boolean;
   issueType: string;
 }[] = [
   {
@@ -2564,7 +2560,6 @@ const DEMO_UNTRIAGED: {
     number: 402,
     title: 'Spike: replace node-pty with a portable shim',
     hoursAgo: 72,
-    ignored: true,
     issueType: 'Tech Debt',
   },
   {
@@ -2577,7 +2572,6 @@ const DEMO_UNTRIAGED: {
     number: 371,
     title: 'Retire the legacy priority override table',
     hoursAgo: 200,
-    ignored: true,
     issueType: 'Capability',
   },
 ];

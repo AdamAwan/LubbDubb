@@ -50,7 +50,7 @@ import {
   basePrOf,
   ciNeedsAttention,
   inheritedCiFailure,
-  isPrExcluded,
+  isPrWatched,
   isStackedPr,
   needsBaseUpdate,
   prState,
@@ -65,7 +65,7 @@ import type { Decision, Proposal, PullRequest, Task, WorldEvent } from './types.
  */
 type PrAttentionKind =
   | 'done' // merged or closed — off the board, nobody's turn
-  | 'ignored' // you tagged it: nobody's turn, by your instruction
+  | 'unwatched' // nobody opted it in: nobody's turn, by the absence of your tag
   | 'you' // your court — a verdict is owed, or an agent parked on you
   | 'harness' // the harness's court — staffed, or about to be
   | 'elsewhere' // outside the loop — a reviewer, a CI run, the PR below it
@@ -93,15 +93,15 @@ export interface PrAttention {
 export interface PrAttentionContext {
   /**
    * Every open PR the world knows about, **unfiltered** — the dispatch world plus
-   * `ctx.excludedPrs`. The same list `inheritedCiFailure`/`basePrOf` take, and for
-   * the same reason: an `-ignore`d base still attributes, so a stacked PR waiting
-   * on an ignored parent says so instead of reading as stalled.
+   * `ctx.unwatchedPrs`. The same list `inheritedCiFailure`/`basePrOf` take, and for
+   * the same reason: an unwatched base still attributes, so a stacked PR waiting on
+   * an unwatched parent says so instead of reading as stalled.
    */
   openPrs: PullRequest[];
   /** The integration branch, for {@link isStackedPr}. */
   defaultBranch: string;
-  /** The `${labelPrefix}-ignore` tag. Empty = the gate is off, nothing is ignored. */
-  ignoreLabel: string;
+  /** The `${labelPrefix}-watch` tag. Empty = the gate is off, everything is watched. */
+  watchLabel: string;
   /** Live and finished tasks; the branch's active one is what staffs a PR. */
   tasks: Task[];
   /** Acts put to a human, newest-first — the store's order, which `proposalHold` assumes. */
@@ -146,14 +146,14 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
     return { status: 'done', reasons: [state === 'merged' ? 'merged' : 'closed without merging'] };
   }
 
-  // The ignore tag is a *status*, not an absence: the cockpit still lists an
-  // excluded PR with its health, so a verdict that skipped it would leave the one
+  // Being unwatched is a *status*, not an absence: the cockpit still lists an
+  // unwatched PR with its health, so a verdict that skipped it would leave the one
   // row whose emptiness means something looking exactly like the rows whose
   // emptiness means nothing. It comes first because `Harness.runCycle` filters
   // these out of the dispatch world entirely — every arm below would be describing
   // rules that cannot fire.
-  if (isPrExcluded(pr, ctx.ignoreLabel)) {
-    return { status: 'ignored', reasons: [`tagged "${ctx.ignoreLabel}" — the harness is leaving it alone`] };
+  if (!isPrWatched(pr, ctx.watchLabel)) {
+    return { status: 'unwatched', reasons: [`not tagged "${ctx.watchLabel}" — the harness is leaving it alone`] };
   }
 
   // A pending proposal is the one unambiguous "your court", and this verdict

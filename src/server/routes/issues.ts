@@ -7,7 +7,7 @@ import { goalFingerprint } from '../../intake/assay.js';
 import { ShortfallBody } from '../../delivery/shortfall.js';
 import { validationHeadline } from '../../delivery/closeOut.js';
 import { goalValidation } from '../../validation/goal.js';
-import { watchLabelsFor } from '../../watchLabels.js';
+import { watchLabelFor } from '../../watchLabels.js';
 import { modelLabelsFor } from '../../modelLabels.js';
 import { watchCascadeTargets } from '../../issueRelations.js';
 import { checked, IssueNumberParams, optionalText, requiredBoolean } from '../validation.js';
@@ -31,12 +31,12 @@ const MAX_BUG_SUMMARY = 4000;
 
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store, connector, harness, config, errors } = system;
-  const { watchLabel, ignoreLabel } = watchLabelsFor(config.labelPrefix);
+  const watchLabel = watchLabelFor(config.labelPrefix);
 
-  // Toggle an issue's watch/ignore state from the cockpit. Issues are opt-in, so
-  // "watch" adds the watch tag (and clears any ignore tag) and "ignore" adds the
-  // ignore tag (and clears the watch tag) — the write pair keeps the two labels
-  // mutually exclusive. Provider-agnostic through the same outbound seam.
+  // Toggle an issue's watch state from the cockpit. Issues are opt-in, so "watch"
+  // adds the one tag and un-watching takes it off again — a single write, because
+  // there is no second label to keep it exclusive with. Provider-agnostic through
+  // the same outbound seam.
   //
   // **A container cascades.** Watching a Feature tags every descendant beneath it
   // (`watchCascadeTargets`), because a container is never worked itself: a tag on
@@ -54,7 +54,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const { watched } = body;
       const world = store.getWorldBaseline();
       const issue = world?.issues.find((i) => i.number === issueNumber);
-      // An issue the snapshot does not carry still gets its own pair written — the
+      // An issue the snapshot does not carry still gets its own tag written — the
       // toggle must keep working for a world that has aged out — it simply has no
       // hierarchy to walk.
       const targets =
@@ -66,13 +66,12 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       for (const target of targets) {
         try {
           await connector.setIssueLabel({ number: target, label: watchLabel, present: watched });
-          await connector.setIssueLabel({ number: target, label: ignoreLabel, present: !watched });
         } catch (err) {
           const message = (err as Error).message;
           failed.push({ number: target, message });
           errors.record({
             source: 'server',
-            message: `Failed to set watch tags on #${target} while ${watched ? 'watching' : 'dropping'} #${issueNumber}: ${message}`,
+            message: `Failed to set the watch tag on #${target} while ${watched ? 'watching' : 'dropping'} #${issueNumber}: ${message}`,
           });
         }
       }
@@ -89,7 +88,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         return reply.code(400).send({
           error:
             `Tagged ${targets.length - failed.length} of ${targets.length} items; ` +
-            `#${failed.map((f) => f.number).join(', #')} kept the old tags: ${failed[0]?.message ?? ''}`,
+            `#${failed.map((f) => f.number).join(', #')} kept the old tag: ${failed[0]?.message ?? ''}`,
         });
       }
       return { ok: true, watched, cascaded: targets.length - 1 };

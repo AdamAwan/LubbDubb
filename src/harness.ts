@@ -8,7 +8,7 @@ import type { ActionExecutor, ExecutionSummary } from './executor/actionExecutor
 import type { ErrorRecorder } from './errorLog.js';
 import type { RuntimeControl } from './runtimeControl.js';
 import { diffWorlds } from './world/worldDiff.js';
-import { awaitingReview, isPrExcluded } from './prHealth.js';
+import { awaitingReview, isPrWatched } from './prHealth.js';
 
 import { rejectionSignalQuery } from './proposals/proposals.js';
 import { deliverySignalQuery } from './delivery/delivery.js';
@@ -19,6 +19,7 @@ import type { LimitResumeFailure } from './agents/agentManager.js';
 import type { PlanReconciler } from './plans/planReconciler.js';
 import type { AssayDesk } from './intake/assayDesk.js';
 import type { PrNamingDesk } from './prNamingDesk.js';
+import type { PrWatchDesk } from './prWatchDesk.js';
 import type { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import type { ValidationAskDesk } from './validation/askDesk.js';
 import type { ValidationReadyDesk } from './validation/readyDesk.js';
@@ -41,8 +42,12 @@ interface HarnessDeps {
   errors: ErrorRecorder;
   /** Live cap + pause flag, read by reference each cycle (never a frozen copy). */
   runtime: RuntimeControl;
-  /** PRs carrying this label (`${labelPrefix}-ignore`) are excluded from dispatch (the operator's "leave it alone" tag). */
-  prIgnoreLabel: string;
+  /**
+   * Only PRs carrying this label (`${labelPrefix}-watch`) are dispatched at — pull
+   * requests are opt-in exactly as issues are. Empty = the gate is off and every PR
+   * is worked, which is the no-prefix and test posture.
+   */
+  prWatchLabel: string;
   /**
    * What a dispatch needs to resolve the profile its origin is pinned to (issue
    * #342) — passed straight through to the dispatch context. Absent = no
@@ -64,6 +69,12 @@ interface HarnessDeps {
   assays?: AssayDesk;
   /** Keeps open pull requests on the naming convention. Absent = no renaming. */
   naming?: PrNamingDesk;
+  /**
+   * Tags the pull requests the harness opened, so its own work is watched without
+   * an operator clicking anything. Absent = no seeding, and then only what `open_pr`
+   * tagged at creation is worked.
+   */
+  prWatch?: PrWatchDesk;
   /**
    * Files the "close the ticket" obligation on a delivered goal, and settles it
    * when the tracker stops listing the item open. Absent = no close-out (tests
@@ -235,6 +246,13 @@ export class Harness extends EventEmitter {
       // the store holds intent, the outside world stays the source of truth, and a
       // part this moves to `ready` is dispatchable in this same cycle.
       await this.deps.plans?.reconcile(world);
+      // The harness's own pull requests, tagged as watched. Before the naming desk
+      // only because it belongs with the other per-pulse bookkeeping; a pull request
+      // tagged here is worked from the *next* pulse, since the snapshot below was
+      // read before the label landed. That lag is the same one the retarget and the
+      // reap accept, and it costs nothing on the path that matters: `open_pr` tags a
+      // pull request as it creates it, so this is only ever catching the strays.
+      await this.deps.prWatch?.run(world);
       // Mechanical bookkeeping, like the plan's status comment: idempotent, so a
       // world already on convention writes nothing.
       await this.deps.naming?.run(world);
@@ -435,20 +453,22 @@ export class Harness extends EventEmitter {
       // dispatches; the executor also hard-defers them (belt and braces).
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - store.countLiveAgents());
 
-      // A PR carrying the exclusion tag is the operator's "leave this alone"
-      // signal. Hide tagged PRs from the dispatch view so *both* dispatchers
-      // ignore them uniformly — no CI fix, base update, comment note, or merge.
-      // The world used for diffing/baseline above is untouched, and the cockpit
-      // snapshot reads the connector directly, so an excluded PR stays fully
-      // visible (with its health and tag) — it's just not acted on.
-      const label = this.deps.prIgnoreLabel;
-      const excludedPrs = world.pullRequests.filter((pr) => isPrExcluded(pr, label));
+      // A PR without the watch tag is one nobody opted in — the harness's own are
+      // tagged as they are opened (`src/prWatch.ts`), so what is left here is
+      // somebody else's work, or work an operator has taken off the fleet. Hide them
+      // from the dispatch view so *both* dispatchers leave them alone uniformly — no
+      // CI fix, base update, comment note, or merge. The world used for
+      // diffing/baseline above is untouched, and the cockpit snapshot reads the
+      // connector directly, so an unwatched PR stays fully visible (with its health
+      // and its tags) — it is just not acted on.
+      const label = this.deps.prWatchLabel;
+      const unwatchedPrs = world.pullRequests.filter((pr) => !isPrWatched(pr, label));
 
       // The other half of #234: the runs the tracker has forgotten join the
       // dispatcher's issue list, so a goal whose ticket was closed by the very PR
       // that delivered it is still a subject the assessor and the retrospective can
       // finish. Only the *dispatch* view is widened — the snapshot above stays the
-      // connector's own answer, exactly as the ignore-tag filter below it does, so
+      // connector's own answer, exactly as the watch-tag filter below it does, so
       // nothing that reports the world reports a stub as something the tracker said.
       //
       // Not safe by accident: every rule that must not act on a retained run says
@@ -457,10 +477,10 @@ export class Harness extends EventEmitter {
       // change removes without a test failing.
       const retainedIssues = retainedRunIssues(store.listIssueRuns(), world.issues);
       const dispatchWorld: WorldSnapshot =
-        excludedPrs.length > 0 || retainedIssues.length > 0
+        unwatchedPrs.length > 0 || retainedIssues.length > 0
           ? {
               ...world,
-              pullRequests: world.pullRequests.filter((pr) => !isPrExcluded(pr, label)),
+              pullRequests: world.pullRequests.filter((pr) => isPrWatched(pr, label)),
               issues: [...world.issues, ...retainedIssues],
             }
           : world;
@@ -473,8 +493,8 @@ export class Harness extends EventEmitter {
         // from one a provider set.
         retainedIssues: retainedIssues.map((i) => i.number),
         // Hidden from dispatch, but still open — the issue-pickup gate has to see
-        // them or an ignored PR reads as merged and its issue gets a second agent.
-        excludedPrs,
+        // them or an unwatched PR reads as merged and its issue gets a second agent.
+        unwatchedPrs,
         tasks,
         agents,
         openEscalations,

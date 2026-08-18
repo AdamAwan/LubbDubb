@@ -132,6 +132,12 @@ export interface McpToolDeps {
     sink: ActionSink;
     defaultBranch: string;
     prompts: PromptTemplates;
+    /**
+     * `${labelPrefix}-watch`, written onto the pull request as it is created so the
+     * fleet keeps working what it just opened (pull requests are opt-in). Empty =
+     * the gate is off, and nothing is tagged because nothing needs to be.
+     */
+    watchLabel: string;
   };
   errors?: ErrorRecorder;
 }

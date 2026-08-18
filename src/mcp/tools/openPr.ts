@@ -1,6 +1,7 @@
 import { issueOrigin, planOriginIssue } from '../../plans/planning.js';
 import { prTitleFields, renderPrTitle } from '../../prTitle.js';
 import { resolveOpenPr } from '../openPr.js';
+import { seedPrWatch } from '../../prWatchDesk.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -95,9 +96,21 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
         title,
         body,
       });
+      // Tagged as the harness's own the moment it exists. Pull requests are opt-in,
+      // so without this the fleet would stop acting on the very pull request it just
+      // opened until the seeding desk caught it a pulse later. Through the one shared
+      // write path, and after the create: a failure here is recorded and leaves the
+      // pull request for that desk, never failing the tool call that succeeded.
+      const prNumber = result.ref ? Number(result.ref) : null;
+      if (prNumber !== null && Number.isFinite(prNumber)) {
+        await seedPrWatch(
+          { prNumber, branch: target.branch },
+          { sink: wiring.sink, store: deps.store, watchLabel: wiring.watchLabel, errors: deps.errors },
+        );
+      }
       return ok({
         opened: result.ok,
-        pullRequest: result.ref ? Number(result.ref) : null,
+        pullRequest: prNumber,
         title,
         branch: target.branch,
         base: target.base,

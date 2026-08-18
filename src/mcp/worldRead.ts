@@ -129,9 +129,9 @@ export function readWorldItem(
 
 /** One PR as the harness reads it, including the verdicts the cockpit shows. */
 function prView(pr: PullRequest, world: WorldSnapshot): Record<string, unknown> {
-  // The *unfiltered* open list: an `-ignore` tagged PR is hidden from dispatch but
-  // is still a real base, so attribution must see it — the same reason
-  // `DispatchContext` carries `excludedPrs` alongside the dispatch world.
+  // The *unfiltered* open list: an unwatched PR is hidden from dispatch but is
+  // still a real base, so attribution must see it — the same reason
+  // `DispatchContext` carries `unwatchedPrs` alongside the dispatch world.
   const openPrs = world.pullRequests;
   const base = basePrOf(pr, openPrs);
   const inherited = inheritedCiFailure(pr, openPrs);

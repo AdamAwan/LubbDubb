@@ -1,51 +1,42 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { watchBucket } from '../web/src/worldBuckets.js';
-import { resolveWatchState, watchLabelsFor } from '../src/watchLabels.js';
+import { isWatched, watchLabelFor } from '../src/watchLabels.js';
 
-const LABELS = watchLabelsFor('lubbdubb');
-const PR = { ...LABELS, defaultWatched: true };
-const ISSUE = { ...LABELS, defaultWatched: false };
+const WATCH = watchLabelFor('lubbdubb');
 
-test('an explicit ignore tag wins over a watch tag', () => {
-  const both = [LABELS.watchLabel, LABELS.ignoreLabel];
-  assert.equal(watchBucket(both, PR), 'ignored');
-  assert.equal(watchBucket(both, ISSUE), 'ignored');
+test('the watch tag is the whole of the bucket', () => {
+  assert.equal(watchBucket([WATCH], WATCH), 'watched');
+  assert.equal(watchBucket(['bug'], WATCH), 'unwatched');
 });
 
-test('a watch tag beats the type default', () => {
-  assert.equal(watchBucket([LABELS.watchLabel], ISSUE), 'watched');
+test('untagged is unwatched, for every kind of item', () => {
+  assert.equal(watchBucket([], WATCH), 'unwatched');
+  assert.equal(watchBucket(undefined, WATCH), 'unwatched');
 });
 
-test('the untagged default is per kind — PRs opt-out, issues opt-in', () => {
-  assert.equal(watchBucket([], PR), 'watched');
-  assert.equal(watchBucket([], ISSUE), 'unwatched');
-  assert.equal(watchBucket(undefined, PR), 'watched');
-  assert.equal(watchBucket(undefined, ISSUE), 'unwatched');
+test('the retired ignore tag is just another label now', () => {
+  // It carries no watch tag, so it lands unworked by itself — which is why nothing
+  // had to be migrated when the second tag went away.
+  assert.equal(watchBucket(['lubbdubb-ignore'], WATCH), 'unwatched');
+  assert.equal(watchBucket(['lubbdubb-ignore', WATCH], WATCH), 'watched');
 });
 
-test('unwatched is distinct from ignored — the split the panel exists to draw', () => {
-  assert.equal(watchBucket([], ISSUE), 'unwatched');
-  assert.equal(watchBucket([LABELS.ignoreLabel], ISSUE), 'ignored');
-});
-
-test('empty labels leave every item on its type default, so both extra tabs are empty', () => {
-  const off = { ...watchLabelsFor(''), defaultWatched: false };
+test('an empty label turns the gate off, so nothing is ever unwatched', () => {
+  const off = watchLabelFor('');
   // The tags an operator may still have on the item must not be read as gates.
-  assert.equal(watchBucket(['lubbdubb-ignore', 'lubbdubb-watch'], off), 'unwatched');
-  assert.equal(watchBucket([], { ...off, defaultWatched: true }), 'watched');
+  assert.equal(watchBucket(['lubbdubb-ignore', 'lubbdubb-watch'], off), 'watched');
+  assert.equal(watchBucket([], off), 'watched');
 });
 
-test('the precedence agrees with the server gate wherever the gate has an opinion', () => {
-  // `resolveWatchState` is binary, so `unwatched` folds onto its `ignored` — but
-  // the two must never disagree about *watched*, or the panel would file a row the
-  // harness is working under a tab saying nothing will happen to it.
-  for (const labels of [[], [LABELS.watchLabel], [LABELS.ignoreLabel], [LABELS.watchLabel, LABELS.ignoreLabel]]) {
-    for (const defaultWatched of [true, false]) {
-      const opts = { ...LABELS, defaultWatched };
-      const gate = resolveWatchState(labels, opts);
-      const bucket = watchBucket(labels, opts);
-      assert.equal(bucket === 'watched', gate === 'watched', `${labels.join('+')} @ default=${defaultWatched}`);
+test('the panel and the server gate never disagree', () => {
+  for (const labels of [[], [WATCH], ['lubbdubb-ignore'], [WATCH, 'lubbdubb-ignore']]) {
+    for (const label of [WATCH, '']) {
+      assert.equal(
+        watchBucket(labels, label) === 'watched',
+        isWatched(labels, label),
+        `${labels.join('+')} @ label=${label || '(off)'}`,
+      );
     }
   }
 });

@@ -296,7 +296,7 @@ test('the lens agrees with the dispatcher: an expired build is the harness’s c
   const ctx = (pr: PullRequest): PrAttentionContext => ({
     openPrs: [pr],
     defaultBranch: 'Development',
-    ignoreLabel: '',
+    watchLabel: '',
     tasks: [],
     proposals: [],
     recentDecisions: [],

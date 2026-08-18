@@ -1,7 +1,7 @@
 # 07 — Pull requests
 
 Every PR predicate lives in `src/prHealth.ts`, pure and unit-tested (`test/prHealth.test.ts`,
-`test/prExclusion.test.ts`, `test/stackedPrs.test.ts`). The dispatcher, the cockpit and the
+`test/prWatch.test.ts`, `test/stackedPrs.test.ts`). The dispatcher, the cockpit and the
 `world_read` tool all read them, so all three give one account of a PR.
 
 ## `prState(pr)`
@@ -172,8 +172,8 @@ stack keeps its own. A status policy is evaluated per pull request, so each rung
 of its own to clear — suppressing those would park the whole stack on the bottom one, which is the
 mirror-image failure of the multiplication above.
 
-Both predicates take the **unfiltered** open list — the dispatch world plus `ctx.excludedPrs` — so an
-`-ignore`d base still attributes.
+Both predicates take the **unfiltered** open list — the dispatch world plus `ctx.unwatchedPrs` — so an
+unwatched base still attributes.
 
 ### `retargetsFor(openPrs, closedPrs, defaultBranch)`
 
@@ -214,7 +214,7 @@ elsewhere. `test/stacks.test.ts` asserts that structurally — no file under `sr
 `stacks/`, and the only importer is `src/server/stateSnapshot.ts`.
 
 A chain of one is not a stack. A merged rung is not a base. A cycle in the base edges terminates
-rather than hanging the pulse. It takes the **unfiltered** open list, so an `-ignore`d rung does not
+rather than hanging the pulse. It takes the **unfiltered** open list, so an unwatched rung does not
 put a hole in the chain.
 
 ### Landing a stack
@@ -382,7 +382,7 @@ folding them would make one of the two a lie every time they disagree.
 | Status      | Court                         | When                                                                                                                                                                                                                                                                                                  |
 | ----------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `done`      | nobody — off the board        | `prState(pr) !== 'open'`.                                                                                                                                                                                                                                                                             |
-| `ignored`   | nobody, by your instruction   | `isPrExcluded(pr, ignoreLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire.                                                                                                                                 |
+| `unwatched` | nobody — nobody opted it in   | `!isPrWatched(pr, watchLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire.                                                                                                                                 |
 | `you`       | yours                         | A **pending proposal** whose ref names this PR; an agent on the branch **parked waiting**; a failing check the **CI policy holds** (rule `pr-ci-blocked` handed it to a human); or a concern whose **attempt cap is spent** (rule `cooldown-escalate` did).                                           |
 | `harness`   | the harness's                 | An agent is **running or queued** on the branch; an unstaffed **concern** (rules `pr-ci-failing`/`pr-ci-gate`/`pr-base-update`/`pr-review-comment`) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window. |
 | `settled`   | nobody — you already answered | Merge-ready, and a **rejection still stands** on `pr:<n>:merge`. The reason quotes the note you left.                                                                                                                                                                                                 |
@@ -458,7 +458,7 @@ classified the PR first, and asking a pure function twice is one answer rather t
 ### What it reads, and what it deliberately does not
 
 - **The same lists the other predicates read**: the **unfiltered** open PR list (the dispatch world
-  plus `ctx.excludedPrs`), so an `-ignore`d base still attributes, exactly as `inheritedCiFailure`
+  plus `ctx.unwatchedPrs`), so an unwatched base still attributes, exactly as `inheritedCiFailure`
   requires; the tasks; the proposals in the store's newest-first order; the recent decision window;
   and the world snapshot's `takenAt` as "now".
 - **`proposalHold`, not the proposal row.** The `settled` arm asks the gate, so a rejection that
@@ -480,7 +480,7 @@ classified the PR first, and asking a pure function twice is one answer rather t
 
 It is a **lens**, like `findings` and `overlaps` and unlike the pending-proposal gate. Every input it
 folds is already a gate that fires on its own — the branch gate, `proposalHold`, `dispatchVerdict`,
-`isPrExcluded` — so a rule reading this verdict would be taking a second opinion about a decision
+`isPrWatched` — so a rule reading this verdict would be taking a second opinion about a decision
 made elsewhere, from a function sitting nowhere near the rule it duplicates. A verdict the dispatcher
 acts on is a new gate with its own failure modes; a verdict only the cockpit reads cannot change what
 happens, only what an operator can see. `test/prAttention.test.ts` asserts the property both
@@ -492,11 +492,35 @@ than shared with the dispatcher, which builds prompt-bearing concerns it has no 
 relationship `issuePickupStatus` has to rule `issue-pickup`. The orders are stated once, above and in
 [05](05-dispatcher.md), for both.
 
-## `isPrExcluded(pr, label)`
+## Watching
 
-True when `pr.labels` includes the configured ignore label. Pure and provider-agnostic. An empty label
-(feature off) or a PR with no labels is never excluded. `Harness.runCycle` uses it to split the open
-list; see [04](04-harness-cycle.md).
+A pull request is worked only while it carries `${labelPrefix}-watch`. `isPrWatched(pr, watchLabel)`
+is the whole predicate — pure, provider-agnostic, and an empty label (feature off) reads as watched.
+`Harness.runCycle` uses it to split the open list; see [04](04-harness-cycle.md).
+
+Opt-in on its own would stop the harness acting on the pull requests it opened itself, so the harness
+**tags its own**, programmatically and never by asking an agent to:
+
+- **At creation.** `open_pr` writes the tag the moment the provider returns a number, so a pull
+  request the fleet just opened is never briefly invisible to the fleet.
+- **On the pulse.** `PrWatchDesk` tags any open pull request on a branch only a dispatch cuts —
+  `issue/<n>`, `issue/<n>/<slug>`, `job/<id>`, the one predicate `isHarnessBranch` in
+  `src/prOwnership.ts` — that carries no tag. That is the floor under the first: an agent that opened
+  its own after the tool reported itself unwired, a code job's pull request, and every pull request
+  already open the first pulse a deployment runs this.
+
+**Exactly once per pull request, and `pr_watch_seeds` is what makes it once.** Taking the tag off is
+how an operator stops the fleet on a runaway agent's pull request; a seeder that re-derived its
+answer from the world alone would write the tag straight back on the next pulse, and the control
+would silently undo itself. The row goes down only after the label write succeeds, so a failed write
+is retried rather than marked done — and `POST /api/prs/:n/watch` writes a row too, in both
+directions, because a human's answer must outrank the seeder just as much as the seeder's own past
+one.
+
+The one thing the seeding will not do is tag a pull request carrying the retired
+`${labelPrefix}-ignore` tag ([06](06-issue-pickup.md#the-retired-ignore-tag)): everywhere else that
+label is inert, and this is the single path that could wake the fleet on work somebody parked under
+the old model.
 
 ## The PR rules end to end
 

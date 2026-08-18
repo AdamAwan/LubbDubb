@@ -205,7 +205,7 @@ export interface CockpitActions {
   /** Clear a settled task off the bench. Settled only — it answers nothing. */
   dismissHumanTask(id: string): Promise<void>;
 
-  setPrExcluded(prNumber: number, excluded: boolean): Promise<void>;
+  setPrWatched(prNumber: number, watched: boolean): Promise<void>;
   /**
    * Authorize landing a whole chain of stacked pull requests, or call that off.
    *

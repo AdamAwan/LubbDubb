@@ -220,7 +220,7 @@ export function useCockpit(): CockpitStatus {
       declineHumanTask: (id, note) => then(api.declineHumanTask(id, note)),
       dismissHumanTask: (id) => then(api.dismissHumanTask(id)),
 
-      setPrExcluded: (n, excluded) => then(api.setPrExcluded(n, excluded)),
+      setPrWatched: (n, watched) => then(api.setPrWatched(n, watched)),
       setStackLanding: (ref, landing) => then(api.setStackLanding(ref, landing)),
       setIssueWatched: (n, watched) => then(api.setIssueWatched(n, watched)),
       setGoalPriority: (n, priority) => then(api.setGoalPriority(n, priority)),

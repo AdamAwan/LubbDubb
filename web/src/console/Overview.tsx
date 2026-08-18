@@ -331,7 +331,7 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
   const open = view.state.world.pullRequests;
   const closed = view.state.world.closedPullRequests;
   const merged = closed === undefined ? null : closed.filter((pr) => pr.merged).length;
-  const { ignoreLabel } = config;
+  const { watchLabel } = config;
 
   return (
     <section className="cn-card cn-span2">
@@ -342,19 +342,19 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
       <div className="cn-rows">
         {open.length === 0 && <p className="cn-empty">No pull request is open.</p>}
         {open.map((pr) => {
-          // The server's verdict, not a second reading of the labels: `ignored` is
-          // the first arm `prAttentionStatus` takes, so on an open PR it *is* the
-          // tag. Drawn as a spent row for the reason the backlog dims an ignored
-          // goal — the chip alone leaves a row the harness will never touch
-          // sitting at the same weight as the ones it is working.
-          const excluded = pr.attention.status === 'ignored';
+          // The server's verdict, not a second reading of the labels: `unwatched`
+          // is the first arm `prAttentionStatus` takes, so on an open PR it *is* the
+          // absent tag. Drawn as a spent row for the reason the backlog dims an
+          // unwatched goal — the chip alone leaves a row the harness will never
+          // touch sitting at the same weight as the ones it is working.
+          const unwatched = pr.attention.status === 'unwatched';
           // The goal this PR is delivering, joined the server's own three ways
           // rather than through the plan parts alone: a goal worked whole has no
           // parts at all, which is most finished goals, and the rack drew no goal
           // for any of them.
           const goal = goalOfPr(view.state, pr.number);
           return (
-            <div className={`cn-row ${excluded ? 'cn-spent' : ''}`} key={pr.number}>
+            <div className={`cn-row ${unwatched ? 'cn-spent' : ''}`} key={pr.number}>
               <span className="cn-grow">
                 <b className="cn-name">
                   <Ref to={`pr:${pr.number}`} /> {pr.title}
@@ -370,17 +370,17 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
               <CourtChip pr={pr} now={view.now} />
               <AsyncButton
                 className="ghost"
-                disabled={ignoreLabel === ''}
-                onClick={() => actions.setPrExcluded(pr.number, !excluded)}
+                disabled={watchLabel === ''}
+                onClick={() => actions.setPrWatched(pr.number, unwatched)}
                 title={
-                  ignoreLabel === ''
-                    ? 'No ignore label configured — the watch/ignore gate is off'
-                    : excluded
-                      ? `Remove the "${ignoreLabel}" tag and let the harness work this PR again`
-                      : `Tag this PR "${ignoreLabel}" so the harness leaves it alone`
+                  watchLabel === ''
+                    ? 'No watch label configured — the watch gate is off'
+                    : unwatched
+                      ? `Tag this PR "${watchLabel}" and let the harness work it`
+                      : `Take the "${watchLabel}" tag off so the harness leaves this PR alone`
                 }
               >
-                {excluded ? 'watch' : 'ignore'}
+                {unwatched ? 'watch' : 'unwatch'}
               </AsyncButton>
             </div>
           );

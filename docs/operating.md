@@ -189,7 +189,7 @@ row carrying its reason verbatim. If the order is wrong, drag it; the override p
 _reasons_ are wrong, that is a configuration conversation, not a drag.
 
 **Triage the Backlog** periodically — nothing in it blocks an agent, which is what makes it a tab
-rather than a rail. Watched, blocked at intake, unwatched, ignored. The unwatched count in the nav is
+rather than a rail. Watched, blocked at intake, unwatched. The unwatched count in the nav is
 the one number that tells you whether opening it is worth it.
 
 **Read Findings** when the count is non-zero. These are claims agents filed about things _outside_

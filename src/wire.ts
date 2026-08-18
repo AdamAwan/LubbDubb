@@ -399,10 +399,12 @@ interface StackLandingView {
 interface CockpitConfig {
   heartbeatIntervalMs: number;
   maxConcurrentAgents: number;
-  /** `${labelPrefix}-watch` — the tag the watch toggle sets and that marks an item watched. */
+  /**
+   * `${labelPrefix}-watch` — the one tag the watch toggle writes and every gate
+   * reads. Empty = the gate is off, and everything is worked. There is no second
+   * tag: an item without this one is unwatched, which is the whole model.
+   */
   watchLabel: string;
-  /** `${labelPrefix}-ignore` — the tag the ignore toggle sets and that marks an item ignored. */
-  ignoreLabel: string;
   /**
    * The model profiles a goal or a part may be pinned to (#342), cheapest first,
    * with what each is for.
@@ -424,7 +426,7 @@ interface CockpitConfig {
    * it. Shipped because the backlog draws a container as a *heading* over its
    * children rather than as a row beside them, and that is a decision about the
    * item's type made before any verdict: `pickup.status` cannot answer it, since
-   * an ignored container reports `ignored` and a container under a gate-off
+   * an unwatched container reports `unwatched` and a container under a gate-off
    * deployment reports something else again. Read the policy, not a symptom.
    */
   containerTypes: string[];
@@ -666,7 +668,7 @@ export interface WorkSubtreePayload {
  * "this is finished" the same kind of answer, which is exactly the distinction the
  * tab exists to let someone ask about.
  */
-export type TicketWatchFilter = 'any' | 'watched' | 'unwatched' | 'ignored';
+export type TicketWatchFilter = 'any' | 'watched' | 'unwatched';
 /**
  * What the *harness* is doing about an item, which is not the same question as
  * what the tracker calls it.
@@ -727,8 +729,8 @@ export interface TicketRow {
   number: number;
   title: string;
   state: IssueState;
-  /** Three-valued: an untagged item is `unwatched`, not `ignored`. → `src/watchLabels.ts` */
-  watch: TicketWatchFilter & ('watched' | 'unwatched' | 'ignored');
+  /** Two-valued: an item is watched only if it carries the tag. → `src/watchLabels.ts` */
+  watch: TicketWatchFilter & ('watched' | 'unwatched');
   labels: string[];
   /**
    * Dollars spent under this goal, or **null** where the fleet never ran on it.
