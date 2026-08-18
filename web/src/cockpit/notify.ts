@@ -153,6 +153,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   escalation: 'An agent is asking you',
   proposal: 'A decision is waiting on you',
   permission: 'An agent wants a command',
+  profile: 'A goal is waiting on which profile to run on',
   bench: 'Work only you can do',
   close_out: 'A delivered goal needs closing',
   burn: 'A run is spending far more than usual',

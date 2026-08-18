@@ -527,6 +527,13 @@ same two call sites, and the same safety argument as above pointed at a second q
 
 The hold's string names the proposal — `the goal assay proposes running this on "deep"`. A refused goal
 is reported ahead of an unpriced one: there is no point pricing work that is not going to start.
+
+**Because it expires on nothing but the answer, it is also a row in the cockpit's queue rail**
+(`profile`, [17](17-cockpit.md#the-queue-rail--needs-you)) rather than a band on the goal's own page
+alone. Every other hold clears itself on something — the world moves, a window turns over, an agent is
+resumed — and this one does not, so an operator who never opens that goal's page has a goal stopped
+for good with nothing anywhere saying so. The queue is what the harness has for "only you can end
+this".
 → [02](02-configuration.md#the-gate-the-assayer-proposes-a-human-confirms)
 
 The hold's string names **what happened and nothing else** — `the goal assay could not act on this

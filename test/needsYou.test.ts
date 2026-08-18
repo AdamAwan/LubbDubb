@@ -311,3 +311,55 @@ test('no selected goal means no goal page', async () => {
 
   assert.equal(view.goalPage, null);
 });
+
+/**
+ * The goal-profile gate (#342) holds every dispatch for its goal and expires on
+ * nothing but the answer, so a queue that does not carry it is how a goal stops
+ * for good with nobody told. It was drawn on the goal's own page and nowhere
+ * else, which is the page nobody opens for a goal that looks like it merely has
+ * not come up yet.
+ */
+test('an unanswered profile proposal is a row, and an answered one is not', () => {
+  const base = buildDemoState();
+  const goal = base.world.issues[0]!;
+  const proposed = (over: { awaiting: boolean }) =>
+    stateWith({
+      escalations: [],
+      humanTasks: [],
+      proposals: [],
+      recovery: [],
+      world: {
+        ...base.world,
+        issues: base.world.issues.map((i) =>
+          i.number === goal.number
+            ? {
+                ...i,
+                assay: {
+                  verdict: 'workable' as const,
+                  summary: 'Three subsystems and an auth guard between them.',
+                  by: 'assayer' as const,
+                  decidedAt: '2026-01-01T00:00:00.000Z',
+                  commentRef: null,
+                  proposedProfile: 'deep',
+                  awaitingProfileAnswer: over.awaiting,
+                },
+              }
+            : i,
+        ),
+      },
+    });
+
+  const rows = buildNeedsYou(proposed({ awaiting: true }));
+  // `yours`, not `blocking`: the colour rule is about a held slot, and no agent
+  // is parked on this one — the goal simply cannot start.
+  assert.deepEqual(
+    rows.map((r) => [r.kind, r.group, r.goalRef]),
+    [['profile', 'yours', `issue:${goal.number}`]],
+  );
+  assert.equal(rows[0]?.opens, 'goal');
+  assert.equal(rows[0]?.holding, 0, 'the gate stops the goal before there is a plan to hold parts');
+  assert.equal(rows[0]?.agentId, null, 'the assayer that proposed it is gone, not parked');
+  assert.ok(rows[0]?.title.includes('deep'), 'the row names the profile it is asking about');
+
+  assert.deepEqual(buildNeedsYou(proposed({ awaiting: false })), [], 'a settled proposal asks nothing');
+});

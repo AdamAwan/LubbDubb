@@ -232,14 +232,26 @@ single spelling, an unknown value reading as the overview, and an ask id survivi
 ## The queue rail — "Needs you"
 
 A permanent left column holding **every** blocking item in one list: escalations, plan proposals,
-permission requests, usage-limit parks, bench tasks, close-outs and the recovery hold. `buildNeedsYou`
+permission requests, unanswered goal-profile proposals, usage-limit parks, bench tasks, close-outs and
+the recovery hold. `buildNeedsYou`
 (`web/src/view/needsYou.ts`) is the merge, and it is pure.
 
-**Seven kinds, and the split is about what answers them.** `permission` and `proposal` are escalations
+**Eight kinds, and the split is about what answers them.** `permission` and `proposal` are escalations
 underneath, named apart because the verdict differs — a permission goes to `/permission`, a proposal
 carries accept/reject, a plain question takes free text. Drawing them as one kind is how a surface ends
 up offering the wrong control. `bench` and `close_out` are human tasks, likewise split, since a
 close-out is the step after a launch and reads as one ([13](13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)).
+
+**`profile` is the second kind with no row of its own underneath it** — it is read off
+`issue.assay.awaitingProfileAnswer`, the goal-profile gate ([06](06-issue-pickup.md#the-second-arm-an-unanswered-profile-proposal-issue-342)),
+because the harness raises no escalation and files no task for it: the proposal *is* the ask. It is in
+the queue for what makes that gate different from every other hold — it expires on nothing but the
+answer, so a gate nobody sees is a goal stopped for good. It was drawn on the goal's own page and
+nowhere else, which is the page an operator has no reason to open for a goal that looks like it merely
+has not come up yet. Its verdict is the two the gate has always had — take the proposal, or keep what
+is standing — both through one write, so "keep mine" settles the question rather than leaving it
+re-readable as an unanswered disagreement. It is derived from `world.issues` and never the retained
+runs: a goal the world no longer carries is not one the funnel is refusing to dispatch.
 
 **`limit` is the one kind with no row of its own underneath it.** It is built from the _fleet_ —
 `state.parkedOnLimit`, keyed on the agent — because a usage-limit park raises no escalation on purpose:
@@ -251,9 +263,12 @@ early, and for the parks that carry no reset time and would otherwise sit there 
 limit and a box that cannot send is worse than no box.
 
 **Two groups, split on who is stopped.** `blocking` means an agent is parked and cannot proceed;
-`yours` means the obligation is the operator's and nothing inside the fleet is waiting. That is the
+`yours` means the obligation is the operator's and nothing inside the fleet is waiting. A profile gate
+is `yours` for that reason and against how much it stops: it holds a whole goal's dispatch, and no
+agent is sitting in it. The rule is about a held slot, and widening it here would cost red the only
+thing it means. That is the
 whole of the colour rule: **red means an agent is parked and only you can un-park it, and nothing
-else.** A bench task genuinely blocks no agent, so it is amber, and the merge of seven surfaces into
+else.** A bench task genuinely blocks no agent, so it is amber, and the merge of eight surfaces into
 one list preserves the distinction rather than flattening it. A limit park is red for the rule's own
 reason and not by analogy: the agent is stopped, its worktree and its slot are held, and the harness
 will not resume it on its own — all that differs from a question is what the operator does, which is
@@ -447,8 +462,11 @@ run.
 ### The bands
 
 Each band embeds the **shared** component that owns its refusal rules — `EscalationCard` for a
-question, a permission or a proposal, `HumanTaskActions` for a bench task or a close-out. Embedded,
-never redrawn: a second wiring is a second way to answer a proposal with free text on one surface only.
+question, a permission or a proposal, `HumanTaskActions` for a bench task or a close-out. The
+goal-profile gate is the one band whose controls live in `NeedsBand` itself — its verdict is two
+buttons on one write and there is no shared card underneath it — and it is drawn there rather than on
+the goal page for the same reason the others are: the page and the rail's panel then hold one copy of
+the write between them. Embedded, never redrawn: a second wiring is a second way to answer a proposal with free text on one surface only.
 `buttonClass` is the one seam the console passes, so the shared buttons wear the console's face without
 the console reaching into their class.
 
@@ -1203,7 +1221,7 @@ are broken" from the demo has learned nothing about their browser.
 is a pure diff of two reduced snapshots, and the needs-you half diffs the **rendered** queue —
 `buildNeedsYou`'s own output. Watching frames instead would have covered escalations and missed human
 tasks, plan approvals and recovery, the three that arrive as one coarse `dirty` and never announce
-themselves; diffing the queue covers every kind by construction and stays true when a seventh is
+themselves; diffing the queue covers every kind by construction and stays true when a ninth is
 added. Agents notify on the **transition** into a terminal status rather than on appearing, since an
 agent is in the list from the moment it spawns and a dead one stays there.
 
