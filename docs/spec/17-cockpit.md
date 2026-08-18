@@ -201,7 +201,10 @@ once.
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                          |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                 |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched` / `ignored`; `any` is the absent value                                    |
-| `state`                              | its tracker axis: `open` / `closed`; `any` is the absent value                                                                    |
+| `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on    |
+| `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis     |
+| `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                         |
+| `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                   |
 | `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                               |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
@@ -229,6 +232,14 @@ console does not would make the first real move look like a change when it is no
 `test/cockpitPlace.test.ts` pins the codec — the round trip for every destination, the bare URL, the
 single spelling, an unknown value reading as the overview, and an ask id surviving encoding.
 
+**Reaching the URL is only the first leg.** A `Place` field is carried to the surface that draws it
+through the view model — `useCockpit` hands the fields to `buildViewModel`, which defaults each one it
+is not given. A field the hook never forwards therefore round-trips through the query string perfectly
+and still draws its default: the button updates the address bar, highlights nothing and re-reads no
+list. That is a dead control with nothing red, and it happened to the tickets tab's `tracking`,
+`feature` and `group` at once. Adding a field to `Place` is both legs, and `test/cockpitPlace.test.ts`
+reads the `ticket*` fields off `place.ts` and asserts the hook forwards every one.
+
 ## The queue rail — "Needs you"
 
 A permanent left column holding **every** blocking item in one list: escalations, plan proposals,
@@ -248,7 +259,7 @@ are answered the same two ways — done, or declined with a reason — which is 
 
 **`profile` is the second kind with no row of its own underneath it** — it is read off
 `issue.assay.awaitingProfileAnswer`, the goal-profile gate ([06](06-issue-pickup.md#the-second-arm-an-unanswered-profile-proposal-issue-342)),
-because the harness raises no escalation and files no task for it: the proposal *is* the ask. It is in
+because the harness raises no escalation and files no task for it: the proposal _is_ the ask. It is in
 the queue for what makes that gate different from every other hold — it expires on nothing but the
 answer, so a gate nobody sees is a goal stopped for good. It was drawn on the goal's own page and
 nowhere else, which is the page an operator has no reason to open for a goal that looks like it merely
