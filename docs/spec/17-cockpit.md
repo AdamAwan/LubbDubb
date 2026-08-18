@@ -636,6 +636,16 @@ which was retired, with those parts below it.
 A part's row names its pull request as a way there rather than as text (`PR #412`), the one ref a wave
 carries; the goal it is under is the page it is already on.
 
+**The card's header carries the way into the plan sheet** — `open the full plan ↗`, `viewPlan` on the
+plan this goal's parts came from, drawn only when there is a plan to open. The waves are the shape of
+the work and nothing else: the diagnosis, the approach, the map, each part's `touches`, `rationale`
+and acceptance checklist, and the record of the decision that was made on it are all the sheet's
+([The plan sheet](#the-plan-sheet)). Until this control the only way onto it from a goal page was the
+validation card's aside about amending the checks — a door that reads as being about checks, on the
+card below the one an operator looking for the plan is reading. The sheet is the same one the
+approval band opens, which is the point: what was approved and what is being worked are one document,
+read at any time and not only while the question is open.
+
 **A held part quotes the reconciler's `blockedReason` verbatim.** It is the one status nothing else in
 the world explains — a blocked part has no branch, no PR and no agent to read — so a paraphrase here
 would be the only account there is, and wrong ([08](08-planning.md#the-ref-collision-guard)).

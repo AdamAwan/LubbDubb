@@ -745,6 +745,33 @@ test('a plan with no live parts draws what it proposed rather than only saying s
   assert.ok(html.includes('cn-retired'));
 });
 
+/**
+ * The waves are the shape of the work and nothing else. Everything a plan also is
+ * — the diagnosis, the map, each part's acceptance, the decision that was made on
+ * it — is the sheet's, and the goal page reached it only through the validation
+ * card's aside about amending the checks. This pins the way in on the card that
+ * draws the plan, and pins that it is keyed on a plan existing rather than drawn
+ * as a dead control over a goal that has none.
+ */
+test('the plan card is a way into the whole plan, not only its shape', () => {
+  const planned = view().state.plans?.[0];
+  assert.ok(planned, 'the demo fixtures must carry a plan');
+  const v = goalView(() => {}, planned.originRef);
+  assert.ok(v.goalPage?.plan, 'the plan must reach the page of the goal it hangs off');
+
+  const html = decode(render(v));
+  assert.ok(html.includes('open the full plan'), 'the plan card must offer the sheet');
+  assert.ok(html.indexOf('open the full plan') < html.indexOf('cn-waves'), 'the way in belongs in the header');
+});
+
+test('a goal with no plan draws no way into one', () => {
+  const v = goalView();
+  const page = v.goalPage;
+  assert.ok(page, 'the fixture goal must resolve to a page');
+  const html = decode(render({ ...v, goalPage: { ...page, plan: null } }));
+  assert.ok(!html.includes('open the full plan'), 'a control onto a plan that does not exist is a dead end');
+});
+
 test('the ticket is drawn as HTML when the tracker wrote HTML', () => {
   const v = goalView();
   const page = v.goalPage;

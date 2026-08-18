@@ -63,7 +63,7 @@ export function GoalPage({
       <Validation page={page} actions={actions} refUrls={view.state.refUrls} />
       <div className="cn-gcols">
         <div className="cn-stack">
-          <PlanWaves page={page} />
+          <PlanWaves page={page} actions={actions} />
           <Instructions issue={page.issue} actions={actions} />
           <Ticket issue={page.issue} refUrls={view.state.refUrls} />
           <PullRequests page={page} view={view} />
@@ -389,13 +389,21 @@ const GROUP_LABEL: Record<PartGroup, string> = {
  * list shrank between two readings has simply lost rows, with nothing saying so.
  * They sit outside the four groups because they are outside every count on this
  * page: what the plan proposed is not what the goal is made of.
+ *
+ * **The header carries the way into the plan sheet.** What this card draws is the
+ * shape of the work — titles, groups and dependencies — and the plan is also a
+ * diagnosis, an approach, an acceptance checklist per part and the record of the
+ * decision that was made on it. Without a control here the only way onto that
+ * from a goal was the validation card's aside about amending the checks, which
+ * reads as being about checks.
  */
-function PlanWaves({ page }: { page: GoalPageView }): JSX.Element {
+function PlanWaves({ page, actions }: { page: GoalPageView; actions: CockpitActions }): JSX.Element {
   const groups = GROUP_ORDER.map((group) => ({
     group,
     parts: page.parts.filter((p) => p.group === group),
   })).filter((g) => g.parts.length > 0);
   const retired = page.retiredParts;
+  const plan = page.plan;
 
   return (
     <section className="cn-card">
@@ -403,7 +411,24 @@ function PlanWaves({ page }: { page: GoalPageView }): JSX.Element {
         The plan
         {page.parts.length > 0 && <i className="cn-n">{page.parts.length} parts</i>}
         {page.parts.length === 0 && retired.length > 0 && <i className="cn-n">{retired.length} retired</i>}
-        <span className="cn-more">left to right is dispatch order</span>
+        <span className="cn-more">
+          left to right is dispatch order
+          {/* The way to the whole plan, on the card that draws its summary. The
+              waves are titles and dependencies; the diagnosis, the map, each part's
+              acceptance and what was decided are the sheet's, and it was reachable
+              from here only through the validation card's aside about amending the
+              checks — a door nobody looking for the plan would think to try. */}
+          {plan !== null && (
+            <button
+              type="button"
+              className="cn-linkish"
+              title="The plan sheet — the write-up, the shape, each part in full, and the decision that was made on it"
+              onClick={() => actions.viewPlan(plan.id)}
+            >
+              open the full plan ↗
+            </button>
+          )}
+        </span>
       </h3>
       <div className="cn-waves">
         {groups.length === 0 && (
