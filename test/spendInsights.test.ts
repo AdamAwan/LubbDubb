@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildSpendInsights } from '../src/spendInsights.js';
-import type { Agent, Issue, Task, UsageEvent, WorkNode } from '../src/types.js';
+import type { Agent, Issue, IssueRun, Task, UsageEvent, WorkNode } from '../src/types.js';
 
 /**
  * The breakdown behind the cost indicators. What it has to get right is not the
@@ -83,11 +83,30 @@ function issue(number: number, title: string): Issue {
   };
 }
 
+function run(number: number, title: string): IssueRun {
+  return {
+    originRef: `issue:${number}`,
+    issueNumber: number,
+    title,
+    body: '',
+    labels: [],
+    linkedPrNumber: null,
+    workItemState: null,
+    startedAt: T,
+    completedAt: null,
+    outcome: null,
+    dismissedAt: null,
+    dismissNote: null,
+    updatedAt: T,
+  };
+}
+
 function build(over: {
   agents?: Agent[];
   tasks?: Task[];
   nodes?: WorkNode[];
   issues?: Issue[];
+  runs?: IssueRun[];
   usageEvents?: UsageEvent[];
 }) {
   return buildSpendInsights({
@@ -95,6 +114,7 @@ function build(over: {
     tasks: over.tasks ?? [],
     nodes: over.nodes ?? [],
     issues: over.issues ?? [],
+    runs: over.runs ?? [],
     usageEvents: over.usageEvents ?? [],
     fiveHourCostUsd: 0,
     sevenDayCostUsd: 0,
@@ -312,4 +332,36 @@ test('the timeline buckets dated deltas and drops what falls outside the window'
     5.75,
     'an event older than the window, and an unparseable one, are dropped rather than clamped',
   );
+});
+
+/**
+ * A goal outlives the tracker's open set, and its name has to outlive it too.
+ *
+ * The money stays on the table forever; the world baseline is the *open* issues,
+ * so every goal that closed or was dismissed is missing from it. Naming those rows
+ * off the world alone drew each of them as its number and "no longer in the world"
+ * — while the run record, which never forgets a goal the harness worked, had the
+ * title all along.
+ */
+test('a goal the world has forgotten is named from its run record', () => {
+  const insights = build({
+    agents: [agent('a1', { costUsd: 3 }), agent('a2', { costUsd: 2 })],
+    tasks: [task('a1', 'issue:12'), task('a2', 'issue:99')],
+    issues: [issue(12, 'Still open')],
+    runs: [run(12, 'What it was called then'), run(99, 'Closed months ago')],
+  });
+  const named = new Map(insights.goals.map((g) => [g.issueNumber, g.title]));
+  // The world wins where it has an answer — a retitled ticket reads as it does now.
+  assert.equal(named.get(12), 'Still open');
+  assert.equal(named.get(99), 'Closed months ago');
+});
+
+/** No record anywhere is still a row, and still honest about the name. */
+test('a goal older than the run record keeps its row and no title', () => {
+  const insights = build({
+    agents: [agent('a1', { costUsd: 1 })],
+    tasks: [task('a1', 'issue:404')],
+  });
+  assert.equal(insights.goals.length, 1);
+  assert.equal(insights.goals[0]?.title, null);
 });

@@ -201,9 +201,10 @@ once.
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                          |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                 |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched` / `ignored`; `any` is the absent value                                    |
-| `tracking`                           | its harness reading: `any` / `frozen`; `live` is the absent value                                                                 |
-| `state`                              | its tracker axis: the tracker's own word (`open` / `closed` alias the old two-valued axis); `any` is the absent value             |
-| `feature` / `group`                  | the feature it is narrowed to (or `none`), and `flat` for one list; `feature` grouping is the absent value                        |
+| `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on    |
+| `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis     |
+| `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                         |
+| `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                   |
 | `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                               |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
@@ -228,17 +229,16 @@ place that does not exist, and the answer to that is the overview. The entry the
 normalised with `replaceState` for the same reason the push is skipped: a URL saying something the
 console does not would make the first real move look like a change when it is not.
 
-**The Tickets tab's filter is lifted off the place in one piece** — `ticketPlace(place)`, spread into
-the view model rather than listed field by field. A field named there one at a time is a field that
-can be left off, and a filter the view never receives is a **control that moves the address bar and
-nothing else**: the URL says `tracking=frozen`, the segment stays on Live, the list never re-reads,
-and every one of those looks like a working filter from the outside. `tracking`, `feature` and `group`
-were all inert that way, with nothing red and no type able to say so — every field of the view
-model's input is optional, because the defaults are what a bare URL means.
-
 `test/cockpitPlace.test.ts` pins the codec — the round trip for every destination, the bare URL, the
-single spelling, an unknown value reading as the overview, an ask id surviving encoding, and that
-every `ticket*` field the place holds reaches the view.
+single spelling, an unknown value reading as the overview, and an ask id surviving encoding.
+
+**Reaching the URL is only the first leg.** A `Place` field is carried to the surface that draws it
+through the view model — `useCockpit` hands the fields to `buildViewModel`, which defaults each one it
+is not given. A field the hook never forwards therefore round-trips through the query string perfectly
+and still draws its default: the button updates the address bar, highlights nothing and re-reads no
+list. That is a dead control with nothing red, and it happened to the tickets tab's `tracking`,
+`feature` and `group` at once. Adding a field to `Place` is both legs, and `test/cockpitPlace.test.ts`
+reads the `ticket*` fields off `place.ts` and asserts the hook forwards every one.
 
 ## The queue rail — "Needs you"
 
@@ -858,6 +858,20 @@ the row as a chip and is deliberately **not a filter**: it answers a different q
 It is folded to one word on the server (`src/tickets/outcomes.ts`) from `resolveIssueConclusion` plus
 the delivery and run rows, because a precedence rule re-implemented in a component is a second opinion
 about it.
+
+### The type is tinted by family, never by name
+
+A row's work-item type is drawn as a chip tinted by **family** — bug, story, debt, container, task —
+by `issueTypeTone` (`web/src/issueGroups.ts`), which the goal page's header chip reads too, so a Bug
+is the same red on the row it was opened from.
+
+The families are the stock vocabulary [`src/issueRelations.ts`](../../src/issueRelations.ts) states
+its own defaults in, and **a type outside them draws untinted** rather than being sorted into the
+nearest one. That fall-through is the invariant: the vocabulary belongs to the tracker, a process
+template can name its types anything, and a colour that guessed would be a claim about an item's kind
+made by the surface that is only supposed to be reporting it. It is a tone and never a verdict — the
+container hue tracks the default names, not the operator's `issueContainerTypes`, so a customised
+container name is uncoloured here while the dispatcher's gate still knows exactly what it is.
 
 ### Intake is pulled out, never greyed inside the list
 

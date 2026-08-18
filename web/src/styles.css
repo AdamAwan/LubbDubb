@@ -3772,15 +3772,20 @@ body {
 /* The tracks are the *list's*, taken by each row through subgrid, so the id, the
    cost and the date line up down the whole list however long one title runs. A
    column is what makes a history scannable; independently laid-out rows read as
-   ragged. */
+   ragged.
+
+   The watch track is 146px because the three-segment control measures 134 and each
+   row re-applies the 10px gap inside its own subgrid: at 128 the switch outgrew its
+   cell and sat under the state chip, which reads as a gap too small rather than as
+   the overflow it was. Sized to its content, so it moves when the content does. */
 .tickets-rows {
   display: grid;
-  grid-template-columns: 66px minmax(0, 1fr) 128px 96px 82px 84px auto;
+  grid-template-columns: 66px minmax(0, 1fr) 146px 96px 82px 84px auto;
 }
 /* Grouped by feature, the heading says which feature a row is under, so the column
    would be a third copy of it. Flat, there is no heading, so it comes back. */
 .tickets-rows:not(.grouped) {
-  grid-template-columns: 66px minmax(0, 1fr) 150px 128px 96px 82px 84px auto;
+  grid-template-columns: 66px minmax(0, 1fr) 150px 146px 96px 82px 84px auto;
 }
 .tickets-thead,
 .tickets-row {
@@ -3855,8 +3860,47 @@ body {
   font-size: 13px;
 }
 .tickets-sub {
-  display: block;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 6px;
   margin-top: 3px;
+}
+/* The tracker's word for what a thing *is*, tinted by family rather than by
+   literal type: five hues over an open vocabulary, and an unrecognised type keeps
+   the untinted border it had before there were tones. Quieter than `.tickets-state`
+   one line up — the state is a reading that changes, the type never does, so it
+   must not compete with it for the same glance. */
+.tickets-type {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 5px;
+  border-radius: 4px;
+  border: 1px solid var(--cn-line);
+  color: var(--cn-fg-faint);
+  font-size: 10.5px;
+  font-style: normal;
+  white-space: nowrap;
+}
+.tickets-type.bug {
+  border-color: #4a2226;
+  color: var(--cn-red);
+}
+.tickets-type.story {
+  border-color: #1e4733;
+  color: var(--cn-green);
+}
+.tickets-type.debt {
+  border-color: #4a3a1c;
+  color: var(--cn-amber);
+}
+.tickets-type.container {
+  border-color: #342a55;
+  color: var(--cn-violet);
+}
+.tickets-type.task {
+  border-color: #1f3b52;
+  color: #63b3ed;
 }
 .tickets-row.closed .tickets-name {
   color: var(--cn-fg-dim);

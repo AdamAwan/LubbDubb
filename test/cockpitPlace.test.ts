@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { NOWHERE, placeQuery, readPlace, ticketPlace, type Place } from '../web/src/cockpit/place.js';
+import { NOWHERE, placeQuery, readPlace, type Place } from '../web/src/cockpit/place.js';
 
 const at = (over: Partial<Place> = {}): Place => ({ ...NOWHERE, ...over });
 
@@ -57,34 +57,6 @@ test('every panel the type admits round-trips through the URL', () => {
     const place = at({ panel: panel as Place['panel'] });
     assert.deepEqual(readPlace(placeQuery(place)), place, `panel=${panel} is dropped by readPlace`);
   }
-});
-
-// The bug this pins was three inert controls: `tracking`, `feature` and `group`
-// moved the address bar, and nothing else. The place held them, `placeQuery` wrote
-// them, `readPlace` read them back — and `useCockpit` named the other three by hand
-// on its way into the view model, so the view kept answering the defaults. Nothing
-// errored, nothing was red, and the one route to the closed items was the dead one.
-test('every ticket filter the place holds reaches the view model', () => {
-  const place = at({
-    tab: 'tickets',
-    ticketWatch: 'ignored',
-    ticketTracking: 'frozen',
-    ticketState: 'Closed',
-    ticketFeature: 'none',
-    ticketGroup: 'flat',
-    ticketOrder: 'cost',
-  });
-  const lifted = ticketPlace(place);
-  const held = Object.keys(place).filter((key) => key.startsWith('ticket'));
-  assert.deepEqual(Object.keys(lifted).sort(), held.sort(), 'the filter is lifted whole, never field by field');
-  for (const key of held) assert.equal(lifted[key as keyof typeof lifted], place[key as keyof Place]);
-
-  // And the hook hands that one value over rather than re-listing its fields —
-  // the shape of the original bug, which no type could catch because every field
-  // of the view model's input is optional.
-  const source = readFileSync('web/src/cockpit/useCockpit.ts', 'utf8');
-  assert.match(source, /\.\.\.ticketPlace\(place\)/);
-  assert.ok(!/ticket[A-Z]\w*: place\./.test(source), 'a field named one at a time is one that can be left off');
 });
 
 // The one input to the cockpit an operator can type. A place that does not
@@ -159,4 +131,27 @@ test('no folded feature writes no parameter', () => {
 // does not exist, and there is nothing on screen to say why.
 test('a hand-edited fold list drops what is not an issue number', () => {
   assert.deepEqual(readPlace('?collapsed=4,abc,-1,0,4,7.5,9').collapsed, [4, 9]);
+});
+
+/**
+ * The other half of the round trip, and the half that fails silently.
+ *
+ * A filter reaching the URL is only the first leg: the panel is *told* where it
+ * is through the view model, so a `ticket*` field the hook never forwards is
+ * defaulted by `buildViewModel` and the control draws its default no matter what
+ * the place says. The button then updates the address bar, changes no highlight
+ * and re-reads no list — which happened to `tracking`, `feature` and `group` at
+ * once, with nothing red.
+ *
+ * Read off `Place` rather than listed here, for the same reason as the panels
+ * above: the list is what is being guarded.
+ */
+test('every ticket filter on the place is forwarded into the view model', () => {
+  const place = readFileSync('web/src/cockpit/place.ts', 'utf8');
+  const fields = [...place.matchAll(/^ {2}(ticket[A-Za-z]+):/gm)].map((m) => m[1]!);
+  assert.ok(fields.length >= 6, `found ${fields.length} ticket filters, which is too few to be the real list`);
+  const hook = readFileSync('web/src/cockpit/useCockpit.ts', 'utf8');
+  for (const field of fields) {
+    assert.ok(hook.includes(`${field}: place.${field},`), `${field} never reaches buildViewModel`);
+  }
 });

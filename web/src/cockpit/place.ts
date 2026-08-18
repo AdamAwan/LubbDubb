@@ -187,28 +187,6 @@ function readTracking(
   };
 }
 
-/** Every `ticket*` field a place carries — the tab's whole filter, as one value. */
-type TicketPlace = Pick<
-  Place,
-  'ticketWatch' | 'ticketTracking' | 'ticketState' | 'ticketFeature' | 'ticketGroup' | 'ticketOrder'
->;
-
-/**
- * The tab's filter, lifted off the place in one piece.
- *
- * Spread into the view model rather than listed field by field, because a field
- * left off that list is a **control that moves the address bar and nothing else**:
- * the URL says `tracking=frozen`, the segment stays on Live, the list never
- * re-reads, and every one of those is what a working filter looks like from the
- * outside. `ticketTracking`, `ticketFeature` and `ticketGroup` were all missing
- * that way — three inert controls, no error anywhere, and the one route to the
- * closed items among them. One value is what makes forgetting one impossible.
- */
-export function ticketPlace(place: Place): TicketPlace {
-  const { ticketWatch, ticketTracking, ticketState, ticketFeature, ticketGroup, ticketOrder } = place;
-  return { ticketWatch, ticketTracking, ticketState, ticketFeature, ticketGroup, ticketOrder };
-}
-
 /**
  * Where picking a state chip lands — the state itself, and the tracking axis it
  * has to be reachable under.

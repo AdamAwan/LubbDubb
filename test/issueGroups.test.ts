@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cascadeNote, featureBlocks, isContainerType } from '../web/src/issueGroups.js';
+import { cascadeNote, featureBlocks, isContainerType, issueTypeTone } from '../web/src/issueGroups.js';
 import type { Issue, TicketRow } from '../web/src/types.js';
 
 /**
@@ -111,4 +111,25 @@ test('watching a container says what else the click will tag', () => {
   // nothing to promise either.
   assert.equal(cascadeNote({ issueType: 'Task', children: [{}] } as unknown as Issue, ['Feature']), '');
   assert.equal(cascadeNote({ issueType: 'Feature' } as unknown as Issue, ['Feature']), '');
+});
+
+test('a type tone is the family, whatever casing and spacing the tracker uses', () => {
+  assert.equal(issueTypeTone('Bug'), 'bug');
+  assert.equal(issueTypeTone('  user story '), 'story');
+  assert.equal(issueTypeTone('Product Backlog Item'), 'story');
+  assert.equal(issueTypeTone('Tech Debt'), 'debt');
+  assert.equal(issueTypeTone('Epic'), 'container');
+  assert.equal(issueTypeTone('Task'), 'task');
+});
+
+/**
+ * The untinted fall-through is the invariant, not a gap: the vocabulary is the
+ * tracker's, so a customised process template must draw as it did before there
+ * were tones rather than being coloured as something it is not.
+ */
+test('a type the cockpit has no opinion about carries no tone', () => {
+  assert.equal(issueTypeTone('Capability'), '');
+  assert.equal(issueTypeTone(''), '');
+  assert.equal(issueTypeTone(null), '');
+  assert.equal(issueTypeTone(undefined), '');
 });
