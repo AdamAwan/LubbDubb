@@ -51,8 +51,8 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
    * The trend tab, fetched on its *first visit* rather than with the breakdown.
    *
    * A route of its own for the reason the settings modal mounts its tabs lazily:
-   * this reaches two months of world events on top of the same all-time agent
-   * walk, and an operator who opened the panel to read the phase table should not
+   * this reaches two months of world events and the closed end of the ticket
+   * mirror on top of the same all-time agent walk, and an operator who opened the panel to read the phase table should not
    * pay for it. Both tabs stay mounted once visited, so the cost is once per
    * panel session either way.
    *
@@ -74,7 +74,11 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           issues: world?.issues ?? [],
           runs: store.listIssueRuns(),
         }).goals,
-        closures: store.listWorldEventsOfKindsSince(since, ['issue_closed']),
+        // The ticket mirror, not `world_events`: `issue_closed` needs an in-place
+        // open→closed transition and both real providers snapshot the open set
+        // only, so the event never fires off one. The mirror's history read
+        // returns closed items, so it is the only source that has any.
+        closures: store.listTicketsClosedSince(since),
         // The world as it stands, for the reopen check: a goal that closed inside
         // the window and is open here came back.
         issues: world?.issues ?? [],

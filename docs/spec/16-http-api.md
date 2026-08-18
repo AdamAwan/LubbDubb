@@ -633,8 +633,10 @@ the stage split as dollars per goal, and whether the work still landed. Returns 
 weeks are different weeks, and what is withheld rather than drawn thin.
 
 Fetched on the Trend tab's **first visit** rather than alongside `/api/spend`, which is one step
-further than the other fetched-on-open routes go: it reads two months of `world_events` on top of the
-same all-time agent walk, and the tab an operator never opens should cost nothing. Its goals come
+further than the other fetched-on-open routes go: it reads two months of `world_events` and the closed
+end of the ticket mirror on top of the same all-time agent walk, and the tab an operator never opens
+should cost nothing. The closures are the mirror's and not `world_events`', which is the whole reason
+the tab has anything to draw — see [18](18-observability.md#the-spend-trend). Its goals come
 from `buildSpendGoals`, the fold `/api/spend` ships — the two tabs state one goal's cost a click
 apart, and agreement by construction is the only kind that holds.
 

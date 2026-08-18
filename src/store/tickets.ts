@@ -103,7 +103,9 @@ export interface TrackerSweepMark {
  * decides from the live issue list, which is open items by construction, and a rule
  * that could see a closed row would eventually act on one.
  *
- * **Reads hand back the whole table.** There is no `WHERE` here and no `LIMIT`,
+ * **The list read hands back the whole table.** There is no `WHERE` on it and no
+ * `LIMIT` (the trend's closure read below is the one narrowed query, and it asks
+ * for a state and an instant — nothing a screen sorts by),
  * because neither of the two things the list is filtered and ordered by is this
  * table's to know: the watch bucket is a function of the operator's label prefix
  * (`watchBucket`, shared with the backlog so the two cannot disagree) and cost is
@@ -302,6 +304,31 @@ export class TicketStore {
   }
 
   /**
+   * The goals that are closed and were last touched since `since` — the spend
+   * trend's cohort ({@link module:spendTrend}).
+   *
+   * The mirror is the closure source rather than `world_events` because it is the
+   * only one that has any: `issue_closed` needs an in-place `open → closed`
+   * transition, and both real providers snapshot the open set only, so a closed
+   * item simply leaves the world and the event never fires. `listTicketHistory`
+   * asks by last-changed and returns both states, so the closures are already
+   * here — on every existing database, with nothing to wait for.
+   *
+   * `changed_at` is the tracker's last-modified and not a close date, so a closed
+   * item edited afterwards drifts to a later week. That is the trade taken
+   * knowingly: the tracker gives no close date to mirror, and a cohort a few
+   * items out of place is the whole trend's alternative to no trend at all.
+   */
+  listTicketsClosedSince(since: string): TicketClosure[] {
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT number, changed_at FROM tracker_items WHERE state = 'closed' AND changed_at >= ? ORDER BY number`,
+      )
+      .all(since) as { number: number; changed_at: string }[];
+    return rows.map((r) => ({ number: r.number, closedAt: r.changed_at }));
+  }
+
+  /**
    * Every mirrored item, newest tracker id first — which is newest-added first,
    * since a tracker id is auto-incremental and therefore already arrival order. No
    * date parsing, and no timezone to get wrong.
@@ -310,6 +337,13 @@ export class TicketStore {
     const rows = this.ctx.db.prepare(`SELECT * FROM tracker_items ORDER BY number DESC`).all() as TrackerItemRow[];
     return rows.map(rowToTicket);
   }
+}
+
+/** A goal the mirror holds as closed, and the instant it was last changed. */
+export interface TicketClosure {
+  number: number;
+  /** `tracker_items.changed_at` — last-modified, read as a close date. See {@link TicketStore.listTicketsClosedSince}. */
+  closedAt: string;
 }
 
 /** One mirrored item: the tracker's own fields, plus what the harness makes of it. */

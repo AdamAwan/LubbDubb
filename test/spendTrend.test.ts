@@ -10,7 +10,8 @@ import { buildSystem } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { gitRepo } from './support/gitRepo.js';
-import type { Agent, Issue, WorldEvent } from '../src/types.js';
+import type { Agent, Issue, TrackerItem, WorldEvent } from '../src/types.js';
+import type { TicketClosure } from '../src/store/tickets.js';
 import type { SpendTrendPayload } from '../src/wire.js';
 
 /**
@@ -26,6 +27,11 @@ import type { SpendTrendPayload } from '../src/wire.js';
  *   one;
  * - a goal that closed and is open again is counted as reopened, which is the one
  *   reading that can contradict the other two.
+ *
+ * The cohort is the **ticket mirror's** closed rows and not `issue_closed` world
+ * events, which never fire on a real provider — both snapshot the open set, so a
+ * closed item leaves the world without a transition being seen. The route case at
+ * the bottom asserts that end to end, on a store with no world events at all.
  */
 
 const NOW = Date.parse('2026-08-16T12:00:00.000Z');
@@ -52,14 +58,9 @@ function goal(issueNumber: number, costUsd: number, byPhase: Partial<Record<Spen
   };
 }
 
-function closed(issueNumber: number, at: string): WorldEvent {
-  return {
-    id: `we_${issueNumber}_${at}`,
-    kind: 'issue_closed',
-    ref: `issue:${issueNumber}`,
-    summary: `Issue #${issueNumber} closed`,
-    createdAt: at,
-  };
+/** A closure as the ticket mirror hands it over: a goal, and when it last changed. */
+function closed(issueNumber: number, at: string): TicketClosure {
+  return { number: issueNumber, closedAt: at };
 }
 
 function red(prNumber: number, at: string): WorldEvent {
@@ -103,7 +104,7 @@ function agent(id: string, over: Partial<Agent> = {}): Agent {
 
 function build(over: {
   goals?: SpendGoal[];
-  closures?: WorldEvent[];
+  closures?: TicketClosure[];
   issues?: Issue[];
   agents?: Agent[];
   ciEvents?: WorldEvent[];
@@ -395,4 +396,84 @@ test('the route answers a full axis on a store with nothing in it', async () => 
 
   await app.close();
   system.store.close();
+});
+
+/**
+ * The case the old wiring could not pass. The cohort used to be built from
+ * `issue_closed` world events, which never fire on a real provider — `diffWorlds`
+ * needs an in-place `open → closed` transition and both real issue providers
+ * snapshot the open set only, so a closed item leaves `next.issues` and the branch
+ * is never reached. Every deployment therefore drew the empty state forever while
+ * its tracker mirror held the closures all along.
+ *
+ * So: closures written to the mirror, **no world events of any kind**, and the
+ * trend read through the route it is actually served by.
+ */
+test('the cohort comes from the ticket mirror, with no issue_closed events anywhere', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
+  const config = loadConfig({
+    labelPrefix: '',
+    dbPath: ':memory:',
+    agentMode: 'raw',
+    deskRoot: join(dir, 'desk'),
+    worktreeRoot: join(dir, 'wt'),
+    repoRoot: gitRepo(),
+    heartbeatIntervalMs: 999_999,
+    auth: { enabled: false } as never,
+  });
+  const system = buildSystem(config, { backend: new FakePtyBackend(), errorMirror: () => {} });
+  const { store } = system;
+  const ago = (weeks: number): string => new Date(Date.now() - weeks * WEEK).toISOString();
+
+  // #7 has spend against it; #8 has none, and must still be counted apart rather
+  // than read as a goal that closed for free.
+  const task = store.createTask({ kind: 'code', title: 'Goal 7', prompt: 'p', branch: null, originRef: 'issue:7' });
+  const worked = store.createAgent({ taskId: task.id, cwd: '/wt/7', pid: null });
+  store.recordAgentUsage(worked.id, {
+    costUsd: 8,
+    inputTokens: 8000,
+    outputTokens: 80,
+    cacheReadTokens: null,
+    cacheCreationTokens: null,
+    numTurns: 3,
+  });
+
+  const mirrored = (number: number, changedAt: string): TrackerItem => ({
+    number,
+    title: `Goal ${number}`,
+    labels: [],
+    state: 'closed',
+    workItemState: 'Closed',
+    url: null,
+    createdAt: ago(9),
+    changedAt,
+  });
+  store.recordSweep(ago(8), [mirrored(7, ago(3)), mirrored(8, ago(3)), mirrored(9, ago(20))]);
+
+  // The premise, asserted rather than assumed: nothing has ever recorded one.
+  assert.equal(store.listWorldEventsOfKindsSince(ago(8), ['issue_closed']).length, 0);
+
+  const { app } = await buildApp(system);
+  const res = await app.inject({ method: 'GET', url: '/api/spend/trend' });
+  assert.equal(res.statusCode, 200);
+  const { trend } = res.json() as SpendTrendPayload;
+
+  assert.equal(
+    trend.buckets.reduce((n, w) => n + w.goalsClosed, 0),
+    1,
+  );
+  // The two-tier count survives the new source: #8 closed with nothing recorded,
+  // which is what the empty state's "though N closed with none recorded" reads.
+  assert.equal(
+    trend.buckets.reduce((n, w) => n + w.goalsUnmeasured, 0),
+    1,
+  );
+  // #9 was last changed four months ago and is dropped, not clamped into week one.
+  const week = trend.buckets.find((w) => w.goalsClosed > 0);
+  assert.equal(week?.medianCostUsd, 8);
+  assert.deepEqual(week?.costs, [8]);
+  assert.equal(trend.buckets[0]?.goalsClosed, 0);
+
+  await app.close();
+  store.close();
 });
