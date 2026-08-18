@@ -104,3 +104,46 @@ export function cascadeNote(issue: Issue, containerTypes: readonly string[]): st
   const kids = issue.children?.length ?? 0;
   return kids === 0 ? '' : ` and its ${kids} child item${kids === 1 ? '' : 's'}`;
 }
+
+/**
+ * Which colour family a work-item type is drawn in — `bug`, `story`, `debt`,
+ * `container`, `task`, or `''` for a type the cockpit has no opinion about.
+ *
+ * A **family**, not the type itself, because the vocabulary is the tracker's: a
+ * process template can name its types anything, and a class per literal string
+ * would leave a customised board's rows uncoloured while looking like it worked.
+ * Everything unrecognised falls through to the empty tone and draws exactly as it
+ * did before there were tones at all — the one behaviour that must not depend on
+ * whose board it is.
+ *
+ * Membership is the stock Azure vocabulary `src/issueRelations.ts` states its own
+ * defaults in, so the families a reader learns from the list are the ones the
+ * dispatcher already gates on. It is the *default* vocabulary and not the
+ * operator's `issueContainerTypes`, which is why the container arm is a tone and
+ * never a verdict: a customised process template's own container name draws
+ * untinted here, where reading it as workable would have been the lie.
+ */
+export function issueTypeTone(issueType: string | null | undefined): string {
+  if (issueType === null || issueType === undefined) return '';
+  switch (issueType.trim().toLowerCase()) {
+    case 'bug':
+    case 'defect':
+      return 'bug';
+    case 'feature':
+    case 'epic':
+      return 'container';
+    case 'user story':
+    case 'story':
+    case 'product backlog item':
+    case 'requirement':
+      return 'story';
+    case 'tech debt':
+    case 'technical debt':
+    case 'debt':
+      return 'debt';
+    case 'task':
+      return 'task';
+    default:
+      return '';
+  }
+}

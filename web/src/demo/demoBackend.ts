@@ -2471,7 +2471,7 @@ function demoTickets(query: {
     changedAt: iso(seed.hoursAgo),
     tracking: 'live' as const,
     workItemState: seed.number % 3 === 0 ? 'Ready' : seed.number % 3 === 1 ? 'New' : 'Active',
-    issueType: 'Task',
+    issueType: seed.issueType,
     parent: featureOf(seed.number),
     featureSlot: featureSlotOf(featureOf(seed.number)),
   }));
@@ -2529,10 +2529,46 @@ function demoTickets(query: {
 }
 
 /** Backlog the demo's fleet has never been pointed at — the unwatched/ignored tail. */
-const DEMO_UNTRIAGED: { number: number; title: string; hoursAgo: number; ignored?: boolean }[] = [
-  { number: 412, title: 'Document the two-watcher requirement for maintenance jobs', hoursAgo: 5 },
-  { number: 409, title: 'Gap clustering merges unrelated questions into one gap', hoursAgo: 30 },
-  { number: 402, title: 'Spike: replace node-pty with a portable shim', hoursAgo: 72, ignored: true },
-  { number: 398, title: 'Sweep docs/ for links that no longer resolve', hoursAgo: 96 },
-  { number: 371, title: 'Retire the legacy priority override table', hoursAgo: 200, ignored: true },
+// The types are spread across the families deliberately: a demo where everything is
+// a Task shows the tickets list with one tone in it, which reads as a list that has
+// no tones. `Capability` is the untinted case, and is the one worth seeing.
+const DEMO_UNTRIAGED: {
+  number: number;
+  title: string;
+  hoursAgo: number;
+  ignored?: boolean;
+  issueType: string;
+}[] = [
+  {
+    number: 412,
+    title: 'Document the two-watcher requirement for maintenance jobs',
+    hoursAgo: 5,
+    issueType: 'Task',
+  },
+  {
+    number: 409,
+    title: 'Gap clustering merges unrelated questions into one gap',
+    hoursAgo: 30,
+    issueType: 'Bug',
+  },
+  {
+    number: 402,
+    title: 'Spike: replace node-pty with a portable shim',
+    hoursAgo: 72,
+    ignored: true,
+    issueType: 'Tech Debt',
+  },
+  {
+    number: 398,
+    title: 'Sweep docs/ for links that no longer resolve',
+    hoursAgo: 96,
+    issueType: 'User Story',
+  },
+  {
+    number: 371,
+    title: 'Retire the legacy priority override table',
+    hoursAgo: 200,
+    ignored: true,
+    issueType: 'Capability',
+  },
 ];

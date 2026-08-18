@@ -8,6 +8,7 @@ import { ProfilePicker } from '../components/ProfilePicker.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { InstructionModal } from '../components/InstructionModal.js';
 import { renderRichText } from '../components/richText.js';
+import { issueTypeTone } from '../issueGroups.js';
 import { fmtUsd, relTime } from '../components/util.js';
 import { Ref } from '../components/refs.js';
 import { ValidationSection } from '../components/ValidationSection.js';
@@ -125,7 +126,9 @@ function Header({
           #{issue.number} · {issue.title}
         </h1>
         <div className="cn-ghmeta">
-          {issue.issueType !== undefined && <i className="cn-chip">{issue.issueType}</i>}
+          {issue.issueType !== undefined && (
+            <i className={`cn-chip cn-type ${issueTypeTone(issue.issueType)}`}>{issue.issueType}</i>
+          )}
           <i className="cn-chip">{issue.workItemState ?? issue.state}</i>
           {issue.assay !== null && (
             <i
