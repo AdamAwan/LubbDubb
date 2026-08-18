@@ -265,7 +265,10 @@ export function useCockpit(): CockpitStatus {
       tab: place.tab,
       collapsed: place.collapsed,
       ticketWatch: place.ticketWatch,
+      ticketTracking: place.ticketTracking,
       ticketState: place.ticketState,
+      ticketFeature: place.ticketFeature,
+      ticketGroup: place.ticketGroup,
       ticketOrder: place.ticketOrder,
     }),
   };

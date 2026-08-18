@@ -132,3 +132,26 @@ test('no folded feature writes no parameter', () => {
 test('a hand-edited fold list drops what is not an issue number', () => {
   assert.deepEqual(readPlace('?collapsed=4,abc,-1,0,4,7.5,9').collapsed, [4, 9]);
 });
+
+/**
+ * The other half of the round trip, and the half that fails silently.
+ *
+ * A filter reaching the URL is only the first leg: the panel is *told* where it
+ * is through the view model, so a `ticket*` field the hook never forwards is
+ * defaulted by `buildViewModel` and the control draws its default no matter what
+ * the place says. The button then updates the address bar, changes no highlight
+ * and re-reads no list — which happened to `tracking`, `feature` and `group` at
+ * once, with nothing red.
+ *
+ * Read off `Place` rather than listed here, for the same reason as the panels
+ * above: the list is what is being guarded.
+ */
+test('every ticket filter on the place is forwarded into the view model', () => {
+  const place = readFileSync('web/src/cockpit/place.ts', 'utf8');
+  const fields = [...place.matchAll(/^ {2}(ticket[A-Za-z]+):/gm)].map((m) => m[1]!);
+  assert.ok(fields.length >= 6, `found ${fields.length} ticket filters, which is too few to be the real list`);
+  const hook = readFileSync('web/src/cockpit/useCockpit.ts', 'utf8');
+  for (const field of fields) {
+    assert.ok(hook.includes(`${field}: place.${field},`), `${field} never reaches buildViewModel`);
+  }
+});
