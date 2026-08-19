@@ -196,8 +196,12 @@ export interface Config {
    *
    * **On by default and inert**: it spends no agent, gates nothing, dispatches
    * nothing and is invisible to every agent. Off hides it and stops the scan
-   * without deleting a thing. Deep-merged, so one field can be set alone.
-   * → `docs/spec/22-pets.md`
+   * without deleting a thing.
+   *
+   * One switch and nothing else, on purpose: the rates a pet costs are constants
+   * in `src/pets/rules.ts`, because a deployment that can set its own drop chance
+   * can write itself a vivarium that looks exactly like an earned one.
+   * → `docs/spec/22-pets.md#authenticity`
    */
   pets: PetPolicy;
   /**
@@ -581,18 +585,10 @@ const DEFAULTS: Config = {
   // for an *omitted* policy is a separate answer (off) and lives with the rules.
   planning: DEFAULT_PLANNING,
   spendBurn: DEFAULT_BURN,
-  // Generous early and slow later: a working week of ordinary use produces a
-  // handful of creatures, and a common takes about ten days of a thirty-dollar
-  // fleet to raise. An empty vivarium is the failure mode worth tuning against.
-  pets: {
-    enabled: true,
-    beatsPerDollar: 25,
-    dropChance: 0.02,
-    // Twice the expected gap, so pity is a ceiling and not the schedule.
-    pity: 100,
-    rarity: { common: 700, uncommon: 200, rare: 80, mythic: 20 },
-    blendYield: 500,
-  },
+  // One switch and no rates. Everything a pet costs lives in `src/pets/rules.ts`
+  // as a constant, because each of those numbers was also a way of writing a pet
+  // into existence without doing anything.
+  pets: { enabled: true },
   selfUpdate: { enabled: true, remote: 'origin', branch: 'main', checkIntervalMs: 60 * 60 * 1000 },
   validation: DEFAULT_VALIDATION,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
@@ -792,14 +788,7 @@ function mergeLayers(lower: Partial<Config>, upper: Partial<Config>): Partial<Co
     merged.integrations = { ...DEFAULTS.integrations, ...lower.integrations, ...upper.integrations };
   if (lower.planning ?? upper.planning)
     merged.planning = { ...DEFAULTS.planning, ...lower.planning, ...upper.planning };
-  if (lower.pets ?? upper.pets) {
-    merged.pets = { ...DEFAULTS.pets, ...lower.pets, ...upper.pets };
-    // One level deeper than the rest: `rarity` is a record, so a config naming a
-    // single tier would otherwise drop the other three to undefined and leave the
-    // roll walking a table of NaN — a vivarium that silently hatches nothing.
-    if (lower.pets?.rarity ?? upper.pets?.rarity)
-      merged.pets.rarity = { ...DEFAULTS.pets.rarity, ...lower.pets?.rarity, ...upper.pets?.rarity };
-  }
+  if (lower.pets ?? upper.pets) merged.pets = { ...DEFAULTS.pets, ...lower.pets, ...upper.pets };
   if (lower.spendBurn ?? upper.spendBurn)
     merged.spendBurn = { ...DEFAULTS.spendBurn, ...lower.spendBurn, ...upper.spendBurn };
   if (lower.selfUpdate ?? upper.selfUpdate)

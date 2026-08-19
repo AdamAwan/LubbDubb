@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { nanoid } from 'nanoid';
 import type { Pet, PetAction, PetActionKind, PetSpecies } from '../types.js';
 import type { StoreContext } from './context.js';
@@ -11,7 +12,17 @@ import type { ColumnMigrations } from './migrate.js';
  * `dissolved_at` reads `undefined` is simply alive again.
  */
 export const PET_COLUMNS: ColumnMigrations = {
-  pets: { dissolved_at: `TEXT` },
+  pets: {
+    dissolved_at: `TEXT`,
+    // The three authenticity columns. Every one of them reads as a *weaker* claim
+    // when absent rather than a false one — a pet from before them carries no
+    // build and no chain link, and `attest.ts` declines to judge it rather than
+    // calling it a forgery. That asymmetry is deliberate: the failure that would
+    // matter most here is telling an honest operator their collection is fake.
+    built_sha: `TEXT`,
+    built_clean: `INTEGER NOT NULL DEFAULT 0`,
+    chain: `TEXT`,
+  },
 };
 
 /**
@@ -53,13 +64,17 @@ export class PetStore {
     originKind: PetActionKind;
     originRef: string;
     hatchedAt: string;
+    /** The build that rolled it. The keeper resolves it; nothing here runs git. */
+    builtSha?: string | null;
+    builtClean?: boolean;
   }): Pet {
     const existing = this.ctx.db
       .prepare(`SELECT * FROM pets WHERE origin_kind=? AND origin_ref=?`)
       .get(input.originKind, input.originRef) as PetRow | undefined;
     if (existing) return rowToPet(existing);
+    const id = `pet_${nanoid(10)}`;
     const pet: Pet = {
-      id: `pet_${nanoid(10)}`,
+      id,
       species: input.species,
       seed: input.seed,
       name: null,
@@ -72,14 +87,52 @@ export class PetStore {
       // corner is decoration and to stop looking at it.
       placed: this.placedCount() < VIVARIUM_SLOTS,
       dissolvedAt: null,
+      builtSha: input.builtSha ?? null,
+      builtClean: input.builtClean ?? false,
+      chain: chainLink(this.lastChain(), { id, ...input }),
     };
     this.ctx.db
       .prepare(
-        `INSERT OR IGNORE INTO pets (id, species, seed, name, fed, origin_kind, origin_ref, hatched_at, placed)
-         VALUES (@id, @species, @seed, @name, @fed, @originKind, @originRef, @hatchedAt, @placed)`,
+        `INSERT OR IGNORE INTO pets
+           (id, species, seed, name, fed, origin_kind, origin_ref, hatched_at, placed, built_sha, built_clean, chain)
+         VALUES
+           (@id, @species, @seed, @name, @fed, @originKind, @originRef, @hatchedAt, @placed, @builtSha, @builtClean, @chain)`,
       )
-      .run({ ...pet, placed: pet.placed ? 1 : 0 });
+      .run({ ...pet, placed: pet.placed ? 1 : 0, builtClean: pet.builtClean ? 1 : 0 });
     return pet;
+  }
+
+  /** The newest row's link, which the next one hashes onto. Null on an empty table. */
+  private lastChain(): string | null {
+    const row = this.ctx.db.prepare(`SELECT chain FROM pets ORDER BY rowid DESC LIMIT 1`).get() as
+      | { chain: string | null }
+      | undefined;
+    return row?.chain ?? null;
+  }
+
+  /**
+   * Every pet in the order it was written, with the link it carries.
+   *
+   * Insertion order, not `hatched_at`: the chain is built as rows are inserted, and
+   * a scan settling a backlog writes several pets whose hatch times run backwards
+   * against the order they were chained in.
+   */
+  petChainLog(): { id: string; chain: string | null; link: ChainInput }[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT id, species, seed, origin_kind, origin_ref, hatched_at, chain FROM pets ORDER BY rowid`)
+      .all() as (ChainRow & { id: string; chain: string | null })[];
+    return rows.map((row) => ({
+      id: row.id,
+      chain: row.chain,
+      link: {
+        id: row.id,
+        species: row.species as PetSpecies,
+        seed: row.seed,
+        originKind: row.origin_kind as PetActionKind,
+        originRef: row.origin_ref,
+        hatchedAt: row.hatched_at,
+      },
+    }));
   }
 
   /** How many stand in the vivarium now. */
@@ -106,6 +159,64 @@ export class PetStore {
   petActionKeys(): Set<string> {
     const rows = this.ctx.db.prepare(`SELECT kind, ref FROM pet_actions`).all() as { kind: string; ref: string }[];
     return new Set(rows.map((row) => `${row.kind}:${row.ref}`));
+  }
+
+  /**
+   * Every rolled action in the order it was written, with what it came to.
+   *
+   * **`rowid`, not `at`** — the same reason {@link petActionsSinceHatch} counts
+   * that way. A scan settles several actions in one pass and a busy minute stamps
+   * them identically, so an order taken from the timestamp is not the order pity
+   * counted them in, and a replay reading it would disagree with the harness about
+   * which action was forced.
+   */
+  petActionLog(): PetAction[] {
+    const rows = this.ctx.db.prepare(`SELECT kind, ref, at, pet_id FROM pet_actions ORDER BY rowid`).all() as {
+      kind: string;
+      ref: string;
+      at: string;
+      pet_id: string | null;
+    }[];
+    return rows.map((row) => ({
+      kind: row.kind as PetActionKind,
+      ref: row.ref,
+      at: row.at,
+      petId: row.pet_id,
+    }));
+  }
+
+  /**
+   * Every rolled action, by key, with what it came to.
+   *
+   * The wider read behind {@link petActionKeys}, and what an attestation is
+   * checked against: a pet whose origin names no row here, or a row that hatched
+   * something else, was not put there by the scan. Read once per snapshot and
+   * shared across the whole vivarium — the alternative is a query per card on a
+   * surface the socket redraws constantly.
+   */
+  petActionIndex(): Map<string, { at: string; petId: string | null }> {
+    const rows = this.ctx.db.prepare(`SELECT kind, ref, at, pet_id FROM pet_actions`).all() as {
+      kind: string;
+      ref: string;
+      at: string;
+      pet_id: string | null;
+    }[];
+    return new Map(rows.map((row) => [`${row.kind}:${row.ref}`, { at: row.at, petId: row.pet_id }]));
+  }
+
+  /**
+   * What each pet's purchases actually paid for, by pet id.
+   *
+   * `pets.fed` is a cache of this sum, written in the same transaction as the
+   * purchase. The two disagreeing means either a torn write or a hand-edited
+   * column, and both read identically from the card: a creature further along
+   * than anything bought it.
+   */
+  petPaidTotals(): Map<string, number> {
+    const rows = this.ctx.db
+      .prepare(`SELECT pet_id, COALESCE(SUM(beats), 0) AS total FROM pet_purchases GROUP BY pet_id`)
+      .all() as { pet_id: string; total: number }[];
+    return new Map(rows.map((row) => [row.pet_id, row.total]));
   }
 
   /**
@@ -225,6 +336,54 @@ export class PetStore {
  */
 export const VIVARIUM_SLOTS = 4;
 
+/**
+ * The identity fields one link covers.
+ *
+ * Everything that says *which creature this is and where it came from*, and
+ * nothing that legitimately changes afterwards: `name`, `fed`, `placed` and
+ * `dissolved_at` all move in ordinary use, and a chain over them would break on
+ * the first rename.
+ */
+export interface ChainInput {
+  id: string;
+  species: PetSpecies;
+  seed: string;
+  originKind: PetActionKind;
+  originRef: string;
+  hatchedAt: string;
+}
+
+/**
+ * One link: this pet's identity, hashed onto the link before it.
+ *
+ * **What it buys, precisely.** A pet cannot be edited or slipped into the middle
+ * of the collection without every link after it going wrong, and recomputing the
+ * tail is work an idle `UPDATE` will not do. What it does *not* buy is protection
+ * against an append: a forger writing the newest row can chain onto the newest
+ * link as easily as the harness can. That is a real limit and it is why the chain
+ * is one check of several rather than the check.
+ *
+ * SHA-256 rather than the `hash32` the roll uses: a 32-bit link is a chain anybody
+ * can collide by trying, and unlike the roll there is no reason here to want a
+ * number small enough to index with.
+ *
+ * @public — recomputed by `src/pets/attest.ts`, which is the only reader.
+ */
+export function chainLink(previous: string | null, pet: ChainInput): string {
+  const body = [previous ?? '', pet.id, pet.species, pet.seed, pet.originKind, pet.originRef, pet.hatchedAt].join(
+    '\u0000',
+  );
+  return createHash('sha256').update(body).digest('hex');
+}
+
+interface ChainRow {
+  species: string;
+  seed: string;
+  origin_kind: string;
+  origin_ref: string;
+  hatched_at: string;
+}
+
 interface PetRow {
   id: string;
   species: string;
@@ -236,6 +395,9 @@ interface PetRow {
   hatched_at: string;
   placed: number;
   dissolved_at: string | null;
+  built_sha: string | null;
+  built_clean: number | null;
+  chain: string | null;
 }
 
 function rowToPet(row: PetRow): Pet {
@@ -252,5 +414,8 @@ function rowToPet(row: PetRow): Pet {
     // Nullable *and* possibly absent: added by `ensureColumns` on databases from
     // an older build, where the read would otherwise be `undefined` rather than null.
     dissolvedAt: row.dissolved_at ?? null,
+    builtSha: row.built_sha ?? null,
+    builtClean: row.built_clean === 1,
+    chain: row.chain ?? null,
   };
 }

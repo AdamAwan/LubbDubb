@@ -2760,7 +2760,47 @@ export interface Pet {
    * its origin, draws greyed, and can no longer be fed or placed.
    */
   dissolvedAt: string | null;
+  /**
+   * The harness build that rolled it, and whether that build's own checkout was
+   * clean. Null and false when no reading could be taken.
+   *
+   * Taking the rates out of the config stops an operator dialling a vivarium into
+   * existence; it stops nothing at all for one willing to edit `src/pets/rules.ts`
+   * and restart. This is what makes that visible — and what lets the replay check
+   * accuse anything safely, since a pet stamped with a build that is not the
+   * running one is a pet the running constants cannot judge.
+   */
+  builtSha: string | null;
+  builtClean: boolean;
+  /**
+   * This row's link in the hatch chain: its identity hashed onto the link before
+   * it. Null on every pet from before the chain existed.
+   */
+  chain: string | null;
 }
+
+/**
+ * Why a pet does not verify against the record of what the operator did.
+ *
+ * Coded rather than a boolean, because "this one is not real" is a sentence
+ * an operator will want a reason for — and the reasons are different enough that
+ * one of them is a bug in the harness rather than a forgery. → `src/pets/attest.ts`
+ */
+/** One failed check, with the sentence the card draws under the sprite. */
+export interface PetFlaw {
+  code: 'unrecorded' | 'misdated' | 'impossible' | 'overfed' | 'broken-chain' | 'unearned';
+  note: string;
+}
+
+/**
+ * What kind of build hatched a pet, as the card reports it.
+ *
+ * `unknown` is the honest answer for every pet from before the stamp existed, and
+ * for a tarball install that is not a git checkout at all. It is **not** a
+ * suspicion: the checks that could accuse a pet decline to judge an unknown build
+ * rather than assuming the worst of it.
+ */
+export type PetProvenance = 'official' | 'modified' | 'unknown';
 
 /**
  * One operator action the scan has already rolled, and what came of it.
@@ -2780,7 +2820,7 @@ export interface PetAction {
 
 /** What beats there are, and where they went. All three are derived at read time. */
 export interface PetWallet {
-  /** `floor(lifetime cost × beatsPerDollar)`. Only ever grows. */
+  /** `floor(lifetime cost × PET_RULES.beatsPerDollar)`. Only ever grows. */
   earned: number;
   spent: number;
   balance: number;

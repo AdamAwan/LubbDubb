@@ -5563,6 +5563,21 @@ body {
 .pet-blended {
   margin: 0;
 }
+/* A pet that does not verify reads as *questioned*, not as failed: amber rather
+   than red, because the likeliest cause is a restored database and not a forgery,
+   and the card is still the operator's record either way. Tinted through the
+   amber tokens so it follows whichever theme is on. */
+.pet-card.is-flawed {
+  border-color: var(--amber-line);
+}
+.pet-flaw {
+  margin: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--amber-line);
+  background: var(--amber-fill);
+  color: var(--text);
+  line-height: 1.45;
+}
 .pet-frame {
   height: 96px;
   display: flex;

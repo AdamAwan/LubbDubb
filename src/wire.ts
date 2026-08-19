@@ -81,6 +81,8 @@ import type {
   Job,
   JobAttachment,
   Pet,
+  PetFlaw,
+  PetProvenance,
   PetRarity,
   PetStage,
   PetWallet,
@@ -1024,6 +1026,7 @@ export type {
   PlanPartInput,
   PlanRevision,
   Pet,
+  PetFlaw,
   PetRarity,
   PetSpecies,
   PetStage,
@@ -1096,6 +1099,25 @@ export interface PetView extends Pet {
   stage: PetStage;
   /** Beats still owed to the next stage, or null for an adult. */
   beatsToNextStage: number | null;
+  /**
+   * Why this one does not verify against the record of what you did, or null when
+   * it does.
+   *
+   * Computed server-side on every snapshot, for the same reason `stage` is: the
+   * check is a re-roll of the pet's own origin, and a cockpit that did it too
+   * would be a second implementation of the arithmetic that decides whether a
+   * creature is real. → `docs/spec/22-pets.md#authenticity`
+   */
+  flaw: PetFlaw | null;
+  /**
+   * What kind of build hatched it: an official one, one running uncommitted
+   * changes, or no reading at all.
+   *
+   * Descriptive, never a verdict. `unknown` is what every pet from before the
+   * stamp existed reports, and what a deployment that is not a git checkout always
+   * will. → `docs/spec/22-pets.md#authenticity`
+   */
+  provenance: PetProvenance;
 }
 
 /** The whole vivarium, as it rides on the state snapshot. */
