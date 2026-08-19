@@ -1212,4 +1212,21 @@ export interface PetState {
   wallet: PetWallet;
   /** How many pets stand in the enclosure at once, so the cockpit refuses the fifth in the same words the server does. */
   slots: number;
+  /**
+   * When this vivarium started counting, or null on a deployment whose first
+   * enabled scan has not run yet.
+   *
+   * Shipped so the cockpit can *say* it. Nothing an operator can see otherwise
+   * distinguishes a harness that pays nothing for a year of escalations, jobs and
+   * findings from one that is simply broken — the actions are on record, the
+   * enclosure is empty, and the page's own rates argue that something should have
+   * dropped by now. The date is the whole answer, and it only exists here.
+   *
+   * Null is a real state rather than a placeholder, and it lasts one boot: the
+   * start is stamped by the keeper's first scan, not by the `Store`, so a
+   * deployment sitting with pets turned off does not burn a date it cannot use.
+   * A surface draws nothing at all rather than a sentence about a boundary that
+   * has not been decided.
+   */
+  startedAt: string | null;
 }

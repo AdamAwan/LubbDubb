@@ -1124,6 +1124,23 @@ test('the roll never reaches for randomness', () => {
   }
 });
 
+test('the state carries the vivarium’s start, so the cockpit can say why a backlog paid nothing', () => {
+  const { store, pets } = coldKeeper({ dropChance: 1 });
+  assert.equal(
+    pets.state()?.startedAt,
+    null,
+    'before the first scan there is no start, and a surface draws nothing rather than a placeholder',
+  );
+  // Read, never stamped: `state()` runs on every heartbeat, and a read that wrote
+  // the boundary would start the vivarium on whichever pulse first drew the
+  // cockpit rather than on the first scan that could hatch anything.
+  assert.equal(store.vivariumStart(), null, 'drawing the cockpit does not start the vivarium');
+
+  answer(store, 'hatch me something');
+  pets.scan();
+  assert.equal(pets.state()?.startedAt, store.vivariumStart(), 'and afterwards it is the store’s own start');
+});
+
 /** Source with block and line comments removed, so prose about a call is not the call. */
 function stripComments(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');

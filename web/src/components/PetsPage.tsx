@@ -11,6 +11,7 @@ import type {
   PetState,
 } from '../types.js';
 import { SpeciesSprite } from './SpeciesSprite.js';
+import { absDate } from './util.js';
 
 /**
  * The catalogue: every species that exists, what each costs, and how often it
@@ -94,6 +95,21 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
           You have found <b>{found.size}</b> of {species.length}. A pet you have not found keeps its rate and its
           sources, and withholds its name, its grown forms and its colours.
         </p>
+        {/* The one thing on this page that is about *this* deployment rather than
+            about the tables. Every rate above is a claim about what an action is
+            worth, and on a harness that took pets long after it started working
+            there is a whole history of actions those rates visibly did not pay
+            for — which reads as the feature being broken. It is not: the vivarium
+            counts from a start, and this says when that was. Drawn only once the
+            start exists, because a sentence about a boundary nothing has decided
+            yet would be worse than the silence. */}
+        {pets.startedAt === null ? null : (
+          <p className="muted small">
+            This vivarium has been counting since <b>{absDate(pets.startedAt)}</b>. Anything done before then is on
+            record and pays nothing — otherwise a harness that took pets years in would roll all of it in one pass, and
+            spend its first pet on something nobody remembers doing.
+          </p>
+        )}
       </div>
 
       <h3 className="species-h">Drop rates</h3>

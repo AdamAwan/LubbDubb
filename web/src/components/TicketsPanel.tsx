@@ -17,7 +17,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import { stateColour } from '../stateColour.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Ref, RefLinksExtended } from './refs.js';
-import { fmtUsd, relAge } from './util.js';
+import { absDate, fmtUsd, relAge } from './util.js';
 
 /** What the tab is narrowed to, grouped and ordered by — every field of it a `Place` field. */
 interface TicketQueryPlace {
@@ -917,11 +917,4 @@ function SortHead({
       </button>
     </span>
   );
-}
-
-/** The floor's date, as someone would say it. */
-function absDate(iso: string): string {
-  const at = new Date(iso).getTime();
-  if (!Number.isFinite(at)) return iso;
-  return new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 }
