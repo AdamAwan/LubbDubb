@@ -98,6 +98,23 @@ export interface CiCheck {
    * prompt is composed exactly as it was before this existed.
    */
   evidenceRef?: string;
+  /**
+   * How the provider that reported this check **queues a fresh run of it** — an
+   * Azure policy-evaluation id (`src/integrations/azure/sourceControl.ts`).
+   *
+   * Opaque above the integration that wrote it, exactly as {@link evidenceRef}
+   * is: nothing outside `src/integrations/<provider>/` parses or renders it, it
+   * is handed straight back to the same provider's `CiCheckRequeueCapable`
+   * write, and that is what lets a provider with an entirely different job model
+   * share the field later without a union every reader would have to widen.
+   *
+   * Only ever set alongside {@link expired}, which is the only state a requeue
+   * answers: a check that is genuinely running needs no second run, and a check
+   * with a verdict has already had one. Absent therefore reads as "nothing the
+   * harness can queue itself", which is where rule `pr-ci-gate` dispatches the
+   * agent it always did.
+   */
+  requeueRef?: string;
 }
 
 /** GitHub's `mergeable_state`, normalised to the values the harness reacts to. */
@@ -2553,6 +2570,7 @@ type ActionType =
   | 'propose_plan'
   | 'propose_shortfall'
   | 'update_pr_branch'
+  | 'requeue_ci_check'
   | 'set_work_item_state'
   | 'no_op';
 

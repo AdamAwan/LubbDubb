@@ -23,6 +23,7 @@ import { prHealth } from '../src/prHealth.js';
 import { prAttentionStatus, type PrAttentionContext } from '../src/prAttention.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import type { AzPolicyEvaluation, AzPull, AzureDevOpsApi } from '../src/integrations/azure/azureDevOpsApi.js';
+import type { ActionSink } from '../src/sink/actionSink.js';
 import type { PullRequest, WorldSnapshot } from '../src/types.js';
 
 /**
@@ -40,6 +41,13 @@ import type { PullRequest, WorldSnapshot } from '../src/types.js';
  * the running one is not, and nothing downstream of `ciStatus` moves for either —
  * a build that has not run is not a failing build, and must never claim the pull
  * request cannot merge.
+ *
+ * And, since #395, what the harness does about it: the expiry has exactly one
+ * resolution and the evaluation carries the handle for it, so the gate is cleared
+ * with one provider write rather than a worktree, a pool slot and a model. The
+ * agent is still the floor — for a check an operator wrote guidance for, for an
+ * evaluation that arrived without an id, and for a requeue the provider would not
+ * perform.
  *
  * And the operator's way out, for a deployment where required builds expire on
  * every push: a `pending`-only `ignore` rule mutes the chase and leaves the same
@@ -59,6 +67,8 @@ function evaluation(over: Partial<AzPolicyEvaluation> = {}): AzPolicyEvaluation 
     status: 'queued',
     isBlocking: true,
     isEnabled: true,
+    // Azure puts one on every evaluation; it is what a requeue is addressed to.
+    evaluationId: 'eval-31702-ci',
     ...over,
   };
 }
@@ -69,6 +79,12 @@ const EXPIRED = evaluation({ isExpired: true });
 const RUNNING = evaluation({ status: 'running' });
 /** The same policy having actually run and failed — the side muting the expiry must not touch. */
 const REJECTED = evaluation({ status: 'rejected' });
+/**
+ * Expired, and with nothing to address a requeue to. The state every expired build
+ * was in before #395 mapped the evaluation's own id, and the one the direct path
+ * has to fall back out of rather than guess its way through.
+ */
+const UNADDRESSABLE = evaluation({ isExpired: true, evaluationId: undefined });
 
 /**
  * The operator's lever for a check that expires on every push: mute the *waiting*
@@ -93,12 +109,28 @@ function pull(over: Partial<AzPull> = {}): AzPull {
   };
 }
 
+/** What a scripted requeue answers, and what it was asked to restart. */
+interface RequeueScript {
+  /** Evaluation ids the provider was asked to requeue, in order. */
+  asked: string[];
+  /** Azure's answer. `refuse` is a 200 whose record comes back still expired; `throw` is a failed call. */
+  answer?: 'requeued' | 'refuse' | 'throw';
+}
+
 /** The slice of the provider seam this exercises; anything unscripted throws rather than returning empty. */
-function fakeApi(evals: AzPolicyEvaluation[]): AzureDevOpsApi {
+function fakeApi(evals: AzPolicyEvaluation[], requeue: RequeueScript = { asked: [] }): AzureDevOpsApi {
   const unused = (name: string) => (): never => {
     throw new Error(`${name} is not scripted in this test`);
   };
   return {
+    async requeuePolicyEvaluation(evaluationId) {
+      requeue.asked.push(evaluationId);
+      if (requeue.answer === 'throw') throw new Error('403 Forbidden (PAT lacks Build execute)');
+      // The refusal that is not an error: Azure answers with the record, and the
+      // record is still expired, which is the only thing that says nothing ran.
+      if (requeue.answer === 'refuse') return { status: 'queued', isExpired: true };
+      return { status: 'queued', isExpired: false };
+    },
     async viewerUniqueName() {
       return 'bot@example.com';
     },
@@ -145,8 +177,38 @@ async function azurePullRequests(evals: AzPolicyEvaluation[]): Promise<PullReque
   return slice.pullRequests ?? [];
 }
 
+/**
+ * An outbound sink that is the **real** Azure integration for the one act this
+ * exercises, and unscripted for everything else.
+ *
+ * The requeue's whole subtlety — a 200 that changed nothing reads as `ok: false` —
+ * lives in the integration, so a hand-written stub here would be asserting the
+ * test's own opinion of the provider rather than the harness's.
+ */
+function azureSink(evals: AzPolicyEvaluation[], requeue: RequeueScript): ActionSink {
+  const integration = new AzureDevOpsSourceControlIntegration({ api: fakeApi(evals, requeue) });
+  const unused = (name: string) => (): never => {
+    throw new Error(`${name} is not scripted in this test`);
+  };
+  return {
+    requeueCiCheck: (input) => integration.requeueCiCheck(input),
+    postPrReply: unused('postPrReply'),
+    mergePr: unused('mergePr'),
+    setPrLabel: unused('setPrLabel'),
+    setIssueLabel: unused('setIssueLabel'),
+    setWorkItemState: unused('setWorkItemState'),
+    upsertIssueComment: unused('upsertIssueComment'),
+    linkWorkItem: unused('linkWorkItem'),
+    createPullRequest: unused('createPullRequest'),
+    setPullTitle: unused('setPullTitle'),
+    setPullBase: unused('setPullBase'),
+    updatePrBranch: unused('updatePrBranch'),
+    deleteBranch: unused('deleteBranch'),
+  };
+}
+
 /** A whole system on fakes, pulsing on the Azure-derived world. `ci.checks` is empty unless a policy is given. */
-function build(pullRequests: PullRequest[], ci: CiPolicy = { checks: [] }): System {
+function build(pullRequests: PullRequest[], ci: CiPolicy = { checks: [] }, sink?: ActionSink): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-expired-'));
   const system = buildSystem(
     loadConfig({
@@ -159,7 +221,12 @@ function build(pullRequests: PullRequest[], ci: CiPolicy = { checks: [] }): Syst
       defaultBranch: 'Development',
       ci,
     }),
-    { backend: new FakePtyBackend(), worktrees: new FakeWorktreeManager(dir), errorMirror: () => {} },
+    {
+      backend: new FakePtyBackend(),
+      worktrees: new FakeWorktreeManager(dir),
+      errorMirror: () => {},
+      ...(sink ? { sink } : {}),
+    },
   );
   const world: WorldSnapshot = { takenAt: '2026-08-14T09:00:00.000Z', pullRequests, issues: [] };
   system.connector.getState = async () => world;
@@ -167,7 +234,14 @@ function build(pullRequests: PullRequest[], ci: CiPolicy = { checks: [] }): Syst
 }
 
 test('an expired queued build maps to a pending check flagged expired; a running one does not', () => {
+  // The evaluation's own id rides along as the requeue handle — only here, because
+  // expired is the only state a fresh run answers.
   assert.deepEqual(listPolicyCiChecks([EXPIRED]), [
+    { name: 'Example-CI', status: 'pending', blocking: true, expired: true, requeueRef: 'eval-31702-ci' },
+  ]);
+  // An evaluation that arrived without one is expired all the same; it simply has
+  // nothing the harness can address, which is the agent's case.
+  assert.deepEqual(listPolicyCiChecks([UNADDRESSABLE]), [
     { name: 'Example-CI', status: 'pending', blocking: true, expired: true },
   ]);
   // The distinction Azure's `status` cannot make, and the reason the flag exists.
@@ -251,20 +325,100 @@ test('escalate on a pending-only rule is still refused, and says why', () => {
   );
 });
 
-test('the harness dispatches a gate agent for the expired build, through buildSystem', async () => {
-  const system = build(await azurePullRequests([EXPIRED]));
+test('the harness clears the expired build with one write and no agent, through buildSystem', async () => {
+  const requeue: RequeueScript = { asked: [] };
+  const system = build(await azurePullRequests([EXPIRED]), { checks: [] }, azureSink([EXPIRED], requeue));
+  await system.harness.runCycle('manual');
+
+  // The whole point of #395: the harness knows what an expired build needs, so it
+  // does it — no worktree, no pool slot, no model.
+  assert.deepEqual(system.store.listTasks(), [], 'no agent is spent on a gate whose cause is known');
+  assert.deepEqual(requeue.asked, ['eval-31702-ci']);
+
+  const decision = system.store
+    .listDecisions()
+    .find((d) => d.action.type === 'requeue_ci_check' && d.action.originRef === 'pr:31702:ci-gate');
+  assert.equal(decision?.outcome, 'executed');
+  assert.equal(decision?.rule, 'pr-ci-gate');
+  // It lands on the gate's own origin, which is what keeps the attempt accounting
+  // whole: three requeues that leave the check expired escalate, they don't loop.
+  assert.match(decision!.detail ?? '', /Example-CI/);
+  system.store.close();
+});
+
+test('a requeue the provider will not perform falls back to the dispatch it always was', async () => {
+  // Azure answers 200 and changes nothing — the case that looks identical to a
+  // successful requeue until the evaluation is read again, and the reason the
+  // integration reads `isExpired` off the answer rather than trusting the status.
+  const requeue: RequeueScript = { asked: [], answer: 'refuse' };
+  const system = build(await azurePullRequests([EXPIRED]), { checks: [] }, azureSink([EXPIRED], requeue));
+  await system.harness.runCycle('manual');
+
+  assert.deepEqual(requeue.asked, ['eval-31702-ci']);
+  assert.deepEqual(system.store.listTasks(), [], 'the write is tried before the agent, not beside it');
+  const refused = system.store.listDecisions().find((d) => d.action.type === 'requeue_ci_check');
+  assert.equal(refused?.outcome, 'skipped', 'a provider that would not do it is a configuration, not an error');
+
+  // The next pulse reads that row back out of the audit log and sends the agent,
+  // with the prompt and the expiry note it carried before the direct path existed.
+  await system.harness.runCycle('manual');
+  const task = system.store.listTasks().find((t) => t.originRef === 'pr:31702:ci-gate');
+  assert.ok(task, 'the gate is never left waiting because the cheap path was unavailable');
+  assert.equal(task.branch, 'feature/expiry');
+  assert.match(task.prompt, /waiting, not failing/);
+  assert.match(task.prompt, /expired, not running — Example-CI/);
+  assert.equal(requeue.asked.length, 1, 'and the refused write is not tried again while the row stands');
+  system.store.close();
+});
+
+test('a requeue that fails is recorded as an error and falls back the same way', async () => {
+  const requeue: RequeueScript = { asked: [], answer: 'throw' };
+  const errors: string[] = [];
+  const system = build(await azurePullRequests([EXPIRED]), { checks: [] }, azureSink([EXPIRED], requeue));
+  system.errors.on('logged', (e) => errors.push(e.message));
+  await system.harness.runCycle('manual');
+
+  const rejected = system.store.listDecisions().find((d) => d.action.type === 'requeue_ci_check');
+  assert.equal(rejected?.outcome, 'rejected');
+  // A failure the harness recovers from on its own is still visible as a failure.
+  assert.equal(errors.length, 1);
+  assert.match(errors[0]!, /Requeueing the expired check\(s\) on PR #31702 failed/);
+
+  await system.harness.runCycle('manual');
+  assert.ok(system.store.listTasks().find((t) => t.originRef === 'pr:31702:ci-gate'));
+  system.store.close();
+});
+
+test('an expired evaluation with nothing to address keeps its agent', async () => {
+  // The provider reported the expiry and handed over no handle. Nothing to write,
+  // so this is the dispatch it always was — and the sink is never asked.
+  const requeue: RequeueScript = { asked: [] };
+  const system = build(await azurePullRequests([UNADDRESSABLE]), { checks: [] }, azureSink([UNADDRESSABLE], requeue));
   await system.harness.runCycle('manual');
 
   const task = system.store.listTasks().find((t) => t.originRef === 'pr:31702:ci-gate');
   assert.ok(task, 'the expired build should be claimed on the gate origin');
   assert.equal(task.branch, 'feature/expiry');
-  assert.match(task.prompt, /waiting, not failing/);
   assert.match(task.prompt, /expired, not running — Example-CI/);
+  assert.deepEqual(requeue.asked, []);
+  system.store.close();
+});
 
-  const decision = system.store
-    .listDecisions()
-    .find((d) => d.action.type === 'dispatch_code_agent' && d.action.originRef === 'pr:31702:ci-gate');
-  assert.equal(decision?.rule, 'pr-ci-gate');
+test('a check that is both expired and guided keeps its agent — the operator outranks the known cause', async () => {
+  // The one case where the harness knowing what an expired build needs is not the
+  // last word: an operator wrote guidance about this check knowing what it is, and
+  // a requeue would do something other than what they asked for.
+  const guided: CiPolicy = {
+    checks: [{ match: 'Example-*', states: ['pending'], onFailure: 'dispatch', guidance: 'Ask #build-eng to run it.' }],
+  };
+  const requeue: RequeueScript = { asked: [] };
+  const system = build(await azurePullRequests([EXPIRED]), guided, azureSink([EXPIRED], requeue));
+  await system.harness.runCycle('manual');
+
+  const task = system.store.listTasks().find((t) => t.originRef === 'pr:31702:ci-gate');
+  assert.ok(task, 'guidance keeps the gate on an agent');
+  assert.match(task.prompt, /Ask #build-eng to run it\./);
+  assert.deepEqual(requeue.asked, [], 'and nothing is queued behind the operator’s back');
   system.store.close();
 });
 

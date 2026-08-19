@@ -165,6 +165,7 @@ cockpit's link map.
 | `pr:<n>`                     | A pull request (world events, link map)             | —                          |
 | `pr:<n>:ci`                  | A PR's failing-CI concern                           | the PR's own `branch`      |
 | `pr:<n>:mergeable`           | A PR's base-update / conflict concern¹              | the PR's own `branch`      |
+| `pr:<n>:ci-gate`             | A PR's waiting-check concern²                       | the PR's own `branch`      |
 | `pr:<n>:comments`            | A PR's unhandled review threads, together           | the PR's own `branch`      |
 | `pr:<n>:comment:<commentId>` | One review thread (a signal, not a dispatch origin) | the PR's own `branch`      |
 | `issue:<n>`                  | An issue, and its plan row's `origin_ref`           | `issue/<n>`                |
@@ -176,6 +177,11 @@ cockpit's link map.
 against the same cooldown a dispatch on this origin would
 ([05](05-dispatcher.md#pr-base-update--two-arms)). The branch column still answers for the arm that
 dispatches.
+
+² Its own origin rather than `pr:<n>:ci`, so a red build and a stuck gate never share one attempt cap.
+Also the origin of the agentless requeue of an expired build policy (`requeue_ci_check`), on
+footnote 1's reasoning exactly
+([05](05-dispatcher.md#pr-ci-gate-a-check-that-waits-rather-than-fails)).
 
 **Origin and branch are 1:1 for every world-driven rule.** That is why the origin de-duplication gate
 already functions as a branch gate. Rule `manual-job` (`job:<id>`) is the one dispatch path where the property

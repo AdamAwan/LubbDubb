@@ -60,6 +60,15 @@ export interface PrBaseUpdateInput {
   base: string;
 }
 
+export interface CiCheckRequeueInput {
+  /** The pull request the gate sits on. For the audit line, not for the provider. */
+  prNumber: number;
+  /** The check's operator-facing name — what the audit line and the fallback prompt call it. */
+  check: string;
+  /** The provider's own handle for queueing a fresh run — `CiCheck.requeueRef`, opaque here. */
+  requeueRef: string;
+}
+
 export interface BranchDeleteInput {
   /** The branch to delete, plain — each provider adds its own `refs/heads/` prefix. */
   branch: string;
@@ -177,6 +186,21 @@ export interface ActionSink {
    * and it failed, which is the case worth an error entry.
    */
   updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult>;
+  /**
+   * Queue a fresh run of a CI check the provider reports as **expired** — the
+   * gate whose cause the harness already knows, cleared without an agent
+   * (issue #395). Only ever called for a check carrying a `requeueRef`, which is
+   * only ever set on an expired one.
+   *
+   * **`ok: false` is "the requeue did not happen", not a thrown failure**, and it
+   * covers one case more than {@link updatePrBranch}'s does. A provider with no
+   * such operation answers it from the composite, as there; and so does a
+   * provider that *has* it and declined — Azure answers 200 for a policy it will
+   * not restart, so the only honest reading of "still expired" is that nothing
+   * was queued. Both fall back to the code agent rule `pr-ci-gate` dispatched
+   * before this existed. Throws only when the call itself failed.
+   */
+  requeueCiCheck(input: CiCheckRequeueInput): Promise<SendResult>;
   /**
    * Delete a branch on the remote — the branch behind a pull request that has
    * merged. Mechanical bookkeeping like {@link setPullTitle}, so it is not auto-send

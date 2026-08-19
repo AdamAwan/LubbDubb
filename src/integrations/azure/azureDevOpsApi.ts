@@ -42,6 +42,22 @@ export interface AzureDevOpsApi {
    */
   listPolicyEvaluations(pullRequestId: number): Promise<AzPolicyEvaluation[]>;
   /**
+   * Requeue one policy evaluation — the write that starts a build for an
+   * **expired** build-validation policy (issue #395).
+   *
+   * `PATCH _apis/policy/evaluations/{evaluationId}`, which is the endpoint Azure
+   * exposes for exactly this and the reason the harness does not queue the build
+   * definition itself: queueing a definition produces a build that is not
+   * attached to this pull request's policy evaluation, so the gate would stay
+   * expired while a build ran.
+   *
+   * Returns the record Azure answers with rather than nothing, because the call
+   * succeeding and the requeue *happening* are different facts: Azure answers 200
+   * for a policy it declines to restart, and the returned `isExpired` is the only
+   * thing that tells them apart before the next snapshot.
+   */
+  requeuePolicyEvaluation(evaluationId: string): Promise<AzPolicyRequeue>;
+  /**
    * A build's timeline: one record per stage/phase/job/task, each carrying its
    * result, its log id, and — the useful part — the `issues` the task raised.
    *
@@ -220,6 +236,17 @@ interface AzComment {
 
 export interface AzPolicyEvaluation {
   /**
+   * The evaluation's own id — the handle a **requeue** is addressed to
+   * ({@link AzureDevOpsApi.requeuePolicyEvaluation}), and the only thing on the
+   * record that identifies this evaluation rather than the policy behind it.
+   *
+   * Optional because it is read from the wire like everything else here, and a
+   * response without one leaves the harness with nothing to requeue — which is a
+   * check rule `pr-ci-gate` dispatches an agent for, exactly as it did before the
+   * direct path existed.
+   */
+  evaluationId?: string;
+  /**
    * The policy configuration's well-known type GUID (stable across every org).
    * Identifies build-validation vs status vs required-reviewers vs … so callers
    * can keep `ciStatus` to *automated* checks only.
@@ -280,6 +307,17 @@ export interface AzPolicyEvaluation {
   isBlocking: boolean;
   /** False when the policy is disabled; a disabled policy's evaluation is noise. */
   isEnabled: boolean;
+}
+
+/**
+ * What a requeue came back as — the evaluation record, narrowed to the two fields
+ * that say whether the requeue took.
+ */
+export interface AzPolicyRequeue {
+  /** queued | running | approved | rejected | notApplicable | broken | null. */
+  status: string | null;
+  /** `context.isExpired` again: still true means Azure changed nothing. */
+  isExpired?: boolean;
 }
 
 /** One node of a build's timeline — a stage, phase, job or task. */

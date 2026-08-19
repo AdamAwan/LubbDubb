@@ -27,6 +27,7 @@ is rejected and audited rather than executed.
 | `merge_pr`            | `prNumber`, `reason`                      | `method` (`merge`\|`squash`\|`rebase`, default `squash`), `confidence`, `rule` |
 | `propose_plan`        | `planId`, `originRef`, `prompt`, `reason` | `rule`                                                                         |
 | `update_pr_branch`    | `prNumber`, `base`, `originRef`, `reason` | `rule`                                                                         |
+| `requeue_ci_check`    | `prNumber`, `checks`, `originRef`, `reason` | `rule`                                                                       |
 | `set_work_item_state` | `number`, `state`, `reason`               | `rule`                                                                         |
 | `no_op`               | `reason`                                  | `rule`                                                                         |
 
@@ -149,12 +150,45 @@ it, the same way an unclaimed _failing_ check dispatches: expiry is the provider
 is coming, which is not an opinion an operator improves on, and the config-only alternative
 (`states: ["pending"]` on the build checks) fires equally on builds that are merely mid-flight. A rule
 claiming the check in `pending` with a non-dispatch action still shadows it. Everything else about the
-rule is shared — one origin, one cap, the same stack guard, and the same escalation when the agent
-cannot queue the build. → [07](07-pull-requests.md#ci-checks),
+rule is shared — one origin, one cap, the same stack guard. → [07](07-pull-requests.md#ci-checks),
 [15](15-integrations.md#the-azure-provider)
 
+**And only one of them is an agent's job** (issue #395). The guided arm genuinely is: only the
+operator's words can say what releases a check they asked to be watched, and the prompt is built
+around carrying them. The expired arm is not — the harness knows exactly what the state is and
+exactly what clears it, and the evaluation hands over the id to address a requeue to. So the concern
+carries an `act`, exactly as `pr-base-update`'s `behind` arm does, and the same paragraph applies word
+for word: a staffed branch is still told rather than written to, the act takes the same
+`dispatchVerdict` on the same origin, nobody authorizes it, and it gets no queue row.
+`requeue_ci_check` names every expired check on the gate in one action — the concern is one per pull
+request, and splitting a repository's two required builds across pulses would spend the origin's whole
+attempt budget on a gate nothing was wrong with
+([09](09-execution.md#requeue_ci_check--the-expired-build-without-an-agent)).
+
+The direct path is **all-or-nothing across the gate's checks**, because the dispatch it replaces is
+one agent for the whole of it. Three things put a check back on the agent, and any one of them takes
+the gate with it:
+
+- **A watched check that is not expired.** It is waiting on something only the operator's `guidance`
+  names; there is nothing to requeue.
+- **Expired _and_ guided.** The operator's words outrank the known cause: they wrote them about this
+  check knowing what it is, so a requeue would do something other than what they asked and then
+  report the gate cleared.
+- **No `requeueRef`.** The provider reported the expiry and handed over nothing to address — the state
+  every expired build was in before this existed.
+
+**The fallback is the same shape, and a pulse later.** A provider that cannot requeue answers
+`ok: false` from the composite, and so does Azure answering 200 for a policy it declined to restart —
+`skipped` either way, audited and not an error; a call that fails is `rejected` and _is_ recorded.
+`directActUnperformed` reads that row back out of `recentDecisions` on the next pulse and builds the
+concern as the dispatch it always was, with the same `pr-ci-gate` prompt and the same expiry note. So
+a gate is never left waiting merely because the cheap path was unavailable, and the memory is the
+audit log — the same place the cooldown reads its attempts.
+
 The prompt is `pr-ci-gate`, written for a gate rather than a red build — `pr-ci-fix` tells an agent to
-investigate a failure, which here is an instruction to go looking for a bug that does not exist. The
+investigate a failure, which here is an instruction to go looking for a bug that does not exist. It is
+unchanged by the direct path above: it is what the fallback sends, and what an expired check that
+carries guidance or no handle still gets. The
 waiting check names, the rule's `guidance` and the expiry note (what an expired check needs, since no
 operator wrote guidance for a check nobody had to name) are **appended** to the rendered template,
 never interpolated: an operator override that predates this feature would silently drop a new
@@ -300,7 +334,7 @@ The whole ranked list — above and below the cut — is returned as `DispatchRe
 ```mermaid
 flowchart TD
     CTX(["DispatchContext"]) --> WALK["walk DISPATCH_PIPELINE in order,<br/>running each rule whose enabled predicate says the operator has it on"]
-    WALK --> NA["non-dispatch acts, pushed straight through<br/>merge_pr · propose_plan · set_work_item_state · update_pr_branch<br/>escalate_to_human · respond_to_agent"]
+    WALK --> NA["non-dispatch acts, pushed straight through<br/>merge_pr · propose_plan · set_work_item_state · update_pr_branch<br/>requeue_ci_check · escalate_to_human · respond_to_agent"]
     WALK --> CAND["one Candidate list, appended as the walk proceeds —<br/>so the pipeline order is the priority"]
     CAND --> OV["rankByPriorityOverride<br/>manual jobs first · a flagged goal's whole subtree next · overridden origins after that · the rest in their natural order"]
     OV --> CUT{"the headroom cut — one walk"}
@@ -362,7 +396,7 @@ A superseded candidate is **queued, not dropped** — with the superseding rule 
 and attributed to the rule that proposed it rather than to whatever held it.
 
 Non-dispatch actions (`merge_pr`, `propose_plan`, `set_work_item_state`, `update_pr_branch`,
-`escalate_to_human`, `respond_to_agent`) are
+`requeue_ci_check`, `escalate_to_human`, `respond_to_agent`) are
 pushed directly, because they claim no headroom.
 
 ### Operator re-ordering (issue #128)
@@ -465,7 +499,8 @@ missing memory, purely from the audit log:
 
 `DEFAULT_COOLDOWN` is `{ maxAttempts: 3, cooldownMs: 900000 }` (15 minutes). Only **executed**
 dispatches count as attempts: a deferred one (paused, or no headroom) never ran. An executed
-`update_pr_branch` counts too, on its `originRef` — the question is how many times the harness has
+`update_pr_branch` counts too, on its `originRef` — and a `requeue_ci_check` for the same reason —
+because the question is how many times the harness has
 tried to clear an origin, not how many agents it spent, and an act that runs and leaves the PR behind
 is the same loop a dispatch that leaves it behind is. A _failed_ one is not an attempt: it never
 happened, and the agent it falls back to gets the origin's full budget. "Now" is the world

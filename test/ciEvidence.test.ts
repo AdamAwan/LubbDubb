@@ -186,6 +186,7 @@ function azApi(script: AzScript): AzureDevOpsApi {
     async getBuildLog(buildId, logId) {
       return script.buildLogs?.[`${buildId}/${logId}`] ?? [];
     },
+    requeuePolicyEvaluation: unused('requeuePolicyEvaluation'),
     listRecentlyClosedPullRequests: unused('listRecentlyClosedPullRequests'),
     listOpenWorkItems: unused('listOpenWorkItems'),
     listWorkItemsChangedSince: unused('listWorkItemsChangedSince'),

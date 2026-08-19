@@ -67,6 +67,9 @@ function recordingSink(): { sink: ActionSink; states: WorkItemStateInput[] } {
     async updatePrBranch(): Promise<SendResult> {
       return { ok: true };
     },
+    async requeueCiCheck(): Promise<SendResult> {
+      return { ok: true };
+    },
     async deleteBranch(): Promise<SendResult> {
       return { ok: true };
     },
@@ -126,6 +129,9 @@ test('a failing transition is recorded as rejected, not escalated', async () => 
       return { ok: true };
     },
     async updatePrBranch(): Promise<SendResult> {
+      return { ok: true };
+    },
+    async requeueCiCheck(): Promise<SendResult> {
       return { ok: true };
     },
     async deleteBranch(): Promise<SendResult> {

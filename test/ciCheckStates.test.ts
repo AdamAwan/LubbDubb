@@ -126,6 +126,7 @@ function fakeApi(evals: AzPolicyEvaluation[], pulls: AzPull[] = [pull()]): Azure
     setPullBase: unused('setPullBase'),
     deleteBranch: unused('deleteBranch'),
     getBuildTimeline: unused('getBuildTimeline'),
+    requeuePolicyEvaluation: unused('requeuePolicyEvaluation'),
     getBuildLog: unused('getBuildLog'),
   };
 }

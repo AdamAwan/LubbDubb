@@ -84,6 +84,8 @@ interface Recorded {
   comments: Array<{ id: number; commentId: number | null; text: string }>;
   closedSince: string[];
   timelineReads: number[];
+  /** Evaluation ids `requeuePolicyEvaluation` was asked to restart. */
+  requeues: string[];
   logReads: Array<{ buildId: number; logId: number }>;
   createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
   titleSets: Array<{ id: number; title: string }>;
@@ -94,6 +96,7 @@ interface Recorded {
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
   const recorded: Recorded = {
     threadReplies: [],
+    requeues: [],
     newThreads: [],
     completions: [],
     tagQueries: [],
@@ -154,6 +157,10 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async listPolicyEvaluations(prId) {
       return script.policyEvals?.[prId] ?? [];
+    },
+    async requeuePolicyEvaluation(evaluationId) {
+      recorded.requeues.push(evaluationId);
+      return { status: 'queued', isExpired: false };
     },
     async listPullLabels(prId) {
       return script.labels?.[prId] ?? [];
