@@ -249,7 +249,7 @@ test('the print sheet answers every literal colour token', () => {
   const sheet = withoutComments(readFileSync('web/src/styles.css', 'utf8'));
   // Anchored on the newline and its two spaces, because `body.printing #print-sheet`
   // sits above the rule that carries the tokens and would otherwise match first.
-  const block = /\n  #print-sheet \{([\s\S]*?)\n  \}/.exec(sheet.slice(sheet.indexOf('@media print')));
+  const block = /\n {2}#print-sheet \{([\s\S]*?)\n {2}\}/.exec(sheet.slice(sheet.indexOf('@media print')));
   assert.ok(block, 'the print block is where this test looks for it');
   const declared = new Set([...block[1]!.matchAll(/(--[a-z0-9-]+)\s*:/g)].map((m) => m[1]!));
   const missing = requiredLiterals().filter((name) => !declared.has(name));

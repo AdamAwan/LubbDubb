@@ -10,6 +10,7 @@ import {
   type ThemePrefs,
 } from '../cockpit/theme.js';
 import { THEME_TOKENS, TOKEN_GROUPS, type ThemeToken, type TokenGroup } from '../cockpit/tokens.js';
+import { ColourField } from './ColourField.js';
 
 /**
  * The theme: a preset, and any token moved off it.
@@ -44,27 +45,6 @@ function shownValue(token: ThemeToken, draft: Readonly<Record<string, string>>):
   if (override !== undefined) return override;
   if (typeof getComputedStyle !== 'function') return '';
   return getComputedStyle(document.documentElement).getPropertyValue(token.name).trim();
-}
-
-/**
- * A colour input only understands `#rrggbb`, so an eight-digit value has to be cut
- * down for it — and the alpha put back on the way out, or dragging the picker on a
- * scrim would silently make it opaque.
- */
-function toPickerHex(value: string): string {
-  const hex = value.startsWith('#') ? value.slice(1) : '';
-  if (hex.length === 3 || hex.length === 4) {
-    return '#' + [...hex.slice(0, 3)].map((c) => c + c).join('');
-  }
-  if (hex.length >= 6) return '#' + hex.slice(0, 6);
-  return '#000000';
-}
-
-function withAlphaOf(previous: string, picked: string): string {
-  const hex = previous.startsWith('#') ? previous.slice(1) : '';
-  if (hex.length === 8) return picked + hex.slice(6);
-  if (hex.length === 4) return picked + hex[3]! + hex[3]!;
-  return picked;
 }
 
 export function ThemeSettings() {
@@ -219,23 +199,23 @@ export function ThemeSettings() {
                   <span className="th-label">{token.label}</span>
                   <span className="th-why muted">{token.why}</span>
                   <span className="th-pick">
-                    {token.kind === 'colour' && (
+                    {token.kind === 'colour' ? (
+                      <ColourField
+                        value={value}
+                        label={token.label}
+                        valid={value === '' || isTokenValue(token.name, value)}
+                        onChange={(next) => setToken(token, next)}
+                      />
+                    ) : (
                       <input
-                        type="color"
-                        className="th-col"
-                        aria-label={`${token.label} colour`}
-                        value={toPickerHex(value)}
-                        onInput={(e) => setToken(token, withAlphaOf(value, e.currentTarget.value))}
+                        type="text"
+                        className={`cf-hex${value !== '' && !isTokenValue(token.name, value) ? ' bad' : ''}`}
+                        aria-label={token.label}
+                        value={value}
+                        spellCheck={false}
+                        onChange={(e) => setToken(token, e.target.value)}
                       />
                     )}
-                    <input
-                      type="text"
-                      className={`th-hex${value !== '' && !isTokenValue(token.name, value) ? ' bad' : ''}`}
-                      aria-label={token.label}
-                      value={value}
-                      spellCheck={false}
-                      onChange={(e) => setToken(token, e.target.value)}
-                    />
                   </span>
                   {/* Drawn only when the row is overridden: a hundred disabled
                       buttons is furniture, not an affordance. */}

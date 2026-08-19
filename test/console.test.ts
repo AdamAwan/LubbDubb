@@ -23,6 +23,8 @@ const { Panel } = await import('../web/src/console/Panel.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
 const { ThemeSettings } = await import('../web/src/components/ThemeSettings.js');
+const { ColourField } = await import('../web/src/components/ColourField.js');
+const { ConfigValues } = await import('../web/src/components/ConfigValues.js');
 
 function view(over: Partial<CockpitView> = {}): CockpitView {
   const state = buildDemoState().state;
@@ -839,6 +841,91 @@ test('every config section in the strip has a render arm', () => {
   for (const id of sections) {
     assert.ok(source.includes(`tab === '${id}' &&`), `the ${id} section is in the strip with nothing to draw`);
   }
+});
+
+/**
+ * One colour control, used by two features that are otherwise unrelated.
+ *
+ * Asserted structurally because the sharing is the point and un-sharing it is a
+ * one-line temptation: a caller that wants "just a swatch here" writes its own
+ * `<input type="color">`, and then only one of the two picks up the next fix to the
+ * alpha handling or the `onInput` behaviour. The tracker-state colours had exactly
+ * that control before the theme work gave them a better one.
+ */
+test('every colour input in the cockpit is the shared field', () => {
+  const owners: string[] = [];
+  for (const path of readdirSync('web/src/components').filter((f) => f.endsWith('.tsx'))) {
+    const source = readFileSync(join('web/src/components', path), 'utf8');
+    if (source.includes("type=\"color\"")) owners.push(path);
+  }
+  assert.deepEqual(owners, ['ColourField.tsx'], 'a second colour input has appeared beside the shared one');
+});
+
+/**
+ * And the tracker-state colours really do draw it — the structural check above proves
+ * no *other* colour input exists, which is a different claim from this one.
+ *
+ * Rendered from a fixture rather than in the browser because the demo backend answers
+ * `/api/config` with no groups at all, on purpose: it refuses config writes rather than
+ * faking them, so there is nothing for the Values tab to draw there.
+ */
+test('the tracker-state colour picker draws the shared field', () => {
+  const entry = {
+    path: 'issueStateColours',
+    value: { 'In Review': '#ff8800' },
+    isDefault: false,
+    type: 'colourMap' as const,
+    access: 'plain' as const,
+    live: false,
+    env: null,
+    why: 'The colour a state chip draws in',
+  };
+  const html = renderToStaticMarkup(
+    createElement(ConfigValues, {
+      payload: {
+        groups: [{ title: 'Features', entries: [entry] }],
+        file: 'lubbdubb.config.json',
+        text: '{}',
+        revision: 'abc123',
+        pending: [],
+        canRestart: false,
+      },
+      staged: { set: {}, clear: [] },
+      saved: null,
+      group: 'Features',
+      control: { cap: 2, paused: false },
+      states: ['In Review', 'Done'],
+      onGroup: () => undefined,
+      onStage: () => undefined,
+      onReview: () => undefined,
+      onReloaded: () => undefined,
+    }),
+  );
+  assert.ok(html.includes('cfg-colours'), 'the colourMap widget is drawn');
+  assert.match(html, /class="cf"/, 'and the swatch is the shared colour field');
+  assert.ok(html.includes('value="#ff8800"'), 'showing the operator’s colour');
+  assert.ok(html.includes('aria-label="Colour for In Review"'), 'named for the state it colours');
+  // The state the map does not colour is offered, the one it does is not.
+  assert.ok(html.includes('value="Done"'), 'an uncoloured state is offered in the datalist');
+});
+
+test('the shared colour field keeps the alpha a picker cannot express', () => {
+  const seen: string[] = [];
+  const html = renderToStaticMarkup(
+    createElement(ColourField, { value: '#00000099', label: 'Modal scrim', onChange: (v) => seen.push(v) }),
+  );
+  // The picker only ever sees six digits; the field still shows all eight.
+  assert.ok(html.includes('value="#000000"'), 'the picker is handed #rrggbb');
+  assert.ok(html.includes('value="#00000099"'), 'the hex field shows the whole value');
+  assert.equal(seen.length, 0);
+});
+
+test('a refused colour is marked and still shown', () => {
+  const html = renderToStaticMarkup(
+    createElement(ColourField, { value: '#no', label: 'Border', valid: false, onChange: () => undefined }),
+  );
+  assert.match(html, /class="cf-hex bad"/, 'the field is marked');
+  assert.ok(html.includes('value="#no"'), 'and what was typed is left on screen rather than swallowed');
 });
 
 test('the theme section draws a preset picker, the token rows and the save bar', () => {

@@ -4889,15 +4889,6 @@ body {
 .cfg-colouradd .cfg-in {
   max-width: 180px;
 }
-.cfg-swatch {
-  width: 30px;
-  height: 24px;
-  padding: 2px;
-  background: #0f1114;
-  border: 1px solid var(--cn-line);
-  border-radius: var(--cn-r-sm);
-  cursor: pointer;
-}
 .cfg-colour .tickets-state {
   min-width: 90px;
   justify-content: center;
@@ -5225,6 +5216,44 @@ body {
   background: var(--cn-red-fill);
 }
 
+/* ---------- colour field ---------- */
+/* The shared colour control (`components/ColourField.tsx`): the platform picker and
+   the hex beside it. Used by the Theme section and by the tracker-state colours on
+   the Values tab, which are two unrelated features that both need one colour picked
+   — so the control is shared and nothing else about them is. */
+.cf {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cf-col {
+  width: 30px;
+  height: 24px;
+  flex: none;
+  padding: 2px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  background: var(--cn-bg);
+  cursor: pointer;
+}
+.cf-hex {
+  width: 15ch;
+  background: var(--cn-bg);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  color: var(--cn-fg);
+  font-family: var(--cn-mono);
+  font-size: 11px;
+  padding: 3px 6px;
+}
+/* A value the caller refuses is marked and left on screen, never swallowed: the
+   preview keeps the last good one, so a half-typed hex cannot blank the cockpit,
+   and the operator can still see the typo they made. */
+.cf-hex.bad {
+  border-color: var(--cn-red-line);
+  color: var(--cn-red-ink);
+}
+
 /* ---------- theme section ---------- */
 /* The Theme section of the config page. A shared component, so it styles itself
    only through the tokens — which here is also a demonstration: the surface that
@@ -5360,31 +5389,6 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-}
-.th-col {
-  width: 30px;
-  height: 22px;
-  padding: 0;
-  border: 1px solid var(--cn-line);
-  border-radius: 3px;
-  background: none;
-  cursor: pointer;
-}
-.th-hex {
-  width: 15ch;
-  background: var(--cn-bg);
-  border: 1px solid var(--cn-line);
-  border-radius: 3px;
-  color: var(--cn-fg);
-  font-family: var(--cn-mono);
-  font-size: 11px;
-  padding: 3px 6px;
-}
-/* A value the grammar will not accept is marked and simply not applied — the
-   preview keeps the last good one, so a half-typed hex never blanks the cockpit. */
-.th-hex.bad {
-  border-color: var(--cn-red-line);
-  color: var(--cn-red-ink);
 }
 .th-reset.th-reset {
   width: 22px;

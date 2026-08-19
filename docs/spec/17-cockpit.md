@@ -1381,6 +1381,17 @@ A `colourMap` is the one `entry.type` that draws more than a field: `issueStateC
 swatch per state over a `datalist` of the state words the tracker is currently reporting, read off the
 world the page already holds rather than fetched again ([02](02-configuration.md#fields)).
 
+Each swatch is `ColourField` (`web/src/components/ColourField.tsx`), the same control the
+[Theme](#the-theme) section uses — the picker and a hex field beside it. **That is the only thing the two
+share, and deliberately so:** a tracker state's colour is a harness setting in `lubbdubb.config.json`
+that every operator sees, and a theme is one browser's preference; tying them together would put one of
+them in the wrong place. What is worth sharing is the mechanics of picking a colour, which were got
+wrong twice independently — `onChange` on a colour input fires only when the picker closes, and a colour
+input speaks `#rrggbb`, so dragging one over an eight-digit value silently drops the alpha. Validity is
+still the caller's: a state colour is `#rrggbb` only, a theme token admits three, four, six or eight
+digits. `test/console.test.ts` asserts no second colour input exists anywhere under `components/`,
+because writing one is a one-line temptation and only one of the two would get the next fix.
+
 Saving writes `lubbdubb.config.json` and nothing else; the file stays the source of truth and editing it
 by hand lands on the same apply path ([02](02-configuration.md#the-watcher)). A **reset clears the key**
 rather than writing the default back — the browser is never told what a default _is_, only `isDefault`.

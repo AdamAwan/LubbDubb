@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api } from '../api.js';
 import { isStateColour } from '../stateColour.js';
+import { ColourField } from './ColourField.js';
 import type { ConfigChange, RunningConfigEntry, RunningConfigGroup, RunningConfigPayload } from '../types.js';
 
 /**
@@ -512,12 +513,11 @@ function ColourMap({
     <div className="cfg-colours">
       {Object.entries(map).map(([state, colour]) => (
         <div className="cfg-colour" key={state}>
-          <input
-            type="color"
-            className="cfg-swatch"
+          <ColourField
             value={colour}
-            aria-label={`Colour for ${state}`}
-            onChange={(e) => write({ ...map, [state]: e.target.value })}
+            label={`Colour for ${state}`}
+            valid={isStateColour(colour)}
+            onChange={(next) => write({ ...map, [state]: next })}
           />
           <i className="tickets-state" style={{ color: colour, borderColor: colour }}>
             {state}
