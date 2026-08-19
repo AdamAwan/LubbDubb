@@ -893,6 +893,7 @@ CREATE TABLE IF NOT EXISTS pets (
   origin_ref  TEXT NOT NULL,
   hatched_at  TEXT NOT NULL,      -- when the action happened, not when the scan reached it
   placed      INTEGER NOT NULL DEFAULT 0,   -- 0/1: standing in the vivarium
+  dissolved_at TEXT,                -- when a duplicate was blended; the row survives it
   UNIQUE (origin_kind, origin_ref)
 );
 
@@ -910,6 +911,16 @@ CREATE TABLE IF NOT EXISTS pet_actions (
 -- One row per beat spent. The only source of the wallet total the cockpit shows as
 -- spent, summed at read time rather than kept in a column beside it.
 CREATE TABLE IF NOT EXISTS pet_purchases (
+  id         TEXT PRIMARY KEY,
+  pet_id     TEXT NOT NULL,
+  beats      INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+-- One row per duplicate blended back into beats. The credit is stored rather than
+-- derived from the dissolved pets, because its value depends on blendYield — a
+-- derived figure would rewrite history the day that key is tuned.
+CREATE TABLE IF NOT EXISTS pet_blends (
   id         TEXT PRIMARY KEY,
   pet_id     TEXT NOT NULL,
   beats      INTEGER NOT NULL,

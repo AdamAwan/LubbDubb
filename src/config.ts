@@ -584,7 +584,15 @@ const DEFAULTS: Config = {
   // Generous early and slow later: a working week of ordinary use produces a
   // handful of creatures, and a common takes about ten days of a thirty-dollar
   // fleet to raise. An empty vivarium is the failure mode worth tuning against.
-  pets: { enabled: true, beatsPerDollar: 25, dropChance: 0.02, pity: 15 },
+  pets: {
+    enabled: true,
+    beatsPerDollar: 25,
+    dropChance: 0.02,
+    // Twice the expected gap, so pity is a ceiling and not the schedule.
+    pity: 100,
+    rarity: { common: 700, uncommon: 200, rare: 80, mythic: 20 },
+    blendYield: 500,
+  },
   selfUpdate: { enabled: true, remote: 'origin', branch: 'main', checkIntervalMs: 60 * 60 * 1000 },
   validation: DEFAULT_VALIDATION,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
@@ -784,7 +792,14 @@ function mergeLayers(lower: Partial<Config>, upper: Partial<Config>): Partial<Co
     merged.integrations = { ...DEFAULTS.integrations, ...lower.integrations, ...upper.integrations };
   if (lower.planning ?? upper.planning)
     merged.planning = { ...DEFAULTS.planning, ...lower.planning, ...upper.planning };
-  if (lower.pets ?? upper.pets) merged.pets = { ...DEFAULTS.pets, ...lower.pets, ...upper.pets };
+  if (lower.pets ?? upper.pets) {
+    merged.pets = { ...DEFAULTS.pets, ...lower.pets, ...upper.pets };
+    // One level deeper than the rest: `rarity` is a record, so a config naming a
+    // single tier would otherwise drop the other three to undefined and leave the
+    // roll walking a table of NaN — a vivarium that silently hatches nothing.
+    if (lower.pets?.rarity ?? upper.pets?.rarity)
+      merged.pets.rarity = { ...DEFAULTS.pets.rarity, ...lower.pets?.rarity, ...upper.pets?.rarity };
+  }
   if (lower.spendBurn ?? upper.spendBurn)
     merged.spendBurn = { ...DEFAULTS.spendBurn, ...lower.spendBurn, ...upper.spendBurn };
   if (lower.selfUpdate ?? upper.selfUpdate)

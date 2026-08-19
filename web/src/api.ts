@@ -389,6 +389,7 @@ const realApi = {
   feedPet: (id: string, beats: number) => post<{ ok: true }>(`/api/pets/${id}/feed`, { beats }),
   renamePet: (id: string, name: string) => post<{ ok: true }>(`/api/pets/${id}/name`, { name }),
   placePet: (id: string, placed: boolean) => post<{ ok: true }>(`/api/pets/${id}/place`, { placed }),
+  blendPet: (id: string) => post<{ ok: true }>(`/api/pets/${id}/blend`, {}),
 
   // Lessons (#355). Proposing is the operator's own arm — the retrospective's
   // will land beside it — and promote/retire are the gate and the prune.

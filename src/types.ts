@@ -2689,7 +2689,31 @@ export interface UpgradeIntent {
  * The set is closed and the keys are stored, so a species is never renamed — the
  * display name in `src/pets/catalogue.ts` is what changes when one reads wrong.
  */
-export type PetSpecies = 'pip' | 'nib' | 'tuft' | 'warden' | 'cinder' | 'nocturne' | 'lander' | 'quill' | 'ouroboros';
+export type PetSpecies =
+  // common — two universals, then one signature per action kind
+  | 'pip'
+  | 'mote'
+  | 'nib'
+  | 'tuft'
+  | 'beck'
+  | 'berth'
+  | 'stoke'
+  | 'speck'
+  | 'patch'
+  // uncommon
+  | 'warden'
+  | 'cinder'
+  | 'nocturne'
+  | 'chit'
+  | 'vellum'
+  | 'drift'
+  | 'bramble'
+  // rare
+  | 'lander'
+  | 'quill'
+  | 'cairn'
+  // mythic
+  | 'ouroboros';
 
 /** How hard a species is to draw, and how long it takes to raise. */
 export type PetRarity = 'common' | 'uncommon' | 'rare' | 'mythic';
@@ -2726,6 +2750,16 @@ export interface Pet {
   hatchedAt: string;
   /** Whether it stands in the vivarium at the foot of the rail. */
   placed: boolean;
+  /**
+   * When a duplicate was blended into beats, or null while the animal is alive.
+   *
+   * A stamp rather than a `DELETE`, because the panel's origin line — the night
+   * you answered the thing that produced this pet — is the one part of the
+   * subsystem that gets better the longer a deployment runs, and a row removed
+   * takes that record with it. A dissolved pet keeps its species, its seed and
+   * its origin, draws greyed, and can no longer be fed or placed.
+   */
+  dissolvedAt: string | null;
 }
 
 /**

@@ -320,6 +320,7 @@ function panelBody(
           onFeed={(id, beats) => actions.feedPet(id, beats)}
           onRename={(id, name) => actions.renamePet(id, name)}
           onPlace={(id, placed) => actions.placePet(id, placed)}
+          onBlend={(id) => actions.blendPet(id)}
         />
       );
     case 'faults':

@@ -24,14 +24,21 @@ export function PetsPanel({
   onFeed,
   onRename,
   onPlace,
+  onBlend,
 }: {
   pets: PetState;
   now: number;
   onFeed: (id: string, beats: number) => Promise<unknown>;
   onRename: (id: string, name: string) => Promise<unknown>;
   onPlace: (id: string, placed: boolean) => Promise<unknown>;
+  onBlend: (id: string) => Promise<unknown>;
 }) {
   const { wallet } = pets;
+  // How many of each species are still alive, which is the whole of what decides
+  // whether a card may offer Blend. Counted here rather than per card so the grid
+  // walks the list once.
+  const live = new Map<PetView['species'], number>();
+  for (const pet of pets.pets) if (pet.dissolvedAt === null) live.set(pet.species, (live.get(pet.species) ?? 0) + 1);
   return (
     <div className="pets">
       <div className="pets-wallet">
@@ -60,9 +67,11 @@ export function PetsPanel({
               balance={wallet.balance}
               full={pets.pets.filter((p) => p.placed).length >= pets.slots && !pet.placed}
               slots={pets.slots}
+              duplicate={(live.get(pet.species) ?? 0) > 1}
               onFeed={onFeed}
               onRename={onRename}
               onPlace={onPlace}
+              onBlend={onBlend}
             />
           ))}
         </div>
@@ -77,9 +86,11 @@ function PetCard({
   balance,
   full,
   slots,
+  duplicate,
   onFeed,
   onRename,
   onPlace,
+  onBlend,
 }: {
   pet: PetView;
   now: number;
@@ -87,16 +98,20 @@ function PetCard({
   /** Whether the enclosure is already at capacity and this one is not in it. */
   full: boolean;
   slots: number;
+  /** Whether another of this species is still alive, which is what Blend needs. */
+  duplicate: boolean;
   onFeed: (id: string, beats: number) => Promise<unknown>;
   onRename: (id: string, name: string) => Promise<unknown>;
   onPlace: (id: string, placed: boolean) => Promise<unknown>;
+  onBlend: (id: string) => Promise<unknown>;
 }) {
   const [name, setName] = useState(pet.name ?? '');
   // What it would take to finish the current stage, and never more than there is.
   // Offering a button that always refuses is worse than not offering it.
   const toNext = pet.beatsToNextStage === null ? 0 : Math.min(pet.beatsToNextStage, balance);
+  const dissolved = pet.dissolvedAt !== null;
   return (
-    <div className="pet-card">
+    <div className={dissolved ? 'pet-card is-dissolved' : 'pet-card'}>
       <div className="pet-frame">
         <PetSprite pet={pet} size={84} beatMs={2400} />
       </div>
@@ -117,6 +132,11 @@ function PetCard({
         <br />
         <span className="muted">{relTime(pet.hatchedAt, now)}</span>
       </p>
+      {dissolved ? (
+        <p className="pet-blended muted small">
+          Blended {relTime(pet.dissolvedAt ?? pet.hatchedAt, now)} — its record stays.
+        </p>
+      ) : null}
       <div className="pet-meter" title={`${pet.fed.toLocaleString()} beats fed`}>
         <i style={{ width: `${stageFill(pet)}%` }} />
       </div>
@@ -127,20 +147,32 @@ function PetCard({
         </span>
       </div>
       <div className="pet-acts">
-        <AsyncButton className="ghost small" disabled={balance < 100} onClick={() => onFeed(pet.id, 100)}>
-          Feed 100
-        </AsyncButton>
-        <AsyncButton className="ghost small" disabled={toNext <= 0} onClick={() => onFeed(pet.id, toNext)}>
-          {pet.beatsToNextStage === null ? 'Grown' : `Feed ${toNext.toLocaleString()}`}
-        </AsyncButton>
-        <AsyncButton
-          className="ghost small"
-          disabled={full}
-          title={full ? `The vivarium holds ${slots} — take one out first` : undefined}
-          onClick={() => onPlace(pet.id, !pet.placed)}
-        >
-          {pet.placed ? 'Take out' : 'Put out'}
-        </AsyncButton>
+        {dissolved ? null : (
+          <>
+            <AsyncButton className="ghost small" disabled={balance < 100} onClick={() => onFeed(pet.id, 100)}>
+              Feed 100
+            </AsyncButton>
+            <AsyncButton className="ghost small" disabled={toNext <= 0} onClick={() => onFeed(pet.id, toNext)}>
+              {pet.beatsToNextStage === null ? 'Grown' : `Feed ${toNext.toLocaleString()}`}
+            </AsyncButton>
+            <AsyncButton
+              className="ghost small"
+              disabled={full}
+              title={full ? `The vivarium holds ${slots} — take one out first` : undefined}
+              onClick={() => onPlace(pet.id, !pet.placed)}
+            >
+              {pet.placed ? 'Take out' : 'Put out'}
+            </AsyncButton>
+            <AsyncButton
+              className="ghost small"
+              disabled={!duplicate}
+              title={duplicate ? undefined : `This is your only ${pet.display} — blending is for duplicates`}
+              onClick={() => onBlend(pet.id)}
+            >
+              Blend
+            </AsyncButton>
+          </>
+        )}
       </div>
     </div>
   );

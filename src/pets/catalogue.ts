@@ -4,80 +4,112 @@ import type { PetActionKind, PetRarity, PetSpecies, PetStage } from '../types.js
  * What each species is, and what it costs to raise.
  *
  * One exported const rather than one export per species: knip runs every rule at
- * `error`, so nine separately-exported records would read as nine unimported
- * symbols the day the ninth is added and nothing imports it directly.
+ * `error`, so twenty separately-exported records would read as twenty unimported
+ * symbols the day the twentieth is added and nothing imports it directly.
  *
- * `growth` is the multiplier on both stage thresholds. It is what makes a rare
- * animal *feel* rare once the novelty of drawing it has passed — a mythic takes
- * four times the beats a common does to bring up, which is a decision an operator
- * makes about a finite thing rather than a label on a card.
+ * `growth` is the multiplier on both stage thresholds and on what a duplicate
+ * blends back into. It is what makes a rare animal *feel* rare once the novelty
+ * of drawing it has passed — a mythic takes four times the beats a common does to
+ * bring up, which is a decision an operator makes about a finite thing rather
+ * than a label on a card.
  */
 export const SPECIES: Record<PetSpecies, { rarity: PetRarity; display: string; growth: number }> = {
   pip: { rarity: 'common', display: 'Pip', growth: 1 },
+  mote: { rarity: 'common', display: 'Mote', growth: 1 },
   nib: { rarity: 'common', display: 'Nib', growth: 1 },
   tuft: { rarity: 'common', display: 'Tuft', growth: 1 },
+  beck: { rarity: 'common', display: 'Beck', growth: 1 },
+  berth: { rarity: 'common', display: 'Berth', growth: 1 },
+  stoke: { rarity: 'common', display: 'Stoke', growth: 1 },
+  speck: { rarity: 'common', display: 'Speck', growth: 1 },
+  patch: { rarity: 'common', display: 'Patch', growth: 1 },
   warden: { rarity: 'uncommon', display: 'Warden', growth: 1.6 },
   cinder: { rarity: 'uncommon', display: 'Cinder', growth: 1.6 },
   nocturne: { rarity: 'uncommon', display: 'Nocturne', growth: 1.6 },
+  chit: { rarity: 'uncommon', display: 'Chit', growth: 1.6 },
+  vellum: { rarity: 'uncommon', display: 'Vellum', growth: 1.6 },
+  drift: { rarity: 'uncommon', display: 'Drift', growth: 1.6 },
+  bramble: { rarity: 'uncommon', display: 'Bramble', growth: 1.6 },
   lander: { rarity: 'rare', display: 'Lander', growth: 2.5 },
   quill: { rarity: 'rare', display: 'Quill', growth: 2.5 },
+  cairn: { rarity: 'rare', display: 'Cairn', growth: 2.5 },
   ouroboros: { rarity: 'mythic', display: 'Ouroboros', growth: 4 },
 };
+
+/**
+ * Commonest first, which is the order a degrade walks *backwards* along: a tier a
+ * pool cannot fill steps down this list until one has members. Not exported —
+ * knip fails `check` on an unimported export, and nothing outside needs the order.
+ */
+const RARITIES: readonly PetRarity[] = ['common', 'uncommon', 'rare', 'mythic'];
 
 /** Beats to the next stage, before the species' `growth` multiplier. */
 const JUVENILE_AT = 1_500;
 const ADULT_AT = 8_000;
 
 /**
- * What an action can draw, by weight.
+ * Which species each action can draw, **by tier**.
  *
- * Every table includes `pip`, so no action is a dead end — an operator whose week
- * was all human tasks still ends it with something, which is the difference
- * between a feature that rewards a working style and one that judges it.
+ * The shape is the whole of the Mark Two change. Weights used to live here and
+ * decide the species directly, which made a tier an emergent accident of seven
+ * hand-tuned tables: a triaged finding produced a rare 23% of the time and an
+ * answered escalation 5%, and no sentence beginning "a rare is…" was true of the
+ * deployment as a whole. The tier roll now happens once, globally against
+ * `pets.rarity`, and this table only answers *which animal* of the tier that was
+ * already rolled.
  *
- * The weights are what make a rarity rare. {@link SPECIES}'s `rarity` is a label
- * for the cockpit and is never an input to the pick: two sources of the same fact
- * is the drift where a card reads `MYTHIC` above the commonest animal in the
- * vivarium.
+ * Every action carries **three commons**: the two universals `pip` and `mote`,
+ * plus one signature of its own. One common per pool put `pip` at 70% of hatches
+ * on five of the seven actions, which is a hundred identical animals before
+ * anything else turns up.
+ *
+ * `nocturne` sits in every uncommon pool and is filtered out unless the action's
+ * own timestamp falls at night — still the one species gated on something other
+ * than what you were doing.
  */
-const DROP_TABLES: Record<PetActionKind, readonly { species: PetSpecies; weight: number }[]> = {
-  escalation: [
-    { species: 'pip', weight: 60 },
-    { species: 'warden', weight: 30 },
-    { species: 'nocturne', weight: 20 },
-    { species: 'quill', weight: 5 },
-  ],
-  'human-task': [
-    { species: 'pip', weight: 55 },
-    { species: 'tuft', weight: 35 },
-    { species: 'nocturne', weight: 20 },
-  ],
-  plan: [
-    { species: 'pip', weight: 55 },
-    { species: 'nib', weight: 35 },
-    { species: 'nocturne', weight: 20 },
-    { species: 'quill', weight: 8 },
-  ],
-  landing: [
-    { species: 'pip', weight: 50 },
-    { species: 'nocturne', weight: 20 },
-    { species: 'lander', weight: 12 },
-  ],
-  job: [
-    { species: 'pip', weight: 60 },
-    { species: 'cinder', weight: 30 },
-    { species: 'nocturne', weight: 20 },
-  ],
-  finding: [
-    { species: 'pip', weight: 60 },
-    { species: 'nocturne', weight: 20 },
-    { species: 'quill', weight: 18 },
-  ],
-  upgrade: [
-    { species: 'pip', weight: 40 },
-    { species: 'lander', weight: 15 },
-    { species: 'ouroboros', weight: 25 },
-  ],
+const POOLS: Record<PetActionKind, Record<PetRarity, readonly PetSpecies[]>> = {
+  escalation: {
+    common: ['pip', 'mote', 'beck'],
+    uncommon: ['warden', 'nocturne'],
+    rare: ['quill', 'cairn'],
+    mythic: [],
+  },
+  'human-task': {
+    common: ['pip', 'mote', 'tuft'],
+    uncommon: ['chit', 'nocturne'],
+    rare: [],
+    mythic: [],
+  },
+  plan: {
+    common: ['pip', 'mote', 'nib'],
+    uncommon: ['vellum', 'nocturne'],
+    rare: ['quill'],
+    mythic: [],
+  },
+  landing: {
+    common: ['pip', 'mote', 'berth'],
+    uncommon: ['drift', 'nocturne'],
+    rare: ['lander'],
+    mythic: [],
+  },
+  job: {
+    common: ['pip', 'mote', 'stoke'],
+    uncommon: ['cinder', 'nocturne'],
+    rare: [],
+    mythic: [],
+  },
+  finding: {
+    common: ['pip', 'mote', 'speck'],
+    uncommon: ['bramble', 'nocturne'],
+    rare: ['cairn'],
+    mythic: [],
+  },
+  upgrade: {
+    common: ['pip', 'mote', 'patch'],
+    uncommon: ['cinder', 'nocturne'],
+    rare: ['lander'],
+    mythic: ['ouroboros'],
+  },
 };
 
 /**
@@ -97,30 +129,60 @@ function eligible(species: PetSpecies, hour: number): boolean {
   return hour >= NIGHT_FROM || hour < NIGHT_TO;
 }
 
+/** What this action can draw of one tier, at this hour. May be empty. */
+function membersOf(kind: PetActionKind, tier: PetRarity, hour: number): readonly PetSpecies[] {
+  return POOLS[kind][tier].filter((species) => eligible(species, hour));
+}
+
 /**
- * The table an action rolls against, narrowed to what it may actually draw.
+ * The tier a roll actually lands on, and what it may draw there.
+ *
+ * A tier the pool cannot fill hands the roll **down** one tier at a time, never
+ * up — which is the only way a ceiling is expressed. `human-task` and `job` hold
+ * no rare, so their rare and mythic rolls become uncommon; only `upgrade` holds a
+ * mythic at all. Degrading upward instead would make the scarcest actions the
+ * easiest source of the scarcest animals, which is the inversion Mark Two exists
+ * to remove.
+ *
+ * Returns null only if an action's every tier is empty, which no pool allows —
+ * the callers still handle it rather than asserting, because a pool edited badly
+ * should hatch nothing rather than throw inside the scan.
+ */
+export function resolveTier(
+  kind: PetActionKind,
+  tier: PetRarity,
+  hour: number,
+): { tier: PetRarity; members: readonly PetSpecies[] } | null {
+  for (let i = RARITIES.indexOf(tier); i >= 0; i--) {
+    const at = RARITIES[i]!;
+    const members = membersOf(kind, at, hour);
+    if (members.length > 0) return { tier: at, members };
+  }
+  return null;
+}
+
+/**
+ * The tiers a roll may land on, in order, with their weights.
  *
  * `firstEver` drops the commons: the very first action an operator takes in a new
  * deployment is the most memorable one they will take, and spending it on a `pip`
- * wastes the one moment this feature is guaranteed an audience. When removing
- * them leaves nothing — a table that is all commons — the full one is used rather
- * than nothing being drawn.
+ * wastes the one moment this feature is guaranteed an audience. It fires **once
+ * per deployment**, not once per kind — per kind it handed out seven guaranteed
+ * pets in an afternoon, most of them rare.
  *
- * It fires **once per deployment**, not once per kind. Per kind, most tables have
- * exactly one non-common species available by day, so the guarantee handed out a
- * *deterministic rare* on the first plan, the first finding and the first landing
- * alike — which inverted the tiers it was meant to decorate, making the rare ones
- * the easiest in the game to collect and `nib` and `tuft` the hardest.
+ * When removing the commons would leave nothing — a weight table an operator has
+ * zeroed everywhere else — the full one is used rather than nothing being drawn.
  */
-export function tableFor(
-  kind: PetActionKind,
-  hour: number,
+export function tiersFor(
+  weights: Record<PetRarity, number>,
   firstEver: boolean,
-): readonly { species: PetSpecies; weight: number }[] {
-  const open = DROP_TABLES[kind].filter((entry) => eligible(entry.species, hour));
-  if (!firstEver) return open;
-  const notable = open.filter((entry) => SPECIES[entry.species].rarity !== 'common');
-  return notable.length > 0 ? notable : open;
+): readonly { tier: PetRarity; weight: number }[] {
+  const all = RARITIES.map((tier) => ({ tier, weight: Math.max(0, weights[tier]) })).filter(
+    (entry) => entry.weight > 0,
+  );
+  if (!firstEver) return all;
+  const notable = all.filter((entry) => entry.tier !== 'common');
+  return notable.length > 0 ? notable : all;
 }
 
 /** What a pet with this much fed into it has grown into. */
@@ -143,4 +205,17 @@ export function beatsToNextStage(species: PetSpecies, fed: number): number | nul
   if (fed < JUVENILE_AT * growth) return Math.ceil(JUVENILE_AT * growth - fed);
   if (fed < ADULT_AT * growth) return Math.ceil(ADULT_AT * growth - fed);
   return null;
+}
+
+/**
+ * What blending one duplicate hands back.
+ *
+ * Scaled by the same `growth` that decides what the animal costs to raise, so a
+ * mythic is worth four commons — and deliberately *below* the cost of a stage:
+ * at the default yield, dissolving three commons does not fund one to juvenile.
+ * Blending is a use for surplus, not a currency press, and the arithmetic is
+ * meant to be obvious enough that nobody farms it.
+ */
+export function blendValue(species: PetSpecies, yieldPerGrowth: number): number {
+  return Math.round(yieldPerGrowth * SPECIES[species].growth);
 }
