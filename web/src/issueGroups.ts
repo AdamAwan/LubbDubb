@@ -1,4 +1,5 @@
 import type { Issue, TicketRow } from './types.js';
+import { watchBucket } from './worldBuckets.js';
 
 /**
  * The tickets tab's second axis, beside the watch buckets: **what a thing is**,
@@ -103,6 +104,37 @@ export function cascadeNote(issue: Issue, containerTypes: readonly string[]): st
   if (!isContainerType(issue, containerTypes)) return '';
   const kids = issue.children?.length ?? 0;
   return kids === 0 ? '' : ` and its ${kids} child item${kids === 1 ? '' : 's'}`;
+}
+
+/**
+ * Which of the two readings of the watch tag the toggle draws, for one row.
+ *
+ * There are two, and picking the wrong one is a control that never visibly moves.
+ * The **world** is the live reading: the watch route folds a write the provider
+ * confirmed straight onto the baseline and the click refetches `/api/state`, so it
+ * is right the instant the click returns. `TicketRow.watch` is the **mirror's**,
+ * and the mirror is a record — the tab does not refetch its page on a click, and
+ * the sweep that would refresh it runs last in a cycle that coalesces away while
+ * another is in flight. Reading it first left an operator clicking Unwatch on a
+ * row that went on reporting `watched` however many times they clicked, with the
+ * tag long gone from the tracker (issue #417).
+ *
+ * So the world wins wherever it holds the item. The mirror answers only for the
+ * rows it no longer does — which are exactly the rows whose buttons are disabled
+ * anyway, so the fallback decides how a dead row *reads* and never what a click
+ * does. A feature heading passes no row and is always in the world, or it would
+ * not have been drawn.
+ *
+ * Pure and separate from the control, for `cascadeNote`'s reason: the invariant is
+ * about which of two inputs is believed, which no render can show.
+ */
+export function watchReading(
+  issue: { labels?: string[] } | null,
+  row: Pick<TicketRow, 'watch'> | null,
+  watchLabel: string,
+): 'watched' | 'unwatched' {
+  if (issue === null) return row?.watch ?? 'unwatched';
+  return watchBucket(issue.labels, watchLabel);
 }
 
 /**

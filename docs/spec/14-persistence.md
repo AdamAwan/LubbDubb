@@ -582,6 +582,25 @@ copy of a verdict that moves. The filtering, ordering and paging are one pure fu
 stated reason rather than by luck: one line per row with no body, bounded by the tracker's assigned
 backlog rather than by time, and the route is fetched on open rather than polled.
 
+#### Folding a watch click onto the mirror
+
+`patchTicketLabels({numbers, label, present})` folds one label onto the named mirrored rows — the
+mirror's half of the same click `patchWorldLabels` handles for the baseline, and for the same reason
+stated twice as strongly. The Tickets tab is the one surface with an explicit **Unwatch**, and it
+draws both the toggle and its `watch` filter from `labels` here rather than from the world. Nothing
+else writes this column between sweeps, and the sweep that would runs _last_ in a cycle — the same
+cycle a watch route's `runCycle('manual')` coalesces away when another is in flight. So without the
+fold the row an operator just un-watched goes on reporting `watched` while the tag is long gone from
+the tracker: a control that cannot be moved, which is what issue #417 reported
+([16](16-http-api.md#and-why-the-issue-route-also-patches-the-mirror)).
+
+It is observed fact arriving early on the same terms: only ever called for a write the provider
+confirmed, only for the items whose write landed, and overwritten by the next sweep's overlay of the
+world's own labels. A `number` the mirror does not hold is **skipped** rather than inserted — this
+table is a record of what the tracker handed us, and a row invented for a click would be a ticket
+that was never swept. An empty label is a no-op: that is `labelPrefix: ''`, the gate off, where there
+is no tag at all.
+
 **The mirror is also the spend trend's closure source.** `listTicketsClosedSince(since)` is the one
 narrowed read on this table: the rows in the `closed` state whose `changed_at` is at or after an
 instant. It exists because the closure event the trend would otherwise use never fires on a real
