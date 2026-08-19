@@ -464,6 +464,15 @@ interface CockpitConfig {
    * both routes refuse on.
    */
   canFileTickets: boolean;
+  /**
+   * `issueStateColours` — the operator's colour for each tracker state, as
+   * `#rrggbb`. Display only, and shipped rather than guessed at: which of a
+   * tracker's dozen state words are worth telling apart is a thing the operator
+   * knows and the harness has no reading of. Empty means every chip draws as it
+   * did before there were colours. Read through `stateColour`, which folds the
+   * key — the tracker's punctuation is not the operator's.
+   */
+  stateColours: Record<string, string>;
 }
 
 /** Account-level Claude usage: the rolling cost windows, plus real limits when captured. */

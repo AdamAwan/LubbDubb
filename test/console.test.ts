@@ -106,6 +106,26 @@ test('a dropped socket draws no gauge, no rail and no situation area', () => {
   assert.ok(!html.includes('cn-sit'), 'the situation area must not render while offline');
 });
 
+/**
+ * The tracker link is on the bar whether the harness is talking to us or not
+ * (#404). Both arms are asserted because they are two returns in `TopBar` and the
+ * offline one is the one a change would forget — and it is the state an operator is
+ * most likely to have something to file about.
+ *
+ * The href is pinned to the new-issue *form*, not the repo or the issue list: the
+ * feature is the click count, and a link that lands one page short of writing
+ * anything down still reads as done.
+ */
+test('the bar offers LubbDubb’s own tracker, online and off', () => {
+  // One anchor carrying both, rather than two `includes` — the console draws other
+  // external refs, so a loose `rel` assertion would pass on somebody else's link.
+  const link = /<a[^>]*href="https:\/\/github\.com\/AdamAwan\/LubbDubb\/issues\/new"[^>]*rel="noopener noreferrer"/;
+  for (const connected of [true, false]) {
+    const html = render(view({ connected }));
+    assert.ok(link.test(html), `no new-issue link that keeps the opener, while connected=${connected}`);
+  }
+});
+
 test('the recovery banner sits outside the situation area', () => {
   const html = render(view({ crashed: [{ taskId: 't1' }] as CockpitView['crashed'] }));
   const banner = html.indexOf('cn-recovery');

@@ -13,6 +13,7 @@ import { fmtUsd, relTime } from '../components/util.js';
 import { Ref } from '../components/refs.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { watchBucket } from '../worldBuckets.js';
+import { stateColour } from '../stateColour.js';
 import { NeedsBand } from './NeedsBand.js';
 
 /** Where the header's validation chip jumps to. Anchors, not refs — one element. */
@@ -125,7 +126,7 @@ function Header({
           {issue.issueType !== undefined && (
             <i className={`cn-chip cn-type ${issueTypeTone(issue.issueType)}`}>{issue.issueType}</i>
           )}
-          <i className="cn-chip">{issue.workItemState ?? issue.state}</i>
+          <StateChip state={issue.workItemState ?? issue.state} colours={config.stateColours} />
           {issue.assay !== null && (
             <i
               className={`cn-chip ${issue.assay.verdict === 'workable' ? 'cn-ok' : 'cn-stall'}`}
@@ -312,6 +313,21 @@ function Header({
  * this passes `cn-btn` so they wear the console's chrome, the seam
  * `HumanTaskActions` already takes.
  */
+/**
+ * The goal's tracker state, in the colour the operator gave it.
+ *
+ * The same reading as the backlog's chip and for the same reason: two surfaces
+ * drawing one state two colours would be worse than neither being coloured.
+ */
+function StateChip({ state, colours }: { state: string; colours: Readonly<Record<string, string>> }): JSX.Element {
+  const colour = stateColour(colours, state);
+  return (
+    <i className="cn-chip" style={colour === null ? undefined : { color: colour, borderColor: colour }}>
+      {state}
+    </i>
+  );
+}
+
 function Validation({
   page,
   actions,

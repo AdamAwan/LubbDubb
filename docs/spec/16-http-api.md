@@ -287,8 +287,9 @@ than from a dropped socket.
 ### `POST /api/prs/:number/watch`
 
 Body `{watched: boolean}`. Adds or removes the `${labelPrefix}-watch` label through the provider,
-broadcasts `world:changed`, and runs a cycle so a now-watched PR is picked up (or a now-unwatched one
-dropped). 400 on a non-integer PR number, a non-boolean `watched`, or a provider failure.
+folds the tag onto the world baseline, broadcasts `world:changed`, and runs a cycle so a now-watched
+PR is picked up (or a now-unwatched one dropped). 400 on a non-integer PR number, a non-boolean
+`watched`, or a provider failure.
 
 It also records a `pr_watch_seeds` row, in **both** directions: the seeding desk
 ([07](07-pull-requests.md#watching)) must not answer for a pull request a person has answered for, or
@@ -296,8 +297,8 @@ un-watching one the harness opened would be undone on the next pulse.
 
 ### `POST /api/issues/:number/watch`
 
-Body `{watched: boolean}`. Writes the one label — sets `${prefix}-watch` to `watched`. Broadcasts and
-runs a cycle.
+Body `{watched: boolean}`. Writes the one label — sets `${prefix}-watch` to `watched`. Folds the tag
+onto the baseline, broadcasts, and runs a cycle.
 
 **On a container it cascades.** The tag is written on every item `watchCascadeTargets` names — the
 issue itself and, for a Feature or Epic, every descendant beneath it — because a container is never
@@ -308,7 +309,23 @@ dispatched at and a tag on one alone would change nothing
 400 on a non-integer issue number or a non-boolean `watched`, and on a provider failure — including a
 **partial** one, where the error names how many of how many landed and which numbers kept their old
 tags. Every failed write is recorded on the error log. `world:changed` is broadcast either way,
-because whatever landed has already changed the world the cockpit is showing.
+because whatever landed has already changed the world the cockpit is showing — and only the items
+whose write the provider took are folded onto the baseline.
+
+#### Why both watch routes patch the baseline
+
+`store.patchWorldLabels` runs **before** the broadcast, and the ordering is the whole of why the
+toggle changes under the click. `GET /api/state` serves the baseline and never a live provider read
+(above), so a broadcast ahead of the fold only makes the cockpit redraw the state it already had.
+The cycle at the end of the route cannot supply it either: `runCycle` coalesces to nothing while
+another cycle is in flight ([04](04-harness-cycle.md#cycles)), which is most clicks on a busy fleet,
+and where it does run the operator waits a whole cycle for a button to change.
+
+The fold is not optimism — it only ever runs for a write the provider confirmed, so it is observed
+fact arriving early, and the next pulse reads the same tag back off the tracker and writes the same
+baseline. It is deliberately not sticky: a world read that disagrees wins, because the tracker stays
+the source of truth and a patch that outlived its observation would be the cockpit lying about a tag
+nobody can see ([04](04-harness-cycle.md#the-world-baseline)).
 
 ### `POST /api/issues/:number/profile`
 
@@ -738,14 +755,14 @@ The configuration this process resolved at boot, for the cockpit's config page
 titled list of entries — dotted paths into the config object, with nested blocks expanded to leaves so
 one overridden member of `planning` does not make the other three read as chosen — carrying:
 
-| Field                | What it answers                                                                     |
-| -------------------- | ----------------------------------------------------------------------------------- |
-| `value`, `isDefault` | what it is, and whether anybody chose it                                              |
-| `type`, `options`     | what widget draws it, from `CONFIG_FIELDS` ([02](02-configuration.md#fields))         |
-| `access`              | `plain`, `advanced` (behind the disclosure) or `fileOnly` (not offered)               |
-| `live`                | whether saving it takes effect now, because `configApply.ts` holds an arm for it      |
-| `env`                 | the environment variable currently beating the file, or null                          |
-| `why`, `ms`           | the one line under the key, and whether the number is a duration                      |
+| Field                | What it answers                                                                  |
+| -------------------- | -------------------------------------------------------------------------------- |
+| `value`, `isDefault` | what it is, and whether anybody chose it                                         |
+| `type`, `options`    | what widget draws it, from `CONFIG_FIELDS` ([02](02-configuration.md#fields))    |
+| `access`             | `plain`, `advanced` (behind the disclosure) or `fileOnly` (not offered)          |
+| `live`               | whether saving it takes effect now, because `configApply.ts` holds an arm for it |
+| `env`                | the environment variable currently beating the file, or null                     |
+| `why`, `ms`          | the one line under the key, and whether the number is a duration                 |
 
 `file` is the absolute path a save writes, and `text` is its current contents — what the raw editor edits
 and what the review step diffs against. `revision` fingerprints that file's current text and rides
@@ -803,7 +820,7 @@ for the raw arm.
 It exists so the review step can promise something about the file. The splice that preserves comments,
 key order and every untouched line is server code; a second implementation of it in the cockpit would be
 free to disagree with the one that actually writes. One function answers both routes, for the same
-reason inverted — a preview that refused *less* than the save it previews is worse than no preview.
+reason inverted — a preview that refused _less_ than the save it previews is worse than no preview.
 
 ### `POST /api/config/raw`
 

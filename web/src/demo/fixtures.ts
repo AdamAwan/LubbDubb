@@ -215,6 +215,9 @@ export function buildDemoState(): DemoSeed {
       maxConcurrentAgents: 3,
       watchLabel: 'lubbdubb-watch',
       containerTypes: ['Feature', 'Epic'],
+      // The demo tracker's own vocabulary, coloured — the setting is invisible
+      // until a deployment has used it, and the demo is where it is looked at.
+      stateColours: { New: '#8a93a0', Ready: '#7fb3ff', Active: '#63d297', Closed: '#666b73' },
       // Cheapest first, as `rank` orders them — the demo's profile controls draw
       // this list in this order.
       profiles: [

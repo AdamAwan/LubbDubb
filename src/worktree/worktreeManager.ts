@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
-import { isAbsolute, relative, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
 import { runGit, resolveCommit } from '../git/gitCli.js';
 
 /**
@@ -9,9 +9,9 @@ import { runGit, resolveCommit } from '../git/gitCli.js';
  * dispatched a code agent cut a real branch in whatever checkout `repoRoot`
  * happened to name (`process.cwd()` by default) and never deleted it.
  *
- * Deliberately three methods: `ensure`/`remove`/`deleteBranch` is the whole of what
- * {@link ActionExecutor} and the reap in `system.ts` ask for, and a seam wider
- * than its consumer is a fake with behaviour nobody checks.
+ * Deliberately four methods: `ensure`/`ensureReadOnly`/`remove`/`deleteBranch` is the
+ * whole of what {@link ActionExecutor} and the reap in `system.ts` ask for, and a
+ * seam wider than its consumer is a fake with behaviour nobody checks.
  */
 export interface Worktrees {
   /**
@@ -22,8 +22,26 @@ export interface Worktrees {
    */
   ensure(branch: string, base?: string): Promise<string>;
   /**
-   * Release the lease `ensure` took. **The directory stays**, still on the branch and
-   * with everything git ignores in it, so the same branch coming back starts warm.
+   * Path to a **read-only** checkout of `of`, leased under `key` (issue #396).
+   *
+   * For the dispatches that need a repository and no branch — the assay, the
+   * assessment, a validation check — each of which is told in its prompt not to
+   * commit or push anything, and each of which used to mint a branch cut from the
+   * default one. That branch never got a pull request, so it was never merged, so
+   * `reapableBranches` never deleted it: one ref per assay, per assessment and per
+   * check, accumulating for the life of the deployment.
+   *
+   * So nothing is minted at all. The slot is checked out **detached** at the commit
+   * `of` resolves to, and there is no ref to leave behind on either side. `key` is a
+   * lease key rather than a branch: it is what {@link remove} releases, what the
+   * task row carries, and what the branch gate reads — everything the pool needs a
+   * name for, without a name in `refs/heads`.
+   */
+  ensureReadOnly(key: string, of: string): Promise<string>;
+  /**
+   * Release the lease `ensure` or {@link ensureReadOnly} took. **The directory
+   * stays**, still on the branch (or at the commit) and with everything git ignores
+   * in it, so the same work coming back starts warm.
    */
   remove(branch: string): Promise<void>;
   /**
@@ -63,6 +81,13 @@ export interface Worktrees {
  * wrong would put two agents in one directory on different branches — worse than
  * anything `fileOverlap` reports, since `sameWorktree` at least assumes they agree
  * on the branch.
+ *
+ * **A read-only checkout is a slot like any other** (issue #396). It is detached at
+ * a commit instead of switched onto a branch, and it takes a lease under its key on
+ * exactly the same terms — the property the lease exists for does not care whether
+ * the thing holding a directory has a ref. What differs is only what a hand-over
+ * costs: see {@link WorktreeManager.handOver} for why one read-only checkout of a
+ * ref is warm for the next.
  *
  * Desk tasks never call any of this.
  */
@@ -110,7 +135,8 @@ export class WorktreeManager implements Worktrees {
   ) {}
 
   /**
-   * Return the path to a worktree for `branch`, leasing a slot for it.
+   * Return the path to a worktree for `branch`, leasing a slot for it — the
+   * writable shape, and the order the slot is chosen in is {@link acquire}'s.
    *
    * **Reuse comes first, it is scoped to the branch, and `base` is then ignored
    * entirely** — a slot already checked out on the branch is handed back untouched,
@@ -119,53 +145,90 @@ export class WorktreeManager implements Worktrees {
    * guarantee the branch is based on `base`; it only decides where a branch that
    * didn't exist starts. Two tasks on one branch therefore share a checkout rather
    * than fighting over it, exactly as they did before there was a pool.
+   */
+  ensure(branch: string, base?: string): Promise<string> {
+    return this.acquire({ readOnly: false, name: branch, base });
+  }
+
+  /**
+   * A detached checkout of `of`, leased under `key` — the read-only shape, see
+   * {@link Worktrees.ensureReadOnly}.
    *
-   * Failing that, in order:
+   * `of` is required where `ensure`'s `base` is not, and for the reason `base`
+   * throws rather than falling back: a read-only dispatch exists to read one
+   * particular state of the repository, and the repo root's HEAD is whatever an
+   * operator last left checked out.
+   */
+  ensureReadOnly(key: string, of: string): Promise<string> {
+    return this.acquire({ readOnly: true, name: key, of });
+  }
+
+  /**
+   * Lease a slot for `req` — the one path both {@link ensure} and
+   * {@link ensureReadOnly} take, so the lease is checked once rather than twice.
    *
-   * 1. A **spare** slot — free, and on a detached HEAD or a branch whose ref is
-   *    gone, so it holds nothing anybody can come back for.
-   * 2. A **new** slot, while the pool is below its bound. Minting comes ahead of
+   * In order, and the order is the whole of the pool's policy:
+   *
+   * 1. The slot the request **already holds** — a worktree checked out on the
+   *    branch, or (read-only) a slot this key still holds a lease or a mark on. It
+   *    is handed back untouched, with everything in it. This is the only arm that
+   *    reuses anything, and the reason two tasks on one name share a checkout
+   *    rather than fighting over it.
+   * 2. (Read-only only) a free slot that is already a read-only checkout of the
+   *    same ref. Handing it over costs nothing and burns nothing — every read-only
+   *    checkout of one ref is the same tree to whoever gets it — so it beats both
+   *    a spare and a fresh slot, and it is what stops a fleet of assays and
+   *    validation checks paying for a cold install each.
+   * 3. A **spare** slot — free, and on a detached HEAD nothing marks or a branch
+   *    whose ref is gone, so it holds nothing anybody can come back for.
+   * 4. A **new** slot, while the pool is below its bound. Minting comes ahead of
    *    eviction because a slot handed to another branch is wiped either way, so
-   *    taking one that still carries a live branch would burn that branch's tree for
-   *    nothing — and that tree is exactly what a CI fix or a review comment on it
-   *    comes back to.
-   * 3. The first **evictable** slot: free, but still on a branch that exists. It is
+   *    taking one that still carries a live branch would burn that branch's tree
+   *    for nothing — and that tree is exactly what a CI fix or a review comment on
+   *    it comes back to.
+   * 5. The first **evictable** slot: free, but still carrying something. It is
    *    wiped and switched (see {@link handOver}).
    *
-   * With none of the three, `ensure` **throws**. So does a `base` that resolves to
-   * nothing — silently picking an incidental base is the bug that parameter exists
+   * With none of the five, this **throws**. So does a `base`/`of` that resolves to
+   * nothing — silently picking an incidental base is the bug those parameters exist
    * to fix — and so does a switch git refuses. The executor records each as a
    * rejected dispatch, **never** a silent fall back to a fresh directory, which
    * would put two agents in one tree.
    */
-  async ensure(branch: string, base?: string): Promise<string> {
+  private async acquire(req: Request): Promise<string> {
     // Cheap, idempotent, and it must run before the slot scan rather than inside
     // {@link reclaim}: a slot whose directory vanished leaves an admin entry that
     // would otherwise read as an occupied path forever, so the pool would shrink
     // by one per lost directory with nothing to say so.
     await this.git(['worktree', 'prune']).catch(() => {});
 
-    const existing = await this.findExisting(branch);
-    if (existing) return this.lease(branch, existing);
+    if (!req.readOnly) {
+      const existing = await this.findExisting(req.name);
+      if (existing) return this.lease(req.name, existing);
+    }
 
     mkdirSync(this.worktreeRoot, { recursive: true });
     const slots = await this.slots();
-    const survey = await this.survey(slots);
-    if (survey.spare !== null) {
-      await this.handOver(survey.spare, branch, base);
-      return this.lease(branch, survey.spare);
+    const survey = await this.survey(slots, req);
+    // A read-only key's own slot, which git cannot answer for: nothing is checked
+    // out under that name, so the mark and the lease are all there is to go on.
+    if (survey.own !== null) return this.lease(req.name, survey.own);
+    const take = survey.warm ?? survey.spare;
+    if (take !== null) {
+      await this.handOver(take, req);
+      return this.lease(req.name, take);
     }
 
     const minted = this.nextSlotPath(slots);
     if (minted !== null) {
       await this.reclaim(minted);
-      await this.create(minted, branch, base);
-      return this.lease(branch, minted);
+      await this.create(minted, req);
+      return this.lease(req.name, minted);
     }
 
-    if (survey.evictable === null) throw new Error(this.exhausted(branch, survey.blocked));
-    await this.handOver(survey.evictable, branch, base);
-    return this.lease(branch, survey.evictable);
+    if (survey.evictable === null) throw new Error(this.exhausted(req, survey.blocked));
+    await this.handOver(survey.evictable, req);
+    return this.lease(req.name, survey.evictable);
   }
 
   /** Path of an existing worktree checked out on the branch, or null. */
@@ -228,14 +291,20 @@ export class WorktreeManager implements Worktrees {
   }
 
   /**
-   * The free slots worth taking, in the two flavours {@link ensure} chooses between —
+   * The free slots worth taking, in the flavours {@link acquire} chooses between —
    * and, when there are none, why each of the others was not free.
    *
-   * A **spare** holds nothing anybody can come back for: it sits on a detached HEAD
-   * or on a branch whose ref is gone, which is what {@link deleteBranch} leaves
-   * behind when a pull request merges. An **evictable** slot is free but still on a
-   * branch that exists, so handing it over burns a tree that branch may yet want —
-   * which is why {@link ensure} grows the pool before it reaches for one.
+   * A slot's **own** arm is the read-only half of `ensure`'s reuse: a key holding a
+   * lease or a mark on a slot gets it back untouched, the way a branch checked out
+   * in one does. A **warm** slot is already a read-only checkout of the ref being
+   * asked for, so a hand-over neither costs nor burns anything (see
+   * {@link handOver}) — read-only work is the one case where a free slot carrying
+   * something is *better* than an empty one. A **spare** holds nothing anybody can
+   * come back for: it sits on an unmarked detached HEAD, or on a branch whose ref is
+   * gone — what {@link deleteBranch} leaves behind when a pull request merges. An
+   * **evictable** slot is free but still carrying a branch or another ref's
+   * read-only tree, so handing it over burns something that may yet be wanted —
+   * which is why {@link acquire} grows the pool before it reaches for one.
    *
    * Two conditions make a slot neither, and the second is a correctness rule rather
    * than a convenience. **A slot carrying uncommitted tracked changes is never
@@ -249,12 +318,19 @@ export class WorktreeManager implements Worktrees {
    * message an exhausted pool throws is the operator's only handle on it — "no free
    * slot" alone names neither what is holding them nor what to do.
    */
-  private async survey(slots: WorktreeEntry[]): Promise<Survey> {
+  private async survey(slots: WorktreeEntry[], req: Request): Promise<Survey> {
     const blocked: string[] = [];
+    let warm: string | null = null;
+    let spare: string | null = null;
     let evictable: string | null = null;
     for (const slot of slots) {
-      const holder = this.holder(slot);
+      const mark = readMark(this.markPath(slot.path));
+      const holder = this.holder(slot, mark);
       if (holder !== null) {
+        // Its own holder is not a blocker but the reuse arm: a second task under one
+        // name shares the checkout rather than fighting over it, and after a restart
+        // the mark plus `pool.held` is the only thing that still says so.
+        if (holder === req.name) return { own: slot.path, warm, spare, evictable, blocked };
         blocked.push(`${slot.path} (work in flight on ${holder})`);
         continue;
       }
@@ -262,28 +338,45 @@ export class WorktreeManager implements Worktrees {
         blocked.push(`${slot.path} (uncommitted changes on ${shortBranch(slot.branch) ?? 'a detached HEAD'})`);
         continue;
       }
+      if (req.readOnly && mark !== null && mark.of === req.of) {
+        warm ??= slot.path;
+        continue;
+      }
       const occupant = shortBranch(slot.branch);
-      // A spare beats everything below it, so there is nothing left to survey once
-      // one turns up — and `blocked` is read only by the refusal, unreachable from here.
-      if (occupant === null || !(await this.branchExists(occupant))) return { spare: slot.path, evictable, blocked };
+      if (mark === null && (occupant === null || !(await this.branchExists(occupant)))) {
+        spare ??= slot.path;
+        // A spare beats everything a writable request can reach below it, so there is
+        // nothing left to survey — `blocked` is read only by the refusal, which this
+        // arm has already made unreachable. A read-only request scans on, because a
+        // warm slot beats a spare one for it.
+        if (!req.readOnly) return { own: null, warm, spare, evictable, blocked };
+        continue;
+      }
       evictable ??= slot.path;
     }
-    return { spare: null, evictable, blocked };
+    return { own: null, warm, spare, evictable, blocked };
   }
 
   /**
-   * The branch still holding this slot, or null when nothing does — the lease, asked.
+   * The name still holding this slot, or null when nothing does — the lease, asked.
    *
-   * The two arms are the two halves described on {@link WorktreeManager.leases} and
-   * `pool.held`, and they cover windows the other cannot: this run's own lease runs
-   * until the process is reaped, and the branch actually checked out in the slot is
-   * what a restart has left to go on.
+   * The three arms are the two halves described on {@link WorktreeManager.leases}
+   * and `pool.held`, with the read-only one folded into the second. They cover
+   * windows the others cannot: this run's own lease runs until the process is
+   * reaped, and what a restart has left to go on is what is *in* the slot — the
+   * branch checked out in it, or the key its mark names.
+   *
+   * **The mark is why a read-only slot survives a restart.** A detached checkout
+   * has no ref for `pool.held` to be asked about, so without it a restored assayer's
+   * tree would read as a spare and be cleaned and switched under the agent still
+   * sitting in it — the exact damage the lease exists to refuse, and silent.
    */
-  private holder(slot: WorktreeEntry): string | null {
+  private holder(slot: WorktreeEntry, mark: Mark | null): string | null {
     const leased = this.leaseOn(slot.path);
     if (leased !== null) return leased;
     const occupant = shortBranch(slot.branch);
     if (occupant !== null && this.pool.held(occupant)) return occupant;
+    if (mark !== null && this.pool.held(mark.key)) return mark.key;
     return null;
   }
 
@@ -304,10 +397,11 @@ export class WorktreeManager implements Worktrees {
   }
 
   /**
-   * Wipe a free slot back to a fresh checkout and switch it onto `branch`.
+   * Wipe a free slot back to a fresh checkout and switch it onto what `req` asks
+   * for — a branch, or a detached commit.
    *
-   * **`-ffdx`, and the reach is the whole point.** This runs only for a branch the
-   * slot is *not* already on — {@link ensure}'s reuse arm has taken every other
+   * **`-ffdx`, and the reach is the whole point.** This runs only for work the slot
+   * is *not* already holding — {@link acquire}'s reuse arm has taken every other
    * case — so everything standing in the directory belongs to some other branch: a
    * dependency tree resolved from a different lockfile, a `dist/` built from source
    * this branch has never seen. `-x` is what takes those, and the second `-f` is for
@@ -316,10 +410,23 @@ export class WorktreeManager implements Worktrees {
    * handing anyone. Nothing is excluded by name: an ignore list of paths to keep is
    * the repo-specific configuration the harness must not grow.
    *
-   * **Ordering.** The wipe runs before the switch because `git switch` refuses when
-   * an untracked file would be overwritten. The start point is resolved before
-   * either, so an unresolvable `base` leaves the slot exactly as it was rather than
-   * wiped and half-prepared.
+   * **One hand-over keeps the ignored files, and only one**: a read-only checkout
+   * of a ref, handed to another read-only checkout of the *same* ref. The wipe
+   * exists because the previous occupant's output answers a different source, and
+   * here it answers the same one — the default branch as the harness resolves it —
+   * so `-ffd` takes the last agent's scratch and leaves the build state standing.
+   * That is what stops a queue of assays and validation checks paying for a cold
+   * install each, which the pool could never give work that warms nothing of its
+   * own. The mark is the whole of the evidence: it is written only by a read-only
+   * hand-over and cleared by every other, so a tree the harness cannot vouch for is
+   * wiped.
+   *
+   * **Ordering.** The mark is cleared before anything is touched, so a failure
+   * between here and the switch leaves a slot claiming nothing rather than claiming
+   * to be a checkout it is not. The wipe runs before the switch because `git switch`
+   * refuses when an untracked file would be overwritten. The start point is resolved
+   * before all of it, so an unresolvable `base` leaves the slot exactly as it was
+   * rather than wiped and half-prepared.
    *
    * **The reset forms are unreachable, and that is the point.** `git switch -C` and
    * `git checkout -B` *reset* an existing branch to the start point, which on a slot
@@ -328,43 +435,95 @@ export class WorktreeManager implements Worktrees {
    * checked first and the create form is only ever reached for a branch that does
    * not exist.
    */
-  private async handOver(dir: string, branch: string, base?: string): Promise<void> {
-    const exists = await this.branchExists(branch);
-    const start = exists ? null : await this.startPoint(branch, base);
+  private async handOver(dir: string, req: Request): Promise<void> {
+    const mark = readMark(this.markPath(dir));
+    const warm = req.readOnly && mark !== null && mark.of === req.of;
+    const onto = await this.switchOnto(req);
+    this.mark(dir, null);
     try {
-      await runGit(dir, ['clean', '-ffdx']);
-      await runGit(dir, start === null ? ['switch', '--quiet', branch] : ['switch', '--quiet', '-c', branch, start]);
+      await runGit(dir, ['clean', warm ? '-ffd' : '-ffdx']);
+      await runGit(dir, onto);
     } catch (err) {
-      throw new Error(`Cannot hand worktree slot ${dir} to branch ${branch}: ${(err as Error).message}`);
+      throw new Error(`Cannot hand worktree slot ${dir} to ${describe(req)}: ${(err as Error).message}`);
     }
+    if (req.readOnly) this.mark(dir, { key: req.name, of: req.of });
   }
 
-  /** Add a brand-new slot directory, already on the branch. */
-  private async create(dir: string, branch: string, base?: string): Promise<void> {
-    if (await this.branchExists(branch)) {
-      await this.git(['worktree', 'add', dir, branch]);
+  /** Add a brand-new slot directory, already holding what `req` asks for. */
+  private async create(dir: string, req: Request): Promise<void> {
+    // A slot minted onto a path a dead one left behind inherits its mark otherwise,
+    // and would then read as a read-only tree nobody prepared.
+    this.mark(dir, null);
+    if (req.readOnly) {
+      await this.git(['worktree', 'add', '--detach', dir, await this.startPoint(req.name, req.of)]);
+      this.mark(dir, { key: req.name, of: req.of });
       return;
     }
-    await this.git(['worktree', 'add', '-b', branch, dir, await this.startPoint(branch, base)]);
+    if (await this.branchExists(req.name)) {
+      await this.git(['worktree', 'add', dir, req.name]);
+      return;
+    }
+    await this.git(['worktree', 'add', '-b', req.name, dir, await this.startPoint(req.name, req.base)]);
   }
 
   /**
-   * Where a branch that does not exist yet starts, as a **commit**.
+   * How a prepared slot is pointed at what it is going to hold — detached at a
+   * commit for a read-only checkout, switched onto a branch otherwise.
+   *
+   * Resolved before the slot is touched, so an unresolvable `base` or `of` leaves it
+   * exactly as it was rather than wiped and half-prepared. The create form is only
+   * reachable for a branch that does not exist, which is what keeps `switch -C`
+   * unreachable — see {@link handOver}.
+   */
+  private async switchOnto(req: Request): Promise<string[]> {
+    if (req.readOnly) return ['switch', '--quiet', '--detach', await this.startPoint(req.name, req.of)];
+    if (await this.branchExists(req.name)) return ['switch', '--quiet', req.name];
+    return ['switch', '--quiet', '-c', req.name, await this.startPoint(req.name, req.base)];
+  }
+
+  /**
+   * Where a branch that does not exist yet starts, or where a read-only checkout is
+   * pinned — as a **commit**.
    *
    * An omitted `base` means the repo root's HEAD — what `git worktree add -b` used
    * to fork from implicitly. It is named explicitly now because a pooled slot's own
    * HEAD is the *previous occupant's*, so leaving it implicit would silently mis-base
    * every branch cut into a reused slot.
    */
-  private async startPoint(branch: string, base?: string): Promise<string> {
+  private async startPoint(name: string, base?: string): Promise<string> {
     if (base === undefined) {
       const { stdout } = await this.git(['rev-parse', 'HEAD']);
       return stdout.trim();
     }
     const startPoint = await resolveCommit(this.repoRoot, base);
     if (!startPoint)
-      throw new Error(`Cannot create branch ${branch}: base '${base}' resolves to no commit in ${this.repoRoot}.`);
+      throw new Error(
+        `Cannot prepare a worktree for ${name}: base '${base}' resolves to no commit in ${this.repoRoot}.`,
+      );
     return startPoint;
+  }
+
+  /**
+   * Read, write or clear a slot's read-only mark.
+   *
+   * **Beside the slots rather than inside one.** A file in the worktree would be a
+   * stray in front of the agent and `clean -ffdx`'s to take; a file in git's admin
+   * directory would be the harness writing into git's own bookkeeping. `worktreeRoot`
+   * is the pool's, so the pool's record of what a slot holds lives there — and a
+   * lost mark degrades the way a lost lease does, to a full wipe.
+   */
+  private mark(dir: string, mark: Mark | null): void {
+    const path = this.markPath(dir);
+    if (mark === null) {
+      rmSync(path, { force: true });
+      return;
+    }
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, JSON.stringify(mark));
+  }
+
+  private markPath(dir: string): string {
+    return resolve(this.worktreeRoot, MARKS_DIR, basename(dir));
   }
 
   /** The pool: every registered worktree under `worktreeRoot`, in a stable order. */
@@ -398,9 +557,9 @@ export class WorktreeManager implements Worktrees {
    * tries again — but a rejection that does not name the slots or the knob is a dead
    * end for whoever reads the decision log.
    */
-  private exhausted(branch: string, blocked: string[]): string {
+  private exhausted(req: Request, blocked: string[]): string {
     return (
-      `No free worktree slot for branch ${branch}: all ${this.pool.size} slots under ${this.worktreeRoot} are ` +
+      `No free worktree slot for ${describe(req)}: all ${this.pool.size} slots under ${this.worktreeRoot} are ` +
       `unavailable — ${blocked.join('; ')}. A slot is held while the harness has work in flight on the branch ` +
       'checked out in it, and a slot carrying uncommitted tracked changes is never handed to another branch, ' +
       'because git would carry those edits across onto it. Raise `worktreePoolSize`, or commit or discard the ' +
@@ -543,8 +702,63 @@ function reclaimFailure(dir: string, err: NodeJS.ErrnoException): string {
   );
 }
 
+/**
+ * What a dispatch asks the pool for: a **branch** to work on, or a **read-only**
+ * checkout of a ref (issue #396).
+ *
+ * One type rather than two entry points with two policies, because the policy —
+ * the lease, the survey, the bound, the refusal — is the same for both and is the
+ * part that must not fork. All that discriminates them is what a prepared slot ends
+ * up holding, which is `switch <branch>` on one arm and `switch --detach <commit>`
+ * on the other.
+ *
+ * `name` is what the slot is leased under either way: a branch for the first,
+ * and for the second a key that never becomes a ref — the task row's `branch`, the
+ * branch gate's, and what `remove` is called with when the agent is reaped.
+ */
+type Request = { readOnly: false; name: string; base?: string } | { readOnly: true; name: string; of: string };
+
+/**
+ * What a slot holds when it holds a read-only checkout: whose it is, and which ref
+ * it is a checkout **of**.
+ *
+ * Both fields do a job the pool has nothing else to answer with. `key` is what
+ * `pool.held` is asked about, so a restart still knows a detached slot is somebody's
+ * (there is no ref for it to read). `of` is what scopes the warm hand-over: two
+ * read-only checkouts of one ref are the same tree, and of two different refs are
+ * the stale-`dist/` bug the wipe exists for.
+ */
+interface Mark {
+  key: string;
+  of: string;
+}
+
+/** Where a slot's mark lives, relative to `worktreeRoot`. */
+const MARKS_DIR = '.read-only';
+
+/** A slot's mark, or null when it holds no read-only checkout (or an unreadable one). */
+function readMark(path: string): Mark | null {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const { key, of } = parsed as Partial<Mark>;
+    return typeof key === 'string' && typeof of === 'string' ? { key, of } : null;
+  } catch {
+    // No mark, or one nothing can read: both mean the slot vouches for nothing, and
+    // a full wipe is the answer to both.
+    return null;
+  }
+}
+
+/** How a request reads in a failure the operator has to act on. */
+function describe(req: Request): string {
+  return req.readOnly ? `read-only checkout ${req.name} of ${req.of}` : `branch ${req.name}`;
+}
+
 /** What {@link WorktreeManager.survey} found: see there for what each arm means. */
 interface Survey {
+  own: string | null;
+  warm: string | null;
   spare: string | null;
   evictable: string | null;
   blocked: string[];

@@ -53,6 +53,14 @@ class WedgedWorktrees implements Worktrees {
       );
     return this.inner.ensure(branch, base);
   }
+  /** The wedge is the *directory*, so it takes the read-only shape exactly as it takes a branch. */
+  ensureReadOnly(key: string, of: string): Promise<string> {
+    if (this.failing)
+      return Promise.reject(
+        new Error(`Cannot reclaim the worktree directory /wt/slot-0: it is held open by another process (EBUSY)`),
+      );
+    return this.inner.ensureReadOnly(key, of);
+  }
   remove(branch: string): Promise<void> {
     return this.inner.remove(branch);
   }

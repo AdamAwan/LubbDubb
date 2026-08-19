@@ -79,8 +79,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         // Written for *both* directions — the seed means "decided", not "tagged".
         const branch = store.getWorldBaseline()?.pullRequests.find((pr) => pr.number === prNumber)?.branch ?? '';
         store.recordPrWatchSeed(prNumber, branch);
-        // Reflect the change immediately: refetch on the next state read, and run a
-        // cycle so a now-watched PR is picked up (or a now-unwatched one dropped).
+        // Reflect the change immediately: the tag is folded onto the baseline so
+        // the refetch this broadcast triggers draws the new state rather than the
+        // old one — `/api/state` serves the baseline, and the cycle below is no
+        // use for it, since it coalesces to nothing while another is in flight.
+        store.patchWorldLabels({ pullRequests: [prNumber], label: watchLabel, present: watched });
         hub.broadcast({ type: 'world:changed' });
         await harness.runCycle('manual');
         return { ok: true, ref: result.ref, watched };

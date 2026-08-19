@@ -7,6 +7,8 @@ import { slotDirName, type Worktrees } from './worktreeManager.js';
 interface FakeWorktreeCall {
   branch: string;
   base?: string;
+  /** Set by `ensureReadOnly`, so a test can tell the two shapes apart. */
+  readOnly?: true;
 }
 
 /**
@@ -66,6 +68,23 @@ export class FakeWorktreeManager implements Worktrees {
 
   ensure(branch: string, base?: string): Promise<string> {
     this.ensured.push(base === undefined ? { branch } : { branch, base });
+    return this.slotFor(branch);
+  }
+
+  /**
+   * The read-only shape, and **the same pool** — which is the property worth
+   * modelling. What differs in the real manager is what a hand-over costs and
+   * whether a ref is minted, and neither is observable without a repository (`base`
+   * is recorded and never honoured here for the same reason). What is observable,
+   * and is what the lease exists for, is that a read-only key holds a directory
+   * against every other name exactly as a branch does.
+   */
+  ensureReadOnly(key: string, of: string): Promise<string> {
+    this.ensured.push({ branch: key, base: of, readOnly: true });
+    return this.slotFor(key);
+  }
+
+  private slotFor(branch: string): Promise<string> {
     const warm = this.leases.get(branch) ?? this.slots.find((dir) => this.occupants.get(dir) === branch);
     if (warm !== undefined) return Promise.resolve(this.lease(branch, warm));
     const spare = this.slots.find((dir) => !this.isLeased(dir) && !this.occupants.has(dir));

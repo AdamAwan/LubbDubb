@@ -81,6 +81,15 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // Whatever landed, landed — the world is now different from the one the
       // cockpit is showing even on a partial failure, so it is republished before
       // the refusal rather than after a success only.
+      //
+      // Folded onto the baseline first, and that ordering is the whole of why the
+      // toggle changes under the click: `/api/state` serves the baseline, so a
+      // broadcast ahead of the write just makes the cockpit redraw the old state.
+      // The cycle below cannot be relied on for it either — it coalesces away to
+      // nothing while another is in flight, which is most clicks on a busy fleet.
+      // Only the targets whose write the provider took.
+      const landed = targets.filter((t) => !failed.some((f) => f.number === t));
+      store.patchWorldLabels({ issues: landed, label: watchLabel, present: watched });
       hub.broadcast({ type: 'world:changed' });
       if (failed.length === targets.length) {
         return reply.code(400).send({ error: failed[0]?.message ?? 'no watch tag could be written' });

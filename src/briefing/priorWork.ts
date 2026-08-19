@@ -2,6 +2,7 @@ import { padTestimony } from '../retro/dossier.js';
 import { liveParts } from '../plans/parts.js';
 import type {
   GoalFile,
+  GoalNeighbour,
   IssueAssay,
   IssueConclusion,
   IssueDelivery,
@@ -44,7 +45,10 @@ import type {
  *   assessment's finding either way;
  * - **the paths the goal has been edited in**, the one entry here that is not prose
  *   an agent wrote. It is the cheapest orientation there is — it turns a grep phase
- *   into a Read — and no template renders it either.
+ *   into a Read — and no template renders it either;
+ * - **the retrospectives of goals that have been in those same files** — prose an
+ *   agent wrote about a run nobody on this goal was part of, and the only place it is
+ *   ever put in front of one: no tool an agent has reaches another goal's write-up.
  *
  * So it deliberately omits `plan.reason` (rendered by `currentPlanSummary` to a
  * replanner and as `{plan}` to a part agent), a part's status, branch and PR number
@@ -52,10 +56,10 @@ import type {
  * request's state is live through `world_read`, and pasted into a prompt it would
  * be a stale second reading of something the agent can ask about properly.
  *
- * ## Where the file list sits against those two rules
+ * ## Where the file list and its neighbours sit against those two rules
  *
- * It is the one section that is stored *fields* rather than stored prose, so both
- * rules are answered here rather than left to be re-argued (issue #354).
+ * The file list is the one section that is stored *fields* rather than stored prose,
+ * so both rules are answered here rather than left to be re-argued (issue #354).
  *
  * **"It derives nothing"** still holds: a path is `agent_files.path` quoted back and
  * the grouping is a join — which agents worked this goal, and which of them wrote a
@@ -73,6 +77,28 @@ import type {
  * record pointing at nothing. That is testimony going stale, which the heading's own
  * framing already covers, so the section inherits that sentence rather than writing
  * a softer one of its own.
+ *
+ * ## Where the neighbouring goals sit against them
+ *
+ * The neighbour section is the same two rules asked of a wider join (issue #354,
+ * phase 2), and it answers them the same way.
+ *
+ * **It derives nothing.** Which goals have been in these files is a join;
+ * `retroSummary` is a stored field quoted whole. What is deliberately absent is the
+ * ordering that would make it a judgement: the list is **not** sorted by how many
+ * paths a neighbour shares, because "most overlapping" is a relevance score, and a
+ * relevance score is the second opinion about somebody else's work this module
+ * refuses. The count is stated — it is a count of the join — and the order is the
+ * recency of the neighbour's last write, a stored timestamp, exactly as above.
+ *
+ * **It is not a world fact, and that is why "closed" is spelled `has a
+ * retrospective`.** Whether an issue is closed is a fact about the world now, which
+ * `world_read` answers properly and a paste would answer staler. A retrospective is
+ * a row this database owns, written only once a goal is done — the harness's own
+ * stored answer to the same question, and the thing worth handing over besides. A
+ * goal still being worked is therefore absent without a second liveness predicate;
+ * `detectFileOverlaps` owns "is this happening now", and a briefing offering a
+ * second opinion on it would be the drift both modules exist to avoid.
  *
  * ## Why it is bounded
  *
@@ -103,6 +129,22 @@ const MAX_DOCUMENT = 4000;
  */
 const MAX_FILE_PATHS = 25;
 
+/**
+ * Neighbouring goals beyond this are dropped — the least recently worked first, and
+ * said so. Low, and lower than the file cap, because each line here carries a whole
+ * summary rather than a path: this is a pointer to work done elsewhere, and a page
+ * of them would displace the reasoning about the work actually in hand.
+ */
+const MAX_NEIGHBOUR_GOALS = 4;
+
+/**
+ * Shared paths named per neighbour before the rest are counted instead. The paths
+ * are the evidence that the neighbour is worth reading at all, so some are always
+ * named; a goal that rewrote forty of the same files needs no more than four of them
+ * to have made the point.
+ */
+const MAX_NEIGHBOUR_PATHS = 4;
+
 export interface PriorWorkInput {
   /** The plan for this goal, whatever its verdict — a `single` plan has a write-up too. */
   plan: Plan | null;
@@ -120,6 +162,12 @@ export interface PriorWorkInput {
   /** Newest write first, one row per path — `Store.listGoalFiles`. */
   files: GoalFile[];
   /**
+   * Goals with a retrospective that have been in the same files as this one, the
+   * most recently worked first — `Store.listGoalNeighbours`, seeded by
+   * {@link neighbourSeedPaths}.
+   */
+  neighbours: GoalNeighbour[];
+  /**
    * True when the dispatch is for a part of this plan. `plan-part` already renders
    * every sibling's intent through `siblingContext`, so repeating the parts section
    * there would be the duplication this module's whole rule exists to refuse.
@@ -127,7 +175,9 @@ export interface PriorWorkInput {
    * It suppresses the parts section and **nothing else**. In particular the file
    * list stays on for a part dispatch: `siblingContext` renders what a sibling was
    * *for*, and nowhere renders where it has been — so a part agent is the reader
-   * with the most to gain from it, not the one to withhold it from.
+   * with the most to gain from it, not the one to withhold it from. The neighbour
+   * list stays on for a stronger version of the same reason: it is about goals no
+   * sibling was ever part of, so there is no surface it could be a second copy of.
    */
   forPart: boolean;
 }
@@ -146,6 +196,7 @@ export function priorWorkBriefing(input: PriorWorkInput): string {
     partsSection(input.forPart ? [] : input.parts),
     verdictSection(input),
     filesSection(input.files),
+    neighboursSection(input.neighbours),
   ].filter(Boolean);
   if (sections.length === 0) return '';
   return [
@@ -260,6 +311,76 @@ function filesSection(files: GoalFile[]): string {
     // Not "the agents above": this section renders on a goal whose only record is
     // its file rows, and there is nothing above it there.
     'Written by the agents on this goal, most recently written first, and as the paths stood then.',
+    '',
+    ...lines,
+  ].join('\n');
+}
+
+/**
+ * The paths a neighbour lookup asks about: where this goal has **been**, and where
+ * its planner said the answer **was**.
+ *
+ * Two sources, because the first is empty exactly when the lookup is worth most. A
+ * goal's own file rows appear only once an agent has written something under it, so
+ * seeding from them alone would answer nobody on the first dispatch — which is the
+ * case the cross-goal lookup was asked for (issue #354). A plan's `evidence` carries
+ * a stored `path` per citation and is written before any part is dispatched, so the
+ * first part agent is seeded by where the planner read.
+ *
+ * The two mean different things and neither is widened into the other. What keeps
+ * that honest is the rendering: the section names the paths a neighbour **shares**
+ * and never claims this goal edited them, so a citation seeding the query cannot
+ * become a claim that anybody wrote to it.
+ *
+ * Deduped and ordered — this goal's own writes first — so one goal asks one query.
+ */
+export function neighbourSeedPaths(files: GoalFile[], plan: Plan | null): string[] {
+  return [...new Set([...files.map((f) => f.path), ...(plan?.evidence ?? []).map((e) => e.path)])];
+}
+
+/**
+ * Who else has been in this code, and how their run went.
+ *
+ * **Last, under the index it is derived from.** The file section says where this
+ * goal has been; this says who else has been there, so it reads as a footnote to
+ * that list rather than as one more thing to weigh.
+ *
+ * **The summary is quoted, not pointed at.** Every other cross-reference in this
+ * briefing could name a thing and let the agent go and read it; this one cannot,
+ * because no tool it has reaches another goal's write-up — `scratch_read` is scoped
+ * to the caller's own pad. So the sentence itself is the deliverable, and the
+ * document behind it stays where it is: a page per neighbour would out-weigh the
+ * goal in hand, and the summary is the field written to be read first.
+ *
+ * **Nothing here claims relevance.** The lead says a neighbour has been in this code
+ * and wrote up how it went, which is the whole of what the join knows. Whether that
+ * run is worth reading is the agent's call on the paths and the summary in front of
+ * it — not a score computed here about somebody else's work.
+ */
+function neighboursSection(neighbours: GoalNeighbour[]): string {
+  if (neighbours.length === 0) return '';
+  const dropped = Math.max(0, neighbours.length - MAX_NEIGHBOUR_GOALS);
+  const shown = dropped > 0 ? neighbours.slice(0, MAX_NEIGHBOUR_GOALS) : neighbours;
+  const lines = shown.map((n) => {
+    const extra = Math.max(0, n.sharedPaths.length - MAX_NEIGHBOUR_PATHS);
+    const named = n.sharedPaths
+      .slice(0, MAX_NEIGHBOUR_PATHS)
+      .map((path) => `\`${path}\``)
+      .join(', ');
+    const rest = extra > 0 ? `, and ${extra} more of the ${n.sharedPaths.length}` : '';
+    return `- **${n.goalRef}** has been in ${named}${rest}. Its retrospective: ${n.retroSummary}`;
+  });
+  if (dropped > 0) {
+    lines.push(
+      `\n(${dropped} of the ${neighbours.length} goal${neighbours.length === 1 ? '' : 's'} are not shown here — the least recently worked went first.)`,
+    );
+  }
+  return [
+    '### Other goals that have been in these same files',
+    '',
+    'Goals with a retrospective of their own that have been in files this one has been edited in, or ' +
+      'that its plan cites as evidence — most recently worked first. This does not say the work is ' +
+      'related: it says somebody has been in this code and wrote up how it went.',
     '',
     ...lines,
   ].join('\n');

@@ -63,6 +63,16 @@ test('the CI policy applies now by re-seating the dispatcher, not by assignment 
   assert.deepEqual(running.ci.checks, checks);
 });
 
+test('the state colours apply now, because the snapshot reads the running config each poll', () => {
+  const { running, live } = harness();
+  const colours = { Worthyable: '#7fb3ff' };
+
+  live.apply(loadConfig({ maxConcurrentAgents: 3, lessonBlockChars: 6000, issueStateColours: colours }));
+
+  assert.deepEqual(running.issueStateColours, colours, 'the object the snapshot builder reads by reference');
+  assert.deepEqual(live.pending(), [], 'no restart is owed for a colour');
+});
+
 test('a key with no arm lands in the file and is reported as pending, not applied', () => {
   const { running, live } = harness();
 

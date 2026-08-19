@@ -30,7 +30,7 @@ import { operatorInstructionsNote } from '../goalInstructions.js';
 import { attachmentsNote } from '../jobs/attachments.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { retroDossier, retroPad } from '../retro/dossier.js';
-import { priorWorkBriefing } from '../briefing/priorWork.js';
+import { neighbourSeedPaths, priorWorkBriefing } from '../briefing/priorWork.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
 import { padOriginFor } from '../scratch/pad.js';
 import { retryNote, retryResumeFor, type RetryResume } from './retryResume.js';
@@ -960,8 +960,16 @@ export class ActionExecutor {
   ): Promise<string> {
     // A stacked plan part names the branch it forks from; everything else takes
     // the configured integration branch.
-    if (action.type === 'dispatch_code_agent')
-      return this.deps.worktrees.ensure(action.branch, action.base ?? this.deps.defaultBranch);
+    //
+    // **`readOnly` picks the shape, and nothing else does.** A dispatch that only
+    // reads gets a detached checkout leased under its name rather than a branch cut
+    // for it (issue #396) — one call site, so no rule can arrange its own.
+    if (action.type === 'dispatch_code_agent') {
+      const at = action.base ?? this.deps.defaultBranch;
+      return action.readOnly
+        ? this.deps.worktrees.ensureReadOnly(action.branch, at)
+        : this.deps.worktrees.ensure(action.branch, at);
+    }
     const cwd = resolve(this.deps.deskRoot, task.id);
     mkdirSync(cwd, { recursive: true });
     return cwd;
@@ -1066,6 +1074,13 @@ function outstandingForOrigin(originRef: string | null | undefined, store: Store
  * `Store.listGoalFiles` takes the goal, never the dispatching origin, because where
  * a *sibling* has been is the half of that list worth having.
  *
+ * The neighbour list is that join asked once more with the goal on the far side of
+ * it: which *other* goals have a retrospective and have been in the same paths
+ * (issue #354). It is gathered here rather than inside the briefing for the reason
+ * every other input is — the briefing is pure, and this is two reads — and it is the
+ * one input seeded by another, so `neighbourSeedPaths` owns which paths are asked
+ * about rather than the call site assembling them a second way.
+ *
  * In the executor, and for the branch gate's reason: every dispatch passes through
  * here whatever composed it, an accepted proposal's included.
  */
@@ -1075,6 +1090,7 @@ function priorWorkFor(originRef: string | null | undefined, store: Store, outsta
   if (!issueOriginRef) return null;
   if (retroSubmitOrigin(ref).ok) return null;
   const plan = store.getPlanByOrigin(issueOriginRef);
+  const files = store.listGoalFiles(issueOriginRef);
   const briefing = priorWorkBriefing({
     plan,
     parts: plan ? store.listPlanParts(plan.id) : [],
@@ -1083,7 +1099,8 @@ function priorWorkFor(originRef: string | null | undefined, store: Store, outsta
     delivery: store.getDelivery(issueOriginRef),
     shortfall: store.getShortfall(issueOriginRef),
     entries: store.listScratchEntries(issueOriginRef),
-    files: store.listGoalFiles(issueOriginRef),
+    files,
+    neighbours: store.listGoalNeighbours(issueOriginRef, neighbourSeedPaths(files, plan)),
     forPart: /^issue:\d+:part:/.test(ref),
   });
   return briefing || null;

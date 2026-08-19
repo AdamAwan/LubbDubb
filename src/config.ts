@@ -102,6 +102,16 @@ export interface Config {
   /** Weight for an issue carrying no matching priority label. */
   issueDefaultPriority: number;
   /**
+   * Tracker state → `#rrggbb`, for the state chip the cockpit draws on a ticket.
+   * Display only — nothing in the harness reads a colour to decide anything. A
+   * tracker with a rich workflow reports a dozen state words the cockpit has no
+   * opinion about, and a column of identical grey chips is a column you cannot
+   * read at a glance; this is the operator saying which ones matter. Keys match
+   * on letters and digits only, so `In Review` and `in-review` are one state.
+   * Replaced wholesale by an override, not merged.
+   */
+  issueStateColours: Record<string, string>;
+  /**
    * Dispatcher-level, state-based pickup gate. When non-empty, only issues whose
    * provider-native workflow state is in this list are picked up — e.g.
    * `["Ready", "Doing"]` for Azure DevOps, so items sitting in "In Review"/"New"
@@ -552,6 +562,9 @@ const DEFAULTS: Config = {
   labelPrefix: 'lubbdubb',
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
   issueDefaultPriority: 2,
+  // Empty on purpose: every state keeps the reading it had before there were
+  // colours until an operator names one.
+  issueStateColours: {},
   issueContainerTypes: [...DEFAULT_CONTAINER_TYPES],
   issueFilingTypes: [...DEFAULT_FILING_TYPES],
   // Each policy's own module owns the operator default; the dispatcher's fallback

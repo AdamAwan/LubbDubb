@@ -147,6 +147,21 @@
   font-weight: 600;
   letter-spacing: 0.2px;
 }
+/* The tracker link, sized down out of the wordmark. `.cn-ident` is 600 for the
+   name and the link would inherit it, which reads as a second half of the wordmark
+   rather than as somewhere to go — the arrow `ExtLink` stamps is the mark that has
+   to carry that, and it cannot while the type says "title".
+
+   It is a **wrapper the console owns** rather than a rule on `.ext-ref`, because
+   `console.css` styling a shared component's class is the thing this stylesheet is
+   tested not to do. All three properties inherit and the token layer sets none of
+   them, so the link picks them up through the cascade and keeps its own hue, arrow
+   and focus ring — which is the whole of what the shared layer is for. */
+.cn-issue {
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: normal;
+}
 .cn-dot {
   width: 7px;
   height: 7px;

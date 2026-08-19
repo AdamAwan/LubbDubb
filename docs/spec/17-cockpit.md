@@ -126,7 +126,7 @@ Four surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ident │ Overview Backlog Work │ Scan · Fleet    Spend Yield … Launch ⚙ │  top bar
+│ ident ↗issue │ Overview Backlog Work │ Scan · Fleet  Spend Yield … Launch ⚙ │ top bar
 ├────────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned            │
 ├───────────────┬────────────────────────────────────────────────────────┤
@@ -985,6 +985,28 @@ made by the surface that is only supposed to be reporting it. It is a tone and n
 container hue tracks the default names, not the operator's `issueContainerTypes`, so a customised
 container name is uncoloured here while the dispatcher's gate still knows exactly what it is.
 
+### The state is coloured by the operator, never by the harness
+
+A row's state chip is the tracker's own word (`workItemState`) where there is one, and it draws in
+whatever colour the operator gave that word — `issueStateColours`
+([02](02-configuration.md#item-selection-labels-priority-states)), shipped on `CockpitConfig` and read
+through `stateColour` (`web/src/stateColour.ts`). The goal page's header chip reads the same map, so a
+state is one colour wherever it is drawn.
+
+This is the opposite arrangement from the type chip above, and for the same reason. A type has
+_families_ the harness genuinely knows, so it can tint one and fall through on the rest. A state has
+none: `New`, `Doing`, `Worthyable`, `Closed` is one board's vocabulary, the next board renames all four,
+and the cockpit has no reading of which of them matter — only the operator does. So there is no built-in
+scheme to fall through from, and the fall-through is _grey_: an uncoloured state draws exactly as it did
+before the setting existed. Which is the failure the setting answers — a dozen state words rendered as
+one grey is a column you read by squinting.
+
+The lookup folds punctuation and case, so a map written against `In Review` keeps working when the
+tracker reports `in-review`. A malformed colour resolves to no colour rather than reaching the `style`
+attribute: the config route refuses one on the way in, but the map also arrives from a hand-edited
+file. **Frozen keeps its dashed border** whatever colour its state carries — closed in the tracker is a
+fact about the item, not a shade of the state it stopped in.
+
 ### Intake is pulled out, never greyed inside the list
 
 An `unclear` assay is the one intake reading that **stops dispatch** ([06](06-issue-pickup.md)). Among
@@ -1109,6 +1131,18 @@ The strip carries the ident, the nav, the pulse, the fleet cap, and nine reading
 **Output**, **Findings**, **Lessons**, **Faults**, **Launch**, **Build** and **Settings**. Each is one subject stated once, in
 a plain label-and-number face. None reaches `api.js`: every one is a method on `CockpitActions`, and
 the fleet cap is the shared `FleetControl`, which is already on that seam.
+
+**The ident carries the one link on the bar that leaves.** `↗ Raise an issue` opens LubbDubb's own
+new-issue form in a new tab, and its URL is a constant in `TopBar.tsx` — not `github.owner`/`github.repo`,
+which name the repo the fleet _works on_ and are LubbDubb's only while it is dogfooding itself. A fault
+in the cockpit belongs on the cockpit's tracker whatever repo the deployment is pointed at, so a fork or
+a customer's repo is sent to the same place; nothing on the wire has to carry it. It lands on the form
+rather than the repo or the issue list because the feature is the number of clicks between noticing
+something and having written it down. It sits in the ident rather than among the readings for the reason
+the readings are a group at all — each is a gauge on the fleet or on this build, read left to right as
+one sentence about what is happening, and "raise an issue" answers nothing in it. `.cn-issue` sizes it
+out of the wordmark's weight through a console-owned wrapper, since `console.css` styling `.ext-ref`
+directly is what this stylesheet is tested not to do.
 
 Four rules hold them:
 
@@ -1269,6 +1303,12 @@ are not rendered at all — one `Off the air` card in their place, saying that t
 and that the console returns by itself. `test/console.test.ts` asserts that no gauge, no rail and no
 situation area survive the drop.
 
+**The ident survives it whole, tracker link included.** `Ident` is one component drawn by both arms of
+`TopBar` — the lamp turning red is the only difference — because a socket that just went down is a
+moment an operator has something to report, and a way to report it that is only there while the harness
+is healthy is missing exactly then. Both arms are asserted, since the offline one is the return a change
+to the bar forgets.
+
 ## Settings
 
 A reading in the top bar opens a shared modal carrying **three tabs**, which is everything an operator
@@ -1309,7 +1349,7 @@ at and dismiss. The decisive argument is smaller than that, though — **a modal
 and "look at what `agentMode` is set to on the box" is a URL now.
 
 It is not in the nav. The nav is the three surfaces work happens on, and a fourth button beside them
-would say configuration is a fourth thing you *do* rather than the thing you set up once; the reading
+would say configuration is a fourth thing you _do_ rather than the thing you set up once; the reading
 in the bar is where an operator already reached for it. `?settings=1`, which opened the modal, is
 honoured as a way in for `?tab=backlog`'s reason.
 
@@ -1331,20 +1371,24 @@ the form says so **per row** rather than the surface claiming one answer for fif
 per row all come from the server for `isDefault`'s reason — a browser that decided them would be a
 second copy free to drift:
 
-| Drawn from      | Decided by                                                          |
-| --------------- | ------------------------------------------------------------------- |
-| the widget      | `entry.type` — `configFields.ts` ([02](02-configuration.md#fields))  |
-| applies now / needs restart | `entry.live` — true only where `configApply.ts` holds an arm |
-| not editable    | `entry.env` (the environment beats the file), or `access: 'fileOnly'` |
+| Drawn from                  | Decided by                                                            |
+| --------------------------- | --------------------------------------------------------------------- |
+| the widget                  | `entry.type` — `configFields.ts` ([02](02-configuration.md#fields))   |
+| applies now / needs restart | `entry.live` — true only where `configApply.ts` holds an arm          |
+| not editable                | `entry.env` (the environment beats the file), or `access: 'fileOnly'` |
+
+A `colourMap` is the one `entry.type` that draws more than a field: `issueStateColours` becomes a
+swatch per state over a `datalist` of the state words the tracker is currently reporting, read off the
+world the page already holds rather than fetched again ([02](02-configuration.md#fields)).
 
 Saving writes `lubbdubb.config.json` and nothing else; the file stays the source of truth and editing it
 by hand lands on the same apply path ([02](02-configuration.md#the-watcher)). A **reset clears the key**
-rather than writing the default back — the browser is never told what a default *is*, only `isDefault`.
+rather than writing the default back — the browser is never told what a default _is_, only `isDefault`.
 Staged edits are counted in a save bar and nothing reaches the file until the write; a save whose
 baseline has moved is refused with "reload" rather than clobbering whoever moved it.
 
-**The write goes through a review step** (`ReviewWrite.tsx`), which draws its diff from the *server's own
-candidate bytes* (`POST /api/config/preview`) rather than splicing the file in the browser. That is the
+**The write goes through a review step** (`ReviewWrite.tsx`), which draws its diff from the _server's own
+candidate bytes_ (`POST /api/config/preview`) rather than splicing the file in the browser. That is the
 whole reason it can promise anything: the edit that preserves comments, key order and every untouched
 line is server code, and a second implementation of it here would be free to disagree with the one that
 actually writes — silently, and in the direction of "your file is fine, honestly". Beside the diff, each
@@ -1630,7 +1674,7 @@ Every effective value is computed by `describeCiPolicy` on the server
 ([16](16-http-api.md#get-apici-policy)) — the component asserts nothing of its own about the policy, so
 it cannot claim a routing the dispatcher would not take. Read-only, and deliberately: `ci.checks` is an
 **ordered** rule list where the order is the semantics, so a rule editor is its own shape and its own
-decision. The config tab saves the list *whole*, which is the part #401 covers.
+decision. The config tab saves the list _whole_, which is the part #401 covers.
 
 ## Spend
 

@@ -64,6 +64,20 @@ const part = {
 };
 
 /**
+ * Whether this dispatch needs a **read-only** checkout rather than a branch of its
+ * own (issue #396) — see `Worktrees.ensureReadOnly` and `readOnlyDispatch`.
+ *
+ * Defaults to false, which is what every dispatch that writes code is, so a rule
+ * that says nothing gets the writable shape it always had. The three rules that
+ * only read say so through `readOnlyDispatch`, never by setting this themselves:
+ * three literals is three chances for one of them to drift back to minting a
+ * branch nothing will ever reap.
+ */
+const checkout = {
+  readOnly: z.boolean().default(false),
+};
+
+/**
  * The model profile this dispatch's origin is pinned to (issue #342) — a goal's
  * tag, or the profile its plan named for this part. Null for the ordinary case,
  * which is a dispatch priced by its rule.
@@ -104,6 +118,7 @@ const ActionSchema = z.discriminatedUnion('type', [
     ...job,
     ...part,
     ...pin,
+    ...checkout,
     ...base,
   }),
   z.object({

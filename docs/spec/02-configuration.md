@@ -93,8 +93,8 @@ from `LUBBDUBB_TOKEN` or a minted 0600 file, so `lubbdubb.config.json` stays saf
 ## Fields
 
 Every configurable leaf is declared once, in `src/configFields.ts`: its type (`number`, `boolean`,
-`string`, `enum`, `stringList`, `json`), the members where it is an enum, how far an operator reaches
-to edit it, the environment variable that beats it, and one line saying why it exists.
+`string`, `enum`, `stringList`, `json`, `colourMap`), the members where it is an enum, how far an
+operator reaches to edit it, the environment variable that beats it, and one line saying why it exists.
 
 The declaration exists because `RunningConfigEntry` carries `value: unknown`, which is enough to read a
 value back and nothing like enough to draw a control for it. Four consumers read the table — the form's
@@ -112,6 +112,14 @@ separately is four places to disagree.
 A `json` field is edited whole because it has no fixed shape to draw: an ordered rule list where the
 order is the semantics (`ci.checks`), or a map whose keys the operator invents
 (`issuePriorityLabels`, `agentModels`).
+
+A `colourMap` is the one map that does have a shape to draw — state → `#rrggbb` — and it is a type of
+its own rather than a `json` field because JSON is the wrong instrument for picking a colour. The
+cockpit draws one swatch per state, previewed in the chip the value lands on, over a `datalist` of the
+state words the tracker is currently reporting; the list is an offer and never a closed set, since a
+state no open item is sitting in is still one worth colouring. `issueStateColours` is the only field of
+this type. Its values are refused leaf by leaf on the way in — a colour reaches a `style` attribute, so
+a map half of whose entries do nothing is one an operator reads as broken with nothing saying why.
 
 `test/configFields.test.ts` asserts every top-level key of `defaultConfig()` is declared, so a config
 key added without one fails `npm run check` rather than quietly arriving un-editable — the failure
@@ -135,13 +143,14 @@ failure this repo catalogues. `test/configFields.test.ts` asserts the classifica
 in both directions; `test/configApply.test.ts` asserts each arm through its *effect*, never through the
 flag, so an arm that stops doing anything fails rather than passing.
 
-Three keys have arms, and the shortness is deliberate — every arm is a second place a value lives, and
+Four keys have arms, and the shortness is deliberate — every arm is a second place a value lives, and
 so a place two copies can disagree:
 
 | Key                   | The arm                                                                        |
 | --------------------- | ------------------------------------------------------------------------------ |
 | `maxConcurrentAgents` | Assign, and re-seat `RuntimeControl`, which the harness reads by reference each cycle. The live cap stays ephemeral: a restart still comes back to the file. |
 | `lessonBlockChars`    | Assign. `system.ts` renders the lesson block through a closure at every launch, so the object *is* the late reader. |
+| `issueStateColours`   | Assign. `buildStateSnapshot` reads the running config by reference at every poll and ships the colours to the cockpit, so the chips are recoloured a heartbeat later. Nothing in the harness reads a colour, so there is no consumer to re-seat. |
 | `ci.checks`           | Assign, and hand `RuleDispatcher` a new policy — it took `{checks}` at construction, so assignment alone would leave the cockpit drawing one policy while the dispatcher ran another. |
 
 Everything else is restart-only, including the ones that could be made live. A key nobody changes twice
@@ -378,6 +387,7 @@ reading the file is not the same as knowing the policy.
 | `userId`               | `string` (optional)      | unset                                                             | Who _you_ are to every provider — see [`userId`](#userid). Turns on the ownership gate, ticket assignment and the PR-author filter together. Unset, all three are off.                           |
 | `labelPrefix`          | `string`                 | `"lubbdubb"`                                                      | Derives the one tag `${prefix}-watch`. Everything is opt-in: an item without it is left alone. An **empty** prefix turns the gate off.                                                           |
 | `issuePriorityLabels`  | `Record<string, number>` | `{ 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 }` | Label → weight for pickup ordering. Replaced wholesale by an override.                                                                                                                           |
+| `issueStateColours`    | `Record<string, string>` | `{}`                                                              | Tracker state → `#rrggbb` for its chip in the cockpit. Display only. Keys match on letters and digits, so `In Review` and `in-review` are one state. Replaced wholesale by an override; live.    |
 | `issueDefaultPriority` | `number`                 | `2`                                                               | Weight for an issue with no matching priority label.                                                                                                                                             |
 | `issuePickupStates`    | `string[]` (optional)    | unset                                                             | When non-empty, only items whose provider-native state is listed are eligible. Items with no such state bypass it.                                                                               |
 | `issueInReviewState`   | `string` (optional)      | unset                                                             | The state an item is moved to once a PR is open for it. Takes effect only alongside `issuePickupStates`.                                                                                         |

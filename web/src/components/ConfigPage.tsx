@@ -41,6 +41,20 @@ const TABS: readonly { id: ConfigTab; label: string }[] = [
   { id: 'theme', label: 'Theme' },
 ];
 
+/**
+ * The state words the tracker is reporting, for the colour picker to offer.
+ *
+ * Read off the world rather than fetched: `issueStateColours` is a policy about a
+ * vocabulary the operator already has in front of them on the backlog, and a
+ * second request for a list the snapshot is holding is a second answer that can
+ * disagree with it.
+ */
+function trackerStates(view: CockpitView): string[] {
+  const seen = new Set<string>();
+  for (const issue of view.state.world.issues) seen.add(issue.workItemState ?? issue.state);
+  return [...seen].sort((a, b) => a.localeCompare(b));
+}
+
 export function ConfigPage({ view, actions }: { view: CockpitView; actions: CockpitActions }): React.JSX.Element {
   const [payload, setPayload] = useState<RunningConfigPayload | null>(null);
   const [staged, setStaged] = useState<Staged>({ set: {}, clear: [] });
@@ -126,6 +140,7 @@ export function ConfigPage({ view, actions }: { view: CockpitView; actions: Cock
               saved={saved}
               group={view.configGroup}
               control={view.state.control}
+              states={trackerStates(view)}
               onGroup={(group) => actions.openConfig({ configGroup: group })}
               onStage={(next) => {
                 setSaved(null);
