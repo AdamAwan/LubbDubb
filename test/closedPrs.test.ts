@@ -294,6 +294,7 @@ function azApi(closed: AzClosedPull[], recorded: string[]): AzureDevOpsApi {
   };
   return {
     getBuildTimeline: unused,
+    requeuePolicyEvaluation: unused,
     getBuildLog: unused,
     async viewerUniqueName() {
       return 'bot@acme.com';

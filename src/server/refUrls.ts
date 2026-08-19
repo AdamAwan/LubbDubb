@@ -75,7 +75,8 @@ export function decisionSubjectRef(action: { type: string; [key: string]: unknow
       return str(action.originRef);
     case 'reply_on_pr':
     case 'merge_pr':
-    case 'update_pr_branch': {
+    case 'update_pr_branch':
+    case 'requeue_ci_check': {
       const n = num(action.prNumber);
       return n === null ? null : `pr:${n}`;
     }

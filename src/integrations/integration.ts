@@ -4,6 +4,7 @@ import type { Store } from '../store/store.js';
 import type { InjectableEvent } from '../connector/connector.js';
 import type {
   BranchDeleteInput,
+  CiCheckRequeueInput,
   IssueCommentInput,
   IssueLabelInput,
   PrBaseInput,
@@ -171,6 +172,25 @@ export interface PrBaseUpdateCapable {
 
 export function isPrBaseUpdateCapable(x: Integration): x is Integration & PrBaseUpdateCapable {
   return typeof (x as Partial<PrBaseUpdateCapable>).updatePrBranch === 'function';
+}
+
+/**
+ * An integration that can **queue a fresh run of an expired CI check** — the gate
+ * whose cause the harness already knows (issue #395).
+ *
+ * Its own capability rather than a method on {@link CiEvidenceCapable}, which is
+ * the other per-check provider call: that one reads a failure, this one writes.
+ * Only the Azure provider implements it, and only because only Azure has the
+ * state — a blocking build policy that sits `queued` forever with nothing in
+ * flight. GitHub has no equivalent, so the composite answers `ok: false` and the
+ * gate keeps the agent it always had.
+ */
+export interface CiCheckRequeueCapable {
+  requeueCiCheck(input: CiCheckRequeueInput): Promise<SendResult>;
+}
+
+export function isCiCheckRequeueCapable(x: Integration): x is Integration & CiCheckRequeueCapable {
+  return typeof (x as Partial<CiCheckRequeueCapable>).requeueCiCheck === 'function';
 }
 
 /** An integration that can delete a branch — the reap after a pull request merges. */

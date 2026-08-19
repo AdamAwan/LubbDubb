@@ -437,6 +437,64 @@ export class ActionExecutor {
           break;
         }
 
+        case 'requeue_ci_check': {
+          // The expired arm of rule `pr-ci-gate`, performed rather than dispatched
+          // (issue #395). Not authorized and not proposed, for `update_pr_branch`'s
+          // reasons: it is mechanical, and the agent path queued this same build
+          // without asking anyone.
+          //
+          // **No branch gate here, and that is not an omission.** A requeue writes
+          // to a policy evaluation, not to the branch: nothing an agent's worktree
+          // was cut from moves, so there is no collision to defer for. The rule
+          // only reaches this act for a free branch anyway — a staffed one gets the
+          // note — which makes the gate the base update needs redundant twice over.
+          const unperformed: string[] = [];
+          try {
+            for (const check of action.checks) {
+              const res = await this.deps.sink.requeueCiCheck({
+                prNumber: action.prNumber,
+                check: check.name,
+                requeueRef: check.requeueRef,
+              });
+              // `ok: false` is the provider saying nothing was queued — it has no
+              // such operation, or it has one and declined. A configuration rather
+              // than a failure either way, so it is audited and *not* recorded as
+              // an error.
+              if (!res.ok) unperformed.push(check.name);
+            }
+          } catch (err) {
+            const message = (err as Error).message;
+            this.deps.errors.record({
+              source: 'provider',
+              message: `Requeueing the expired check(s) on PR #${action.prNumber} failed: ${message}`,
+              detail: 'Rule pr-ci-gate will dispatch a code agent to queue the build instead.',
+            });
+            // Deliberately whole-act, even where earlier checks in the list were
+            // queued: the ones that took stop being expired and drop out of the
+            // gate by themselves, and the agent the next pulse dispatches is left
+            // with exactly the checks that did not.
+            record(
+              'rejected',
+              `Failed to requeue the expired check(s) on PR #${action.prNumber}: ${message}. ` +
+                `A code agent will be dispatched to queue the build.`,
+            );
+            break;
+          }
+          if (unperformed.length > 0) {
+            record(
+              'skipped',
+              `This provider did not requeue ${unperformed.join(', ')} on PR #${action.prNumber}; ` +
+                `a code agent will be dispatched to queue the build.`,
+            );
+            break;
+          }
+          record(
+            'executed',
+            `Queued a fresh run of ${action.checks.map((c) => c.name).join(', ')} on PR #${action.prNumber} — no agent spent.`,
+          );
+          break;
+        }
+
         case 'set_work_item_state': {
           // A mechanical bookkeeping transition (e.g. move a work item to "In
           // Review" once its PR is open), not a publish-to-the-world action — so it

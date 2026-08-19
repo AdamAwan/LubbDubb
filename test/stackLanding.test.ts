@@ -83,6 +83,9 @@ function countingSink(fail = false): ActionSink & { merges: number[] } {
     async updatePrBranch() {
       return { ok: true };
     },
+    async requeueCiCheck() {
+      return { ok: true };
+    },
     async deleteBranch() {
       return { ok: true };
     },

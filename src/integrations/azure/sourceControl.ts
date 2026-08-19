@@ -1,6 +1,7 @@
 import type { ErrorRecorder } from '../../errorLog.js';
 import type {
   BranchDeleteInput,
+  CiCheckRequeueInput,
   MergeMethod,
   PrBaseInput,
   PrCreateInput,
@@ -15,6 +16,7 @@ import { EVIDENCE_LOG_TAIL_LINES, type CiEvidenceTarget, type CiFailureEvidence 
 import type {
   BranchDeleteCapable,
   Capability,
+  CiCheckRequeueCapable,
   CiEvidenceCapable,
   Integration,
   PrBaseCapable,
@@ -76,6 +78,7 @@ export class AzureDevOpsSourceControlIntegration
     PrBaseCapable,
     BranchDeleteCapable,
     CiEvidenceCapable,
+    CiCheckRequeueCapable,
     RefResolvable
 {
   readonly id = 'sourceControl:azure';
@@ -219,6 +222,30 @@ export class AzureDevOpsSourceControlIntegration
   async setPullBase(input: PrBaseInput): Promise<SendResult> {
     await this.opts.api.setPullBase(input.prNumber, input.base);
     return { ok: true };
+  }
+
+  /**
+   * Queue a fresh run of an **expired** build-validation policy (issue #395) — the
+   * gate rule `pr-ci-gate` used to spend a code agent, a worktree and a cold read
+   * of the repository on, to do the one thing the harness already knew was needed.
+   *
+   * The evaluation is requeued rather than the build definition queued. A build
+   * started against the definition is not attached to *this* pull request's
+   * evaluation, so the policy would stay expired while a build ran — a gate that
+   * looks cleared for one pulse and is not.
+   *
+   * **A 200 is not a requeue.** Azure answers with the evaluation record whether
+   * or not it restarted anything, and a record that comes back still `isExpired`
+   * is one it declined — a token without **Build (execute)**, a definition it
+   * cannot queue. Answering `ok: false` there is what sends the gate back to the
+   * agent on the next pulse instead of leaving it waiting on a build nobody
+   * started. A call that *fails* throws, and the executor records that as its own
+   * outcome.
+   */
+  async requeueCiCheck(input: CiCheckRequeueInput): Promise<SendResult> {
+    const res = await this.opts.api.requeuePolicyEvaluation(input.requeueRef);
+    if (res.isExpired === true) return { ok: false };
+    return { ok: true, ref: `${input.check} (${res.status ?? 'queued'})` };
   }
 
   /**
@@ -449,7 +476,15 @@ export function listPolicyCiChecks(evals: AzPolicyEvaluation[], modes?: PolicyCh
     // because the flag only says anything about a check that has not resolved:
     // whatever `isExpired` reads beside an `approved` or `rejected` status, the
     // verdict is in and there is nothing left to wait for.
-    if (status === 'pending' && e.isExpired) check.expired = true;
+    if (status === 'pending' && e.isExpired) {
+      check.expired = true;
+      // The handle the harness clears the gate with, carried only where it means
+      // anything: an expired evaluation is the one state a requeue answers, and
+      // the flag and the handle therefore travel together. An evaluation that came
+      // back without an id leaves it unset, which reads downstream as "nothing to
+      // queue directly" and puts the gate back on the agent it always had.
+      if (e.evaluationId) check.requeueRef = e.evaluationId;
+    }
     checks.push(check);
   }
   return checks;

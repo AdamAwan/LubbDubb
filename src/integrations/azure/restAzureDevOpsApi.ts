@@ -7,6 +7,7 @@ import type {
   AzCommentRef,
   AzMergeResult,
   AzPolicyEvaluation,
+  AzPolicyRequeue,
   AzPull,
   AzThread,
   AzTimelineRecord,
@@ -183,6 +184,8 @@ interface RawTimelineRecord {
 }
 
 interface RawPolicyEvaluation {
+  /** The evaluation's own id — what a requeue is addressed to. */
+  evaluationId?: string;
   status?: string | null;
   /**
    * Build-validation evaluations carry the definition they ran here — and
@@ -521,6 +524,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       this.withApiVersion(`${this.projectUrl}/_apis/policy/evaluations`, { artifactId }, POLICY_API_VERSION),
     );
     return data.value.map((e) => ({
+      evaluationId: e.evaluationId,
       typeId: e.configuration?.type?.id ?? '',
       displayName: policyDisplayName(e),
       displayAliases: policyDisplayAliases(e),
@@ -532,6 +536,32 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       isBlocking: e.configuration?.isBlocking ?? false,
       isEnabled: e.configuration?.isEnabled ?? false,
     }));
+  }
+
+  /**
+   * Requeue one policy evaluation (issue #395). A body-less PATCH: the endpoint's
+   * whole meaning is "run this again", and there is nothing to say about it.
+   *
+   * The response is the evaluation as it stands *after* the requeue, and it is
+   * read rather than discarded because a 200 is not the same as a restart — a
+   * policy Azure declines to requeue (a definition the token cannot queue, a
+   * policy that has since been disabled) answers with the record unchanged, and
+   * `isExpired` still true is the only signal before the next snapshot.
+   */
+  async requeuePolicyEvaluation(evaluationId: string): Promise<AzPolicyRequeue> {
+    const data = await this.request<RawPolicyEvaluation>(
+      this.withApiVersion(
+        `${this.projectUrl}/_apis/policy/evaluations/${encodeURIComponent(evaluationId)}`,
+        {},
+        POLICY_API_VERSION,
+      ),
+      { method: 'PATCH' },
+    );
+    // A deployment that answers 204 leaves `request` with nothing to parse, which
+    // is a requeue that said nothing about itself — taken at its word rather than
+    // read as expired, since the alternative is falling back to an agent on every
+    // successful write.
+    return { status: data?.status ?? null, isExpired: data?.context?.isExpired };
   }
 
   async getBuildTimeline(buildId: number): Promise<AzTimelineRecord[]> {

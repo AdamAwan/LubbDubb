@@ -328,6 +328,7 @@ function relationApi(
     setPullBase: unused,
     deleteBranch: unused,
     getBuildTimeline: unused,
+    requeuePolicyEvaluation: unused,
     getBuildLog: unused,
   };
 }

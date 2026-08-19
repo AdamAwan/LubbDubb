@@ -2,6 +2,7 @@ import type { Connector, InjectableEvent } from '../connector/connector.js';
 import type {
   ActionSink,
   BranchDeleteInput,
+  CiCheckRequeueInput,
   IssueCommentInput,
   IssueLabelInput,
   PrBaseInput,
@@ -19,6 +20,7 @@ import type { TrackerItem, WorldSnapshot } from '../types.js';
 import type { CiEvidenceReader, CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import {
   isBranchDeleteCapable,
+  isCiCheckRequeueCapable,
   isCiEvidenceCapable,
   isInjectable,
   isIssueCommentCapable,
@@ -159,6 +161,19 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     const handler = this.integrations.find(isPrBaseUpdateCapable);
     if (!handler) return { ok: false };
     return handler.updatePrBranch(input);
+  }
+
+  /**
+   * The third routed act whose missing handler is not an error, for
+   * {@link updatePrBranch}'s reason exactly: rule `pr-ci-gate` dispatched a code
+   * agent for this gate before the direct write existed and still does when the
+   * write is unavailable, so a provider without the operation (GitHub, which has
+   * no expired-policy state to begin with) is a configuration rather than a fault.
+   */
+  async requeueCiCheck(input: CiCheckRequeueInput): Promise<SendResult> {
+    const handler = this.integrations.find(isCiCheckRequeueCapable);
+    if (!handler) return { ok: false };
+    return handler.requeueCiCheck(input);
   }
 
   async deleteBranch(input: BranchDeleteInput): Promise<SendResult> {
