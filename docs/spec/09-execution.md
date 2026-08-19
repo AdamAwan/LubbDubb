@@ -590,7 +590,9 @@ write side is the half that mutates a repository.
    `--detach` at the commit). Slot directories are `slot-<n>`, the lowest unused index.
 6. Otherwise the first **evictable** slot: free, but still carrying a branch or another ref's
    read-only tree. Wiped and switched.
-7. With none of those, it **throws** — see [exhaustion](#exhaustion).
+7. Otherwise the uncommitted work stranding the free slots is moved onto a **salvage ref** and the
+   ladder is walked once more — see [reclaiming a stranded slot](#reclaiming-a-stranded-slot).
+8. With none of those, it **throws** — see [exhaustion](#exhaustion).
 
 **Minting comes ahead of eviction**, and the order is load-bearing rather than a preference. A slot
 handed to another branch is wiped either way, so taking one that still carries a live branch burns
@@ -640,7 +642,9 @@ A slot carrying **uncommitted tracked changes** is also never handed to another 
 correctness rule rather than tidiness: `git switch` _carries_ uncommitted edits across when they do
 not conflict, so a failed agent's half-finished work would land on an unrelated branch and be
 committed there by an agent with no idea where it came from. It is also what keeps a failed or killed
-agent's tree readable, which is what deleting the directory used to provide.
+agent's tree readable, which is what deleting the directory used to provide. What it is _not_ is
+permanent: a slot stranded that way is reclaimed rather than refused forever once the pool has nothing
+else left to give ([below](#reclaiming-a-stranded-slot)).
 
 ### The read-only checkout
 
@@ -722,24 +726,88 @@ fall back to a fresh directory — which would put two agents in one tree.
 
 ### Exhaustion
 
-Pool size is `worktreePoolSize`, defaulting to `maxConcurrentAgents` plus a slack of two
-([02](02-configuration.md#repository)). Disk is therefore bounded too, which it never was: twenty
+Pool size is `worktreePoolSize` when it is set, and otherwise the **live** agent cap plus a slack of
+two ([02](02-configuration.md#repository)). Disk is bounded either way, which it never was: twenty
 concurrent agents meant twenty full checkouts and no ceiling at all.
 
-With every slot held, `ensure` **throws** and the executor audits a rejected dispatch, which settles
-the task and leaves the next cycle to try again. Rejecting is preferable to blocking — waiting on a
-directory would hold the pulse — and the refusal names each slot and why it is unavailable, plus the
-key that raises the bound, because a rejection that names neither is a dead end in the decision log.
+**The bound is read on every acquire, not once at boot, and it must stay that way.** The bound and
+the cap are two limits over one fleet and **the lower one wins**, so a bound frozen at boot silently
+becomes the fleet's real cap the moment an operator raises the other one through `POST /api/control`:
+every dispatch above the old number is refused for want of a directory, audited `rejected`, and
+retried on the next cycle forever. What that presents as is a full "Up next" queue, one running
+agent, a cap of five, nothing paused and nothing red — which is what it did, for over an hour, before
+this was written. So the pool's `size` is a **live view of `RuntimeControl.cap`**, the same
+by-reference read the harness's headroom does, and `worktreePoolSize` is the explicit pin over it —
+a deployment on a small disk must still be able to fix the number of checkouts, and pinning it below
+the cap is then a real limit deliberately chosen rather than one nobody noticed.
 
-The live cap from `POST /api/control` moves the number of _agents_, not the number of directories:
-the bound is read once at boot, so raising the cap past the pool trades dispatches for rejections
-until `worktreePoolSize` is raised too.
+**Growing the ceiling mints nothing.** A slot is created only when a dispatch needs one and the pool
+is below its bound, so raising the cap costs no disk until the fleet actually runs that wide — which
+matters when one checkout of the repository is measured in tens of gigabytes. Lowering the cap does
+not delete anything either: the slots already standing keep their warm trees, and the pool simply
+stops growing.
+
+With every slot unavailable and nothing left to reclaim, `ensure` **throws** and the executor audits
+a rejected dispatch, which settles the task and leaves the next cycle to try again. Rejecting is
+preferable to blocking — waiting on a directory would hold the pulse. The refusal names each slot and
+why it is unavailable, what the reclaim did or could not do, the two knobs, and the directories under
+`worktreeRoot` that are not registered worktrees at all, because a rejection that names none of that
+is a dead end in the decision log.
 
 ### Slot names and migration
 
 Slot directories are `slot-0`, `slot-1`, … under `worktreeRoot`. There is no migration: a directory
 left by a pre-pool deployment (named after a branch) is a registered worktree under the same root, so
 it counts toward the bound and is leased like any other slot.
+
+### Reclaiming a stranded slot
+
+A slot carrying uncommitted tracked changes is refused by the survey — correctly, since a hand-over
+would carry those edits onto an unrelated branch ([above](#the-lease)) — and until this existed
+**nothing ever took them off it**. So the refusal was terminal: every failed or killed agent cost the
+deployment one directory for the life of the process, and the pool silted up monotonically until the
+fleet stopped. It is not an edge case either. On a repository whose build rewrites a **tracked**
+generated file, _every_ slot an agent builds in is stranded the moment its lease ends; that is the
+steady state, not the exception.
+
+So `ensure`'s dead end reclaims instead of refusing. For each free-but-stranded slot:
+`git stash push --include-untracked`, the resulting commit copied to
+`refs/lubbdubb/salvage/<slot>/<sha>`, and the entry taken back off the stash stack. The slot is then
+clean, so the retry reaches it as a spare or an evictable one and the dispatch proceeds.
+
+- **Nothing is ever classified, and nothing is discarded.** Telling a build's dirtied generated file
+  apart from an agent's half-finished feature is a judgement about a repository the harness does not
+  have and must not grow, and being wrong destroys the only copy of somebody's work — silently, which
+  is the genre this whole document exists to keep out. So everything uncommitted is kept and the
+  operator decides. `--include-untracked` covers the new file an agent had not committed yet;
+  **ignored** files are deliberately not stashed, since a dependency tree does not belong in a git
+  object and the slot's next occupant already has rules for it.
+- **A detached HEAD needs no special case, which is why a stash and not a commit.** A stash commit's
+  parent is whatever HEAD is, named or not — and two of the stranded slots in the incident were
+  detached, with no branch to commit onto. Committing onto the branch would have been wrong where
+  there _was_ one, too: the agent's abandoned half-work would land in its pull request.
+- **A ref of the pool's own, not the stash stack.** `refs/lubbdubb/salvage/…` is outside `refs/heads`,
+  so it is not a branch to anything that reads branches — not `git branch`, not a push, not the reap's
+  `reapableBranches` — and it moves for nobody. The stack is the operator's: its entries shift under
+  whoever reads them next, and a stray `git stash pop` in the main checkout would drop an agent's
+  800-file diff into their working tree. The name is content-addressed, so salvaging one slot twice
+  cannot overwrite the first. `git for-each-ref refs/lubbdubb/salvage` lists them and
+  `git stash apply <ref>` puts one back.
+- **It runs at the dead end and nowhere else.** A sweep on the harness pulse would shell out
+  `git status` across every checkout in the pool every ten seconds to answer a question that matters a
+  few times a day, and on tens of gigabytes each that is not acceptable. A pass on release or at boot
+  would pay the same cost off-schedule and salvage trees nobody was waiting for — where a slot left
+  standing on its branch, dirt and all, is exactly what a re-dispatch onto that branch comes back to.
+  At the dead end the `git status` per slot has **already been run by the survey**, so the reclaim
+  costs nothing until the alternative is a rejected dispatch.
+- **The lease is never reached past.** Only slots the survey marked free _and_ stranded are touched —
+  the same arm that has already established no lease and no mark holds them. A held slot is not
+  reclaimable however dirty it is, which is the property that keeps two agents out of one directory.
+- **It is visible.** Each reclaim is recorded to the error log naming the slot and the ref its work
+  went to, since a reclaim that ran invisibly would be the same silent-failure genre as the bug. So is
+  a stash git refused — that slot simply stays blocked and the dispatch is rejected as before, and the
+  refusal repeats the reason. A slot needing this after every dispatch is a repository with tracked
+  files a build rewrites; the log says so, because untracking them is the actual fix.
 
 ### Reclaiming an orphaned directory
 
@@ -789,6 +857,18 @@ takes its whole subtree down, so the common case no longer arises — but an age
 leaves descendants nothing can walk to, and `reclaim` is where that shows up. Tests:
 `test/worktreeManager.test.ts` (Windows-only for the lock itself — POSIX permits removing a live
 process's cwd, so there is nothing there to reproduce).
+
+**Only the path being minted, and only automatically there.** The same operator's `worktreeRoot` held
+eighteen directories against five registered worktrees: thirteen dead full checkouts, tens of
+gigabytes, invisible to `slots()` and to the bound because git no longer knows about them, and beyond
+`git worktree prune`, which is for the mirror case. They are **not** deleted automatically, and that
+is a decision rather than an omission — `worktreeRoot` is an operator setting, an unguarded recursive
+delete under a mistyped one is unrecoverable, and none of those directories costs the pool a slot or
+blocks a dispatch. They cost disk, which is a thing to be told about rather than acted on. So the
+[exhaustion](#exhaustion) refusal counts and names them (five, then a count), says that prune has
+already run so nothing in the harness will ever reach them again, and leaves removing them to the
+operator. The one exception is the path a new slot is about to be minted on, above, where a leftover
+is not a disk cost but a wedged slot.
 
 ### Release
 

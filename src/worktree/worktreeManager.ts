@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
+import type { ErrorRecorder } from '../errorLog.js';
 import { runGit, resolveCommit } from '../git/gitCli.js';
 
 /**
@@ -115,8 +116,17 @@ export class WorktreeManager implements Worktrees {
        * Hard bound on how many slot directories may exist under `worktreeRoot`.
        * Disk is then bounded too, which the old manager never was: twenty
        * concurrent agents meant twenty full checkouts and no ceiling at all.
+       *
+       * **Read on every acquire, so it must be a live view of the cap and never a
+       * snapshot of it.** `system.ts` defines it as a getter over
+       * `RuntimeControl.cap` — the same by-reference read the harness's headroom
+       * does — because the bound and the cap are two limits over one fleet and the
+       * lower of them wins: a cap raised in the cockpit past a bound frozen at boot
+       * turns every dispatch above the old number into a rejection, forever, and
+       * that presents as a full queue and an idle fleet with nothing red anywhere.
+       * `worktreePoolSize` still pins it, for a disk that cannot hold more.
        */
-      size: number;
+      readonly size: number;
       /**
        * Whether the harness still has work in flight on a branch — wired to
        * `Store.findActiveTaskByBranch`, the same predicate the executor's branch
@@ -132,6 +142,12 @@ export class WorktreeManager implements Worktrees {
        */
       held: (branch: string) => boolean;
     },
+    /**
+     * Where a {@link salvage} reports what it moved and what it could not — the
+     * only part of the pool that acts on a slot nobody asked about, so the only
+     * part with no dispatch of its own to be audited against.
+     */
+    private readonly errors?: ErrorRecorder,
   ) {}
 
   /**
@@ -188,14 +204,22 @@ export class WorktreeManager implements Worktrees {
    *    it comes back to.
    * 5. The first **evictable** slot: free, but still carrying something. It is
    *    wiped and switched (see {@link handOver}).
+   * 6. With none of those, whatever uncommitted work is stranding the free slots is
+   *    moved onto a salvage ref and the ladder is walked once more — see
+   *    {@link salvage} for why that runs here and nowhere else.
    *
-   * With none of the five, this **throws**. So does a `base`/`of` that resolves to
+   * With none of the six, this **throws**. So does a `base`/`of` that resolves to
    * nothing — silently picking an incidental base is the bug those parameters exist
    * to fix — and so does a switch git refuses. The executor records each as a
    * rejected dispatch, **never** a silent fall back to a fresh directory, which
    * would put two agents in one tree.
+   *
+   * `salvaged` marks the second walk, and is the whole of what stops this
+   * recursing: a slot the salvage freed is clean, so the retry reaches it as a
+   * spare or an evictable one, and a salvage that freed nothing throws instead of
+   * trying again.
    */
-  private async acquire(req: Request): Promise<string> {
+  private async acquire(req: Request, salvaged?: SalvageReport): Promise<string> {
     // Cheap, idempotent, and it must run before the slot scan rather than inside
     // {@link reclaim}: a slot whose directory vanished leaves an admin entry that
     // would otherwise read as an occupied path forever, so the pool would shrink
@@ -226,9 +250,14 @@ export class WorktreeManager implements Worktrees {
       return this.lease(req.name, minted);
     }
 
-    if (survey.evictable === null) throw new Error(this.exhausted(req, survey.blocked));
-    await this.handOver(survey.evictable, req);
-    return this.lease(req.name, survey.evictable);
+    if (survey.evictable !== null) {
+      await this.handOver(survey.evictable, req);
+      return this.lease(req.name, survey.evictable);
+    }
+
+    const report = salvaged ?? (await this.salvage(survey.blocked));
+    if (salvaged === undefined && report.freed > 0) return this.acquire(req, report);
+    throw new Error(this.exhausted(req, survey.blocked, report, slots));
   }
 
   /** Path of an existing worktree checked out on the branch, or null. */
@@ -316,10 +345,13 @@ export class WorktreeManager implements Worktrees {
    *
    * The reason each blocked slot is blocked is collected as it goes, because the
    * message an exhausted pool throws is the operator's only handle on it — "no free
-   * slot" alone names neither what is holding them nor what to do.
+   * slot" alone names neither what is holding them nor what to do. It carries which
+   * of the two conditions blocked each slot, too, and that half is load-bearing:
+   * `stuck` is what {@link salvage} is allowed to touch, and it is set on exactly
+   * the arm that has already established nothing holds the slot.
    */
   private async survey(slots: WorktreeEntry[], req: Request): Promise<Survey> {
-    const blocked: string[] = [];
+    const blocked: Blocked[] = [];
     let warm: string | null = null;
     let spare: string | null = null;
     let evictable: string | null = null;
@@ -331,11 +363,12 @@ export class WorktreeManager implements Worktrees {
         // name shares the checkout rather than fighting over it, and after a restart
         // the mark plus `pool.held` is the only thing that still says so.
         if (holder === req.name) return { own: slot.path, warm, spare, evictable, blocked };
-        blocked.push(`${slot.path} (work in flight on ${holder})`);
+        blocked.push({ path: slot.path, reason: `work in flight on ${holder}`, stuck: false });
         continue;
       }
       if (await this.dirty(slot.path)) {
-        blocked.push(`${slot.path} (uncommitted changes on ${shortBranch(slot.branch) ?? 'a detached HEAD'})`);
+        const on = shortBranch(slot.branch) ?? 'a detached HEAD';
+        blocked.push({ path: slot.path, reason: `uncommitted changes on ${on}`, stuck: true });
         continue;
       }
       if (req.readOnly && mark !== null && mark.of === req.of) {
@@ -393,6 +426,111 @@ export class WorktreeManager implements Worktrees {
     } catch {
       // A slot git cannot even read is not one to hand out.
       return true;
+    }
+  }
+
+  /**
+   * Move the uncommitted work stranding each **stuck** slot onto a ref of its own,
+   * and hand the emptied slots back to the pool.
+   *
+   * **Why it exists.** A slot that carries uncommitted tracked changes is refused
+   * by {@link survey} forever — correctly, since a hand-over would carry those
+   * edits onto an unrelated branch — and nothing else ever took them off it. So the
+   * pool silted up monotonically: every failed or killed agent, and on a repository
+   * whose build dirties a tracked generated file *every* agent, cost the deployment
+   * one directory permanently, until the fleet sat at one running agent with a full
+   * queue and nothing anywhere reading as wrong.
+   *
+   * **When it runs, and why only here.** Only on {@link acquire}'s dead end, where
+   * the alternative is a rejected dispatch. It is the one moment the work is worth
+   * paying for, and it is free of the thing that made a periodic sweep unacceptable:
+   * the `git status` per slot has already been run by the survey, on a path that
+   * only executes when the pool is exhausted. A pulse-timed sweep would shell out
+   * across every checkout in the pool every ten seconds to answer a question that
+   * matters a few times a day.
+   *
+   * **It never decides what is worth keeping.** Distinguishing a build's dirtied
+   * generated file from an agent's half-finished feature is a judgement about a
+   * repository the harness does not have and must not grow, and the failure mode of
+   * getting it wrong is silent destruction of the only copy. So nothing is
+   * classified: everything uncommitted is preserved and the operator decides. What
+   * `git stash push --include-untracked` takes is exactly right for that — tracked
+   * edits, the index, and new files, but **not** ignored ones, so a slot's
+   * dependency tree and build output stay on disk where the next occupant's
+   * hand-over deals with them under its own rules, and a 13 GB `node_modules` never
+   * reaches a git object.
+   *
+   * **A detached HEAD needs no special case, which is why a stash and not a
+   * commit.** Two of the stranded slots in the incident this was written for sat
+   * detached, with no branch to commit onto; a stash commit's parent is whatever
+   * HEAD is, named or not. Committing onto the branch would also have been wrong
+   * where there *was* one: the agent's abandoned half-work would land in its pull
+   * request.
+   *
+   * The stash is then copied to `refs/lubbdubb/salvage/<slot>/<sha>` and taken back
+   * off the stack. The stack is the operator's, its entries shift under whoever
+   * reads them next, and a stray `git stash pop` in the main checkout would drop an
+   * agent's 800-file diff into their working tree; a ref under our own namespace
+   * moves for nobody, is never listed by `git branch`, is never pushed, and is
+   * never what {@link deleteBranch}'s reap looks at. Content-addressed, so salvaging
+   * one slot twice cannot overwrite the first.
+   */
+  private async salvage(blocked: Blocked[]): Promise<SalvageReport> {
+    const notes: string[] = [];
+    let freed = 0;
+    for (const slot of blocked) {
+      // A held slot is somebody's, lease or mark, and the whole point of the lease
+      // is that nothing reaches past it — least of all something with no dispatch
+      // behind it.
+      if (!slot.stuck) continue;
+      try {
+        const ref = await this.stash(slot.path);
+        freed += 1;
+        notes.push(ref === null ? `${slot.path} (nothing left to save)` : `${slot.path} → ${ref}`);
+        if (ref !== null) this.errors?.record({ source: 'cycle', message: salvaged(slot.path, ref) });
+      } catch (err) {
+        // Not swallowed and not fatal: the slot stays blocked, the dispatch is
+        // rejected exactly as it was before, and the refusal below repeats this.
+        const message = `Cannot reclaim the worktree slot ${slot.path}: ${(err as Error).message}`;
+        notes.push(message);
+        this.errors?.record({ source: 'cycle', message });
+      }
+    }
+    return { freed, notes };
+  }
+
+  /**
+   * Stash everything uncommitted in `dir` onto a ref of the pool's own, and return
+   * that ref — or null when there turned out to be nothing to take.
+   *
+   * The tip is read either side of the push rather than the output parsed, because
+   * "No local changes to save" is a *success* exit and dropping on that reading
+   * would take the previous entry, which belongs to somebody else. The one race
+   * left is an operator stashing in their own checkout inside the same few
+   * milliseconds; the harness's own dispatches are sequential.
+   */
+  private async stash(dir: string): Promise<string | null> {
+    const before = await this.stashTip();
+    await runGit(dir, ['stash', 'push', '--include-untracked', '--message', `lubbdubb: reclaimed ${basename(dir)}`]);
+    const tip = await this.stashTip();
+    if (tip === null || tip === before) return null;
+    const ref = `${SALVAGE_REFS}/${basename(dir)}/${tip.slice(0, 12)}`;
+    // The ref before the drop, so a failure between them leaves the work on the
+    // stack rather than nowhere.
+    await this.git(['update-ref', ref, tip]);
+    if ((await this.stashTip()) === tip) await this.git(['stash', 'drop']);
+    return ref;
+  }
+
+  /** The stash stack's top commit, or null when nothing has ever been stashed. */
+  private async stashTip(): Promise<string | null> {
+    try {
+      const { stdout } = await this.git(['rev-parse', '--verify', '--quiet', 'refs/stash']);
+      return stdout.trim() || null;
+    } catch {
+      // `--verify` exits non-zero for a ref that is not there, which is an answer
+      // rather than a failure — the caller reads null as "nothing on the stack".
+      return null;
     }
   }
 
@@ -556,15 +694,50 @@ export class WorktreeManager implements Worktrees {
    * already records a rejected dispatch and settles the task, and the next cycle
    * tries again — but a rejection that does not name the slots or the knob is a dead
    * end for whoever reads the decision log.
+   *
+   * It carries what the {@link salvage} did, because by the time this is built the
+   * reclaim has already run and failed to free anything: a refusal that named the
+   * same blocked slots as before would read as though nothing had been tried. And
+   * it names the directories under `worktreeRoot` that are **not** registered
+   * worktrees, since nothing else in the harness can see them — they cost disk
+   * without counting toward the bound, and an operator staring at a full root has
+   * no other way to learn which of it git has forgotten.
    */
-  private exhausted(req: Request, blocked: string[]): string {
+  private exhausted(req: Request, blocked: Blocked[], salvage: SalvageReport, slots: WorktreeEntry[]): string {
+    const strays = this.strays(slots);
     return (
       `No free worktree slot for ${describe(req)}: all ${this.pool.size} slots under ${this.worktreeRoot} are ` +
-      `unavailable — ${blocked.join('; ')}. A slot is held while the harness has work in flight on the branch ` +
-      'checked out in it, and a slot carrying uncommitted tracked changes is never handed to another branch, ' +
-      'because git would carry those edits across onto it. Raise `worktreePoolSize`, or commit or discard the ' +
-      'changes in the slots named above; the dispatch is retried next cycle either way.'
+      `unavailable — ${blocked.map((b) => `${b.path} (${b.reason})`).join('; ')}. ` +
+      (salvage.notes.length > 0 ? `Reclaim: ${salvage.notes.join('; ')}. ` : '') +
+      'A slot is held while the harness has work in flight on the branch checked out in it, and a slot carrying ' +
+      'uncommitted changes is stashed onto a salvage ref and reclaimed — so one still named above is one the ' +
+      'stash itself refused. The bound follows the live agent cap, so raising the cap raises it too, unless ' +
+      '`worktreePoolSize` pins the number of checkouts; the dispatch is retried next cycle either way.' +
+      (strays.length === 0
+        ? ''
+        : ` Costing disk but not slots: ${strays.length} ${strays.length === 1 ? 'directory' : 'directories'} ` +
+          `under ${this.worktreeRoot} that git no longer knows about (${listed(strays)}). \`git worktree prune\` ` +
+          'has already run, so nothing here will ever reach them again and they are safe to delete by hand; ' +
+          'the harness will not, because this root is an operator setting and an unguarded delete under a ' +
+          'mistyped one is unrecoverable.')
     );
+  }
+
+  /**
+   * Directories under `worktreeRoot` that are not registered worktrees — a killed
+   * agent's leftovers, or a pre-pool deployment's branch-named checkouts. Full
+   * checkouts, tens of gigabytes each, invisible to {@link slots} and to the bound.
+   *
+   * Only ever asked on the refusal path, so the `readdir` costs nothing the rest of
+   * the time. `worktreeRoot` exists by then — {@link acquire} makes it before the
+   * scan — so a failure here is a real one and belongs out of this function.
+   */
+  private strays(slots: WorktreeEntry[]): string[] {
+    const known = new Set(slots.map((e) => e.path));
+    return readdirSync(this.worktreeRoot, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && e.name !== MARKS_DIR)
+      .map((e) => resolve(this.worktreeRoot, e.name))
+      .filter((path) => !known.has(path));
   }
 
   /**
@@ -654,16 +827,22 @@ export function slotDirName(index: number): string {
  * How many slots the pool gets beyond the concurrency cap.
  *
  * The cap bounds how many agents are *running*, and slots are held slightly longer
- * than that: from `ensure` until the agent's process is actually reaped, and by any
- * slot left carrying uncommitted changes by a run that failed. Sized to absorb that
+ * than that: from `ensure` until the agent's process is actually reaped, and for as
+ * long as a slot a failed run left dirty takes to be salvaged. Sized to absorb that
  * rather than to hide a leak — a pool that needs more than this is a deployment that
  * should say so through `worktreePoolSize`.
  */
 const POOL_SLACK = 2;
 
-/** The pool bound a deployment that does not configure one runs on. */
-export function defaultPoolSize(maxConcurrentAgents: number): number {
-  return Math.max(1, maxConcurrentAgents) + POOL_SLACK;
+/**
+ * The pool bound a deployment that does not configure one runs on, derived from the
+ * **live** cap rather than the configured one: the two are limits over one fleet and
+ * the lower wins, so a bound frozen at boot turns every dispatch above it into a
+ * permanent rejection the moment an operator raises the cap. Called on every acquire
+ * (see the constructor's `pool.size`), so it stays a pure function of the cap.
+ */
+export function defaultPoolSize(cap: number): number {
+  return Math.max(1, cap) + POOL_SLACK;
 }
 
 /**
@@ -761,8 +940,57 @@ interface Survey {
   warm: string | null;
   spare: string | null;
   evictable: string | null;
-  blocked: string[];
+  blocked: Blocked[];
 }
+
+/** A slot neither free nor reusable, and which of the two reasons it was. */
+interface Blocked {
+  path: string;
+  /** How it reads in the refusal, as the parenthetical after the path. */
+  reason: string;
+  /**
+   * Free of every holder, and stranded only on uncommitted work — the one shape
+   * {@link WorktreeManager.salvage} may touch. Set on the survey arm that has
+   * already established nothing holds the slot, so the lease is never reached past.
+   */
+  stuck: boolean;
+}
+
+/** What one {@link WorktreeManager.salvage} pass did, for the operator and the refusal. */
+interface SalvageReport {
+  /** How many slots it handed back to the pool. */
+  freed: number;
+  /** One line per stranded slot: where its work went, or why it could not be moved. */
+  notes: string[];
+}
+
+/**
+ * Where salvaged work lands. Outside `refs/heads`, so it is not a branch to
+ * anything that reads branches: not `git branch`, not a push, not the reap's
+ * `reapableBranches`. `git for-each-ref refs/lubbdubb/salvage` lists them and
+ * `git stash apply <ref>` puts one back.
+ */
+const SALVAGE_REFS = 'refs/lubbdubb/salvage';
+
+/** What the error log says about work the pool took off a slot to keep the fleet moving. */
+function salvaged(dir: string, ref: string): string {
+  return (
+    `Reclaimed worktree slot ${dir}, which was stranded carrying uncommitted changes. Nothing was discarded: ` +
+    `its tracked edits, staged state and new files are stashed at ${ref} (\`git stash apply ${ref}\`). Ignored ` +
+    'files are not stashed — a dependency tree does not belong in a git object, and the slot handles its own ' +
+    "under the pool's usual rules. A slot needing this after every dispatch is a repository with tracked files " +
+    'a build rewrites: untracking those is the fix, and until then this is where each copy goes.'
+  );
+}
+
+/** Up to five paths named, then a count — a pool that lost thirteen must not fill the log with them. */
+function listed(paths: string[]): string {
+  const named = paths.slice(0, STRAYS_NAMED);
+  const rest = paths.length - named.length;
+  return rest === 0 ? named.join(', ') : `${named.join(', ')}, and ${rest} more`;
+}
+
+const STRAYS_NAMED = 5;
 
 interface WorktreeEntry {
   path: string;
