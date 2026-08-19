@@ -154,6 +154,37 @@ export interface AzureDevOpsApi {
    */
   linkWorkItemToPull(id: number, pullRequestId: number): Promise<void>;
 
+  /**
+   * Create a work item of `type`, returning its id (issue #394).
+   *
+   * The type is part of the URL, not a field: Azure has no untyped work item, so a
+   * create without one is refused outright — which is exactly why the harness rather
+   * than a model now decides it.
+   *
+   * Tags and the assignee ride on the same patch document as the title, so the item
+   * is never briefly untagged: an item that exists for a moment without the watch tag
+   * is one the pickup gate can miss.
+   */
+  createWorkItem(input: {
+    type: string;
+    title: string;
+    description: string;
+    tags: string[];
+    assignedTo: string | null;
+  }): Promise<{ id: number }>;
+  /**
+   * Hang a **related** link between two work items — the bug and the story it was
+   * raised on.
+   *
+   * `related`, not parent/child: it is legal whatever process template the project
+   * uses and changes neither item's rollup or board position, while a parent link
+   * from a User Story to a Bug is refused outright where bugs are not managed at the
+   * task level.
+   *
+   * Idempotent for {@link linkWorkItemToPull}'s reason and by the same absorption: a
+   * relation the item already carries is a success.
+   */
+  relateWorkItem(id: number, relatedId: number): Promise<void>;
   /** Add (`present`) or remove a `System.Tags` entry on a work item — the watch/ignore toggle. Idempotent. */
   setWorkItemTag(id: number, tag: string, present: boolean): Promise<void>;
   /** Open a pull request. Branch names are plain here; the REST arm adds `refs/heads/`. */

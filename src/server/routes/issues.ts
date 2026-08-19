@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { issueConclusionOrigin } from '../../issueConclusion.js';
-import { bugTicketFields, bugTrackerCoordinates } from '../../bugFiling.js';
+import { bugTicketFields } from '../../bugFiling.js';
+import { trackerCoordinates } from '../../mcp/findings.js';
+import { dedupeCandidates, renderCandidates } from '../../tickets/candidates.js';
 import { MAX_INSTRUCTION } from '../../goalInstructions.js';
 import { goalFingerprint } from '../../intake/assay.js';
 import { ShortfallBody } from '../../delivery/shortfall.js';
@@ -580,10 +582,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // has never seen would be a silent no-op dressed as an action.
       const issue = store.getWorldBaseline()?.issues.find((i) => i.number === issueNumber);
       if (!issue) return reply.code(404).send({ error: 'issue not in the last world snapshot' });
-      // A desk agent runs in a scratch dir with no remote to infer the target from;
-      // without coordinates there is nowhere to file. The cockpit hides the button
-      // in this case, so reaching here means a direct call.
-      const tracker = bugTrackerCoordinates(config, issueNumber);
+      // With no tracker configured there is nowhere to file — the same gate all four
+      // filing arms ask. The cockpit hides the button in this case, so reaching here
+      // means a direct call.
+      const tracker = trackerCoordinates(config);
       if (!tracker)
         return reply
           .code(409)
@@ -596,8 +598,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         const derived = bugTicketFields(issue, body.summary, tracker);
         const title = body.title ?? derived.title;
         // Rendered from the operator's template book, not built here: how a bug should
-        // be worded is exactly the sort of house style an override exists for.
-        const prompt = system.prompts.render('raise-bug', derived.vars);
+        // be worded is exactly the sort of house style an override exists for. The
+        // duplicate candidates are **appended** rather than given a placeholder, so an
+        // override that never learned about them cannot silently drop them.
+        const candidates = renderCandidates(dedupeCandidates(store.listTrackerItems(), body.summary));
+        const prompt = [system.prompts.render('raise-bug', derived.vars), candidates]
+          .filter((part) => part !== null)
+          .join('\n\n');
         // Desk, not code: filing touches no repository. The operator's report rides in
         // this prompt and is not stored again — see src/store/bugFilings.ts.
         const job = store.createJob({ title, prompt, kind: 'desk' });

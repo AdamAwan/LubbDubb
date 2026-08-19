@@ -89,6 +89,7 @@ function countingSink(fail = false): ActionSink & { merges: number[]; replies: n
     setWorkItemState: ok,
     linkWorkItem: ok,
     upsertIssueComment: ok,
+    createIssue: ok,
     createPullRequest: ok,
     setPullTitle: ok,
     setPullBase: ok,

@@ -165,14 +165,17 @@ test("an issue's own branch match is never displaced by a job", () => {
 // The filing record
 // ---------------------------------------------------------------------------
 
-test('a filing is opened once per node — a second click is refused by the write', () => {
+test('a filing is claimed once per node — a second click is refused by the write', () => {
   const store = new Store(':memory:');
-  const first = store.createWorkItemFiling({ targetRef: 'job:j7', jobId: 'job_file1' });
+  const first = store.createWorkItemFiling({ targetRef: 'job:j7' });
   assert.equal(first?.status, 'filing');
   assert.equal(first?.ticketRef, null, 'the ticket does not exist yet — that is what filing means');
 
+  // The claim is taken before anything reaches the tracker, which is what makes a
+  // double-click safe now that the harness files on the request rather than
+  // queueing an agent: the second one loses here, not after a second ticket exists.
   assert.equal(
-    store.createWorkItemFiling({ targetRef: 'job:j7', jobId: 'job_file2' }),
+    store.createWorkItemFiling({ targetRef: 'job:j7' }),
     null,
     'the refusal is the primary key, not a caller remembering to look',
   );
@@ -182,25 +185,35 @@ test('a filing is opened once per node — a second click is refused by the writ
 
 test('linking settles a filing exactly once', () => {
   const store = new Store(':memory:');
-  store.createWorkItemFiling({ targetRef: 'job:j7', jobId: 'job_file1' });
+  store.createWorkItemFiling({ targetRef: 'job:j7' });
 
-  const linked = store.linkWorkItemFiling('job_file1', 'issue:314');
+  const linked = store.linkWorkItemFiling('job:j7', 'issue:314');
   assert.equal(linked?.status, 'filed');
   assert.equal(linked?.ticketRef, 'issue:314');
 
-  assert.equal(
-    store.linkWorkItemFiling('job_file1', 'issue:999'),
-    null,
-    'an agent that calls link_ticket twice links once',
-  );
-  assert.equal(store.findWorkItemFilingByJobId('job_file1')?.ticketRef, 'issue:314');
+  assert.equal(store.linkWorkItemFiling('job:j7', 'issue:999'), null, 'a settled filing is not re-settled');
+  assert.equal(store.listWorkItemFilings()[0]?.ticketRef, 'issue:314');
   store.close();
 });
 
-test('a job that is filing nothing resolves to no filing', () => {
+test('a claim whose create failed is released, so the button comes back', () => {
   const store = new Store(':memory:');
-  assert.equal(store.findWorkItemFilingByJobId('job_unrelated'), null);
-  assert.equal(store.linkWorkItemFiling('job_unrelated', 'issue:314'), null);
+  store.createWorkItemFiling({ targetRef: 'job:j7' });
+  store.dropWorkItemFiling('job:j7');
+  assert.equal(store.listWorkItemFilings().length, 0, 'no filing stands for a ticket that was never created');
+  // And it can be claimed again — the node is unrecorded work once more.
+  assert.equal(store.createWorkItemFiling({ targetRef: 'job:j7' })?.status, 'filing');
+
+  // A settled filing is never dropped: the ref on it is a real ticket.
+  store.linkWorkItemFiling('job:j7', 'issue:314');
+  store.dropWorkItemFiling('job:j7');
+  assert.equal(store.listWorkItemFilings()[0]?.ticketRef, 'issue:314');
+  store.close();
+});
+
+test('a node that is filing nothing resolves to no filing', () => {
+  const store = new Store(':memory:');
+  assert.equal(store.linkWorkItemFiling('job:unrelated', 'issue:314'), null);
   store.close();
 });
 
@@ -279,7 +292,7 @@ test('the narrowings: desk, queued, cancelled and adopted jobs are not unrecorde
 
 test('a filing in flight keeps the node listed, carrying its status', () => {
   const { store, nodes } = recorded({ jobs: [job()] });
-  const filing = store.createWorkItemFiling({ targetRef: 'job:j7', jobId: 'job_file1' });
+  const filing = store.createWorkItemFiling({ targetRef: 'job:j7' });
   assert.ok(filing);
   const found = unrecordedWork(nodes, [job()], store.listWorkItemFilings());
   assert.equal(found[0]?.filing, 'filing', 'dropping it would make the click look like it did nothing');
@@ -328,15 +341,18 @@ test('the ticket prompt names the tracker, the ref and what the work produced', 
   );
   const node = store.listWorkNodes().find((n) => n.ref === 'job:j7');
   assert.ok(node);
-  const fields = workItemTicketFields(node, store.listWorkSubtree('job:j7'), 'the GitHub repository a/b');
+  const fields = workItemTicketFields(node, store.listWorkSubtree('job:j7'));
+  // The item's own title is the work's, where it used to be a queue entry's — no
+  // desk agent is dispatched for this, so there is no queue to be legible in.
   assert.match(fields.title, /Bump the linter/);
   assert.equal(fields.vars.ref, 'job:j7');
   assert.match(fields.vars.produced ?? '', /pr:41/, 'the PR it produced is in the body');
-  assert.match(fields.vars.tracker ?? '', /the GitHub repository a\/b/);
 
-  const rendered = defaultPromptTemplates().render('work-item-ticket', fields.vars);
-  assert.match(rendered, /do not\s+do it again/i, 'the agent must record the work, not redo it');
-  assert.match(rendered, /link_ticket/, 'and must close the loop');
+  const rendered = defaultPromptTemplates().render('work-item-ticket-body', fields.vars);
+  assert.match(rendered, /records work the harness has already done/i);
+  assert.match(rendered, /pr:41/);
+  // It is a ticket body, not a prompt: nobody is being instructed.
+  assert.doesNotMatch(rendered, /link_ticket|do not do it again/i);
   store.close();
 });
 
@@ -344,7 +360,7 @@ test('a job that produced nothing says so in the prompt rather than leaving a bl
   const { store, nodes } = recorded({ jobs: [job()] });
   const node = nodes.find((n) => n.ref === 'job:j7');
   assert.ok(node);
-  const fields = workItemTicketFields(node, store.listWorkSubtree('job:j7'), 'somewhere');
+  const fields = workItemTicketFields(node, store.listWorkSubtree('job:j7'));
   assert.match(fields.vars.produced ?? '', /no pull request/i);
   store.close();
 });
@@ -357,7 +373,6 @@ test('a job that produced nothing says so in the prompt rather than leaving a bl
 function filing(over: Partial<WorkItemFiling> = {}): WorkItemFiling {
   return {
     targetRef: 'job:j7',
-    jobId: 'job_file1',
     status: 'filed',
     ticketRef: 'issue:314',
     createdAt: '2026-07-28T09:00:00.000Z',
@@ -434,9 +449,7 @@ test('a linked filing re-emits a node whose job has aged out of the fold', () =>
 test('the fold is the only writer: a second filing cannot re-parent an adopted node', () => {
   const store = new Store(':memory:');
   store.recordWorkGraph(foldWorkGraph(input({ jobs: [job()], filings: [filing()] })));
-  store.recordWorkGraph(
-    foldWorkGraph(input({ jobs: [job()], filings: [filing({ jobId: 'job_file2', ticketRef: 'issue:999' })] })),
-  );
+  store.recordWorkGraph(foldWorkGraph(input({ jobs: [job()], filings: [filing({ ticketRef: 'issue:999' })] })));
   assert.equal(
     store.listWorkNodes().find((n) => n.ref === 'job:j7')?.parentRef,
     'issue:314',
@@ -468,19 +481,18 @@ function buildServed(over: Record<string, unknown> = {}) {
 }
 
 /**
- * Run `fn` with GITHUB_TOKEN present, then restore it — `buildIntegrations`
- * refuses the github provider without one, and these tests want its *coordinates*
- * (which is all `trackerCoordinates` reads), not its network.
+ * A system whose *issue tracker* is GitHub while its world — and the sink it files
+ * through — stays the fake one. The selection is flipped after the build on
+ * purpose: `trackerCoordinates` is read from config at request time, so this
+ * exercises the route's real branch, while the create lands in the fake world
+ * instead of on the network. (Building the github provider outright would file
+ * these tickets into a real repository.)
  */
-async function withGithubToken(fn: () => Promise<void>): Promise<void> {
-  const prev = process.env.GITHUB_TOKEN;
-  process.env.GITHUB_TOKEN = 'test-token';
-  try {
-    await fn();
-  } finally {
-    if (prev === undefined) delete process.env.GITHUB_TOKEN;
-    else process.env.GITHUB_TOKEN = prev;
-  }
+function buildWithTracker(): ReturnType<typeof buildSystem> {
+  const system = buildServed();
+  system.config.integrations.issues = 'github';
+  system.config.github = { owner: 'a', repo: 'b' };
+  return system;
 }
 
 /** Run a code job to `dispatched` — the state that makes it unrecorded work. */
@@ -508,36 +520,37 @@ test('the roots route reports unrecorded work beside the roots', async () => {
   system.store.close();
 });
 
-test('filing queues a desk job and opens the filing, and a second click is refused', async () => {
-  // `fake` has no tracker to file into, so this is the github-configured path.
-  await withGithubToken(async () => {
-    const system = buildServed({
-      integrations: { source: 'fake', issues: 'github' },
-      github: { owner: 'a', repo: 'b' },
-    });
-    const job = await dispatchedJob(system);
-    const ref = `job:${job.id}`;
+test('filing creates the work item there and then, and a second click is refused', async () => {
+  // `fake` has no tracker to file into, so this is the tracker-configured path.
+  const system = buildWithTracker();
+  const job = await dispatchedJob(system);
+  const ref = `job:${job.id}`;
 
-    const { app } = await buildApp(system);
-    const res = await app.inject({ method: 'POST', url: `/api/work/${ref}/file` });
-    assert.equal(res.statusCode, 200);
-    const filed = res.json() as { job: { kind: string; prompt: string }; filing: { status: string } };
-    assert.equal(filed.job.kind, 'desk', 'filing touches no repository — and a desk job is never itself unrecorded');
-    assert.match(filed.job.prompt, /a\/b/, 'the coordinates the agent cannot infer');
-    assert.equal(filed.filing.status, 'filing');
+  const { app } = await buildApp(system);
+  const res = await app.inject({ method: 'POST', url: `/api/work/${ref}/file` });
+  assert.equal(res.statusCode, 200);
+  const filed = res.json() as { job?: unknown; filing: { status: string; ticketRef: string | null } };
 
-    const again = await app.inject({ method: 'POST', url: `/api/work/${ref}/file` });
-    assert.equal(again.statusCode, 409, 'an agent is already filing this one');
+  // No desk job: the body was already the harness's own walk of the work subtree,
+  // so all a filing agent added was one API call (issue #394).
+  assert.equal(filed.job, undefined);
+  assert.equal(system.store.listJobs().filter((j) => j.kind === 'desk').length, 0);
+  // Filed, not filing: the operator is told the item's ref on the request that
+  // asked for it, instead of watching a row that completes minutes later.
+  assert.equal(filed.filing.status, 'filed');
+  assert.ok(filed.filing.ticketRef?.startsWith('issue:'));
 
-    const listed = await app.inject({ method: 'GET', url: '/api/work' });
-    assert.equal(
-      (listed.json() as { unrecorded: { filing: string | null }[] }).unrecorded.find((u) => u.filing !== null)?.filing,
-      'filing',
-      'the node stays listed so the click does not look like it did nothing',
-    );
-    await app.close();
-    system.store.close();
-  });
+  const again = await app.inject({ method: 'POST', url: `/api/work/${ref}/file` });
+  assert.equal(again.statusCode, 409, 'the node already has a work item');
+
+  // And it is off the unrecorded list, because it is recorded now: the route ran a
+  // cycle, the fold read the settled filing and parented the work to the item. The
+  // old two-step left the row sitting on `filing` until an agent got to it.
+  const listed = await app.inject({ method: 'GET', url: '/api/work' });
+  assert.deepEqual((listed.json() as { unrecorded: { ref: string }[] }).unrecorded, []);
+  assert.equal(system.store.listWorkNodes().find((n) => n.ref === ref)?.parentRef, filed.filing.ticketRef);
+  await app.close();
+  system.store.close();
 });
 
 test('the route refuses an unknown ref, work that is already recorded, and a missing tracker', async () => {
@@ -595,73 +608,27 @@ test('ignoring a node clears it from the list, survives a re-read, and refuses a
 });
 
 // ---------------------------------------------------------------------------
-// link_ticket's second arm
+// The fold parents the work to the item the route filed
 // ---------------------------------------------------------------------------
 
-test('a filing agent links its work item, and the next pulse parents the work to it', async () => {
-  await withGithubToken(async () => {
-    const system = buildServed({
-      integrations: { source: 'fake', issues: 'github' },
-      github: { owner: 'a', repo: 'b' },
-    });
-    const worked = await dispatchedJob(system);
-    const { app } = await buildApp(system);
-    const filed = await app.inject({ method: 'POST', url: `/api/work/job:${worked.id}/file` });
-    const filingJob = (filed.json() as { job: { id: string; title: string; prompt: string } }).job;
+test('filing parents the work to its new item on the next pulse', async () => {
+  const system = buildWithTracker();
+  const worked = await dispatchedJob(system);
+  const { app } = await buildApp(system);
+  const filed = await app.inject({ method: 'POST', url: `/api/work/job:${worked.id}/file` });
+  const { filing } = filed.json() as { filing: { ticketRef: string } };
 
-    // The filing agent, on the filing job's own origin.
-    const task = system.store.createTask({
-      kind: 'desk',
-      title: filingJob.title,
-      prompt: filingJob.prompt,
-      branch: null,
-      originRef: `job:${filingJob.id}`,
-    });
-    const agent = system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
-
-    const res = system.agents.linkTicket(agent.id, 'issue:314');
-    assert.equal(res.ok, true);
-    assert.equal(system.store.findWorkItemFilingByJobId(filingJob.id)?.ticketRef, 'issue:314');
-
-    await system.harness.runCycle('manual');
-    assert.equal(
-      system.store.listWorkNodes().find((n) => n.ref === `job:${worked.id}`)?.parentRef,
-      'issue:314',
-      'the fold writes the edge, not the tool',
-    );
-    await app.close();
-    system.store.close();
-  });
+  await system.harness.runCycle('manual');
+  assert.equal(
+    system.store.listWorkNodes().find((n) => n.ref === `job:${worked.id}`)?.parentRef,
+    filing.ticketRef,
+    'the fold writes the edge, not the route',
+  );
+  await app.close();
+  system.store.close();
 });
 
-test('a work item must be an issue ref — there is no node kind to guess at', async () => {
-  await withGithubToken(async () => {
-    const system = buildServed({
-      integrations: { source: 'fake', issues: 'github' },
-      github: { owner: 'a', repo: 'b' },
-    });
-    const worked = await dispatchedJob(system);
-    const { app } = await buildApp(system);
-    const filed = await app.inject({ method: 'POST', url: `/api/work/job:${worked.id}/file` });
-    const filingJob = (filed.json() as { job: { id: string } }).job;
-    const task = system.store.createTask({
-      kind: 'desk',
-      title: 'file it',
-      prompt: 'file it',
-      branch: null,
-      originRef: `job:${filingJob.id}`,
-    });
-    const agent = system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
-
-    const res = system.agents.linkTicket(agent.id, 'pr:42');
-    assert.equal(res.ok, false);
-    assert.equal(system.store.findWorkItemFilingByJobId(filingJob.id)?.status, 'filing', 'left awaiting a real item');
-    await app.close();
-    system.store.close();
-  });
-});
-
-test('an agent on an unrelated job can link nothing, and is told both reasons', () => {
+test('an agent on an unrelated job can link nothing, and is told which jobs can', () => {
   const system = buildServed();
   const task = system.store.createTask({
     kind: 'code',
@@ -676,7 +643,7 @@ test('an agent on an unrelated job can link nothing, and is told both reasons', 
   assert.equal(res.ok, false);
   // Identity is the whole access check: there is no argument naming what to link.
   assert.match(res.ok === false ? res.error : '', /file a finding/);
-  assert.match(res.ok === false ? res.error : '', /work item/);
+  assert.match(res.ok === false ? res.error : '', /raise a bug/);
   system.store.close();
 });
 

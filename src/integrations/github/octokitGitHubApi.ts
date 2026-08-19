@@ -442,6 +442,22 @@ export class OctokitGitHubApi implements GitHubApi {
     await this.setLabel(number, label, present);
   }
 
+  async createIssue(input: {
+    title: string;
+    body: string;
+    labels: string[];
+    assignee: string | null;
+  }): Promise<{ number: number }> {
+    const res = await this.octokit.issues.create({
+      ...this.base,
+      title: input.title,
+      body: input.body,
+      ...(input.labels.length > 0 ? { labels: input.labels } : {}),
+      ...(input.assignee ? { assignees: [input.assignee] } : {}),
+    });
+    return { number: res.data.number };
+  }
+
   async createPull(input: { head: string; base: string; title: string; body: string }): Promise<{ number: number }> {
     const res = await this.octokit.pulls.create({
       ...this.base,

@@ -20,6 +20,7 @@ interface ActionSink {
   setIssueLabel(input): Promise<SendResult>;
   setWorkItemState(input): Promise<SendResult>;
   upsertIssueComment(input): Promise<SendResult>;
+  createIssue(input): Promise<SendResult>;
 }
 ```
 
@@ -43,8 +44,8 @@ providers share one `FakeWorldStore` so their world stays coherent.
 
 `PrReplyCapable`, `PrMergeCapable`, `PrLabelCapable`, `PrCreateCapable`, `PrTitleCapable`,
 `PrBaseCapable`, `PrBaseUpdateCapable`, `BranchDeleteCapable`, `IssueLabelCapable`,
-`WorkItemStateCapable`, `WorkItemLinkCapable`, `IssueCommentCapable`, `CiEvidenceCapable`,
-`RefResolvable`, `TicketHistoryCapable`, and the fake-only `Injectable`.
+`WorkItemStateCapable`, `WorkItemLinkCapable`, `IssueCommentCapable`, `IssueCreateCapable`,
+`CiEvidenceCapable`, `RefResolvable`, `TicketHistoryCapable`, and the fake-only `Injectable`.
 
 `BranchDeleteCapable` deletes a branch outright — the reap after a pull request merges. Both
 providers implement it, and both report **already gone as success**: GitHub's "automatically delete
@@ -71,6 +72,31 @@ runs at date precision by default and faults on _any_ time supplied under it. Th
 query-string parameter; the `Wiql` body is `{query}` alone, so putting it there is dropped in
 silence). It is also why the mirror's one-month floor is a floor rather
 than a cut — asking by last-changed brings back older items that are still alive.
+
+`IssueCreateCapable` **creates** a tracker item — the seam the four filing arms had no answer for, so
+each of them composed a `gh`/`az` command as a string and spent a desk agent typing it back
+([13](13-jobs-and-findings.md#filing-a-ticket)). Its input is provider-neutral and every provider
+answers the parts it has:
+
+| Field       | GitHub                                                    | Azure DevOps                                  |
+| ----------- | --------------------------------------------------------- | --------------------------------------------- |
+| `title`     | the issue title                                            | `System.Title`                                 |
+| `body`      | the issue body                                             | `System.Description`                           |
+| `labels`    | `labels` on the create                                     | `System.Tags`, semicolon-joined, on the create |
+| `assignee`  | `assignees: [login]` on the create                         | `System.AssignedTo` on the create              |
+| `type`      | **dropped** — a GitHub issue is not created _as_ anything  | the create's URL segment (`$User Story`)       |
+| `relatedTo` | appended to the body as `Related to #<n>`                  | a second write: a `System.LinkTypes.Related` relation |
+
+Two of those rows are the whole point. Labels and the assignee ride on the **create** rather than on
+follow-up writes, because an item that exists for a moment untagged is one the pickup gate can miss
+and a filing nobody is assigned. And `relatedTo` is one field rather than a caller's second call: on
+Azure a bug is only correct with two writes, and a caller that could forget the second is exactly what
+this replaced. A relation that fails does **not** cost the item — it exists and the operator asked for
+it — so the throw carries the id of what was created.
+
+`ref` on the result is `issue:<n>`, the harness's own vocabulary rather than a provider id: that is
+what a filing row stores, what `link_ticket` speaks and what the cockpit resolves to a URL, so the one
+translation happens in the provider instead of at each call site.
 
 `PrBaseUpdateCapable` merges a pull request's **base into it** — the arm of rule `pr-base-update` that
 costs no agent ([05](05-dispatcher.md#pr-base-update--two-arms)). GitHub implements it with

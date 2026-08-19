@@ -15,10 +15,10 @@ import type {
   ScratchEntry,
   ShortfallCause,
   Task,
-  WorkItemFiling,
   BugFiling,
 } from '../../types.js';
 import type { ActionSink } from '../../sink/actionSink.js';
+import type { TicketFiler } from '../../tickets/filing.js';
 import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
 import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAssayVerdictName } from '../goalAssay.js';
@@ -43,20 +43,20 @@ export interface AgentToolTarget {
     input: HumanTaskInput,
   ): { ok: true; task: HumanTask } | { ok: false; error: string };
   recordProgress(agentId: string, note: string): { ok: true; notedAt: string } | { ok: false; error: string };
+  /**
+   * Which filing this credential resolves to — asked *before* the item is created,
+   * because the harness files it and a bug is created as a different type and
+   * linked back to its story (issue #394).
+   */
+  filingTarget(
+    agentId: string,
+  ): { ok: true; kind: 'finding' | 'bug'; storyNumber: number | null } | { ok: false; error: string };
   linkTicket(
     agentId: string,
     ticketRef: string,
   ):
-    | { ok: true; finding: Finding; filing?: undefined; bug?: undefined }
-    | {
-        ok: true;
-        filing: WorkItemFiling;
-        finding?: undefined;
-        bug?: undefined;
-        /** How many of the operator's images moved from the filing job onto the ticket (issue #249). */
-        attachments: number;
-      }
-    | { ok: true; bug: BugFiling; finding?: undefined; filing?: undefined }
+    | { ok: true; finding: Finding; bug?: undefined }
+    | { ok: true; bug: BugFiling; finding?: undefined }
     | { ok: false; error: string };
   recordConclusion(
     agentId: string,
@@ -140,6 +140,13 @@ export interface McpToolDeps {
      */
     watchLabel: string;
   };
+  /**
+   * How `link_ticket` creates the item an agent has written up (issue #394).
+   * Optional for {@link McpToolDeps.openPr}'s reason and with the same floor: with
+   * no tracker configured there is nothing to file into, nothing dispatches a
+   * filing job, and the tool says so rather than pretending.
+   */
+  filing?: TicketFiler;
   errors?: ErrorRecorder;
 }
 

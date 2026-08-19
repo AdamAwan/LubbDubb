@@ -55,35 +55,37 @@ assay, the planning agent, the plan's parts — exactly like a picked-up issue. 
 points ("start with a prompt", "start with a ticket") are drawn converging on _find-or-create a ticket,
 then the funnel_; this is the prompt arm wired to that convergence.
 
-- **The whole transform is at route time; rule `manual-job` is untouched.** That is a clean recursion boundary:
-  only an operator-injected code blueprint via this route becomes a ticket, and the **desk** filing job
-  it becomes never does (a desk job is never itself a code blueprint). No new dispatcher wiring — the
-  funnel already picks up watched issues.
-- **A desk job, not a code one**, for `finding-ticket`'s reason: filing touches no repository, so a
-  worktree and a branch would be pure cost. It renders the overridable `blueprint-ticket` template
-  (`src/dispatcher/promptTemplates.ts`), whose pure fields come from `blueprintTicketFields(request,
-tracker, watchLabel)` (`src/blueprintTicket.ts`) — the operator's prompt carried verbatim, the
-  tracker coordinates, and the label instruction.
-- **The ticket must be `-watch`-tagged, unlike a finding-filed one.** A finding's ticket lands in the
-  backlog unwatched on purpose (it is deferred, not scheduled); a blueprint's ticket is the work the
-  operator asked for, so the prompt instructs the agent to add the effective `${labelPrefix}-watch`
-  label or the watch gate never picks it up. The empty case is decided in the pure fields, not the
-  template: `labelPrefix: ''` turns the watch gate off (the harness acts on every open issue), so there
-  is no label to add and the prompt says so.
-- **A `WorkItemFiling` row keyed on the desk job is how `link_ticket` resolves the created issue back**
-  (`agent → task → job:<id> origin → the filing`). A blueprint has no prior work node to file _for_,
-  so `targetRef` is the desk job's own ref (`job:<id>`) — unique by construction, skipped by the
-  unrecorded-work lens (which is code-kind only), and handled by the fold, which stands the issue node
-  up and hangs the desk job under it. Reusing the filing table rather than a parallel record is safe
-  because no reader misreads it: the row surfaces nowhere as "unrecorded work" and `link_ticket`'s
-  existing `issue:`-ref guard is exactly right. See [11](11-mcp-tools.md).
+- **The harness files it, on the request.** No job is queued and no agent is dispatched for it
+  ([filing a ticket](#filing-a-ticket)). This arm is the one that made the case: the ticket must carry
+  the effective `${labelPrefix}-watch` label or the watch gate never picks it up, and an agent that
+  forgot it left the item created, the filing shown complete in the cockpit, and **nothing ever
+  dispatched** — no error, nothing red. A `labels` array the harness passes cannot be forgotten. The
+  empty case is a `[]` rather than a sentence: `labelPrefix: ''` turns the watch gate off (the harness
+  acts on every open issue), so there is nothing to tag and nothing is written.
+- **The body was never being delegated.** It is the operator's own request, verbatim — the only
+  judgement a desk agent added was a title, and the request's first line is that. The wording stays
+  overridable through the `blueprint-ticket-body` template, whose pure fields come from
+  `blueprintTicketFields(request)` (`src/blueprintTicket.ts`); `body.title` on the launch still wins
+  over the derived one.
+- **The whole transform is at route time; rule `manual-job` is untouched.** That is a clean recursion
+  boundary: only an operator-injected code blueprint via this route becomes a ticket, and there is no
+  second job for the transform to reach again.
+- **No filing row.** One existed only so `link_ticket` could resolve the created issue back from the
+  filing agent's credential, and there is no filing agent. The route answers `{ok, ticketRef}`, and the
+  issue stands up in the graph from the world on the next pulse like any other.
+- **Attachments are written under the ticket** (`issue:<n>`), not under a job and then moved. The
+  harness knows the number before any byte is written, so an image is the goal's from the moment it
+  lands — every agent the funnel dispatches for the issue is handed it
+  ([12](12-artifacts-and-files.md)). A create that succeeds and an attachment write that fails is
+  recorded, not raised: the ticket is what the operator asked for, and losing a screenshot's onward
+  visibility is the smaller failure.
 
 **Fallbacks are today's behaviour.** A **desk** blueprint (a direct answer, a report) is dispatched as
 asked. A code blueprint with **no tracker** (`fake`/unconfigured) has nowhere to file, so it too
 dispatches directly — and the branch-collision 409 above applies only on this arm, since a filed
 blueprint's branch is meaningless (the funnel works `issue/<n>` branches later).
 
-Tests: `test/blueprintTicket.test.ts`.
+Tests: `test/blueprintTicket.test.ts`, `test/attachmentsSurviveTicket.test.ts`.
 
 ### Dispatch — rule `manual-job`
 
@@ -470,57 +472,72 @@ The only path from a finding to an agent, and it starts with an operator's click
   failed create leaves the finding open.
 - A cycle is kicked.
 
+### Filing a ticket
+
+Four cockpit clicks file a tracker item: a deferred **finding**, unrecorded **work**, a **blueprint**,
+and a **bug** an operator raised. All four go through `ActionSink.createIssue`
+([15](15-integrations.md)), and none of them asks a model to run a `gh` / `az` command any more
+(issue #394).
+
+- **What the harness must supply is the one thing nothing else can infer: which tracker.**
+  `trackerCoordinates(config)` (pure, `src/mcp/findings.ts`) names it from the same config block the
+  **`issues` provider** is built from — so a ticket lands where the harness reads issues from and
+  nowhere else. It returns null for `fake`, or for a provider selected without its config; every one
+  of the four routes then 409s, and the snapshot ships `config.canFileTickets: false` so the cockpit
+  hides the buttons rather than offering a click that cannot work. One predicate, five surfaces.
+- **The type, the labels, the assignee and any relation are decided by the harness.** `ticketAssignee`
+  (`src/ticketAssignment.ts`) reads `userId` ([02](02-configuration.md#userid)); `filingType` /
+  `bugFilingType` (`src/ticketTypes.ts`) read `issueFilingTypes` and `issueBugType`
+  ([02](02-configuration.md#what-type-a-filed-item-is)). Each of those was a sentence in a prompt, and
+  a sentence is only as reliable as a model's memory of it: a blueprint's ticket without its watch
+  label is never dispatched for, an Azure bug without its relation cannot be traced back to its story,
+  and a create with no `--type` is refused outright, taking the ticket with it. `ticketFiler`
+  (`src/tickets/filing.ts`) resolves all four per call, so all four arms file identically.
+- **The wording stays operator-overridable**, because how a ticket reads _is_ house style. Two arms
+  render a ticket **body** from the template book — `work-item-ticket-body`, `blueprint-ticket-body` —
+  and two keep an agent to write one. Nothing about the change moves that judgement into the harness.
+- **Two arms keep a desk agent, and two do not.** Where the whole body is already harness- or
+  operator-composed text (unrecorded work, a blueprint), a desk agent was spending a slot on one API
+  call. Where the body is a judgement — verifying a finding's report against the repository, writing up
+  a symptom an operator observed — the agent stays, narrowed to composing the title and body and
+  handing both to `link_ticket` ([11](11-mcp-tools.md)).
+- **A surviving agent is handed its dedupe candidates**, rather than told to go and search. The
+  harness mirrors the tracker ([14](14-persistence.md#the-ticket-mirror)), so the adjacent items are
+  computable: `dedupeCandidates` ranks the mirror by title-token overlap and `renderCandidates`
+  **appends** the shortlist after the rendered prompt — never a `{candidates}` placeholder, which
+  every override predating it would drop in silence. Closed items are candidates too; the mirror is the
+  only place the harness can see one at all.
+
+Tests: `test/ticketFiling.test.ts`.
+
 ### Filing — `POST /api/findings/:id/file`
 
 The **defer** arm, beside promotion's "work it now". Promotion puts an agent on the problem; filing
-puts an agent on the **tracker**, so the problem waits its turn in the backlog with everything else.
+puts an agent on the **writing up**, so the problem waits its turn in the backlog with everything else.
 It is the one thing promotion could not express: a queued job either runs or is cancelled, and neither
 of those is "deal with this later".
 
-- **An agent files it, not a provider seam.** The _wording_ of a ticket is the part an operator has
-  opinions about, and a prompt is where those opinions already live — `finding-ticket` is an ordinary
-  overridable entry in the template book (`src/dispatcher/promptTemplates.ts`), so how tickets are
-  worded, labelled or typed is changed by dropping a file in `promptTemplatesDir`, not by patching a
-  route. Agents create issues with `gh` / `az` in their own shell already; adding an
-  `IssueCreateCapable` seam would have moved that judgement into the harness, where it cannot be
-  overridden. The template book is therefore no longer only the rule dispatcher's — `loadPromptTemplates`
-  is hoisted in `system.ts` and exposed as `System.prompts`, so this renders the same under either
-  dispatcher.
-- **What the harness must supply is the one thing an agent cannot infer: which tracker.**
-  `trackerCoordinates(config)` (pure, `src/mcp/findings.ts`) renders coordinates from the same config
-  block the **`issues` provider** is built from — so a ticket lands where the harness reads issues
-  from and nowhere else. It returns null for `fake`, or for a provider selected without its config;
-  the route then 409s and the snapshot ships `config.canFileTickets: false` so the cockpit hides the
-  button rather than offering a click that cannot work. One predicate, both surfaces.
-- **And the one other thing an agent cannot infer: who it is for.** `userId`
-  ([02](02-configuration.md#userid)) rides in on the same
-  string — the create command gains `--assignee` / `--assigned-to`, and a paragraph says the flag is
-  not optional, covers only the item the agent creates, and must not cost the ticket if the tracker
-  refuses the identity. In the coordinates rather than a placeholder of its own, so an operator's
-  prompt override that predates the key still assigns; unset, the coordinates are unchanged and the
-  item is filed unassigned. One pure function (`ticketAssignment`, `src/ticketAssignment.ts`), so all
-  four filing arms assign identically.
-- **And what type of item it is.** `issueFilingTypes` ([02](02-configuration.md#what-type-a-filed-item-is))
-  is the closed set the agent chooses from, defaulting to `["User Story", "Bug"]`. The three arms here
-  hardcoded `--type Task` until they did not: a Task is how a story is broken down once somebody is
-  working it, so one filed from the cockpit had nothing above it to roll up to and reached no backlog.
-  _Which_ of the configured types a report is stays the agent's judgement, like the wording; the harness
-  supplies the menu, names the decomposition type it must not reach for, and says an imperfect fit
-  rounds to the nearest entry rather than to a type the project would refuse. In the coordinates rather
-  than a `{type}` placeholder, on the same override argument as the assignee (`ticketTypeGuidance`,
-  `src/ticketTypes.ts`). Azure only — a GitHub issue has no type. The **raised bug** arm files `Bug` on
-  its own coordinates and consults none of this.
+- **This is the arm where the writing is most of the value**, which is why it kept its agent. The body
+  is one agent's prose report, and turning that into something a stranger can act on — verifying what
+  of it holds against the repository, and saying which parts are confirmed and which are the reporting
+  agent's word — is judgement, not mechanism. `finding-ticket` is an ordinary overridable entry in the
+  template book (`src/dispatcher/promptTemplates.ts`), so how tickets are worded is changed by dropping
+  a file in `promptTemplatesDir`, not by patching a route. The template book is therefore not only the
+  rule dispatcher's — `loadPromptTemplates` is hoisted in `system.ts` and exposed as `System.prompts`.
+- **The agent writes; the harness files.** `link_ticket` takes `title` + `body` and creates the item,
+  or takes `ref` alone when the agent decided an existing item already covers it. An override written
+  against the older book still works: it tells the agent to run `gh` and report the ref, and
+  `link_ticket({ref})` is still exactly that call.
 - **A desk job, not a code one.** Filing touches no repository, so cutting a worktree and a branch
-  would be pure cost. The consequence is that a desk agent runs in a scratch directory with no git
-  remote for `gh` to read the repo off — which is precisely why the coordinates are explicit.
-- **Two statuses, because filing is asynchronous.** The click queues a job; the ticket exists only
-  once an agent has created it. `filing` is the honest reading in between, and `filed` is the one that
+  would be pure cost.
+- **Two statuses, because this arm is asynchronous.** The click queues a job; the ticket exists only
+  once the agent has written it. `filing` is the honest reading in between, and `filed` is the one that
   carries `ticketRef`. Collapsing them would have the card claim a ticket that does not exist yet, and
-  leave nothing to show for a filing agent that died before making one — which is why the cockpit
-  draws a `filing` finding among the open ones rather than in the resolved tail.
+  leave nothing to show for an agent that died before writing one — which is why the cockpit draws a
+  `filing` finding among the open ones rather than in the resolved tail.
 - **`link_ticket` closes it** — see [11](11-mcp-tools.md). The finding is resolved from the agent's
-  credential (`agent → task → its `job:<id>` origin → the finding that job was created for`), so the
-  tool takes only a ref, and idempotence lives in the write (`WHERE status='filing'`).
+  credential (`agent → task → its job:<id> origin → the finding that job was created for`), so the
+  tool takes no finding argument, and idempotence lives in the write (`WHERE status='filing'`).
 - `job_id` is reused for the filing job: a finding is terminal either way, so only ever one job hangs
   off it. `ticket_ref` is a **column on an existing table**, so it needs a `migrate()` entry — see
   [14](14-persistence.md).
@@ -533,12 +550,21 @@ Tests: `test/findingTickets.test.ts`.
 with a different author. A finding is an agent's testimony and a work-item filing is the harness
 accounting for its own work; this one is the **operator's** — they ran the thing and it does not do
 what they expect, which is the one fact about a goal no agent on it can derive, since none of them ran
-it. Everything the two arms above establish holds: explicit tracker coordinates, a desk job, an
-overridable template (`raise-bug`), two statuses, and `link_ticket` closing the loop from the
-credential.
+it. Everything the finding arm establishes holds: the same tracker gate, a desk job, an overridable
+template (`raise-bug`), two statuses, and `link_ticket` closing the loop from the credential by
+carrying the title and body the agent wrote.
 
-Three things differ, each for a reason worth keeping:
+Four things differ, each for a reason worth keeping:
 
+- **It needs two writes to be correct, and that is why it does not file itself.** A bug that is not
+  linked back to its story is a bug nobody can trace. On Azure that is a `related` relation — `related`
+  and not parent/child, which is legal whatever process template the project runs, where a parent link
+  from a User Story to a Bug is refused outright by some of them. On GitHub it is a `#<story>`
+  cross-reference in the body, which GitHub draws on both issues. Both are `relatedTo` on
+  `createIssue` ([15](15-integrations.md)) and neither is a sentence an agent could drop. The type is
+  `issueBugType` rather than the head of `issueFilingTypes`: what a process calls its bug type is
+  exactly what varies (the Basic process calls it "Issue"), and matching on the word would file a
+  story as a bug on the one project it is wrong for.
 - **The row is keyed on the job, not on a target** (`issue_bug_filings`, [14](14-persistence.md)), so
   a story can carry several bugs. A story can be wrong in more than one way and each is its own bug;
   refusing the second would be a rule nobody asked for, and it is why this is a table of its own

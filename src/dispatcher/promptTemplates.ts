@@ -42,6 +42,8 @@ type PromptId =
   | 'work-item-ticket'
   | 'raise-bug'
   | 'blueprint-ticket'
+  | 'work-item-ticket-body'
+  | 'blueprint-ticket-body'
   | 'pr-title';
 
 interface TemplateDef {
@@ -55,6 +57,17 @@ interface TemplateDef {
    * so operators start from a self-documenting template.
    */
   readonly doc: string;
+  /**
+   * Set on an id the harness no longer renders (issue #394 filed two of the four
+   * ticket arms directly, so their prompts have no agent left to send them to).
+   *
+   * The id stays in the book rather than being deleted, because `loadPromptTemplates`
+   * **throws** on a file naming no known id: removing one would turn an operator's
+   * customised deployment into a harness that will not boot. It is surfaced on
+   * {@link PromptTemplates.describe} instead, so the Prompts panel says the override
+   * is no longer sent rather than leaving it looking live.
+   */
+  readonly retired?: true;
 }
 
 const REGISTRY: Record<PromptId, TemplateDef> = {
@@ -414,53 +427,58 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
   'finding-ticket': {
     placeholders: ['kind', 'kindHelp', 'ref', 'summary', 'originRef', 'tracker'],
     template:
-      'An operator wants a finding filed as a ticket so it can be dealt with later. File it — do not fix it.\n\n' +
+      'An operator wants a finding filed as a ticket so it can be dealt with later. **Write it up — ' +
+      'do not fix it, and do not create it yourself.**\n\n' +
       'It was reported by an agent working {originRef}, about {ref}, as a "{kind}" finding ({kindHelp}).\n\n' +
       'The report, verbatim:\n\n{summary}\n\n' +
-      'File it in {tracker}\n\n' +
-      'Before you create anything, search the existing open items for the same thing. If one already ' +
-      'covers it, do not file a second — link the existing one instead. Write the ticket for someone ' +
-      'who was not there: a title that says what is wrong, and a body carrying the report above, where ' +
-      'it was found, and what you were able to verify. Verify what you reasonably can from the ' +
-      'repository first, and say in the body which parts you confirmed and which are the reporting ' +
-      "agent's word — it is one agent's reading, not established fact.\n\n" +
-      'When the ticket exists, call the link_ticket tool with its ref ("issue:314") so it shows up ' +
-      'against the finding in the cockpit. That call is what finishes this task: without it the ' +
-      'operator sees a filing that never completed. If you decided not to file because it already ' +
-      'exists, call link_ticket with the existing item’s ref.',
+      'It will be filed in {tracker}. The harness creates the item itself, so the type it is created ' +
+      'as, the labels it carries and who it is assigned to are already settled and there is no ' +
+      'command for you to run — your job is the words.\n\n' +
+      'Write the ticket for someone who was not there: a title that says what is wrong, and a body ' +
+      'carrying the report above, where it was found, and what you were able to verify. Verify what ' +
+      'you reasonably can from the repository first, and say in the body which parts you confirmed ' +
+      "and which are the reporting agent's word — it is one agent's reading, not established fact.\n\n" +
+      'When you have both, call the link_ticket tool with `title` and `body`. That call is what files ' +
+      'the ticket and finishes this task: without it the operator sees a filing that never completed. ' +
+      'If an existing item already covers this, do not write a second — call link_ticket with that ' +
+      'item\u2019s ref ("issue:314") instead, and it is linked rather than filed.',
     doc:
-      'Sent to a desk agent when an operator clicks "File ticket" on a finding, to create it in ' +
-      'GitHub/Azure DevOps and report the ref back via link_ticket. Override this to control how ' +
-      'tickets are worded, labelled, or typed in your tracker. Placeholders: {kind} {kindHelp} {ref} ' +
-      '{summary} {originRef} {tracker}.',
+      'Sent to a desk agent when an operator clicks "File ticket" on a finding. The agent writes the ' +
+      'ticket; since #394 the **harness** creates it, so this prompt no longer carries a `gh`/`az` ' +
+      'command and an agent cannot forget a label, a type or an assignee. Override this to control ' +
+      'how tickets are worded. Candidate duplicates from the harness\u2019s ticket mirror are appended ' +
+      'after this text rather than interpolated, so an override cannot silently drop them. ' +
+      'Placeholders: {kind} {kindHelp} {ref} {summary} {originRef} {tracker}.',
   },
   'raise-bug': {
     placeholders: ['number', 'title', 'summary', 'tracker'],
     template:
-      'An operator ran work item #{number} ("{title}") and it does not do what they expect. **File a ' +
-      'bug for it — do not fix it.**\n\n' +
+      'An operator ran work item #{number} ("{title}") and it does not do what they expect. **Write ' +
+      'the bug up — do not fix it, and do not create it yourself.**\n\n' +
       'Their report, verbatim:\n\n{summary}\n\n' +
       'This is the operator speaking, not an agent: it is what they observed running the thing, which ' +
       'is not something you can find in the repository. Treat it as the goal. Where you cannot ' +
       'reproduce or locate it, say so in the bug — do not narrow it to whatever you did find, and do ' +
       'not decide it is not a bug.\n\n' +
-      'File it in {tracker}\n\n' +
-      'Before you create anything, search the existing open items for the same symptom. If one already ' +
-      'covers it, do not file a second — link the existing one instead. Write the bug for someone who ' +
-      'was not there: a title naming the symptom (not the suspected cause), and a body carrying the ' +
-      'report above verbatim, what you were able to verify against the repository, and where you think ' +
-      'it lives if you found it. Say which parts you confirmed and which are the operator’s word — ' +
-      'they observed a symptom, and the diagnosis is yours and provisional.\n\n' +
-      'When the bug exists, call the link_ticket tool with its ref ("issue:314") so it shows up against ' +
-      'the story in the cockpit. That call is what finishes this task: without it the operator sees a ' +
-      'filing that never completed. If you decided not to file because it already exists, call ' +
-      'link_ticket with the existing item’s ref.',
+      'It will be filed in {tracker}. The harness creates the item itself and links it back to ' +
+      'story #{number}, so the type, the labels, the assignee and the relation are already settled ' +
+      'and there is no command for you to run — your job is the words.\n\n' +
+      'Write the bug for someone who was not there: a title naming the symptom (not the suspected ' +
+      'cause), and a body carrying the report above verbatim, what you were able to verify against ' +
+      'the repository, and where you think it lives if you found it. Say which parts you confirmed ' +
+      'and which are the operator\u2019s word — they observed a symptom, and the diagnosis is yours and ' +
+      'provisional.\n\n' +
+      'When you have both, call the link_ticket tool with `title` and `body`. That call is what files ' +
+      'the bug and finishes this task: without it the operator sees a filing that never completed. If ' +
+      'an existing item already covers this symptom, do not write a second — call link_ticket with ' +
+      'that item\u2019s ref ("issue:314") instead, and it is linked rather than filed.',
     doc:
-      'Sent to a desk agent when an operator clicks "raise issue" on a work item, to file a bug in ' +
-      'GitHub/Azure DevOps linked back to that story and report the ref via link_ticket. The operator ' +
-      'types the symptom; the agent writes it up. Override this to control how bugs are worded, ' +
-      'labelled, or typed in your tracker — a project whose bug type is not called "Bug" (the Basic ' +
-      'process calls it "Issue") overrides here. Placeholders: {number} {title} {summary} {tracker}.',
+      'Sent to a desk agent when an operator clicks "raise issue" on a work item. The operator types ' +
+      'the symptom; the agent writes it up; since #394 the **harness** files it and draws the link ' +
+      'back to the story, so neither the bug type nor the relation depends on an agent remembering a ' +
+      'flag. A project whose bug type is not called "Bug" sets `issueBugType` rather than overriding ' +
+      'here. Candidate duplicates from the ticket mirror are appended after this text. Placeholders: ' +
+      '{number} {title} {summary} {tracker}.',
   },
   'blueprint-ticket': {
     placeholders: ['request', 'tracker', 'watchLabel', 'labelling'],
@@ -479,13 +497,14 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'will plan and dispatch it once the ticket exists.\n\n' +
       'When the ticket exists, call the link_ticket tool with its ref ("issue:314"). That call is what ' +
       'finishes this task: without it the operator sees a filing that never completed. If you decided ' +
-      'not to file because a suitable item already exists, call link_ticket with that item’s ref.',
+      'not to file because a suitable item already exists, call link_ticket with that item\u2019s ref.',
+    retired: true,
     doc:
-      'Sent to a desk agent when an operator injects a **code blueprint** and a tracker is configured ' +
-      '(issue #198). Instead of coding the prompt directly, the agent files a watched ticket so the ' +
-      'work enters the planning funnel like any picked-up issue. Override this to control how such ' +
-      'tickets are worded, labelled, or typed in your tracker. Placeholders: {request} {tracker} ' +
-      '{watchLabel} {labelling}.',
+      '**Retired in #394 — no longer rendered.** A blueprint\u2019s ticket is now filed by the harness ' +
+      'directly, because its body is the operator\u2019s own request verbatim and its correctness rested ' +
+      'entirely on the agent remembering to add the watch label: without it the item is created, the ' +
+      'filing shows as complete, and nothing is ever dispatched for it. Word the item through ' +
+      '`blueprint-ticket-body` instead. An override left here still loads — it is simply not sent.',
   },
   'work-item-ticket': {
     placeholders: ['ref', 'workTitle', 'produced', 'tracker'],
@@ -506,13 +525,45 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'When the item exists, call the link_ticket tool with its ref ("issue:314"). That call is what ' +
       'finishes this task and what attaches the work to the item in the record: without it the operator ' +
       'sees a filing that never completed. If you decided not to file because a suitable item already ' +
-      'exists, call link_ticket with that item’s ref.',
+      'exists, call link_ticket with that item\u2019s ref.',
+    retired: true,
     doc:
-      'Sent to a desk agent when an operator clicks "File a work item" on unrecorded work in the Work ' +
-      'panel — an operator job that produced commits with no issue behind it. Creates the item in ' +
-      'GitHub/Azure DevOps and reports the ref back via link_ticket. Override this to control how such ' +
-      'items are worded, labelled, or typed in your tracker. Placeholders: {ref} {workTitle} {produced} ' +
-      '{tracker}.',
+      '**Retired in #394 — no longer rendered.** The harness files this item directly: its body was ' +
+      'already composed here in full (`produced` is the harness\u2019s own walk of the work subtree), so ' +
+      'the only thing being delegated was a title, and a whole desk agent was being spent on one API ' +
+      'call. Word the item through `work-item-ticket-body` instead. An override left here still ' +
+      'loads — it is simply not sent.',
+  },
+  'work-item-ticket-body': {
+    placeholders: ['ref', 'workTitle', 'produced'],
+    template:
+      'This item records work the harness has already done. It is finished or under way; what was ' +
+      'missing is a tracker item accounting for it, so that someone reading the board can see it ' +
+      'happened and close it when they are satisfied.\n\n' +
+      'It ran as {ref}: "{workTitle}".\n\n' +
+      'What it produced, as the harness recorded it:\n\n{produced}\n\n' +
+      'Where the list above says a merge was "inferred", the harness assumed it from the pull request ' +
+      'disappearing rather than watching it merge, rather than observing the merge itself.',
+    doc:
+      'The **body** of the work item the harness files when an operator clicks "File a work item" on ' +
+      'unrecorded work in the Work panel — an operator job that produced commits with no issue behind ' +
+      'it. Not a prompt: it is written straight into the tracker, so an override is house style for ' +
+      'how such an item reads. The title is the work\u2019s own. Replaces the retired `work-item-ticket`, ' +
+      'which asked an agent to do the same filing by hand (#394). Placeholders: {ref} {workTitle} ' +
+      '{produced}.',
+  },
+  'blueprint-ticket-body': {
+    placeholders: ['request'],
+    template:
+      'An operator asked for this work from the cockpit, as a blueprint. It is filed as a ticket ' +
+      'rather than coded straight off, so it flows through the same planning funnel as any other ' +
+      'issue.\n\nThe request, verbatim:\n\n{request}',
+    doc:
+      'The **body** of the ticket the harness files when an operator injects a code blueprint and a ' +
+      'tracker is configured (issue #198). Not a prompt: it is written straight into the tracker, so ' +
+      'an override is house style for how such a ticket reads. The harness adds the watch label ' +
+      'itself, which is what makes the funnel pick the ticket up. Replaces the retired ' +
+      '`blueprint-ticket` (#394). Placeholders: {request}.',
   },
 };
 
@@ -561,6 +612,8 @@ export interface PromptTemplateDescription {
   readonly template: string;
   /** Whether an operator override replaced the built-in. */
   readonly overridden: boolean;
+  /** True for an id the harness no longer renders — see {@link TemplateDef.retired}. */
+  readonly retired: boolean;
 }
 
 /**
@@ -594,6 +647,7 @@ export class PromptTemplates {
       placeholders: REGISTRY[id].placeholders,
       template: this.templates[id],
       overridden: this.overridden.has(id),
+      retired: REGISTRY[id].retired === true,
     }));
   }
 }

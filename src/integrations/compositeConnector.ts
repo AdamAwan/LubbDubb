@@ -4,6 +4,7 @@ import type {
   BranchDeleteInput,
   CiCheckRequeueInput,
   IssueCommentInput,
+  IssueCreateInput,
   IssueLabelInput,
   PrBaseInput,
   PrBaseUpdateInput,
@@ -24,6 +25,7 @@ import {
   isCiEvidenceCapable,
   isInjectable,
   isIssueCommentCapable,
+  isIssueCreateCapable,
   isIssueLabelCapable,
   isPrBaseCapable,
   isPrBaseUpdateCapable,
@@ -206,6 +208,12 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     if (!handler)
       throw new Error('no integration can set work item state (no issues provider is WorkItemStateCapable)');
     return handler.setWorkItemState(input);
+  }
+
+  async createIssue(input: IssueCreateInput): Promise<SendResult> {
+    const handler = this.integrations.find(isIssueCreateCapable);
+    if (!handler) throw new Error('no integration can create issues (no issues provider is IssueCreateCapable)');
+    return handler.createIssue(input);
   }
 
   async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {

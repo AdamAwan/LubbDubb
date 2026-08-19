@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { findingJobRequest, findingTicketFields, trackerCoordinates } from '../../mcp/findings.js';
+import { dedupeCandidates, renderCandidates } from '../../tickets/candidates.js';
 import { checked, IdParams, optionalText, TicketTitleBody } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -48,9 +49,14 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // File a finding as a ticket in the tracker — the *defer* arm, next to promote's
   // "do it now". Both are one operator click and both produce a job, and the split
   // is what each job is for: promotion dispatches an agent at the problem, filing
-  // dispatches one at the tracker so the problem can wait its turn with everything
-  // else. Filing is asynchronous, so the finding lands on `filing` here and reaches
-  // `filed` only when the agent reports the ticket back through `link_ticket`.
+  // dispatches one at the *writing up* so the problem can wait its turn with
+  // everything else. This is the one filing arm that kept its agent (issue #394):
+  // the finding's body is one agent's prose report, and turning that into a ticket
+  // somebody else can act on — checking what of it holds against the repository —
+  // is the judgement being delegated. The **create** is not: `link_ticket` takes
+  // the title and body and the harness files them. Filing is asynchronous, so the
+  // finding lands on `filing` here and reaches `filed` only when the agent hands
+  // its words over.
   // The operator may reword the ticket's title before an agent files it; the
   // derived one is only the default (`TicketTitleBody`, shared with
   // `/api/work/:ref/file`, which offers the same override over its own).
@@ -61,9 +67,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const finding = store.getFinding(id);
       if (!finding) return reply.code(404).send({ error: 'finding not found' });
       if (finding.status !== 'open') return reply.code(409).send({ error: `finding is already ${finding.status}` });
-      // A desk agent runs in a scratch dir, so it has no remote to infer the target
-      // from; without coordinates there is nowhere to file. The cockpit hides the
-      // button in this case, so reaching here means a direct call.
+      // With no tracker configured there is nowhere to file — the same gate all four
+      // filing arms ask. The cockpit hides the button in this case, so reaching here
+      // means a direct call.
       const tracker = trackerCoordinates(system.config);
       if (!tracker)
         return reply
@@ -74,7 +80,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         const title = body.title ?? derived.title;
         // Rendered from the operator's template book, not built here: how a ticket
         // should be worded is exactly the sort of house style an override exists for.
-        const prompt = system.prompts.render('finding-ticket', derived.vars);
+        // The duplicate candidates are **appended** rather than given a placeholder,
+        // so an override that never learned about them cannot silently drop them
+        // (CLAUDE.md, "Prompts and templates").
+        const candidates = renderCandidates(dedupeCandidates(store.listTrackerItems(), derived.vars.summary ?? ''));
+        const prompt = [system.prompts.render('finding-ticket', derived.vars), candidates]
+          .filter((part) => part !== null)
+          .join('\n\n');
         // Desk, not code: filing touches no repository, so a worktree and a branch
         // would be cut for a task that never writes a file.
         const job = store.createJob({ title, prompt, kind: 'desk' });

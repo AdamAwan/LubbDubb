@@ -50,30 +50,28 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // is worse than no blueprint at all.
       const prepared = prepareAttachments(body.attachments);
       if (!prepared.ok) return reply.code(400).send({ error: prepared.error });
-      // Store the images against whichever job row this launch creates — the
-      // blueprint itself, or the desk filing job the tracker fork turns it into.
+      // Store the images against the ref the work now lives under — `job:<id>` for a
+      // blueprint that dispatches, `issue:<n>` for one the harness filed as a ticket
+      // instead. Written under the final ref rather than moved onto it later (issue
+      // #394 removed the re-key with the filing agent that needed it), so an image
+      // is the goal's from the moment it lands.
+      //
       // Files first, rows second: an interrupted write then leaves bytes nothing
-      // points at, rather than a row naming a path that does not resolve, and a
-      // path an agent cannot open is the failure that matters. A job whose images
-      // failed to land is cancelled rather than left queued without them.
-      const attach = (jobId: string): void => {
+      // points at, rather than a row naming a path that does not resolve, and a path
+      // an agent cannot open is the failure that matters.
+      const attach = (targetRef: string): void => {
         if (prepared.files.length === 0) return;
-        try {
-          const stored = system.attachments.write(`job:${jobId}`, prepared.files);
-          store.addAttachments(
-            `job:${jobId}`,
-            stored.map((file) => ({
-              index: file.index,
-              label: file.label,
-              mime: file.mime,
-              bytes: file.data.length,
-              path: file.path,
-            })),
-          );
-        } catch (err) {
-          store.cancelJob(jobId);
-          throw err;
-        }
+        const stored = system.attachments.write(targetRef, prepared.files);
+        store.addAttachments(
+          targetRef,
+          stored.map((file) => ({
+            index: file.index,
+            label: file.label,
+            mime: file.mime,
+            bytes: file.data.length,
+            path: file.path,
+          })),
+        );
       };
 
       // A code blueprint enters the workflow through the *same* door as a ticket
@@ -81,9 +79,17 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // branch but filed as a **watched ticket**, so it flows through the planning
       // funnel (assay → plan → parts → work) exactly like a picked-up issue rather
       // than being coded straight off this prompt. The whole transform is here, at
-      // route time — rule `manual-job` is untouched, which keeps a clean recursion boundary:
-      // only operator-injected code blueprints via this route become tickets, and
-      // the desk filing job they become never does.
+      // route time — rule `manual-job` is untouched, which keeps a clean recursion
+      // boundary: only operator-injected code blueprints via this route become
+      // tickets, and nothing is dispatched for the filing itself.
+      //
+      // The harness files it rather than a desk agent (issue #394), and this arm is
+      // why: the ticket must carry the effective watch label or the funnel never
+      // picks it up, and an agent that forgot it left an item created, a filing
+      // shown complete in the cockpit, and **nothing ever dispatched** — no error,
+      // nothing red. A label the harness passes cannot be forgotten. The body was
+      // already the operator's own words verbatim, so nothing was being delegated
+      // but a title.
       //
       // Fallbacks are today's behaviour: a *desk* blueprint dispatches directly, and
       // a code blueprint with no tracker (`fake`/unconfigured) has nowhere to file,
@@ -91,30 +97,42 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const tracker = kind === 'code' ? trackerCoordinates(system.config) : null;
       if (tracker) {
         const watchLabel = watchLabelFor(config.labelPrefix);
-        const derived = blueprintTicketFields(prompt, tracker, watchLabel);
-        // Desk, not code: filing touches no repository, so a worktree and a branch
-        // would be cut for a task that never writes a file. It is also what stops
-        // this recursing — a desk job is never itself an injected code blueprint.
-        const job = store.createJob({
-          title: providedTitle ?? derived.title,
-          prompt: system.prompts.render('blueprint-ticket', derived.vars),
-          kind: 'desk',
-        });
-        // The desk job's own ref is what it files *for* — there is no prior work
-        // node behind a blueprint, unlike an unrecorded-work filing. The row is how
-        // `link_ticket` resolves the created issue back from the agent's credential
-        // (agent → task → `job:<id>` origin → this filing); the fold then stands the
-        // issue node up and hangs this desk job under it. Job first, then the row, so
-        // a failed create leaves nothing dangling.
-        const filing = store.createWorkItemFiling({ targetRef: `job:${job.id}`, jobId: job.id });
-        // The attachments follow the job that was actually created — here, the
-        // *filing* job. That is what lets them survive the fork: `link_ticket`
-        // resolves this filing from the filing agent's credential, so the same ref
-        // that carries the images is the one that learns the issue number.
-        attach(job.id);
+        const derived = blueprintTicketFields(prompt);
+        const ticketBody = system.prompts.render('blueprint-ticket-body', derived.vars);
+        let ticketRef: string;
+        try {
+          ticketRef = await system.filing({
+            title: providedTitle ?? derived.title,
+            body: ticketBody,
+            // Empty when the watch gate is off (`labelPrefix: ''`), and an empty
+            // label must not be written: the harness then acts on every open issue
+            // and there is nothing to tag.
+            labels: watchLabel ? [watchLabel] : [],
+          });
+        } catch (err) {
+          system.errors.record({
+            source: 'provider',
+            message: `filing a blueprint as a ticket failed: ${(err as Error).message}`,
+          });
+          return reply.code(502).send({ error: `the tracker refused the ticket: ${(err as Error).message}` });
+        }
+        // The images follow the ticket, which is what makes them the *goal's*: every
+        // agent the funnel dispatches for this issue is handed them. Recorded rather
+        // than raised — the ticket exists and the operator asked for it, and losing
+        // the onward visibility of a screenshot is the smaller failure.
+        try {
+          attach(ticketRef);
+        } catch (err) {
+          system.errors.record({
+            source: 'server',
+            message:
+              `The ticket ${ticketRef} was filed but its ${prepared.files.length} attachment(s) could not be ` +
+              `stored: ${(err as Error).message}. Agents working it will not see them.`,
+          });
+        }
         hub.broadcast({ type: 'world:changed' });
         const report = await harness.runCycle('manual');
-        return { ok: true, job, filing, report };
+        return { ok: true, ticketRef, report };
       }
 
       // Refuse a branch a live task already holds, up front (issue #116). The
@@ -136,7 +154,15 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // Fall back to a title derived from the prompt's first line when none is given.
       const title = providedTitle ?? deriveJobTitle(prompt);
       const job = store.createJob({ title, prompt, kind, branch });
-      attach(job.id);
+      // A job whose images failed to land is cancelled rather than left queued
+      // without them: a blueprint that says "make it look like this" without the
+      // "this" is worse than no blueprint at all.
+      try {
+        attach(`job:${job.id}`);
+      } catch (err) {
+        store.cancelJob(job.id);
+        throw err;
+      }
       hub.broadcast({ type: 'world:changed' });
       const report = await harness.runCycle('manual');
       return { ok: true, job, report };

@@ -171,43 +171,6 @@ export class JobStore {
   }
 
   /**
-   * The first index free under `targetRef` — 0 when nothing is attached to it yet.
-   *
-   * A re-key needs this because the destination may already hold images: a filing
-   * agent may link its blueprint to an issue that **already exists** (the one it
-   * decided the blueprint duplicates), and that issue may have arrived through a
-   * blueprint of its own. Renumbering from here is what keeps `UNIQUE(target_ref,
-   * idx)` — and the files' own stems — collision-free.
-   */
-  nextAttachmentIndex(targetRef: string): number {
-    const row = this.ctx.db.prepare(`SELECT MAX(idx) AS max FROM job_attachments WHERE target_ref=?`).get(targetRef) as
-      | { max: number | null }
-      | undefined;
-    return row?.max === null || row?.max === undefined ? 0 : row.max + 1;
-  }
-
-  /**
-   * Move attachment rows onto `targetRef` at their new index and path — the
-   * second half of the re-key `link_ticket` performs when a blueprint becomes a
-   * ticket (issue #249).
-   *
-   * **Rows are rewritten after the files have moved**, never before. The two
-   * halves cannot be made atomic — one is SQLite, the other is a rename — so the
-   * order chooses which way a crash between them fails: files already at their new
-   * paths with rows still naming the old ones is a recoverable inconsistency
-   * nobody reads, while the reverse hands an agent a path that does not resolve,
-   * which is the failure that matters. One transaction, so the rows at least agree
-   * with each other.
-   */
-  rekeyAttachments(targetRef: string, moved: { id: string; index: number; path: string }[]): void {
-    if (moved.length === 0) return;
-    const update = this.ctx.db.prepare(`UPDATE job_attachments SET target_ref=?, idx=?, path=? WHERE id=?`);
-    this.ctx.db.transaction(() => {
-      for (const row of moved) update.run(targetRef, row.index, row.path, row.id);
-    })();
-  }
-
-  /**
    * Forget what was attached to `targetRef` — a blueprint cancelled before it ran,
    * the one case nothing downstream can want. Rows go first and the files after,
    * so an interrupted deletion leaves orphaned bytes rather than a row pointing at

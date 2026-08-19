@@ -497,10 +497,13 @@ them ran the feature.
   body's 400. The cockpit hides the button off the same `canFileTickets` flag, so a 409 means a direct
   call.
 - **It queues a desk job and nothing more.** The `raise-bug` template is rendered with the report
-  verbatim and the tracker coordinates, a `desk` job is created, an `issue_bug_filings` row opens at
-  `filing`, and a manual cycle runs so the report reaches the fleet now rather than on the next
-  heartbeat. The bug exists only once that job's agent has created it and called `link_ticket`
-  ([11](11-mcp-tools.md#link_ticket)).
+  verbatim and the tracker named, duplicate candidates from the ticket mirror are appended to it, a
+  `desk` job is created, an `issue_bug_filings` row opens at `filing`, and a manual cycle runs so the
+  report reaches the fleet now rather than on the next heartbeat. The agent writes the bug up; the
+  **harness** files it — with its type, its assignee and the relation back to this story — when the
+  agent hands over the title and body through `link_ticket` ([11](11-mcp-tools.md#link_ticket)). Two
+  writes are what make a bug traceable, and neither is a sentence an agent could drop
+  ([13](13-jobs-and-findings.md#filing-a-ticket)).
 - **Repeatable.** The filing row is keyed on the job, so a story can carry several bugs — it can be
   wrong in more than one way, and each is its own bug ([14](14-persistence.md)).
 
@@ -680,11 +683,10 @@ silence.
 
 ### `POST /api/work/:ref/file`
 
-Ask an agent to create a tracker item for unrecorded work. The mirror of
-`POST /api/findings/:id/file`, and an **operator click** for that route's reason: creating tracker
-items on the harness's own initiative would be a new outbound capability on the world, and the
-condition would be permanent until acted on, so a throttle would only set the rate at which a backlog
-fills.
+File a tracker item for unrecorded work. The mirror of `POST /api/findings/:id/file`, and an
+**operator click** for that route's reason: creating tracker items on the harness's own initiative
+would be a new outbound capability on the world, and the condition would be permanent until acted on,
+so a throttle would only set the rate at which a backlog fills.
 
 404 when the ref names no node; 409 when a filing already stands for it (naming whether one is in
 flight or already filed); 409 when the node is not unrecorded work; 409 when no tracker is configured,
@@ -693,12 +695,15 @@ asked of the very predicate the panel draws from, so the route can never refuse 
 offered, and it is asked **before** the tracker check, so a deployment with nowhere to file still gives
 the honest answer about a node that was never eligible.
 
-Body may override `title`. Renders the `work-item-ticket` prompt template, creates a **desk** job —
-filing touches no repository, and it is also what stops this recursing, since a desk job is never
-itself unrecorded work — then opens the filing row, broadcasts and runs a cycle. Returns
-`{ ok: true, filing, job, report }`. The node is parented to the new item only once the filing agent
-reports it through `link_ticket`, and then by the **fold**, not by the tool — see
-[11](11-mcp-tools.md) and [14](14-persistence.md#work-item-filings).
+Body may override `title`; the default is the work's own. **No agent and no job**: the item's body was
+already the harness's own walk of the work subtree, so all a desk agent added was one API call
+([13](13-jobs-and-findings.md#filing-a-ticket)). The route claims the filing row first — `target_ref`
+is the primary key, so a double-click loses there rather than after a second ticket exists — renders
+the `work-item-ticket-body` template, files it, links the row, broadcasts and runs a cycle. Returns
+`{ ok: true, filing, report }` with the filing already `filed`. A tracker that refuses the create
+releases the claim and answers **502**, so the button comes back rather than the node sitting on a
+filing that will never complete. The node is parented to the new item by the **fold** on that cycle,
+not by the route — the recorder stays the graph's only writer ([14](14-persistence.md)).
 
 ### `POST /api/work/:ref/ignore`, `DELETE /api/work/:ref/ignore`
 
@@ -709,8 +714,8 @@ representation.
 
 A standing ignore makes `POST /api/work/:ref/file` **409**, asked of the same predicate the panel draws
 from, so the route cannot file a ticket for work the operator has dismissed. It is a table of its own
-rather than a third `work_item_filings` status because that row's `job_id` is `NOT NULL` — a filing is
-an agent doing something, and an ignore is the operator saying nothing should be.
+rather than a third `work_item_filings` status because a filing is the harness creating the item, and
+an ignore is the operator saying nothing should be.
 
 ### `GET /api/prompts`
 
@@ -784,10 +789,11 @@ in the harness, and inventing one for this is a larger decision than making the 
 
 Queue an operator job. See [13](13-jobs-and-findings.md). 400 on a missing/empty prompt, a bad `kind`,
 a non-string `title` or `branch`; **409** when a code job names a branch a live task holds. Returns
-`{ ok: true, job, report }`. A **code** job with a tracker configured is a _blueprint_: it is filed as
-a watched ticket (a desk job + a `WorkItemFiling`) that enters the planning funnel, and returns
-`{ ok: true, job, filing, report }` with `job.kind === 'desk'` — the branch-collision 409 applies only
-to the direct-dispatch arm (a desk job, or a code job with no tracker).
+`{ ok: true, job, report }`. A **code** job with a tracker configured is a _blueprint_: the harness
+files it as a watched ticket that enters the planning funnel and queues **nothing**, returning
+`{ ok: true, ticketRef, report }` with no `job` at all ([13](13-jobs-and-findings.md#filing-a-ticket));
+a tracker that refuses the create answers **502**. The branch-collision 409 applies only to the
+direct-dispatch arm (a desk job, or a code job with no tracker).
 
 **Attachments (issue #249).** The body may carry `attachments: {name?, data}[]` — images the operator
 pasted, dropped or picked in the composer, `data` base64 of the raw file.
@@ -810,9 +816,11 @@ pasted, dropped or picked in the composer, `data` base64 of the raw file.
   under `attachmentRoot`, which removes traversal as a category rather than sanitising it; the
   operator's name is kept as a display label. See [14](14-persistence.md#blueprint-attachments) and
   [09](09-execution.md#an-operators-attachments-reach-the-agent).
-- The images follow **whichever job row this launch creates** — the blueprint itself, or the desk
-  filing job the tracker fork turns it into — and change hands to `issue:<n>` when that filing agent
-  calls `link_ticket`, which is what keeps them in front of the whole planning funnel. See
+- The images are written under **the ref the work ends up on** — `job:<id>` for a blueprint that
+  dispatches, `issue:<n>` for one the harness files as a ticket. The number is known before any byte is
+  written, so nothing is keyed on a job and then moved, and the image is in front of the whole planning
+  funnel from the moment it lands. A create that succeeds and an attachment write that fails is
+  recorded rather than raised: the ticket is what the operator asked for. See
   [14](14-persistence.md#blueprint-attachments).
 
 ### `POST /api/upnext/order`

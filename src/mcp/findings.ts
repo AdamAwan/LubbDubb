@@ -34,8 +34,6 @@
  */
 
 import type { Config } from '../config.js';
-import { ticketAssignment } from '../ticketAssignment.js';
-import { ticketTypeGuidance } from '../ticketTypes.js';
 import type { Finding, FindingInput, FindingKind } from '../types.js';
 
 /**
@@ -180,60 +178,31 @@ export function findingJobRequest(finding: Finding): { title: string; prompt: st
 }
 
 /**
- * Where a filed ticket goes, in the words the filing agent needs.
+ * **Which** tracker the harness files into, named so a prompt can say it — and the
+ * one gate on whether filing is offered at all.
  *
- * A finding can also be **deferred** rather than worked: the operator wants it
- * in the tracker's backlog, not on the fleet. That is the one thing promotion
- * could not do — a queued job either runs or is cancelled, and neither is "deal
- * with this later".
+ * It used to be a `gh`/`az` **command**, composed here and handed to a desk agent
+ * to run in its own shell, because the wording of a ticket is the part an operator
+ * has opinions about and a prompt is where those opinions live. Issue #394 kept the
+ * wording and took the command back: the harness creates the item through
+ * {@link ActionSink.createIssue}, so the type, the labels, the assignee and any
+ * relation are structural rather than a sentence a model has to remember. What is
+ * left is the fact a composing agent genuinely cannot infer from a scratch
+ * directory with no git remote — where its words are going to end up.
  *
- * The agent files it itself (`gh` / `az` in its own shell) rather than the
- * harness posting through a provider seam, because the *wording* of a ticket is
- * the part an operator has opinions about, and a prompt is where those opinions
- * already live (`finding-ticket`, overridable like every other template). What
- * the harness must supply is the one thing an agent cannot infer: **which**
- * tracker. A filing job is a desk job, so it runs in a scratch directory with no
- * git remote for `gh` to read the repo off — hence explicit coordinates, taken
- * from the same config block the `issues` provider is built from, so the ticket
- * lands where the harness reads issues from and nowhere else.
- *
- * Null for the `fake` provider (and for a provider whose config is absent):
- * there is no tracker to file into, and the cockpit hides the button rather than
- * offering one that fails.
- *
- * The **assignee** travels with the coordinates for the same reason the tracker
- * does — a desk agent cannot infer who asked for the work either. See
- * {@link file://../ticketAssignment.ts}; unconfigured, this string reads exactly
- * as it did before.
- *
- * So does the **work item type**, and on a third turn of the same argument: this
- * function used to hardcode `--type Task`, which is the altitude a story is
- * broken down at rather than the altitude a backlog is filed at. Which of the
- * configured types a given report is remains the agent's judgement — see
- * {@link file://../ticketTypes.ts}.
+ * Null for the `fake` provider (and for a provider whose config is absent): there
+ * is no tracker to file into, and the cockpit hides the button rather than offering
+ * one that fails. Every filing route asks this before it does anything else, so the
+ * three that no longer dispatch an agent share the refusal with the one that does.
  */
 export function trackerCoordinates(config: Config): string | null {
   const provider = config.integrations.issues;
-  const assignment = ticketAssignment(config);
-  const assign = assignment?.flag ?? '';
-  const types = ticketTypeGuidance(config);
-  // Type before assignee: the type is the thing being chosen, and the paragraph
-  // about who it belongs to reads after the one about what it is.
-  const note = [types ? `\n\n${types.note}` : '', assignment ? `\n\n${assignment.note}` : ''].join('');
   if (provider === 'github' && config.github) {
-    const slug = `${config.github.owner}/${config.github.repo}`;
-    return (
-      `the GitHub repository ${slug}. Create it with: ` +
-      `gh issue create -R ${slug} --title "<title>" --body "<body>"${assign}${note}`
-    );
+    return `the GitHub repository ${config.github.owner}/${config.github.repo}`;
   }
   if (provider === 'azure' && config.azureDevOps) {
     const { organization, project } = config.azureDevOps;
-    return (
-      `the Azure DevOps project "${project}" in organization "${organization}". Create it with: ` +
-      `az boards work-item create --org https://dev.azure.com/${organization} --project "${project}"` +
-      `${types?.flag ?? ''} --title "<title>" --description "<body>"${assign}${note}`
-    );
+    return `the Azure DevOps project "${project}" in organization "${organization}"`;
   }
   return null;
 }
