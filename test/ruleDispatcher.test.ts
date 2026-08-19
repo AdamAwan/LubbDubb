@@ -164,6 +164,48 @@ test('with a pickup label set, only issues carrying it are dispatched', async ()
   assert.equal((dispatched[0] as { originRef: string }).originRef, 'issue:101');
 });
 
+test("the container-type gate the dispatcher applies is the operator's, not the default pair", async () => {
+  // The constructor used to copy the pickup policy field by field, which dropped
+  // `containerTypes` — so the cockpit honoured the operator's list and the
+  // dispatcher went on gating against `DEFAULT_CONTAINER_TYPES`, silently.
+  const issues = [
+    {
+      id: 'i1',
+      number: 101,
+      title: 'a Feature',
+      body: '',
+      labels: [] as string[],
+      state: 'open' as const,
+      linkedPrNumber: null,
+      issueType: 'Feature',
+    },
+    {
+      id: 'i2',
+      number: 102,
+      title: 'a Widget',
+      body: '',
+      labels: [] as string[],
+      state: 'open' as const,
+      linkedPrNumber: null,
+      issueType: 'Widget',
+    },
+  ];
+
+  const off = await new RuleDispatcher({ containerTypes: [] }).decide(ctx({ issues }));
+  assert.deepEqual(
+    off.actions.filter((a) => a.type === 'dispatch_code_agent').map((a) => (a as { originRef: string }).originRef),
+    ['issue:101', 'issue:102'],
+    'an empty list turns the gate off for both',
+  );
+
+  const renamed = await new RuleDispatcher({ containerTypes: ['Widget'] }).decide(ctx({ issues }));
+  assert.deepEqual(
+    renamed.actions.filter((a) => a.type === 'dispatch_code_agent').map((a) => (a as { originRef: string }).originRef),
+    ['issue:101'],
+    'a process template with its own container name gates on that name alone',
+  );
+});
+
 test('requireOwnLabel: a pickup tag added by someone else does not dispatch', async () => {
   const d = new RuleDispatcher({ watchLabel: 'agent-ready', requireOwnLabel: true });
   const { actions } = await d.decide(
