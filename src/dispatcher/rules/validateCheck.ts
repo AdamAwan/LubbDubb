@@ -5,6 +5,7 @@ import { claimIsLive } from '../../validation/desktop.js';
 import { checkBriefing, validateBranch, validateOrigin } from '../../validation/fleet.js';
 import { validationGoalDir } from '../../validation/resources.js';
 import { liveChecks } from '../../validation/verdict.js';
+import { readOnlyDispatch } from './readOnlyDispatch.js';
 import type { RawAction, StageContext } from './context.js';
 
 /**
@@ -81,11 +82,11 @@ export function validateCheck(s: StageContext): void {
         held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
         action: {
           type: 'dispatch_code_agent',
-          branch: validateBranch(issue.number, check.id),
           // The delivered work is *on* the default branch, so it is the only
           // checkout the check can be run in — `issue-assess`'s argument, and
-          // for the same reason it is not the issue's own branch.
-          base: s.defaultBranch,
+          // for the same reason it is not the issue's own branch. Read-only: the
+          // prompt already says nothing here is to be committed or pushed.
+          ...readOnlyDispatch(validateBranch(issue.number, check.id), s.defaultBranch),
           title,
           // The check itself is **appended**, never interpolated: an operator
           // override that predates this rule would silently drop a new token,
