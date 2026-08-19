@@ -193,6 +193,19 @@ export interface StageContext {
    * stage seeing null here has been run by a caller that ignored the pipeline.
    */
   workItemStates: { inReviewState: string; pickupStates: string[] } | null;
+  /**
+   * Rule `work-item-in-progress`'s config, narrowed the same way and on the same
+   * terms: null unless the operator set an in-progress state *and* non-empty
+   * pickup states, which is what the `workItemInProgress` condition switches that
+   * rule out on. Its own field rather than an optional member of
+   * {@link StageContext.workItemStates}, because the two are independent knobs —
+   * an operator may want "Doing" and no review state, or the reverse.
+   *
+   * `pickupStates` is the *effective* list here too, so the rule sees the state it
+   * writes as one of its own — which is what makes it idempotent by exclusion
+   * rather than by luck.
+   */
+  workItemInProgress: { inProgressState: string; pickupStates: string[] } | null;
 }
 
 /**

@@ -51,9 +51,13 @@ type RuleKind = 'rule' | 'admission' | 'terminal';
  * `workItemStates` is the one that isn't a feature flag: the work-item rules are
  * on when the operator has configured **both** a review state and pickup states,
  * which is a property of `IssuePickupPolicy` rather than a switch of its own.
+ * `workItemInProgress` is the same shape over the other two keys — an in-progress
+ * state and pickup states — and is separate because the two states are separate
+ * knobs: setting one must not switch on the rule that reads the other.
  */
 export interface RuleConditions {
   workItemStates: boolean;
+  workItemInProgress: boolean;
 }
 
 export interface DispatchRule {
@@ -132,7 +136,15 @@ const RULES = [
       'A green, approved, mergeable PR with no open comments is driven the last mile — merged in, gated by the auto-send policy (below the confidence bar it escalates for approval instead).',
   },
 
-  // ---- Tracker state. Opt-in: both a review state and pickup states. --------
+  // ---- Tracker state. Opt-in: pickup states, plus the state each rule moves to.
+  {
+    id: 'work-item-in-progress',
+    kind: 'rule',
+    name: 'Advance to in-progress state',
+    description:
+      'A work item in a pickup state that an agent is actually working — a live task on the goal itself or on one of its plan parts — is moved to the configured in-progress state, so the board shows work in flight where it is rather than sitting in "Ready". It fires off the observed task rather than off the dispatch that started it: a candidate can be cut by headroom or held on cooldown, and parking an item in "Doing" that nobody is working is the failure the rule exists to avoid. Observational and idempotent, so a provider write that was refused is simply attempted again next cycle. It never fires for an item with an open PR or a decomposed one — those belong to the review state, and the two rules are mutually exclusive by construction.',
+    enabled: (c) => c.workItemInProgress,
+  },
   {
     id: 'work-item-in-review',
     kind: 'rule',

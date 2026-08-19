@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  effectivePickupStates,
   issueBranch,
   issuePriority,
   isIssuePickupEligible,
@@ -365,4 +366,49 @@ test('issuePickupStatus: no headroom blocks pickup', () => {
 test('issuePickupStatus: an unimpeded open issue is eligible', () => {
   const v = issuePickupStatus(issue(), ctx());
   assert.deepEqual(v, { eligible: true, status: 'eligible', reasons: [] });
+});
+
+// --------------------------------------------------------------------------
+// The in-progress state, folded into the pickup set.
+// --------------------------------------------------------------------------
+
+test('effectivePickupStates folds the in-progress state into the operator list', () => {
+  assert.deepEqual(effectivePickupStates({ ...SCHEME, pickupStates: ['Ready'], inProgressState: 'Doing' }), [
+    'Ready',
+    'Doing',
+  ]);
+  // The operator listing it themselves — today's documented arrangement — is not
+  // a second entry.
+  assert.deepEqual(effectivePickupStates({ ...SCHEME, pickupStates: ['Ready', 'Doing'], inProgressState: 'Doing' }), [
+    'Ready',
+    'Doing',
+  ]);
+  // The first pickup state is where `work-item-back-to-pickup` returns an item:
+  // the fold appends, so it cannot become the state the harness writes.
+  assert.equal(effectivePickupStates({ ...SCHEME, pickupStates: ['Ready'], inProgressState: 'Doing' })?.[0], 'Ready');
+});
+
+test('effectivePickupStates leaves the gate off: an in-progress state alone is not a pickup list', () => {
+  assert.equal(effectivePickupStates({ ...SCHEME, inProgressState: 'Doing' }), undefined);
+  assert.deepEqual(effectivePickupStates({ ...SCHEME, pickupStates: [], inProgressState: 'Doing' }), []);
+  assert.deepEqual(effectivePickupStates({ ...SCHEME, pickupStates: ['Ready'] }), ['Ready']);
+});
+
+test('an item in the in-progress state is still pickup-eligible', () => {
+  const policy: IssuePickupPolicy = {
+    ...SCHEME,
+    pickupStates: ['Ready'],
+    inProgressState: 'Doing',
+    inReviewState: 'In Review',
+  };
+  // The whole point of the fold: an agent that died without opening a PR left the
+  // item in "Doing", and it must be picked up again rather than stranded there by
+  // the harness's own write.
+  assert.equal(isIssuePickupEligible(issue({ workItemState: 'Doing' }), policy).eligible, true);
+  assert.equal(isIssuePickupEligible(issue({ workItemState: 'Ready' }), policy).eligible, true);
+  // And the states outside both lists are refused exactly as before.
+  assert.deepEqual(isIssuePickupEligible(issue({ workItemState: 'In Review' }), policy).reasons, ['in review']);
+  assert.deepEqual(isIssuePickupEligible(issue({ workItemState: 'New' }), policy).reasons, [
+    'state "New" not in pickup states',
+  ]);
 });

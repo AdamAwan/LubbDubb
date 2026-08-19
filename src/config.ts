@@ -131,6 +131,19 @@ export interface Config {
    */
   issueInReviewState?: string;
   /**
+   * The state a work item is moved to once an agent is actually working it — e.g.
+   * `"Doing"` for Azure DevOps — so a board shows work in flight where it is rather
+   * than sitting in "Ready". Takes effect only alongside `issuePickupStates` and
+   * needs a provider that can write the state back (Azure). Unset (the default) =
+   * no automatic transition.
+   *
+   * The state is folded into the *effective* pickup states, so it does **not** need
+   * listing in `issuePickupStates` — and should not be: an item the harness left
+   * here (an agent that died without opening a PR) stays pickup-eligible either
+   * way, but listing it also lets an assessed item lift its own delivery hold.
+   */
+  issueInProgressState?: string;
+  /**
    * Provider-native item types that *hold* work rather than being work — Azure
    * DevOps Features and Epics. An item of one of these types is never picked up,
    * planned or assayed: its children are the work, and an agent put on the

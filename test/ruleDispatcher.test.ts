@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext, DispatchResult } from '../src/dispatcher/dispatcher.js';
-import type { Action, Decision, DecisionOutcome, PullRequest, WorldSnapshot } from '../src/types.js';
+import type { Action, Decision, DecisionOutcome, PullRequest, Task, WorldSnapshot } from '../src/types.js';
 import { pastTheFunnel } from './support/plans.js';
 
 function ctx(world: Partial<WorldSnapshot>, over: Partial<DispatchContext> = {}): DispatchContext {
@@ -1284,4 +1284,131 @@ test('return-from-review is off unless both pickupStates and inReviewState are s
     }),
   );
   assert.ok(!actions.some((a) => a.type === 'set_work_item_state'));
+});
+
+// --------------------------------------------------------------------------
+// The in-progress transition (rule `work-item-in-progress`). The whole walk is
+// asserted at the `buildSystem` seam in `workItemState.test.ts`; these are the
+// narrow cases a hand-built world says more clearly than a cycle does.
+// --------------------------------------------------------------------------
+
+/** An open work item in a tracked state, with nothing else true of it. */
+function tracked(number: number, workItemState: string): Partial<WorldSnapshot> {
+  return {
+    issues: [
+      {
+        id: `i${number}`,
+        number,
+        title: 'work',
+        body: '',
+        labels: [],
+        state: 'open',
+        workItemState,
+        linkedPrNumber: null,
+      },
+    ],
+  };
+}
+
+/** A live task on an origin, as the fleet would report it mid-run. */
+function runningTask(id: string, originRef: string): Task {
+  return {
+    id,
+    kind: 'code',
+    title: 'work',
+    branch: 'issue/30',
+    originRef,
+    originTitle: 'work',
+    originSummary: null,
+    dispatchReason: 'test',
+    prompt: 'do it',
+    status: 'running',
+    agentId: `a_${id}`,
+    createdAt: 'now',
+    updatedAt: 'now',
+  };
+}
+
+test('in-progress: a live work agent moves the item to the in-progress state', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready'], inProgressState: 'Doing' });
+  const { actions } = await d.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30')] }));
+  const move = actions.find((a) => a.type === 'set_work_item_state');
+  assert.ok(move, 'a transition is emitted');
+  assert.equal((move as { state: string }).state, 'Doing');
+  assert.equal((move as { rule: string }).rule, 'work-item-in-progress');
+});
+
+test('in-progress: a plan part counts as work on the goal', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready'], inProgressState: 'Doing' });
+  const { actions } = await d.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30:part:api')] }));
+  assert.ok(actions.some((a) => a.type === 'set_work_item_state'));
+});
+
+test('in-progress: an assay, a planner or an assessor is not work on the goal', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready'], inProgressState: 'Doing' });
+  for (const origin of ['issue:30:assay', 'issue:30:plan', 'issue:30:assess', 'issue:30:retro']) {
+    const { actions } = await d.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', origin)] }));
+    assert.ok(!actions.some((a) => a.type === 'set_work_item_state'), `${origin} moved the item`);
+  }
+});
+
+test('in-progress: no agent, an open PR, or the state already reached, moves nothing', async () => {
+  const d = new RuleDispatcher({ pickupStates: ['Ready'], inProgressState: 'Doing' });
+  const idle = await d.decide(ctx(tracked(30, 'Ready')));
+  assert.ok(!idle.actions.some((a) => a.type === 'set_work_item_state'), 'a dispatch candidate is not a live agent');
+
+  const withPr = await d.decide(
+    ctx(
+      {
+        ...tracked(30, 'Ready'),
+        pullRequests: [
+          { id: 'p', number: 94, title: 'wip', branch: 'issue/30', ciStatus: 'pending', unresolvedComments: [] },
+        ],
+      },
+      { tasks: [runningTask('t1', 'issue:30')] },
+    ),
+  );
+  assert.ok(!withPr.actions.some((a) => a.type === 'set_work_item_state'), "an open PR is the review state's business");
+
+  const already = await d.decide(ctx(tracked(30, 'Doing'), { tasks: [runningTask('t1', 'issue:30')] }));
+  assert.ok(!already.actions.some((a) => a.type === 'set_work_item_state'), 'the move does not repeat');
+});
+
+test('in-progress is off unless both pickupStates and inProgressState are set', async () => {
+  const noStates = new RuleDispatcher({ inProgressState: 'Doing' });
+  const a = await noStates.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30')] }));
+  assert.ok(!a.actions.some((x) => x.type === 'set_work_item_state'));
+
+  const noProgress = new RuleDispatcher({ pickupStates: ['Ready'] });
+  const b = await noProgress.decide(ctx(tracked(30, 'Ready'), { tasks: [runningTask('t1', 'issue:30')] }));
+  assert.ok(!b.actions.some((x) => x.type === 'set_work_item_state'));
+});
+
+test('the in-progress state keeps an item pickup-eligible, but does not lift a delivery hold', async () => {
+  const delivered = {
+    originRef: 'issue:31',
+    summary: 'shipped',
+    detail: null,
+    by: 'assessor' as const,
+    agentId: null,
+    taskId: null,
+    decidedAt: '2026-07-25T00:00:00.000Z',
+    updatedAt: '2026-07-25T00:00:00.000Z',
+  };
+  // "Doing" is the state the *harness* wrote, so it is not the operator saying
+  // "work this again" — `deliveryHold` reads the configured list, not the folded
+  // one, and the item stays parked.
+  const d = new RuleDispatcher({ pickupStates: ['Ready'], inProgressState: 'Doing' });
+  const parked = await d.decide(ctx(tracked(31, 'Doing'), { deliveries: [delivered] }));
+  assert.ok(
+    !parked.actions.some((a) => a.type === 'dispatch_code_agent'),
+    'a delivered item in the in-progress state stays parked',
+  );
+  // The same item is dispatched again the moment nothing has judged it delivered,
+  // which is what makes the assertion above about the hold rather than the gate.
+  const free = await d.decide(ctx(tracked(31, 'Doing')));
+  assert.ok(
+    free.actions.some((a) => a.type === 'dispatch_code_agent'),
+    'the state gate itself lets "Doing" through',
+  );
 });

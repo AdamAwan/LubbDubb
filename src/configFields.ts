@@ -275,6 +275,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'State an item moves to once a pull request is open for it.',
   },
   {
+    path: 'issueInProgressState',
+    type: 'string',
+    access: 'plain',
+    why: 'State an item moves to once an agent is working it. Do not also list it in the pickup states.',
+  },
+  {
     path: 'issueContainerTypes',
     type: 'stringList',
     access: 'plain',
