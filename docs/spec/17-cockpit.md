@@ -944,6 +944,28 @@ made by the surface that is only supposed to be reporting it. It is a tone and n
 container hue tracks the default names, not the operator's `issueContainerTypes`, so a customised
 container name is uncoloured here while the dispatcher's gate still knows exactly what it is.
 
+### The state is coloured by the operator, never by the harness
+
+A row's state chip is the tracker's own word (`workItemState`) where there is one, and it draws in
+whatever colour the operator gave that word — `issueStateColours`
+([02](02-configuration.md#item-selection-labels-priority-states)), shipped on `CockpitConfig` and read
+through `stateColour` (`web/src/stateColour.ts`). The goal page's header chip reads the same map, so a
+state is one colour wherever it is drawn.
+
+This is the opposite arrangement from the type chip above, and for the same reason. A type has
+_families_ the harness genuinely knows, so it can tint one and fall through on the rest. A state has
+none: `New`, `Doing`, `Worthyable`, `Closed` is one board's vocabulary, the next board renames all four,
+and the cockpit has no reading of which of them matter — only the operator does. So there is no built-in
+scheme to fall through from, and the fall-through is _grey_: an uncoloured state draws exactly as it did
+before the setting existed. Which is the failure the setting answers — a dozen state words rendered as
+one grey is a column you read by squinting.
+
+The lookup folds punctuation and case, so a map written against `In Review` keeps working when the
+tracker reports `in-review`. A malformed colour resolves to no colour rather than reaching the `style`
+attribute: the config route refuses one on the way in, but the map also arrives from a hand-edited
+file. **Frozen keeps its dashed border** whatever colour its state carries — closed in the tracker is a
+fact about the item, not a shade of the state it stopped in.
+
 ### Intake is pulled out, never greyed inside the list
 
 An `unclear` assay is the one intake reading that **stops dispatch** ([06](06-issue-pickup.md)). Among
@@ -1313,6 +1335,10 @@ second copy free to drift:
 | the widget                  | `entry.type` — `configFields.ts` ([02](02-configuration.md#fields))   |
 | applies now / needs restart | `entry.live` — true only where `configApply.ts` holds an arm          |
 | not editable                | `entry.env` (the environment beats the file), or `access: 'fileOnly'` |
+
+A `colourMap` is the one `entry.type` that draws more than a field: `issueStateColours` becomes a
+swatch per state over a `datalist` of the state words the tracker is currently reporting, read off the
+world the page already holds rather than fetched again ([02](02-configuration.md#fields)).
 
 Saving writes `lubbdubb.config.json` and nothing else; the file stays the source of truth and editing it
 by hand lands on the same apply path ([02](02-configuration.md#the-watcher)). A **reset clears the key**

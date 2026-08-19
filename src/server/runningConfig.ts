@@ -107,6 +107,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'azureDevOps',
       'labelPrefix',
       'issuePriorityLabels',
+      'issueStateColours',
       'issueDefaultPriority',
       'issuePickupStates',
       'issueInReviewState',

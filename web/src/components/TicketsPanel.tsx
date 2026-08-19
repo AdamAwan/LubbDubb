@@ -14,6 +14,7 @@ import type {
 import { statePick } from '../cockpit/place.js';
 import { watchBucket } from '../worldBuckets.js';
 import type { CockpitView } from '../view/viewModel.js';
+import { stateColour } from '../stateColour.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Ref, RefLinksExtended } from './refs.js';
 import { fmtUsd, relAge } from './util.js';
@@ -638,7 +639,7 @@ function TicketRowView({
           <WatchSwitch issue={issue} row={row} view={view} actions={actions} />
         </span>
         <span>
-          <StateChip row={row} />
+          <StateChip row={row} colours={view.state.config.stateColours} />
         </span>
         {/* An em dash, not `$0.00`: never worked and worked for free are different
             facts, and a zero would state the wrong one. */}
@@ -697,13 +698,26 @@ function FeatureCell({ row }: { row: TicketRow }): JSX.Element {
   );
 }
 
-/** The tracker's own word where there is one, and the coarse reading where there is not. */
-function StateChip({ row }: { row: TicketRow }): JSX.Element {
+/**
+ * The tracker's own word where there is one, and the coarse reading where there is not.
+ *
+ * The operator's colour wins over the built-in tone, and over nothing at all —
+ * which is the point of the setting: a tracker with a dozen state words draws
+ * eleven of them the same grey, and this is the one place the difference is meant
+ * to be readable at a glance. Frozen keeps its dashed border either way: closed is
+ * a fact about the item, not a shade of its last state.
+ */
+function StateChip({ row, colours }: { row: TicketRow; colours: Readonly<Record<string, string>> }): JSX.Element {
   const label = row.workItemState ?? row.state;
   const tone =
     row.tracking === 'frozen' ? 'frozen' : (row.workItemState ?? row.state).toLowerCase().replace(/\s+/g, '');
+  const colour = stateColour(colours, label);
   return (
-    <i className={`tickets-state ${tone}`} title={`${label} · ${row.tracking} in the harness's reading`}>
+    <i
+      className={`tickets-state ${tone}`}
+      style={colour === null ? undefined : { color: colour, borderColor: colour }}
+      title={`${label} · ${row.tracking} in the harness's reading`}
+    >
       {label}
     </i>
   );
