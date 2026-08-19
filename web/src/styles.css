@@ -3252,7 +3252,6 @@ body {
   word-break: break-word;
 }
 
-
 /* Stacks. Tokens only — the shared-component contract in this file's header.
    The rung column carries a
    left rule rather than a per-rung border, so a stack reads as one run of work
@@ -4103,7 +4102,6 @@ body {
   }
 }
 
-
 /* ---------------------------------------------------------------------------
    The tickets tab as the one work surface (#351): the backlog's controls, its
    feature headings and its intake call-out, folded into the mirror's list.
@@ -4183,6 +4181,38 @@ body {
   color: var(--cn-amber-ink);
 }
 
+/* The tracking axis saying it moved, between the control that moved and the one
+   that moved it — amber because it is a reading of the list that the reader did
+   not ask for, and the button beside it is the way back. */
+.tickets-widened {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 7px 11px;
+  margin-bottom: 8px;
+  border: 1px solid var(--cn-amber-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-amber-bg);
+  font-size: 11.5px;
+  color: var(--cn-amber-ink);
+}
+.tickets-widened button {
+  margin-left: auto;
+  padding: 3px 9px;
+  border: 1px solid var(--cn-amber-line-hi);
+  border-radius: 99px;
+  background: var(--cn-panel-2);
+  font-size: 11.5px;
+  color: var(--cn-fg);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tickets-widened button:hover {
+  border-color: var(--cn-blue-line-hi);
+  background: var(--cn-blue-bg);
+}
+
 /* The tracker's own states, drawn only where the provider has any. */
 .tickets-states,
 .tickets-legend {
@@ -4248,7 +4278,13 @@ body {
   flex: none;
   /* The unassigned case, and the orphan bucket: hatched rather than coloured, so
      "no feature" cannot be mistaken for a feature. */
-  background: repeating-linear-gradient(45deg, var(--cn-line-hi), var(--cn-line-hi) 2px, var(--cn-line) 2px, var(--cn-line) 4px);
+  background: repeating-linear-gradient(
+    45deg,
+    var(--cn-line-hi),
+    var(--cn-line-hi) 2px,
+    var(--cn-line) 2px,
+    var(--cn-line) 4px
+  );
 }
 .tickets-sw {
   width: 8px;
@@ -5538,7 +5574,7 @@ body {
   padding: 3px 6px;
 }
 .pet-rarity {
-  font: 9.5px/1 var(--mono, monospace);
+  font: 9.5px/1 var(--font-mono);
   letter-spacing: 0.1em;
   text-transform: uppercase;
   padding: 3px 5px;
