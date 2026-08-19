@@ -110,8 +110,13 @@ function PetCard({
   // Offering a button that always refuses is worse than not offering it.
   const toNext = pet.beatsToNextStage === null ? 0 : Math.min(pet.beatsToNextStage, balance);
   const dissolved = pet.dissolvedAt !== null;
+  // A pet that does not verify keeps its card and its origin line — nothing here
+  // deletes anything — and loses the three controls that would spend beats on it
+  // or turn it back into beats. The server refuses all three anyway; the card
+  // says so first, because a button that always refuses is worse than no button.
+  const flawed = pet.flaw !== null;
   return (
-    <div className={dissolved ? 'pet-card is-dissolved' : 'pet-card'}>
+    <div className={`pet-card${dissolved ? ' is-dissolved' : ''}${flawed ? ' is-flawed' : ''}`}>
       <div className="pet-frame">
         <PetSprite pet={pet} size={84} beatMs={2400} />
       </div>
@@ -137,6 +142,19 @@ function PetCard({
           Blended {relTime(pet.dissolvedAt ?? pet.hatchedAt, now)} — its record stays.
         </p>
       ) : null}
+      {pet.flaw === null ? null : (
+        <p className="pet-flaw small">
+          <b>Does not check out</b> — {pet.flaw.note}. It stays on the shelf: nothing here is ever deleted, but it
+          cannot be fed, put out or blended.
+        </p>
+      )}
+      {/* Only `modified` says anything. `official` is the ordinary case and needs no
+          badge, and `unknown` — every pet from before the stamp, and every install
+          that is not a git checkout — is a shrug rather than a suspicion, so drawing
+          it would turn an honest collection into a wall of warnings. */}
+      {pet.provenance === 'modified' && pet.flaw === null ? (
+        <p className="pet-origin">Hatched by a build with uncommitted changes.</p>
+      ) : null}
       <div className="pet-meter" title={`${pet.fed.toLocaleString()} beats fed`}>
         <i style={{ width: `${stageFill(pet)}%` }} />
       </div>
@@ -147,7 +165,7 @@ function PetCard({
         </span>
       </div>
       <div className="pet-acts">
-        {dissolved ? null : (
+        {dissolved || flawed ? null : (
           <>
             <AsyncButton className="ghost small" disabled={balance < 100} onClick={() => onFeed(pet.id, 100)}>
               Feed 100

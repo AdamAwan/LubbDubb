@@ -971,6 +971,18 @@ export class Store {
   petActionKeys(): Set<string> {
     return this.pets.petActionKeys();
   }
+  petActionIndex(): Map<string, { at: string; petId: string | null }> {
+    return this.pets.petActionIndex();
+  }
+  petActionLog(): PetAction[] {
+    return this.pets.petActionLog();
+  }
+  petChainLog(): ReturnType<PetStore['petChainLog']> {
+    return this.pets.petChainLog();
+  }
+  petPaidTotals(): Map<string, number> {
+    return this.pets.petPaidTotals();
+  }
   petActionsSinceHatch(): number {
     return this.pets.petActionsSinceHatch();
   }

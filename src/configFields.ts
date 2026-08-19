@@ -357,29 +357,14 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     access: 'plain',
     why: 'Spend above which a run is flagged whatever its comparables say.',
   },
+  // The one pets key there is. The rates used to sit here too, and each of them
+  // was a way of hatching a pet without doing anything — so they are constants in
+  // `src/pets/rules.ts` now, and this page cannot reach them.
   {
     path: 'pets.enabled',
     type: 'boolean',
     access: 'plain',
     why: 'Creatures that hatch from what you do in the cockpit.',
-  },
-  {
-    path: 'pets.beatsPerDollar',
-    type: 'number',
-    access: 'plain',
-    why: 'Beats earned per dollar the fleet has spent. Higher makes every pet quicker to raise.',
-  },
-  {
-    path: 'pets.dropChance',
-    type: 'number',
-    access: 'plain',
-    why: 'Chance one action of yours hatches something. Raise this first on a quiet vivarium.',
-  },
-  {
-    path: 'pets.pity',
-    type: 'number',
-    access: 'plain',
-    why: 'Actions without a hatch before the next one is guaranteed.',
   },
   { path: 'selfUpdate.enabled', type: 'boolean', access: 'plain', why: 'Check this build against its upstream.' },
   { path: 'selfUpdate.remote', type: 'string', access: 'plain', why: 'The remote the build is checked against.' },

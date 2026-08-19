@@ -5,25 +5,39 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { Store } from '../src/store/store.js';
-import { PetKeeper, type PetPolicy } from '../src/pets/keeper.js';
-import { hash32, rollAction } from '../src/pets/roll.js';
+import { PetKeeper } from '../src/pets/keeper.js';
+import { attestPet, provenanceOf, replayBarren, replayChain, type PetLedger } from '../src/pets/attest.js';
+import { hash32, rollAction, speciesCandidates } from '../src/pets/roll.js';
+import { PET_RULES, type PetRules } from '../src/pets/rules.js';
 import { beatsToNextStage, blendValue, petStage, resolveTier, SPECIES } from '../src/pets/catalogue.js';
-import type { PetActionKind } from '../src/types.js';
+import type { Pet, PetActionKind } from '../src/types.js';
 
-const RARITY = { common: 700, uncommon: 200, rare: 80, mythic: 20 };
-const POLICY: PetPolicy = {
-  enabled: true,
-  beatsPerDollar: 25,
-  dropChance: 0.1,
-  pity: 15,
-  rarity: RARITY,
-  blendYield: 500,
-};
-
-function keeper(policy: Partial<PetPolicy> = {}): { store: Store; pets: PetKeeper } {
-  const store = new Store(':memory:');
-  return { store, pets: new PetKeeper(store, { ...POLICY, ...policy }) };
+/** The rates, with whatever this test needs bent. Nothing threads this from config. */
+function rules(over: Partial<PetRules> = {}): PetRules {
+  return { ...PET_RULES, ...over };
 }
+
+function keeper(over: Partial<PetRules> = {}, build = BUILD): { store: Store; pets: PetKeeper } {
+  const store = new Store(':memory:');
+  return { store, pets: new PetKeeper(store, { enabled: true }, rules(over), () => build) };
+}
+
+/** The build the suite pretends to be running, so a stamp does not need a checkout. */
+const BUILD = { sha: 'build_one', clean: true };
+
+/** What the keeper checks a pet against, read straight out of the store. */
+function ledger(store: Store, build = BUILD): PetLedger {
+  return {
+    actions: store.petActionIndex(),
+    paid: store.petPaidTotals(),
+    chain: replayChain(store.petChainLog()),
+    barren: replayBarren(store.petActionLog(), PET_RULES),
+    build,
+  };
+}
+
+/** Every action that can roll, which several tests walk. */
+const KINDS: PetActionKind[] = ['escalation', 'human-task', 'plan', 'landing', 'job', 'finding', 'upgrade'];
 
 /** A settled `ask`: a second kind of action, for the tests that need two. */
 function settle(store: Store, title: string): string {
@@ -46,18 +60,9 @@ function answer(store: Store, prompt: string): string {
 }
 
 test('the roll is a pure function of the action, so re-reading it is free', () => {
-  const first = rollAction('escalation', 'esc_9f2a', '2026-04-12T14:00:00.000Z', {
-    dropChance: 0.5,
-    forced: false,
-    firstEver: false,
-    rarity: RARITY,
-  });
-  const again = rollAction('escalation', 'esc_9f2a', '2026-04-12T14:00:00.000Z', {
-    dropChance: 0.5,
-    forced: false,
-    firstEver: false,
-    rarity: RARITY,
-  });
+  const opts = { rules: rules({ dropChance: 0.5 }), forced: false, firstEver: false };
+  const first = rollAction('escalation', 'esc_9f2a', '2026-04-12T14:00:00.000Z', opts);
+  const again = rollAction('escalation', 'esc_9f2a', '2026-04-12T14:00:00.000Z', opts);
   assert.deepEqual(first, again, 'the same action must always come to the same answer');
   assert.equal(hash32('escalation:esc_9f2a'), hash32('escalation:esc_9f2a'));
 });
@@ -200,7 +205,7 @@ test('turning pets off scans nothing and reports nothing, and deletes nothing', 
   pets.scan();
   assert.equal(store.listPets().length, 1);
 
-  const off = new PetKeeper(store, { ...POLICY, enabled: false });
+  const off = new PetKeeper(store, { enabled: false });
   assert.deepEqual(off.scan(), []);
   assert.equal(off.state(), null, 'the cockpit draws nothing rather than an empty enclosure');
   assert.equal(off.feed('anything', 1).ok, false);
@@ -208,8 +213,7 @@ test('turning pets off scans nothing and reports nothing, and deletes nothing', 
 });
 
 test('every action kind can draw something, so no action is a dead end', () => {
-  const kinds: PetActionKind[] = ['escalation', 'human-task', 'plan', 'landing', 'job', 'finding', 'upgrade'];
-  for (const kind of kinds) {
+  for (const kind of KINDS) {
     const common = resolveTier(kind, 'common', 14);
     assert.ok(common !== null && common.members.length >= 3, `${kind} must carry three commons`);
     assert.ok(
@@ -229,10 +233,9 @@ test('the tier is rolled globally, so rarity is a fact about the deployment', ()
   const counts: Record<string, number> = { common: 0, uncommon: 0, rare: 0, mythic: 0 };
   for (let i = 0; i < 4_000; i++) {
     const roll = rollAction('escalation', `esc_${i}`, '2026-04-12T14:00:00.000Z', {
-      dropChance: 1,
+      rules: rules({ dropChance: 1 }),
       forced: false,
       firstEver: false,
-      rarity: RARITY,
     });
     counts[SPECIES[roll.species].rarity] = (counts[SPECIES[roll.species].rarity] ?? 0) + 1;
   }
@@ -262,16 +265,14 @@ test('pity forces the hatch and never touches the tier', () => {
   for (let i = 0; i < 200; i++) {
     const ref = `job_${i}`;
     const rolled = rollAction('job', ref, '2026-04-12T14:00:00.000Z', {
-      dropChance: 1,
+      rules: rules({ dropChance: 1 }),
       forced: false,
       firstEver: false,
-      rarity: RARITY,
     });
     const forced = rollAction('job', ref, '2026-04-12T14:00:00.000Z', {
-      dropChance: 0,
+      rules: rules({ dropChance: 0 }),
       forced: true,
       firstEver: false,
-      rarity: RARITY,
     });
     assert.equal(forced.species, rolled.species, 'the same action must draw the same animal either way');
     assert.ok(forced.hatches && rolled.hatches);
@@ -282,18 +283,16 @@ test('no common turns up often enough to bore you', () => {
   // One common per pool put `pip` at 70% of hatches on five of the seven actions.
   // Three per pool is what keeps any single animal near a fifth.
   const seen: Record<string, number> = {};
-  const kinds: PetActionKind[] = ['escalation', 'human-task', 'plan', 'landing', 'job', 'finding', 'upgrade'];
-  for (const kind of kinds)
+  for (const kind of KINDS)
     for (let i = 0; i < 700; i++) {
       const roll = rollAction(kind, `${kind}_${i}`, '2026-04-12T14:00:00.000Z', {
-        dropChance: 1,
+        rules: rules({ dropChance: 1 }),
         forced: false,
         firstEver: false,
-        rarity: RARITY,
       });
       seen[roll.species] = (seen[roll.species] ?? 0) + 1;
     }
-  const total = kinds.length * 700;
+  const total = KINDS.length * 700;
   const worst = Math.max(...Object.values(seen)) / total;
   assert.ok(
     worst < 0.3,
@@ -324,7 +323,11 @@ test('blending a duplicate credits beats and keeps the record', () => {
   assert.equal(after.species, victim.species, 'keeping its species');
   assert.equal(after.originRef, victim.originRef, 'and its origin');
   assert.equal(after.placed, false, 'a dissolved pet does not hold a vivarium slot');
-  assert.equal(pets.state()!.wallet.earned, before + blendValue(victim.species, 500), 'the credit lands in the wallet');
+  assert.equal(
+    pets.state()!.wallet.earned,
+    before + blendValue(victim.species, PET_RULES.blendYield),
+    'the credit lands in the wallet',
+  );
 });
 
 test('the last of a species is refused, and a dissolved one cannot be fed or re-blended', () => {
@@ -346,6 +349,273 @@ test('the last of a species is refused, and a dissolved one cannot be fed or re-
   assert.equal(pets.blend(victim.id).ok, false, 'a dissolved pet cannot be blended twice');
   assert.equal(pets.feed(victim.id, 10).ok, false, 'nor fed');
   assert.equal(pets.place(victim.id, true).ok, false, 'nor put out');
+});
+
+// -- Authenticity ------------------------------------------------------------
+
+test('no configuration key can reach the roll', () => {
+  // The cheapest forgery there was: `dropChance: 1` and a rarity table zeroed
+  // everywhere but `mythic` hatches a full vivarium out of one config edit, and
+  // every animal in it arrives through the ordinary scan with a real origin line.
+  // Nothing on any surface can tell that from an earned one, which is why the
+  // rates are constants and this test is structural rather than behavioural.
+  const fields = readFileSync('src/configFields.ts', 'utf8');
+  const paths = [...fields.matchAll(/path: '(pets\.[a-zA-Z]+)'/g)].map((m) => m[1]);
+  assert.deepEqual(paths, ['pets.enabled'], 'the only pets key an operator may set is the switch');
+
+  // And the type says so too, so a key added to the page has nowhere to land.
+  const policy = readFileSync('src/pets/keeper.ts', 'utf8');
+  const shape = /export interface PetPolicy \{([^}]*)\}/.exec(policy)?.[1] ?? '';
+  assert.deepEqual(
+    shape
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0),
+    ['enabled: boolean;'],
+    'PetPolicy holds the switch and nothing that is a number',
+  );
+});
+
+test('an action reaches two or three species, and never the one you wanted', () => {
+  // The load-bearing property behind the whole check: stage 3 is a hash of the
+  // action's own key, so a forger cannot pick the animal — they have to grind for
+  // an origin ref that happens to give it, and the ref has to belong to something
+  // really settled.
+  for (const kind of KINDS) {
+    const reach = speciesCandidates(kind, 'ref_c0ffee', '2026-04-12T14:00:00.000Z');
+    assert.ok(reach.size >= 1 && reach.size <= 4, `${kind} must reach a handful of species, saw ${reach.size}`);
+    assert.ok(reach.size < 20, 'and never the whole catalogue');
+  }
+  // Only `upgrade` carries the mythic at all, so no other action can ever reach it.
+  for (const kind of KINDS)
+    if (kind !== 'upgrade')
+      assert.ok(
+        !speciesCandidates(kind, 'ref_c0ffee', '2026-04-12T14:00:00.000Z').has('ouroboros'),
+        `${kind} must not be a route to the mythic`,
+      );
+});
+
+test('a pet the scan hatched checks out, and one written straight into the table does not', () => {
+  const { store, pets } = keeper({ dropChance: 1 });
+  answer(store, 'a question really answered');
+  const [real] = pets.scan();
+  assert.ok(real);
+  assert.equal(attestPet(real, ledger(store)), null, 'what the scan wrote must verify against what the scan recorded');
+
+  // The cheap forgery: a row in `pets` and nothing else.
+  const forged = store.hatchPet({
+    species: 'ouroboros',
+    seed: 'upgrade:deadbeef',
+    originKind: 'upgrade',
+    originRef: 'deadbeef',
+    hatchedAt: '2026-04-12T14:00:00.000Z',
+  });
+  assert.equal(attestPet(forged, ledger(store))?.code, 'unrecorded', 'nothing rolled it, so nothing accounts for it');
+});
+
+test('a forged pet cannot be laundered back into beats', () => {
+  // Blending is the only route from a creature back into food, so it is the one
+  // refusal that costs an attacker something rather than only themselves. The
+  // forgery here is the *careful* one: a `pet_actions` row written to match, so
+  // only the species gives it away.
+  const { store, pets } = keeper({ dropChance: 1 });
+  answer(store, 'a question really answered');
+  pets.scan();
+  const at = '2026-04-12T14:00:00.000Z';
+  const forged = store.hatchPet({
+    species: 'ouroboros',
+    seed: 'escalation:esc_forged',
+    originKind: 'escalation',
+    originRef: 'esc_forged',
+    hatchedAt: at,
+  });
+  store.recordPetAction({ kind: 'escalation', ref: 'esc_forged', at, petId: forged.id });
+  assert.equal(attestPet(forged, ledger(store))?.code, 'impossible', 'no escalation can ever roll the mythic');
+
+  const blended = pets.blend(forged.id);
+  assert.equal(blended.ok, false);
+  assert.match(blended.ok ? '' : blended.error, /does not check out/, 'refused for what it is, not for being the last');
+  assert.equal(store.getPet(forged.id)?.dissolvedAt, null, 'and not dissolved — nothing here deletes anything');
+  assert.equal(pets.feed(forged.id, 1).ok, false, 'nor fed');
+  assert.equal(pets.place(forged.id, true).ok, false, 'nor put out');
+});
+
+test('a hand-grown pet is caught by what nothing paid for', () => {
+  const { store, pets } = keeper({ dropChance: 1 });
+  answer(store, 'a question really answered');
+  const [pet] = pets.scan();
+  assert.ok(pet);
+  // `fed` is a cache of the purchases beside it, so a column edited to put a
+  // creature two stages along has nothing backing it.
+  const grown: Pet = { ...pet, fed: 99_999 };
+  assert.equal(attestPet(grown, ledger(store))?.code, 'overfed', 'a stage nothing bought is a stage nobody earned');
+});
+
+test('a flaw is drawn, never deleted, and the origin line survives it', () => {
+  // The rule the whole subsystem is built on: nothing is taken away. A pet that
+  // does not verify keeps its row, its species and the night it claims — it simply
+  // stops being feedable, placeable and blendable, and says why on its card.
+  const { store, pets } = keeper({ dropChance: 1 });
+  answer(store, 'a question really answered');
+  pets.scan();
+  const forged = store.hatchPet({
+    species: 'ouroboros',
+    seed: 'upgrade:deadbeef',
+    originKind: 'upgrade',
+    originRef: 'deadbeef',
+    hatchedAt: '2026-04-12T02:00:00.000Z',
+  });
+
+  const state = pets.state();
+  const drawn = state?.pets.find((p) => p.id === forged.id);
+  assert.ok(drawn, 'it is still on the shelf');
+  assert.ok(drawn.flaw !== null, 'and marked');
+  assert.ok(drawn.flaw.note.length > 0, 'with a sentence an operator can act on');
+  assert.equal(drawn.originRef, 'deadbeef', 'keeping the origin line, which is the point of the panel');
+  assert.equal(state?.pets.filter((p) => p.flaw === null).length, 1, 'the earned one is untouched beside it');
+});
+
+test('every pet a long ordinary run produces verifies', () => {
+  // The failure that would matter most is a false positive: an honest operator
+  // told their collection is a forgery. Two kinds of action, a hundred rolls, and
+  // pity firing throughout — everything the scan writes must check out.
+  const { store, pets } = keeper();
+  for (let i = 0; i < 60; i++) {
+    answer(store, `question ${i}`);
+    settle(store, `task ${i}`);
+  }
+  pets.scan();
+  const all = store.listPets();
+  assert.ok(all.length > 0, 'a hundred and twenty actions must produce something to check');
+  for (const pet of all) assert.equal(attestPet(pet, ledger(store)), null, `${pet.species} from ${pet.originRef}`);
+});
+
+test('a pet records the build that rolled it', () => {
+  // Taking the rates out of the config stops the config route to a free vivarium
+  // and stops nothing for somebody editing `src/pets/rules.ts` and restarting.
+  // The stamp is what makes that visible.
+  const { store, pets } = keeper({ dropChance: 1 }, { sha: 'build_one', clean: false });
+  answer(store, 'hatched by a modified build');
+  const [pet] = pets.scan();
+  assert.ok(pet);
+  assert.equal(pet.builtSha, 'build_one');
+  assert.equal(pet.builtClean, false, 'the checkout carried edits, and the row says so');
+  assert.equal(pets.state()?.pets[0]?.provenance, 'modified');
+});
+
+test('the replay accuses only what this same clean build hatched', () => {
+  // The failure worth avoiding above all others: telling an honest operator their
+  // collection is fake, on their machine, months later. A pet decided by constants
+  // this process does not hold is a pet this process may not judge.
+  const at = '2026-04-12T14:00:00.000Z';
+  const { store, pets } = keeper({ dropChance: 1 });
+  answer(store, 'a real one');
+  pets.scan();
+
+  // An action the shipped rules would have hatched nothing on, with a pet against
+  // it anyway — which is what editing the drop chance and restarting looks like.
+  store.recordPetAction({ kind: 'escalation', ref: 'esc_barren', at, petId: null });
+  const log = store.petActionLog();
+  const barren = replayBarren(log, PET_RULES);
+  assert.ok(barren.has('escalation:esc_barren'), 'at the shipped chance, this one hatches nothing');
+
+  // A species that origin really can roll, so the earlier checks pass and the
+  // replay is what is under test.
+  const plausible = [...speciesCandidates('escalation', 'esc_barren', at)][0]!;
+  for (const [claim, expected] of [
+    [{ sha: 'build_one', clean: true }, 'unearned'],
+    [{ sha: 'build_two', clean: true }, undefined],
+    [{ sha: 'build_one', clean: false }, undefined],
+    [{ sha: null, clean: false }, undefined],
+  ] as const) {
+    const forged: Pet = {
+      id: 'pet_forged',
+      species: plausible,
+      seed: 'escalation:esc_barren',
+      name: null,
+      fed: 0,
+      originKind: 'escalation',
+      originRef: 'esc_barren',
+      hatchedAt: at,
+      placed: false,
+      dissolvedAt: null,
+      builtSha: claim.sha,
+      builtClean: claim.clean,
+      chain: null,
+    };
+    const seen = { ...ledger(store), actions: new Map(store.petActionIndex()) };
+    seen.actions.set('escalation:esc_barren', { at, petId: 'pet_forged' });
+    assert.equal(
+      attestPet(forged, seen)?.code,
+      expected,
+      `a pet claiming ${claim.sha ?? 'no build'}${claim.clean ? ' clean' : ' modified'}`,
+    );
+  }
+});
+
+test('an edit anywhere in the collection breaks the chain from there on', () => {
+  const { store, pets } = keeper({ dropChance: 1 });
+  for (let i = 0; i < 4; i++) answer(store, `question ${i}`);
+  pets.scan();
+  const chain = replayChain(store.petChainLog());
+  for (const pet of store.listPets()) assert.equal(pet.chain, chain.get(pet.id), 'what was written is what recomputes');
+
+  // Re-species the second one written, as a hand edit would.
+  const log = store.petChainLog();
+  const victim = log[1]!;
+  const edited = log.map((row) =>
+    row.id === victim.id ? { ...row, link: { ...row.link, species: 'ouroboros' as const } } : row,
+  );
+  const after = replayChain(edited);
+  assert.notEqual(after.get(victim.id), chain.get(victim.id), 'its own link moves');
+  assert.notEqual(after.get(log[3]!.id), chain.get(log[3]!.id), 'and so does every link behind it');
+});
+
+test('a broken link is a flaw, and a missing one is not an accusation', () => {
+  const { store, pets } = keeper({ dropChance: 1 });
+  answer(store, 'a real one');
+  const [pet] = pets.scan();
+  assert.ok(pet);
+
+  const tampered: Pet = { ...pet, chain: 'not the link this row should carry' };
+  assert.equal(attestPet(tampered, ledger(store))?.code, 'broken-chain');
+
+  // A pet from before the chain existed carries no link at all, and every check
+  // that could accuse it declines instead — the whole migration rests on this.
+  const historical: Pet = { ...pet, chain: null };
+  assert.equal(attestPet(historical, ledger(store)), null, 'no link is not a broken link');
+});
+
+test('a database from before the stamp reads as unknown rather than as suspect', () => {
+  // Built against the *old* shape on purpose: a fresh database gets the columns
+  // from `SCHEMA` and would pass without the migration existing.
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-pets-stamp-'));
+  const file = join(dir, 'before-stamps.sqlite');
+  try {
+    const old = new Database(file);
+    old.exec(`CREATE TABLE pets (
+      id TEXT PRIMARY KEY, species TEXT NOT NULL, seed TEXT NOT NULL, name TEXT,
+      fed INTEGER NOT NULL DEFAULT 0, origin_kind TEXT NOT NULL, origin_ref TEXT NOT NULL,
+      hatched_at TEXT NOT NULL, placed INTEGER NOT NULL DEFAULT 0, dissolved_at TEXT,
+      UNIQUE (origin_kind, origin_ref))`);
+    old
+      .prepare(
+        `INSERT INTO pets (id, species, seed, name, fed, origin_kind, origin_ref, hatched_at, placed)
+         VALUES (?,?,?,?,?,?,?,?,?)`,
+      )
+      .run('pet_old', 'pip', 'escalation:esc_1', null, 0, 'escalation', 'esc_1', '2026-01-01T00:00:00.000Z', 1);
+    old.close();
+
+    const store = new Store(file);
+    const pet = store.getPet('pet_old');
+    assert.ok(pet, 'the historical row survives the migration');
+    assert.equal(pet.builtSha, null, 'with no build recorded');
+    assert.equal(pet.builtClean, false);
+    assert.equal(pet.chain, null, 'and no link');
+    assert.equal(provenanceOf(pet), 'unknown', 'which is a shrug, not a suspicion');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('a database from before blending gains the column rather than reading undefined', () => {

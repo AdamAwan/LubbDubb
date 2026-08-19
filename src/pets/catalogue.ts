@@ -38,10 +38,12 @@ export const SPECIES: Record<PetSpecies, { rarity: PetRarity; display: string; g
 
 /**
  * Commonest first, which is the order a degrade walks *backwards* along: a tier a
- * pool cannot fill steps down this list until one has members. Not exported —
- * knip fails `check` on an unimported export, and nothing outside needs the order.
+ * pool cannot fill steps down this list until one has members.
+ *
+ * @public — walked by `speciesCandidates` in `src/pets/roll.ts`, which asks what
+ * every tier of one action resolves to rather than what one roll landed on.
  */
-const RARITIES: readonly PetRarity[] = ['common', 'uncommon', 'rare', 'mythic'];
+export const RARITIES: readonly PetRarity[] = ['common', 'uncommon', 'rare', 'mythic'];
 
 /** Beats to the next stage, before the species' `growth` multiplier. */
 const JUVENILE_AT = 1_500;
@@ -55,8 +57,8 @@ const ADULT_AT = 8_000;
  * hand-tuned tables: a triaged finding produced a rare 23% of the time and an
  * answered escalation 5%, and no sentence beginning "a rare is…" was true of the
  * deployment as a whole. The tier roll now happens once, globally against
- * `pets.rarity`, and this table only answers *which animal* of the tier that was
- * already rolled.
+ * `PET_RULES.rarity`, and this table only answers *which animal* of the tier that
+ * was already rolled.
  *
  * Every action carries **three commons**: the two universals `pip` and `mote`,
  * plus one signature of its own. One common per pool put `pip` at 70% of hatches
@@ -170,8 +172,8 @@ export function resolveTier(
  * per deployment**, not once per kind — per kind it handed out seven guaranteed
  * pets in an afternoon, most of them rare.
  *
- * When removing the commons would leave nothing — a weight table an operator has
- * zeroed everywhere else — the full one is used rather than nothing being drawn.
+ * When removing the commons would leave nothing — a weight table with every other
+ * tier at zero — the full one is used rather than nothing being drawn.
  */
 export function tiersFor(
   weights: Record<PetRarity, number>,

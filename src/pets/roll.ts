@@ -1,5 +1,6 @@
 import type { PetActionKind, PetRarity, PetSpecies } from '../types.js';
-import { resolveTier, tiersFor } from './catalogue.js';
+import { RARITIES, resolveTier, tiersFor } from './catalogue.js';
+import type { PetRules } from './rules.js';
 
 /**
  * FNV-1a, 32-bit. Not a cryptographic choice and does not need to be: what is
@@ -39,8 +40,8 @@ interface RollOutcome {
  * fresh chance at a pet — with nothing anywhere able to tell that from a first
  * read.
  *
- * 1. **Does anything hatch?** `dropChance`, or forced by pity, or the one
- *    guaranteed drop a deployment gets.
+ * 1. **Does anything hatch?** `PET_RULES.dropChance`, or forced by pity, or the
+ *    one guaranteed drop a deployment gets.
  * 2. **Which tier?** One global weighted table, identical for every action, which
  *    is what lets "a rare is 8% of hatches" be true of the deployment rather than
  *    of whichever button was pressed.
@@ -57,15 +58,13 @@ export function rollAction(
   kind: PetActionKind,
   ref: string,
   at: string,
-  opts: { dropChance: number; forced: boolean; firstEver: boolean; rarity: Record<PetRarity, number> },
+  opts: { rules: PetRules; forced: boolean; firstEver: boolean },
 ): RollOutcome {
   const key = `${kind}:${ref}`;
-  // Local, like `job_schedules.cron` — 2am means 2am where the operator was,
-  // not where a server happens to think it is.
-  const hour = new Date(at).getHours();
-  const hatches = opts.forced || opts.firstEver || hash32(key) % 10_000 < Math.round(opts.dropChance * 10_000);
+  const hour = hourOf(at);
+  const hatches = opts.forced || opts.firstEver || hash32(key) % 10_000 < Math.round(opts.rules.dropChance * 10_000);
 
-  const tiers = tiersFor(opts.rarity, opts.firstEver);
+  const tiers = tiersFor(opts.rules.rarity, opts.firstEver);
   const rolled = pickTier(tiers, hash32(`${key}:tier`));
   const landed = resolveTier(kind, rolled, hour);
   // A pool with every tier empty cannot happen through the shipped table, but a
@@ -73,8 +72,54 @@ export function rollAction(
   // the scan.
   if (landed === null) return { hatches: false, species: 'pip', tier: 'common' };
 
-  const species = landed.members[hash32(`${key}:species`) % landed.members.length]!;
-  return { hatches, species, tier: landed.tier };
+  return { hatches, species: pickSpecies(key, landed.members), tier: landed.tier };
+}
+
+/**
+ * Every species this action could *ever* draw, whatever tier stage 2 lands on.
+ *
+ * What {@link attestPet} checks a stored pet against, and the reason it is worth
+ * having beside {@link rollAction} rather than inside it: an attestation must not
+ * depend on the tier weights, because those are a number this build ships and an
+ * older build may have shipped differently — a pet from a deployment that once
+ * tuned them is still an honestly earned pet, and a check that called it a forgery
+ * would take something away from the one operator who had done nothing wrong.
+ *
+ * Weight-independent and still narrow: an origin key reaches two or three species
+ * out of twenty, because stage 3 is a hash of that same key. **You cannot choose
+ * which animal an action gives you**, which is the whole of what the check is for.
+ *
+ * @public — read by `src/pets/attest.ts` across the roll/attest seam.
+ */
+export function speciesCandidates(kind: PetActionKind, ref: string, at: string): Set<PetSpecies> {
+  const key = `${kind}:${ref}`;
+  const hour = hourOf(at);
+  const out = new Set<PetSpecies>();
+  for (const tier of RARITIES) {
+    const landed = resolveTier(kind, tier, hour);
+    if (landed !== null) out.add(pickSpecies(key, landed.members));
+  }
+  return out;
+}
+
+/**
+ * Stage 3, and the only implementation of it.
+ *
+ * Uniform among the tier's members, indexed by the key's own hash — no weights,
+ * because stage 2 has already done the rarity work. Shared with
+ * {@link speciesCandidates} so the check and the roll cannot drift: two readings
+ * of one arithmetic is how an honest pet comes to fail its own attestation.
+ */
+function pickSpecies(key: string, members: readonly PetSpecies[]): PetSpecies {
+  return members[hash32(`${key}:species`) % members.length]!;
+}
+
+/**
+ * The action's own hour, local — like `job_schedules.cron`, 2am means 2am where
+ * the operator was rather than where a server happens to think it is.
+ */
+function hourOf(at: string): number {
+  return new Date(at).getHours();
 }
 
 /** Weighted pick over the tiers, indexed by the hash rather than by a draw. */

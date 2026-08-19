@@ -1,39 +1,29 @@
 import type { Store } from '../store/store.js';
-import type { Pet, PetRarity, PetWallet } from '../types.js';
+import type { Pet, PetWallet } from '../types.js';
 import type { PetState, PetView } from '../wire.js';
 import { VIVARIUM_SLOTS } from '../store/pets.js';
+import { attestPet, provenanceOf, replayBarren, replayChain, type PetLedger } from './attest.js';
+import { buildStamp, type PetBuildStamp } from './build.js';
 import { beatsToNextStage, blendValue, petStage, SPECIES } from './catalogue.js';
 import { rollAction } from './roll.js';
+import { PET_RULES, type PetRules } from './rules.js';
 import { collectActions } from './scan.js';
 
-/** What the operator can tune. Every field is a number an operator can feel. */
+/**
+ * The whole of what an operator may say about pets.
+ *
+ * **One switch, and nothing that is a number.** Every rate this feature runs on
+ * used to be a key here, and each of them was a way of writing a pet into
+ * existence without doing anything — a drop chance of 1, a pity of 1, a rarity
+ * table zeroed everywhere but `mythic`. They now live as constants in
+ * `src/pets/rules.ts`, which is what lets a collection mean the same thing on
+ * every deployment. → `docs/spec/22-pets.md#authenticity`
+ *
+ * `enabled` is safe to keep because off is the one direction that cannot mint
+ * anything: it hides the vivarium and stops the scan, and deletes nothing.
+ */
 export interface PetPolicy {
   enabled: boolean;
-  /** Beats per dollar of fleet spend. Raising it makes every pet cheaper to raise. */
-  beatsPerDollar: number;
-  /** Chance one qualifying operator action hatches something, before pity. */
-  dropChance: number;
-  /**
-   * Actions without a hatch before the next one is forced.
-   *
-   * Set to twice the expected gap (`2 / dropChance`) it is a *ceiling* rather
-   * than a schedule: you can be unlucky, never more than twice-unlucky, and the
-   * roll still decides the great majority of drops. Set near the expected gap it
-   * becomes the schedule instead — at `dropChance` 0.02 and pity 15 it supplied
-   * three pets in four, and lowering the drop chance further moved nothing.
-   */
-  pity: number;
-  /**
-   * The tier weights stage 2 rolls, as whole numbers over their own total.
-   *
-   * Global on purpose: rolling rarity here rather than inside each action's table
-   * is what lets "a rare is 8% of hatches" be a fact about the deployment. An
-   * action whose pool cannot fill a tier degrades downward — it never re-rolls,
-   * and never reaches up.
-   */
-  rarity: Record<PetRarity, number>;
-  /** Beats a blended duplicate hands back, per point of the species' `growth`. */
-  blendYield: number;
 }
 
 /** A refusal the route returns as a 400, or the pet the act produced. */
@@ -44,7 +34,7 @@ type PetResult = { ok: true; pet: Pet } | { ok: false; error: string };
  * decides both.
  *
  * A **lens**. It reads what the operator has already done and writes only its own
- * three tables; nothing it holds is read by a rule, a gate, a rank or a report,
+ * four tables; nothing it holds is read by a rule, a gate, a rank or a report,
  * and `test/pets.test.ts` asserts structurally that `src/dispatcher/` never
  * imports any of it. The day that assertion fails, the fix is the import.
  */
@@ -52,6 +42,23 @@ export class PetKeeper {
   constructor(
     private readonly store: Store,
     private readonly policy: PetPolicy,
+    /**
+     * The rates, which are constants everywhere but here.
+     *
+     * A parameter only so the suite can roll against a certain drop chance instead
+     * of manufacturing a hundred escalations per assertion. **Nothing threads it
+     * from configuration** — `src/system.ts` passes two arguments, and
+     * `test/pets.test.ts` asserts that no config key reaches it.
+     */
+    private readonly rules: PetRules = PET_RULES,
+    /**
+     * Which build is doing the hatching and the judging.
+     *
+     * A parameter for the same reason `rules` is: the suite has to be able to say
+     * "this pet was rolled by this build" without a git checkout underneath it.
+     * The default reads the running install once and remembers it.
+     */
+    private readonly stamp: () => PetBuildStamp = buildStamp,
   ) {}
 
   /**
@@ -79,22 +86,21 @@ export class PetKeeper {
     let anyRolled = seen.size > 0;
     for (const action of fresh) {
       const firstEver = !anyRolled;
-      const forced = sinceHatch + 1 >= this.policy.pity;
-      const roll = rollAction(action.kind, action.ref, action.at, {
-        dropChance: this.policy.dropChance,
-        forced,
-        firstEver,
-        rarity: this.policy.rarity,
-      });
-      const pet = roll.hatches
-        ? this.store.hatchPet({
-            species: roll.species,
-            seed: `${action.kind}:${action.ref}`,
-            originKind: action.kind,
-            originRef: action.ref,
-            hatchedAt: action.at,
-          })
-        : null;
+      const forced = sinceHatch + 1 >= this.rules.pity;
+      const roll = rollAction(action.kind, action.ref, action.at, { rules: this.rules, forced, firstEver });
+      const build = roll.hatches ? this.stamp() : null;
+      const pet =
+        build === null
+          ? null
+          : this.store.hatchPet({
+              species: roll.species,
+              seed: `${action.kind}:${action.ref}`,
+              originKind: action.kind,
+              originRef: action.ref,
+              hatchedAt: action.at,
+              builtSha: build.sha,
+              builtClean: build.clean,
+            });
       this.store.recordPetAction({ kind: action.kind, ref: action.ref, at: action.at, petId: pet?.id ?? null });
       anyRolled = true;
       if (pet) {
@@ -110,7 +116,15 @@ export class PetKeeper {
   /** What the cockpit draws, or null when the feature is off. */
   state(): PetState | null {
     if (!this.policy.enabled) return null;
-    return { pets: this.store.listPets().map((pet) => this.view(pet)), wallet: this.wallet(), slots: VIVARIUM_SLOTS };
+    // One ledger for the whole grid rather than two queries per card: the snapshot
+    // is what the socket redraws, and a per-pet read here is a per-pet read on
+    // every pulse.
+    const ledger = this.ledger();
+    return {
+      pets: this.store.listPets().map((pet) => this.view(pet, ledger)),
+      wallet: this.wallet(),
+      slots: VIVARIUM_SLOTS,
+    };
   }
 
   feed(id: string, beats: number): PetResult {
@@ -122,6 +136,8 @@ export class PetKeeper {
     const existing = this.store.getPet(id);
     if (existing !== null && existing.dissolvedAt !== null)
       return { ok: false, error: 'that one was blended — a dissolved pet keeps its record but stops growing' };
+    const flawed = existing === null ? null : this.refuseFlawed(existing, 'fed');
+    if (flawed !== null) return flawed;
     const pet = this.store.feedPet(id, beats);
     return pet ? { ok: true, pet } : { ok: false, error: 'no such pet' };
   }
@@ -145,6 +161,10 @@ export class PetKeeper {
     const existing = this.store.getPet(id);
     if (placed && existing !== null && existing.dissolvedAt !== null)
       return { ok: false, error: 'that one was blended — a dissolved pet cannot stand in the vivarium' };
+    // Only on the way *in*: a pet that stops verifying while it stands there can
+    // always be taken out again, and refusing that would strand it in the rail.
+    const flawed = placed && existing !== null ? this.refuseFlawed(existing, 'put out') : null;
+    if (flawed !== null) return flawed;
     const pet = this.store.placePet(id, placed);
     return pet ? { ok: true, pet } : { ok: false, error: 'no such pet' };
   }
@@ -161,17 +181,54 @@ export class PetKeeper {
    * Only a **duplicate** may go: blending is a use for a species you already have
    * standing, so the last live one of its kind is refused. That is what keeps this
    * from being a way to lose something.
+   *
+   * And only a pet that **verifies**. This is the single route from a creature back
+   * into beats, so an unchecked one would let a row written straight into the file
+   * be laundered into food for the honest animals beside it.
    */
   blend(id: string): PetResult {
     if (!this.policy.enabled) return { ok: false, error: 'pets are turned off for this deployment' };
     const pet = this.store.getPet(id);
     if (pet === null) return { ok: false, error: 'no such pet' };
     if (pet.dissolvedAt !== null) return { ok: false, error: 'that one has already been blended' };
+    const flawed = this.refuseFlawed(pet, 'blended');
+    if (flawed !== null) return flawed;
     const { display } = SPECIES[pet.species];
     if (this.store.livePetsOfSpecies(pet.species) < 2)
       return { ok: false, error: `this is your only ${display} — blending is for duplicates` };
-    const blended = this.store.blendPet(id, blendValue(pet.species, this.policy.blendYield));
+    const blended = this.store.blendPet(id, blendValue(pet.species, this.rules.blendYield));
     return blended ? { ok: true, pet: blended } : { ok: false, error: 'no such pet' };
+  }
+
+  /**
+   * The refusal a pet that does not verify earns, or null when it does.
+   *
+   * Feeding, placing and blending all go through it, and blending is the one that
+   * matters — the other two only spend beats on something that is not real, which
+   * costs the operator and nobody else.
+   */
+  private refuseFlawed(pet: Pet, act: string): { ok: false; error: string } | null {
+    const flaw = attestPet(pet, this.ledger());
+    if (flaw === null) return null;
+    return { ok: false, error: `that one does not check out — ${flaw.note} — so it cannot be ${act}` };
+  }
+
+  /**
+   * Everything an attestation is made against, built once.
+   *
+   * Four reads and two replays over a few hundred rows — the whole vivarium's
+   * worth, rather than a query and a walk per card. Both replays are a handful of
+   * hashes an action, which is cheap enough to redo on every snapshot rather than
+   * cache into a column nothing can keep in step.
+   */
+  private ledger(): PetLedger {
+    return {
+      actions: this.store.petActionIndex(),
+      paid: this.store.petPaidTotals(),
+      chain: replayChain(this.store.petChainLog()),
+      barren: replayBarren(this.store.petActionLog(), this.rules),
+      build: this.stamp(),
+    };
   }
 
   /**
@@ -182,16 +239,15 @@ export class PetKeeper {
    */
   private wallet(): PetWallet {
     // Fleet spend plus what duplicates have been blended back. The blend credit is
-    // *stored* rather than derived from the dissolved rows, because its value
-    // depends on `blendYield` — deriving it would rewrite history the day an
-    // operator tuned that key, and could take a balance already spent negative.
+    // *stored* rather than derived from the dissolved rows, because a yield this
+    // build ships is not necessarily the yield the credit was granted under.
     const earned =
-      Math.floor(this.store.sumUsageCostSince(EPOCH) * this.policy.beatsPerDollar) + this.store.petBlendCredits();
+      Math.floor(this.store.sumUsageCostSince(EPOCH) * this.rules.beatsPerDollar) + this.store.petBlendCredits();
     const spent = this.store.petBeatsSpent();
     return { earned, spent, balance: Math.max(0, earned - spent) };
   }
 
-  private view(pet: Pet): PetView {
+  private view(pet: Pet, ledger: PetLedger): PetView {
     const { rarity, display } = SPECIES[pet.species];
     return {
       ...pet,
@@ -199,6 +255,8 @@ export class PetKeeper {
       display,
       stage: petStage(pet.species, pet.fed),
       beatsToNextStage: beatsToNextStage(pet.species, pet.fed),
+      flaw: attestPet(pet, ledger),
+      provenance: provenanceOf(pet),
     };
   }
 }

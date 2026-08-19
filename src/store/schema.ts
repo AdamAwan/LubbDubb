@@ -894,6 +894,9 @@ CREATE TABLE IF NOT EXISTS pets (
   hatched_at  TEXT NOT NULL,      -- when the action happened, not when the scan reached it
   placed      INTEGER NOT NULL DEFAULT 0,   -- 0/1: standing in the vivarium
   dissolved_at TEXT,                -- when a duplicate was blended; the row survives it
+  built_sha   TEXT,               -- the harness build that rolled it, or null for no reading
+  built_clean INTEGER NOT NULL DEFAULT 0,  -- 0/1: that build's own tree carried no edits
+  chain       TEXT,               -- this row's link in the hatch chain (see chainLink)
   UNIQUE (origin_kind, origin_ref)
 );
 

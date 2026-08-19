@@ -25,6 +25,7 @@ change that finds pets convenient:
 | Visible to agents    | No prompt mentions pets, no MCP tool touches them, and no agent can read the tables. A score an agent can see is a target it can optimise.                                                                                                                                                                            |
 | A dispatch input     | `src/pets/` is a lens. Nothing under `src/dispatcher/` may import it, for the reason the work graph and `prAttentionStatus` may not — see [05](05-dispatcher.md).                                                                                                                                                     |
 | A reason to spend    | Beats are a rebate on money already gone. Spending more to raise a pet faster is a worse trade than not raising it, and the arithmetic is deliberately that obvious.                                                                                                                                                  |
+| A thing you can dial | Nothing about the rates is configuration. Every rate used to be a key under `pets`, and every one of them wrote pets into existence that were indistinguishable from earned ones. → [Authenticity](#authenticity)                                                                                                     |
 | A thing you can lose | Nothing decays, starves, dies or is taken away. The harness runs unattended by design, and a creature that sulked about a quiet Sunday would be lying about it. Blending is the one thing that ends an animal, and it is the operator's own act on a duplicate — never the harness's, and never the last of its kind. |
 
 ## The two economies
@@ -60,14 +61,17 @@ Every qualifying operator action is rolled exactly once, in **three stages**, an
 
 ```
 hatches = hash32(`${kind}:${ref}`) % 10_000 < dropChance × 10_000   -- or forced, or the first ever
-tier    = weighted pick from pets.rarity,  using hash32(`${kind}:${ref}:tier`)
+tier    = weighted pick from PET_RULES.rarity, using hash32(`${kind}:${ref}:tier`)
 species = uniform pick from the kind's members of that tier, using hash32(`${kind}:${ref}:species`)
 ```
+
+Every number in it comes from `PET_RULES` (`src/pets/rules.ts`) and none of them is a config key —
+see [Authenticity](#authenticity) for why.
 
 **Rarity is rolled once, globally.** It used to be an emergent accident of seven hand-tuned weight
 tables — a triaged finding produced a rare 23% of the time and an answered escalation 5%, so no
 sentence beginning "a rare is…" was true of the deployment. Stage 2 makes it one fact:
-`pets.rarity` is the same table for every action, and only a pool that cannot fill a tier changes
+`PET_RULES.rarity` is the same table for every action, and only a pool that cannot fill a tier changes
 the answer.
 
 Stage 3 is **uniform**, not weighted. Stage 2 has already done the rarity work, and weighting here
@@ -360,12 +364,16 @@ longer new, so **`dissolved_at` has one**, in `PET_COLUMNS`. Without it the colu
 every database from before blending existed, and invisible here means every historical pet reads as
 alive again ([14](14-persistence.md#migrations)).
 
-| Table           | Holds                                                                                                     |
-| --------------- | --------------------------------------------------------------------------------------------------------- |
-| `pets`          | One row per hatched pet. `UNIQUE (origin_kind, origin_ref)` is what makes the scan idempotent.            |
-| `pet_actions`   | One row per operator action rolled, hatched or not, keyed `(kind, ref)`.                                  |
-| `pet_purchases` | One row per beat spent, with the pet it was spent on. The only source of `beatsSpent`.                    |
-| `pet_blends`    | One row per duplicate blended, with what it credited. The only source of the blend half of `beatsEarned`. |
+| Table           | Holds                                                                                                                                               |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pets`          | One row per hatched pet. `UNIQUE (origin_kind, origin_ref)` is what makes the scan idempotent. Also carries `built_sha`, `built_clean` and `chain`. |
+| `pet_actions`   | One row per operator action rolled, hatched or not, keyed `(kind, ref)`.                                                                            |
+| `pet_purchases` | One row per beat spent, with the pet it was spent on. The only source of `beatsSpent`.                                                              |
+| `pet_blends`    | One row per duplicate blended, with what it credited. The only source of the blend half of `beatsEarned`.                                           |
+
+`built_sha`, `built_clean` and `chain` are in `PET_COLUMNS` beside `dissolved_at`, for the same
+reason. Each of them reads as a _weaker_ claim when absent rather than a false one, which is what lets
+a database from before them keep every pet it holds.
 
 **There is no scan cursor.** `pet_actions` is the watermark: an action whose key is already in it is
 skipped rather than re-rolled, which is stronger than a timestamp high-water mark and needs nothing
@@ -378,12 +386,27 @@ transaction, so there is no window in which a pet has been paid for and not grow
 
 ## Configuration
 
-| Key                   | Default | Does                                                         |
-| --------------------- | ------- | ------------------------------------------------------------ |
-| `pets.enabled`        | `true`  | Off stops the scan and hides the vivarium. Nothing is lost.  |
-| `pets.beatsPerDollar` | `25`    | The conversion. Raising it makes every pet cheaper to raise. |
-| `pets.dropChance`     | `0.02`  | Per qualifying action, before pity.                          |
-| `pets.pity`           | `15`    | Actions without a hatch before the next one is forced.       |
+| Key            | Default | Does                                                        |
+| -------------- | ------- | ----------------------------------------------------------- |
+| `pets.enabled` | `true`  | Off stops the scan and hides the vivarium. Nothing is lost. |
+
+**That is the whole of it, and the shortness is the point.** `beatsPerDollar`, `dropChance`, `pity`,
+`rarity` and `blendYield` were all keys here once. Each of them was a way of writing a pet into
+existence without doing anything: `dropChance: 1` hatches on every action, `pity: 1` does the same by
+another road, a `rarity` table zeroed everywhere but `mythic` turns the scarcest animal in the
+catalogue into the only one, and a large enough `beatsPerDollar` raises a whole vivarium on a single
+dollar. None of it reads as cheating from inside the cockpit — the pets arrive through the ordinary
+scan, carry real origin lines, and look exactly like earned ones.
+
+They live in `PET_RULES` (`src/pets/rules.ts`) now, frozen, identical on every deployment:
+
+| Rate             | Value                                            | Does                                                         |
+| ---------------- | ------------------------------------------------ | ------------------------------------------------------------ |
+| `dropChance`     | `0.02`                                           | Per qualifying action, before pity.                          |
+| `pity`           | `100`                                            | Actions without a hatch before one is forced.                |
+| `rarity`         | `{common 700, uncommon 200, rare 80, mythic 20}` | The one tier table stage 2 rolls.                            |
+| `beatsPerDollar` | `25`                                             | The conversion.                                              |
+| `blendYield`     | `500`                                            | Beats a blended duplicate hands back, per point of `growth`. |
 
 The defaults are set so a pet is an event rather than a receipt: one guaranteed drop to open the
 vivarium, and roughly one per thirteen actions after it. At a fleet spending thirty dollars a day an
@@ -391,11 +414,136 @@ adult common is about ten days of feeding.
 
 `dropChance` and `pity` are two limits over one rate, and the **lower one wins** — which is worth
 reading off the arithmetic rather than the table, because the table makes them look independent. At
-`0.02` the roll misses fourteen times running in 75% of streaks, so **three pets in four arrive
-because pity forced them**, and the drop chance has largely stopped being the thing that decides.
-Lowering it further barely moves the rate; raising `pity` is what hands the decision back to the
-roll. An empty vivarium is still the failure mode worth tuning against, so the first move on a quiet
-deployment is `dropChance` up, not `pity` down.
+`0.02` the roll misses ninety-nine times running rarely enough that the roll keeps the decision;
+setting pity near the expected gap is what takes it away. An empty vivarium is the failure mode worth
+watching for, and the answer to one is now a change in this table, in a release everybody gets,
+rather than a dial one deployment turns and the rest do not.
+
+`enabled` survives because off is the one direction that cannot mint anything.
+
+`PetKeeper` takes the rates as a third constructor argument, defaulted to `PET_RULES`. That is a
+**test seam and nothing else** — `src/system.ts` passes two arguments, and `test/pets.test.ts`
+asserts that `configFields.ts` exposes `pets.enabled` alone and that `PetPolicy` holds no number.
+
+## Authenticity
+
+A pet is worth having because of what it cost. So the subsystem answers, for every pet on the shelf,
+whether it is what it says it is — and says so on the card when it is not.
+
+### What this can and cannot be
+
+**Tamper-evident, not tamper-proof, and the difference is worth stating once.** The vivarium lives in
+a SQLite file the operator owns, so nothing here stops somebody writing rows into it. No local check
+can: the verifier and the forger are the same machine, run by the same person, so any secret the
+harness could sign with is a secret that person can read. A design claiming otherwise would be
+lying, and the only real fix — a remote signer holding the private half — would make a decorative
+corner of the rail network-dependent and ship a record of what an operator does off their own box.
+That is a bad trade for this feature and it is not made.
+
+What is achievable is that a forgery has to agree with three tables, a hash chain and the build
+stamp all at once, and that the one thing anybody would forge _for_ — a particular animal — is the
+thing that cannot be chosen.
+
+### Why the roll being a hash is what makes this possible
+
+Stage 3 hashes the action's key under a `:species` salt and indexes the tier's members with it, so
+the animal is a **property of the action's identity** — an origin key reaches two or three species
+out of twenty, and never the one you wanted. A forger has to grind for an origin ref that happens to give them the animal, and that
+ref has to belong to something really settled. The same determinism that makes the scan idempotent
+makes every pet recomputable, which is the whole of the check.
+
+### The six checks
+
+`src/pets/attest.ts`, run per pet against a ledger read once per snapshot — `pet_actions` by key, and
+what `pet_purchases` paid for by pet. No walk of the source tables, so it costs two queries a
+snapshot rather than a query a card.
+
+| Flaw           | Catches                                                                                             |
+| -------------- | --------------------------------------------------------------------------------------------------- |
+| `unrecorded`   | No rolled action claims it. A row appended to `pets` alone fails here, which is the cheap forgery.  |
+| `misdated`     | It hatched at a different moment than the action it names was settled. The hour decides `nocturne`. |
+| `impossible`   | Its species, or its seed, is not something that origin can produce.                                 |
+| `overfed`      | It has grown by more beats than its purchases paid for.                                             |
+| `broken-chain` | Its link, or one before it, does not recompute. Catches an edit and a middle insertion.             |
+| `unearned`     | The shipped rules would have hatched nothing on that action. Raised only against this build's own.  |
+
+The first flaw found is returned rather than all of them: the checks fall over each other, and a
+misdated pet rolls a different hour and would report an impossible species too.
+
+**`impossible` checks against every tier's candidate, not against the tier the roll landed on.**
+Deliberately: the exact tier depends on the weight table, which this build ships and an older build
+may have shipped differently. A pet from a deployment that once tuned `pets.rarity` is still an
+honestly earned pet, and a check that called it a forgery would take something away from the one
+operator who had done nothing wrong. Weight-independent is still narrow — two or three species out of
+twenty — because stage 3 is the hash either way.
+
+### What a flaw costs
+
+**Shown, never deleted.** A flagged pet keeps its row, its species and its origin line, draws with an
+amber note saying which check it failed, and loses three controls: it cannot be fed, put out or
+blended. Nothing is taken away, because a pet that never verified was never earned in the first
+place — the "not a thing you can lose" row above stays honest.
+
+Blending is the refusal that matters. It is the only route from a creature back into beats, so an
+unchecked one would let a hand-written row be laundered into food for the honest animals beside it.
+Feeding and placing only spend beats on something that is not real, which costs the forger and
+nobody else; they are refused for tidiness, not for defence.
+
+`place` refuses only on the way **in**. A pet that stops verifying while it stands in the vivarium
+can always be taken out again, and refusing that would strand it in the rail.
+
+### The chain
+
+Every pet carries `chain`: its identity — id, species, seed, origin, hatch time — SHA-256'd onto the
+link of the row written before it. `pets.name`, `fed`, `placed` and `dissolved_at` are **not** in it,
+because all four move in ordinary use and a chain over them would break on the first rename.
+
+**What it buys, precisely.** A pet cannot be edited, or slipped into the middle of the collection,
+without every link after it going wrong. What it does not buy is protection against an _append_: a
+forger writing the newest row chains onto the newest link as easily as the harness does. That is a
+real limit, and it is why the chain is one check of several rather than the check.
+
+Recomputed in insertion order, never `hatched_at` — a scan settling a backlog writes several pets
+whose hatch times run backwards against the order they were chained in.
+
+### The build stamp, and the replay
+
+Taking the rates out of the config stops an operator dialling a vivarium into existence. It stops
+nothing at all for one willing to edit `src/pets/rules.ts` and restart. Two columns and one replay
+close that.
+
+**Every pet records the build that rolled it** — `built_sha`, the install directory's HEAD, and
+`built_clean`, whether that checkout carried uncommitted changes. The repo asked about is the
+harness's own install, resolved from the module's own path exactly as
+[21](21-self-update.md) does it, and **never `config.repoRoot`**: that is the codebase the fleet is
+pointed at, it is dirty on a feature branch as a matter of course, and gating pets on it would switch
+the vivarium off during normal operation. It reads through `execFileSync` once per process and
+remembers the answer — the scan is synchronous and the install's HEAD cannot move under a running
+build.
+
+Three provenances ride on the wire. `official` and `unknown` draw nothing on the card; only
+`modified` says so, because `unknown` is every pet from before the stamp and every deployment that is
+not a git checkout, and drawing it would turn an honest collection into a wall of warnings.
+
+**The replay** walks `pet_actions` in `rowid` order and asks, of each, whether the shipped constants
+would have hatched anything. A pet against an action they would not have is `unearned`.
+
+Two things about it are load-bearing:
+
+- **It reads the pity counter off the record, not off its own simulation.** A simulated counter that
+  diverges once — one pet hatched under different rates, one restored backup — stays diverged, and
+  every action after it is judged against a history that never happened. Taking the counter from the
+  rows that actually hatched keeps each decision local and correct.
+- **It accuses only a pet stamped by this same clean build.** Anything else was decided by constants
+  this process does not hold. Judging it would mean telling an honest operator their collection is
+  fake, on their machine, months later, over a rate somebody retuned in a release.
+
+### What is not checked
+
+**That the source row still exists.** Verifying an origin against the live escalations, plans and
+findings would mean `collectActions`' seven-table walk on every snapshot, and it would turn a pruned
+or restored source into an accusation. `pet_actions` is append-only and is taken as the evidence
+instead.
 
 ## Sharp edges
 
@@ -403,6 +551,22 @@ deployment is `dropChance` up, not `pity` down.
   temptation is to call the keeper from the route that settles it. That works, and it is also how the
   scan quietly stops being the thing that guarantees delivery — one source recorded at its call site
   and not in the table is a source that pays out only while that route is the one that settles it.
+- **A rate is never a config key again.** Every number in `PET_RULES` is one an operator setting it
+  could use to hatch a vivarium that looks exactly like an earned one, from inside the cockpit, with
+  nothing anywhere able to tell. `test/pets.test.ts` asserts that `pets.enabled` is the only `pets.`
+  path in `configFields.ts` and that `PetPolicy` holds no number — the assertion is the fix, not the
+  thing to loosen.
+- **A check that could accuse a pet must decline on a database it cannot judge.** Three of the six
+  already do: `broken-chain` skips a null link, `unearned` skips anything not stamped by this same
+  clean build, and `impossible` checks every tier's candidate rather than the rolled one. All three
+  exist for one reason — the worst failure this subsystem has is telling an honest operator their
+  collection is fake, and it lands on somebody else's machine, months after the change that caused it,
+  with nothing red anywhere.
+- **A new check in `attest.ts` must be weight-independent, or it accuses honest pets.** The tier
+  weights are a number this build ships; a database from a deployment that ran different ones is full
+  of pets that were properly earned under them. A check that re-derives the exact tier calls every one
+  of those a forgery, on a surface whose whole promise is that nothing is taken away — and it does it
+  silently, on somebody else's machine, months later.
 - **The roll is a hash, and must stay one.** `Math.random` anywhere in `src/pets/roll.ts` turns every
   re-read into a fresh chance at a pet, and the tables have no way to tell that from a first read.
   All three stages hash the same key under different salts, so they stay independent _and_
