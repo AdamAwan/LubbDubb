@@ -36,6 +36,8 @@ test('every place round-trips through the query string', () => {
     at({ plan: 'plan-395' }),
     at({ retro: 'issue:142' }),
     at({ scratchpad: 'issue:142' }),
+    at({ hatch: 'pet_7f2a1c' }),
+    at({ panel: 'pets', hatch: 'pet_7f2a1c' }),
     at({ tab: 'config' }),
     at({ tab: 'config', configTab: 'prompts', configGroup: 'Agents' }),
     at({ spend: true, reliability: true }),

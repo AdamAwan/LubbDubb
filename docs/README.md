@@ -80,7 +80,7 @@ deliberately left unchecked, and why, is in
 | [19](spec/19-development.md)         | Development and quality    | The `check` gate, test seams, the smoke run, build outputs                           |
 | [20](spec/20-validation.md)          | Validation                 | Checks on the delivered goal, resources, the verdict, and the close-out flag         |
 | [21](spec/21-self-update.md)         | Self-update                | The harness's own build: the watch, the drain, the handoff, the supervisor           |
-| [22](spec/22-pets.md)                | Pets                       | The vivarium: what hatches from an operator's actions, beats, growth, the corner     |
+| [22](spec/22-pets.md)                | Pets                       | The vivarium: the eggs an operator's actions drop, hatching, beats, growth, the corner     |
 
 ## Conventions used throughout
 

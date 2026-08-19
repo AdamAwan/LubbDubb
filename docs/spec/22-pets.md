@@ -3,7 +3,8 @@
 `src/pets/`. On by default; `pets.enabled: false` stops the scan and hides the vivarium without
 deleting anything.
 
-A **pet** hatches when you do something in the cockpit. **Beats** accrue from what the fleet spends,
+An **egg** drops when you do something in the cockpit, and a **pet** comes out of it when you click
+it. **Beats** accrue from what the fleet spends,
 and buy the food a pet grows on. One collection per database, so a deployment has one vivarium
 however many projects, profiles or repositories it works across — a pet belongs to the harness, not
 to a corner of it.
@@ -161,6 +162,65 @@ property of the action.
 
 It is the one species whose availability depends on something other than what you were doing.
 
+## The egg
+
+A drop arrives as a **shell**, `pets.opened_at` null, and stays one until the operator clicks it. The
+click writes the stamp, and the cockpit runs the ceremony: three rocks, a crack apiece, a flash, and
+the hatchling.
+
+**Nothing is rolled when the shell comes off.** The species, the tier and the colours were all
+settled by `hash32(kind:ref)` the instant the scan reached the action — the shell withholds them, it
+does not choose them. This is not a detail of the animation, it is the reason the animation is safe
+to have at all: a roll at opening time would move the subsystem's one decision from the action to the
+click, and every guarantee the hash buys goes with it. A re-scan would stop being free, `pet_actions`
+would stop being a sufficient watermark, and two cockpits open on one database would crack the same
+egg into two different creatures.
+
+So an egg is a **reveal over a decided outcome**, and everything downstream follows from that:
+
+- **A second open is a success, not a refusal.** A double click, a retried request and a reloaded
+  link all arrive after the stamp is set, and none of them is the operator getting something wrong.
+  The store's own `opened_at IS NULL` guard means they change nothing either way.
+- **The modal draws from its own clock, never from the snapshot.** The write broadcasts, so the live
+  row turns into a hatchling on whatever pulse the socket delivers — somewhere around the second
+  rock on a quick machine. `HatchModal` therefore holds the shell on until its own sequence says
+  otherwise. Drawing the prop would pop the egg open mid-wobble on one machine and hold it shut to
+  the end on another, and the surface would be right both times.
+- **The chain does not cover it.** `chainLink` hashes what the roll decided; opening is the
+  operator's own act afterwards. Hashing it in would break every link the moment a shell came off,
+  and an honest collection would start reporting `broken-chain` on the pets its owner had just
+  enjoyed most. → [Authenticity](#authenticity)
+- **An egg cannot be fed and cannot be blended.** Both are decisions about a creature, and nobody has
+  been shown one yet — blending especially, since "only a duplicate goes" is a promise about
+  something you have seen twice. It **can** be put out: a shell in the corner of the rail is the
+  whole point of a shell. The flaw check runs *before* the shell check in both, because "open it
+  first" on a forgery is an invitation to carry on.
+- **Nothing expires.** An egg sits for as long as the operator leaves it, the same way nothing else
+  here decays. The enclosure counts them in its bar and the shell stirs every few seconds; that is
+  the loudest this feature gets. → [What it is not](#what-it-is-not)
+
+### What the shell gives away
+
+The tier, and not the species. `mote` and `ouroboros` drop into the same corner of the rail and only
+one of them is worth stopping what you are doing for, so an egg that gave away nothing would make
+every egg the same egg — and one that gave away the animal would leave the click with nothing to
+say. Markings carry the tier, from one speck on a common to a mythic banded end to end, and the
+seed's palette does the rest, so no two eggs of a tier are the same egg either.
+
+The species does ride on the wire from the moment of the drop — it has to, since the reveal is a
+ceremony over something already decided — so **the one place it can leak is the cockpit**, and it
+leaks silently: a component reaching for `pet.species` or `pet.display` on an unopened pet draws the
+answer through the shell with nothing red. `PetSprite` picks the egg grid without consulting the
+species at all, and the panel's name field falls back to `egg` rather than to the species' display
+name, which is the leak that was there first.
+
+### Three reveals, not two
+
+The shell fits the shape the sprites already had. A hatchling shares one grid per tier and the
+juvenile is the first form that says which animal you have — so opening now reveals the **tier**, and
+feeding still reveals the **species**. Each is a thing you wait for, and the wait was always the
+mechanic. → [Why a hatchling has no species](#why-a-hatchling-has-no-species)
+
 ## The catalogue
 
 `src/pets/catalogue.ts`, one exported `SPECIES` const — one const rather than one export per
@@ -279,6 +339,12 @@ They live in `web/src/pets/sprites.ts` and never leave it. The wire carries `spe
 `seed`; what a species looks like is a cockpit fact, and a server that also knew would be a second
 place to change when a sprite changes.
 
+There are four **egg** grids as well, one per tier, and three **crack** overlays drawn over them —
+`c` splits the shell along the outline ink, `k` takes the pixel out. Three grids rather than a
+fracture simulation, indexed by how many times the egg has rocked: the animation is a sequence of
+states, so a run that is interrupted or replayed draws the same shell at the same count rather than
+wherever a physics clock had got to.
+
 ### Why a hatchling has no species
 
 Every species in a rarity tier shares one hatchling grid, so four grids cover all twenty-seven. The
@@ -319,6 +385,18 @@ token layer rather than a `cn-` class.
 The rail is already a flex column with a scrolling list, so the vivarium is a pinned footer: a queue
 longer than the rail scrolls behind it rather than pushing it off the bottom. It is always in frame
 and it never covers anything.
+
+**One button per creature, rather than one over the floor.** The floor was a single button while it
+had a single destination; an egg gives it two — a shell opens its own ceremony, anything else opens
+the panel — and one click cannot have two destinations. Nested buttons are the other way to spell
+that and are not a thing HTML has, so each animal is its own control and the bar underneath carries
+the way in for an empty enclosure. → [17](17-cockpit.md#links)
+
+The ceremony itself is `web/src/components/HatchModal.tsx`, rendered from `App.tsx` beside the other
+shared modals, and **which egg is open is a `Place`** (`?hatch=<pet id>`) rather than a `useState`:
+the back button steps out of it and a reload lands on the creature it named. A reload mid-wobble is a
+reveal rather than a second roll, because there is nothing left to decide by then.
+`prefers-reduced-motion: reduce` skips the sequence and shows the hatchling.
 
 Four pets stand in it, chosen by the operator — and the first four to hatch stand there without
 being asked for, because an empty enclosure under a full queue is exactly what teaches somebody the
@@ -443,6 +521,7 @@ refuses by returning a 400, never by throwing ([16](16-http-api.md#request-valid
 
 | Route                      | Does                                                             |
 | -------------------------- | ---------------------------------------------------------------- |
+| `POST /api/pets/:id/open`  | Cracks a shell. No body, and a repeat is a success.              |
 | `POST /api/pets/:id/feed`  | Spends beats on one pet. Refuses more than the balance.          |
 | `POST /api/pets/:id/name`  | Renames it. An empty name restores the species' display name.    |
 | `POST /api/pets/:id/place` | Puts it in the vivarium or takes it out. Refuses a fifth.        |
@@ -462,11 +541,21 @@ alive again ([14](14-persistence.md#migrations)).
 
 | Table           | Holds                                                                                                                                               |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pets`          | One row per hatched pet. `UNIQUE (origin_kind, origin_ref)` is what makes the scan idempotent. Also carries `built_sha`, `built_clean` and `chain`. |
+| `pets`          | One row per pet, egg or opened. `UNIQUE (origin_kind, origin_ref)` is what makes the scan idempotent. Also carries `opened_at`, `built_sha`, `built_clean` and `chain`. |
 | `pet_actions`   | One row per operator action rolled, hatched or not, keyed `(kind, ref)`.                                                                            |
 | `pet_purchases` | One row per beat spent, with the pet it was spent on. The only source of `beatsSpent`.                                                              |
 | `pet_blends`    | One row per duplicate blended, with what it credited. The only source of the blend half of `beatsEarned`.                                           |
 | `pet_resets`    | One row per clearance, keyed by its name. Its timestamp is the floor `beatsEarned` counts spend from.                                               |
+
+`opened_at` is in `PET_COLUMNS` too, and it is the one column here whose migration is not finished by
+the `ALTER TABLE`. **Null in it means _still an egg_** — so on every existing deployment the added
+column would turn a vivarium raised over months into a crate of anonymous shells, silently and with
+no way back but clicking through the lot. `ensureColumns` therefore reports the columns it actually
+added, and `Store`'s constructor runs `openPetsFromBeforeEggs` only when `pets.opened_at` is among
+them, stamping every historical pet with its own `hatched_at`: a pet from before the shell was
+revealed the moment it dropped, and that is the honest time to give it. Run unconditionally on every
+boot instead, the same backfill would open every egg the operator had deliberately left sitting —
+the identical silence, pointed the other way. → [14](14-persistence.md#migrations)
 
 `built_sha`, `built_clean` and `chain` are in `PET_COLUMNS` beside `dissolved_at`, for the same
 reason. Each of them reads as a _weaker_ claim when absent rather than a false one, which is what lets

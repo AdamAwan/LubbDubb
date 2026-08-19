@@ -81,6 +81,12 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   existed — and invisible is the whole failure: nothing errors. A brand-new table needs no entry,
   but a table being new **once** does not keep it exempt.
   → [14](docs/spec/14-persistence.md#migrations)
+- **A column whose _null means something_ needs a backfill as well as an `ALTER TABLE`, gated on
+  `ensureColumns`' report of what it added.** `pets.opened_at` null spells "still an egg", so the
+  column alone turns every existing vivarium back into a crate of shells on the boot the operator
+  takes the build. A backfill run on _every_ boot is the same silence pointed the other way: it opens
+  the eggs they were saving. Both look like the feature working.
+  → [14](docs/spec/14-persistence.md#when-a-null-means-something)
 - **`VIVARIUM_RESET` in `src/pets/keeper.ts` is never edited in place.** The string names one
   clearance, and `resetOnce` runs it on any database holding no `pet_resets` row under that name —
   so changing it is not a rename, it is a second clearance that releases every operator's whole pet
