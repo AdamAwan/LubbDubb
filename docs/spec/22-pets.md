@@ -602,15 +602,15 @@ a hash and the origin is unique.
 
 `src/pets/scan.ts` holds one table of sources, each naming a store read and how to key a row:
 
-| Kind         | Source                                                         |
-| ------------ | -------------------------------------------------------------- |
-| `escalation` | escalations with an answer                                     |
-| `human-task` | `ask` tasks settled `done` — not declined, and not `close_out` |
-| `plan`       | plans that reached `active`                                    |
-| `landing`    | stack landings recorded                                        |
-| `job`        | jobs launched from the cockpit, which carry no `originRef`     |
-| `finding`    | findings triaged — promoted, filed or dismissed                |
-| `upgrade`    | a self-update applied, keyed on the commit it accepted         |
+| Kind         | Source                                                         | Label                          |
+| ------------ | -------------------------------------------------------------- | ------------------------------ |
+| `escalation` | escalations with an answer                                     | the question it asked          |
+| `human-task` | `ask` tasks settled `done` — not declined, and not `close_out` | the ask's title                |
+| `plan`       | plans that reached `active`                                    | the plan's title               |
+| `landing`    | stack landings recorded                                        | the goal the chain belonged to |
+| `job`        | jobs launched from the cockpit, which carry no `originRef`     | the job's title                |
+| `finding`    | findings triaged — promoted, filed or dismissed                | the claim it made              |
+| `upgrade`    | a self-update applied, keyed on the commit it accepted         | the short sha                  |
 
 Three exclusions are deliberate. A **declined** human task is the operator saying the ask should not
 have been made, and a **`close_out`** one is the harness's own, which the harness also settles — so
@@ -621,6 +621,35 @@ obviously belong to.
 
 Adding a source is an entry in that table and a row in the loot tables. Nothing else changes, and a
 source nobody adds is invisible rather than broken.
+
+#### The label
+
+`origin_ref` is a row id by construction — `esc_Jdt9l826iQ` — so `PetView` carries an `originLabel`
+beside it: the **Label** column above, resolved from the source row and clamped to one line of ninety
+characters. Free text an operator or an agent typed reaches the wire clamped rather than the panel,
+because a paragraph with newlines in it reflows a grid and nothing in `npm run check` draws a card.
+
+Three things about where it is resolved, each of them the reason for the next.
+
+**On the server, not in the browser.** Every source list already rides on `/api/state`, but they are
+all capped — `listFindings(limit = 100)`, `listHumanTasks(limit = 100)`, `listJobs(limit = 100)`,
+`listStackLandings(limit = 50)` — while pets are kept forever. A browser-side join would name this
+week's pets and leave the oldest showing an id, which inverts the one thing the origin line is for.
+
+**Per snapshot, not in a column.** A stored label is a copy that disagrees with the thing it names
+the first time a job is renamed or an escalation reworded. `stage`, `beatsToNextStage`, `flaw` and the
+wallet are all derived for the same reason; this is on that side of the line.
+
+**By id, not by a walk.** `PetKeeper.originLabels` groups the vivarium's refs by kind and asks each
+owning store module for exactly those ids — `escalationLabels`, `humanTaskLabels`, `planLabels`,
+`landingLabels`, `jobLabels`, `findingLabels`, six statements bounded by the collection rather than by
+the deployment's history. `upgrade` reads nothing: its ref is a commit, and the label is that sha
+shortened. Anything that resolved these by re-running `collectActions` would put the seven-table walk
+this subsystem already refused back on every pulse.
+
+`origin_kind` and `origin_ref` do not move for any of this. They are the seed, the input to the
+re-roll in `src/pets/attest.ts` and part of the chain hash — the label sits beside them and is read by
+nothing but the panel.
 
 ## Blending a duplicate
 
@@ -906,6 +935,12 @@ Two things about it are load-bearing:
 findings would mean `collectActions`' seven-table walk on every snapshot, and it would turn a pruned
 or restored source into an accusation. `pet_actions` is append-only and is taken as the evidence
 instead.
+
+The label lookup is not that check wearing a different hat, and must never become it. It asks six
+tables for a handful of ids and its only possible answers are *a line of words* or *nothing*: a ref
+with no row yields `originLabel: null`, the card falls back to the ref it drew before, and the
+attestation never sees it. **A missing source row is no label and never a flaw** — an operator who
+pruned a finding or restored an older database has not forged anything.
 
 ## Sharp edges
 

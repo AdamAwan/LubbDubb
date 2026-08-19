@@ -940,6 +940,7 @@ export function buildDemoState(): DemoSeed {
           beatsToNextStage: 10_400,
           originKind: 'escalation',
           originRef: 'esc_9f2a',
+          originLabel: 'Should the rate-limit park apply to review agents too?',
           hatchedAt: ago(4_320),
           openedAt: ago(4_320),
           placed: true,
@@ -962,6 +963,7 @@ export function buildDemoState(): DemoSeed {
           beatsToNextStage: null,
           originKind: 'human-task',
           originRef: 'htk_31c',
+          originLabel: 'Issue a deploy key for the staging cluster',
           hatchedAt: ago(2_880),
           openedAt: ago(2_880),
           placed: true,
@@ -984,6 +986,7 @@ export function buildDemoState(): DemoSeed {
           beatsToNextStage: 3_250,
           originKind: 'landing',
           originRef: 'land_77b',
+          originLabel: 'stack:413',
           hatchedAt: ago(600),
           openedAt: ago(600),
           placed: true,
@@ -1006,6 +1009,7 @@ export function buildDemoState(): DemoSeed {
           beatsToNextStage: 6_000,
           originKind: 'upgrade',
           originRef: '9c1d4a2',
+          originLabel: '9c1d4a2',
           hatchedAt: ago(90),
           // The demo's one unopened egg: the newest drop, still a shell in the
           // corner of the rail, so the hatch is one click away in the tour.

@@ -284,6 +284,9 @@ export class Store {
   listJobs(limit?: number): Job[] {
     return this.jobs.listJobs(limit);
   }
+  jobLabels(ids: string[]): Map<string, string> {
+    return this.jobs.jobLabels(ids);
+  }
   listQueuedJobs(): Job[] {
     return this.jobs.listQueuedJobs();
   }
@@ -373,6 +376,9 @@ export class Store {
   listFindings(limit?: number): Finding[] {
     return this.findings.listFindings(limit);
   }
+  findingLabels(ids: string[]): Map<string, string> {
+    return this.findings.findingLabels(ids);
+  }
   resolveFinding(
     id: string,
     status: Exclude<FindingStatus, 'open' | 'filed'>,
@@ -416,6 +422,9 @@ export class Store {
   listHumanTasks(limit?: number): HumanTask[] {
     return this.humanTasks.listHumanTasks(limit);
   }
+  humanTaskLabels(ids: string[]): Map<string, string> {
+    return this.humanTasks.humanTaskLabels(ids);
+  }
   listHumanTasksForParts(partIds: string[]): HumanTask[] {
     return this.humanTasks.listHumanTasksForParts(partIds);
   }
@@ -439,6 +448,9 @@ export class Store {
   }
   getPlanByOrigin(originRef: string): Plan | null {
     return this.plans.getPlanByOrigin(originRef);
+  }
+  planLabels(ids: string[]): Map<string, string> {
+    return this.plans.planLabels(ids);
   }
   listPlans(): Plan[] {
     return this.plans.listPlans();
@@ -746,6 +758,9 @@ export class Store {
   listEscalations(): Escalation[] {
     return this.escalations.listEscalations();
   }
+  escalationLabels(ids: string[]): Map<string, string> {
+    return this.escalations.escalationLabels(ids);
+  }
   listOpenEscalations(): Escalation[] {
     return this.escalations.listOpenEscalations();
   }
@@ -777,6 +792,9 @@ export class Store {
   }
   listStackLandings(limit?: number): StackLanding[] {
     return this.landings.listStackLandings(limit);
+  }
+  landingLabels(ids: string[]): Map<string, string> {
+    return this.landings.landingLabels(ids);
   }
   listStandingLandings(): StackLanding[] {
     return this.landings.listStandingLandings();
