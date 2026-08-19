@@ -645,23 +645,27 @@ ordinary check it would restate the same fact as a second concern on the same PR
 origin (`pr:<n>:ci`), carrying the generic CI-fix prompt — the same work with strictly less
 information, and a PR that reads as CI-failing for as long as a review is open.
 
-Work-item linking is `off` by default; promoting it means an agent making writes against a tracker.
-To have an agent fix it:
+`workItems` is `off` by default, and since the harness started **writing the link itself** that is a
+different statement than it used to be. `PrWorkItemDesk` links every pull request the fleet opens to
+the work item it opened it for, mechanically, off a row it already holds
+([07](07-pull-requests.md#linking-the-work-item)) — so the policy is normally satisfied before it is
+ever evaluated, and there is nothing for a check to route. Leaving the kind `off` keeps a gate that
+clears itself out of the dispatcher's sight entirely.
+
+Promote it to `check` when you want the policy **visible** as a check on the PR, or when a class of
+pull request the harness did not open is expected to fail it. Doing so is now a display choice rather
+than an invitation to dispatch, and an `onFailure: "ignore"` rule beside it says so explicitly:
 
 ```jsonc
 {
   "azureDevOps": { "policyChecks": { "workItems": "check" } },
-  "ci": {
-    "checks": [
-      {
-        "match": "Work item linking",
-        "onFailure": "dispatch",
-        "guidance": "Link the work item with `az repos pr work-item add --id <pr> --work-items <n>`. The work item number is the `<n>` in the branch name `issue/<n>`.",
-      },
-    ],
-  },
+  "ci": { "checks": [{ "match": "Work item linking", "onFailure": "ignore" }] },
 }
 ```
+
+Routing it to `dispatch` instead puts a code agent on a link the desk is about to write anyway — a
+model call and a worktree spent rediscovering a number in the branch name. That was the only way to
+clear the gate before the desk existed, and it is what the desk replaced.
 
 No outbound capability is involved: the agent makes the link with a tool it already has, and
 `guidance` is the channel that tells it how.

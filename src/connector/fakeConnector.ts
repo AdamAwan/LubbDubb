@@ -12,6 +12,7 @@ import type {
   PrReplyInput,
   PrTitleInput,
   SendResult,
+  WorkItemLinkInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
@@ -66,6 +67,10 @@ export class FakeConnector implements Connector, ActionSink {
 
   setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
     return this.composite.setWorkItemState(input);
+  }
+
+  linkWorkItem(input: WorkItemLinkInput): Promise<SendResult> {
+    return this.composite.linkWorkItem(input);
   }
 
   upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {

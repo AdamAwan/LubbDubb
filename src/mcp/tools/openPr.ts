@@ -1,6 +1,7 @@
 import { issueOrigin, planOriginIssue } from '../../plans/planning.js';
 import { prTitleFields, renderPrTitle } from '../../prTitle.js';
 import { resolveOpenPr } from '../openPr.js';
+import { linkPrWorkItem } from '../../prWorkItemDesk.js';
 import { seedPrWatch } from '../../prWatchDesk.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
@@ -106,6 +107,18 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
         await seedPrWatch(
           { prNumber, branch: target.branch },
           { sink: wiring.sink, store: deps.store, watchLabel: wiring.watchLabel, errors: deps.errors },
+        );
+        // Linked to its work item in the same breath, for the same reason and through
+        // the same shape: on Azure the reference appended to the body above is prose
+        // and satisfies nothing, so a pull request opened without this is blocked by
+        // the linked-work-items policy from the moment it exists — and the agent that
+        // would be dispatched to clear it would be rediscovering `target.issueNumber`,
+        // which is right here. Recorded through the one shared write path, and after
+        // the create: a failure is recorded and leaves the pull request for the desk,
+        // never failing the tool call that succeeded.
+        await linkPrWorkItem(
+          { prNumber, workItemNumber: target.issueNumber },
+          { sink: wiring.sink, store: deps.store, errors: deps.errors },
         );
       }
       return ok({

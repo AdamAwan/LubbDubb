@@ -125,6 +125,19 @@ export interface AzureDevOpsApi {
   /** Edit an existing work-item comment in place. */
   updateWorkItemComment(id: number, commentId: number, text: string): Promise<AzWorkItemCommentRef>;
 
+  /**
+   * Hang a pull-request artifact link off a work item — the relation the **Check for
+   * linked work items** branch policy reads, and the only thing on Azure that
+   * satisfies it. A `#12` in the description does not; that is a GitHub convention
+   * Azure never adopted.
+   *
+   * Idempotent: a link the work item already carries is a success, not an error.
+   * Azure rejects the duplicate relation with a 400, which the implementation
+   * absorbs — the harness's question is whether the link is there afterwards, and
+   * it is.
+   */
+  linkWorkItemToPull(id: number, pullRequestId: number): Promise<void>;
+
   /** Add (`present`) or remove a `System.Tags` entry on a work item — the watch/ignore toggle. Idempotent. */
   setWorkItemTag(id: number, tag: string, present: boolean): Promise<void>;
   /** Open a pull request. Branch names are plain here; the REST arm adds `refs/heads/`. */

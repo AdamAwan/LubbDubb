@@ -49,6 +49,9 @@ function recordingSink(): { sink: ActionSink; states: WorkItemStateInput[] } {
       states.push(input);
       return { ok: true, ref: 'ok' };
     },
+    async linkWorkItem(): Promise<SendResult> {
+      return { ok: false };
+    },
     async upsertIssueComment(): Promise<SendResult> {
       return { ok: true };
     },
@@ -106,6 +109,9 @@ test('a failing transition is recorded as rejected, not escalated', async () => 
     },
     async setWorkItemState(): Promise<SendResult> {
       throw new Error('boom');
+    },
+    async linkWorkItem(): Promise<SendResult> {
+      return { ok: false };
     },
     async upsertIssueComment(): Promise<SendResult> {
       return { ok: true };

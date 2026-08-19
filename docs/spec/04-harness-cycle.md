@@ -84,10 +84,14 @@ flowchart TD
 2. **Snapshot the world** — `connector.getState()`.
 3. **Record world changes** — diff against the previous snapshot, persist the events, emit
    `world:events`. See below.
-4. **Tag the harness's own pull requests** — `prWatch.run(world)`. See [the watch split](#the-watch-split).
-   A pull request tagged here is worked from the *next* pulse, since the snapshot below was read
-   before the label landed — the same lag the retarget and the reap accept, and one nothing pays on
-   the ordinary path, where `open_pr` tagged it at creation.
+4. **Tag and link the harness's own pull requests** — `prWatch.run(world)`, then
+   `prWorkItems.run(world)`. See [the watch split](#the-watch-split) and
+   [linking the work item](07-pull-requests.md#linking-the-work-item). Two passes in one register:
+   one says the pull request is the fleet's, the other says which work item it is for. Both are
+   idempotent, so a settled world writes nothing. A pull request reached here is worked from the
+   *next* pulse, since the snapshot below was read before either write landed — the same lag the
+   retarget and the reap accept, and one nothing pays on the ordinary path, where `open_pr` did both
+   at creation.
 5. **Reconcile plans** — `plans.reconcile(world)`. This runs **before** `decide`, so a part it moves
    to `ready` is dispatchable in the same cycle. Safe because every fold is idempotent.
 6. **File and settle close-outs** — `closeOuts.run(world)`. A goal with a standing delivery whose
@@ -198,6 +202,13 @@ requests it opened itself, so the pulse seeds the tag: `open_pr` writes it as it
 `issue/<n>/<slug>`, `job/<id>`. Once per pull request, recorded in `pr_watch_seeds`, because an
 operator who takes the tag off must not have it written back on the next pulse.
 → [07](07-pull-requests.md#watching)
+
+**And links its own.** The pass beside it answers the other question a pull request the fleet opened
+owes an answer to — which work item it is for — by writing the tracker link, on the same terms and for
+the same reason: `open_pr` links as it creates, `PrWorkItemDesk` catches the strays, once per pull
+request, recorded in `pr_work_item_links`. It exists because Azure's linked-work-items policy blocks a
+pull request without one and the only thing that used to clear it was a dispatched agent.
+→ [07](07-pull-requests.md#linking-the-work-item)
 
 ## `DispatchContext`
 

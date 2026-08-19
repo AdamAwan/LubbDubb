@@ -110,6 +110,9 @@ function countingSink(fail = false): ActionSink & { merges: number[]; replies: n
     async setWorkItemState() {
       return { ok: true };
     },
+    async linkWorkItem() {
+      return { ok: true };
+    },
     async upsertIssueComment() {
       return { ok: true };
     },

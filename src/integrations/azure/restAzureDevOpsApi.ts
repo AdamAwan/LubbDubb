@@ -267,6 +267,19 @@ export function isSignInHtml(contentType: string | null, body: string): boolean 
 }
 
 /**
+ * Is this rejected PATCH Azure saying the relation is already on the work item?
+ *
+ * Adding a link a work item already carries is a 400, not a 409, and it is the one
+ * 400 the linking path must not surface: the caller asked for a link and the link
+ * is there. Matched on the exception type key rather than the prose, which is
+ * localised — the message is checked too, for a deployment that answers only the
+ * sentence. Pure so it stays unit-testable, like {@link isSignInHtml}.
+ */
+export function isRelationAlreadyExists(message: string): boolean {
+  return /WorkItemRelationAlreadyExists|relation already exists/i.test(message);
+}
+
+/**
  * The real {@link AzureDevOpsApi}: one bound `organization`/`project`/`repository`,
  * all HTTP behind `fetch`, mapping Azure's responses down to the minimal `Az*`
  * shapes the integrations consume. All Azure DevOps HTTP (and auth) lives here —
@@ -277,6 +290,8 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
   private viewer: string | null = null;
   /** The bound project's GUID, resolved once — the policy artifactId needs the id, not the name. */
   private projectId: string | null = null;
+  /** The bound repository's GUID, resolved once — a work-item artifact link needs the id, not the name. */
+  private repositoryId: string | null = null;
 
   constructor(
     private readonly organization: string,
@@ -483,6 +498,19 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       this.projectId = data.id ?? '';
     }
     return this.projectId;
+  }
+
+  /**
+   * Resolve (and cache) the bound repository's GUID. The repositories endpoint takes
+   * a name or an id, exactly as the projects one does, so this works whichever the
+   * operator configured — and a pull-request artifact link needs the id.
+   */
+  private async resolveRepositoryId(): Promise<string> {
+    if (this.repositoryId === null) {
+      const data = await this.request<{ id?: string }>(this.withApiVersion(this.repoUrl));
+      this.repositoryId = data.id ?? '';
+    }
+    return this.repositoryId;
   }
 
   async listPolicyEvaluations(pullRequestId: number): Promise<AzPolicyEvaluation[]> {
@@ -696,6 +724,50 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
       { method: 'PATCH', body: JSON.stringify({ text }) },
     );
     return { id: data.id ?? commentId };
+  }
+
+  /**
+   * The write behind Azure's **Check for linked work items** policy.
+   *
+   * The link is a relation on the *work item*, not a field on the pull request:
+   * Azure derives a pull request's `workItemRefs` from these, and the create-PR
+   * payload's `workItemRefs` is read-only, so there is no way to open a pull request
+   * already linked. Hence a second call, and hence this being a work-item API method
+   * rather than a git one.
+   *
+   * The artifact id is `{projectId}/{repositoryId}/{pullRequestId}` **URL-encoded
+   * into the vstfs path** — the separators are `%2F` inside a single path segment,
+   * not real slashes. Azure stores it exactly as sent, which is why
+   * `linkedPrFromRelations` reads either form: a link a human made through the web
+   * UI comes back the same way, and one written any other way is not a link Azure's
+   * policy recognises.
+   *
+   * A duplicate is absorbed rather than thrown. The desk's row and the world's
+   * `linkedPrNumber` already make a repeat rare, but the two race across a pulse
+   * boundary, and "the link you asked for is there" is not a failure worth an entry
+   * in the operator's Errors panel.
+   */
+  async linkWorkItemToPull(id: number, pullRequestId: number): Promise<void> {
+    const [projectId, repositoryId] = await Promise.all([this.resolveProjectId(), this.resolveRepositoryId()]);
+    const artifactUrl = `vstfs:///Git/PullRequestId/${projectId}%2F${repositoryId}%2F${pullRequestId}`;
+    try {
+      await this.request(this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json-patch+json' },
+        body: JSON.stringify([
+          {
+            op: 'add',
+            path: '/relations/-',
+            // `name` is what the work item's Development section labels the link.
+            // Azure defaults it to the artifact type, so omitting it is not neutral:
+            // the link renders unnamed and reads as somebody's hand-made mistake.
+            value: { rel: 'ArtifactLink', url: artifactUrl, attributes: { name: 'Pull Request' } },
+          },
+        ]),
+      });
+    } catch (err) {
+      if (!isRelationAlreadyExists((err as Error).message)) throw err;
+    }
   }
 
   async setWorkItemTag(id: number, tag: string, present: boolean): Promise<void> {

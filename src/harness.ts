@@ -20,6 +20,7 @@ import type { PlanReconciler } from './plans/planReconciler.js';
 import type { AssayDesk } from './intake/assayDesk.js';
 import type { PrNamingDesk } from './prNamingDesk.js';
 import type { PrWatchDesk } from './prWatchDesk.js';
+import type { PrWorkItemDesk } from './prWorkItemDesk.js';
 import type { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import type { ValidationAskDesk } from './validation/askDesk.js';
 import type { ValidationReadyDesk } from './validation/readyDesk.js';
@@ -75,6 +76,13 @@ interface HarnessDeps {
    * tagged at creation is worked.
    */
   prWatch?: PrWatchDesk;
+  /**
+   * Links the pull requests the harness opened to their work items, so Azure's
+   * linked-work-items policy is satisfied without an agent being spent working out
+   * a number the harness already holds. Absent = no linking, and then only what
+   * `open_pr` linked at creation carries a link.
+   */
+  prWorkItems?: PrWorkItemDesk;
   /**
    * Files the "close the ticket" obligation on a delivered goal, and settles it
    * when the tracker stops listing the item open. Absent = no close-out (tests
@@ -253,6 +261,12 @@ export class Harness extends EventEmitter {
       // reap accept, and it costs nothing on the path that matters: `open_pr` tags a
       // pull request as it creates it, so this is only ever catching the strays.
       await this.deps.prWatch?.run(world);
+      // Beside the tagging and on its terms: the tracker link the harness can supply
+      // from a row, so the linked-work-items policy is cleared without a dispatch.
+      // Idempotent, so a world already linked writes nothing — and the same one-pulse
+      // lag applies, since `open_pr` links a pull request as it opens one and this is
+      // only ever catching the strays.
+      await this.deps.prWorkItems?.run(world);
       // Mechanical bookkeeping, like the plan's status comment: idempotent, so a
       // world already on convention writes nothing.
       await this.deps.naming?.run(world);

@@ -1,6 +1,12 @@
 import { nanoid } from 'nanoid';
 import type { InjectableEvent } from '../../connector/connector.js';
-import type { IssueCommentInput, IssueLabelInput, SendResult, WorkItemStateInput } from '../../sink/actionSink.js';
+import type {
+  IssueCommentInput,
+  IssueLabelInput,
+  SendResult,
+  WorkItemLinkInput,
+  WorkItemStateInput,
+} from '../../sink/actionSink.js';
 import type {
   Capability,
   Injectable,
@@ -8,6 +14,7 @@ import type {
   IssueCommentCapable,
   IssueLabelCapable,
   TicketHistoryCapable,
+  WorkItemLinkCapable,
   WorkItemStateCapable,
   WorldSlice,
 } from '../integration.js';
@@ -23,7 +30,14 @@ const KINDS: ReadonlySet<InjectableEvent['kind']> = new Set(['new_issue', 'issue
  * of an injected fake world.
  */
 export class FakeIssuesIntegration
-  implements Integration, Injectable, WorkItemStateCapable, IssueLabelCapable, IssueCommentCapable, TicketHistoryCapable
+  implements
+    Integration,
+    Injectable,
+    WorkItemStateCapable,
+    WorkItemLinkCapable,
+    IssueLabelCapable,
+    IssueCommentCapable,
+    TicketHistoryCapable
 {
   readonly id = 'issues:fake';
   readonly capability: Capability = 'issues';
@@ -142,6 +156,17 @@ export class FakeIssuesIntegration
       issue.labels = [...labels];
     });
     return { ok: true };
+  }
+
+  /**
+   * Reflect the tracker link into the fake world, exactly as Azure's artifact link
+   * shows up on the next snapshot as `linkedPrNumber`. That is what makes the
+   * linking desk's idempotence testable at the `buildSystem` seam rather than only
+   * in the pure predicate: link once, and the second pulse writes nothing.
+   */
+  async linkWorkItem(input: WorkItemLinkInput): Promise<SendResult> {
+    this.markIssueLinked(input.number, input.prNumber);
+    return { ok: true, ref: `${input.number}->${input.prNumber}` };
   }
 
   /** Reflect an "in review" back-off into the fake world, so the state gate sees it next cycle. */

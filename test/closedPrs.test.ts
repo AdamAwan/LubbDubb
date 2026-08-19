@@ -324,6 +324,7 @@ function azApi(closed: AzClosedPull[], recorded: string[]): AzureDevOpsApi {
     createWorkItemComment: unused,
     updateWorkItemComment: unused,
     setWorkItemTag: unused,
+    linkWorkItemToPull: unused,
   };
 }
 

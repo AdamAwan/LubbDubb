@@ -12,6 +12,7 @@ import type {
   PrReplyInput,
   PrTitleInput,
   SendResult,
+  WorkItemLinkInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { TrackerItem, WorldSnapshot } from '../types.js';
@@ -31,6 +32,7 @@ import {
   isPrTitleCapable,
   isRefResolvable,
   isTicketHistoryCapable,
+  isWorkItemLinkCapable,
   isWorkItemStateCapable,
   type Integration,
 } from './integration.js';
@@ -170,6 +172,18 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     const handler = this.integrations.find(isIssueLabelCapable);
     if (!handler) throw new Error('no integration can label issues (no issues provider is IssueLabelCapable)');
     return handler.setIssueLabel(input);
+  }
+
+  /**
+   * The second outbound act whose missing handler is not an error, for
+   * {@link updatePrBranch}'s reason: a provider that links an issue to a pull
+   * request from the body text (GitHub) needs no relation written, so nothing there
+   * implements this and `ok: false` means "already done", not "failed".
+   */
+  async linkWorkItem(input: WorkItemLinkInput): Promise<SendResult> {
+    const handler = this.integrations.find(isWorkItemLinkCapable);
+    if (!handler) return { ok: false };
+    return handler.linkWorkItem(input);
   }
 
   async setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
