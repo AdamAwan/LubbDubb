@@ -168,6 +168,19 @@
   font-weight: 400;
   letter-spacing: normal;
 }
+/* The compose control wears the link's face, because it is the same offer in the
+   same spot and the operator should not have to learn two of them: only where it
+   lands differs, and that is what the modal's head is for. It borrows `.ext-ref`'s
+   colours through the token layer rather than the class — `console.css` styling
+   `.ext-ref` directly is the one thing this stylesheet is tested not to do — and it
+   wears no `↗`, since it leaves for nowhere. */
+.cn-issue-btn {
+  color: var(--link-ink);
+  padding: 0;
+}
+.cn-issue-btn:hover {
+  color: var(--text);
+}
 .cn-dot {
   width: 7px;
   height: 7px;
