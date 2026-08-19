@@ -340,6 +340,10 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* A flex item's automatic minimum size is its content, so without this the
+     list refuses to shrink below a long queue and pushes the rail's footer off
+     the bottom instead of scrolling. */
+  min-height: 0;
 }
 /* A queue longer than the rail is tall must scroll, not squash: flex items
    shrink by default, and a row shorter than its text hides the ask's goal and
@@ -1572,14 +1576,17 @@ button.cn-grow {
   flex: none;
 }
 
-/* The vivarium: pinned under the rail's scrolling list, so a long queue scrolls
-   behind it rather than pushing it off the bottom. It is the last thing in the
-   rail's flex column and never shrinks, which is the whole of what "always in
-   frame" costs here. */
+/* The vivarium: the rail's footer, below its scrolling list, so a long queue
+   scrolls behind it rather than pushing it off the bottom. It never shrinks,
+   and the `auto` top margin absorbs whatever height the queue leaves over — so
+   a short or empty queue leaves the gap above the enclosure rather than below
+   it, and the corner is the corner at every queue length. Inert when the list
+   already fills the rail. */
 .cn-viv {
   border-top: 1px solid var(--cn-line);
   background: var(--cn-bg);
   flex-shrink: 0;
+  margin-top: auto;
 }
 .cn-viv-floor {
   display: flex;

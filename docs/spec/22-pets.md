@@ -472,9 +472,15 @@ an hour. The period is clamped to a range a heart could plausibly beat at.
 `web/src/components/PetSprite.tsx`, which is shared with the panel and so styles itself through the
 token layer rather than a `cn-` class.
 
-The rail is already a flex column with a scrolling list, so the vivarium is a pinned footer: a queue
-longer than the rail scrolls behind it rather than pushing it off the bottom. It is always in frame
-and it never covers anything.
+**What pins it is one `auto` margin, not the flex column.** The rail is a full-height flex column,
+but nothing in it grows: the list and the vivarium both size to their content, so a short or empty
+queue used to leave the free height *below* the enclosure and it rode up under the last ask row.
+`margin-top: auto` on `.cn-viv` absorbs that free height above it instead, which puts the enclosure
+on the rail's floor at every queue length and is inert when the list already fills the rail. The
+list carries `min-height: 0` so it is still allowed to shrink below its content and scroll when the
+queue is long — a queue longer than the rail scrolls behind the vivarium rather than pushing it off
+the bottom. It stays in flow, so it is always in frame and never covers anything: absolute
+positioning would reserve no space and leave the last ask row permanently half-hidden.
 
 **One button per creature, rather than one over the floor.** The floor was a single button while it
 had a single destination; an egg gives it two — a shell opens its own ceremony, anything else opens
@@ -493,7 +499,7 @@ being asked for, because an empty enclosure under a full queue is exactly what t
 corner is decoration. Putting out a fifth is refused rather than silently swapping one out: evicting
 whoever was there is the cockpit deciding something the operator did not. Clicking it opens the panel.
 
-Four rather than all of them because the rail is 268 pixels wide and a vivarium that scrolled would
+Four rather than all of them because the rail is a single narrow column and a vivarium that scrolled would
 be a second queue in the one place on the screen reserved for the first.
 
 ## The panel
