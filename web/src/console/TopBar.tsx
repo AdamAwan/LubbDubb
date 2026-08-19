@@ -2,11 +2,28 @@ import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { FleetControl } from '../components/FleetControl.js';
+import { ExtLink } from '../components/util.js';
 import { untriagedCount } from '../worldBuckets.js';
 import { productionReading } from '../view/production.js';
 
 /** The nav's destinations, in reading order — the order the tabs are drawn in. */
 const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets'];
+
+/**
+ * Where a bug in LubbDubb goes — fixed, and deliberately not derived from
+ * `github.owner`/`github.repo`.
+ *
+ * Those name the repo this harness *works on*, which is LubbDubb only while it is
+ * dogfooding itself. A fault in the cockpit belongs on the cockpit's own tracker
+ * whatever repo the fleet happens to be pointed at, so a deployment driving a
+ * customer's repo — or a fork — is sent here too. That is the trade: the link is
+ * about the tool, not about the work, and nothing on the wire has to carry it.
+ *
+ * It lands on the *form* rather than the repo or the issue list, because the whole
+ * point is the number of clicks between noticing something and having written it
+ * down (#404).
+ */
+const NEW_ISSUE_URL = 'https://github.com/AdamAwan/LubbDubb/issues/new';
 
 export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
@@ -62,6 +79,40 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
         </button>
       ))}
     </nav>
+  );
+}
+
+/**
+ * The wordmark, the link lamp, and the one thing on this bar that is about
+ * LubbDubb rather than about the work.
+ *
+ * A component rather than markup in `TopBar` because **both** arms draw it — the
+ * live bar and the dropped-socket one. A socket that just went down is a moment an
+ * operator has something to report, and a way to report it that is only there when
+ * the harness is healthy is missing exactly then. The lamp is the only thing that
+ * differs between the two: green from the stylesheet, red inline when the link is
+ * gone.
+ *
+ * The link sits here and not among the readings for the reason the readings are a
+ * group at all — every one of them is a gauge on the fleet or on this build, read
+ * left to right as one sentence about what is happening. "Raise an issue" answers
+ * nothing about the fleet, and a tenth chip in a group that already wraps at laptop
+ * widths would cost a line to say so.
+ */
+function Ident({ view }: { view: CockpitView }): JSX.Element {
+  return (
+    <div className="cn-ident">
+      <i className="cn-dot" style={view.connected ? undefined : { background: 'var(--cn-red)' }} />
+      LubbDubb
+      {view.demo && <span style={{ color: 'var(--cn-fg-faint)', fontWeight: 400 }}>· demo</span>}
+      {/* `.cn-issue` is the console's own hook for sizing the link out of the
+          wordmark — see `console.css`; it styles nothing `ExtLink` owns. */}
+      <span className="cn-issue">
+        <ExtLink href={NEW_ISSUE_URL} title="Raise an issue on the LubbDubb repo">
+          Raise an issue
+        </ExtLink>
+      </span>
+    </div>
   );
 }
 
@@ -179,7 +230,8 @@ function Build({ view, actions }: { view: CockpitView; actions: CockpitActions }
 /**
  * The control-room strip: ident, the nav, the pulse, the fleet cap, and seven
  * readings. The nav is here because this is the only row of the shell that never
- * scrolls — everything else lives inside `.cn-sit`, which does.
+ * scrolls — everything else lives inside `.cn-sit`, which does. The ident carries
+ * the one link that leaves for LubbDubb's own tracker ({@link Ident}).
  *
  * Each reading is one subject stated once, mirroring `StatusBar`'s rule but
  * with the mockup's plain text-and-number face — the console has no icon set of
@@ -203,10 +255,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
   if (!view.connected) {
     return (
       <div className="cn-bar">
-        <div className="cn-ident">
-          <i className="cn-dot" style={{ background: 'var(--cn-red)' }} />
-          LubbDubb
-        </div>
+        <Ident view={view} />
         <div className="cn-read">
           <span>Link</span>
           <b>offline</b>
@@ -236,11 +285,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
 
   return (
     <div className="cn-bar">
-      <div className="cn-ident">
-        <i className="cn-dot" />
-        LubbDubb
-        {view.demo && <span style={{ color: 'var(--cn-fg-faint)', fontWeight: 400 }}>· demo</span>}
-      </div>
+      <Ident view={view} />
       <div className="cn-sep" />
 
       <Nav view={view} actions={actions} />
