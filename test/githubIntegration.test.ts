@@ -47,7 +47,13 @@ interface Script {
   /** What `listIssuesChangedSince` was asked from, in call order. */
   historySince?: string[];
   timeline?: Record<number, GhTimelineEvent[]>;
-  throwOn?: 'listOpenPulls' | 'listOpenIssues' | 'listPullReviewThreads' | 'updatePullBranch' | 'getJobLog';
+  throwOn?:
+    | 'listOpenPulls'
+    | 'listOpenIssues'
+    | 'listPullReviewThreads'
+    | 'updatePullBranch'
+    | 'getJobLog'
+    | 'viewerLogin';
   /** Check-run annotations by check-run id — the structured half of CI evidence. */
   annotations?: Record<number, GhAnnotation[]>;
   /** Actions job logs by job id — the fallback half. */
@@ -138,6 +144,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
       return script.missingBranches?.includes(branch) !== true;
     },
     async viewerLogin() {
+      if (script.throwOn === 'viewerLogin') throw new Error('Bad credentials');
       return script.viewer ?? 'lubbdubb-bot';
     },
     async listOpenPulls() {
@@ -649,6 +656,25 @@ test('sourceControl resolves refs to canonical URLs using its owner/repo', () =>
   assert.equal(sc.resolveRefUrl('issue:13'), 'https://github.com/octo/demo/issues/13');
   assert.equal(sc.resolveRefUrl('epic:e1:groom'), null);
   store.close();
+});
+
+test('the filing-target probe names the repository and the authenticated login', async () => {
+  const { api } = fakeApi({ viewer: 'adamawan' });
+  const issues = new GitHubIssuesIntegration({ api, owner: 'octo', repo: 'demo' });
+
+  // `viewerLogin` rather than a call invented for this: it is the one authenticated
+  // round trip a revoked token fails outright, which is the only thing about filing
+  // that boot cannot already prove (issue #413).
+  assert.deepEqual(await issues.describeFilingTarget(), { target: 'octo/demo', identity: 'adamawan' });
+});
+
+test('a filing-target probe on a dead credential throws rather than reporting a target', async () => {
+  const { api } = fakeApi({ throwOn: 'viewerLogin' });
+  const issues = new GitHubIssuesIntegration({ api, owner: 'octo', repo: 'demo' });
+
+  // The route turns this into `available: false` with the reason; the provider's
+  // job is to fail loudly rather than answer a target it cannot write to.
+  await assert.rejects(issues.describeFilingTarget(), /Bad credentials/);
 });
 
 test('issues provider is also a ref resolver', () => {

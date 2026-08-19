@@ -583,6 +583,54 @@ requirement, and it is kept on the run as `dismissNote` so what the goal owed an
 it survive together. A clear goal, or one with no checks at all, is dismissed with no body as before.
 → [20](20-validation.md)
 
+### `GET /api/issues/filing-target`
+
+Whether the harness can file an issue right now, where it would land and as whom — the live half of
+the gate on the top bar's compose modal (issue #413). Answers a `FilingTargetProbe`:
+`{available: true, target, identity, reason: null}`, or
+`{available: false, target: null, identity: null, reason}`. A **union, not four independent fields**:
+an available target always names itself and an unavailable one always says why, so there is no way to
+draw a modal head naming nowhere.
+
+Every failure arm is a **200**, never a 5xx. A dead credential is an answer to the question that was
+asked, and the caller is a modal that wants to say why it is falling back to the external new-issue
+form rather than one that wants an exception. Three arms reach it: nothing is `IssueCreateCapable`
+(the fake or an unconfigured provider), the provider call threw, or it did not answer inside eight
+seconds — the last one because the whole point of a live probe is to catch a rate-limited tracker, and
+a request that never returns leaves the modal that fired it spinning, which is worse than the fault it
+was checking for. The two failing arms are **recorded** to the error log; the "nothing can file" arm is
+not, because a deployment shape is not a fault
+([15](15-integrations.md#outbound-is-many-small-interfaces-not-one-fat-one)).
+
+Not on `/api/state`: it costs a provider round trip and the only reader is a modal that opens rarely.
+The static half of the gate — whether a real tracker is configured at all — is already on the snapshot
+as `canFileTickets`, and is the cheaper cut to make first.
+
+### `POST /api/issues`
+
+File the operator's own issue, directly (issue #413). Body `{title, body, watch?}`; answers
+`{ok: true, ref, url}` where `ref` is `issue:<n>` in the harness's own vocabulary and `url` is the
+connector's resolution of it, or null where no provider can resolve one.
+
+The one filing route with **no desk agent between the click and the create**. `/api/issues/:number/bug`
+dispatches one because the dedupe and the write-up are the judgement being delegated; here the operator
+has already written the thing up, and spending a model call to re-type it would add nothing.
+
+It files through `ticketFiler` rather than calling `connector.createIssue` itself, so the type and the
+assignee a filed item must carry are resolved in the one place that knows them
+([13](13-jobs-and-findings.md#filing-a-ticket)). **`watch` defaults to false**: the watch label is what
+makes the fleet pick an issue up, so defaulting it on would mean a half-formed thought is being worked
+before the operator has finished reading it back — an unwatched issue is the right resting state, and
+the operator who wants otherwise says so.
+
+Refusals: **400** for a missing or blank `title`/`body` or a non-boolean `watch`, through
+`checked({body})` like every other route here; **409** with a plain reason when nothing is
+`IssueCreateCapable`, which the cockpit's own gate means is only reachable by a direct call; **502**
+carrying the provider's own words when the tracker refuses the create, so the modal can keep what was
+typed. The cycle runs before the response — a watched issue should be considered for dispatch now, not
+on the next heartbeat — but its report is deliberately not returned: what the modal shows is the issue
+it just filed.
+
 ### `GET /api/work`
 
 The durable work graph's roots — every node with no parent — plus `unrecorded`: work the harness did
