@@ -3,6 +3,7 @@ import { issueWatchGateReason, openPrForIssue } from '../issuePickup.js';
 import { assessBranch, assessOrigin, hasPriorWork } from '../../delivery/assessment.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { planInFlight } from '../../plans/parts.js';
+import { readOnlyDispatch } from './readOnlyDispatch.js';
 import type { RawAction, StageContext } from './context.js';
 
 /**
@@ -75,10 +76,10 @@ export function issueAssess(s: StageContext): void {
       held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
       action: {
         type: 'dispatch_code_agent',
-        branch,
-        // Cut from the default branch: merged work is *on* it, so it is the only
-        // checkout in which "was this delivered" can be answered at all.
-        base: s.defaultBranch,
+        // A read-only checkout of the default branch: merged work is *on* it, so it
+        // is the only checkout in which "was this delivered" can be answered at all
+        // — and reading it is the whole of what this agent does.
+        ...readOnlyDispatch(branch, s.defaultBranch),
         title,
         prompt: s.templates.render('issue-assess', {
           number: issue.number,

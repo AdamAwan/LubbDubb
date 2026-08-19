@@ -610,9 +610,12 @@ gate an issue passes asks whether the harness is _allowed_ to act; this is the o
 whether the ticket says anything to act on. Full argument, the verdict's lifetime and what ends a
 hold are in [06](06-issue-pickup.md); the dispatcher's half is:
 
-- A **code** agent — the judgement needs the repository — on branch `assay/issue/<n>`, origin
-  `issue:<n>:assay`, based on `defaultBranch`. Its own branch namespace for `plan/issue/<n>`'s hard
-  reason: git cannot put `refs/heads/issue/12/assay` beside `refs/heads/issue/12`.
+- A **code** agent — the judgement needs the repository — in a **read-only checkout** of
+  `defaultBranch` ([09](09-execution.md#the-read-only-checkout)), leased under `assay/issue/<n>`,
+  origin `issue:<n>:assay`. The name is its own namespace for `plan/issue/<n>`'s hard reason — git
+  cannot put `refs/heads/issue/12/assay` beside `refs/heads/issue/12` — but since #396 it is a lease
+  key rather than a ref: the assayer reads the repository and writes nothing, so nothing is minted
+  and nothing is left for a reap that only ever collects merged branches.
 - Driven off `eligibleIssues` (unlike rules `issue-assess` and `plan-part`), because an issue the state gate or the watch
   gate excludes is not going to be worked and so has nothing to assay.
 - Fires only when nothing has been started: no verdict against the issue's _current_ text, no prior
@@ -645,11 +648,13 @@ and `issue-retro` — whose only precondition is that row — never fired either
 and Manifest stayed unbuilt permanently. Since #234 the run outlives the ticket and the question stays
 askable until the operator dismisses it.
 
-The rule dispatches a **code** agent — it needs a worktree to read what was delivered — on branch
-`assess/issue/<n>`, origin `issue:<n>:assess`, based on `defaultBranch` (merged work is _on_ it, so
-it is the only checkout in which the question can be answered). The branch namespace is not
-cosmetic, for `plan/issue/<n>`'s reason: git stores refs as files, so `refs/heads/issue/12` and
-`refs/heads/issue/12/assess` cannot coexist.
+The rule dispatches a **code** agent — it needs a worktree to read what was delivered — in a
+**read-only checkout** of `defaultBranch` ([09](09-execution.md#the-read-only-checkout)), leased under
+`assess/issue/<n>`, origin `issue:<n>:assess` (merged work is _on_ the default branch, so it is the
+only checkout in which the question can be answered). The namespace is not cosmetic, for
+`plan/issue/<n>`'s reason: git stores refs as files, so `refs/heads/issue/12` and
+`refs/heads/issue/12/assess` cannot coexist — and since #396 the name is a lease key, never a ref, the
+assessor having nothing to commit.
 
 It fires for issue N when all of:
 
@@ -856,10 +861,12 @@ tracker and nothing is scheduled from what it says.
 `validate-check` puts a code agent on one validation check the operator handed to the fleet. Everything about what a check _is_ is [20](20-validation.md); the dispatcher's
 half is:
 
-- A **code** agent — a check runs things — on branch `validate/issue/<n>/<checkId>`, origin
-  `issue:<n>:validate:<checkId>`, based on `defaultBranch`. Its own branch namespace for
-  `assess/issue/<n>`'s hard reason, and the check id on both so two handed-over checks get two
-  worktrees rather than fighting over one.
+- A **code** agent — a check runs things — in a **read-only checkout** of `defaultBranch`
+  ([09](09-execution.md#the-read-only-checkout)), leased under `validate/issue/<n>/<checkId>`, origin
+  `issue:<n>:validate:<checkId>`. Its own namespace for `assess/issue/<n>`'s hard reason, and the
+  check id on both so two handed-over checks get two worktrees rather than fighting over one. Since
+  #396 the name is a lease key rather than a ref: the prompt already says nothing here is to be
+  committed or pushed.
 - **One origin per check, never one per goal.** The origin carries the cooldown and the attempt cap,
   so a shared one would let a check that can never be run spend the attempts of the four beside it —
   `pr-ci-gate`'s split against `pr-ci`, argument for argument.

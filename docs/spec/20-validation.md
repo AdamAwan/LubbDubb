@@ -399,10 +399,13 @@ answers.
 ### `validate-check`
 
 `src/dispatcher/rules/validateCheck.ts`, a `DISPATCH_PIPELINE` entry and a `STAGES` module like any
-other rule ([05](05-dispatcher.md#the-rule-book)). A **code** agent — a check runs things — on branch
-`validate/issue/<n>/<checkId>`, origin `issue:<n>:validate:<checkId>`, based on `defaultBranch`. The
-branch namespace is `assess/issue/<n>`'s: git stores refs as files, so nothing bare is ever cut, and
-the check id is on both the branch and the origin so two handed-over checks get two worktrees.
+other rule ([05](05-dispatcher.md#the-rule-book)). A **code** agent — a check runs things — in a
+**read-only checkout** of `defaultBranch` ([09](09-execution.md#the-read-only-checkout)), leased under
+`validate/issue/<n>/<checkId>`, origin `issue:<n>:validate:<checkId>`. The namespace is
+`assess/issue/<n>`'s: git stores refs as files, so nothing bare is ever cut, and the check id is on
+both the name and the origin so two handed-over checks get two worktrees. Since #396 that name is a
+lease key and no ref is minted — the agent is told this is not a place to build on, and a branch cut
+for it would have outlived every check ever run.
 
 Five conditions, and each is somebody's decision rather than the harness's:
 

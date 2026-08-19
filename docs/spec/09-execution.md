@@ -305,8 +305,9 @@ prompt.
   `outOfScope`**, which reach the plan sheet and no agent — and on a one-part plan are the entire
   product of a code agent that read the whole repository, while rule `issue-pickup`'s prompt is the issue title and
   body; a part's **`rationale` / `acceptance`**, stored and rendered nowhere at all; the **prose
-  behind each standing verdict** (assay, conclusion, delivery, shortfall); and **the paths the goal has
-  been edited in**. It therefore omits
+  behind each standing verdict** (assay, conclusion, delivery, shortfall); **the paths the goal has
+  been edited in**; and **the retrospectives of the goals that have been in those same paths**. It
+  therefore omits
   `plan.reason` (rendered by `currentPlanSummary` to a replanner and as `{plan}` to a part agent) and a
   part's status, branch and PR number (`currentPlanSummary`, `siblingContext`).
 - **No world facts.** A pull request's state is live through `world_read`; pasted into a prompt it would
@@ -327,6 +328,34 @@ prompt.
   - **Promoted paths are in it and unmarked**, and it **stays on for a part dispatch**: `forPart`
     suppresses the parts section alone, because `siblingContext` renders what a sibling was _for_ and
     nowhere renders where it has been.
+- **Other goals that have been in these same files** (issue #354, phase 2) is that join asked once more
+  with a goal on the far side of it, and it sits last of all — under the index it is derived from. One
+  line per neighbour: the paths in common, then its retrospective summary quoted whole, from
+  `Store.listGoalNeighbours` ([14](14-persistence.md#flags-and-files)). It answers the same two rules
+  the same way, and settles three things of its own:
+  - **"Closed" is spelled `has a retrospective`, and that is the world-fact rule rather than a
+    shortcut.** Whether an issue is closed is a fact about the world *now*; a retrospective is a row
+    this database owns, written by rule `issue-retro` only once a goal is done. So it is the harness's
+    own stored answer to the same question, and it is the thing being handed over besides — the gate
+    and the payload are one join. A goal still being worked is therefore absent with no second liveness
+    predicate: `detectFileOverlaps` owns "is this happening now"
+    ([12](12-artifacts-and-files.md#file-overlap-detection)), and a briefing with an opinion on that
+    would be the drift both modules exist to avoid.
+  - **It is not sorted by overlap.** Neighbours come back by the recency of their last write, a stored
+    timestamp, and the number of shared paths is *stated* rather than allowed to rank — "most
+    overlapping" is a relevance score, which is the judgement the section above refuses in the same
+    words.
+  - **The summary is quoted, not pointed at**, because no tool an agent has reaches another goal's
+    write-up — `scratch_read` is scoped to the caller's own pad. The sentence is therefore the whole
+    delivery, and the document stays where it is. The section **stays on for a part dispatch** for a
+    stronger version of the file list's reason: it is about goals no sibling was ever part of, so there
+    is no surface it could duplicate.
+- **The neighbour query is seeded from two places**, `neighbourSeedPaths`: the paths this goal has been
+  edited in, and the paths its plan cites as `evidence`. The second exists because the first is empty on
+  exactly the dispatch the lookup is worth most on — a goal's file rows appear only once an agent has
+  written under it, while a plan's evidence is written before any part is dispatched. They mean
+  different things and neither is widened into the other; what keeps that honest is that the section
+  names the paths a neighbour **shares** and never claims this goal edited them.
 - **Scoped by `padOriginFor`, not a fresh predicate** — already the harness's answer to "which goal is
   this agent working": the `issue:<n>` root plus its `:plan`, `:assay`, `:assess` and `:part:<slug>`
   arms. Everything else (a PR concern, a job, a filing) is handed nothing, which is the rejection note's
@@ -341,10 +370,12 @@ prompt.
 - **Bounded, and it names what it dropped.** Appended text lands after the cached prefix, so a briefing
   is fresh input tokens on every dispatch. An untouched goal renders the empty string, so a first
   agent's prompt is byte-identical to one composed before this existed; the pad is capped at the most
-  recent 15 entries, the file list at the most recent 25 paths and the write-up at 4 000 characters,
-  with the elision stated and `scratch_read` named, or a partial record reads as the whole one. The
-  file cap is the tightest because it is the one section that scales with the **size** of the work
-  rather than with what anyone chose to write down.
+  recent 15 entries, the file list at the most recent 25 paths, the neighbour list at 4 goals of 4 named
+  paths each and the write-up at 4 000 characters, with the elision stated and `scratch_read` named, or
+  a partial record reads as the whole one. The file cap is tight because it is the section that scales
+  with the **size** of the work rather than with what anyone chose to write down; the neighbour cap is
+  tighter still, because each of its lines carries a whole summary and is a pointer to work done
+  somewhere else.
 
 ## The operator's own instructions reach the agent
 
@@ -534,28 +565,32 @@ them stale. The cost is the cold install on a branch's **first** dispatch. That 
 now makes: a tree is only warm for the work that warmed it, and the work that comes back to a branch
 is exactly the work that pays for a cold one twice.
 
-The executor depends on the `Worktrees` **interface**, not the class: `ensure`/`remove`/`deleteBranch`
-is the whole of what it and the reap in `system.ts` ask for, and a seam wider than its consumer is a
-fake with behaviour nobody checks. `WorktreeManager` is the real implementation, wired by default;
+The executor depends on the `Worktrees` **interface**, not the class:
+`ensure`/`ensureReadOnly`/`remove`/`deleteBranch` is the whole of what it and the reap in `system.ts`
+ask for, and a seam wider than its consumer is a fake with behaviour nobody checks. `WorktreeManager` is the real implementation, wired by default;
 `FakeWorktreeManager` is the injected one, and it **models the pool too** (see
 [19](19-development.md)) — a fake still keyed on the branch would hand every branch its own path and
 keep every test green while the real manager leased slots. This is git's **write** side given the
 treatment its read side already had in `GitObserver` — the asymmetry was load-bearing, because the
 write side is the half that mutates a repository.
 
-`ensure(branch, base?)`:
+`ensure(branch, base?)` — and `ensureReadOnly(key, of)`, which takes the same path with one extra arm
+([below](#the-read-only-checkout)):
 
 1. `git worktree prune`, so a slot whose directory vanished stops counting against the bound.
-2. A worktree already checked out on the branch is returned as-is, and re-leased — untouched, with
-   everything in it. This is the only arm that reuses anything.
-3. Otherwise a **spare** slot: free, and on a detached HEAD or a branch whose ref is gone, so it
-   holds nothing anybody can come back for. Wiped and switched (below).
-4. Otherwise the pool **grows**, while it is below its bound: a stale target directory is
-   **reclaimed**, then `git worktree add` puts a new slot straight on the branch. Slot directories
-   are `slot-<n>`, the lowest unused index.
-5. Otherwise the first **evictable** slot: free, but still on a branch that exists. Wiped and
-   switched.
-6. With none of those, `ensure` **throws** — see [exhaustion](#exhaustion).
+2. A worktree already checked out on the branch — or, read-only, a slot this key still holds — is
+   returned as-is, and re-leased: untouched, with everything in it. This is the only arm that reuses
+   anything.
+3. Read-only only: a free slot that is already a read-only checkout of the **same ref**. Handing it
+   over costs nothing and burns nothing, so it beats both a spare and a fresh slot.
+4. Otherwise a **spare** slot: free, and on an unmarked detached HEAD or a branch whose ref is gone,
+   so it holds nothing anybody can come back for. Wiped and switched (below).
+5. Otherwise the pool **grows**, while it is below its bound: a stale target directory is
+   **reclaimed**, then `git worktree add` puts a new slot straight on the branch (or, read-only,
+   `--detach` at the commit). Slot directories are `slot-<n>`, the lowest unused index.
+6. Otherwise the first **evictable** slot: free, but still carrying a branch or another ref's
+   read-only tree. Wiped and switched.
+7. With none of those, it **throws** — see [exhaustion](#exhaustion).
 
 **Minting comes ahead of eviction**, and the order is load-bearing rather than a preference. A slot
 handed to another branch is wiped either way, so taking one that still carries a live branch burns
@@ -607,6 +642,55 @@ not conflict, so a failed agent's half-finished work would land on an unrelated 
 committed there by an agent with no idea where it came from. It is also what keeps a failed or killed
 agent's tree readable, which is what deleting the directory used to provide.
 
+### The read-only checkout
+
+Three dispatches need a repository and no branch: the goal assay ([06](06-issue-pickup.md)), the
+assessment and a handed-over validation check ([20](20-validation.md)). Each is told in its prompt not
+to commit or push anything, and each is cut from the default branch for the reason it says out loud —
+the state it is asked about is _on_ it.
+
+Each used to mint a branch anyway, and **nothing ever reaped it**: `reapableBranches` deletes the
+branch of a **merged** pull request and refuses everything else, deliberately, so a ref that never
+gets a pull request is never merged and never deleted. One `assay/issue/<n>` per assay, one
+`assess/issue/<n>` per assessment and one `validate/issue/<n>/<checkId>` per check, accumulating for
+the life of the deployment, with nothing anywhere reading as wrong (#396).
+
+So a read-only dispatch mints nothing. `ensureReadOnly(key, of)` leases a slot and checks it out
+**detached** at the commit `of` resolves to (through `resolveCommit`, so `origin/<ref>` wins over the
+local ref as everywhere else). The lease key is the name the rule would have used as a branch — it is
+what the task row carries, what the [branch gate](#2-branch-gate--deferred-code-dispatches-only)
+reads, and what `remove` is called with when the agent is reaped — and it never becomes a ref.
+
+- **The lease is untouched, which is the point.** Several read-only agents pinned to one directory is
+  precisely the case the lease was written to refuse, and "none of them writes" is a property of a
+  _prompt_, not of the runtime. So a read-only checkout takes a whole slot, leased under its key,
+  exactly as a branch does. There is no sharing and no exemption.
+- **It survives a restart too.** A detached slot has no ref for `pool.held` to be asked about, so the
+  slot carries a **mark** — the key it holds and the ref it is a checkout of — in `<worktreeRoot>/.read-only/<slot>`.
+  `holder` reads the key off it and asks `pool.held` the same question it asks about a branch. Without
+  it a restored assayer's tree would read as a spare and be cleaned and switched under the agent
+  sitting in it. The mark is beside the slots rather than inside one (where `clean -ffdx` would take
+  it, in front of the agent) or in git's admin directory (which is git's, not the harness's); losing
+  one degrades to a full wipe, the way losing a lease does.
+- **One ref, one warm tree.** Two read-only checkouts of the same ref are the same tree to whoever
+  gets it, so a hand-over between them keeps the ignored files and takes only the last agent's
+  scratch (`git clean -ffd`, not `-ffdx`) — and a free one is _preferred_ over minting a slot. That is
+  what stops a queue of assays and checks paying for a cold install each, which the pool could never
+  give work that warms nothing of its own. The mark is the whole of the evidence: it is written only by
+  a read-only hand-over and cleared by every other, so a tree the harness cannot vouch for is wiped.
+- **Reuse follows the ref, not the tree.** A key coming back to its own slot after the default branch
+  has moved is re-pointed at the new commit. An assessor judging "was this delivered" against
+  yesterday's tip answers the wrong question — where a branch's slot going stale is just its own
+  commits arriving.
+- **Not a separate pool.** A read-only dispatch is an agent like any other and is bounded by
+  `maxConcurrentAgents` before it ever reaches a slot; a second pool would double the disk and need a
+  second number nobody can size. What it costs is one slot while it runs, and `worktreePoolSize` is
+  the knob for that.
+- Rules never arrange this themselves: they compose the dispatch through `readOnlyDispatch`
+  (`src/dispatcher/rules/readOnlyDispatch.ts`), the executor reads `action.readOnly` at the single
+  `ensure` call site, and `readOnly` defaults to false — so a dispatch that writes code cannot lose
+  its branch by omission. Tests: `test/readOnlyCheckout.test.ts`.
+
 ### Handing a slot over
 
 This runs **only for a branch the slot is not already on** — `ensure`'s reuse arm has taken every
@@ -617,10 +701,15 @@ the order is load-bearing:
    previous occupant's dependency tree and build output, and the second `-f` is for a nested
    repository inside them (a git-sourced dependency), which a single `-f` skips — leaving exactly the
    half-deleted dependency tree this is trying not to hand anyone. Nothing is excluded by name: an
-   ignore list of paths to keep is the repo-specific configuration the harness refuses to grow.
-2. **`git switch <branch>`** when the ref exists, `git switch -c <branch> <commit>` when it does not.
-   The wipe must precede it because `git switch` refuses when an untracked file would be
-   overwritten.
+   ignore list of paths to keep is the repo-specific configuration the harness refuses to grow. The
+   one hand-over that keeps them is read-only to read-only on the same ref
+   ([above](#the-read-only-checkout)), where the output answers the same source and `-ffd` takes only
+   the last agent's scratch.
+2. **`git switch <branch>`** when the ref exists, `git switch -c <branch> <commit>` when it does not,
+   `git switch --detach <commit>` for a read-only checkout. The wipe must precede it because
+   `git switch` refuses when an untracked file would be overwritten. The mark is cleared ahead of
+   both, so a failure in between leaves a slot claiming nothing rather than claiming to be a checkout
+   it is not.
 
 **`git switch -C` and `git checkout -B` are unreachable, deliberately.** They _reset_ an existing
 branch to the start point, so on a slot being handed to a branch that already has commits — a
@@ -703,9 +792,10 @@ process's cwd, so there is nothing there to reproduce).
 
 ### Release
 
-`remove(branch)` releases the lease and **deletes nothing**. That is the whole change: the slot stays
-on its branch with everything git ignores in it, and a failed or killed agent's tree stays readable
-until the slot is reissued.
+`remove(name)` releases the lease and **deletes nothing**. That is the whole change: the slot stays on
+its branch (or at its commit, for a read-only checkout) with everything git ignores in it, and a
+failed or killed agent's tree stays readable until the slot is reissued. A read-only checkout needs no
+other ending: there is no ref for a reap to collect, which is the whole of why it exists.
 
 `deleteBranch(branch)` — the local half of the reap after a pull request merges — releases the lease
 and deletes the ref. `git branch -D` refuses a branch that is checked out anywhere, and the directory

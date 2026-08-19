@@ -2,6 +2,7 @@ import { dispatchVerdict } from '../dispatchCooldown.js';
 import { assayBranch, assayOrigin, hasWorkStarted, isAssayed } from '../../intake/assay.js';
 import { issueOrigin } from '../../plans/planning.js';
 import { relatedWorkNote } from '../../issueRelations.js';
+import { readOnlyDispatch } from './readOnlyDispatch.js';
 import type { RawAction, StageContext } from './context.js';
 
 /**
@@ -64,10 +65,10 @@ export function issueAssay(s: StageContext): void {
       held: verdict.kind === 'cooldown' ? 'cooldown' : undefined,
       action: {
         type: 'dispatch_code_agent',
-        branch,
-        // Cut from the default branch: the question is whether this goal makes
-        // sense against the repository as it stands.
-        base: s.defaultBranch,
+        // A read-only checkout of the default branch: the question is whether this
+        // goal makes sense against the repository as it stands, and answering it
+        // needs the repository, not a branch of its own to leave behind.
+        ...readOnlyDispatch(branch, s.defaultBranch),
         title,
         // The relations decide half of what this rule is asking. A goal that
         // reads as vague on its own is often exactly right once its parent

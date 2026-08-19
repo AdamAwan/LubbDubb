@@ -6,11 +6,11 @@ import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
-import { priorWorkBriefing, type PriorWorkInput } from '../src/briefing/priorWork.js';
+import { neighbourSeedPaths, priorWorkBriefing, type PriorWorkInput } from '../src/briefing/priorWork.js';
 import { Store } from '../src/store/store.js';
 import { gitRepo } from './support/gitRepo.js';
 import { planWithOnePart } from './support/plans.js';
-import type { GoalFile, Plan, ScratchEntry } from '../src/types.js';
+import type { GoalFile, GoalNeighbour, Plan, ScratchEntry } from '../src/types.js';
 
 // -- the pure briefing -------------------------------------------------------
 
@@ -25,6 +25,7 @@ function bare(): PriorWorkInput {
     shortfall: null,
     entries: [],
     files: [],
+    neighbours: [],
     forPart: false,
   };
 }
@@ -34,6 +35,16 @@ function file(fields: Partial<GoalFile> = {}): GoalFile {
     path: 'src/store/schema.ts',
     originRef: 'issue:12:part:schema',
     createdAt: '2026-07-30T10:00:00.000Z',
+    ...fields,
+  };
+}
+
+function neighbour(fields: Partial<GoalNeighbour> = {}): GoalNeighbour {
+  return {
+    goalRef: 'issue:312',
+    retroSummary: 'The registry was the only place that knew about the tag.',
+    sharedPaths: ['src/store/schema.ts'],
+    lastWriteAt: '2026-07-20T10:00:00.000Z',
     ...fields,
   };
 }
@@ -235,6 +246,64 @@ test('an over-long file list names what it dropped, the oldest first', () => {
   assert.match(text, /5 of the 30 paths are not shown here/);
 });
 
+test('a neighbouring goal is named with the paths it shares and its retrospective', () => {
+  // The join with a goal on the far side of it: who else has been in this code, and
+  // the write-up that is the only account of how it went an agent can be given.
+  const text = priorWorkBriefing({
+    ...bare(),
+    neighbours: [neighbour({ sharedPaths: ['src/store/schema.ts', 'src/store/agents.ts'] })],
+  });
+  assert.match(text, /issue:312/, 'the neighbour is named by the ref its retrospective is keyed on');
+  assert.match(text, /src\/store\/schema\.ts/);
+  assert.match(text, /src\/store\/agents\.ts/, 'every shared path, up to the cap');
+  assert.match(text, /the only place that knew about the tag/, 'and the summary quoted whole');
+  assert.match(
+    text,
+    /does not say the work is related/,
+    'the lead claims a shared file and nothing more — relevance is the reader’s call',
+  );
+});
+
+test('a neighbour with more shared paths than the cap counts the rest', () => {
+  const text = priorWorkBriefing({
+    ...bare(),
+    neighbours: [neighbour({ sharedPaths: Array.from({ length: 9 }, (_, i) => `src/file${i}.ts`) })],
+  });
+  assert.match(text, /src\/file0\.ts/);
+  assert.doesNotMatch(text, /src\/file8\.ts/, 'past the cap they are counted rather than named');
+  assert.match(text, /and 5 more of the 9/);
+});
+
+test('an over-long neighbour list names what it dropped, the least recently worked first', () => {
+  const neighbours = Array.from({ length: 6 }, (_, i) =>
+    neighbour({ goalRef: `issue:${300 + i}`, lastWriteAt: `2026-07-${String(20 - i).padStart(2, '0')}T10:00:00.000Z` }),
+  );
+  const text = priorWorkBriefing({ ...bare(), neighbours });
+  assert.match(text, /issue:300/, 'the order the store returned is kept — most recently worked first');
+  assert.doesNotMatch(text, /issue:305/, 'the least recently worked go');
+  assert.match(text, /2 of the 6 goals are not shown here/);
+});
+
+test('a part agent keeps the neighbour list, which is about goals no sibling was part of', () => {
+  assert.match(priorWorkBriefing({ ...bare(), neighbours: [neighbour()], forPart: true }), /issue:312/);
+});
+
+test('the neighbour seed is where the goal has been and where its planner read', () => {
+  // Two sources because a goal's own file rows are empty on the dispatch the lookup
+  // is worth most on, and a plan's evidence is written before any part is dispatched.
+  const seed = neighbourSeedPaths(
+    [file({ path: 'src/a.ts' }), file({ path: 'src/b.ts' })],
+    planRow({
+      evidence: [
+        { path: 'src/b.ts', line: 12, note: null },
+        { path: 'src/c.ts', line: null, note: 'here' },
+      ],
+    }),
+  );
+  assert.deepEqual(seed, ['src/a.ts', 'src/b.ts', 'src/c.ts'], 'deduped, this goal’s own writes first');
+  assert.deepEqual(neighbourSeedPaths([], null), [], 'and a goal with neither asks nothing');
+});
+
 test('an over-long pad names what it dropped rather than truncating in silence', () => {
   // A partial record read as a whole one is the failure mode; the count and the
   // tool that reaches the rest are both stated.
@@ -322,6 +391,78 @@ test('the goal file join folds the whole subtree to one row per path, newest wri
   }
 });
 
+/** A goal that has been written up — which is how this harness spells "closed". */
+function goalWithRetro(store: Store, originRef: string, paths: string[], summary: string): void {
+  agentThatWrote(store, `${originRef}:part:whole`, paths);
+  store.recordRetrospective({ originRef, summary, document: '# how it went', agentId: 'a_r', taskId: 't_r' });
+}
+
+test('the neighbour join finds written-up goals in the same paths, and only those', () => {
+  let tick = 0;
+  const store = new Store(':memory:', () =>
+    new Date(Date.parse('2026-07-30T00:00:00.000Z') + tick++ * 60_000).toISOString(),
+  );
+  try {
+    goalWithRetro(store, 'issue:300', ['src/a.ts', 'src/unrelated.ts'], 'three hundred went fine');
+    goalWithRetro(store, 'issue:301', ['src/a.ts', 'src/b.ts'], 'three oh one was harder');
+    // None of these is a neighbour: a goal still being worked (no retrospective is
+    // this harness's stored answer to "closed", and `detectFileOverlaps` owns the
+    // live question), a written-up goal that has been nowhere near these paths, a
+    // desk agent's scratch directory, and this goal itself.
+    agentThatWrote(store, 'issue:302:part:whole', ['src/a.ts']);
+    goalWithRetro(store, 'issue:303', ['src/elsewhere.ts'], 'somewhere else entirely');
+    agentThatWrote(store, 'issue:304:retro', ['src/a.ts'], 'desk');
+    store.recordRetrospective({
+      originRef: 'issue:304',
+      summary: 'a desk agent wrote this path in a scratch directory',
+      document: '# d',
+      agentId: 'a_d',
+      taskId: 't_d',
+    });
+    goalWithRetro(store, 'issue:1', ['src/a.ts'], 'this goal itself');
+
+    const neighbours = store.listGoalNeighbours('issue:1', ['src/a.ts', 'src/b.ts']);
+    assert.deepEqual(
+      neighbours.map((n) => n.goalRef),
+      ['issue:301', 'issue:300'],
+      'written-up goals in these paths only, most recently worked first',
+    );
+    assert.deepEqual(
+      neighbours[0]?.sharedPaths,
+      ['src/b.ts', 'src/a.ts'],
+      'the paths in common, newest write first — and never a path this goal never asked about',
+    );
+    assert.equal(neighbours[0]?.retroSummary, 'three oh one was harder', 'the summary comes back with it');
+    assert.deepEqual(store.listGoalNeighbours('issue:1', []), [], 'a goal with no paths asks nothing');
+  } finally {
+    store.close();
+  }
+});
+
+test('the neighbour join scopes a goal by prefix, so issue:1 never reaches issue:12', () => {
+  const store = new Store(':memory:');
+  try {
+    goalWithRetro(store, 'issue:12', ['src/a.ts'], 'twelve');
+    // The retrospective is `issue:1`'s, so `issue:12:part:whole` must not be read as
+    // one of its arms — the same prefix trap `listGoalFiles` answers.
+    store.recordRetrospective({
+      originRef: 'issue:1',
+      summary: 'one',
+      document: '# one',
+      agentId: 'a_1',
+      taskId: 't_1',
+    });
+    const neighbours = store.listGoalNeighbours('issue:9', ['src/a.ts']);
+    assert.deepEqual(
+      neighbours.map((n) => n.goalRef),
+      ['issue:12'],
+      'the write belongs to twelve alone',
+    );
+  } finally {
+    store.close();
+  }
+});
+
 test("a part's agent is handed what the earlier agents on its issue wrote down", async () => {
   const system = systemFor();
   try {
@@ -346,6 +487,9 @@ test("a part's agent is handed what the earlier agents on its issue wrote down",
       note: 'the fake provider leaves labelsAddedByViewer unset',
     });
     agentThatWrote(system.store, 'issue:1:plan', ['src/tags/registry.ts']);
+    // A finished goal that has been in the same file, so the neighbour lookup has
+    // something to say beyond this goal's own history.
+    goalWithRetro(system.store, 'issue:312', ['src/tags/registry.ts'], 'the registry is generated, do not hand-edit');
     system.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
     await system.harness.runCycle('manual');
 
@@ -357,6 +501,10 @@ test("a part's agent is handed what the earlier agents on its issue wrote down",
     // The cheapest orientation there is: where the goal has already been edited,
     // which turns a grep phase into a Read.
     assert.match(task.prompt, /src\/tags\/registry\.ts/, 'and the files the earlier agent wrote');
+    // And who else has been in them, with the write-up that is the only account of
+    // another goal's run an agent can be handed (issue #354, phase 2).
+    assert.match(task.prompt, /issue:312/, 'the neighbouring goal that has been in the same file');
+    assert.match(task.prompt, /do not hand-edit/, "and that goal's retrospective summary");
   } finally {
     system.store.close();
   }

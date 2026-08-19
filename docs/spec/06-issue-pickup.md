@@ -462,9 +462,12 @@ could answer — and the first signal that anything was wrong is an agent spendi
 way that reads as its own failure.
 
 The goal assay (issue #158, `src/intake/assay.ts`, **unconditional**) is
-that missing gate. Rule `issue-assay` dispatches a code agent on `assay/issue/<n>` (origin `issue:<n>:assay`,
-cut from the default branch) for a watched open issue nothing has been started for, and the agent
-casts a verdict with the `assay_issue` tool. It is the mirror of the assessor: `hasPriorWork` is the
+that missing gate. Rule `issue-assay` dispatches a code agent into a read-only checkout of the default
+branch ([09](09-execution.md#the-read-only-checkout)), leased under `assay/issue/<n>` (origin
+`issue:<n>:assay`), for a watched open issue nothing has been started for, and the agent casts a
+verdict with the `assay_issue` tool. The checkout is the default branch because the question is
+whether the goal makes sense against the repository as it stands; it is read-only because answering
+that needs a repository and no branch, and a branch minted for it would never be reaped (#396). It is the mirror of the assessor: `hasPriorWork` is the
 discriminator for both, one taking each arm — nothing started means the goal is all there is to
 judge, something started means the question was answered by someone acting on it. "Started" means an
 origin that could have delivered something, which is the pickup root, a plan's parts, or an
