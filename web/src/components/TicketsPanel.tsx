@@ -11,7 +11,7 @@ import type {
   TicketTrackingFilter,
   TicketWatchFilter,
 } from '../types.js';
-import { statePick } from '../cockpit/place.js';
+import { LIVE_WORK, statePick, widenedFor } from '../cockpit/place.js';
 import { watchBucket } from '../worldBuckets.js';
 import type { CockpitView } from '../view/viewModel.js';
 import { stateColour } from '../stateColour.js';
@@ -169,6 +169,11 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
   const live_ = useMemo(() => new Map(worldIssues.map((issue) => [issue.number, issue])), [worldIssues]);
   const held = useMemo(() => intakeHeld(worldIssues, view.state.config), [worldIssues, view.state.config]);
 
+  // Which state the tracking axis is standing widened for, if any — read back off
+  // the facets this page already carries rather than remembered, because a
+  // remembered widening is a second copy of the two `Place` fields that state it.
+  const widened = widenedFor(query.state, query.tracking, states);
+
   return (
     <div className="tickets">
       <div className="tickets-head">
@@ -222,6 +227,24 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
           )}
         </span>
       </div>
+
+      {/* Said where the axis actually moved, and offered back as the pair rather
+          than the axis — `widenedFor` owns both halves of why (issue #418). */}
+      {widened !== null && (
+        <div className="tickets-widened">
+          <span>
+            Showing the whole history, live and frozen: nothing under <b>{widened.state}</b> is still in the tracker’s
+            open set, so picking it widened <b>Tracking</b> to <b>Any</b>.
+          </span>
+          <button
+            type="button"
+            onClick={() => onQuery(LIVE_WORK)}
+            title="Back to what the tab opens on: every state, and only the items still in the tracker’s open set"
+          >
+            Back to live work
+          </button>
+        </div>
+      )}
 
       {/* Drawn only where the provider has native states. A filter offering states
           the tracker cannot produce is a control that always returns nothing. */}

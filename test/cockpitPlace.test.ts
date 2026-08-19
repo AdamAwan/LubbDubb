@@ -1,7 +1,15 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { NOWHERE, placeQuery, readPlace, type Place } from '../web/src/cockpit/place.js';
+import {
+  LIVE_WORK,
+  NOWHERE,
+  placeQuery,
+  readPlace,
+  statePick,
+  widenedFor,
+  type Place,
+} from '../web/src/cockpit/place.js';
 
 const at = (over: Partial<Place> = {}): Place => ({ ...NOWHERE, ...over });
 
@@ -176,4 +184,56 @@ test('every ticket filter on the place is forwarded into the view model', () => 
   for (const field of fields) {
     assert.ok(hook.includes(`${field}: place.${field},`), `${field} never reaches buildViewModel`);
   }
+});
+
+/** A facet as the route ships one — the count over the whole mirror, and how much of it is live. */
+const facet = (state: string, count: number, live: number) => ({ state, count, live, pickup: false });
+
+/**
+ * The forward rule, restated here rather than assumed: the widening happens on
+ * exactly the picks the `live` count says are unreachable, and on no other.
+ */
+test('a state with nothing live widens the tracking axis, and a state with live rows does not', () => {
+  assert.deepEqual(statePick(facet('Closed', 68, 0), 'live'), { state: 'Closed', tracking: 'any' });
+  assert.deepEqual(statePick(facet('Active', 9, 9), 'live'), { state: 'Active' });
+  assert.deepEqual(statePick(facet('Closed', 68, 0), 'frozen'), { state: 'Closed' });
+  assert.deepEqual(statePick(null, 'any'), { state: 'any' });
+});
+
+/**
+ * And the inverse, which is the bug: after the widening the tab has to be able to
+ * say which control moved, or the filter set it starts on is the one it cannot
+ * offer back (issue #418).
+ */
+test('the tab can name the state its tracking axis is widened for', () => {
+  const states = [facet('Closed', 68, 0), facet('Active', 9, 9)];
+  assert.equal(widenedFor('Closed', 'any', states)?.state, 'Closed', 'the pick that widened it is named');
+  assert.equal(widenedFor('Active', 'any', states), null, 'a state with live rows never widened anything');
+  assert.equal(widenedFor('Closed', 'live', states), null, 'and a narrowed axis is not a widened one');
+  assert.equal(widenedFor('any', 'any', states), null, 'nor is the whole history with no state picked');
+  assert.equal(widenedFor('Closed', 'any', []), null, 'a state the facets do not know is left alone');
+});
+
+/**
+ * The way back is the *pair*: narrowing to `live` while a closing state is still
+ * picked is the empty list the widening exists to avoid. Read off `NOWHERE`, so it
+ * cannot drift from the default it offers back.
+ */
+test('the way back out of a widening is the view the tab lands on', () => {
+  assert.deepEqual(LIVE_WORK, { tracking: 'live', state: 'any' });
+  assert.deepEqual({ ...NOWHERE, ticketTracking: LIVE_WORK.tracking, ticketState: LIVE_WORK.state }, NOWHERE);
+  const back = { ...at({ tab: 'tickets' }), ticketTracking: LIVE_WORK.tracking, ticketState: LIVE_WORK.state };
+  assert.equal(placeQuery(back), '?tab=tickets', 'and it is the bare tab, not a second spelling of it');
+});
+
+/**
+ * `.tsx` is a module no test can import, and the two halves of this are useless
+ * apart: a `widenedFor` nothing reads is a band that never draws, and a band with
+ * no `LIVE_WORK` on it is the dead end being fixed.
+ */
+test('the tickets panel reads the widening back and offers the way out of it', () => {
+  const panel = readFileSync('web/src/components/TicketsPanel.tsx', 'utf8');
+  assert.match(panel, /widenedFor\(query\.state, query\.tracking, states\)/);
+  assert.match(panel, /onQuery\(LIVE_WORK\)/);
+  assert.match(panel, /className="tickets-widened"/);
 });

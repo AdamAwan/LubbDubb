@@ -227,6 +227,59 @@ export function statePick(
   return { state: facet.state };
 }
 
+/**
+ * The coarse pair the tab lands on: the harness's own work surface, with the
+ * history behind it.
+ *
+ * Read off {@link NOWHERE} rather than written out, because it is *the landing
+ * view* that has to be offered back and not a second opinion about what that is —
+ * a literal here would go stale the day the tab's default narrowing changes, and
+ * silently, since a control offering the wrong pair still works.
+ */
+export const LIVE_WORK: { tracking: TicketTrackingFilter; state: TicketStateFilter } = {
+  tracking: NOWHERE.ticketTracking,
+  state: NOWHERE.ticketState,
+};
+
+/**
+ * The state the tracking axis is currently widened for, or null — {@link statePick}'s
+ * predicate read back off the place it wrote (issue #418).
+ *
+ * The widening is a one-way door without this. `statePick` moves `tracking` to
+ * `any` on a pick of a state with nothing live under it, which is the only reading
+ * of that click that is not a lie; but nothing moves it back, and the State tier's
+ * own `Any` returns `{state: 'any'}` alone — so a reader who lands on the tab, picks
+ * `Closed`, and then asks for every state again is left on the whole history with
+ * the axis that widened it two controls away and no sentence anywhere saying it
+ * moved. The reported symptom is exactly that: the filter set the tab *starts* on
+ * turns out to be the one it cannot offer.
+ *
+ * So the axis says so where it landed, and the way back is the pair rather than the
+ * axis: narrowing to `live` while `Closed` is still picked is the empty list the
+ * widening exists to avoid, so the offer is {@link LIVE_WORK} — both coarse axes at
+ * once, which is the view the reader is asking to return to.
+ *
+ * **It announces and offers; it never moves an axis nobody touched.** An operator
+ * who chose `any` by hand and then picked a closing state sits under this same
+ * predicate, and their axis is theirs: undoing it for them would be the silent move
+ * this exists to apologise for, in the other direction.
+ *
+ * Here rather than in the panel for `statePick`'s reason — it is a statement about
+ * two `Place` fields, and a `.tsx` is a module no test can import.
+ * → `docs/spec/17-cockpit.md#three-axes-because-they-are-three-questions`
+ */
+export function widenedFor(
+  state: TicketStateFilter,
+  tracking: TicketTrackingFilter,
+  states: readonly TicketStateFacet[],
+): TicketStateFacet | null {
+  if (tracking !== 'any' || state === 'any') return null;
+  // Unknown to the facets — a hand-edited `?state=` — narrows to nothing and is not
+  // a widening anybody asked for, so it is left alone like every other junk value here.
+  const facet = states.find((f) => f.state === state);
+  return facet && facet.live === 0 ? facet : null;
+}
+
 /** A feature number, the orphan bucket, or null. Junk narrows nothing, as everywhere here. */
 function readFeature(value: string | null): number | 'none' | null {
   if (value === null) return null;
