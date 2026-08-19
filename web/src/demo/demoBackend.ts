@@ -777,6 +777,22 @@ class DemoServer {
     return { ok: true };
   }
 
+  async blendPet(id: string): Promise<{ ok: true }> {
+    const pets = this.state.pets;
+    const pet = pets?.pets.find((p) => p.id === id);
+    // Same rule the server enforces: a duplicate only, and the row is marked
+    // rather than dropped so its origin line survives the blend.
+    const live = pets?.pets.filter((p) => p.species === pet?.species && p.dissolvedAt === null).length ?? 0;
+    if (pets && pet && pet.dissolvedAt === null && live > 1) {
+      pet.dissolvedAt = new Date().toISOString();
+      pet.placed = false;
+      pets.wallet.earned += 500;
+      pets.wallet.balance = Math.max(0, pets.wallet.earned - pets.wallet.spent);
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   async promoteFinding(id: string): Promise<{ ok: true }> {
     const finding = (this.state.findings ?? []).find((f) => f.id === id);
     if (finding && finding.status === 'open') {
@@ -2450,6 +2466,7 @@ export const demoApi = {
   feedPet: (id: string, beats: number) => getServer().feedPet(id, beats),
   renamePet: (id: string, name: string) => getServer().renamePet(id, name),
   placePet: (id: string, placed: boolean) => getServer().placePet(id, placed),
+  blendPet: (id: string) => getServer().blendPet(id),
   promoteFinding: (id: string) => getServer().promoteFinding(id),
   fileFinding: (id: string) => getServer().fileFinding(id),
   dismissFinding: (id: string) => getServer().dismissFinding(id),

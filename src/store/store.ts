@@ -16,7 +16,7 @@ import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './vali
 import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS } from './issueVerdicts.js';
 import { ScratchStore } from './scratch.js';
 import { UpgradeStore } from './upgrades.js';
-import { PetStore } from './pets.js';
+import { PetStore, PET_COLUMNS } from './pets.js';
 import { InstructionStore } from './instructions.js';
 import { AgentStore, AGENT_COLUMNS } from './agents.js';
 import { TranscriptStore } from './transcripts.js';
@@ -72,7 +72,7 @@ import type {
   LessonInput,
   Pet,
   PetAction,
-  PetActionKind,
+  PetSpecies,
   Plan,
   PlanPart,
   PlanPartInput,
@@ -183,6 +183,7 @@ export class Store {
       ISSUE_VERDICT_COLUMNS,
       FLOOR_COLUMNS,
       TICKET_COLUMNS,
+      PET_COLUMNS,
     ]) {
       ensureColumns(this.db, columns);
     }
@@ -970,9 +971,6 @@ export class Store {
   petActionKeys(): Set<string> {
     return this.pets.petActionKeys();
   }
-  hasPetActionOfKind(kind: PetActionKind): boolean {
-    return this.pets.hasPetActionOfKind(kind);
-  }
   petActionsSinceHatch(): number {
     return this.pets.petActionsSinceHatch();
   }
@@ -987,5 +985,14 @@ export class Store {
   }
   petBeatsSpent(): number {
     return this.pets.petBeatsSpent();
+  }
+  petBlendCredits(): number {
+    return this.pets.petBlendCredits();
+  }
+  livePetsOfSpecies(species: PetSpecies): number {
+    return this.pets.livePetsOfSpecies(species);
+  }
+  blendPet(id: string, beats: number): Pet | null {
+    return this.pets.blendPet(id, beats);
   }
 }

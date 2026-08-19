@@ -18,14 +18,14 @@ here.
 Stated first, because each boundary is a thing that would otherwise be re-litigated by the first
 change that finds pets convenient:
 
-| Not                     | Because                                                                                                                                                          |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A metric                | Nothing is ranked, compared or scored. There is no total, no level, no streak and no leaderboard, and a collection twice the size of another's means nothing.   |
-| An incentive            | Rewarding an operator for _acting_ would price a decision that must stay free — including the decision to answer nothing today, which is often the correct one. |
-| Visible to agents       | No prompt mentions pets, no MCP tool touches them, and no agent can read the tables. A score an agent can see is a target it can optimise.                      |
-| A dispatch input        | `src/pets/` is a lens. Nothing under `src/dispatcher/` may import it, for the reason the work graph and `prAttentionStatus` may not — see [05](05-dispatcher.md). |
-| A reason to spend       | Beats are a rebate on money already gone. Spending more to raise a pet faster is a worse trade than not raising it, and the arithmetic is deliberately that obvious.  |
-| A thing you can lose    | Nothing decays, starves, dies or is taken away. The harness runs unattended by design, and a creature that sulked about a quiet Sunday would be lying about it. |
+| Not                  | Because                                                                                                                                                                                                                                                                                                               |
+| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A metric             | Nothing is ranked, compared or scored. There is no total, no level, no streak and no leaderboard, and a collection twice the size of another's means nothing.                                                                                                                                                         |
+| An incentive         | Rewarding an operator for _acting_ would price a decision that must stay free — including the decision to answer nothing today, which is often the correct one.                                                                                                                                                       |
+| Visible to agents    | No prompt mentions pets, no MCP tool touches them, and no agent can read the tables. A score an agent can see is a target it can optimise.                                                                                                                                                                            |
+| A dispatch input     | `src/pets/` is a lens. Nothing under `src/dispatcher/` may import it, for the reason the work graph and `prAttentionStatus` may not — see [05](05-dispatcher.md).                                                                                                                                                     |
+| A reason to spend    | Beats are a rebate on money already gone. Spending more to raise a pet faster is a worse trade than not raising it, and the arithmetic is deliberately that obvious.                                                                                                                                                  |
+| A thing you can lose | Nothing decays, starves, dies or is taken away. The harness runs unattended by design, and a creature that sulked about a quiet Sunday would be lying about it. Blending is the one thing that ends an animal, and it is the operator's own act on a duplicate — never the harness's, and never the last of its kind. |
 
 ## The two economies
 
@@ -55,13 +55,23 @@ remembered.
 
 ## The roll
 
-Every qualifying operator action is rolled exactly once, and the roll is a **hash of the action's own
-identity**, never a random number:
+Every qualifying operator action is rolled exactly once, in **three stages**, and every stage is a
+**hash of the action's own identity**, never a random number:
 
 ```
-roll   = hash32(`${kind}:${ref}`)      → drops when (roll % 10_000) < dropChance × 10_000
-species = weighted pick from the kind's table, using hash32(`${kind}:${ref}:species`)
+hatches = hash32(`${kind}:${ref}`) % 10_000 < dropChance × 10_000   -- or forced, or the first ever
+tier    = weighted pick from pets.rarity,  using hash32(`${kind}:${ref}:tier`)
+species = uniform pick from the kind's members of that tier, using hash32(`${kind}:${ref}:species`)
 ```
+
+**Rarity is rolled once, globally.** It used to be an emergent accident of seven hand-tuned weight
+tables — a triaged finding produced a rare 23% of the time and an answered escalation 5%, so no
+sentence beginning "a rare is…" was true of the deployment. Stage 2 makes it one fact:
+`pets.rarity` is the same table for every action, and only a pool that cannot fill a tier changes
+the answer.
+
+Stage 3 is **uniform**, not weighted. Stage 2 has already done the rarity work, and weighting here
+too would put rarity in two places — the drift this replaced.
 
 This is the load-bearing decision in the whole subsystem. A random roll would need the scan to be
 exactly-once, and the scan is a walk over tables that a restart, a clock change, a restored backup
@@ -77,7 +87,16 @@ re-roll the ones it has.
 ### Pity
 
 Actions since the last hatch are counted over `pet_actions`, and at `pets.pity` the next one is
-forced whatever the hash says. Nothing stores the counter: a count is one query, and a stored total
+forced whatever the hash says.
+
+**Pity flips stage 1 and stops.** It never touches the tier: a pet you were given because you had
+been unlucky is exactly as likely to be a mythic as one the roll granted. Paying out worse would
+make a consolation a punishment; paying out better would make waiting the strategy.
+
+Set to **twice the expected gap** (`2 / dropChance`) it is a ceiling rather than a schedule — you
+can be unlucky, never more than twice-unlucky, and the roll still decides roughly six drops in
+seven. Set near the expected gap it becomes the schedule instead: at `dropChance` 0.02 and pity 15
+it supplied three pets in four, and lowering the drop chance moved nothing. Nothing stores the counter: a count is one query, and a stored total
 is one more thing a torn write can leave wrong — wrong here meaning the rule either never fires or
 fires forever, neither of which announces itself.
 
@@ -105,29 +124,65 @@ It is the one species whose availability depends on something other than what yo
 species, because knip runs every rule at `error` and nine separately-exported records read as nine
 unimported symbols.
 
+Twenty species across four tiers. Each action kind declares its members **per tier**; the tier
+itself is rolled globally.
+
 | Species     | Rarity   | Drawn by                          |
 | ----------- | -------- | --------------------------------- |
 | `pip`       | common   | any qualifying action             |
+| `mote`      | common   | any qualifying action             |
 | `nib`       | common   | a plan accepted                   |
 | `tuft`      | common   | a human task settled              |
+| `beck`      | common   | an escalation answered            |
+| `berth`     | common   | a stack landing authorised        |
+| `stoke`     | common   | a job launched from the cockpit   |
+| `speck`     | common   | a finding triaged                 |
+| `patch`     | common   | the harness updating itself       |
 | `warden`    | uncommon | an escalation answered            |
-| `cinder`    | uncommon | a job launched from the cockpit   |
+| `cinder`    | uncommon | a job launched, or a self-update  |
 | `nocturne`  | uncommon | any action taken between 22 and 5 |
-| `lander`    | rare     | a stack landing authorised        |
-| `quill`     | rare     | a finding triaged                 |
+| `chit`      | uncommon | a human task settled              |
+| `vellum`    | uncommon | a plan accepted                   |
+| `drift`     | uncommon | a stack landing authorised        |
+| `bramble`   | uncommon | a finding triaged                 |
+| `lander`    | rare     | a landing, or a self-update       |
+| `quill`     | rare     | an escalation or a plan           |
+| `cairn`     | rare     | an escalation or a finding        |
 | `ouroboros` | mythic   | the harness updating itself       |
 
-Each action kind carries a weighted table over the species it can draw. Every table includes `pip`,
-so no action is a dead end, and the weights are what make a rarity rare — the tier on the row above
-is a label for the cockpit, never an input to the pick.
+**Every action carries three commons**: the two universals `pip` and `mote`, plus one signature of
+its own. One common per pool put `pip` at 70% of hatches on five of the seven actions — a hundred
+identical animals before anything else turned up, which is the boredom the extra six exist to fix.
+No species now exceeds a fifth of hatches across a mixed workload, asserted in `test/pets.test.ts`.
 
-### First of a kind
+### Ceilings, and degrading downward
 
-The first qualifying action of each kind drops unconditionally and picks from the table with the
-common weights removed. This is the only place the roll is overridden, and it exists because the
-first escalation an operator ever answers is the single most memorable action they will take in the
-harness, and rolling a 90% chance of nothing on it is a waste of the one moment the feature is
-guaranteed an audience.
+A tier a pool cannot fill hands the roll **down** one tier at a time, never up. That is the only way
+a ceiling is expressed: `human-task` and `job` hold no rare, so their rare and mythic rolls become
+uncommon, and only `upgrade` holds a mythic at all. Degrading upward instead would make the scarcest
+actions the easiest source of the scarcest animals — the inversion this design removed.
+
+### The first action ever
+
+The **deployment's first qualifying action, of any kind**, drops unconditionally and picks from the
+table with the common weights removed. This is the only place the roll is overridden, and it exists
+because the first thing an operator ever settles in the harness is the single most memorable action
+they will take in it, and rolling a 98% chance of nothing on it is a waste of the one moment the
+feature is guaranteed an audience.
+
+It fires **once per deployment**, not once per kind, and the distinction is the whole of why the
+rule is worth stating. Per kind it fired seven times — and because stripping the commons leaves most
+tables holding exactly one non-common species by day, each of those seven was a _deterministic
+rare_: a guaranteed `quill` on the first plan and again on the first finding, a guaranteed `lander`
+on the first landing. That inverted the tiers it was meant to decorate. The rare species became the
+easiest in the catalogue to collect, `nib` and `tuft` became the hardest — reachable only through a
+roll that excludes them the one time it is certain to fire — and an afternoon that touched each kind
+once ended with seven pets and most of the rare tier.
+
+The flag is therefore carried across the scan rather than re-read per action. `petActionKeys` is
+captured once before the loop, so a flag derived from it and never advanced would call _every_
+action in a first scan the deployment's first — the same seven-pet afternoon, arriving by a
+different route.
 
 ## Growth
 
@@ -242,15 +297,15 @@ a hash and the origin is unique.
 
 `src/pets/scan.ts` holds one table of sources, each naming a store read and how to key a row:
 
-| Kind         | Source                                                    |
-| ------------ | --------------------------------------------------------- |
-| `escalation` | escalations with an answer                                       |
-| `human-task` | `ask` tasks settled `done` — not declined, and not `close_out`   |
-| `plan`       | plans that reached `active`                                      |
-| `landing`    | stack landings recorded                                          |
-| `job`        | jobs launched from the cockpit, which carry no `originRef`       |
-| `finding`    | findings triaged — promoted, filed or dismissed                  |
-| `upgrade`    | a self-update applied, keyed on the commit it accepted           |
+| Kind         | Source                                                         |
+| ------------ | -------------------------------------------------------------- |
+| `escalation` | escalations with an answer                                     |
+| `human-task` | `ask` tasks settled `done` — not declined, and not `close_out` |
+| `plan`       | plans that reached `active`                                    |
+| `landing`    | stack landings recorded                                        |
+| `job`        | jobs launched from the cockpit, which carry no `originRef`     |
+| `finding`    | findings triaged — promoted, filed or dismissed                |
+| `upgrade`    | a self-update applied, keyed on the commit it accepted         |
 
 Three exclusions are deliberate. A **declined** human task is the operator saying the ask should not
 have been made, and a **`close_out`** one is the harness's own, which the harness also settles — so
@@ -262,16 +317,36 @@ obviously belong to.
 Adding a source is an entry in that table and a row in the loot tables. Nothing else changes, and a
 source nobody adds is invisible rather than broken.
 
+## Blending a duplicate
+
+The catalogue is twenty and the vivarium holds four, so duplicates are the common case rather than
+the edge. Blending dissolves one back into beats at `blendYield × growth` — a mythic is worth four
+commons, and the yield sits deliberately below what the same tier costs to reach juvenile, so
+blending is a use for surplus rather than a currency press.
+
+**It marks, it never deletes.** A blended pet keeps its row, its species, its seed and its origin
+line, gains a `dissolvedAt` stamp, leaves the vivarium and stops being feedable or placeable. The
+origin line — the night you answered the thing that produced it — is the one part of this subsystem
+that gets better the longer a deployment runs, and a `DELETE` takes it with the animal.
+
+**Only a duplicate goes.** `blend` refuses the last live pet of a species, which is what keeps the
+row above in the "not" table honest: nothing is taken from you that you did not have twice.
+
+The credit is **stored** in `pet_blends` rather than derived from the dissolved rows, and this is the
+one place the subsystem stores a total on purpose. Its value depends on `blendYield`; deriving it
+would rewrite history the day that key is tuned, and could take a balance already spent negative.
+
 ## Routes
 
 `src/server/routes/pets.ts`, in `ROUTE_MODULES`. Every handler is wrapped in `checked(...)` and
 refuses by returning a 400, never by throwing ([16](16-http-api.md#request-validation)).
 
-| Route                     | Does                                                            |
-| ------------------------- | --------------------------------------------------------------- |
-| `POST /api/pets/:id/feed` | Spends beats on one pet. Refuses more than the balance.        |
-| `POST /api/pets/:id/name` | Renames it. An empty name restores the species' display name.  |
-| `POST /api/pets/:id/place`| Puts it in the vivarium or takes it out. Refuses a fifth.      |
+| Route                      | Does                                                             |
+| -------------------------- | ---------------------------------------------------------------- |
+| `POST /api/pets/:id/feed`  | Spends beats on one pet. Refuses more than the balance.          |
+| `POST /api/pets/:id/name`  | Renames it. An empty name restores the species' display name.    |
+| `POST /api/pets/:id/place` | Puts it in the vivarium or takes it out. Refuses a fifth.        |
+| `POST /api/pets/:id/blend` | Dissolves a duplicate into beats. Refuses the last of a species. |
 
 There is no read route. `PetState` rides on the state snapshot with everything else the cockpit
 draws, so the vivarium updates on the same socket as the rail above it — and it is **null** rather
@@ -280,14 +355,17 @@ that reads as a deployment nobody has used.
 
 ## Persistence
 
-`src/store/pets.ts`, three new tables. New tables need no `ColumnMigrations` entry — and a column
-added to any of them later does ([14](14-persistence.md#migrations)).
+`src/store/pets.ts`, four tables. A new table needs no `ColumnMigrations` entry — but `pets` is no
+longer new, so **`dissolved_at` has one**, in `PET_COLUMNS`. Without it the column is invisible on
+every database from before blending existed, and invisible here means every historical pet reads as
+alive again ([14](14-persistence.md#migrations)).
 
-| Table           | Holds                                                                                          |
-| --------------- | ---------------------------------------------------------------------------------------------- |
-| `pets`          | One row per hatched pet. `UNIQUE (origin_kind, origin_ref)` is what makes the scan idempotent.  |
-| `pet_actions`   | One row per operator action rolled, hatched or not, keyed `(kind, ref)`.                        |
-| `pet_purchases` | One row per beat spent, with the pet it was spent on. The only source of `beatsSpent`.          |
+| Table           | Holds                                                                                                     |
+| --------------- | --------------------------------------------------------------------------------------------------------- |
+| `pets`          | One row per hatched pet. `UNIQUE (origin_kind, origin_ref)` is what makes the scan idempotent.            |
+| `pet_actions`   | One row per operator action rolled, hatched or not, keyed `(kind, ref)`.                                  |
+| `pet_purchases` | One row per beat spent, with the pet it was spent on. The only source of `beatsSpent`.                    |
+| `pet_blends`    | One row per duplicate blended, with what it credited. The only source of the blend half of `beatsEarned`. |
 
 **There is no scan cursor.** `pet_actions` is the watermark: an action whose key is already in it is
 skipped rather than re-rolled, which is stronger than a timestamp high-water mark and needs nothing
@@ -300,17 +378,24 @@ transaction, so there is no window in which a pet has been paid for and not grow
 
 ## Configuration
 
-| Key                    | Default | Does                                                        |
-| ---------------------- | ------- | ----------------------------------------------------------- |
-| `pets.enabled`         | `true`  | Off stops the scan and hides the vivarium. Nothing is lost. |
-| `pets.beatsPerDollar`  | `25`    | The conversion. Raising it makes every pet cheaper to raise. |
-| `pets.dropChance`      | `0.1`   | Per qualifying action, before pity.                         |
-| `pets.pity`            | `15`    | Actions without a hatch before the next one is forced.      |
+| Key                   | Default | Does                                                         |
+| --------------------- | ------- | ------------------------------------------------------------ |
+| `pets.enabled`        | `true`  | Off stops the scan and hides the vivarium. Nothing is lost.  |
+| `pets.beatsPerDollar` | `25`    | The conversion. Raising it makes every pet cheaper to raise. |
+| `pets.dropChance`     | `0.02`  | Per qualifying action, before pity.                          |
+| `pets.pity`           | `15`    | Actions without a hatch before the next one is forced.       |
 
-The defaults are set to be generous early and slow later: at a fleet spending thirty dollars a day,
-an adult common is about ten days of feeding, and a working week produces a handful of pets. An
-empty vivarium is the failure mode worth tuning against, so the first move on a quiet deployment is
-`dropChance` up, not `pity` down.
+The defaults are set so a pet is an event rather than a receipt: one guaranteed drop to open the
+vivarium, and roughly one per thirteen actions after it. At a fleet spending thirty dollars a day an
+adult common is about ten days of feeding.
+
+`dropChance` and `pity` are two limits over one rate, and the **lower one wins** — which is worth
+reading off the arithmetic rather than the table, because the table makes them look independent. At
+`0.02` the roll misses fourteen times running in 75% of streaks, so **three pets in four arrive
+because pity forced them**, and the drop chance has largely stopped being the thing that decides.
+Lowering it further barely moves the rate; raising `pity` is what hands the decision back to the
+roll. An empty vivarium is still the failure mode worth tuning against, so the first move on a quiet
+deployment is `dropChance` up, not `pity` down.
 
 ## Sharp edges
 
@@ -320,6 +405,14 @@ empty vivarium is the failure mode worth tuning against, so the first move on a 
   and not in the table is a source that pays out only while that route is the one that settles it.
 - **The roll is a hash, and must stay one.** `Math.random` anywhere in `src/pets/roll.ts` turns every
   re-read into a fresh chance at a pet, and the tables have no way to tell that from a first read.
+  All three stages hash the same key under different salts, so they stay independent _and_
+  reproducible.
+- **Weighting stage 3 puts rarity back in two places.** The species pick is uniform within the tier
+  on purpose. Adding weights there re-creates the drift Mark Two removed — the tier table would say
+  one thing and the pools another, and the pools would quietly win.
+- **A new species is a row in `SPECIES`, a member of some pool, and two sprite grids.** Miss the pool
+  and it exists but can never be drawn; miss the grids and `Record<PetSpecies, …>` fails the web
+  typecheck, which is the one of the three that is not silent.
 - **Nothing under `src/dispatcher/` may import `src/pets/`.** Asserted structurally in
   `test/pets.test.ts`, alongside the assertion that nothing under `src/mcp/` or `docs/prompt-templates/`
   ever names the vivarium to an agent.

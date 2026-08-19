@@ -4,8 +4,8 @@ import { checked, IdParams, optionalText, requiredBoolean } from '../validation.
 import type { RouteContext } from './context.js';
 
 /**
- * The three things an operator does to a creature: feed it, name it, and decide
- * whether it stands in the vivarium.
+ * The four things an operator does to a creature: feed it, name it, decide
+ * whether it stands in the vivarium, and blend a duplicate back into beats.
  *
  * **No read route.** `PetState` rides on the state snapshot with everything else
  * the cockpit draws, so the corner of the rail updates on the same socket as the
@@ -43,6 +43,18 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ params: IdParams, body: NameBody }, async ({ params, body, reply }) => {
       const name = body.name?.trim();
       const result = pets.rename(params.id, name === undefined || name.length === 0 ? null : name);
+      if (!result.ok) return reply.code(400).send({ error: result.error });
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, pet: result.pet };
+    }),
+  );
+
+  // No body: what a blend is worth is the species' own, and a client naming the
+  // amount would be a client deciding it.
+  app.post(
+    '/api/pets/:id/blend',
+    checked({ params: IdParams }, async ({ params, reply }) => {
+      const result = pets.blend(params.id);
       if (!result.ok) return reply.code(400).send({ error: result.error });
       hub.broadcast({ type: 'dirty' });
       return { ok: true, pet: result.pet };

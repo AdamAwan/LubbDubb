@@ -1,6 +1,18 @@
 import { nanoid } from 'nanoid';
 import type { Pet, PetAction, PetActionKind, PetSpecies } from '../types.js';
 import type { StoreContext } from './context.js';
+import type { ColumnMigrations } from './migrate.js';
+
+/**
+ * `pets` was introduced as a fresh `CREATE TABLE` and needed no entry here.
+ * `dissolved_at`, added now, does: `CREATE TABLE IF NOT EXISTS` never alters an
+ * existing table, so without this the column is invisible on every database from
+ * before blending existed — and invisible is the whole failure, since a pet whose
+ * `dissolved_at` reads `undefined` is simply alive again.
+ */
+export const PET_COLUMNS: ColumnMigrations = {
+  pets: { dissolved_at: `TEXT` },
+};
 
 /**
  * The three `pet_*` tables: what has hatched, every operator action that has been
@@ -59,6 +71,7 @@ export class PetStore {
       // enclosure under a full queue is the state that teaches an operator the
       // corner is decoration and to stop looking at it.
       placed: this.placedCount() < VIVARIUM_SLOTS,
+      dissolvedAt: null,
     };
     this.ctx.db
       .prepare(
@@ -93,14 +106,6 @@ export class PetStore {
   petActionKeys(): Set<string> {
     const rows = this.ctx.db.prepare(`SELECT kind, ref FROM pet_actions`).all() as { kind: string; ref: string }[];
     return new Set(rows.map((row) => `${row.kind}:${row.ref}`));
-  }
-
-  /** Whether any action of this kind has been rolled — what "first of a kind" reads. */
-  hasPetActionOfKind(kind: PetActionKind): boolean {
-    const row = this.ctx.db.prepare(`SELECT 1 AS hit FROM pet_actions WHERE kind=? LIMIT 1`).get(kind) as
-      | { hit: number }
-      | undefined;
-    return row !== undefined;
   }
 
   /**
@@ -156,6 +161,52 @@ export class PetStore {
     return changed === 0 ? null : this.getPet(id);
   }
 
+  /**
+   * How many of this species are still alive.
+   *
+   * What `blend` reads to refuse the last one of its kind: dissolving a duplicate
+   * is a use for surplus, and dissolving your only Ouroboros is losing something.
+   */
+  livePetsOfSpecies(species: PetSpecies): number {
+    const row = this.ctx.db
+      .prepare(`SELECT COUNT(*) AS n FROM pets WHERE species=? AND dissolved_at IS NULL`)
+      .get(species) as { n: number };
+    return row.n;
+  }
+
+  /**
+   * Dissolve one duplicate into beats.
+   *
+   * Two writes in one transaction, the same shape as {@link feedPet}: the credit
+   * is the record and the stamp is what the cockpit draws, and a crash between
+   * them would either pay for a pet still standing or dissolve one for nothing.
+   * The row is **marked, never deleted** — its origin line is the point of the
+   * panel. It also leaves the vivarium, because a dissolved animal holding one of
+   * four slots is a slot nobody can use.
+   */
+  blendPet(id: string, beats: number): Pet | null {
+    const blend = this.ctx.db.transaction((): Pet | null => {
+      const ts = this.ctx.now();
+      const changed = this.ctx.db
+        .prepare(`UPDATE pets SET dissolved_at=?, placed=0 WHERE id=? AND dissolved_at IS NULL`)
+        .run(ts, id).changes;
+      if (changed === 0) return null;
+      this.ctx.db
+        .prepare(`INSERT INTO pet_blends (id, pet_id, beats, created_at) VALUES (?,?,?,?)`)
+        .run(`bld_${nanoid(10)}`, id, beats, ts);
+      return this.getPet(id);
+    });
+    return blend();
+  }
+
+  /** Every beat ever handed back by a blend. Rides beside fleet spend in the wallet. */
+  petBlendCredits(): number {
+    const row = this.ctx.db.prepare(`SELECT COALESCE(SUM(beats), 0) AS total FROM pet_blends`).get() as {
+      total: number;
+    };
+    return row.total;
+  }
+
   /** Every beat ever spent. The only input to the wallet's `spent`. */
   petBeatsSpent(): number {
     const row = this.ctx.db.prepare(`SELECT COALESCE(SUM(beats), 0) AS total FROM pet_purchases`).get() as {
@@ -184,6 +235,7 @@ interface PetRow {
   origin_ref: string;
   hatched_at: string;
   placed: number;
+  dissolved_at: string | null;
 }
 
 function rowToPet(row: PetRow): Pet {
@@ -197,5 +249,8 @@ function rowToPet(row: PetRow): Pet {
     originRef: row.origin_ref,
     hatchedAt: row.hatched_at,
     placed: row.placed === 1,
+    // Nullable *and* possibly absent: added by `ensureColumns` on databases from
+    // an older build, where the read would otherwise be `undefined` rather than null.
+    dissolvedAt: row.dissolved_at ?? null,
   };
 }

@@ -204,6 +204,7 @@ export interface CockpitActions {
   feedPet(id: string, beats: number): Promise<void>;
   renamePet(id: string, name: string): Promise<void>;
   placePet(id: string, placed: boolean): Promise<void>;
+  blendPet(id: string): Promise<void>;
 
   promoteFinding(id: string): Promise<void>;
   fileFinding(id: string): Promise<void>;

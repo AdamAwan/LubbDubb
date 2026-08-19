@@ -942,6 +942,7 @@ export function buildDemoState(): DemoSeed {
           originRef: 'esc_9f2a',
           hatchedAt: ago(4_320),
           placed: true,
+          dissolvedAt: null,
         },
         {
           id: 'pet-2',
@@ -957,6 +958,7 @@ export function buildDemoState(): DemoSeed {
           originRef: 'htk_31c',
           hatchedAt: ago(2_880),
           placed: true,
+          dissolvedAt: null,
         },
         {
           id: 'pet-3',
@@ -972,6 +974,7 @@ export function buildDemoState(): DemoSeed {
           originRef: 'land_77b',
           hatchedAt: ago(600),
           placed: true,
+          dissolvedAt: null,
         },
         {
           id: 'pet-4',
@@ -987,6 +990,7 @@ export function buildDemoState(): DemoSeed {
           originRef: '9c1d4a2',
           hatchedAt: ago(90),
           placed: false,
+          dissolvedAt: null,
         },
       ],
     },

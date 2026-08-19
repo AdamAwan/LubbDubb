@@ -219,6 +219,7 @@ export function useCockpit(): CockpitStatus {
       feedPet: (id, beats) => then(api.feedPet(id, beats)),
       renamePet: (id, name) => then(api.renamePet(id, name)),
       placePet: (id, placed) => then(api.placePet(id, placed)),
+      blendPet: (id) => then(api.blendPet(id)),
       promoteFinding: (id) => then(api.promoteFinding(id)),
       fileFinding: (id) => then(api.fileFinding(id)),
       dismissFinding: (id) => then(api.dismissFinding(id)),

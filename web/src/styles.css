@@ -5551,6 +5551,18 @@ body {
   flex-direction: column;
   gap: 8px;
 }
+/* A blended pet keeps its card and its origin line — that record is the point of
+   the panel — and reads as spent rather than absent. Opacity rather than a new
+   colour, so it follows whichever theme is on without a token to keep in step. */
+.pet-card.is-dissolved {
+  opacity: 0.55;
+}
+.pet-card.is-dissolved .pet-frame {
+  filter: grayscale(1);
+}
+.pet-blended {
+  margin: 0;
+}
 .pet-frame {
   height: 96px;
   display: flex;
