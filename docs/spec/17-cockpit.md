@@ -291,21 +291,21 @@ The rail once spent its whole palette on that one bit — red for `blocking`, am
 cost of it was that **everything that ever landed on the bench arrived in an alarm colour**. A goal
 delivered and waiting to be closed out drew in the same two hues as a restart that orphaned six runs,
 and an operator glancing at the rail could not tell a queue of successes from a queue of faults without
-reading every row. The palette now answers *what the ask is*, and the group is carried as weight
+reading every row. The palette now answers _what the ask is_, and the group is carried as weight
 within it.
 
-| Kind | Tag | Tone | Glyph | Why that tone |
-| --- | --- | --- | --- | --- |
-| `recovery` | Recovery | red | `↺` | A restart left runs orphaned. Something went wrong. |
-| `escalation` | Escalation | red | `?` | An agent hit a question it cannot get past. |
-| `permission` | Permission | amber | `⊘` | A gate, not a fault — a command is waiting on a yes. |
-| `limit` | Usage limit | amber | `‖` | Nothing broke; an allowance window has to turn over. |
-| `burn` | Spend | amber | `▲` | A heads-up on a run that carries on either way. |
-| `proposal` | Plan | blue | `◇` | A plan to read and decide on. |
-| `profile` | Profile | blue | `⊙` | Which profile a goal runs on. |
-| `bench` | Bench | blue | `◆` | Work only a person can do. Informative, not broken. |
-| `close_out` | Close-out | green | `⚑` | A goal was **delivered**; this is the step after it. |
-| `validate` | Validate | green | `✓` | The other step after a delivery — run its checks. |
+| Kind         | Tag         | Tone  | Glyph | Why that tone                                        |
+| ------------ | ----------- | ----- | ----- | ---------------------------------------------------- |
+| `recovery`   | Recovery    | red   | `↺`   | A restart left runs orphaned. Something went wrong.  |
+| `escalation` | Escalation  | red   | `?`   | An agent hit a question it cannot get past.          |
+| `permission` | Permission  | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes. |
+| `limit`      | Usage limit | amber | `‖`   | Nothing broke; an allowance window has to turn over. |
+| `burn`       | Spend       | amber | `▲`   | A heads-up on a run that carries on either way.      |
+| `proposal`   | Plan        | blue  | `◇`   | A plan to read and decide on.                        |
+| `profile`    | Profile     | blue  | `⊙`   | Which profile a goal runs on.                        |
+| `bench`      | Bench       | blue  | `◆`   | Work only a person can do. Informative, not broken.  |
+| `close_out`  | Close-out   | green | `⚑`   | A goal was **delivered**; this is the step after it. |
+| `validate`   | Validate    | green | `✓`   | The other step after a delivery — run its checks.    |
 
 `KIND_TONE` and `KIND_SYMBOL` (`web/src/console/QueueRail.tsx`) are total over `NeedKind`, beside
 `KIND_LABEL`, so a new kind fails the typecheck rather than drawing in whatever the last rule in the
@@ -1115,6 +1115,15 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
 - **Findings** — the shared `FindingsPanel`, with promote / file / dismiss. The count is findings at
   `open` and nothing else: promoted, filed and dismissed are done, and `filing` is decided. Nothing in
   the dispatcher reads `findings`, so those three buttons are the only way one becomes anything.
+
+  **The promote button says what promoting _this kind_ does.** On a `docs` claim it reads "Queue docs
+  PR", because the click produces a pull request against the worked repository's own documentation and
+  not a fix for the thing described — "Queue job" there would read as scheduling the work the claim
+  names, which is a different decision the operator did not make. Every other kind keeps "Queue job"
+  (`PROMOTE` in `web/src/components/FindingsPanel.tsx`, keyed by kind so a fifth kind cannot be added
+  without answering the question). The kind chip and its tooltip come from the same map they always
+  did. → [13](13-jobs-and-findings.md#the-four-kinds)
+
 - **Lessons** — the shared `LessonsPanel`: what working a goal taught about working this repository,
   the composer that writes one down, and the promote / retire buttons that are the only way one moves
   (#355). Three sections, because the three statuses are three different questions — _what wants a
@@ -1137,7 +1146,7 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   a partial list presented as whole is the failure the cap exists to bound — so this panel is the only
   place a dropped claim is visible, and the only place something can be retired to make room for it.
   Per row rather than as a count, because "two are over the cap" leaves the operator to work out
-  *which* two before they can act. `rendered` is computed server-side by the same `renderLessonBlock`
+  _which_ two before they can act. `rendered` is computed server-side by the same `renderLessonBlock`
   the launch calls (`LessonView` in `src/wire.ts`), never re-derived in the browser: a second
   implementation of "what fits" would be free to disagree with the one that actually ran.
 

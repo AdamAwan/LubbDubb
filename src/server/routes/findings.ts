@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { findingJobRequest, findingTicketFields, trackerCoordinates } from '../../mcp/findings.js';
+import { findingDocsFields, findingJobRequest, findingTicketFields, trackerCoordinates } from '../../mcp/findings.js';
+import type { Finding } from '../../types.js';
 import { checked, IdParams, optionalText, TicketTitleBody } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -8,12 +9,37 @@ import type { RouteContext } from './context.js';
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store, harness } = system;
 
+  /**
+   * What a promoted finding is worked from — and the one place the `docs` kind
+   * diverges from the other three.
+   *
+   * The three original kinds are worked from a prompt derived in code: it is
+   * provenance and "verify before you act", which needs no opinion and has no
+   * house style. A `docs` claim ends in a **pull request against the worked
+   * repository**, where which document owns what and how a change should be
+   * worded are exactly the opinions an override exists to carry — so it renders
+   * `docs-change` from the operator's template book, the way filing renders
+   * `finding-ticket`. → src/mcp/findings.ts
+   */
+  const promotedWork = (finding: Finding): { title: string; prompt: string } => {
+    if (finding.kind !== 'docs') return findingJobRequest(finding);
+    const { title, vars } = findingDocsFields(finding);
+    return { title, prompt: system.prompts.render('docs-change', vars) };
+  };
+
   // Promote a finding into work. **This is the only path from a finding to an
   // agent, and it starts with an operator's click** — an agent that could queue
   // jobs could put agents on the fleet (rule `manual-job` dispatches a job ahead of every
   // world-driven rule), which is a capability escalation rather than a
   // convenience. So `report_finding` files a claim, and this route is where a
   // human turns one into work. See src/mcp/findings.ts for the full argument.
+  //
+  // `kind` defaults to `code`, which is also what a `docs` promotion needs and why
+  // it is not forced here: writing a documentation change and opening a pull
+  // request for it means files in a tree, so it wants a worktree and a branch —
+  // a desk job would cut neither. The cockpit sends no body at all, so every
+  // promotion from the panel is a code job; the override stays available for the
+  // operator who knows they want otherwise, the same as it is for every kind.
   const PromoteBody = z.object({
     title: optionalText('title'),
     prompt: optionalText('prompt'),
@@ -31,7 +57,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // order. `checked` applied by hand here is what puts the body's refusal
       // second while keeping it the same one refusal path as everywhere else.
       return checked({ body: PromoteBody }, async ({ body }) => {
-        const derived = findingJobRequest(finding);
+        const derived = promotedWork(finding);
         // The operator may reword it before it runs; the derived text is only the default.
         const title = body.title ?? derived.title;
         const prompt = body.prompt ?? derived.prompt;

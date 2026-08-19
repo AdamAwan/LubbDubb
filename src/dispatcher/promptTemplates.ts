@@ -6,9 +6,10 @@ import { basename, extname, join } from 'node:path';
  *
  * Every agent- (and escalation-) facing prompt the harness composes itself has a
  * stable id and a built-in default here — the {@link RuleDispatcher}'s, plus the
- * route-driven `finding-ticket`, which is here rather than inline in the route
- * precisely because *how a ticket should be written* is the operator's opinion,
- * not the harness's. An operator can override any of
+ * route-driven `finding-ticket` and `docs-change`, which are here rather than
+ * inline in the route precisely because *how a ticket should be written*, and
+ * *how a documentation change should be worded and where it belongs*, are the
+ * operator's opinion, not the harness's. An operator can override any of
  * them by dropping a `<id>.md` file into the prompt-templates directory
  * (`promptTemplatesDir`, default `.lubbdubb/prompts`); unset ids keep their
  * default. Overrides are read once at boot — templates don't change per-cycle.
@@ -39,6 +40,7 @@ type PromptId =
   | 'pr-review-comment'
   | 'pr-concern-escalation'
   | 'finding-ticket'
+  | 'docs-change'
   | 'work-item-ticket'
   | 'raise-bug'
   | 'blueprint-ticket'
@@ -350,8 +352,8 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
   'issue-retro': {
     placeholders: ['number', 'title', 'body'],
     template:
-      'Issue #{number} ("{title}") has been delivered. Write the retrospective for it — the account of what shipped, and of how the work actually went.\n\n{body}\n\nYou have no worktree and you are not implementing anything. What you have is the scratchpad the agents on this goal left and the record the harness kept, both appended below, plus world_read if you need the state of a pull request or the issue itself.\n\nWrite one document, in markdown, for two readers:\n\n1. **What shipped** — for someone reviewing this goal who did not watch it happen: the pull requests, what each part delivered or decided, what was concluded to need no code or to be out of scope, and anything still outstanding.\n2. **How the run went** — for the operator: where agents were spent and on what, which gates, escalations or retries cost time, what surprised the agents, and what you would change about the process — a prompt, a gate, a config, a habit of decomposition. Be specific and name the evidence; "it went well" helps nobody, and neither does a list of everything that happened.\n\nQuote the scratchpad where it earns it and attribute it, and say plainly where the pad and the harness\'s record disagree — that disagreement is usually the most useful thing in the document.\n\n## Lessons\n\nThe document is read once, by a person. A **lesson** is the part worth keeping: something this run taught about *working this repository* that the next goal would otherwise pay to learn all over again. One question decides what qualifies — does it describe **the repository**, or **working the repository**?\n\n| What you noticed | Where it goes |\n| --- | --- |\n| The suite needs the web bundle built first; this subsystem\'s tests sit at an odd seam; a ticket naming only a symptom is under-specified for a planner every time | A **lesson** on this submission |\n| A fact about the code — a seam, an invariant, a second place a thing must be registered | The repository\'s own docs, as a change a human merges. Say so in the document; do not file it as a lesson |\n| A defect noticed in passing | **report_finding** |\n| Something true only of this goal | The scratchpad, where it dies with the goal — correctly |\n\nFile the one or two a reader would thank you for, not everything you noticed: each lands as a *proposal* that reaches no agent until an operator vouches for it, and a list nobody finishes reading is a list nobody promotes from. A run that taught nothing general is the ordinary case — submit no lessons and the retrospective is complete.\n\nThen call retro_submit with a summary of one or two sentences, the document itself, and any lessons. Nothing you write is posted to the tracker, nothing is closed, and nothing is scheduled from it: a human reads it and decides what to change.',
-    doc: "Sent to a desk agent when an issue the harness parked as delivered has no retrospective yet (rule `issue-retro`). The issue's scratchpad and the harness dossier are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop them. An override also does not carry the lesson discriminator this default states — `retro_submit`'s own description repeats it for that reason, so an agent hears it either way. Placeholders: {number} {title} {body}.",
+      'Issue #{number} ("{title}") has been delivered. Write the retrospective for it — the account of what shipped, and of how the work actually went.\n\n{body}\n\nYou have no worktree and you are not implementing anything. What you have is the scratchpad the agents on this goal left and the record the harness kept, both appended below, plus world_read if you need the state of a pull request or the issue itself.\n\nWrite one document, in markdown, for two readers:\n\n1. **What shipped** — for someone reviewing this goal who did not watch it happen: the pull requests, what each part delivered or decided, what was concluded to need no code or to be out of scope, and anything still outstanding.\n2. **How the run went** — for the operator: where agents were spent and on what, which gates, escalations or retries cost time, what surprised the agents, and what you would change about the process — a prompt, a gate, a config, a habit of decomposition. Be specific and name the evidence; "it went well" helps nobody, and neither does a list of everything that happened.\n\nQuote the scratchpad where it earns it and attribute it, and say plainly where the pad and the harness\'s record disagree — that disagreement is usually the most useful thing in the document.\n\n## Lessons\n\nThe document is read once, by a person. A **lesson** is the part worth keeping: something this run taught about *working this repository* that the next goal would otherwise pay to learn all over again. One question decides what qualifies — does it describe **the repository**, or **working the repository**?\n\n| What you noticed | Where it goes |\n| --- | --- |\n| The suite needs the web bundle built first; this subsystem\'s tests sit at an odd seam; a ticket naming only a symptom is under-specified for a planner every time | A **lesson** on this submission |\n| A fact about the code — a seam, an invariant, a second place a thing must be registered | **report_finding**, kind `docs`. Promoted, it becomes a pull request against this repository\'s own documentation — not a lesson, which is ours and stays out of their tree |\n| A defect noticed in passing | **report_finding**, kind `out_of_scope` |\n| Something true only of this goal | The scratchpad, where it dies with the goal — correctly |\n\nA repo fact is worth filing the moment you learn it and not only here — any agent with the tool can, and a retrospective is a late place to remember one. File the one or two lessons a reader would thank you for, not everything you noticed: each lands as a *proposal* that reaches no agent until an operator vouches for it, and a list nobody finishes reading is a list nobody promotes from. A run that taught nothing general is the ordinary case — submit no lessons and the retrospective is complete.\n\nThen call retro_submit with a summary of one or two sentences, the document itself, and any lessons. Nothing you write is posted to the tracker, nothing is closed, and nothing is scheduled from it: a human reads it and decides what to change.',
+    doc: "Sent to a desk agent when an issue the harness parked as delivered has no retrospective yet (rule `issue-retro`). The issue's scratchpad and the harness dossier are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop them. An override also does not carry the four-destination discriminator this default states — `retro_submit`'s own description repeats it for that reason, so an agent hears it either way. Row two names `report_finding`'s `docs` kind rather than asking for prose in the document: a fact about the *code* is the repository's, and the only honest destination for it is a pull request a human merges (#397). Placeholders: {number} {title} {body}.",
   },
   'validation-check': {
     placeholders: ['number', 'title', 'letter', 'root'],
@@ -433,6 +435,45 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'GitHub/Azure DevOps and report the ref back via link_ticket. Override this to control how ' +
       'tickets are worded, labelled, or typed in your tracker. Placeholders: {kind} {kindHelp} {ref} ' +
       '{summary} {originRef} {tracker}.',
+  },
+  'docs-change': {
+    placeholders: ['ref', 'summary', 'originRef'],
+    template:
+      'An agent working {originRef} learned something about **this repository** that the repository ' +
+      'itself does not say, and an operator promoted it. Write the documentation change and open a ' +
+      'pull request for it.\n\n' +
+      'It came up on {ref}. The report, verbatim:\n\n{summary}\n\n' +
+      '**Check it against the code before you write a word of it.** It is one agent’s reading of what ' +
+      'it happened to touch, not an established fact, and a document is exactly the wrong place to ' +
+      'record a plausible mistake — everyone after you reads it as settled. Go to the code the report ' +
+      'names, confirm the claim holds in general and not only in the case that agent hit, and if it ' +
+      'does not, say so and stop. Stopping is a good outcome here: it costs one dispatch and saves a ' +
+      'false line that nothing would ever have gone red about.\n\n' +
+      '**Then find the document that already owns this.** A repository that documents itself has a ' +
+      'place for this fact, and the change is almost always a paragraph or a row added where the ' +
+      'subject is already covered — beside the invariants it belongs with, in the voice the rest of ' +
+      'that document uses. A new file is the answer only when nothing there covers the area at all, ' +
+      'and a note bolted onto the end of a README is not one. If the repository keeps a rule about ' +
+      'which document owns what, follow it rather than this paragraph.\n\n' +
+      'Write the *fact*, not the story of finding it: what is true, where it bites, and what breaks ' +
+      'if someone does not know it. No mention of the harness, the agent, this job or the goal it was ' +
+      'learned on — that provenance is the operator’s, and in the repository’s own docs it is noise ' +
+      'about a tool the repository does not use.\n\n' +
+      '**Change documentation, not code.** If checking the claim turned up an actual defect, that is ' +
+      'a separate report through report_finding, not a fix smuggled into a docs pull request.\n\n' +
+      'Finish by **opening a pull request**, and nothing else finishes this: not a commit on the ' +
+      'integration branch, not a direct push, not a summary of what you would have written. This is ' +
+      'the repository’s own knowledge going into the repository’s own tree, and a human merging it is ' +
+      'the whole gate. If the pull request is not opened, nothing has happened — which is correct.',
+    doc:
+      'Sent to a **code** agent when an operator promotes a `docs` finding (`POST /api/findings/:id/promote`) — ' +
+      'a fact about the repository that its own documentation does not state. A code job rather than a desk one ' +
+      'because it writes files in a tree, so it needs a worktree and a branch to open the pull request from. ' +
+      "Overridable for `finding-ticket`'s reason: which document owns what, how a change should be worded, and " +
+      'what your project wants in a docs PR are house style, not harness logic — a repository with a stated rule ' +
+      "about where documentation lives wants that rule here. The report's `where` and `detail` ride in on " +
+      '{summary} rather than placeholders of their own, so an override that predates them still renders them. ' +
+      'Placeholders: {ref} {summary} {originRef}.',
   },
   'raise-bug': {
     placeholders: ['number', 'title', 'summary', 'tracker'],

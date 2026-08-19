@@ -943,8 +943,13 @@ export interface GoalFile {
  *   completed from here; the operator unblocks it or parks it.
  * - `out_of_scope` — "there's an unrelated bug in the module I touched". Work
  *   nobody has yet; the operator decides whether it becomes a job.
+ * - `docs` — "the reap writer must be registered in two places and no document
+ *   says so". A fact about *the repository* that its own documentation does not
+ *   state; the operator promotes it and an agent opens a pull request against
+ *   the worked repo. The odd one out on purpose: the first three are things
+ *   noticed *outside* the agent's task, and this is learned *inside* it.
  */
-export type FindingKind = 'duplicate' | 'blocked' | 'out_of_scope';
+export type FindingKind = 'duplicate' | 'blocked' | 'out_of_scope' | 'docs';
 
 /**
  * Where a finding sits: `open` until an operator acts on it, then `promoted`
