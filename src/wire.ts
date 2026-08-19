@@ -38,6 +38,7 @@
 import type { PlanDiff } from './plans/planDiff.js';
 import type { AcceptanceCriterion } from './plans/parts.js';
 import type { PlanningPolicy } from './plans/planning.js';
+import type { PetRules } from './pets/rules.js';
 import type { CiPolicyDescription } from './ci/describeCiPolicy.js';
 import type { CiVerdict } from './ci/ciPolicy.js';
 import type { IssuePickupStatus } from './dispatcher/issuePickup.js';
@@ -81,9 +82,11 @@ import type {
   Job,
   JobAttachment,
   Pet,
+  PetActionKind,
   PetFlaw,
   PetProvenance,
   PetRarity,
+  PetSpecies,
   PetStage,
   PetWallet,
   JobSchedule,
@@ -1026,6 +1029,7 @@ export type {
   PlanPartInput,
   PlanRevision,
   Pet,
+  PetActionKind,
   PetFlaw,
   PetRarity,
   PetSpecies,
@@ -1080,6 +1084,7 @@ export type { Stack } from './stacks/stack.js';
 export type { PlanDiff } from './plans/planDiff.js';
 export type { AcceptanceCriterion } from './plans/parts.js';
 export type { PlanningPolicy } from './plans/planning.js';
+export type { PetRules } from './pets/rules.js';
 export type { ValidationPolicy } from './validation/policy.js';
 
 /**
@@ -1118,6 +1123,82 @@ export interface PetView extends Pet {
    * will. → `docs/spec/22-pets.md#authenticity`
    */
   provenance: PetProvenance;
+}
+
+/**
+ * One species as the Pets page draws it: what it is, what it costs, and how often
+ * it turns up.
+ *
+ * Every number here is **derived from the catalogue and the rules**, never a
+ * second copy of them — `share` is the roll walked over every action and every
+ * hour, and `juvenileAt` / `adultAt` come from the same `beatsToNextStage` a
+ * `PetView` does. A page that recomputed any of it from a copied threshold is how
+ * a card comes to advertise a price the harness does not charge, with nothing red.
+ * → `docs/spec/22-pets.md#the-pets-page`
+ */
+export interface PetCatalogueEntry {
+  species: PetSpecies;
+  /** The species' own name, which is what an unnamed pet of it is called. */
+  display: string;
+  rarity: PetRarity;
+  /** The multiplier on both stage thresholds and on what a duplicate blends back into. */
+  growth: number;
+  /** Beats fed to reach each stage — the same arithmetic `PetView.beatsToNextStage` runs. */
+  juvenileAt: number;
+  adultAt: number;
+  /** What dissolving a duplicate of this species hands back. */
+  blend: number;
+  /**
+   * Share of all drops, over an even mix of the seven actions and a uniform hour.
+   *
+   * An assumption, and the page says so: no deployment takes the seven actions in
+   * equal numbers. It is the only figure that can be stated about a species rather
+   * than about a species-and-an-action, which is why {@link PetCatalogueSource}
+   * ships the exact per-action answer beside it.
+   */
+  share: number;
+  /** The actions that can draw it, in pool order. */
+  kinds: PetActionKind[];
+  /**
+   * The hours it may be drawn in, or null for any hour.
+   *
+   * Shipped as the hours themselves rather than as a `nightOnly` flag, because the
+   * gate is a property of the pool rather than of a name: a second species gated on
+   * a different window needs no wire change, and nothing outside
+   * `src/pets/catalogue.ts` has to know which species is the nocturnal one.
+   */
+  hours: number[] | null;
+}
+
+/**
+ * What one action's roll of one tier actually resolves to.
+ *
+ * The step-down is invisible anywhere else in the cockpit, and it is the rule that
+ * decides the most: settling a task can never produce a rare, because `human-task`
+ * holds none and the roll walks *down*. → `docs/spec/22-pets.md#the-pets-page`
+ */
+export interface PetCatalogueSource {
+  kind: PetActionKind;
+  /** The tier the global table rolled. */
+  rolled: PetRarity;
+  /** The tier it landed on after any step down — never above `rolled`. */
+  landed: PetRarity;
+  /** What it may draw there, at an hour that admits every species. */
+  members: PetSpecies[];
+}
+
+/** Everything the Pets page draws that is not the operator's own collection. */
+export interface PetCatalogue {
+  /** The one table, on every deployment — the page's whole claim to be worth reading. */
+  rules: PetRules;
+  /**
+   * The tiers commonest-first, which is both the order the page bands them in and
+   * the direction a roll steps *down*. Shipped rather than re-declared in the
+   * cockpit: a fifth tier added to the catalogue would otherwise render nowhere.
+   */
+  rarities: PetRarity[];
+  species: PetCatalogueEntry[];
+  sources: PetCatalogueSource[];
 }
 
 /** The whole vivarium, as it rides on the state snapshot. */

@@ -6,7 +6,13 @@ import { ExtLink } from '../components/util.js';
 import { untriagedCount } from '../worldBuckets.js';
 import { productionReading } from '../view/production.js';
 
-/** The nav's destinations, in reading order — the order the tabs are drawn in. */
+/**
+ * The nav's destinations, in reading order — the order the tabs are drawn in.
+ *
+ * `pets` is absent when the feature is off, exactly as the rail's vivarium is: a
+ * tab that opens on a page explaining a subsystem this deployment does not run is
+ * worse than no tab.
+ */
 const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets'];
 
 /**
@@ -29,6 +35,7 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
   work: 'Work',
   tickets: 'Tickets',
+  pets: 'Pets',
   config: 'Config',
 };
 
@@ -64,9 +71,14 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
     actions.openTab(tab);
   };
 
+  // Appended rather than listed, so the nav is the same three tabs on a deployment
+  // that has the feature off and the fourth cannot be reached by a stale URL either
+  // — `tabBody` refuses it for the same reason.
+  const tabs = view.state.pets === null ? TABS : [...TABS, 'pets' as const];
+
   return (
     <nav className="cn-nav">
-      {TABS.map((tab) => (
+      {tabs.map((tab) => (
         <button key={tab} type="button" className={goal === null && view.tab === tab ? 'cn-on' : ''} onClick={go(tab)}>
           {TAB_LABEL[tab]}
           {/* The space is the gap: `.cn-n` carries no margin of its own. */}

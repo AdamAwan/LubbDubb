@@ -18,6 +18,7 @@ import type {
   JobSchedule,
   LessonStatus,
   OpenPullRequest,
+  PetCatalogue,
   CiPolicyDescription,
   CiSubject,
   PromptTemplateView,
@@ -2383,6 +2384,25 @@ export const demoApi = {
   // to fill the demo panel would be a duplicate free to drift from the originals
   // with nothing to catch it, so the demo shows an empty book and says so.
   getPrompts: () => Promise.resolve({ dir: null, templates: [] as PromptTemplateView[] }),
+  // And the pet catalogue, for the third time and the same reason: what exists and
+  // what it costs is decided by tables in `src/pets/`, which the web bundle
+  // deliberately does not import. A hand-written demo copy of twenty species would
+  // be stale the first time one is added, with nothing to catch it — so the demo
+  // ships an empty catalogue and the page says why. The rules ride at zero because
+  // the page draws none of them without species to draw them for.
+  getPetCatalogue: (): Promise<PetCatalogue> =>
+    Promise.resolve({
+      rules: {
+        dropChance: 0,
+        pity: 0,
+        rarity: { common: 0, uncommon: 0, rare: 0, mythic: 0 },
+        beatsPerDollar: 0,
+        blendYield: 0,
+      },
+      rarities: [],
+      species: [],
+      sources: [],
+    }),
   // Same answer as the prompt book, for the same reason: the running config is
   // resolved by `loadConfig` on the server, and the web bundle imports no server
   // code — so a demo copy would be a duplicate free to drift with nothing to

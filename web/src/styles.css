@@ -65,6 +65,15 @@
   --link-line: color-mix(in srgb, var(--blue) 66%, var(--panel-2));
   --link-fill: color-mix(in srgb, var(--blue) 8%, var(--well));
   --link-ink: #7fb8dc;
+  /* The head of a species card on the Pets page, one per rarity. `color-mix` of the
+     hue each tier is already drawn in, so a preset that moves `--green` moves the
+     uncommon band with it and owes these nothing. Faint on purpose: the band is a
+     grouping, and a tint strong enough to read as a status would make twenty
+     catalogue entries look like twenty verdicts. */
+  --tier-common-fill: color-mix(in srgb, var(--grey) 12%, var(--panel));
+  --tier-uncommon-fill: color-mix(in srgb, var(--green) 8%, var(--panel));
+  --tier-rare-fill: color-mix(in srgb, var(--blue) 9%, var(--panel));
+  --tier-mythic-fill: color-mix(in srgb, var(--accent) 9%, var(--panel));
   /* Ink on a light or warm fill: the ground colour, not near-black — a panel's
      lettering is the panel's own shadow, not ink from somewhere else. */
   --on-light: #1c1b1a;
@@ -5655,4 +5664,376 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+/* ---------- the Pets page ----------------------------------------------------
+   The catalogue, which is a different surface from the vivarium panel above: that
+   one draws the collection and its four controls, this draws every species that
+   exists whether or not it is in the collection. Everything here is prefixed
+   `species-` for that reason — a rule that reached a `.pet-card` would style a card
+   on the other surface, and the two are only alike until one of them changes.
+
+   The one thing shared is `.pet-rarity`, because a tier chip is a tier chip.
+   → docs/spec/22-pets.md#the-pets-page */
+.species {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.species-intro p {
+  margin: 0 0 4px;
+  max-width: 74ch;
+}
+.species-h {
+  margin: 12px 0 0;
+  font-size: 14px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 8px;
+}
+
+/* The rules, as four figures. The sentence that says what each one means is a
+   `title` rather than a paragraph: the page is scanned far more often than it is
+   read, and four explanations in the flow push the catalogue below the fold. */
+.species-odds {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+}
+.species-odd {
+  background: var(--panel);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  cursor: help;
+}
+.species-odd dt {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  align-self: flex-start;
+  border-bottom: 1px dotted var(--muted);
+  padding-bottom: 2px;
+}
+.species-odd dd {
+  margin: 0;
+  font: 20px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.species-tiers {
+  display: flex;
+  height: 26px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  cursor: help;
+}
+.species-tiers i {
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
+  font: 10px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-style: normal;
+  white-space: nowrap;
+  overflow: hidden;
+  color: var(--on-light);
+}
+.species-tiers i.is-common {
+  background: var(--grey);
+}
+.species-tiers i.is-uncommon {
+  background: var(--green);
+}
+.species-tiers i.is-rare {
+  background: var(--blue);
+}
+.species-tiers i.is-mythic {
+  background: var(--accent);
+}
+.species-key {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.species-key span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.species-key i {
+  width: 8px;
+  height: 8px;
+}
+.species-key .is-common i {
+  background: var(--grey);
+}
+.species-key .is-uncommon i {
+  background: var(--green);
+}
+.species-key .is-rare i {
+  background: var(--blue);
+}
+.species-key .is-mythic i {
+  background: var(--accent);
+}
+
+.species-band-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 6px 0 10px;
+}
+.species-band-head h4 {
+  margin: 0;
+  font: 10px/1 var(--font-mono);
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--tier);
+}
+.species-band-head span {
+  font: 11px/1 var(--font-mono);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.species-band-head hr {
+  flex: 1;
+  min-width: 20px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 0;
+}
+/* `--tier` and `--tier-fill` are aliases set on the band and the card, so anything
+   inside either inherits them — the same shape `.cn-t-*` uses in the console sheet,
+   and for the same reason: a declaration on a descendant would shadow an inherited
+   value unconditionally, so a theme could never reach inside a tier. */
+.species-band.is-common,
+.species-card.is-common {
+  --tier: var(--grey);
+  --tier-fill: var(--tier-common-fill);
+}
+.species-band.is-uncommon,
+.species-card.is-uncommon {
+  --tier: var(--green);
+  --tier-fill: var(--tier-uncommon-fill);
+}
+.species-band.is-rare,
+.species-card.is-rare {
+  --tier: var(--blue);
+  --tier-fill: var(--tier-rare-fill);
+}
+.species-band.is-mythic,
+.species-card.is-mythic {
+  --tier: var(--accent);
+  --tier-fill: var(--tier-mythic-fill);
+}
+
+/* `align-items: start`, so a card with no colour strip — every species you have not
+   found — is simply shorter than its neighbours rather than stretching a blank
+   panel to match the row. The ragged edge is the reading. */
+.species-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+.species-card {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+}
+.species-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--tier-fill);
+  border-bottom: 1px solid var(--border);
+}
+.species-top h5 {
+  margin: 0;
+  font-size: 14px;
+}
+.species-card.is-unknown .species-top h5 {
+  color: var(--muted);
+}
+.species-spacer {
+  flex: 1;
+}
+.species-night {
+  color: var(--muted);
+  cursor: help;
+}
+
+/* The three forms on one baseline, so the size step between them is the reading —
+   a hatchling is 8x8 and an adult 14x14, drawn at one pixel scale. */
+.species-ages {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  background: var(--well);
+  border-bottom: 1px solid var(--border);
+}
+.species-age {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 4px 9px;
+  border-right: 1px solid var(--border);
+}
+.species-age:last-child {
+  border-right: 0;
+}
+.species-art {
+  height: 72px;
+  display: flex;
+  align-items: flex-end;
+}
+.species-art canvas {
+  image-rendering: pixelated;
+  display: block;
+}
+.species-age b {
+  font: 9.5px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.species-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-bottom: 1px solid var(--border);
+}
+.species-stat {
+  padding: 9px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  border-right: 1px solid var(--border);
+  cursor: help;
+}
+.species-stat:last-child {
+  border-right: 0;
+}
+.species-stat b {
+  font: 15px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.species-stat span {
+  font: 9.5px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+  align-self: flex-start;
+  border-bottom: 1px dotted var(--muted);
+  padding-bottom: 2px;
+}
+
+.species-srcs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 9px 12px;
+}
+.species-src {
+  font: 10px/1 var(--font-mono);
+  padding: 4px 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  white-space: nowrap;
+}
+.species-vary {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  justify-content: space-between;
+  overflow-x: auto;
+  padding: 10px 12px 12px;
+  background: var(--panel-2);
+  border-top: 1px solid var(--border);
+}
+.species-vary canvas {
+  image-rendering: pixelated;
+  display: block;
+}
+
+.species-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+}
+.species-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 620px;
+  background: var(--panel);
+}
+.species-table th,
+.species-table td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+.species-table thead th {
+  font: 10px/1.3 var(--font-mono);
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--muted);
+  background: var(--panel-2);
+  white-space: nowrap;
+}
+.species-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.species-kind {
+  font: 12px/1.4 var(--font-mono);
+  white-space: nowrap;
+  cursor: help;
+}
+.species-landed {
+  display: block;
+  font: 9.5px/1 var(--font-mono);
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.species-landed.is-common {
+  color: var(--grey);
+}
+.species-landed.is-uncommon {
+  color: var(--green);
+}
+.species-landed.is-rare {
+  color: var(--blue);
+}
+.species-landed.is-mythic {
+  color: var(--accent);
+}
+.species-landed.is-stepped {
+  cursor: help;
+}
+.species-members {
+  display: block;
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.4;
+}
+.species-foot {
+  margin: 0;
+  max-width: 78ch;
 }
