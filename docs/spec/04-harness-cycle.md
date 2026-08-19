@@ -20,6 +20,13 @@ route calling `harness.runCycle('manual')`.
 
 A cycle's `source` is `'timer'`, `'manual'` or `'boot'`.
 
+**A coalesced cycle reads no world.** That is what stops a route from using
+`await harness.runCycle('manual')` as its way of making its own write visible: on a busy fleet most
+manual calls land inside a running cycle and return without fetching anything, so the baseline the
+cockpit is served still describes the world as it was before the write. A route that has changed the
+outside world folds the change onto the baseline itself and then broadcasts — see the watch routes
+([16](16-http-api.md#why-both-watch-routes-patch-the-baseline)).
+
 ## The crash-recovery hold
 
 Before the coalescing guard, and **before the world is fetched**, `runCycle` asks
@@ -89,7 +96,7 @@ flowchart TD
    [linking the work item](07-pull-requests.md#linking-the-work-item). Two passes in one register:
    one says the pull request is the fleet's, the other says which work item it is for. Both are
    idempotent, so a settled world writes nothing. A pull request reached here is worked from the
-   *next* pulse, since the snapshot below was read before either write landed — the same lag the
+   _next_ pulse, since the snapshot below was read before either write landed — the same lag the
    retarget and the reap accept, and one nothing pays on the ordinary path, where `open_pr` did both
    at creation.
 5. **Reconcile plans** — `plans.reconcile(world)`. This runs **before** `decide`, so a part it moves
@@ -143,7 +150,7 @@ flowchart TD
    ([10](10-agent-runtimes.md#the-questions-a-dead-agent-leaves-behind)). It settles inbox rows,
    decides no dispatch, and writes nothing over a clean inbox.
 10. **Compute headroom** — `paused ? 0 : max(0, cap - countLiveAgents())`, reading `cap` and `paused`
-   **by reference** from `RuntimeControl` (never a copy taken at wiring time).
+    **by reference** from `RuntimeControl` (never a copy taken at wiring time).
 11. **Split the PR world** — partition open PRs into the dispatch world and `unwatchedPrs` (below).
 12. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
 13. **Cache the Up next plan** — `plan.upcoming` becomes `harness.upcoming`, tagged with the cycle id
@@ -176,6 +183,12 @@ uncaught throw would otherwise vanish as an unhandled rejection. `cycleInFlight`
 - Otherwise `diffWorlds(prev, world)` runs, non-empty results are persisted via
   `store.recordWorldEvents`, and `world:events` is emitted for the cockpit's Activity feed.
 - The baseline is then replaced with this cycle's world, both in memory and in the store.
+
+The cycle is the baseline's main writer but not its only one: `Store.patchWorldLabels` folds a label
+a route has just had the provider accept onto the stored snapshot, so the cockpit sees it without
+waiting a pulse. It writes labels and nothing else, and the next cycle's reading overwrites it
+either way — observation always wins over the fold, which is what keeps the tracker the source of
+truth.
 
 The persisted baseline is also what the `world_read` MCP tool reads, so an agent sees exactly the
 world the dispatch decision was made against.

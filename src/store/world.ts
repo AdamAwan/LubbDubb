@@ -84,6 +84,56 @@ export class WorldStore {
     return row ? (JSON.parse(row.world) as WorldSnapshot) : null;
   }
 
+  /**
+   * Write a label the provider has just accepted onto the stored baseline.
+   *
+   * `/api/state` serves the baseline and never a live provider read (16), so
+   * until this runs a tag the operator has just set is invisible — the cockpit
+   * redraws the item exactly as it was. The pulse cannot be what makes it
+   * visible: `runCycle` coalesces while a cycle is in flight, so the click that
+   * lands during one is followed by no world read at all, and the toggle stays
+   * on its old state until the next beat.
+   *
+   * Only ever called for a write the provider confirmed, so this is observed
+   * fact arriving early rather than a guess: the next cycle reads the same tag
+   * back off the tracker and writes the same baseline. An item the baseline does
+   * not carry is skipped — the world it came from has aged out, and inventing a
+   * row for it would put an issue in the cockpit that no snapshot described.
+   *
+   * An **empty** label is a no-op, not an empty string written onto every named
+   * item: that is `labelPrefix: ''`, the gate switched off, where every item
+   * already reads as watched and there is no tag to show.
+   */
+  patchWorldLabels(patch: WorldLabelPatch): void {
+    const world = this.getWorldBaseline();
+    if (world === null || patch.label === '') return;
+    const issues = new Set(patch.issues ?? []);
+    const prs = new Set(patch.pullRequests ?? []);
+    let touched = false;
+    const apply = (labels: string[] | undefined): string[] => {
+      const next = new Set(labels ?? []);
+      if (patch.present) next.add(patch.label);
+      else next.delete(patch.label);
+      return [...next];
+    };
+    for (const issue of world.issues) {
+      if (!issues.has(issue.number)) continue;
+      issue.labels = apply(issue.labels);
+      // The ownership view of the same tag: with `issuePickupRequireOwnLabel` on
+      // this is what pickup reads, and a baseline where the two disagree is one
+      // where the cockpit says "Watching" and nothing is ever picked up. The
+      // operator did add it, so the viewer did.
+      if (issue.labelsAddedByViewer !== undefined) issue.labelsAddedByViewer = apply(issue.labelsAddedByViewer);
+      touched = true;
+    }
+    for (const pr of world.pullRequests) {
+      if (!prs.has(pr.number)) continue;
+      pr.labels = apply(pr.labels);
+      touched = true;
+    }
+    if (touched) this.setWorldBaseline(world);
+  }
+
   setWorldBaseline(world: WorldSnapshot): void {
     this.ctx.db
       .prepare(
@@ -108,6 +158,18 @@ export class WorldStore {
       )
       .run(key, value);
   }
+}
+
+/**
+ * A label change to fold onto the stored baseline: which items carry it now, and
+ * whether it went on or came off. One label per call, because that is the shape
+ * of every caller — a watch toggle writes one tag.
+ */
+export interface WorldLabelPatch {
+  issues?: readonly number[];
+  pullRequests?: readonly number[];
+  label: string;
+  present: boolean;
 }
 
 interface WorldEventRow {

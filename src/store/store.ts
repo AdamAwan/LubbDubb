@@ -26,7 +26,7 @@ import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
 import { ReviewWaitStore } from './reviewWaits.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
-import { WorldStore } from './world.js';
+import { WorldStore, type WorldLabelPatch } from './world.js';
 import { ErrorStore } from './errors.js';
 import { GraphStore, GRAPH_REBUILDS } from './graph.js';
 import { BugFilingStore } from './bugFilings.js';
@@ -838,6 +838,9 @@ export class Store {
   }
   setWorldBaseline(world: WorldSnapshot): void {
     this.world.setWorldBaseline(world);
+  }
+  patchWorldLabels(patch: WorldLabelPatch): void {
+    this.world.patchWorldLabels(patch);
   }
   getConnectorState(key: string): string | null {
     return this.world.getConnectorState(key);
