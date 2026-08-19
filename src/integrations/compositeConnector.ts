@@ -2,7 +2,9 @@ import type { Connector, InjectableEvent } from '../connector/connector.js';
 import type {
   ActionSink,
   BranchDeleteInput,
+  CiCheckRequeueInput,
   IssueCommentInput,
+  IssueCreateInput,
   IssueLabelInput,
   PrBaseInput,
   PrBaseUpdateInput,
@@ -19,9 +21,11 @@ import type { TrackerItem, WorldSnapshot } from '../types.js';
 import type { CiEvidenceReader, CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import {
   isBranchDeleteCapable,
+  isCiCheckRequeueCapable,
   isCiEvidenceCapable,
   isInjectable,
   isIssueCommentCapable,
+  isIssueCreateCapable,
   isIssueLabelCapable,
   isPrBaseCapable,
   isPrBaseUpdateCapable,
@@ -161,6 +165,19 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     return handler.updatePrBranch(input);
   }
 
+  /**
+   * The third routed act whose missing handler is not an error, for
+   * {@link updatePrBranch}'s reason exactly: rule `pr-ci-gate` dispatched a code
+   * agent for this gate before the direct write existed and still does when the
+   * write is unavailable, so a provider without the operation (GitHub, which has
+   * no expired-policy state to begin with) is a configuration rather than a fault.
+   */
+  async requeueCiCheck(input: CiCheckRequeueInput): Promise<SendResult> {
+    const handler = this.integrations.find(isCiCheckRequeueCapable);
+    if (!handler) return { ok: false };
+    return handler.requeueCiCheck(input);
+  }
+
   async deleteBranch(input: BranchDeleteInput): Promise<SendResult> {
     const handler = this.integrations.find(isBranchDeleteCapable);
     if (!handler)
@@ -191,6 +208,12 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     if (!handler)
       throw new Error('no integration can set work item state (no issues provider is WorkItemStateCapable)');
     return handler.setWorkItemState(input);
+  }
+
+  async createIssue(input: IssueCreateInput): Promise<SendResult> {
+    const handler = this.integrations.find(isIssueCreateCapable);
+    if (!handler) throw new Error('no integration can create issues (no issues provider is IssueCreateCapable)');
+    return handler.createIssue(input);
   }
 
   async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {

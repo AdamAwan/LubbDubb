@@ -393,9 +393,9 @@ dispatch prompt whenever the goal carries an instruction nobody has concluded ye
 
 A blueprint launched from the cockpit may carry images (issue #249) — a screenshot of the panel to
 change, the broken screen, a before/after pair. They are written once under `attachmentRoot`
-(`src/jobs/attachmentFiles.ts`) and recorded in `job_attachments`, keyed on the ref they belong to,
-which while the request is a blueprint is `job:<id>` and afterwards is the `issue:<n>` the blueprint
-was filed as. See [14](14-persistence.md#blueprint-attachments) for the rows and the re-key, and
+(`src/jobs/attachmentFiles.ts`) and recorded in `job_attachments`, keyed on the ref they belong to —
+`job:<id>` for a blueprint that dispatches, and the `issue:<n>` it was filed as for one that becomes a
+ticket. See [14](14-persistence.md#blueprint-attachments) for the rows, and
 [16](16-http-api.md#launching-a-blueprint) for how they arrive.
 
 `recordDispatchTask` appends `attachmentsNote(...)` (`src/jobs/attachments.ts`, pure) to the dispatch
@@ -452,6 +452,40 @@ Either unperformed row is the dispatcher's memory on the next pulse: it reads th
 sitting behind its base. The error entry is `source: 'provider'` and carries what happens next in its
 detail, because a failure the harness recovers from on its own must still be visible as a failure
 ([18](18-observability.md)).
+
+## `requeue_ci_check` — the expired build without an agent
+
+The expired arm of rule `pr-ci-gate` ([05](05-dispatcher.md#pr-ci-gate-a-check-that-waits-rather-than-fails)),
+performed here rather than dispatched (issue #395). `sink.requeueCiCheck({prNumber, check, requeueRef})`
+asks the provider to run the policy's build again: no worktree, no model, no cold read of the
+repository, for a gate whose cause the provider itself reported and whose resolution the harness
+already knew.
+
+Not authorized and not proposed, for `update_pr_branch`'s reasons exactly. What it does **not** carry
+is that act's branch gate, and that is not an omission: a requeue writes to a policy evaluation, not
+to the branch, so nothing an agent's worktree was cut from moves and there is no collision to defer
+for. The rule reaches this act only for a free branch anyway — a staffed one gets the note.
+
+The action names every expired check on the gate, so the executor loops and one decision row covers
+the lot:
+
+| Result                     | Decision   | Error log | Meaning                                                                          |
+| -------------------------- | ---------- | --------- | --------------------------------------------------------------------------------- |
+| every check `ok: true`     | `executed` | —         | A run is queued; the next snapshot reports the checks pending rather than expired. |
+| any check `ok: false`      | `skipped`  | —         | The provider has no such operation, or has it and declined. A configuration.       |
+| _throws_                   | `rejected` | recorded  | The call itself failed.                                                            |
+
+A throw is whole-act even where earlier checks in the list were queued — the ones that took stop being
+expired and drop out of the gate by themselves, so the agent the next pulse dispatches is left with
+exactly the ones that did not. Either unperformed row is the dispatcher's memory on the next pulse,
+which builds the concern as the code agent it always was.
+
+**A 200 is not a requeue**, and that is the one thing this act knows that the base update does not.
+Azure answers with the evaluation record whether or not it restarted anything, so a record that comes
+back still `isExpired` is one it declined — a token without **Build (execute)**, a definition it
+cannot queue. The Azure integration reads that off the answer and returns `ok: false`, which is what
+sends the gate back to an agent rather than leaving it waiting on a build nobody started
+([15](15-integrations.md#the-azure-provider)).
 
 ## `set_work_item_state` — not authorized, just done
 

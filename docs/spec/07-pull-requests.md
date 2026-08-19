@@ -64,10 +64,11 @@ this predicate feeds. → [02](02-configuration.md#watching-a-check-that-is-not-
 ## CI checks
 
 `PullRequest.ciChecks` is the per-check detail `ciStatus` folds. Each check carries a `name`, a
-`status` (`failing` \| `pending` \| `passing` — never `unknown`), and four optional fields:
+`status` (`failing` \| `pending` \| `passing` — never `unknown`), and five optional fields:
 `blocking: false` when the provider says it does not hold the merge, `advisory: true` for a signal
 something else already models at higher fidelity (no `ci.checks` rule may claim one, in any state),
-`expired: true` for a pending check with nothing in flight, and `aliases` — other names the provider
+`expired: true` for a pending check with nothing in flight, `requeueRef` — the provider's own opaque
+handle for queueing a fresh run, set only beside `expired` — and `aliases`, other names the provider
 shows for the same check.
 
 `expired` is the difference between a check that is waiting and a check that is _stuck_ waiting.
@@ -77,7 +78,9 @@ resolves until one is queued. `status` alone cannot say that — a build genuine
 same — so the flag rides beside `pending` rather than becoming a status. Nothing merge-facing reads
 it: `ciStatus`, `prHealth` and the merge rule are untouched, because a build that has not run is not
 a broken one. The single consumer is `classifyWatchedChecks`, which watches an expired check **with
-no `ci.checks` rule naming it**, putting the PR in rule `pr-ci-gate`'s hands. That default is the
+no `ci.checks` rule naming it**, putting the PR in rule `pr-ci-gate`'s hands — which, where the check
+carries a `requeueRef` and no operator guidance, settles it with one provider write rather than an
+agent ([05](05-dispatcher.md#pr-ci-gate-a-check-that-waits-rather-than-fails)). That default is the
 provider stating a fact rather than an operator stating a preference, which is why it is not left to
 config: the config-only alternative — `states: ["pending"]` on the build checks — also fires on every
 build that is merely mid-flight, dispatching an agent to release a gate that was about to release

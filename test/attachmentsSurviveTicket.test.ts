@@ -8,7 +8,6 @@ import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
-import type { Agent, Job } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 /**
@@ -16,12 +15,15 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
  * fork.
  *
  * A code blueprint with a tracker configured is **not** dispatched — it is filed
- * as a watched ticket and the planning funnel takes over (issue #198). The images
- * arrive keyed `job:<id>`, so left alone they would be visible to exactly one
- * agent: the one that files the ticket and writes no code. These tests are about
- * the three things that stop that — the re-key at `link_ticket`, the goal-scoped
- * append at every later dispatch, and the strip the cockpit draws off the same
- * rows.
+ * as a watched ticket and the planning funnel takes over (issue #198). Left keyed
+ * on the blueprint, the images would be visible to exactly one agent: whoever
+ * writes the code for a job that no longer exists.
+ *
+ * Since #394 the harness files the ticket itself, on the request, so it knows the
+ * issue number **before** anything is written to disk — the images land under
+ * `issue:<n>` and never move. These tests are about the two things left: the
+ * goal-scoped append at every later dispatch, and the strip the cockpit draws off
+ * the same rows.
  */
 
 /** A real PNG: the 8-byte signature is what the sniffer reads, the rest is filler. */
@@ -58,28 +60,8 @@ function build(): System {
   return system;
 }
 
-/** The desk agent the blueprint's filing job dispatches as — the credential `link_ticket` resolves. */
-function filingAgent(system: System, job: Job): Agent {
-  const task = system.store.createTask({
-    kind: 'desk',
-    title: job.title,
-    prompt: job.prompt,
-    branch: null,
-    originRef: `job:${job.id}`,
-    originTitle: job.title,
-  });
-  return system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-desk-')));
-}
-
-async function callTool(system: System, agent: Agent, name: string, args: Record<string, unknown>) {
-  const session = system.mcp.session(agent.id);
-  assert.ok(session, 'a spawned agent has a live MCP credential');
-  const result = (await session!.call(name, args)) as { content: { text: string }[]; isError?: boolean };
-  return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
-}
-
-/** Launch a code blueprint carrying `images`, and return the filing job it became. */
-async function fileBlueprint(system: System, images: { name: string; data: Buffer }[]): Promise<Job> {
+/** Launch a code blueprint carrying `images`, and return the ticket it was filed as. */
+async function fileBlueprint(system: System, images: { name: string; data: Buffer }[]): Promise<string> {
   const { app } = await buildApp(system);
   const res = await app.inject({
     method: 'POST',
@@ -92,104 +74,83 @@ async function fileBlueprint(system: System, images: { name: string; data: Buffe
   });
   assert.equal(res.statusCode, 200);
   await app.close();
-  return (res.json() as { job: Job }).job;
+  return (res.json() as { ticketRef: string }).ticketRef;
 }
 
-test('link_ticket moves the blueprint’s images onto the ticket it filed', async () => {
+test('a blueprint’s images are written under the ticket it was filed as', async () => {
   const system = build();
-  const job = await fileBlueprint(system, [
+  const ticketRef = await fileBlueprint(system, [
     { name: 'panel.png', data: PNG },
     { name: 'after.gif', data: GIF },
   ]);
-  // They arrive on the filing job, which is the ref the route could key them
-  // under — nothing knows the issue number yet, because no issue exists.
-  const before = system.store.listAttachments(`job:${job.id}`);
-  assert.deepEqual(
-    before.map((a) => a.path.split('/').pop()),
-    ['0.png', '1.gif'],
-  );
-  const oldDir = before[0]!.path.slice(0, before[0]!.path.lastIndexOf('/'));
 
-  const agent = filingAgent(system, job);
-  const linked = await callTool(system, agent, 'link_ticket', { ref: 'issue:314' });
-  assert.equal(linked.isError, false);
-  assert.match(linked.text, /2 images the operator attached/);
-
-  // Rows: re-keyed to the goal, in order, still the operator's own labels.
-  const after = system.store.listAttachments('issue:314');
+  // Under the goal from the first write. Nothing is keyed on the blueprint and
+  // then moved — the harness files the ticket itself, so the issue number is known
+  // before any byte is written, and there is no window in which the image belongs
+  // to something that is about to stop existing.
+  const stored = system.store.listAttachments(ticketRef);
   assert.deepEqual(
-    after.map((a) => [a.index, a.label, a.mime]),
+    stored.map((a) => [a.index, a.label, a.mime]),
     [
       [0, 'panel.png', 'image/png'],
       [1, 'after.gif', 'image/gif'],
     ],
   );
-  assert.deepEqual(system.store.listAttachments(`job:${job.id}`), [], 'nothing is left on the job');
-
-  // Files: moved, and every row still names a path that resolves — which is the
-  // failure the move-then-rewrite ordering exists to make impossible.
-  for (const attachment of after) assert.ok(existsSync(attachment.path), `${attachment.path} resolves`);
-  assert.deepEqual(readFileSync(after[0]!.path), PNG, 'the stored bytes are still the operator’s bytes');
-  assert.equal(existsSync(oldDir), false, 'the job’s directory is gone, not left as a second copy');
-  assert.ok(after.every((a) => a.path.startsWith(system.config.attachmentRoot)));
+  assert.deepEqual(
+    stored.map((a) => a.path.split('/').pop()),
+    ['0.png', '1.gif'],
+  );
+  for (const attachment of stored) assert.ok(existsSync(attachment.path), `${attachment.path} resolves`);
+  assert.deepEqual(readFileSync(stored[0]!.path), PNG, 'the stored bytes are still the operator’s bytes');
+  assert.ok(stored.every((a) => a.path.startsWith(system.config.attachmentRoot)));
 
   system.store.close();
 });
 
-test('a re-key onto an issue that already has images renumbers rather than overwriting', async () => {
+test('two blueprints keep their own images, under their own tickets', async () => {
   const system = build();
-  // The first blueprint's images end up on issue:314.
   const first = await fileBlueprint(system, [{ name: 'one.png', data: PNG }]);
-  await callTool(system, filingAgent(system, first), 'link_ticket', { ref: 'issue:314' });
-
-  // A second blueprint whose agent decides it is the same goal — `link_ticket`
-  // explicitly accepts "the existing one you decided it duplicates".
   const second = await fileBlueprint(system, [{ name: 'two.gif', data: GIF }]);
-  await callTool(system, filingAgent(system, second), 'link_ticket', { ref: 'issue:314' });
+  assert.notEqual(first, second, 'each blueprint files its own ticket');
 
-  const all = system.store.listAttachments('issue:314');
+  const a = system.store.listAttachments(first);
+  const b = system.store.listAttachments(second);
   assert.deepEqual(
-    all.map((a) => [a.index, a.label]),
-    [
-      [0, 'one.png'],
-      [1, 'two.gif'],
-    ],
-    'the second arrival takes the next free index',
+    a.map((x) => x.label),
+    ['one.png'],
   );
-  // Distinct files, both still there: a fixed stem would have silently replaced
+  assert.deepEqual(
+    b.map((x) => x.label),
+    ['two.gif'],
+  );
+  // Distinct files, both still there: a shared stem would have silently replaced
   // the first operator's screenshot with the second's.
-  assert.notEqual(all[0]!.path, all[1]!.path);
-  assert.deepEqual(readFileSync(all[0]!.path), PNG);
-  assert.deepEqual(readFileSync(all[1]!.path), GIF);
+  assert.notEqual(a[0]!.path, b[0]!.path);
+  assert.deepEqual(readFileSync(a[0]!.path), PNG);
+  assert.deepEqual(readFileSync(b[0]!.path), GIF);
 
   system.store.close();
 });
 
 test('every agent dispatched for the goal is handed the images, and only that goal’s', async () => {
   const system = build();
-  const job = await fileBlueprint(system, [{ name: 'panel.png', data: PNG }]);
-  await callTool(system, filingAgent(system, job), 'link_ticket', { ref: 'issue:314' });
-  const attachment = system.store.listAttachments('issue:314')[0]!;
+  const ticketRef = await fileBlueprint(system, [{ name: 'panel.png', data: PNG }]);
+  const attachment = system.store.listAttachments(ticketRef)[0]!;
 
-  // The ticket the filing agent said it created, now in the world. A second,
-  // unrelated goal beside it — the images must not follow *that* one anywhere.
-  system.connector.inject({
-    kind: 'new_issue',
-    number: 314,
-    title: 'Make the panel look like this',
-    body: 'See image.',
-  });
+  // A second, unrelated goal beside it — the images must not follow *that* one
+  // anywhere. The blueprint's own ticket is already in the world: the harness
+  // filed it, so it is a real issue on the fake provider from that moment.
   system.connector.inject({ kind: 'new_issue', number: 315, title: 'Something else entirely', body: 'No image.' });
-  // Twice: the cap is shared and the first cycle spends its headroom on the goal
-  // that was already in the world.
+  // Twice: the cap is shared and the first cycle spends its headroom on whichever
+  // goal it reaches first.
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
 
-  const mine = system.store.listTasks().filter((t) => t.originRef?.startsWith('issue:314'));
+  const mine = system.store.listTasks().filter((t) => t.originRef?.startsWith(`${ticketRef}`));
   assert.ok(mine.length > 0, 'the funnel picked the goal up');
   for (const task of mine) {
-    // The funnel dispatches for `issue:314:assay`, `:plan`, `:part:<slug>` — never
-    // for `issue:314` exactly until the parts are gone. An exact-origin lookup
+    // The funnel dispatches for `issue:<n>:assay`, `:plan`, `:part:<slug>` — never
+    // for `issue:<n>` exactly until the parts are gone. An exact-origin lookup
     // would therefore hand the screenshot to nobody, which is the bug this scoping
     // is the fix for.
     assert.ok(task.prompt.includes(attachment.path), `${task.originRef} is given the absolute path`);
@@ -208,21 +169,14 @@ test('every agent dispatched for the goal is handed the images, and only that go
 
 test('the cockpit is shipped the images and a URL that serves them', async () => {
   const system = build();
-  const job = await fileBlueprint(system, [{ name: 'panel.png', data: PNG }]);
+  const ticketRef = await fileBlueprint(system, [{ name: 'panel.png', data: PNG }]);
   const { app } = await buildApp(system);
 
-  // Before the fork resolves, the strip hangs off the queued blueprint…
-  const queued = buildStateSnapshot(system);
-  assert.deepEqual(
-    queued.attachments.map((a) => a.targetRef),
-    [`job:${job.id}`],
-  );
-
-  // …and after it, off the issue, which is where the operator now finds the goal.
-  await callTool(system, filingAgent(system, job), 'link_ticket', { ref: 'issue:314' });
+  // The strip hangs off the issue, which is where the operator now finds the goal —
+  // there is no queued blueprint to hang it off, because nothing was queued.
   const state = buildStateSnapshot(system);
   const attachment = state.attachments[0]!;
-  assert.equal(attachment.targetRef, 'issue:314');
+  assert.equal(attachment.targetRef, ticketRef);
   const url = state.attachmentUrls[attachment.id]!;
   assert.equal(url, `/attachments/${attachment.id}`, 'auth is off here, so no capability is minted');
 

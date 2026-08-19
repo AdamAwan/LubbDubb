@@ -193,8 +193,37 @@ export function prCiFailing(s: StageContext): void {
     const gateVerdict = classifyWatchedChecks(pr.ciChecks, s.ci);
     if (gateVerdict.watched.length > 0 && inheritedFailure === null) {
       const waiting = gateVerdict.watched.map((m) => m.name).join(', ');
+      const gateOrigin = `pr:${pr.number}:ci-gate`;
+      // The **expired** arm, taken directly for `pr-base-update`'s reason (issue
+      // #395): the provider has already said no run is in flight and none will
+      // start, and it hands over the evaluation to requeue, so there is no
+      // judgement anywhere on that path — only a write. The *guided* arm keeps its
+      // agent, because only the operator's words can say what releases a check
+      // they asked to be watched.
+      //
+      // All-or-nothing across the gate's checks: the concern is one per pull
+      // request and its dispatch is one agent for the whole of it, so a single
+      // check that needs a model takes the concern with it.
+      //
+      // Unless the last direct attempt came back unperformed — a provider that
+      // cannot requeue, or one that would not. Then this is the dispatch it always
+      // was, with the same `pr-ci-gate` prompt and the same expiry note, so a gate
+      // is never left waiting merely because the cheap path was unavailable.
+      const requeues = gateRequeues(gateVerdict);
+      const direct = requeues !== null && !directActUnperformed('requeue_ci_check', gateOrigin, ctx.recentDecisions);
       concerns.push({
         rule: 'pr-ci-gate',
+        act:
+          direct && requeues
+            ? ({
+                type: 'requeue_ci_check',
+                prNumber: pr.number,
+                checks: requeues,
+                originRef: gateOrigin,
+                rule: 'pr-ci-gate',
+                reason: `The build policy on PR #${pr.number} is expired (${waiting}); queueing a run through the provider rather than spending an agent on it.`,
+              } satisfies RawAction)
+            : undefined,
         // **Its own origin, not `pr:<n>:ci`.** Sharing would put one cooldown
         // budget across two unrelated problems: a red build spending its attempts
         // would leave the gate permanently capped without a single agent ever
@@ -202,7 +231,7 @@ export function prCiFailing(s: StageContext): void {
         // whichever of the two the concern fold happened to pick. It also keeps
         // notify de-dup honest — a gate signal reaching an agent already on the
         // branch is not the CI signal that origin already delivered.
-        origin: `pr:${pr.number}:ci-gate`,
+        origin: gateOrigin,
         title: `Clear the waiting check on PR #${pr.number}`,
         // Appended, never interpolated — `pr-ci-gate` is operator-overridable and
         // the check names are the half an agent cannot act without.
@@ -233,7 +262,7 @@ export function prCiFailing(s: StageContext): void {
       // Then this is the dispatch it always was, with the same routine-update
       // prompt, so a PR is never left behind its base merely because the cheap
       // path was unavailable.
-      const direct = behind && !directUpdateUnperformed(mergeableOrigin, ctx.recentDecisions);
+      const direct = behind && !directActUnperformed('update_pr_branch', mergeableOrigin, ctx.recentDecisions);
       concerns.push({
         rule: 'pr-base-update',
         origin: mergeableOrigin,
@@ -450,26 +479,58 @@ export function prCiFailing(s: StageContext): void {
 }
 
 /**
- * Did the last direct base update on this origin fail to happen?
+ * Did the last agentless act of this type on this origin fail to happen?
  *
- * The memory behind the fallback, read from the audit log alone — the same place
+ * The memory behind both fallbacks, read from the audit log alone — the same place
  * the cooldown reads its attempts, so the two cannot hold different opinions
  * about what has been tried. Both unperformed outcomes count and mean one thing
- * to the rule: `skipped` is a provider with no update-branch endpoint at all,
- * `rejected` is one that has it and refused, and either way the branch still
- * needs merging and only an agent is left to do it.
+ * to the rule: `skipped` is a provider that cannot do it at all, `rejected` is one
+ * that can and refused, and either way the concern still stands and only an agent
+ * is left to settle it.
+ *
+ * One function over the action type rather than one per act, because the two
+ * differ in nothing else: a base update that never happened and a requeue that
+ * never happened are the same fact about the same audit log, and a second copy of
+ * this would be a second place for the fallback to rot.
  *
  * Best-effort over the recent-decision window, and harmless as it ages out: the
  * cheap path is simply tried once more, which is the right answer for a refusal
  * that was transient and one wasted request for a provider that never had it.
  */
-function directUpdateUnperformed(origin: string, decisions: Decision[]): boolean {
+function directActUnperformed(
+  type: 'update_pr_branch' | 'requeue_ci_check',
+  origin: string,
+  decisions: Decision[],
+): boolean {
   return decisions.some(
     (d) =>
-      d.action.type === 'update_pr_branch' &&
-      d.action.originRef === origin &&
-      (d.outcome === 'skipped' || d.outcome === 'rejected'),
+      d.action.type === type && d.action.originRef === origin && (d.outcome === 'skipped' || d.outcome === 'rejected'),
   );
+}
+
+/**
+ * The expired checks this gate can be cleared by requeueing, or null when it
+ * needs the agent it always had (issue #395).
+ *
+ * Null for the whole gate the moment any one watched check needs a model, because
+ * the concern buys one agent for all of them:
+ *
+ * - **Not expired.** A check an operator asked to watch in a non-failing state is
+ *   waiting on something only their `guidance` names; there is nothing to requeue
+ *   and nothing the harness knows to do.
+ * - **Expired *and* guided.** The operator's words outrank the known cause: they
+ *   wrote them about this check knowing what it is, so a requeue would do
+ *   something other than what they asked for and report the gate cleared.
+ * - **No `requeueRef`.** The provider reported the expiry but handed over no way
+ *   to act on it — the state this rule was written for before the write existed.
+ */
+function gateRequeues(verdict: CiWatchVerdict): Array<{ name: string; requeueRef: string }> | null {
+  const requeues: Array<{ name: string; requeueRef: string }> = [];
+  for (const m of verdict.watched) {
+    if (!m.expired || m.rule?.guidance?.trim() || !m.requeueRef) return null;
+    requeues.push({ name: m.name, requeueRef: m.requeueRef });
+  }
+  return requeues.length > 0 ? requeues : null;
 }
 
 /** One thing wrong with a PR that would warrant a code agent on its branch. */
@@ -478,10 +539,14 @@ interface PrConcern {
   rule: DispatchRuleId;
   origin: string;
   /**
-   * The act that settles this concern **without an agent**, when one can (issue
-   * #332) — today only the base update of a pull request the provider reported as
-   * merely `behind`. Set, and this concern's turn on a free branch emits the act
-   * instead of a dispatch; absent, everything below is what happens, unchanged.
+   * The act that settles this concern **without an agent**, when one can — the
+   * base update of a pull request the provider reported as merely `behind` (issue
+   * #332), and the requeue of a build policy it reported as expired (issue #395).
+   * Set, and this concern's turn on a free branch emits the act instead of a
+   * dispatch; absent, everything below is what happens, unchanged.
+   *
+   * Both are the same trade: a concern whose resolution the provider has already
+   * stated, so there is no judgement left for a model to apply.
    *
    * It rides on the concern rather than replacing it, because the concern is more
    * than a dispatch: a branch that already has a running agent is *told* about the

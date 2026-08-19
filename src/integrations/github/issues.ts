@@ -1,10 +1,11 @@
 import type { ErrorRecorder } from '../../errorLog.js';
-import type { IssueCommentInput, IssueLabelInput, SendResult } from '../../sink/actionSink.js';
+import type { IssueCommentInput, IssueCreateInput, IssueLabelInput, SendResult } from '../../sink/actionSink.js';
 import type { Issue, IssueState, TrackerItem } from '../../types.js';
 import type {
   Capability,
   Integration,
   IssueCommentCapable,
+  IssueCreateCapable,
   IssueLabelCapable,
   RefResolvable,
   TicketHistoryCapable,
@@ -37,7 +38,13 @@ interface GitHubIssuesOpts {
  * `Injectable`).
  */
 export class GitHubIssuesIntegration
-  implements Integration, RefResolvable, IssueLabelCapable, IssueCommentCapable, TicketHistoryCapable
+  implements
+    Integration,
+    RefResolvable,
+    IssueLabelCapable,
+    IssueCreateCapable,
+    IssueCommentCapable,
+    TicketHistoryCapable
 {
   readonly id = 'issues:github';
   readonly capability: Capability = 'issues';
@@ -82,6 +89,31 @@ export class GitHubIssuesIntegration
         createdAt: i.createdAt,
         changedAt: i.updatedAt,
       }));
+  }
+
+  /**
+   * File a new issue (issue #394).
+   *
+   * Two of {@link IssueCreateInput}'s fields are answered in GitHub's own
+   * vocabulary rather than dropped:
+   *
+   * - **`type` is dropped.** A GitHub issue is not created *as* anything; the
+   *   caller's opinion about a work item type has no expression here and inventing
+   *   a label for it would put a tag on the repository nobody asked for.
+   * - **`relatedTo` becomes a cross-reference.** Naming `#<n>` in the body is what
+   *   makes GitHub draw the edge, and it draws it on *both* issues — the closest
+   *   thing GitHub has to Azure's `related` link. Appended rather than left to the
+   *   caller so a body composed once files correctly into either tracker.
+   */
+  async createIssue(input: IssueCreateInput): Promise<SendResult> {
+    const body = input.relatedTo === null ? input.body : `${input.body}\n\nRelated to #${input.relatedTo}.`;
+    const created = await this.opts.api.createIssue({
+      title: input.title,
+      body,
+      labels: input.labels,
+      assignee: input.assignee,
+    });
+    return { ok: true, ref: `issue:${created.number}` };
   }
 
   /** The outbound side of the cockpit's watch/ignore toggle. PRs and issues share the labels API. */

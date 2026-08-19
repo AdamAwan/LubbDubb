@@ -1,5 +1,5 @@
-import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { extname, join, resolve } from 'node:path';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { join, resolve } from 'node:path';
 import type { PreparedAttachment } from './attachments.js';
 
 /** What a stored file is, once written: where it landed and how big it was. */
@@ -19,9 +19,9 @@ interface StoredAttachment extends PreparedAttachment {
  * the launch, is what makes the same image readable by all of them.
  *
  * **A directory per target ref, not per file.** The ref is what an attachment
- * belongs to (`job:<id>` while the blueprint is one), so emptying one directory
- * into another is how the ref changes hands — see {@link AttachmentFiles.relocate},
- * which is what runs when the blueprint becomes a ticket.
+ * belongs to — `job:<id>` for a blueprint that dispatches, `issue:<n>` for one
+ * the harness files as a ticket instead (issue #394), which is what makes the
+ * image the *goal's* rather than one agent's.
  */
 export class AttachmentFiles {
   constructor(private readonly root: string) {}
@@ -47,48 +47,6 @@ export class AttachmentFiles {
       writeFileSync(path, file.data);
       return { ...file, path };
     });
-  }
-
-  /**
-   * Move `files` out of `fromRef`'s directory and into `toRef`'s, renumbering from
-   * `nextIndex`, and return where each landed (issue #249).
-   *
-   * This is the disk half of the re-key that happens when a blueprint becomes a
-   * ticket. Three things it deliberately does:
-   *
-   * - **Renumbers rather than keeping the stem.** The destination may already hold
-   *   images — a filing agent may link to an issue that already exists — and a
-   *   fixed stem would silently overwrite them.
-   * - **Renames, never copies.** Source and destination are two directories under
-   *   one root, so a rename is atomic per file and leaves no window in which the
-   *   same bytes exist twice.
-   * - **Moves before any row is rewritten**, and the store's own contract says so.
-   *   A crash between the two halves then leaves rows naming the old paths — which
-   *   still resolve — rather than rows naming paths that do not.
-   *
-   * A file that is already missing is skipped rather than throwing: the row it
-   * belongs to is then re-keyed to a path in the new directory that does not
-   * exist, which is exactly as broken as it was before the move and no more.
-   */
-  relocate(
-    fromRef: string,
-    toRef: string,
-    files: { id: string; path: string }[],
-    nextIndex: number,
-  ): { id: string; index: number; path: string }[] {
-    if (files.length === 0) return [];
-    const dir = this.dirFor(toRef);
-    mkdirSync(dir, { recursive: true });
-    const moved = files.map((file, offset) => {
-      const index = nextIndex + offset;
-      const path = resolve(dir, `${index}${extname(file.path)}`);
-      if (existsSync(file.path)) renameSync(file.path, path);
-      return { id: file.id, index, path };
-    });
-    // The old directory holds nothing anyone points at now. `force` and a
-    // recursive remove because a partially-moved directory is still ours to clear.
-    rmSync(this.dirFor(fromRef), { recursive: true, force: true });
-    return moved;
   }
 
   /**

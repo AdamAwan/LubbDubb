@@ -62,6 +62,12 @@ interface Script {
   /** Build logs keyed `<buildId>/<logId>` — the fallback half. */
   buildLogs?: Record<string, string[]>;
   createdPullNumber?: number;
+  /** The id `createWorkItem` reports having created. */
+  createdWorkItemId?: number;
+  /** When set, `createWorkItem` throws with this message. */
+  createThrows?: string;
+  /** When set, `relateWorkItem` throws with this message — the second of a bug's two writes. */
+  relateThrows?: string;
   /** Branches the remote says are already gone — `deleteBranch` reports false for these. */
   missingBranches?: string[];
 }
@@ -81,9 +87,19 @@ interface Recorded {
   stateSets: Array<{ id: number; state: string }>;
   tagSets: Array<{ id: number; tag: string; present: boolean }>;
   workItemLinks: Array<{ id: number; pullRequestId: number }>;
+  createdWorkItems: Array<{
+    type: string;
+    title: string;
+    description: string;
+    tags: string[];
+    assignedTo: string | null;
+  }>;
+  relations: Array<{ id: number; relatedId: number }>;
   comments: Array<{ id: number; commentId: number | null; text: string }>;
   closedSince: string[];
   timelineReads: number[];
+  /** Evaluation ids `requeuePolicyEvaluation` was asked to restart. */
+  requeues: string[];
   logReads: Array<{ buildId: number; logId: number }>;
   createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
   titleSets: Array<{ id: number; title: string }>;
@@ -94,6 +110,7 @@ interface Recorded {
 function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded } {
   const recorded: Recorded = {
     threadReplies: [],
+    requeues: [],
     newThreads: [],
     completions: [],
     tagQueries: [],
@@ -105,6 +122,8 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     stateSets: [],
     tagSets: [],
     workItemLinks: [],
+    createdWorkItems: [],
+    relations: [],
     comments: [],
     closedSince: [],
     timelineReads: [],
@@ -154,6 +173,10 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async listPolicyEvaluations(prId) {
       return script.policyEvals?.[prId] ?? [];
+    },
+    async requeuePolicyEvaluation(evaluationId) {
+      recorded.requeues.push(evaluationId);
+      return { status: 'queued', isExpired: false };
     },
     async listPullLabels(prId) {
       return script.labels?.[prId] ?? [];
@@ -205,6 +228,15 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async linkWorkItemToPull(id, pullRequestId) {
       recorded.workItemLinks.push({ id, pullRequestId });
+    },
+    async createWorkItem(input) {
+      recorded.createdWorkItems.push(input);
+      if (script.createThrows) throw new Error(script.createThrows);
+      return { id: script.createdWorkItemId ?? 314 };
+    },
+    async relateWorkItem(id, relatedId) {
+      recorded.relations.push({ id, relatedId });
+      if (script.relateThrows) throw new Error(script.relateThrows);
     },
     async createWorkItemComment(id, text) {
       recorded.comments.push({ id, commentId: null, text });
@@ -982,6 +1014,65 @@ test('work items snapshot maps state / tags→labels / linked PR', async () => {
   assert.equal(issue.linkedPrNumber, 55);
   assert.equal(issue.url, 'https://dev.azure.com/o/p/_workitems/edit/101');
   store.close();
+});
+
+test('createIssue creates the work item as its type, tagged and assigned, in one write', async () => {
+  const { api, recorded } = fakeApi({ createdWorkItemId: 314 });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
+
+  const res = await issues.createIssue({
+    title: 'Add a rate limiter',
+    body: 'it keeps falling over',
+    labels: ['lubbdubb-watch'],
+    type: 'User Story',
+    assignee: 'adam@contoso.com',
+    relatedTo: null,
+  });
+
+  assert.deepEqual(res, { ok: true, ref: 'issue:314' });
+  // Type, tags and assignee all ride on the create. Azure refuses an untyped
+  // create outright, and an item that exists for a moment untagged is one the
+  // pickup gate can miss.
+  assert.deepEqual(recorded.createdWorkItems, [
+    {
+      type: 'User Story',
+      title: 'Add a rate limiter',
+      description: 'it keeps falling over',
+      tags: ['lubbdubb-watch'],
+      assignedTo: 'adam@contoso.com',
+    },
+  ]);
+  assert.deepEqual(recorded.relations, [], 'nothing was named to relate it to');
+});
+
+test('a related item is linked as a second write the caller never has to remember', async () => {
+  const { api, recorded } = fakeApi({ createdWorkItemId: 314 });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
+  await issues.createIssue({
+    title: 'CSV export 404s',
+    body: 'The symptom.',
+    labels: [],
+    type: 'Bug',
+    assignee: null,
+    relatedTo: 12,
+  });
+  // Azure has no way to create a work item already related to another, so it is
+  // two writes — the exact shape a filing prompt used to spell out as two commands,
+  // where a model that ran the first and stopped left an untraceable bug.
+  assert.deepEqual(recorded.relations, [{ id: 314, relatedId: 12 }]);
+  // The body is untouched: `#12` is GitHub's vocabulary, and Azure never adopted it.
+  assert.equal(recorded.createdWorkItems[0]!.description, 'The symptom.');
+});
+
+test('a relation that fails does not cost the item, and says which one exists', async () => {
+  const { api } = fakeApi({ createdWorkItemId: 314, relateThrows: 'TF401232: work item 12 does not exist' });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api });
+  await assert.rejects(
+    () => issues.createIssue({ title: 'Bug', body: 'x', labels: [], type: 'Bug', assignee: null, relatedTo: 12 }),
+    // The item exists and the operator asked for it; a link they can add by hand is
+    // a smaller loss than a filing that came back empty, so the throw carries its id.
+    /work item 314 was created but linking it to #12 failed/,
+  );
 });
 
 test('setWorkItemState transitions the work item and records a connector event', async () => {

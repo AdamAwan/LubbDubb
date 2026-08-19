@@ -42,6 +42,22 @@ export interface AzureDevOpsApi {
    */
   listPolicyEvaluations(pullRequestId: number): Promise<AzPolicyEvaluation[]>;
   /**
+   * Requeue one policy evaluation — the write that starts a build for an
+   * **expired** build-validation policy (issue #395).
+   *
+   * `PATCH _apis/policy/evaluations/{evaluationId}`, which is the endpoint Azure
+   * exposes for exactly this and the reason the harness does not queue the build
+   * definition itself: queueing a definition produces a build that is not
+   * attached to this pull request's policy evaluation, so the gate would stay
+   * expired while a build ran.
+   *
+   * Returns the record Azure answers with rather than nothing, because the call
+   * succeeding and the requeue *happening* are different facts: Azure answers 200
+   * for a policy it declines to restart, and the returned `isExpired` is the only
+   * thing that tells them apart before the next snapshot.
+   */
+  requeuePolicyEvaluation(evaluationId: string): Promise<AzPolicyRequeue>;
+  /**
    * A build's timeline: one record per stage/phase/job/task, each carrying its
    * result, its log id, and — the useful part — the `issues` the task raised.
    *
@@ -138,6 +154,37 @@ export interface AzureDevOpsApi {
    */
   linkWorkItemToPull(id: number, pullRequestId: number): Promise<void>;
 
+  /**
+   * Create a work item of `type`, returning its id (issue #394).
+   *
+   * The type is part of the URL, not a field: Azure has no untyped work item, so a
+   * create without one is refused outright — which is exactly why the harness rather
+   * than a model now decides it.
+   *
+   * Tags and the assignee ride on the same patch document as the title, so the item
+   * is never briefly untagged: an item that exists for a moment without the watch tag
+   * is one the pickup gate can miss.
+   */
+  createWorkItem(input: {
+    type: string;
+    title: string;
+    description: string;
+    tags: string[];
+    assignedTo: string | null;
+  }): Promise<{ id: number }>;
+  /**
+   * Hang a **related** link between two work items — the bug and the story it was
+   * raised on.
+   *
+   * `related`, not parent/child: it is legal whatever process template the project
+   * uses and changes neither item's rollup or board position, while a parent link
+   * from a User Story to a Bug is refused outright where bugs are not managed at the
+   * task level.
+   *
+   * Idempotent for {@link linkWorkItemToPull}'s reason and by the same absorption: a
+   * relation the item already carries is a success.
+   */
+  relateWorkItem(id: number, relatedId: number): Promise<void>;
   /** Add (`present`) or remove a `System.Tags` entry on a work item — the watch/ignore toggle. Idempotent. */
   setWorkItemTag(id: number, tag: string, present: boolean): Promise<void>;
   /** Open a pull request. Branch names are plain here; the REST arm adds `refs/heads/`. */
@@ -220,6 +267,17 @@ interface AzComment {
 
 export interface AzPolicyEvaluation {
   /**
+   * The evaluation's own id — the handle a **requeue** is addressed to
+   * ({@link AzureDevOpsApi.requeuePolicyEvaluation}), and the only thing on the
+   * record that identifies this evaluation rather than the policy behind it.
+   *
+   * Optional because it is read from the wire like everything else here, and a
+   * response without one leaves the harness with nothing to requeue — which is a
+   * check rule `pr-ci-gate` dispatches an agent for, exactly as it did before the
+   * direct path existed.
+   */
+  evaluationId?: string;
+  /**
    * The policy configuration's well-known type GUID (stable across every org).
    * Identifies build-validation vs status vs required-reviewers vs … so callers
    * can keep `ciStatus` to *automated* checks only.
@@ -280,6 +338,17 @@ export interface AzPolicyEvaluation {
   isBlocking: boolean;
   /** False when the policy is disabled; a disabled policy's evaluation is noise. */
   isEnabled: boolean;
+}
+
+/**
+ * What a requeue came back as — the evaluation record, narrowed to the two fields
+ * that say whether the requeue took.
+ */
+export interface AzPolicyRequeue {
+  /** queued | running | approved | rejected | notApplicable | broken | null. */
+  status: string | null;
+  /** `context.isExpired` again: still true means Azure changed nothing. */
+  isExpired?: boolean;
 }
 
 /** One node of a build's timeline — a stage, phase, job or task. */

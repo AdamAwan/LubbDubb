@@ -89,6 +89,10 @@ function PromptList({
           <button className="btn ghost prompt-row" onClick={() => onShow(t)}>
             <code className="prompt-id">{t.id}</code>
             {t.overridden && <span className="chip warn">overridden</span>}
+            {/* A retired id is still loadable — removing it would stop a customised
+                deployment booting — but nothing renders it any more, and an override
+                left on one is doing nothing. Said here rather than left to look live. */}
+            {t.retired && <span className="chip">retired</span>}
             <span className="muted prompt-doc">{firstSentence(t.doc)}</span>
           </button>
         </li>
@@ -123,11 +127,18 @@ function PromptModal({
         <header>
           <code className="prompt-id">{prompt.id}</code>
           {prompt.overridden && <span className="chip warn">overridden</span>}
+          {prompt.retired && <span className="chip">retired</span>}
           <button className="btn ghost prompt-close" onClick={onClose} aria-label="Close">
             ✕
           </button>
         </header>
         <p className="muted">{prompt.doc}</p>
+        {prompt.retired && (
+          <p className="muted prompts-note">
+            The harness no longer renders this prompt. It stays in the book so a deployment that overrode it still boots
+            — an override here is simply not sent.
+          </p>
+        )}
         <p className="muted prompts-note">
           {prompt.overridden ? 'Overridden by ' : 'Override it by creating '}
           <code>{overridePath(dir, prompt.id)}</code>

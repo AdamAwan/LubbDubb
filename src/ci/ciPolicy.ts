@@ -122,6 +122,16 @@ interface CiMatch {
    * than by an operator naming it.
    */
   expired?: boolean;
+  /**
+   * The provider's own handle for queueing a fresh run of this check
+   * ({@link CiCheck.requeueRef}), carried through so rule `pr-ci-gate` can settle
+   * the gate with one write instead of an agent (issue #395).
+   *
+   * Rides beside {@link expired} because that is the only state the provider sets
+   * it in, and absent on every check the harness has no way to requeue — which is
+   * the dispatch the rule always did.
+   */
+  requeueRef?: string;
 }
 
 export interface CiVerdict {
@@ -346,6 +356,7 @@ export function classifyWatchedChecks(checks: CiCheck[] | undefined, policy: CiP
     if (!rule && !check.expired) continue;
     const match: CiMatch = { name: check.name, rule: rule ?? null, blocking: check.blocking };
     if (check.expired) match.expired = true;
+    if (check.requeueRef) match.requeueRef = check.requeueRef;
     watched.push(match);
     if (rule?.urgent) urgent = true;
   }

@@ -16,27 +16,24 @@ import type { Config } from './config.js';
  * The types a project actually files at are its own — "User Story" and "Bug" on
  * the Agile template, "Product Backlog Item" on Scrum, "Issue" on Basic, plus
  * whatever custom types a process has been extended with. So the harness carries
- * a list rather than a type, and the *choice within it* is the filing agent's,
- * on the same argument that leaves it the ticket's wording: which of a story, a
- * debt item and a bug this is, is a judgement about the report, and only the
- * agent has read it.
+ * the names rather than assuming them.
  *
- * ## Why it rides in the coordinates and not in a placeholder
+ * ## Why the harness chooses, and not the agent
  *
- * The same reason the assignee does (→ {@link file://./ticketAssignment.ts}): a
- * new `{type}` token would be dropped silently by every prompt override that
- * never learned about it — exactly the deployments that customised most
- * (CLAUDE.md, "Prompts and templates"). `{tracker}` is already rendered by all
- * four filing templates, so the type arrives as part of it: the flag spliced
- * into the create command that is already in that string, plus a paragraph
- * naming the closed list.
+ * It used to be the filing agent's judgement, spliced into the `az` command in the
+ * ticket coordinates: the list was rendered into a prompt and the model picked
+ * one. That is the class of thing issue #394 removed. Azure refuses an untyped
+ * create outright, so a model that trimmed the flag lost the ticket — and, worse,
+ * a model that picked the wrong one filed a bug as a story with nothing red. The
+ * harness already knows which of the two arms it is in; that is not a judgement,
+ * it is a fact about the route the operator clicked.
  *
  * ## Azure only
  *
  * Same scope as `issueContainerTypes`: a work item type is a thing only Azure
- * reports and only Azure accepts on create. A GitHub issue has no type, so its
- * coordinates read exactly as they did before — there is nothing there to get
- * wrong.
+ * reports and only Azure accepts on create. A GitHub issue is not created *as*
+ * anything, so both functions answer null there and
+ * {@link GitHubIssuesIntegration.createIssue} drops the field.
  */
 
 /**
@@ -50,58 +47,42 @@ import type { Config } from './config.js';
  */
 export const DEFAULT_FILING_TYPES = ['User Story', 'Bug'];
 
-interface TicketTypeGuidance {
-  /** Spliced into the create command in the coordinates; already space-prefixed. */
-  flag: string;
-  /** The paragraph appended after them, naming the list and what is not on it. */
-  note: string;
-}
+/** Filed where `issueBugType` is unset. The Agile and Scrum templates' name for it. */
+const DEFAULT_BUG_TYPE = 'Bug';
 
 /**
- * The type clause for the provider **actually serving issues**, or null where the
- * tracker has no such concept (GitHub, the fake, an unconfigured provider) and
- * the coordinates must read as they always did.
+ * The type a *non-bug* filing is created as — a deferred finding, unrecorded work,
+ * a blueprint — or null where the tracker has no such concept.
  *
- * An empty configured list falls back to the default rather than rendering a
- * `--type` with nothing to put in it: `[]` on `issueContainerTypes` means "turn
- * the gate off", but there is no off here — a work item is created *as*
- * something, and a create command missing the flag is refused by Azure outright.
+ * **The first configured type, not a choice among them.** `issueFilingTypes` was
+ * written as a menu for a model to pick from, and with the harness filing directly
+ * there is no picker left; the honest reading of a list whose order the operator
+ * chose is that its head is the default. The rest still document what the project
+ * files at, which is what makes the key readable at all.
+ *
+ * An empty list falls back to the default rather than yielding an empty `type`:
+ * `[]` on `issueContainerTypes` means "turn the gate off", but there is no off
+ * here — a work item is created *as* something, and Azure refuses a create without
+ * one.
  */
-export function ticketTypeGuidance(config: Config): TicketTypeGuidance | null {
+export function filingType(config: Config): string | null {
   if (config.integrations.issues !== 'azure' || !config.azureDevOps) return null;
-  const types = (config.issueFilingTypes ?? []).map((t) => t.trim()).filter((t) => t.length > 0);
-  const allowed = types.length > 0 ? types : DEFAULT_FILING_TYPES;
-  const only = allowed.length === 1 ? allowed[0] : undefined;
-  return {
-    flag: only ? ` --type "${only}"` : ' --type "<type>"',
-    note: typeNote(allowed, only),
-  };
+  const named = (config.issueFilingTypes ?? []).map((t) => t.trim()).find((t) => t.length > 0);
+  return named ?? DEFAULT_FILING_TYPES[0]!;
 }
 
 /**
- * The wording.
+ * The type a **bug** an operator raised is created as, or null where the tracker
+ * has no such concept.
  *
- * Three things it has to say, each earned by a way the type goes wrong. The list
- * is **closed** (an agent handed a menu treats it as a suggestion and reaches
- * for whatever the project also offers). A decomposition type is named and
- * refused outright, because that is the failure this exists to stop and "pick
- * the right one" does not read as excluding the one it has always picked. And an
- * imperfect fit resolves to the closest entry rather than to an invented type —
- * Azure refuses a type the project does not define, and the ticket is lost with
- * it, which is strictly worse than a story that should have been a debt item.
+ * Its own key rather than the first entry of `issueFilingTypes` that looks like a
+ * bug: what a process template calls its bug type is exactly the thing that
+ * varies — the Basic process calls it "Issue" — and matching on the word is the
+ * kind of guess that files a story as a bug on the one project it is wrong for,
+ * silently. Unset, it is `Bug`, which is what the raise-bug arm hardcoded before
+ * the harness filed anything itself.
  */
-function typeNote(allowed: string[], only: string | undefined): string {
-  const list = allowed.map((t) => `"${t}"`).join(', ');
-  const opening = only
-    ? `File it as a ${list} — that is the only work item type this harness creates, and the type flag ` +
-      'above is already set to it.'
-    : `Choose the \`<type>\` from exactly this list: ${list}. That is the closed set of work item types ` +
-      'this harness creates — pick the one that fits what you are filing, and file nothing outside it.';
-  return (
-    `${opening} In particular do not file a Task, or any other item the project uses to break a story ` +
-    'down: those belong under a story somebody is already working, and one filed here has nothing above ' +
-    'it to roll up to and appears on no backlog anybody grooms. If none of the types fits exactly, use ' +
-    'the closest one and say so in the body — a type the project does not define is refused outright, ' +
-    'and the ticket is lost with it.'
-  );
+export function bugFilingType(config: Config): string | null {
+  if (config.integrations.issues !== 'azure' || !config.azureDevOps) return null;
+  return config.issueBugType?.trim() || DEFAULT_BUG_TYPE;
 }

@@ -1,6 +1,7 @@
 import type { ErrorRecorder } from '../../errorLog.js';
 import type {
   IssueCommentInput,
+  IssueCreateInput,
   IssueLabelInput,
   SendResult,
   WorkItemLinkInput,
@@ -11,6 +12,7 @@ import type {
   Capability,
   Integration,
   IssueCommentCapable,
+  IssueCreateCapable,
   IssueLabelCapable,
   RefResolvable,
   TicketHistoryCapable,
@@ -61,6 +63,7 @@ export class AzureDevOpsWorkItemsIntegration
     WorkItemStateCapable,
     WorkItemLinkCapable,
     IssueLabelCapable,
+    IssueCreateCapable,
     IssueCommentCapable,
     TicketHistoryCapable
 {
@@ -258,6 +261,45 @@ export class AzureDevOpsWorkItemsIntegration
         ? await this.opts.api.updateWorkItemComment(input.number, existing, input.body)
         : await this.opts.api.createWorkItemComment(input.number, input.body);
     return { ok: true, ref: String(ref.id) };
+  }
+
+  /**
+   * File a new work item (issue #394).
+   *
+   * Both halves of a correct filing happen here, which is the whole point of the
+   * seam: the item is created **as** its type and carrying its tags — Azure refuses
+   * an untyped create outright, and an item that appears untagged is one the pickup
+   * gate can miss — and then, where the caller named one, the `related` link is hung
+   * off it. Two writes, because Azure has no way to create a work item already
+   * related to another; one call, because a caller that could forget the second is
+   * the failure this replaced.
+   *
+   * The relation failing does **not** cost the item. It exists, the operator asked
+   * for it, and a link the caller can add by hand is a smaller loss than a filing
+   * that came back empty — so the throw carries the id of what was created.
+   */
+  async createIssue(input: IssueCreateInput): Promise<SendResult> {
+    const created = await this.opts.api.createWorkItem({
+      // Null never reaches here from a filing caller, and `Task` is the historical
+      // default rather than a guess: it is what the prompt hardcoded before the
+      // harness chose types at all.
+      type: input.type ?? 'Task',
+      title: input.title,
+      description: input.body,
+      tags: input.labels,
+      assignedTo: input.assignee,
+    });
+    const ref = `issue:${created.id}`;
+    if (input.relatedTo !== null) {
+      try {
+        await this.opts.api.relateWorkItem(created.id, input.relatedTo);
+      } catch (err) {
+        throw new Error(
+          `work item ${created.id} was created but linking it to #${input.relatedTo} failed: ${(err as Error).message}`,
+        );
+      }
+    }
+    return { ok: true, ref };
   }
 
   /** The outbound side of the watch/ignore toggle: add/remove a `System.Tags` entry. */

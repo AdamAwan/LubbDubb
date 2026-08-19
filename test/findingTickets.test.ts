@@ -116,16 +116,19 @@ test('the tracker is named from the provider actually serving issues', () => {
     github: { owner: 'AdamAwan', repo: 'LubbDubb' },
   } as unknown as Config;
   assert.match(trackerCoordinates(gh)!, /GitHub repository AdamAwan\/LubbDubb/);
-  // The command is in the prompt because a *desk* agent has no repo checkout to
-  // infer the target from — that is the whole reason coordinates are passed.
-  assert.match(trackerCoordinates(gh)!, /gh issue create -R AdamAwan\/LubbDubb/);
+  // The tracker is named in the prompt because a *desk* agent has no repo checkout
+  // to infer the target from. What is no longer there is the create command: since
+  // #394 the harness files the item, so a prompt still carrying one would have the
+  // ticket filed twice.
+  assert.doesNotMatch(trackerCoordinates(gh)!, /gh issue create/);
 
   const az = {
     integrations: { issues: 'azure', sourceControl: 'azure' },
     azureDevOps: { organization: 'contoso', project: 'Platform', repository: 'api' },
   } as unknown as Config;
   assert.match(trackerCoordinates(az)!, /Azure DevOps project "Platform"/);
-  assert.match(trackerCoordinates(az)!, /az boards work-item create --org https:\/\/dev\.azure\.com\/contoso/);
+  assert.match(trackerCoordinates(az)!, /organization "contoso"/);
+  assert.doesNotMatch(trackerCoordinates(az)!, /az boards work-item create/);
 
   // No tracker to file into: the `fake` provider, and a provider selected without
   // its config block. Both must read the same, or the cockpit offers a button
@@ -164,7 +167,7 @@ test('the filing prompt carries the report, its provenance, and the tracker', ()
   assert.match(prompt, /pr:142:ci/); // who saw it, and while doing what
   assert.match(prompt, /issue:41/); // what it is about
   assert.match(prompt, /the GitHub repository a\/b\./); // where it goes
-  assert.match(prompt, /link_ticket/); // and how to report it back
+  assert.match(prompt, /link_ticket/); // and how the words get there
   // File it, don't fix it: the whole point of deferring is that no one is working
   // this yet, and a filing agent that "just quickly fixed it" has spent a slot on
   // work nobody scheduled.
@@ -188,7 +191,7 @@ test('filing a finding queues a desk job and leaves the finding filing, not file
   // branch would be pure cost for a task that never writes a file.
   assert.equal(body.job.kind, 'desk');
   assert.equal(body.job.branch, null);
-  assert.match(body.job.prompt, /gh issue create -R AdamAwan\/LubbDubb/);
+  assert.match(body.job.prompt, /the GitHub repository AdamAwan\/LubbDubb/);
 
   const after = system.store.getFinding(finding.id)!;
   // `filing`, not `filed`: nothing has been created yet. Claiming a ticket here

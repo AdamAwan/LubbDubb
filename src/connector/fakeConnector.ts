@@ -2,7 +2,9 @@ import type { Connector, InjectableEvent } from './connector.js';
 import type {
   ActionSink,
   BranchDeleteInput,
+  CiCheckRequeueInput,
   IssueCommentInput,
+  IssueCreateInput,
   IssueLabelInput,
   PrBaseInput,
   PrBaseUpdateInput,
@@ -73,6 +75,9 @@ export class FakeConnector implements Connector, ActionSink {
     return this.composite.linkWorkItem(input);
   }
 
+  createIssue(input: IssueCreateInput): Promise<SendResult> {
+    return this.composite.createIssue(input);
+  }
   upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
     return this.composite.upsertIssueComment(input);
   }
@@ -91,6 +96,10 @@ export class FakeConnector implements Connector, ActionSink {
 
   updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult> {
     return this.composite.updatePrBranch(input);
+  }
+
+  requeueCiCheck(input: CiCheckRequeueInput): Promise<SendResult> {
+    return this.composite.requeueCiCheck(input);
   }
 
   deleteBranch(input: BranchDeleteInput): Promise<SendResult> {

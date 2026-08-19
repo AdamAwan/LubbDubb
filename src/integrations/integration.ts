@@ -4,7 +4,9 @@ import type { Store } from '../store/store.js';
 import type { InjectableEvent } from '../connector/connector.js';
 import type {
   BranchDeleteInput,
+  CiCheckRequeueInput,
   IssueCommentInput,
+  IssueCreateInput,
   IssueLabelInput,
   PrBaseInput,
   PrBaseUpdateInput,
@@ -173,6 +175,25 @@ export function isPrBaseUpdateCapable(x: Integration): x is Integration & PrBase
   return typeof (x as Partial<PrBaseUpdateCapable>).updatePrBranch === 'function';
 }
 
+/**
+ * An integration that can **queue a fresh run of an expired CI check** — the gate
+ * whose cause the harness already knows (issue #395).
+ *
+ * Its own capability rather than a method on {@link CiEvidenceCapable}, which is
+ * the other per-check provider call: that one reads a failure, this one writes.
+ * Only the Azure provider implements it, and only because only Azure has the
+ * state — a blocking build policy that sits `queued` forever with nothing in
+ * flight. GitHub has no equivalent, so the composite answers `ok: false` and the
+ * gate keeps the agent it always had.
+ */
+export interface CiCheckRequeueCapable {
+  requeueCiCheck(input: CiCheckRequeueInput): Promise<SendResult>;
+}
+
+export function isCiCheckRequeueCapable(x: Integration): x is Integration & CiCheckRequeueCapable {
+  return typeof (x as Partial<CiCheckRequeueCapable>).requeueCiCheck === 'function';
+}
+
 /** An integration that can delete a branch — the reap after a pull request merges. */
 export interface BranchDeleteCapable {
   deleteBranch(input: BranchDeleteInput): Promise<SendResult>;
@@ -272,6 +293,24 @@ export interface WorkItemLinkCapable {
 
 export function isWorkItemLinkCapable(x: Integration): x is Integration & WorkItemLinkCapable {
   return typeof (x as Partial<WorkItemLinkCapable>).linkWorkItem === 'function';
+}
+
+/**
+ * An integration that can **create** a tracker item — the seam the four filing
+ * arms used to have no answer for (issue #394).
+ *
+ * Its own capability rather than a method on {@link IssueCommentCapable}, for
+ * {@link PrBaseUpdateCapable}'s reason: a provider genuinely may read issues and
+ * not accept new ones, and the honest answer there is "nothing serves this" rather
+ * than a method that throws. Every issues provider in the tree implements it, and
+ * a future read-only one would simply not.
+ */
+export interface IssueCreateCapable {
+  createIssue(input: IssueCreateInput): Promise<SendResult>;
+}
+
+export function isIssueCreateCapable(x: Integration): x is Integration & IssueCreateCapable {
+  return typeof (x as Partial<IssueCreateCapable>).createIssue === 'function';
 }
 
 /** An integration that can comment on an issue / work item — the plan's status comment. */

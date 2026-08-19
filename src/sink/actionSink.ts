@@ -60,6 +60,15 @@ export interface PrBaseUpdateInput {
   base: string;
 }
 
+export interface CiCheckRequeueInput {
+  /** The pull request the gate sits on. For the audit line, not for the provider. */
+  prNumber: number;
+  /** The check's operator-facing name — what the audit line and the fallback prompt call it. */
+  check: string;
+  /** The provider's own handle for queueing a fresh run — `CiCheck.requeueRef`, opaque here. */
+  requeueRef: string;
+}
+
 export interface BranchDeleteInput {
   /** The branch to delete, plain — each provider adds its own `refs/heads/` prefix. */
   branch: string;
@@ -86,6 +95,34 @@ export interface IssueLabelInput {
   label: string;
   /** True to add the label, false to remove it. Idempotent either way. */
   present: boolean;
+}
+
+/**
+ * A tracker item the harness is creating — the outbound half of a filing.
+ *
+ * Everything a create needs is here, and that is the point: the four filing arms
+ * used to spell this out as a `gh`/`az` command string for a model to run, so a
+ * label, a type or a relation the harness knew about was only ever as reliable as
+ * the model's memory of the sentence naming it (issue #394).
+ *
+ * `type` and `relatedTo` are **provider-native, not provider-specific**: each
+ * adapter expresses them in its own vocabulary or ignores them. GitHub has no work
+ * item type and drops it; it draws a relation as a `#<n>` cross-reference in the
+ * body, which is the only edge it has. Azure DevOps creates *as* a type and hangs a
+ * `related` link off the new item. A caller states the intent once and never learns
+ * which tracker it landed in.
+ */
+export interface IssueCreateInput {
+  title: string;
+  body: string;
+  /** Labels / tags applied as it is created — the watch label, the bug label. */
+  labels: string[];
+  /** The provider-native item type, or null where the caller has no opinion. */
+  type: string | null;
+  /** Who it belongs to (a GitHub login, an Azure UPN), or null to leave it unassigned. */
+  assignee: string | null;
+  /** A tracker item this one is *related* to — the bug/story edge. Null for none. */
+  relatedTo: number | null;
 }
 
 export interface IssueCommentInput {
@@ -128,6 +165,21 @@ export interface ActionSink {
    * fails. Only providers with a comment API implement it.
    */
   upsertIssueComment(input: IssueCommentInput): Promise<SendResult>;
+  /**
+   * Create a tracker item — the harness filing its own, rather than composing a
+   * `gh`/`az` command for an agent to run (issue #394).
+   *
+   * `ref` on the result is the new item in the harness's own vocabulary
+   * (`issue:314`), not a provider id: that is what a filing row stores, what
+   * `link_ticket` accepts and what the cockpit resolves to a URL, so the one
+   * translation happens here rather than at each of the four call sites.
+   *
+   * Throws when the provider has the operation and it failed. Unlike
+   * {@link updatePrBranch} there is no `ok: false` arm — a caller only reaches this
+   * once a tracker is configured, and a configured tracker that cannot create an
+   * item is a fault, not a shape.
+   */
+  createIssue(input: IssueCreateInput): Promise<SendResult>;
   /**
    * Link a work item to the pull request that resolves it — the tracker-side
    * relation, not a mention in prose.
@@ -177,6 +229,21 @@ export interface ActionSink {
    * and it failed, which is the case worth an error entry.
    */
   updatePrBranch(input: PrBaseUpdateInput): Promise<SendResult>;
+  /**
+   * Queue a fresh run of a CI check the provider reports as **expired** — the
+   * gate whose cause the harness already knows, cleared without an agent
+   * (issue #395). Only ever called for a check carrying a `requeueRef`, which is
+   * only ever set on an expired one.
+   *
+   * **`ok: false` is "the requeue did not happen", not a thrown failure**, and it
+   * covers one case more than {@link updatePrBranch}'s does. A provider with no
+   * such operation answers it from the composite, as there; and so does a
+   * provider that *has* it and declined — Azure answers 200 for a policy it will
+   * not restart, so the only honest reading of "still expired" is that nothing
+   * was queued. Both fall back to the code agent rule `pr-ci-gate` dispatched
+   * before this existed. Throws only when the call itself failed.
+   */
+  requeueCiCheck(input: CiCheckRequeueInput): Promise<SendResult>;
   /**
    * Delete a branch on the remote — the branch behind a pull request that has
    * merged. Mechanical bookkeeping like {@link setPullTitle}, so it is not auto-send

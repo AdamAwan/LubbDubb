@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { loadConfig, loadDeploymentConfig } from '../src/config.js';
-import { ticketAssignment } from '../src/ticketAssignment.js';
+import { ticketAssignee } from '../src/ticketAssignment.js';
 
 test('loadConfig returns sane defaults with no overrides', () => {
   const cfg = loadConfig();
@@ -45,7 +45,7 @@ test('one userId answers ownership, assignment and PR authorship together', () =
     integrations: { sourceControl: 'github', issues: 'github' },
   });
   assert.equal(cfg.userId, 'adam');
-  assert.equal(ticketAssignment(cfg)?.flag, ' --assignee adam', 'filed tickets go to them');
+  assert.equal(ticketAssignee(cfg), 'adam', 'filed tickets go to them');
 });
 
 test('an unset userId leaves every identity gate off rather than guessing one', () => {
@@ -53,7 +53,7 @@ test('an unset userId leaves every identity gate off rather than guessing one', 
     github: { owner: 'acme', repo: 'app' },
     integrations: { sourceControl: 'github', issues: 'github' },
   });
-  assert.equal(ticketAssignment(cfg), null, 'nothing to assign to, so tickets file unassigned');
+  assert.equal(ticketAssignee(cfg), null, 'nothing to assign to, so tickets file unassigned');
 });
 
 test('the planning funnel is deep-merged when overridden', () => {

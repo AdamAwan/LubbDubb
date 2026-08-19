@@ -53,6 +53,7 @@ interface Script {
   /** Actions job logs by job id — the fallback half. */
   jobLogs?: Record<number, string>;
   createdPullNumber?: number;
+  createdIssueNumber?: number;
   /** Branches the remote says are already gone — `deleteBranch` reports false for these. */
   missingBranches?: string[];
 }
@@ -77,6 +78,7 @@ interface Recorded {
   annotationReads: number[];
   jobLogReads: number[];
   createdPulls: Array<{ head: string; base: string; title: string; body: string }>;
+  createdIssues: Array<{ title: string; body: string; labels: string[]; assignee: string | null }>;
   titleSets: Array<{ number: number; title: string }>;
   baseSets: Array<{ number: number; base: string }>;
   /** PR numbers `updatePullBranch` was called for — the server-side base merge. */
@@ -97,6 +99,7 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     annotationReads: [],
     jobLogReads: [],
     createdPulls: [],
+    createdIssues: [],
     titleSets: [],
     baseSets: [],
     branchUpdates: [],
@@ -115,6 +118,10 @@ function fakeApi(script: Script = {}): { api: GitHubApi; recorded: Recorded } {
     async createPull(input) {
       recorded.createdPulls.push(input);
       return { number: script.createdPullNumber ?? 77 };
+    },
+    async createIssue(input) {
+      recorded.createdIssues.push(input);
+      return { number: script.createdIssueNumber ?? 314 };
     },
     async setPullTitle(number, title) {
       recorded.titleSets.push({ number, title });
@@ -777,6 +784,51 @@ test('setIssueLabel adds/removes a label through the labels API', async () => {
     { number: 7, label: 'lubbdubb-ignore', present: false },
   ]);
   store.close();
+});
+
+test('createIssue files an issue with its labels and assignee on the create itself', async () => {
+  const { api, recorded } = fakeApi({ createdIssueNumber: 314 });
+  const issues = new GitHubIssuesIntegration({ api });
+
+  const res = await issues.createIssue({
+    title: 'CSV export 404s on Safari',
+    body: 'Reported by the operator.',
+    labels: ['lubbdubb-watch', 'bug'],
+    // GitHub has no work item type — the field is dropped rather than turned into
+    // a label nobody asked for on the repository.
+    type: 'User Story',
+    assignee: 'adamawan',
+    relatedTo: null,
+  });
+
+  // The harness's own vocabulary, not a provider id: that is what a filing row
+  // stores and what `link_ticket` speaks.
+  assert.deepEqual(res, { ok: true, ref: 'issue:314' });
+  assert.deepEqual(recorded.createdIssues, [
+    {
+      title: 'CSV export 404s on Safari',
+      body: 'Reported by the operator.',
+      labels: ['lubbdubb-watch', 'bug'],
+      assignee: 'adamawan',
+    },
+  ]);
+});
+
+test('a related item becomes the cross-reference GitHub draws on both issues', async () => {
+  const { api, recorded } = fakeApi();
+  const issues = new GitHubIssuesIntegration({ api });
+  await issues.createIssue({
+    title: 'Bug',
+    body: 'The symptom.',
+    labels: [],
+    type: null,
+    assignee: null,
+    relatedTo: 12,
+  });
+  // Naming `#12` in the body *is* GitHub's related link — the closest thing it has
+  // to Azure's relation — so it is appended here rather than left to a caller who
+  // would have to know which tracker they were filing into.
+  assert.match(recorded.createdIssues[0]!.body, /The symptom\.\n\nRelated to #12\./);
 });
 
 test('issues snapshot returns the last-good slice and records an error event on failure', async () => {

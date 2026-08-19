@@ -132,7 +132,7 @@ owns the table**, and the composition root applies them.
 - **Every column is named in the copy.** `SELECT *` binds by position and would silently shift a row's
   columns along the day either shape gains a field.
 
-One declaration exists: `VALIDATION_REBUILDS` in `validation.ts`, moving `validation_checks` and
+Two declarations exist. `VALIDATION_REBUILDS` in `validation.ts` moves `validation_checks` and
 `validation_resources` off `plan_id` and onto the goal's `origin_ref` — the old key resolved through
 the plans table. A row whose plan is gone is dropped by the join rather than carried under a key made
 up for it: it can no longer name a goal, and a check keyed on nothing is worse than one that is not
@@ -140,6 +140,14 @@ there. **`id` and `letter` come across untouched**, which is the whole risk in t
 the merge key and the handle a person types, and renumbering either would silently invalidate every
 amendment that names a check and every reading already recorded against one. Asserted in
 `test/validation.test.ts`, against a database built in the old shape.
+
+`GRAPH_REBUILDS` in `graph.ts` drops `work_item_filings.job_id`. A work item's filing had a job
+because a filing *was* an agent doing something; since [#394](13-jobs-and-findings.md#filing-a-ticket)
+the harness files one itself, so there is no job to name and nothing that resolves a filing from an
+agent's credential. Dropping rather than nulling, because `NOT NULL` is not something `ALTER` can undo
+and a column no writer fills would refuse every new filing on every database created before this
+build. Nothing is re-derived in the copy: `target_ref` was already the primary key, so a filing an
+operator made last month keeps its ticket.
 
 **Three migrations are not `ALTER`s.** `adoptFloorCompletions()` carries #203's `floor_completions`
 into `issue_runs` and drops it (#234). A reshape rather than a column: `completed_at` was `NOT NULL`
@@ -229,7 +237,7 @@ introduced.
 | `tracker_sweep`        | One row (`id = 1`): the mirror's frozen backfill anchor, the high-water mark the next changed-since read asks from, and `restated_at` — the one-shot mark that the history has been read with every row's native state on it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `CHECK (id = 1)` — there is one sweep, not a log of them.                                                                                    |
 | `upgrade_intent`       | One row (`id = 1`): a deliberate upgrade of the harness's own build — its state, the upstream sha accepted, and whether the drain is what paused dispatch. Persisted where `RuntimeControl` is not, because `applying` is read by the process _after_ the one that wrote it ([21](21-self-update.md#the-intent)).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   | `CHECK (id = 1)` — there is one upgrade in progress, not a log of them.                                                                      |
 | `work_nodes`           | The durable work graph: every node the harness has observed, and what it descended from.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | `ref` is `PRIMARY KEY`                                                                                                                       |
-| `work_item_filings`    | A tracker item an operator had filed for work nothing external accounted for.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `target_ref` is `PRIMARY KEY`                                                                                                                |
+| `work_item_filings`    | A tracker item an operator had filed for work nothing external accounted for. `filing` is the **claim**, held for the moment between the click and the tracker answering — the harness files these itself, so a claim whose create failed is deleted rather than left standing. No `job_id`: nothing is dispatched for one.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `target_ref` is `PRIMARY KEY`                                                                                                                |
 | `work_item_ignores`    | The other verdict on the same row: no tracker item is wanted. Undone by deleting the row.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `target_ref` is `PRIMARY KEY`                                                                                                                |
 | `issue_bug_filings`    | A bug an operator raised against a story from the cockpit — they ran it and it does not do what they expect. Keyed on the **job**, not the story, so one story can carry several bugs: it can be wrong in more than one way, and each is its own bug. The operator's report is not a column; the desk job's prompt carries it verbatim.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `job_id` is `PRIMARY KEY`; `origin_ref` indexed                                                                                              |
 | `agent_transcripts`    | Chunked agent output.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `PRIMARY KEY (agent_id, seq)`                                                                                                                |
@@ -247,7 +255,7 @@ introduced.
 Indexes cover the hot lookups: `agent_flags(agent_id)`, `agent_files(agent_id)`, `agents(status)`,
 `tasks(status)`, `jobs(status)`, `job_attachments(target_ref)`, `job_schedules(enabled, next_run_at)`, `findings(status)`, `plans(origin_ref)`, `plan_parts(plan_id)`, `validation_checks(origin_ref)`,
 `decisions(cycle_id)`, `world_events(created_at)`, `usage_events(at)`, `error_events(created_at)`,
-`work_nodes(parent_ref)`, `work_item_filings(job_id)`, `issue_bug_filings(origin_ref)`,
+`work_nodes(parent_ref)`, `issue_bug_filings(origin_ref)`,
 `issue_instructions(origin_ref)`, `tasks(origin_ref)`. The last is the work graph's attempt list: a node's
 attempts are the `tasks` rows carrying its origin, so no separate attempts table exists — `tasks` only
 lacked the index.
@@ -272,12 +280,11 @@ one exists because origin and branch are not 1:1 on the job path — see [09](09
 #### Blueprint attachments
 
 `addAttachments(targetRef, files)`, `listAttachments(targetRef)`, `getAttachment(id)`,
-`listAllAttachments()`, `nextAttachmentIndex(targetRef)`, `rekeyAttachments(targetRef, moved)`,
-`deleteAttachments(targetRef)`.
+`listAllAttachments()`, `deleteAttachments(targetRef)`.
 
-- **Keyed on `target_ref`, not on a job id.** What an attachment belongs to outlives the row it
-  arrived with: a code blueprint becomes a desk _filing_ job and then a ticket, so the images have to
-  follow the goal rather than the job. While the request is a blueprint the ref is `job:<id>`.
+- **Keyed on `target_ref`, not on a job id.** What an attachment belongs to is the *goal*, not the row
+  the request arrived as: a code blueprint with a tracker configured becomes a ticket, so its images
+  belong to `issue:<n>`, while one that dispatches directly belongs to `job:<id>`.
 - **The bytes are on disk, not in the database.** The row records the sniffed mime, the size, the
   operator's filename as a display label and the absolute path. `AttachmentFiles`
   (`src/jobs/attachmentFiles.ts`) owns the files, one directory per target ref; the stem is the index
@@ -285,20 +292,15 @@ one exists because origin and branch are not 1:1 on the job path — see [09](09
 - **Write order is files, then rows.** An interrupted write leaves bytes nothing points at rather than
   a row naming a path that does not resolve, and a path an agent cannot open is the failure that
   matters. A deletion is the mirror — rows first, then files.
-- **The ref changes hands once, at `link_ticket`.** A code blueprint with a tracker configured is
-  filed as a ticket rather than dispatched ([05](05-dispatcher.md), [16](16-http-api.md#launching-a-blueprint)),
-  so its images arrive keyed `job:<id>` and would otherwise be visible to the one agent that files the
-  ticket and writes no code. `AgentManager.linkTicket` re-keys them onto the `issue:<n>` the filing
-  created: `AttachmentFiles.relocate` moves the files, then `rekeyAttachments` rewrites the rows.
-  - **Files move first, rows second**, the write order above and for the same reason: the two halves
-    cannot be made atomic, and a crash between them must leave rows naming paths that still resolve.
-  - **The destination may already hold images** — an agent may link to the existing issue it decided
-    its blueprint duplicates — so the move renumbers from `nextAttachmentIndex(toRef)` rather than
-    keeping the stem. A fixed stem would silently overwrite another operator's screenshot, and
-    `UNIQUE (target_ref, idx)` would refuse the row after the file was already gone.
-  - **A failed move is recorded, not raised.** The link has already succeeded in the store, and
-    refusing it over a rename would leave the operator looking at an incomplete filing. What is lost
-    is the image's onward visibility, and [18](18-observability.md) carries the reason.
+- **The ref is decided before anything is written.** A code blueprint with a tracker configured is
+  filed as a ticket rather than dispatched ([13](13-jobs-and-findings.md#filing-a-ticket)), and the
+  **harness** files it — so the issue number is known on the request, and the images are written under
+  `issue:<n>` from the start. They were previously keyed `job:<id>` and re-keyed by `link_ticket` when
+  a desk agent reported the ticket back; that whole move is gone with the agent, and with it the
+  window in which an image belonged to a row about to stop existing.
+  - **A failed write is recorded, not raised.** The ticket exists and is what the operator asked for;
+    refusing the request over a screenshot would cost them the filing. What is lost is the image's
+    onward visibility, and [18](18-observability.md) carries the reason.
 - **Nothing ages them out.** Attachments live as long as what they are attached to, so a plan written
   days later, and the retrospective after it, can still refer back to the screenshot the goal started
   as. The **only** deletion is a blueprint cancelled before it ran, which nothing downstream can want;
@@ -687,24 +689,27 @@ forgotten. The only writer is the `WorkGraphRecorder` in the pulse — see [04](
 ### Work-item filings
 
 `createWorkItemFiling({targetRef, jobId})`, `listWorkItemFilings()`, `findWorkItemFilingByJobId(jobId)`,
-`linkWorkItemFiling(jobId, ticketRef)`.
+`linkWorkItemFiling(targetRef, ticketRef)`, `dropWorkItemFiling(targetRef)`.
 
-A filing records that an operator asked an agent to create a tracker item for work the harness did that
+A filing records that an operator asked for a tracker item for work the harness did that
 nothing external accounts for — an operator job that produced commits with no issue behind it. It matters
 because **completion is read from the tracker and never computed**, so an item the tracker has never heard
 of has no terminal state available to it at all.
 
 Keyed on `target_ref`, so one node has at most one filing and a second click is refused by the primary key
-rather than by a caller remembering to look first. `create` returns null in that case; `linkWorkItemFiling`
-is guarded `WHERE job_id = ? AND status = 'filing'` and returns null when nothing changed, so an agent that
-calls `link_ticket` twice links once — idempotence in the write, the `linkFindingTicket` and `decideProposal`
-discipline. `listWorkItemFilings` is unbounded on purpose, as `listProposals` is: a linked filing is what
-parents its node, and one that aged out of a window would have the fold quietly un-record filed work.
+rather than by a caller remembering to look first. `create` returns null in that case — and it is the
+**claim**, taken before anything reaches the tracker, which is what makes two clicks in one second safe now
+that the harness files on the request. `linkWorkItemFiling` is guarded
+`WHERE target_ref = ? AND status = 'filing'` and returns null when nothing changed — idempotence in the
+write, the `linkFindingTicket` and `decideProposal` discipline. `dropWorkItemFiling` releases a claim whose
+create failed, narrowed to `filing` so it can never take a row carrying a ref; a delete rather than a third
+status, for the reason `work_item_ignores` is a delete. `listWorkItemFilings` is unbounded on purpose, as
+`listProposals` is: a linked filing is what parents its node, and one that aged out of a window would have
+the fold quietly un-record filed work.
 
 It is **not** a `findings` row. A finding is an agent's testimony, with `agent_id`/`task_id` `NOT NULL` and
 attribution taken structurally from a credential; a harness-authored row has neither, so reusing the table
-would mean forging the two columns that carry the guarantee. The filing _mechanism_ is reused in full — a
-desk job, `trackerCoordinates`, an overridable prompt, `link_ticket` — and only the row differs.
+would mean forging the two columns that carry the guarantee.
 
 The parent edge it produces is written by the **fold**, never from the route or the tool: the filing row is
 intent, the relationship `plans` and `plan_parts` already have to the recorder, which stays the graph's only

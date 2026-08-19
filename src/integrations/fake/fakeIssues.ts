@@ -2,6 +2,7 @@ import { nanoid } from 'nanoid';
 import type { InjectableEvent } from '../../connector/connector.js';
 import type {
   IssueCommentInput,
+  IssueCreateInput,
   IssueLabelInput,
   SendResult,
   WorkItemLinkInput,
@@ -12,6 +13,7 @@ import type {
   Injectable,
   Integration,
   IssueCommentCapable,
+  IssueCreateCapable,
   IssueLabelCapable,
   TicketHistoryCapable,
   WorkItemLinkCapable,
@@ -36,6 +38,7 @@ export class FakeIssuesIntegration
     WorkItemStateCapable,
     WorkItemLinkCapable,
     IssueLabelCapable,
+    IssueCreateCapable,
     IssueCommentCapable,
     TicketHistoryCapable
 {
@@ -183,6 +186,44 @@ export class FakeIssuesIntegration
     const ref = input.commentRef ?? `comment_${this.nextCommentId++}`;
     this.comments.set(ref, { number: input.number, body: input.body });
     return { ok: true, ref };
+  }
+
+  /**
+   * File a new issue into the fake world (issue #394).
+   *
+   * The scripted half of the create seam, and it is what lets a filing test assert
+   * the whole path — the label the harness chose, the relation it drew — without a
+   * network: the issue it writes shows up on the very next snapshot, exactly as a
+   * real tracker's would.
+   *
+   * `type` is dropped, as GitHub's is: the fake world has no work item types, and
+   * modelling one would be the fake asserting a provider's vocabulary rather than
+   * the harness's behaviour. `relatedTo` becomes the same `#<n>` cross-reference
+   * GitHub draws, so a body composed once reads the same in either.
+   */
+  async createIssue(input: IssueCreateInput): Promise<SendResult> {
+    const number = this.nextIssueNumber();
+    this.world.mutate((world) => {
+      world.issues.push({
+        id: `issue_${nanoid(6)}`,
+        number,
+        title: input.title,
+        body: input.relatedTo === null ? input.body : `${input.body}\n\nRelated to #${input.relatedTo}.`,
+        labels: [...input.labels],
+        state: 'open',
+        linkedPrNumber: null,
+      });
+    });
+    return { ok: true, ref: `issue:${number}` };
+  }
+
+  /**
+   * One above the highest number the fake world holds — never a counter of its own.
+   * The world is the record, and a counter beside it would hand out a number an
+   * injected `new_issue` had already taken.
+   */
+  private nextIssueNumber(): number {
+    return this.world.read().issues.reduce((max, i) => Math.max(max, i.number), 0) + 1;
   }
 
   /** Reflect harness progress: an agent opened a PR that resolves this issue. */

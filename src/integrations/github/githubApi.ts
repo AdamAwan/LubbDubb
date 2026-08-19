@@ -102,6 +102,17 @@ export interface GitHubApi {
   setPullLabel(number: number, label: string, present: boolean): Promise<void>;
   /** Add (`present`) or remove a label on an issue — the watch/ignore toggle. Idempotent. */
   setIssueLabel(number: number, label: string, present: boolean): Promise<void>;
+  /**
+   * Open an issue. Returns the new number.
+   *
+   * Labels and the assignee ride on the **create**, not on follow-up writes: an
+   * item that exists for a moment unlabelled is an item the watch gate can miss and
+   * a filing nobody is assigned, and GitHub accepts both fields on the create call
+   * so there is no reason to pay two requests for a weaker guarantee (issue #394).
+   */
+  createIssue(input: { title: string; body: string; labels: string[]; assignee: string | null }): Promise<{
+    number: number;
+  }>;
   /** Open a pull request. Returns the new number. */
   createPull(input: { head: string; base: string; title: string; body: string }): Promise<{ number: number }>;
   /** Rewrite a pull request's title — the naming convention. */

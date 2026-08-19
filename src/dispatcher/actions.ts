@@ -236,6 +236,40 @@ const ActionSchema = z.discriminatedUnion('type', [
     originRef: z.string().min(1),
     ...base,
   }),
+  /**
+   * Queue a fresh run of the **expired** build policies holding a pull request's
+   * gate, without spending a code agent on it (issue #395).
+   *
+   * Emitted only by rule `pr-ci-gate`'s expired arm — a check the provider itself
+   * says nothing is running and nothing will start for, whose resolution the
+   * harness therefore knows without asking a model. The *guided* arm keeps its
+   * agent: only the operator's words can say what releases a check they asked to
+   * be watched, and a check that is both expired and guided keeps them too.
+   *
+   * Like {@link update_pr_branch} it claims no headroom, is pushed straight
+   * through, and is audited under `originRef` so the gate's cooldown and attempt
+   * accounting stay whole whoever performed the attempt.
+   */
+  z.object({
+    type: z.literal('requeue_ci_check'),
+    prNumber: z.number().int(),
+    /**
+     * Every expired check on this gate, as a name for the audit line and the
+     * provider's own opaque handle for the write.
+     *
+     * A list rather than one check because the concern is one per pull request: a
+     * repository with two required builds expires both on the same push, and
+     * splitting them across pulses would spend the origin's whole attempt budget
+     * on a gate nothing was wrong with. One write each, one pulse, one decision row.
+     */
+    checks: z.array(z.object({ name: z.string().min(1), requeueRef: z.string().min(1) })).min(1),
+    /**
+     * `pr:<n>:ci-gate`, the concern's own origin — the key the attempt counter and
+     * the next cycle's fallback both read, for {@link update_pr_branch}'s reason.
+     */
+    originRef: z.string().min(1),
+    ...base,
+  }),
   z.object({
     type: z.literal('set_work_item_state'),
     /** The work item / issue number to transition. */

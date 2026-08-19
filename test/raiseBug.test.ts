@@ -5,10 +5,10 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/server/app.js';
 import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
-import { bugTicketFields, bugTrackerCoordinates } from '../src/bugFiling.js';
+import { bugTicketFields } from '../src/bugFiling.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
-import { loadConfig, type Config } from '../src/config.js';
+import { loadConfig } from '../src/config.js';
 import type { Agent } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
@@ -96,34 +96,6 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
 
 // -- the pure half ------------------------------------------------------------
 
-test('the bug coordinates carry the type and the link back, in each provider’s own vocabulary', () => {
-  const gh = {
-    integrations: { issues: 'github', sourceControl: 'fake' },
-    github: { owner: 'AdamAwan', repo: 'LubbDubb' },
-  } as unknown as Config;
-  assert.match(bugTrackerCoordinates(gh, 12)!, /gh issue create -R AdamAwan\/LubbDubb/);
-  // GitHub's cross-reference *is* its related link, so the story number has to
-  // reach the body — naming it is the whole mechanism.
-  assert.match(bugTrackerCoordinates(gh, 12)!, /#12/);
-
-  const az = {
-    integrations: { issues: 'azure', sourceControl: 'azure' },
-    azureDevOps: { organization: 'contoso', project: 'Platform', repository: 'api' },
-  } as unknown as Config;
-  const coords = bugTrackerCoordinates(az, 12)!;
-  // A Bug, not the Task `trackerCoordinates` files — the two differ, which is why
-  // this is a sibling function rather than a flag on that one.
-  assert.match(coords, /--type Bug/);
-  // `related`, not parent/child: legal whatever process template the project runs,
-  // where a parent link from a User Story to a Bug is refused by some of them.
-  assert.match(coords, /--relation-type related --target-id 12/);
-
-  // Nothing to file into: both must read the same as `trackerCoordinates`, or the
-  // cockpit offers a button whose route refuses.
-  assert.equal(bugTrackerCoordinates({ integrations: { issues: 'fake' } } as unknown as Config, 1), null);
-  assert.equal(bugTrackerCoordinates({ integrations: { issues: 'github' } } as unknown as Config, 1), null);
-});
-
 test('the prompt carries the operator’s words verbatim and says whose they are', () => {
   const { title, vars } = bugTicketFields(
     { number: 12, title: 'Export the ledger as CSV' },
@@ -137,7 +109,10 @@ test('the prompt carries the operator’s words verbatim and says whose they are
   assert.match(prompt, /Worked in the PR preview, not on main\./);
   assert.match(prompt, /#12/); // the story it came from
   assert.match(prompt, /the GitHub repository a\/b\./); // where it goes
-  assert.match(prompt, /link_ticket/); // and how to report it back
+  assert.match(prompt, /link_ticket/); // and how the words get there
+  // The agent writes the bug; it does not create it (issue #394). A prompt still
+  // carrying a create command would have the item filed twice.
+  assert.doesNotMatch(prompt, /gh issue create|az boards work-item/);
   // File it, don't fix it — the same rule the other filing prompts state, and the
   // reason this is a desk job.
   assert.match(prompt, /do not fix it/i);
@@ -170,7 +145,7 @@ test('raising a bug queues a desk job carrying the report, and files nothing yet
   assert.equal(body.job.kind, 'desk');
   assert.equal(body.job.branch, null);
   assert.match(body.job.prompt, /The export button still 404s on Safari\./);
-  assert.match(body.job.prompt, /gh issue create -R AdamAwan\/LubbDubb/);
+  assert.match(body.job.prompt, /the GitHub repository AdamAwan\/LubbDubb/);
 
   // `filing`, not `filed`: nothing exists in the tracker yet, and claiming a ref
   // here would be a link to nowhere.
@@ -295,4 +270,63 @@ test('an agent on any other task has no bug to link', async () => {
   const res = await callTool(system, agent, 'link_ticket', { ref: 'issue:314' });
   assert.equal(res.isError, true);
   assert.match(res.text, /raise a bug an operator reported|none of them/);
+});
+
+test('link_ticket files the bug the agent wrote, related to the story, without being asked to', async () => {
+  const system = build();
+  const { app } = await buildApp(system);
+  const number = await seedWorld(system);
+
+  const res = await app.inject({
+    method: 'POST',
+    url: `/api/issues/${number}/bug`,
+    payload: { summary: 'The export button still 404s on Safari.' },
+  });
+  const { job } = res.json() as { job: { id: string; title: string; prompt: string } };
+  const agent = filingAgent(system, job);
+
+  // Title and body, and nothing else. The relation back to the story is the whole
+  // point of the change: it was a *second* command in the prompt, so a model that
+  // ran the first and stopped left a bug nobody could trace, with nothing red.
+  const ok = await callTool(system, agent, 'link_ticket', {
+    title: 'CSV export 404s on Safari',
+    body: 'Reported by the operator; reproduced against `main`.',
+  });
+  assert.equal(ok.isError, false);
+
+  const filed = system.store.findBugFilingByJobId(job.id)!;
+  assert.equal(filed.status, 'filed');
+  assert.ok(filed.ticketRef?.startsWith('issue:'), 'the harness reports back the ref it created');
+
+  // It really exists in the tracker, and it names the story. The fake issues
+  // provider draws a relation the way GitHub does — a cross-reference in the body.
+  const world = await system.connector.getState();
+  const bug = world.issues.find((i) => `issue:${i.number}` === filed.ticketRef)!;
+  assert.equal(bug.title, 'CSV export 404s on Safari');
+  assert.match(bug.body, /Reported by the operator/);
+  assert.match(bug.body, new RegExp(`Related to #${number}\\.`));
+});
+
+test('link_ticket refuses a call that both names an existing item and writes a new one', async () => {
+  const system = build();
+  const { app } = await buildApp(system);
+  const number = await seedWorld(system);
+  const res = await app.inject({
+    method: 'POST',
+    url: `/api/issues/${number}/bug`,
+    payload: { summary: 'Still broken.' },
+  });
+  const { job } = res.json() as { job: { id: string; title: string; prompt: string } };
+  const agent = filingAgent(system, job);
+
+  // Two different acts — "this already exists" and "create this" — and ranking them
+  // would have the harness choose which of the agent's two claims to believe.
+  const both = await callTool(system, agent, 'link_ticket', { ref: 'issue:7', title: 't', body: 'b' });
+  assert.equal(both.isError, true);
+  assert.match(both.text, /not both/);
+
+  const neither = await callTool(system, agent, 'link_ticket', { title: 'only a title' });
+  assert.equal(neither.isError, true);
+  assert.match(neither.text, /needs `title` and `body`/);
+  assert.equal(system.store.findBugFilingByJobId(job.id)!.status, 'filing');
 });

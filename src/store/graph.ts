@@ -7,6 +7,28 @@ import type {
   WorkNodeProvenance,
 } from '../types.js';
 import type { StoreContext } from './context.js';
+import type { TableRebuild } from './migrate.js';
+
+/**
+ * `work_item_filings` lost its `job_id` when the harness started filing work items
+ * itself (issue #394): there is no desk agent behind one any more, so there is no
+ * job to name and nothing that resolves a filing from an agent's credential.
+ *
+ * A key change rather than an additive column, so it is a rebuild — SQLite has no
+ * `ALTER COLUMN`, and a `NOT NULL` column no writer fills would refuse every new
+ * filing on every database created before this build. The rows themselves come
+ * across untouched: `target_ref` was already the primary key, so nothing is
+ * re-derived and a filing an operator made last month keeps its ticket.
+ */
+export const GRAPH_REBUILDS: readonly TableRebuild[] = [
+  {
+    table: 'work_item_filings',
+    keyedOn: 'job_id',
+    copy: (old) => `
+      INSERT INTO work_item_filings (target_ref, status, ticket_ref, created_at, updated_at)
+      SELECT target_ref, status, ticket_ref, created_at, updated_at FROM ${old}`,
+  },
+];
 
 /**
  * The durable work graph — `work_nodes` — and the two operator answers to a node
@@ -113,17 +135,25 @@ export class GraphStore {
   // -- Work-item filings (stage 3) ------------------------------------------
 
   /**
-   * Open a filing for an unrecorded node.
+   * Open a filing for an unrecorded node — the claim, taken **before** the item is
+   * created.
    *
-   * Returns null when one already stands for that target: the refusal lives in
-   * the write (`target_ref` is the primary key), not in a caller remembering to
-   * look first — the same discipline as `decideProposal` and `linkFindingTicket`.
+   * Returns null when one already stands for that target: the refusal lives in the
+   * write (`target_ref` is the primary key), not in a caller remembering to look
+   * first — the same discipline as `decideProposal` and `linkFindingTicket`. That
+   * is what it is for now that filing is a call the route makes rather than an
+   * agent it queues: two clicks land in the same second, and the second one has to
+   * lose *before* anything reaches the tracker, or the operator gets two tickets
+   * for one piece of work.
+   *
+   * No job. It used to carry the desk job doing the filing, which is how
+   * `link_ticket` found its way back here; since #394 the harness files a work item
+   * itself, so there is no agent to resolve from and nothing to store.
    */
-  createWorkItemFiling(input: { targetRef: string; jobId: string }): WorkItemFiling | null {
+  createWorkItemFiling(input: { targetRef: string }): WorkItemFiling | null {
     const ts = this.ctx.now();
     const row: WorkItemFiling = {
       targetRef: input.targetRef,
-      jobId: input.jobId,
       status: 'filing',
       ticketRef: null,
       createdAt: ts,
@@ -131,8 +161,8 @@ export class GraphStore {
     };
     const result = this.ctx.db
       .prepare(
-        `INSERT OR IGNORE INTO work_item_filings (target_ref, job_id, status, ticket_ref, created_at, updated_at)
-         VALUES (@targetRef, @jobId, @status, @ticketRef, @createdAt, @updatedAt)`,
+        `INSERT OR IGNORE INTO work_item_filings (target_ref, status, ticket_ref, created_at, updated_at)
+         VALUES (@targetRef, @status, @ticketRef, @createdAt, @updatedAt)`,
       )
       .run(row);
     return result.changes === 0 ? null : row;
@@ -152,31 +182,37 @@ export class GraphStore {
     return rows.map(rowToWorkItemFiling);
   }
 
-  /** The filing a job was created for, if it was created for one. */
-  findWorkItemFilingByJobId(jobId: string): WorkItemFiling | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM work_item_filings WHERE job_id=?`).get(jobId) as
+  /**
+   * Record the item the harness created: `filing` → `filed`.
+   *
+   * Guarded in the write rather than by a read-then-check, mirroring
+   * `linkFindingTicket` exactly. Null means there was nothing awaiting a ticket.
+   */
+  linkWorkItemFiling(targetRef: string, ticketRef: string): WorkItemFiling | null {
+    const updatedAt = this.ctx.now();
+    const result = this.ctx.db
+      .prepare(
+        `UPDATE work_item_filings SET status='filed', ticket_ref=?, updated_at=? WHERE target_ref=? AND status='filing'`,
+      )
+      .run(ticketRef, updatedAt, targetRef);
+    if (result.changes === 0) return null;
+    const row = this.ctx.db.prepare(`SELECT * FROM work_item_filings WHERE target_ref=?`).get(targetRef) as
       | WorkItemFilingRow
       | undefined;
     return row ? rowToWorkItemFiling(row) : null;
   }
 
   /**
-   * Record the ticket a filing agent created: `filing` → `filed`.
+   * Release a claim whose filing never happened — the tracker refused the create,
+   * or the request died between the two.
    *
-   * Guarded in the write rather than by a read-then-check, mirroring
-   * `linkFindingTicket` exactly — an agent that calls `link_ticket` twice
-   * links once. Null means there was nothing awaiting a ticket, which the tool
-   * turns into an error the agent can read.
+   * A delete rather than a third status, for {@link unignoreWorkItem}'s reason: the
+   * operator asked for a ticket and there is none, so the honest record is the one
+   * that has the button back. Narrowed to `filing` so it can never take a row that
+   * has a ref on it.
    */
-  linkWorkItemFiling(jobId: string, ticketRef: string): WorkItemFiling | null {
-    const updatedAt = this.ctx.now();
-    const result = this.ctx.db
-      .prepare(
-        `UPDATE work_item_filings SET status='filed', ticket_ref=?, updated_at=? WHERE job_id=? AND status='filing'`,
-      )
-      .run(ticketRef, updatedAt, jobId);
-    if (result.changes === 0) return null;
-    return this.findWorkItemFilingByJobId(jobId);
+  dropWorkItemFiling(targetRef: string): void {
+    this.ctx.db.prepare(`DELETE FROM work_item_filings WHERE target_ref=? AND status='filing'`).run(targetRef);
   }
 
   /**
@@ -225,7 +261,6 @@ interface WorkNodeRow {
 
 interface WorkItemFilingRow {
   target_ref: string;
-  job_id: string;
   status: string;
   ticket_ref: string | null;
   created_at: string;
@@ -250,7 +285,6 @@ function rowToWorkNode(row: WorkNodeRow): WorkNode {
 function rowToWorkItemFiling(row: WorkItemFilingRow): WorkItemFiling {
   return {
     targetRef: row.target_ref,
-    jobId: row.job_id,
     status: row.status as WorkItemFilingStatus,
     ticketRef: row.ticket_ref,
     createdAt: row.created_at,

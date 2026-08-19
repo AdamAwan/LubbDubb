@@ -98,6 +98,23 @@ export interface CiCheck {
    * prompt is composed exactly as it was before this existed.
    */
   evidenceRef?: string;
+  /**
+   * How the provider that reported this check **queues a fresh run of it** — an
+   * Azure policy-evaluation id (`src/integrations/azure/sourceControl.ts`).
+   *
+   * Opaque above the integration that wrote it, exactly as {@link evidenceRef}
+   * is: nothing outside `src/integrations/<provider>/` parses or renders it, it
+   * is handed straight back to the same provider's `CiCheckRequeueCapable`
+   * write, and that is what lets a provider with an entirely different job model
+   * share the field later without a union every reader would have to widen.
+   *
+   * Only ever set alongside {@link expired}, which is the only state a requeue
+   * answers: a check that is genuinely running needs no second run, and a check
+   * with a verdict has already had one. Absent therefore reads as "nothing the
+   * harness can queue itself", which is where rule `pr-ci-gate` dispatches the
+   * agent it always did.
+   */
+  requeueRef?: string;
 }
 
 /** GitHub's `mergeable_state`, normalised to the values the harness reacts to. */
@@ -670,13 +687,18 @@ export interface WorkNode {
 export type WorkItemFilingStatus = 'filing' | 'filed';
 
 /**
- * A tracker item the operator asked an agent to create for work the harness did
- * that nothing external accounts for — an operator job that produced commits and
- * a PR with no issue anywhere behind it (stage 3 of the work graph).
+ * A tracker item the operator asked the harness to create for work it did that
+ * nothing external accounts for — an operator job that produced commits and a PR
+ * with no issue anywhere behind it (stage 3 of the work graph).
  *
  * Keyed on the node it is *for*, so one node has at most one filing. Once the ref
  * comes back it becomes that node's `parentRef` — written by the fold, never from
  * here, so the recorder stays the graph's only writer.
+ *
+ * `filing` is the **claim**, held for the moment between the operator's click and
+ * the tracker answering: the harness files these itself (issue #394), so the two
+ * statuses are one request apart rather than an agent's lifetime, and a claim whose
+ * create failed is deleted rather than left standing.
  *
  * Deliberately not a {@link Finding}: a finding is an agent's testimony with
  * structural attribution, and this row has no agent behind it to attribute to.
@@ -684,10 +706,8 @@ export type WorkItemFilingStatus = 'filing' | 'filed';
 export interface WorkItemFiling {
   /** The unrecorded node this is filing a work item for (`job:job_abc`). */
   targetRef: string;
-  /** The desk job doing the filing — how `link_ticket` finds its way back here. */
-  jobId: string;
   status: WorkItemFilingStatus;
-  /** The tracker item it was filed as (`issue:314`), once the agent reports it. */
+  /** The tracker item it was filed as (`issue:314`), once the harness created it. */
   ticketRef: string | null;
   createdAt: string;
   updatedAt: string;
@@ -695,9 +715,10 @@ export interface WorkItemFiling {
 
 /**
  * A bug the operator raised against a story from the cockpit, and what became of
- * it. Shares {@link WorkItemFilingStatus} because it is the same asynchrony: the
- * click queues a desk job, and the bug exists only once that job's agent created
- * it and called `link_ticket`.
+ * it. Shares {@link WorkItemFilingStatus} because it is the same asynchrony —
+ * though here it is the longer kind: the click queues a desk job, and the bug
+ * exists only once that job's agent has written it up and handed the words to
+ * `link_ticket` for the harness to file.
  *
  * Keyed on {@link BugFiling.jobId} rather than on the story, so one story can
  * carry several bugs over its life — see `src/store/bugFilings.ts` for why that
@@ -2558,6 +2579,7 @@ type ActionType =
   | 'propose_plan'
   | 'propose_shortfall'
   | 'update_pr_branch'
+  | 'requeue_ci_check'
   | 'set_work_item_state'
   | 'no_op';
 
