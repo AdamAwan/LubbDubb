@@ -1167,3 +1167,140 @@ function allFiles(dir: string): string[] {
   }
   return out.sort();
 }
+
+// ---------------------------------------------------------------------------
+// The origin label (`docs/spec/22-pets.md#the-sources`)
+// ---------------------------------------------------------------------------
+
+/** One settled action of every kind, so a scan can hatch a pet from each. */
+function oneOfEachKind(store: Store): Map<PetActionKind, string> {
+  const refs = new Map<PetActionKind, string>();
+  refs.set('escalation', answer(store, 'Should the rate-limit park apply to review agents too?'));
+  refs.set('human-task', settle(store, 'Issue a deploy key for the staging cluster'));
+  const plan = store.upsertPlan({ originRef: 'issue:437', title: 'Give jobs real names', status: 'active' });
+  refs.set('plan', plan.id);
+  refs.set('landing', store.recordStackLanding('stack:413', [411, 412]).id);
+  refs.set('job', store.createJob({ title: 'Re-run the flaky worktree suite', prompt: 'go', kind: 'code' }).id);
+  const { finding } = store.recordFinding('agent_1', 'task_1', null, {
+    kind: 'docs',
+    ref: null,
+    summary: 'ingest.ts buffers the whole body',
+    where: null,
+    detail: null,
+  });
+  store.resolveFinding(finding.id, 'dismissed', null);
+  refs.set('finding', finding.id);
+  store.writeUpgradeIntent({
+    state: 'applying',
+    targetSha: '9c1d4a2f6b3e',
+    requestedAt: '2026-04-12T14:00:00.000Z',
+    pausedByDrain: false,
+  });
+  refs.set('upgrade', '9c1d4a2f6b3e');
+  return refs;
+}
+
+test('every origin arrives on the wire as words rather than as a row id', () => {
+  const { store, pets } = keeper({ dropChance: 1 });
+  const refs = oneOfEachKind(store);
+  pets.scan();
+  const state = pets.state();
+  assert.ok(state);
+  const byKind = new Map(state.pets.map((pet) => [pet.originKind, pet]));
+  for (const kind of KINDS) assert.ok(byKind.has(kind), `${kind} must have hatched something to label`);
+  assert.equal(byKind.get('escalation')?.originLabel, 'Should the rate-limit park apply to review agents too?');
+  assert.equal(byKind.get('human-task')?.originLabel, 'Issue a deploy key for the staging cluster');
+  assert.equal(byKind.get('plan')?.originLabel, 'Give jobs real names');
+  assert.equal(byKind.get('landing')?.originLabel, 'stack:413');
+  assert.equal(byKind.get('job')?.originLabel, 'Re-run the flaky worktree suite');
+  assert.equal(byKind.get('finding')?.originLabel, 'ingest.ts buffers the whole body');
+  // An upgrade is the one kind that reads nothing: its ref is the commit itself.
+  assert.equal(byKind.get('upgrade')?.originLabel, '9c1d4a2');
+  // And the ref the label stands beside has not moved — it is the seed, the
+  // re-roll's input and part of the chain hash.
+  for (const kind of KINDS) assert.equal(byKind.get(kind)?.originRef, refs.get(kind));
+});
+
+test('the labels are one batched read per kind over the refs the vivarium holds', () => {
+  const { store, pets } = keeper({ dropChance: 1 });
+  oneOfEachKind(store);
+  // A second escalation, so "the refs it holds" is more than one and a query per
+  // card would show up as two calls rather than one.
+  answer(store, 'a second question');
+  pets.scan();
+
+  const asked = new Map<string, string[][]>();
+  const methods = [
+    'escalationLabels',
+    'humanTaskLabels',
+    'planLabels',
+    'landingLabels',
+    'jobLabels',
+    'findingLabels',
+  ] as const;
+  for (const method of methods) {
+    const real = store[method].bind(store);
+    store[method] = (ids: string[]): Map<string, string> => {
+      asked.set(method, [...(asked.get(method) ?? []), ids]);
+      return real(ids);
+    };
+  }
+
+  const state = pets.state();
+  assert.ok(state);
+  for (const method of methods) {
+    assert.deepEqual(
+      asked.get(method)?.length,
+      1,
+      `${method} must be asked once for the whole grid, not once per card`,
+    );
+  }
+  const escalations = state.pets.filter((pet) => pet.originKind === 'escalation');
+  assert.equal(escalations.length, 2, 'the second escalation must have hatched, or this asserts nothing');
+  assert.deepEqual(
+    [...(asked.get('escalationLabels')?.[0] ?? [])].sort(),
+    escalations.map((pet) => pet.originRef).sort(),
+    'each kind is asked for exactly the refs its pets carry — never for the table',
+  );
+});
+
+test('a label with a paragraph in it arrives clamped to one line', () => {
+  const { store, pets } = keeper({ dropChance: 1 });
+  answer(store, `  Two rooms,\n\nand a corridor between them.  \t ${'long '.repeat(40)}`);
+  pets.scan();
+  const state = pets.state();
+  const label = state?.pets[0]?.originLabel ?? '';
+  assert.ok(!label.includes('\n'), 'a newline in a label reflows the grid');
+  assert.ok(label.length <= 90, `a label must fit a card, got ${label.length}`);
+  assert.ok(label.startsWith('Two rooms, and a corridor between them.'), `unexpected clamp: ${label}`);
+  assert.ok(label.endsWith('…'), 'a clamped label says that it was clamped');
+});
+
+test('a source row that has gone leaves no label, and is not an accusation', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-pets-label-'));
+  const path = join(dir, 'labels.sqlite');
+  try {
+    const store = new Store(path);
+    const pets = new PetKeeper(store, { enabled: true }, rules({ dropChance: 1 }), () => BUILD);
+    const id = answer(store, 'a question somebody later pruned');
+    pets.scan();
+    assert.equal(pets.state()?.pets[0]?.originLabel, 'a question somebody later pruned');
+    store.close();
+
+    // The source pruned out from under a pet that is otherwise untouched — a
+    // restored backup, or a tidied table.
+    const raw = new Database(path);
+    raw.prepare(`DELETE FROM escalations WHERE id=?`).run(id);
+    raw.close();
+
+    const after = new Store(path);
+    const reopened = new PetKeeper(after, { enabled: true }, rules({ dropChance: 1 }), () => BUILD);
+    const pet = reopened.state()?.pets[0];
+    assert.equal(pet?.originLabel, null, 'a missing row is no label');
+    assert.equal(pet?.originRef, id, 'and the card still has the ref it always drew');
+    assert.equal(pet?.flaw, null, 'a pruned source must never read as a forgery');
+    after.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

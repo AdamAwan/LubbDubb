@@ -66,6 +66,22 @@ export class JobStore {
     return row ? rowToJob(row) : null;
   }
 
+  /**
+   * The title of each of these jobs, by id — the pets panel's label for a `job`
+   * origin. Jobs already carry the name a person typed; this is only the read
+   * that gets it to a surface holding an id. A missing id is absent from the map,
+   * never an error. → `docs/spec/22-pets.md#the-sources`
+   */
+  jobLabels(ids: string[]): Map<string, string> {
+    if (ids.length === 0) return new Map();
+    const holes = ids.map(() => '?').join(',');
+    const rows = this.ctx.db.prepare(`SELECT id, title FROM jobs WHERE id IN (${holes})`).all(...ids) as {
+      id: string;
+      title: string;
+    }[];
+    return new Map(rows.map((r) => [r.id, r.title]));
+  }
+
   listJobs(limit = 100): Job[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?`).all(limit) as JobRow[];
     return rows.map(rowToJob);

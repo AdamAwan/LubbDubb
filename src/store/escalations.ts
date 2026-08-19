@@ -65,6 +65,25 @@ export class EscalationStore {
     return row ? rowToEscalation(row) : null;
   }
 
+  /**
+   * The question each of these escalations asked, by id.
+   *
+   * For the pets panel, which has an `origin_ref` and nothing to call it. A
+   * by-id read over the refs the vivarium holds, never a walk: `listEscalations`
+   * is unbounded and the pet that needs naming is usually the oldest one.
+   * An id with no row is simply absent from the map — a pruned source is not an
+   * error here. → `docs/spec/22-pets.md#the-sources`
+   */
+  escalationLabels(ids: string[]): Map<string, string> {
+    if (ids.length === 0) return new Map();
+    const holes = ids.map(() => '?').join(',');
+    const rows = this.ctx.db.prepare(`SELECT id, prompt FROM escalations WHERE id IN (${holes})`).all(...ids) as {
+      id: string;
+      prompt: string;
+    }[];
+    return new Map(rows.map((r) => [r.id, r.prompt]));
+  }
+
   listEscalations(): Escalation[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM escalations ORDER BY created_at DESC`).all() as EscalationRow[];
     return rows.map(rowToEscalation);

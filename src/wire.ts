@@ -1161,6 +1161,19 @@ export interface PetView extends Pet {
    */
   flaw: PetFlaw | null;
   /**
+   * What the origin was, in words — the escalation's question, the ask's title,
+   * the plan's title, the landing's goal, the job's title, the finding's claim,
+   * or the short sha an upgrade was applied at.
+   *
+   * **Derived per snapshot, never stored.** A label read from the source row at
+   * draw time is the name that thing has *now*; a copy taken at hatch would
+   * disagree with it the first time a job is renamed or an escalation reworded.
+   * Null when the source row is gone, which is not a flaw and never reaches the
+   * attestation — the card falls back to the ref it has always shown.
+   * → `docs/spec/22-pets.md#the-sources`
+   */
+  originLabel: string | null;
+  /**
    * What kind of build hatched it: an official one, one running uncommitted
    * changes, or no reading at all.
    *

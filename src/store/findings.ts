@@ -138,6 +138,23 @@ export class FindingStore {
     return row ? rowToFinding(row) : null;
   }
 
+  /**
+   * The claim each of these findings made, by id — the pets panel's label for a
+   * `finding` origin. By id rather than off {@link listFindings}, whose cap is
+   * the reason a client-side join would leave the oldest pets unnamed. A missing
+   * id is absent from the map, never an error.
+   * → `docs/spec/22-pets.md#the-sources`
+   */
+  findingLabels(ids: string[]): Map<string, string> {
+    if (ids.length === 0) return new Map();
+    const holes = ids.map(() => '?').join(',');
+    const rows = this.ctx.db.prepare(`SELECT id, summary FROM findings WHERE id IN (${holes})`).all(...ids) as {
+      id: string;
+      summary: string;
+    }[];
+    return new Map(rows.map((r) => [r.id, r.summary]));
+  }
+
   /** Every finding, newest first — the snapshot feed. */
   listFindings(limit = 100): Finding[] {
     const rows = this.ctx.db

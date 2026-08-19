@@ -1,5 +1,5 @@
 import type { Store } from '../store/store.js';
-import type { Pet, PetReset, PetWallet } from '../types.js';
+import type { Pet, PetActionKind, PetReset, PetWallet } from '../types.js';
 import type { PetState, PetView } from '../wire.js';
 import { VIVARIUM_SLOTS } from '../store/pets.js';
 import { attestPet, provenanceOf, replayBarren, replayChain, type PetLedger } from './attest.js';
@@ -173,8 +173,10 @@ export class PetKeeper {
     // is what the socket redraws, and a per-pet read here is a per-pet read on
     // every pulse.
     const ledger = this.ledger();
+    const pets = this.store.listPets();
+    const labels = this.originLabels(pets);
     return {
-      pets: this.store.listPets().map((pet) => this.view(pet, ledger)),
+      pets: pets.map((pet) => this.view(pet, ledger, labels)),
       wallet: this.wallet(),
       slots: VIVARIUM_SLOTS,
       // Read rather than stamped: `state()` is called on every heartbeat, and a
@@ -352,7 +354,51 @@ export class PetKeeper {
     return { earned, spent, balance: Math.max(0, earned - spent) };
   }
 
-  private view(pet: Pet, ledger: PetLedger): PetView {
+  /**
+   * A line of words for every origin the vivarium holds, keyed `kind:ref`.
+   *
+   * **Six by-id reads, not a walk.** `collectActions`' seven-table sweep was
+   * ruled out for the snapshot once already (→ `docs/spec/22-pets.md#what-is-not-checked`)
+   * and this must not smuggle it back in: each kind asks its own table for the
+   * handful of refs the pets actually carry, so the cost follows the collection
+   * rather than the deployment's history. `upgrade` asks nothing — its label is
+   * the sha it already stores.
+   *
+   * A ref with no row is simply left out, and `view` renders that as null. A
+   * pruned or restored source is not an accusation here any more than it is in
+   * the attestation.
+   */
+  private originLabels(pets: Pet[]): Map<string, string> {
+    const byKind = new Map<PetActionKind, Set<string>>();
+    for (const pet of pets) {
+      const refs = byKind.get(pet.originKind) ?? new Set<string>();
+      refs.add(pet.originRef);
+      byKind.set(pet.originKind, refs);
+    }
+    const ids = (kind: PetActionKind): string[] => [...(byKind.get(kind) ?? [])];
+    const read: [PetActionKind, Map<string, string>][] = [
+      ['escalation', this.store.escalationLabels(ids('escalation'))],
+      ['human-task', this.store.humanTaskLabels(ids('human-task'))],
+      ['plan', this.store.planLabels(ids('plan'))],
+      ['landing', this.store.landingLabels(ids('landing'))],
+      ['job', this.store.jobLabels(ids('job'))],
+      ['finding', this.store.findingLabels(ids('finding'))],
+    ];
+    const out = new Map<string, string>();
+    for (const [kind, found] of read) {
+      for (const [ref, label] of found) {
+        const clamped = clampLabel(label);
+        if (clamped !== null) out.set(`${kind}:${ref}`, clamped);
+      }
+    }
+    // An upgrade's ref *is* its label, shortened the way every other sha in the
+    // cockpit is. Nothing is read for it: the row it came from is a single
+    // mutable record that has long since moved on to the next upgrade.
+    for (const ref of ids('upgrade')) out.set(`upgrade:${ref}`, ref.slice(0, 7));
+    return out;
+  }
+
+  private view(pet: Pet, ledger: PetLedger, labels: Map<string, string>): PetView {
     const { rarity, display } = SPECIES[pet.species];
     return {
       ...pet,
@@ -362,9 +408,29 @@ export class PetKeeper {
       beatsToNextStage: beatsToNextStage(pet.species, pet.fed),
       flaw: attestPet(pet, ledger),
       provenance: provenanceOf(pet),
+      originLabel: labels.get(`${pet.originKind}:${pet.originRef}`) ?? null,
     };
   }
 }
+
+/**
+ * One line, and a card's worth of it.
+ *
+ * Every label here is free text somebody typed — an escalation's prompt is a
+ * paragraph, and a finding's summary can carry a newline — so the clamp happens
+ * on the wire rather than in the panel: a grid that reflowed around one long
+ * origin would be a layout bug nothing in `check` can see, and the panel is not
+ * the only thing that may ever draw this. A label that is nothing but whitespace
+ * is no label at all.
+ */
+function clampLabel(raw: string): string | null {
+  const line = raw.replace(/\s+/g, ' ').trim();
+  if (line === '') return null;
+  return line.length <= LABEL_MAX ? line : `${line.slice(0, LABEL_MAX - 1).trimEnd()}…`;
+}
+
+/** Long enough for a job title or a finding's claim, short enough for a card. */
+const LABEL_MAX = 90;
 
 /**
  * Before any timestamp this harness can hold, so `at >= EPOCH` is every usage

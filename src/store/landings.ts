@@ -55,6 +55,22 @@ export class StackLandingStore {
     return row ? rowToLanding(row) : null;
   }
 
+  /**
+   * What each of these landings authorized, by id — the pets panel's label for a
+   * `landing` origin, which is the goal the chain belonged to rather than a title
+   * the row does not have. A missing id is absent from the map, never an error.
+   * → `docs/spec/22-pets.md#the-sources`
+   */
+  landingLabels(ids: string[]): Map<string, string> {
+    if (ids.length === 0) return new Map();
+    const holes = ids.map(() => '?').join(',');
+    const rows = this.ctx.db.prepare(`SELECT id, ref FROM stack_landings WHERE id IN (${holes})`).all(...ids) as {
+      id: string;
+      ref: string;
+    }[];
+    return new Map(rows.map((r) => [r.id, r.ref]));
+  }
+
   /** Every intent, newest first — what the cockpit reads and what a restart re-reads. */
   listStackLandings(limit = 50): StackLanding[] {
     const rows = this.ctx.db
