@@ -18,15 +18,15 @@ here.
 Stated first, because each boundary is a thing that would otherwise be re-litigated by the first
 change that finds pets convenient:
 
-| Not                  | Because                                                                                                                                                                                                                                                                                                               |
-| -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A metric             | Nothing is ranked, compared or scored. There is no total, no level, no streak and no leaderboard, and a collection twice the size of another's means nothing.                                                                                                                                                         |
-| An incentive         | Rewarding an operator for _acting_ would price a decision that must stay free — including the decision to answer nothing today, which is often the correct one.                                                                                                                                                       |
-| Visible to agents    | No prompt mentions pets, no MCP tool touches them, and no agent can read the tables. A score an agent can see is a target it can optimise.                                                                                                                                                                            |
-| A dispatch input     | `src/pets/` is a lens. Nothing under `src/dispatcher/` may import it, for the reason the work graph and `prAttentionStatus` may not — see [05](05-dispatcher.md).                                                                                                                                                     |
-| A reason to spend    | Beats are a rebate on money already gone. Spending more to raise a pet faster is a worse trade than not raising it, and the arithmetic is deliberately that obvious.                                                                                                                                                  |
-| A thing you can dial | Nothing about the rates is configuration. Every rate used to be a key under `pets`, and every one of them wrote pets into existence that were indistinguishable from earned ones. → [Authenticity](#authenticity)                                                                                                     |
-| A thing you can lose | Nothing decays, starves, dies or is taken away. The harness runs unattended by design, and a creature that sulked about a quiet Sunday would be lying about it. Blending is the one thing that ends an animal, and it is the operator's own act on a duplicate — never the harness's, and never the last of its kind. |
+| Not                  | Because                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A metric             | Nothing is ranked, compared or scored. There is no total, no level, no streak and no leaderboard, and a collection twice the size of another's means nothing.                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| An incentive         | Rewarding an operator for _acting_ would price a decision that must stay free — including the decision to answer nothing today, which is often the correct one.                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| Visible to agents    | No prompt mentions pets, no MCP tool touches them, and no agent can read the tables. A score an agent can see is a target it can optimise.                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| A dispatch input     | `src/pets/` is a lens. Nothing under `src/dispatcher/` may import it, for the reason the work graph and `prAttentionStatus` may not — see [05](05-dispatcher.md).                                                                                                                                                                                                                                                                                                                                                                                                                   |
+| A reason to spend    | Beats are a rebate on money already gone. Spending more to raise a pet faster is a worse trade than not raising it, and the arithmetic is deliberately that obvious.                                                                                                                                                                                                                                                                                                                                                                                                                |
+| A thing you can dial | Nothing about the rates is configuration. Every rate used to be a key under `pets`, and every one of them wrote pets into existence that were indistinguishable from earned ones. → [Authenticity](#authenticity)                                                                                                                                                                                                                                                                                                                                                                   |
+| A thing you can lose | Nothing decays, starves, dies or is taken away. The harness runs unattended by design, and a creature that sulked about a quiet Sunday would be lying about it. Blending is the one thing that ends an animal in the ordinary run of the feature, and it is the operator's own act on a duplicate — never the harness's, and never the last of its kind. The one exception is a **clearance**, which releases everything at once and is a named, once-ever act of the build rather than something the harness does on a schedule. → [Clearing the vivarium](#clearing-the-vivarium) |
 
 ## The two economies
 
@@ -53,6 +53,11 @@ number the store already holds and drifts from it the first time a write lands t
 only ever grows, so the derived figure only ever grows with it — and a restore, a re-import or a
 recount changes the balance to the truth rather than to the truth plus whatever the column had
 remembered.
+
+The one floor under it is a **clearance**: `beatsEarned` counts `usage_events` from the last one's
+timestamp rather than from the beginning, which is what lets a cleared vivarium start at zero instead
+of opening with every beat the deployment had ever earned. With no clearance recorded the floor is an
+epoch before any timestamp the harness can hold, so the sum is every event there has ever been.
 
 ## The roll
 
@@ -340,6 +345,41 @@ The credit is **stored** in `pet_blends` rather than derived from the dissolved 
 one place the subsystem stores a total on purpose. Its value depends on `blendYield`; deriving it
 would rewrite history the day that key is tuned, and could take a balance already spent negative.
 
+## Clearing the vivarium
+
+A **clearance** releases the whole collection at once and starts the beats again from zero. It is the
+only thing in the subsystem that deletes a pet, and everything about how it is shaped is aimed at
+keeping it from being a thing that can happen twice or by accident.
+
+**It is a named act of the build, not a control.** `VIVARIUM_RESET` in `src/pets/keeper.ts` is the
+clearance this build carries; `PetKeeper.resetOnce` runs it if `pet_resets` holds no row under that
+name, and the row it writes is what makes every later boot a no-op. There is no route, no button and
+no config key — an operator cannot clear their vivarium, and neither can an agent.
+
+**The id is never edited in place.** Changing that string is not a rename, it is a second clearance:
+every deployment that takes the build loses its collection, silently, because a wipe that ran as
+designed has nothing to report and `npm run check` has no opinion about a constant. A further
+clearance is a further id, added deliberately, and the old one stays so the deployments that have
+already had it are not given it twice.
+
+**`pet_actions` survives it, and that is the load-bearing part.** The table is the scan's watermark,
+so the actions a released collection hatched from are still marked as rolled and the next scan writes
+nothing. Clearing it too would read as the tidier wipe and would undo itself on the first pulse — the
+same creatures, out of the same history, by the same hashes. The cost is the honest one: the actions
+behind a cleared collection are spent, the deployment's one first-action guarantee stays spent with
+them, and the vivarium fills again from what the operator does **next**.
+
+Purchases and blend credits go with the pets, in the same transaction, because a beat spent on a
+creature that no longer exists is a balance drawn down against nothing.
+
+**Off clears nothing.** With `pets.enabled` false the clearance is skipped rather than run quietly,
+which keeps the one promise that setting has always made. A deployment that turns the vivarium on
+later gets its clearance then.
+
+It runs in `src/server/main.ts` at boot, before anything can hatch — not in `buildSystem`, for the
+reason `loadDeploymentConfig` is not called there either: a suite that grew it would wipe the fixture
+out from under whichever test built its system first.
+
 ## Routes
 
 `src/server/routes/pets.ts`, in `ROUTE_MODULES`. Every handler is wrapped in `checked(...)` and
@@ -359,7 +399,7 @@ that reads as a deployment nobody has used.
 
 ## Persistence
 
-`src/store/pets.ts`, four tables. A new table needs no `ColumnMigrations` entry — but `pets` is no
+`src/store/pets.ts`, five tables. A new table needs no `ColumnMigrations` entry — but `pets` is no
 longer new, so **`dissolved_at` has one**, in `PET_COLUMNS`. Without it the column is invisible on
 every database from before blending existed, and invisible here means every historical pet reads as
 alive again ([14](14-persistence.md#migrations)).
@@ -370,6 +410,7 @@ alive again ([14](14-persistence.md#migrations)).
 | `pet_actions`   | One row per operator action rolled, hatched or not, keyed `(kind, ref)`.                                                                            |
 | `pet_purchases` | One row per beat spent, with the pet it was spent on. The only source of `beatsSpent`.                                                              |
 | `pet_blends`    | One row per duplicate blended, with what it credited. The only source of the blend half of `beatsEarned`.                                           |
+| `pet_resets`    | One row per clearance, keyed by its name. Its timestamp is the floor `beatsEarned` counts spend from.                                               |
 
 `built_sha`, `built_clean` and `chain` are in `PET_COLUMNS` beside `dissolved_at`, for the same
 reason. Each of them reads as a _weaker_ claim when absent rather than a false one, which is what lets

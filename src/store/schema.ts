@@ -930,6 +930,19 @@ CREATE TABLE IF NOT EXISTS pet_blends (
   created_at TEXT NOT NULL
 );
 
+-- One row per time the collection was cleared, keyed by the clearance's own name
+-- so a build asks "has *this* one run" rather than "has any". The row is what
+-- makes a clearance happen exactly once however many times the harness restarts.
+--
+-- The timestamp is also the epoch the wallet counts fleet spend from: beats are
+-- derived from usage_events, which only ever grows, so without a floor a cleared
+-- vivarium would open holding every beat the deployment had ever earned.
+CREATE TABLE IF NOT EXISTS pet_resets (
+  id      TEXT PRIMARY KEY,
+  at      TEXT NOT NULL,
+  cleared INTEGER NOT NULL     -- how many pets it released; kept for the record
+);
+
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);

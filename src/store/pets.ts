@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { nanoid } from 'nanoid';
-import type { Pet, PetAction, PetActionKind, PetSpecies } from '../types.js';
+import type { Pet, PetAction, PetActionKind, PetReset, PetSpecies } from '../types.js';
 import type { StoreContext } from './context.js';
 import type { ColumnMigrations } from './migrate.js';
 
@@ -26,16 +26,19 @@ export const PET_COLUMNS: ColumnMigrations = {
 };
 
 /**
- * The three `pet_*` tables: what has hatched, every operator action that has been
- * rolled, and every beat that has been spent.
+ * The four `pet_*` tables: what has hatched, every operator action that has been
+ * rolled, every beat that has been spent, and every clearance that has released
+ * the collection.
  *
- * All three are new, so none needs a `ColumnMigrations` entry — and a table being
- * new **once** does not keep it exempt: a column added to any of them later does.
+ * Each arrived as a fresh `CREATE TABLE` and so needed no `ColumnMigrations` entry
+ * — and a table being new **once** does not keep it exempt: `pets` has needed one
+ * since `dissolved_at`, and a column added to any of the others later will too.
  *
- * Nothing here is derived twice. The wallet is a sum over `pet_purchases`, the
- * pity counter is a count over `pet_actions`, and neither is cached in a column,
- * because a running total is a second copy of a number these tables already hold
- * and it drifts the first time a write lands twice.
+ * Nothing here is derived twice. The wallet is a sum over `pet_purchases` from the
+ * last clearance's stamp onwards, the pity counter is a count over `pet_actions`,
+ * and neither is cached in a column, because a running total is a second copy of a
+ * number these tables already hold and it drifts the first time a write lands
+ * twice.
  */
 export class PetStore {
   constructor(private readonly ctx: StoreContext) {}
@@ -324,6 +327,51 @@ export class PetStore {
       total: number;
     };
     return row.total;
+  }
+
+  /** When a named clearance ran here, or null for one that has not. */
+  petResetAt(id: string): string | null {
+    const row = this.ctx.db.prepare(`SELECT at FROM pet_resets WHERE id=?`).get(id) as { at: string } | undefined;
+    return row?.at ?? null;
+  }
+
+  /**
+   * The newest clearance's stamp, which is the floor the wallet counts spend from.
+   *
+   * `MAX(at)` rather than the newest row: a clearance is stamped when it runs, and
+   * insertion order and time agree here only because nothing ever back-dates one.
+   * Taking the maximum is the same answer today and the safe one if that changes.
+   */
+  petEpoch(): string | null {
+    const row = this.ctx.db.prepare(`SELECT MAX(at) AS at FROM pet_resets`).get() as { at: string | null };
+    return row.at;
+  }
+
+  /**
+   * Release the whole collection, and stamp when.
+   *
+   * **`pet_actions` is deliberately left standing.** It is the scan's watermark:
+   * an action whose key is in it is skipped rather than re-rolled, so keeping it
+   * is the whole of what stops the next scan hatching the released collection
+   * straight back out of the same history. Clearing it too would read as the
+   * tidier wipe and would undo itself on the next pulse.
+   *
+   * Purchases and blends go with the pets, because a beat spent on a creature
+   * that no longer exists is a balance drawn down against nothing. One
+   * transaction: a crash between the deletes would leave purchases pointing at
+   * pets that had gone, which reads from the wallet as spend nobody can account
+   * for.
+   */
+  clearVivarium(id: string): PetReset {
+    const wipe = this.ctx.db.transaction((): PetReset => {
+      const at = this.ctx.now();
+      const cleared = this.ctx.db.prepare(`DELETE FROM pets`).run().changes;
+      this.ctx.db.prepare(`DELETE FROM pet_purchases`).run();
+      this.ctx.db.prepare(`DELETE FROM pet_blends`).run();
+      this.ctx.db.prepare(`INSERT OR IGNORE INTO pet_resets (id, at, cleared) VALUES (?,?,?)`).run(id, at, cleared);
+      return { id, at, cleared };
+    });
+    return wipe();
   }
 }
 

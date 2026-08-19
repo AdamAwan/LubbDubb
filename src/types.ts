@@ -2820,8 +2820,26 @@ export interface PetAction {
 
 /** What beats there are, and where they went. All three are derived at read time. */
 export interface PetWallet {
-  /** `floor(lifetime cost × PET_RULES.beatsPerDollar)`. Only ever grows. */
+  /**
+   * `floor(cost since the last clearance × PET_RULES.beatsPerDollar)`. Only ever
+   * grows — until a clearance moves the floor, which is the one thing that takes
+   * it back to zero. → {@link PetReset}
+   */
   earned: number;
   spent: number;
   balance: number;
+}
+
+/**
+ * One clearance of the vivarium: when it ran, and how much it released.
+ *
+ * Named rather than counted, because what a build asks is "has *this* clearance
+ * run here", and a build that asked "has any" would leave the next one unable to
+ * happen. `at` is the epoch the wallet counts fleet spend from afterwards.
+ */
+export interface PetReset {
+  id: string;
+  at: string;
+  /** How many pets it released. Nothing reads it; it is the record of what went. */
+  cleared: number;
 }

@@ -72,6 +72,7 @@ import type {
   LessonInput,
   Pet,
   PetAction,
+  PetReset,
   PetSpecies,
   Plan,
   PlanPart,
@@ -1006,5 +1007,14 @@ export class Store {
   }
   blendPet(id: string, beats: number): Pet | null {
     return this.pets.blendPet(id, beats);
+  }
+  petResetAt(id: string): string | null {
+    return this.pets.petResetAt(id);
+  }
+  petEpoch(): string | null {
+    return this.pets.petEpoch();
+  }
+  clearVivarium(id: string): PetReset {
+    return this.pets.clearVivarium(id);
   }
 }

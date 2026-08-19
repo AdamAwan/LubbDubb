@@ -27,6 +27,19 @@ async function main(): Promise<void> {
   const config = loadDeploymentConfig();
   const system = buildSystem(config);
 
+  // The vivarium's one-time clearance, before anything can hatch into it. Runs at
+  // most once per deployment — the stamp it writes is what makes every later boot
+  // a no-op — and it is here rather than in `buildSystem` for the reason
+  // `loadDeploymentConfig` is: a suite that grew it would wipe the fixture out
+  // from under whichever test built its system first.
+  try {
+    const reset = system.pets.resetOnce();
+    if (reset)
+      console.log(`[lubbdubb] vivarium cleared: ${reset.cleared} pet(s) released and the beats start again from zero`);
+  } catch (err) {
+    system.errors.record({ source: 'server', message: `Vivarium clearance failed: ${(err as Error).message}` });
+  }
+
   // Before crash detection, so an agent the operator restores relaunches already
   // carrying the tool channel. Best-effort by contract: a false return means agents
   // run on the sentinels alone, which is a supported configuration, not a failed start.
