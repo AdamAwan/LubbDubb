@@ -368,6 +368,71 @@ wherever a physics clock had got to. The overlay is drawn by `SpeciesSprite`, in
 the same ink as the shell under it — a second canvas that only knew about eggs is precisely the
 two-views-of-one-bytes split that component was made to prevent.
 
+### The rarity ladder
+
+Each tier keeps everything the tier below has and adds one device it is not allowed:
+
+| Tier         | Adds                                                          |
+| ------------ | ------------------------------------------------------------- |
+| `common`     | the lit body, and nothing else                                 |
+| `uncommon`   | one appendage above the head, drawn in its own grid            |
+| `rare`       | an angular silhouette, and four glints at its bounding box     |
+| `mythic`     | a glow past the outline, and a sparkle that moves              |
+
+Rarity used to be carried by the egg and by however much marking a grid happened to have, and by
+nothing else — so a common with a good silhouette out-dressed a rare with a dull one, which is
+exactly what it looked like. The ladder is the fix, and writing it down is half of it: it constrains
+the twenty-eighth species as much as the twenty-seven already drawn.
+
+`dressSprite` in `web/src/pets/sprites.ts` is where the ladder lives, whole. One grid in, one dressed
+grid out — always `SPRITE_PAD` cells larger on every side, at every tier, because a margin that
+varied by rarity would make the drawn size vary by rarity too, and a rare would sit a pixel lower in
+the enclosure than the common beside it for no reason a reader could name. `SpeciesSprite` therefore
+takes its **scale from the undressed grid** and offsets the crack overlay by the same constant; sizing
+from the dressed one would shrink every creature by a fifth to make room for a margin.
+
+The four rares — `cairn`, `ingot`, `lander`, `quill` — are drawn angular, and nothing below them is.
+That is deliberate and it is the load-bearing half of the rare rung: the shape says the tier at 24px
+in the enclosure, where four glints are four pixels.
+
+#### The rim light is a pass, not a redraw
+
+Each body pixel scores its four neighbours: open to the top-left takes the highlight, open to the
+bottom-right takes the shade. The hand-placed `h` dots are folded back into the body first, so a grid
+is lit once rather than lit and blushed.
+
+A pass rather than eighty-one redrawn grids is the whole reason the direction was affordable, and it
+keeps working: a grid changed tomorrow is lit for free. It is memoised against the grid's identity,
+which holds because every caller passes a module constant out of `spriteFor`.
+
+#### Why the sparkle takes a phase and never a clock
+
+`dressSprite(grid, rarity, seed, phase)` is pure. The sparkle's four points come from the seed and
+their state comes from the number passed in, so a reload, a re-render, or two surfaces showing one
+pet all draw the same star — the same property the crack overlay has by being indexed on rocks, for
+the same reason, and the thing that would be lost by reading a clock inside the drawing.
+
+An **unopened** mythic twinkles as well as a hatched one. The shell already says the tier — a mythic
+egg is banded end to end for exactly that reason — so holding the sparkle back until it opens would
+withhold nothing and cost the one moment it is most worth having.
+
+The phase is advanced by `PetSprite`, off `beatMs` — the clock that already drives the idle bob. A
+busy fleet twinkles faster and a paused one holds still, at no second timer, and `useTwinkle` is
+never even started for the twenty species with nothing to twinkle. `prefers-reduced-motion: reduce`
+holds the phase at 0, which leaves the glow and a spark or two lit: the tier's device stays, only its
+motion goes.
+
+A spark that would land on the animal walks outward until it finds somewhere free, rather than
+drawing under the body. A spark drawn under the body is not subtle, it is absent — and four of them
+vanishing on the broader creatures is no sparkle at all.
+
+#### What the ladder does to the withheld state
+
+An unfound species on the Pets page still draws its tier's devices: a rare still glints, a mythic
+still glows. That follows the page's existing split — **what is withheld is identity, what is
+published is price** — and a tier is price. The devices outside the outline are drawn in a fainter
+grey than the silhouette, because one flat grey turns a glow into more animal rather than into light.
+
 ### Why a hatchling has no species
 
 Every species in a rarity tier shares one hatchling grid, so four grids cover all twenty-seven. The
@@ -380,7 +445,9 @@ more than the twenty-three sprites it saves.
 ### Why a seed as well as a species
 
 The pet's `seed` is the action key it hatched from. `web/src/pets/palette.ts` derives a colour ramp
-and a small marking overlay from it, so two `pip`s are recognisably the same animal and visibly not
+and a small marking overlay from it — ten inks, of which five are the animal and five are the light
+and the rarity devices on it, all from the same two hues so nothing on a creature is a colour the
+seed did not choose — so two `pip`s are recognisably the same animal and visibly not
 the same pet.
 
 That trick is doing the work of an art budget: the alternative to it is either forty hand-drawn
@@ -397,7 +464,7 @@ Derived from the running-agent count rather than from `heartbeatIntervalMs` dire
 default pulse is five minutes and a bob with a five-minute period is a still image that redraws twice
 an hour. The period is clamped to a range a heart could plausibly beat at.
 
-`prefers-reduced-motion: reduce` stops all of it.
+`prefers-reduced-motion: reduce` stops all of it, and holds a mythic's sparkle at phase 0.
 
 ## The vivarium
 
