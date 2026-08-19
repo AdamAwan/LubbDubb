@@ -8,16 +8,35 @@ import { Store } from '../src/store/store.js';
 import { PetKeeper } from '../src/pets/keeper.js';
 import { attestPet, provenanceOf, replayBarren, replayChain, type PetLedger } from '../src/pets/attest.js';
 import { hash32, rollAction, speciesCandidates } from '../src/pets/roll.js';
-import { PET_RULES, type PetRules } from '../src/pets/rules.js';
+import { PET_RULES, type PetActionRate, type PetRules } from '../src/pets/rules.js';
 import { beatsToNextStage, blendValue, petStage, resolveTier, SPECIES } from '../src/pets/catalogue.js';
 import type { Pet, PetActionKind } from '../src/types.js';
 
-/** The rates, with whatever this test needs bent. Nothing threads this from config. */
-function rules(over: Partial<PetRules> = {}): PetRules {
-  return { ...PET_RULES, ...over };
+/**
+ * The rates, with whatever this test needs bent. Nothing threads this from config.
+ *
+ * `dropChance` and `pity` are per action kind on `PET_RULES`, and a test that says
+ * `{ dropChance: 1 }` means it of every kind — so they are accepted flat here and
+ * spread across the whole table. A test that needs one kind bent and the rest left
+ * alone passes `rates` instead.
+ */
+type RuleOverrides = Partial<Omit<PetRules, 'rates'>> & Partial<PetActionRate> & { rates?: PetRules['rates'] };
+
+function rules(over: RuleOverrides = {}): PetRules {
+  const { dropChance, pity, rates, ...rest } = over;
+  const spread = Object.fromEntries(
+    (Object.keys(PET_RULES.rates) as PetActionKind[]).map((kind) => [
+      kind,
+      {
+        dropChance: dropChance ?? PET_RULES.rates[kind].dropChance,
+        pity: pity ?? PET_RULES.rates[kind].pity,
+      },
+    ]),
+  ) as PetRules['rates'];
+  return { ...PET_RULES, ...rest, rates: rates ?? spread };
 }
 
-function keeper(over: Partial<PetRules> = {}, build = BUILD): { store: Store; pets: PetKeeper } {
+function keeper(over: RuleOverrides = {}, build = BUILD): { store: Store; pets: PetKeeper } {
   const store = new Store(':memory:');
   return { store, pets: new PetKeeper(store, { enabled: true }, rules(over), () => build) };
 }
@@ -84,7 +103,7 @@ test('an action that hatched nothing is still recorded, so pity can count it', (
   answer(store, 'the first question ever asked');
   answer(store, 'a question nobody gets a pet for');
   assert.equal(pets.scan().length, 1, 'only the first-of-kind hatches at a zero chance');
-  assert.equal(store.petActionsSinceHatch(), 1, 'a miss is a row, or the counter can never move');
+  assert.equal(store.petActionsSinceHatch().get('escalation'), 1, 'a miss is a row, or the counter can never move');
 });
 
 test('pity forces a hatch once enough actions have missed', () => {
@@ -93,7 +112,68 @@ test('pity forces a hatch once enough actions have missed', () => {
   for (let i = 0; i < 4; i++) answer(store, `question ${i}`);
   const hatched = pets.scan();
   assert.equal(hatched.length, 2, 'the first action ever, and then the one pity forces');
-  assert.equal(store.petActionsSinceHatch(), 0, 'and the counter resets behind it');
+  // Sparse by design: the last escalation row hatched, so nothing sits after it
+  // and the kind has no row of its own. Absent is how zero is spelled.
+  assert.equal(store.petActionsSinceHatch().get('escalation') ?? 0, 0, 'and the counter resets behind it');
+});
+
+test('pity is counted per kind, so a busy action cannot spend a quiet one’s floor', () => {
+  // The whole of why the counter went per kind. A deployment settles jobs and
+  // findings by the dozen and accepts an upgrade a few times a year, so one shared
+  // counter is spent almost entirely by whatever is most frequent — pity then
+  // fires constantly on the busy action and never on the quiet one, which is the
+  // opposite of what a floor is for.
+  const { store, pets } = keeper({ dropChance: 0, pity: 3 });
+  answer(store, 'the first action ever, which is guaranteed');
+  pets.scan();
+
+  // Two escalations short of escalation's own ceiling, and a run of tasks between
+  // them. A shared counter would be forced by the tasks alone.
+  answer(store, 'escalation one');
+  for (let i = 0; i < 10; i++) settle(store, `task ${i}`);
+  pets.scan();
+
+  const byKind = store.petActionsSinceHatch();
+  assert.equal(byKind.get('escalation'), 1, 'the escalation counter counts escalations only');
+  assert.ok((byKind.get('human-task') ?? 0) > 0, 'and the task counter runs on its own');
+  const hatched = store.listPets().filter((pet) => pet.originKind === 'escalation' && pet.originRef !== undefined);
+  assert.ok(hatched.length >= 1, 'the guaranteed first one is still the only escalation pet');
+});
+
+test('a quiet action is worth more than a busy one', () => {
+  // The rate is priced against how often the kind comes up. Without that, a
+  // collection is drawn almost entirely from whichever button the deployment
+  // presses most, and the animals behind the scarce actions are never seen.
+  const { rates } = PET_RULES;
+  assert.ok(rates.upgrade.dropChance > rates.landing.dropChance, 'an upgrade is scarcer than a landing');
+  assert.ok(rates.landing.dropChance > rates.plan.dropChance, 'a landing is scarcer than a plan');
+  assert.ok(rates.plan.dropChance > rates['human-task'].dropChance, 'a plan is scarcer than a task');
+  assert.ok(rates['human-task'].dropChance > rates.finding.dropChance, 'a task is scarcer than a finding');
+  assert.ok(rates.finding.dropChance > rates.job.dropChance, 'and a finding is scarcer than a job launch');
+
+  // Pity stays a ceiling rather than a schedule: twice the expected gap, per kind.
+  for (const kind of KINDS)
+    assert.ok(
+      Math.abs(rates[kind].pity - 2 / rates[kind].dropChance) <= 4,
+      `${kind} pity must be about twice its own expected gap, saw ${rates[kind].pity}`,
+    );
+});
+
+test('every action is a route to a mythic, and each mythic to one action', () => {
+  // The complaint this answers: `upgrade` held the only mythic in the catalogue,
+  // at 2% of the hatches of an action a deployment takes a handful of times a
+  // year — roughly one in twenty-five hundred accepted self-updates, which is an
+  // animal nobody ever sees. A mythic per action makes the tier reachable; one
+  // action per mythic keeps each of them worth having.
+  const owners = new Map<string, PetActionKind[]>();
+  for (const kind of KINDS) {
+    const landed = resolveTier(kind, 'mythic', 14);
+    assert.equal(landed?.tier, 'mythic', `${kind} must be a route to a mythic of its own`);
+    for (const species of landed.members) owners.set(species, [...(owners.get(species) ?? []), kind]);
+  }
+  for (const [species, kinds] of owners)
+    assert.equal(kinds.length, 1, `${species} must belong to one action, not ${kinds.join(' and ')}`);
+  assert.equal(owners.size, KINDS.length, 'one mythic per action, and no action sharing');
 });
 
 test('the deployment’s first action hatches, and draws something above a common', () => {
@@ -239,23 +319,36 @@ test('the tier is rolled globally, so rarity is a fact about the deployment', ()
     });
     counts[SPECIES[roll.species].rarity] = (counts[SPECIES[roll.species].rarity] ?? 0) + 1;
   }
-  // Escalation holds no mythic, so its 2% degrades into rare — 10%, not 8%.
+  // Every pool now fills every tier, so nothing degrades and the weights land as
+  // written: the shipped table read straight off an action.
   assert.ok(Math.abs(counts.common! / 4_000 - 0.7) < 0.05, `common should sit near 70%, saw ${counts.common}/4000`);
   assert.ok(
     Math.abs(counts.uncommon! / 4_000 - 0.2) < 0.05,
     `uncommon should sit near 20%, saw ${counts.uncommon}/4000`,
   );
-  assert.equal(counts.mythic, 0, 'escalation holds no mythic, so it can never draw one');
+  assert.ok(Math.abs(counts.rare! / 4_000 - 0.08) < 0.03, `rare should sit near 8%, saw ${counts.rare}/4000`);
+  assert.ok(Math.abs(counts.mythic! / 4_000 - 0.02) < 0.02, `mythic should sit near 2%, saw ${counts.mythic}/4000`);
 });
 
-test('a tier the pool cannot fill degrades downward, never up', () => {
-  // `human-task` carries no rare and no mythic, so both fall to uncommon. Reaching
-  // *up* instead would make the scarcest actions the easiest source of the
-  // scarcest animals, which is the inversion this design removed.
-  assert.equal(resolveTier('human-task', 'mythic', 14)?.tier, 'uncommon');
-  assert.equal(resolveTier('human-task', 'rare', 14)?.tier, 'uncommon');
-  // Only `upgrade` holds a mythic at all, and it keeps it.
-  assert.equal(resolveTier('upgrade', 'mythic', 14)?.tier, 'mythic');
+test('every action carries a full ladder, so no shipped roll degrades', () => {
+  // `upgrade` used to hold the only mythic and `human-task` and `job` no rare at
+  // all, so a tier those pools could not fill degraded away — which put the
+  // scarcest animals behind the scarcest action and made them, in practice,
+  // unreachable. A hole in a pool is now a bug rather than a way of expressing a
+  // ceiling; the ceiling is the rate, where it can be read as a number.
+  for (const kind of KINDS)
+    for (const tier of ['common', 'uncommon', 'rare', 'mythic'] as const)
+      assert.equal(resolveTier(kind, tier, 14)?.tier, tier, `${kind} must fill ${tier} itself, not by degrading`);
+});
+
+test('degrading still walks downward, never up', () => {
+  // No shipped pool degrades any more, so this is a guard rather than a mechanic
+  // — but the direction stays the invariant it always was: reaching *up* would
+  // make the scarcest actions the easiest source of the scarcest animals.
+  // Exercised through the night gate, the one filter that can empty a tier.
+  const gated = resolveTier('escalation', 'uncommon', 14);
+  assert.ok(gated !== null && !gated.members.includes('nocturne'), 'the day filter drops nocturne');
+  assert.equal(gated.tier, 'uncommon', 'and what is left still fills the tier');
 });
 
 test('pity forces the hatch and never touches the tier', () => {
@@ -351,6 +444,96 @@ test('the last of a species is refused, and a dissolved one cannot be fed or re-
   assert.equal(pets.place(victim.id, true).ok, false, 'nor put out');
 });
 
+// -- Clearing the vivarium ---------------------------------------------------
+
+/** A keeper on a clock that moves a minute per read, so an epoch can be compared. */
+function timedKeeper(over: RuleOverrides = {}): { store: Store; pets: PetKeeper } {
+  let tick = 0;
+  const store = new Store(':memory:', () =>
+    new Date(Date.parse('2026-04-12T09:00:00.000Z') + tick++ * 60_000).toISOString(),
+  );
+  return { store, pets: new PetKeeper(store, { enabled: true }, rules(over), () => BUILD) };
+}
+
+/** One dollar of fleet spend, which is 25 beats at the shipped rate. */
+function spend(store: Store, costUsd: number): void {
+  const agent = store.createAgent({ taskId: `task_${costUsd}`, cwd: '.', pid: null, sessionId: null });
+  store.recordAgentUsage(agent.id, {
+    costUsd,
+    inputTokens: null,
+    outputTokens: null,
+    cacheReadTokens: null,
+    cacheCreationTokens: null,
+    numTurns: null,
+  });
+}
+
+test('clearing the vivarium releases the collection and starts the beats from zero', () => {
+  const { store, pets } = timedKeeper({ dropChance: 1 });
+  for (let i = 0; i < 3; i++) answer(store, `question ${i}`);
+  pets.scan();
+  spend(store, 1);
+  const [first] = store.listPets();
+  assert.ok(first);
+  assert.equal(pets.feed(first.id, 25).ok, true, 'a dollar of spend buys 25 beats');
+
+  const reset = pets.resetOnce();
+  assert.equal(reset?.cleared, 3, 'it reports what it released');
+  assert.deepEqual(store.listPets(), [], 'and the collection is gone');
+  assert.deepEqual(pets.state()?.wallet, { earned: 0, spent: 0, balance: 0 }, 'beats start again from zero');
+});
+
+test('a cleared collection does not hatch back out of the history it came from', () => {
+  const { store, pets } = timedKeeper({ dropChance: 1 });
+  for (let i = 0; i < 3; i++) answer(store, `question ${i}`);
+  pets.scan();
+  pets.resetOnce();
+
+  assert.deepEqual(pets.scan(), [], 'the actions are still rolled, so nothing is rolled again');
+  assert.deepEqual(store.listPets(), []);
+
+  // The vivarium is empty, not dead: the next thing the operator does still lands.
+  answer(store, 'something new');
+  assert.equal(pets.scan().length, 1, 'a fresh action hatches into the cleared enclosure');
+});
+
+test('a clearance runs once, and never takes what hatched after it', () => {
+  const { store, pets } = timedKeeper({ dropChance: 1 });
+  answer(store, 'before');
+  pets.scan();
+  assert.equal(pets.resetOnce()?.cleared, 1);
+
+  answer(store, 'after');
+  pets.scan();
+  assert.equal(pets.resetOnce(), null, 'the stamp is what makes every later boot a no-op');
+  assert.equal(store.listPets().length, 1, 'and the pet that hatched after it stays');
+});
+
+test('the beats a cleared vivarium earns are the spend since it was cleared', () => {
+  const { store, pets } = timedKeeper({ dropChance: 1 });
+  answer(store, 'hatch me something');
+  pets.scan();
+  spend(store, 4);
+  assert.equal(pets.state()?.wallet.earned, 100);
+
+  pets.resetOnce();
+  assert.equal(pets.state()?.wallet.earned, 0, 'spend from before the clearance buys nothing after it');
+  spend(store, 2);
+  assert.equal(pets.state()?.wallet.earned, 50, 'and what the fleet spends afterwards does');
+});
+
+test('a clearance is skipped entirely while pets are turned off', () => {
+  const { store, pets } = timedKeeper({ dropChance: 1 });
+  answer(store, 'hatch me something');
+  pets.scan();
+
+  const off = new PetKeeper(store, { enabled: false });
+  assert.equal(off.resetOnce(), null);
+  assert.equal(store.listPets().length, 1, 'off has never deleted anything, and this is not the change that does');
+  // Turned on later, the deployment still gets its clearance.
+  assert.equal(pets.resetOnce()?.cleared, 1);
+});
+
 // -- Authenticity ------------------------------------------------------------
 
 test('no configuration key can reach the roll', () => {
@@ -376,22 +559,25 @@ test('no configuration key can reach the roll', () => {
   );
 });
 
-test('an action reaches two or three species, and never the one you wanted', () => {
+test('an action reaches one species per tier, and never the one you wanted', () => {
   // The load-bearing property behind the whole check: stage 3 is a hash of the
   // action's own key, so a forger cannot pick the animal — they have to grind for
   // an origin ref that happens to give it, and the ref has to belong to something
   // really settled.
   for (const kind of KINDS) {
     const reach = speciesCandidates(kind, 'ref_c0ffee', '2026-04-12T14:00:00.000Z');
-    assert.ok(reach.size >= 1 && reach.size <= 4, `${kind} must reach a handful of species, saw ${reach.size}`);
-    assert.ok(reach.size < 20, 'and never the whole catalogue');
+    // One per tier, and the tiers hold disjoint members. Filling every ladder
+    // widened this from the two or three a holey pool reached; four in
+    // twenty-seven is still narrower than three in twenty was.
+    assert.equal(reach.size, 4, `${kind} must reach one species per tier, saw ${reach.size}`);
+    assert.ok(reach.size < Object.keys(SPECIES).length, 'and never the whole catalogue');
   }
-  // Only `upgrade` carries the mythic at all, so no other action can ever reach it.
+  // Each mythic belongs to exactly one action, so no other kind is a route to it.
   for (const kind of KINDS)
     if (kind !== 'upgrade')
       assert.ok(
         !speciesCandidates(kind, 'ref_c0ffee', '2026-04-12T14:00:00.000Z').has('ouroboros'),
-        `${kind} must not be a route to the mythic`,
+        `${kind} must not be a route to another action's mythic`,
       );
 });
 

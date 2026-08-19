@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cascadeNote, featureBlocks, isContainerType, issueTypeTone } from '../web/src/issueGroups.js';
+import { cascadeNote, featureBlocks, isContainerType, issueTypeTone, watchReading } from '../web/src/issueGroups.js';
 import type { Issue, TicketRow } from '../web/src/types.js';
 
 /**
@@ -132,4 +132,27 @@ test('a type the cockpit has no opinion about carries no tone', () => {
   assert.equal(issueTypeTone(''), '');
   assert.equal(issueTypeTone(null), '');
   assert.equal(issueTypeTone(undefined), '');
+});
+
+test('the watch toggle believes the world, not the mirror it is drawn beside', () => {
+  // The case the operator hit (issue #417): the tag is off the item and the route
+  // has already folded that onto the baseline, but the tab's own page is a fetch
+  // old and still says watched. Believing the row leaves Unwatch lit and Watch
+  // disabled on an item nobody is watching — a control that cannot be moved.
+  const stale = { watch: 'watched' } as TicketRow;
+  assert.equal(watchReading({ labels: [] }, stale, 'lubbdubb-watch'), 'unwatched');
+  // And the same the other way: a fresh tag shows before any sweep has run.
+  assert.equal(
+    watchReading({ labels: ['lubbdubb-watch'] }, { watch: 'unwatched' } as TicketRow, 'lubbdubb-watch'),
+    'watched',
+  );
+
+  // Only where the world has nothing to say does the record answer — those rows
+  // are refused a click anyway, so this decides how one reads and never what it does.
+  assert.equal(watchReading(null, stale, 'lubbdubb-watch'), 'watched');
+  assert.equal(watchReading(null, null, 'lubbdubb-watch'), 'unwatched');
+
+  // The gate off (`labelPrefix: ''`) reads everything as watched, exactly as the
+  // dispatcher's own gate does — there is no tag, so there is nothing to be outside.
+  assert.equal(watchReading({ labels: [] }, stale, ''), 'watched');
 });

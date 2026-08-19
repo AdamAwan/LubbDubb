@@ -38,6 +38,7 @@ import {
   type LiveTicketFacts,
   type MirroredTicket,
   type TicketClosure,
+  type TicketLabelPatch,
   type TrackerSweepMark,
 } from './tickets.js';
 import type {
@@ -72,6 +73,8 @@ import type {
   LessonInput,
   Pet,
   PetAction,
+  PetActionKind,
+  PetReset,
   PetSpecies,
   Plan,
   PlanPart,
@@ -951,6 +954,9 @@ export class Store {
   listTrackerItems(): MirroredTicket[] {
     return this.tickets.listTrackerItems();
   }
+  patchTicketLabels(patch: TicketLabelPatch): void {
+    this.tickets.patchTicketLabels(patch);
+  }
   // -- Pets -----------------------------------------------------------------
 
   listPets(): Pet[] {
@@ -983,7 +989,7 @@ export class Store {
   petPaidTotals(): Map<string, number> {
     return this.pets.petPaidTotals();
   }
-  petActionsSinceHatch(): number {
+  petActionsSinceHatch(): Map<PetActionKind, number> {
     return this.pets.petActionsSinceHatch();
   }
   feedPet(id: string, beats: number): Pet | null {
@@ -1006,5 +1012,14 @@ export class Store {
   }
   blendPet(id: string, beats: number): Pet | null {
     return this.pets.blendPet(id, beats);
+  }
+  petResetAt(id: string): string | null {
+    return this.pets.petResetAt(id);
+  }
+  petEpoch(): string | null {
+    return this.pets.petEpoch();
+  }
+  clearVivarium(id: string): PetReset {
+    return this.pets.clearVivarium(id);
   }
 }

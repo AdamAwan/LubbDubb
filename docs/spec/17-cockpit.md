@@ -1061,6 +1061,20 @@ narrower and holds: **the watch switch and the intake override, and nothing else
 - It is **inert on a frozen row** (nothing in the tracker left to tag), on a row the world no longer
   holds, and on a deployment with the gate off (`labelPrefix: ''`) — each with a title saying which.
   A button that writes nothing is worse than one that says why.
+- **It draws the world's reading of the tag, never the row's.** `watchReading`
+  (`web/src/issueGroups.ts`) answers from `Issue.labels` wherever the world holds the item, and falls
+  back to `TicketRow.watch` only for the rows it no longer does — which are exactly the rows the
+  previous point refuses a click on, so the fallback decides how a dead row reads and never what a
+  click does.
+
+  The two disagree, and which is believed is load-bearing. The world is the live one: the route folds
+  a confirmed write onto the baseline and the click refetches `/api/state`, so it moves under the
+  reader's hand. `TicketRow.watch` comes off the mirror, and this tab **does not refetch its page on a
+  click** — it fetches per filter change, not per action ([16](16-http-api.md#get-apitickets)). Reading
+  the row first left Unwatch lit and Watch disabled on an item nobody was watching, however many times
+  it was clicked: issue #417. The server's half of the same fix is that the route now patches the
+  mirror too ([14](14-persistence.md#folding-a-watch-click-onto-the-mirror)), so a reload agrees with
+  the click; this half is what makes the click land without one.
 
 ### Features are headings, not rows
 

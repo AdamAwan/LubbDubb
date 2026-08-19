@@ -298,7 +298,7 @@ un-watching one the harness opened would be undone on the next pulse.
 ### `POST /api/issues/:number/watch`
 
 Body `{watched: boolean}`. Writes the one label — sets `${prefix}-watch` to `watched`. Folds the tag
-onto the baseline, broadcasts, and runs a cycle.
+onto the baseline **and onto the ticket mirror**, broadcasts, and runs a cycle.
 
 **On a container it cascades.** The tag is written on every item `watchCascadeTargets` names — the
 issue itself and, for a Feature or Epic, every descendant beneath it — because a container is never
@@ -326,6 +326,21 @@ fact arriving early, and the next pulse reads the same tag back off the tracker 
 baseline. It is deliberately not sticky: a world read that disagrees wins, because the tracker stays
 the source of truth and a patch that outlived its observation would be the cockpit lying about a tag
 nobody can see ([04](04-harness-cycle.md#the-world-baseline)).
+
+#### And why the issue route also patches the mirror
+
+There are **two** readers of this tag, not one. `GET /api/state` serves the baseline; `GET /api/tickets`
+is built from `tracker_items`, and the Tickets tab is the one surface carrying an explicit **Unwatch**
+button. So `store.patchTicketLabels` folds the same confirmed write, over the same `landed` set, onto
+the mirror ([14](14-persistence.md#folding-a-watch-click-onto-the-mirror)).
+
+Without it the argument above holds twice over and then some: the mirror's own writer is `TicketSweep`,
+which runs **last** in a cycle — the same cycle that coalesces away — so the row an operator just
+un-watched goes on reporting `watched`, the `watch=unwatched` filter cannot find it, and clicking again
+does exactly as little. The tag is off the tracker throughout. That is a toggle which reads as broken,
+and it is what issue #417 reported.
+
+The PR route has no equivalent because the mirror holds tracker items and a pull request was never one.
 
 ### `POST /api/issues/:number/profile`
 

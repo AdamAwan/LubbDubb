@@ -90,6 +90,14 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // Only the targets whose write the provider took.
       const landed = targets.filter((t) => !failed.some((f) => f.number === t));
       store.patchWorldLabels({ issues: landed, label: watchLabel, present: watched });
+      // And the mirror, which is a *second* reading of the same tag rather than a
+      // copy of the first: the Tickets tab — the one surface with an explicit
+      // Unwatch — draws the toggle and its watch filter from `/api/tickets`, which
+      // is built from `tracker_items` and never from the baseline. Patched here
+      // for the reason the baseline is, and the same one twice over: the sweep
+      // that would otherwise carry it runs last in a cycle, and the cycle below
+      // coalesces away to nothing while another is in flight (issue #417).
+      store.patchTicketLabels({ numbers: landed, label: watchLabel, present: watched });
       hub.broadcast({ type: 'world:changed' });
       if (failed.length === targets.length) {
         return reply.code(400).send({ error: failed[0]?.message ?? 'no watch tag could be written' });

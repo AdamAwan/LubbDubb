@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { api } from '../api.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import { cascadeNote, featureBlocks, issueTypeTone, type TicketFeatureBlock } from '../issueGroups.js';
+import { cascadeNote, featureBlocks, issueTypeTone, watchReading, type TicketFeatureBlock } from '../issueGroups.js';
 import type {
   Issue,
   TicketFeatureFacet,
@@ -749,11 +749,15 @@ function StateChip({ row, colours }: { row: TicketRow; colours: Readonly<Record<
 /**
  * The one control on a row or a feature heading, and what it costs.
  *
- * `setIssueWatched` writes **both** tags — watching clears the ignore tag,
- * un-watching adds it — so the titles say what the click does rather than what the
- * label reads. Three-valued to *display* and two-valued to *write*: an untagged
- * item shows as neither, which is a state you can leave and never one you can
- * select.
+ * `setIssueWatched` writes the one tag, on or off — there is no second tag and no
+ * third state (`src/watchLabels.ts`), so an untagged item is *unwatched* rather
+ * than untriaged, and the titles say what the click does rather than what the
+ * label reads.
+ *
+ * **Which of the two readings of that tag it draws is load-bearing**, and that
+ * choice is `watchReading`'s — the world where the world holds the item, and the
+ * mirror only for the rows it no longer does. Reading them the other way round is
+ * a toggle that never visibly moves.
  *
  * **On a container it cascades**, and the title says so with the number it will
  * reach. A container is still never dispatched at, but watching one is not an empty
@@ -772,7 +776,7 @@ function WatchSwitch({
   actions,
 }: {
   issue: Issue | null;
-  /** The mirror's row, for the frozen reading. Null on a feature heading. */
+  /** The mirror's row, for the frozen reading and the bucket. Null on a feature heading. */
   row: TicketRow | null;
   view: CockpitView;
   actions: CockpitActions;
@@ -791,7 +795,7 @@ function WatchSwitch({
   // What the click will also reach — the words are a pure function, so the
   // invariant that a click writing eight tags says eight is tested without a render.
   const also = issue === null ? '' : cascadeNote(issue, containerTypes);
-  const bucket = row?.watch ?? watchBucket(issue?.labels, watchLabel);
+  const bucket = watchReading(issue, row, watchLabel);
 
   return (
     <span className={`tickets-switch ${off !== null ? 'off' : ''}`}>

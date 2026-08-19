@@ -1,5 +1,5 @@
 import type { Store } from '../store/store.js';
-import type { Pet, PetWallet } from '../types.js';
+import type { Pet, PetReset, PetWallet } from '../types.js';
 import type { PetState, PetView } from '../wire.js';
 import { VIVARIUM_SLOTS } from '../store/pets.js';
 import { attestPet, provenanceOf, replayBarren, replayChain, type PetLedger } from './attest.js';
@@ -34,7 +34,7 @@ type PetResult = { ok: true; pet: Pet } | { ok: false; error: string };
  * decides both.
  *
  * A **lens**. It reads what the operator has already done and writes only its own
- * four tables; nothing it holds is read by a rule, a gate, a rank or a report,
+ * five tables; nothing it holds is read by a rule, a gate, a rank or a report,
  * and `test/pets.test.ts` asserts structurally that `src/dispatcher/` never
  * imports any of it. The day that assertion fails, the fix is the import.
  */
@@ -78,7 +78,10 @@ export class PetKeeper {
       .filter((action) => !seen.has(`${action.kind}:${action.ref}`))
       .sort((a, b) => a.at.localeCompare(b.at));
     const hatched: Pet[] = [];
-    let sinceHatch = this.store.petActionsSinceHatch();
+    // One counter per kind. A single counter is spent by whatever the deployment
+    // does most — jobs and findings, by an order of magnitude — so the kinds a
+    // pity floor is actually for never reach theirs.
+    const sinceHatch = this.store.petActionsSinceHatch();
     // Carried across the pass rather than re-read per action. `seen` is captured
     // before the loop, so asking it would call *every* action in a first scan the
     // deployment's first — seven guaranteed pets out of one afternoon, which is
@@ -86,7 +89,8 @@ export class PetKeeper {
     let anyRolled = seen.size > 0;
     for (const action of fresh) {
       const firstEver = !anyRolled;
-      const forced = sinceHatch + 1 >= this.rules.pity;
+      const missed = sinceHatch.get(action.kind) ?? 0;
+      const forced = missed + 1 >= this.rules.rates[action.kind].pity;
       const roll = rollAction(action.kind, action.ref, action.at, { rules: this.rules, forced, firstEver });
       const build = roll.hatches ? this.stamp() : null;
       const pet =
@@ -103,14 +107,38 @@ export class PetKeeper {
             });
       this.store.recordPetAction({ kind: action.kind, ref: action.ref, at: action.at, petId: pet?.id ?? null });
       anyRolled = true;
-      if (pet) {
-        hatched.push(pet);
-        sinceHatch = 0;
-      } else {
-        sinceHatch += 1;
-      }
+      if (pet) hatched.push(pet);
+      sinceHatch.set(action.kind, pet ? 0 : missed + 1);
     }
     return hatched;
+  }
+
+  /**
+   * Release the whole collection, once, and start the beats again from zero.
+   *
+   * **Runs at most once per deployment**, and the row it writes is what says so:
+   * `VIVARIUM_RESET` names *this* clearance, so a restart, a restored backup and
+   * an upgrade all find it already done. A build that asked "has any clearance
+   * run" instead could never ship a second one.
+   *
+   * What goes is the collection and the ledger under it — pets, purchases and
+   * blend credits. What stays is `pet_actions`, and it has to: it is the scan's
+   * watermark, so an action that has already been rolled is skipped rather than
+   * rolled again, and the released collection cannot hatch straight back out of
+   * the history it came from. The consequence to hold onto is that a clearance
+   * costs those actions for good — the vivarium starts again from what the
+   * operator does *next*, which is the whole of what "from here on" means.
+   *
+   * Skipped entirely while `pets.enabled` is off, because off is the one setting
+   * that has never deleted anything and this is not the change that makes it. A
+   * deployment that turns the vivarium on later gets the clearance then.
+   *
+   * Returns what it released, or null when there was nothing to do.
+   */
+  resetOnce(): PetReset | null {
+    if (!this.policy.enabled) return null;
+    if (this.store.petResetAt(VIVARIUM_RESET) !== null) return null;
+    return this.store.clearVivarium(VIVARIUM_RESET);
   }
 
   /** What the cockpit draws, or null when the feature is off. */
@@ -241,8 +269,13 @@ export class PetKeeper {
     // Fleet spend plus what duplicates have been blended back. The blend credit is
     // *stored* rather than derived from the dissolved rows, because a yield this
     // build ships is not necessarily the yield the credit was granted under.
+    // Spend since the last clearance, not since the beginning. `usage_events` is
+    // never pruned, so a cleared vivarium counted from the beginning would open
+    // holding every beat the deployment had ever earned — a full grown collection
+    // one afternoon's clicking away, which is exactly what clearing it was for.
     const earned =
-      Math.floor(this.store.sumUsageCostSince(EPOCH) * this.rules.beatsPerDollar) + this.store.petBlendCredits();
+      Math.floor(this.store.sumUsageCostSince(this.store.petEpoch() ?? EPOCH) * this.rules.beatsPerDollar) +
+      this.store.petBlendCredits();
     const spent = this.store.petBeatsSpent();
     return { earned, spent, balance: Math.max(0, earned - spent) };
   }
@@ -267,3 +300,16 @@ export class PetKeeper {
  * accident.
  */
 const EPOCH = '0000-01-01T00:00:00.000Z';
+
+/**
+ * The name of the clearance this build carries, and the only thing that decides
+ * whether a deployment has had it.
+ *
+ * **Never edited in place.** Changing this string is not a rename: it is a second
+ * clearance, and it releases every collection on every deployment that takes the
+ * build — silently, since a wipe that ran as designed has nothing to report and
+ * `npm run check` has no opinion about a constant. A new clearance is a new id,
+ * added deliberately, and the old one stays where it is so the deployments that
+ * have had it are not given it twice.
+ */
+const VIVARIUM_RESET = 'mark-two';
