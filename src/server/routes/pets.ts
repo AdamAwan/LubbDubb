@@ -4,8 +4,9 @@ import { checked, IdParams, optionalText, requiredBoolean } from '../validation.
 import type { RouteContext } from './context.js';
 
 /**
- * The four things an operator does to a creature: feed it, name it, decide
- * whether it stands in the vivarium, and blend a duplicate back into beats.
+ * The five things an operator does to a creature: open its shell, feed it, name
+ * it, decide whether it stands in the vivarium, and blend a duplicate back into
+ * beats.
  *
  * **No read route.** `PetState` rides on the state snapshot with everything else
  * the cockpit draws, so the corner of the rail updates on the same socket as the
@@ -18,6 +19,21 @@ import type { RouteContext } from './context.js';
  */
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { pets } = system;
+
+  // No body: opening decides nothing. The species and the tier were fixed by the
+  // hash of the action that dropped it, and this only stamps the moment the
+  // operator looked — so a client with anything to say here would be a client
+  // deciding what it found. Repeating it is a success, not a 400: a double click
+  // and a reloaded link both land here after the stamp.
+  app.post(
+    '/api/pets/:id/open',
+    checked({ params: IdParams }, async ({ params, reply }) => {
+      const result = pets.open(params.id);
+      if (!result.ok) return reply.code(400).send({ error: result.error });
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, pet: result.pet };
+    }),
+  );
 
   const FeedBody = z.object({
     beats: z.number({ required_error: 'beats is required', invalid_type_error: 'beats must be a number' }),

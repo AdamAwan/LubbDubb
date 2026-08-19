@@ -16,7 +16,7 @@ import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './vali
 import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS } from './issueVerdicts.js';
 import { ScratchStore } from './scratch.js';
 import { UpgradeStore } from './upgrades.js';
-import { PetStore, PET_COLUMNS } from './pets.js';
+import { openPetsFromBeforeEggs, PetStore, PET_COLUMNS } from './pets.js';
 import { InstructionStore } from './instructions.js';
 import { AgentStore, AGENT_COLUMNS } from './agents.js';
 import { TranscriptStore } from './transcripts.js';
@@ -173,6 +173,7 @@ export class Store {
     rebuildTables(this.db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS], () => this.db.exec(SCHEMA));
     // Before any module is constructed, let alone reads: a domain module reading
     // a migrated column on a database created by an older build reads `undefined`.
+    const addedColumns: string[] = [];
     for (const columns of [
       TASK_COLUMNS,
       AGENT_COLUMNS,
@@ -188,8 +189,13 @@ export class Store {
       TICKET_COLUMNS,
       PET_COLUMNS,
     ]) {
-      ensureColumns(this.db, columns);
+      addedColumns.push(...ensureColumns(this.db, columns));
     }
+    // The one migration that has to know a column was *just* added rather than
+    // merely being present: `pets.opened_at` null means "still an egg", so every
+    // pet from before the shell existed is stamped as already opened, once. Run on
+    // every boot instead, it would open the eggs an operator was saving.
+    if (addedColumns.includes('pets.opened_at')) openPetsFromBeforeEggs(this.db);
     // The migrations that are not columns, here for the same reason the pass above
     // is — before any module is constructed, let alone reads. #203's
     // `floor_completions` becomes #234's `issue_runs`, carrying the operator's
@@ -994,6 +1000,9 @@ export class Store {
   }
   feedPet(id: string, beats: number): Pet | null {
     return this.pets.feedPet(id, beats);
+  }
+  openPet(id: string): Pet | null {
+    return this.pets.openPet(id);
   }
   renamePet(id: string, name: string | null): Pet | null {
     return this.pets.renamePet(id, name);

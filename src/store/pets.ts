@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
 import type { Pet, PetAction, PetActionKind, PetReset, PetSpecies } from '../types.js';
 import type { StoreContext } from './context.js';
@@ -14,6 +15,9 @@ import type { ColumnMigrations } from './migrate.js';
 export const PET_COLUMNS: ColumnMigrations = {
   pets: {
     dissolved_at: `TEXT`,
+    // Null spells *still an egg*, which is why this one needs a backfill as well
+    // as an `ALTER TABLE` — see `openPetsFromBeforeEggs`.
+    opened_at: `TEXT`,
     // The three authenticity columns. Every one of them reads as a *weaker* claim
     // when absent rather than a false one — a pet from before them carries no
     // build and no chain link, and `attest.ts` declines to judge it rather than
@@ -71,6 +75,9 @@ export class PetStore {
     builtSha?: string | null;
     builtClean?: boolean;
   }): Pet {
+    // A drop writes an egg — `opened_at` null — and nothing here decides when it
+    // is opened. The species and tier are already in `input`, settled by the hash
+    // of the action: the shell withholds them, it does not choose them.
     const existing = this.ctx.db
       .prepare(`SELECT * FROM pets WHERE origin_kind=? AND origin_ref=?`)
       .get(input.originKind, input.originRef) as PetRow | undefined;
@@ -85,6 +92,7 @@ export class PetStore {
       originKind: input.originKind,
       originRef: input.originRef,
       hatchedAt: input.hatchedAt,
+      openedAt: null,
       // The first four in stand in the vivarium without being asked for: an empty
       // enclosure under a full queue is the state that teaches an operator the
       // corner is decoration and to stop looking at it.
@@ -97,9 +105,9 @@ export class PetStore {
     this.ctx.db
       .prepare(
         `INSERT OR IGNORE INTO pets
-           (id, species, seed, name, fed, origin_kind, origin_ref, hatched_at, placed, built_sha, built_clean, chain)
+           (id, species, seed, name, fed, origin_kind, origin_ref, hatched_at, opened_at, placed, built_sha, built_clean, chain)
          VALUES
-           (@id, @species, @seed, @name, @fed, @originKind, @originRef, @hatchedAt, @placed, @builtSha, @builtClean, @chain)`,
+           (@id, @species, @seed, @name, @fed, @originKind, @originRef, @hatchedAt, @openedAt, @placed, @builtSha, @builtClean, @chain)`,
       )
       .run({ ...pet, placed: pet.placed ? 1 : 0, builtClean: pet.builtClean ? 1 : 0 });
     return pet;
@@ -277,6 +285,19 @@ export class PetStore {
     return feed();
   }
 
+  /**
+   * Crack one open, stamping the moment the operator did it.
+   *
+   * `opened_at IS NULL` in the `WHERE`, so a second click — a double tap, a
+   * retried request, two tabs — changes nothing and reports it by returning the
+   * row unchanged rather than by moving the stamp. The reveal is a ceremony over a
+   * decided outcome, so there is nothing here to re-run.
+   */
+  openPet(id: string): Pet | null {
+    this.ctx.db.prepare(`UPDATE pets SET opened_at=? WHERE id=? AND opened_at IS NULL`).run(this.ctx.now(), id);
+    return this.getPet(id);
+  }
+
   renamePet(id: string, name: string | null): Pet | null {
     const changed = this.ctx.db.prepare(`UPDATE pets SET name=? WHERE id=?`).run(name, id).changes;
     return changed === 0 ? null : this.getPet(id);
@@ -429,6 +450,35 @@ export interface ChainInput {
  *
  * @public — recomputed by `src/pets/attest.ts`, which is the only reader.
  */
+/**
+ * Stamp every pet that predates the shell as already opened.
+ *
+ * Run **only on the boot `pets.opened_at` arrives**, which is why `ensureColumns`
+ * reports what it added. Null in that column means *still an egg*, so a vivarium
+ * raised over months would come back as a crate of shells the day the operator
+ * takes this build — every creature they know redrawn as an anonymous egg, with
+ * nothing red and no way back but clicking through the lot. Stamped with
+ * `hatched_at`, because a pet from before eggs was revealed the moment it dropped
+ * and that is the honest time to give it.
+ *
+ * Ungated it is the same silence pointed the other way: it would open, on every
+ * restart, every egg the operator had deliberately left sitting.
+ *
+ * @public — called by `Store`'s constructor, the only place that knows a column
+ * was just added.
+ */
+export function openPetsFromBeforeEggs(db: Database.Database): void {
+  db.prepare(`UPDATE pets SET opened_at = hatched_at WHERE opened_at IS NULL`).run();
+}
+
+/**
+ * The chain covers what the **roll** decided, and deliberately not `opened_at`.
+ *
+ * Opening is the operator's own act on a creature whose species, tier and origin
+ * were settled the instant it was rolled — none of which this touches. Hashing it
+ * in would break every link the moment a shell came off, and an honest collection
+ * would start reporting `broken-chain` on the pets its owner had just enjoyed most.
+ */
 export function chainLink(previous: string | null, pet: ChainInput): string {
   const body = [previous ?? '', pet.id, pet.species, pet.seed, pet.originKind, pet.originRef, pet.hatchedAt].join(
     '\u0000',
@@ -453,6 +503,7 @@ interface PetRow {
   origin_kind: string;
   origin_ref: string;
   hatched_at: string;
+  opened_at: string | null;
   placed: number;
   dissolved_at: string | null;
   built_sha: string | null;
@@ -470,6 +521,7 @@ function rowToPet(row: PetRow): Pet {
     originKind: row.origin_kind as PetActionKind,
     originRef: row.origin_ref,
     hatchedAt: row.hatched_at,
+    openedAt: row.opened_at ?? null,
     placed: row.placed === 1,
     // Nullable *and* possibly absent: added by `ensureColumns` on databases from
     // an older build, where the read would otherwise be `undefined` rather than null.

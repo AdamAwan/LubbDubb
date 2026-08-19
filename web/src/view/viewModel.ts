@@ -148,6 +148,8 @@ export interface CockpitView {
   viewingPlan: string | null;
   /** The goal whose retrospective is open, as an `issue:<n>` ref. */
   viewingRetro: string | null;
+  /** The egg whose shell is coming off, by pet id. */
+  hatching: string | null;
   /** The goal whose shared scratchpad is open, as an `issue:<n>` ref. */
   viewingScratchpad: string | null;
   /** Whether the settings modal is open. */
@@ -220,6 +222,8 @@ interface ViewInputs {
   viewingPlan: string | null;
   /** The goal whose retrospective is open, as an `issue:<n>` ref. */
   viewingRetro: string | null;
+  /** The egg whose shell is coming off, by pet id. */
+  hatching: string | null;
   /** The goal whose shared scratchpad is open, as an `issue:<n>` ref. */
   viewingScratchpad: string | null;
   /** Whether the settings modal is open. */
@@ -328,6 +332,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     taskFor: (agent) => state.tasks.find((t) => t.id === agent.taskId) ?? null,
     viewingPlan: input.viewingPlan,
     viewingRetro: input.viewingRetro,
+    hatching: input.hatching,
     viewingScratchpad: input.viewingScratchpad,
     spendOpen: input.spendOpen,
     reliabilityOpen: input.reliabilityOpen,

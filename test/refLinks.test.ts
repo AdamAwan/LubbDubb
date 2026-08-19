@@ -34,6 +34,7 @@ function view(over: Partial<CockpitView> = {}, selectedGoal: string | null = nul
       lastPulseAt: Date.now(),
       viewingPlan: null,
       viewingRetro: null,
+      hatching: null,
       viewingScratchpad: null,
       spendOpen: false,
       reliabilityOpen: false,

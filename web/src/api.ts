@@ -386,6 +386,7 @@ const realApi = {
 
   // The vivarium. No read arm: `PetState` rides on `/api/state`, so the corner of
   // the rail updates on the same socket as the queue above it.
+  openPet: (id: string) => post<{ ok: true }>(`/api/pets/${id}/open`, {}),
   feedPet: (id: string, beats: number) => post<{ ok: true }>(`/api/pets/${id}/feed`, { beats }),
   renamePet: (id: string, name: string) => post<{ ok: true }>(`/api/pets/${id}/name`, { name }),
   placePet: (id: string, placed: boolean) => post<{ ok: true }>(`/api/pets/${id}/place`, { placed }),

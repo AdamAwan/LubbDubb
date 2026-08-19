@@ -25,6 +25,7 @@ export function PetsPanel({
   onRename,
   onPlace,
   onBlend,
+  onHatch,
 }: {
   pets: PetState;
   now: number;
@@ -32,6 +33,8 @@ export function PetsPanel({
   onRename: (id: string, name: string) => Promise<unknown>;
   onPlace: (id: string, placed: boolean) => Promise<unknown>;
   onBlend: (id: string) => Promise<unknown>;
+  /** Open a shell — the ceremony, not a bare write. See `HatchModal`. */
+  onHatch: (id: string) => void;
 }) {
   const { wallet } = pets;
   // How many of each species are still alive, which is the whole of what decides
@@ -54,8 +57,8 @@ export function PetsPanel({
 
       {pets.pets.length === 0 ? (
         <p className="muted">
-          Nothing has hatched yet. Creatures come from things <em>you</em> do — answering an escalation, settling a
-          task, accepting a plan, landing a stack. The fleet cannot earn one however much it spends.
+          Nothing has been found yet. Eggs come from things <em>you</em> do — answering an escalation, settling a task,
+          accepting a plan, landing a stack. The fleet cannot earn one however much it spends.
         </p>
       ) : (
         <div className="pets-grid">
@@ -72,6 +75,7 @@ export function PetsPanel({
               onRename={onRename}
               onPlace={onPlace}
               onBlend={onBlend}
+              onHatch={onHatch}
             />
           ))}
         </div>
@@ -91,6 +95,7 @@ function PetCard({
   onRename,
   onPlace,
   onBlend,
+  onHatch,
 }: {
   pet: PetView;
   now: number;
@@ -104,8 +109,10 @@ function PetCard({
   onRename: (id: string, name: string) => Promise<unknown>;
   onPlace: (id: string, placed: boolean) => Promise<unknown>;
   onBlend: (id: string) => Promise<unknown>;
+  onHatch: (id: string) => void;
 }) {
   const [name, setName] = useState(pet.name ?? '');
+  const egg = pet.openedAt === null;
   // What it would take to finish the current stage, and never more than there is.
   // Offering a button that always refuses is worse than not offering it.
   const toNext = pet.beatsToNextStage === null ? 0 : Math.min(pet.beatsToNextStage, balance);
@@ -121,9 +128,12 @@ function PetCard({
         <PetSprite pet={pet} size={84} beatMs={2400} />
       </div>
       <div className="pet-name">
+        {/* `pet.display` is the species' own name, so it is the placeholder for
+            everything except a shell — where printing it would put the answer in
+            the box above the thing withholding it. */}
         <input
           value={name}
-          placeholder={pet.display}
+          placeholder={egg ? 'egg' : pet.display}
           aria-label="Name"
           onChange={(e) => setName(e.target.value)}
           onBlur={() => {
@@ -153,19 +163,41 @@ function PetCard({
           that is not a git checkout — is a shrug rather than a suspicion, so drawing
           it would turn an honest collection into a wall of warnings. */}
       {pet.provenance === 'modified' && pet.flaw === null ? (
-        <p className="pet-origin">Hatched by a build with uncommitted changes.</p>
+        <p className="pet-origin">Found by a build with uncommitted changes.</p>
       ) : null}
-      <div className="pet-meter" title={`${pet.fed.toLocaleString()} beats fed`}>
-        <i style={{ width: `${stageFill(pet)}%` }} />
-      </div>
-      <div className="pet-stage">
-        <span>{pet.stage}</span>
-        <span className="muted">
-          {pet.beatsToNextStage === null ? 'fully grown' : `${pet.beatsToNextStage.toLocaleString()} to go`}
-        </span>
-      </div>
+      {egg ? null : (
+        <>
+          <div className="pet-meter" title={`${pet.fed.toLocaleString()} beats fed`}>
+            <i style={{ width: `${stageFill(pet)}%` }} />
+          </div>
+          <div className="pet-stage">
+            <span>{pet.stage}</span>
+            <span className="muted">
+              {pet.beatsToNextStage === null ? 'fully grown' : `${pet.beatsToNextStage.toLocaleString()} to go`}
+            </span>
+          </div>
+        </>
+      )}
       <div className="pet-acts">
-        {dissolved || flawed ? null : (
+        {/* An egg has one act and the server agrees: it cannot be fed, and it
+            cannot be blended, because neither is a decision anybody can make about
+            an animal they have not been shown. It can still be put out — a shell
+            in the corner of the rail is the whole point of one. */}
+        {egg ? (
+          <>
+            <button type="button" className="ghost small" onClick={() => onHatch(pet.id)}>
+              Open it
+            </button>
+            <AsyncButton
+              className="ghost small"
+              disabled={full}
+              title={full ? `The vivarium holds ${slots} — take one out first` : undefined}
+              onClick={() => onPlace(pet.id, !pet.placed)}
+            >
+              {pet.placed ? 'Take out' : 'Put out'}
+            </AsyncButton>
+          </>
+        ) : dissolved || flawed ? null : (
           <>
             <AsyncButton className="ghost small" disabled={balance < 100} onClick={() => onFeed(pet.id, 100)}>
               Feed 100
@@ -201,14 +233,17 @@ function PetCard({
  * table's. The raw ref rides along because it is the thing they would search for.
  */
 function originLine(pet: PetView): string {
+  // *Found*, not *hatched*: the drop and the reveal are two moments now, and this
+  // line dates the first one. It is the moment worth recording — the night you
+  // answered the thing — and the shell may have come off weeks later.
   const what: Record<PetView['originKind'], string> = {
-    escalation: 'Hatched when you answered',
-    'human-task': 'Hatched when you settled',
-    plan: 'Hatched when you accepted',
-    landing: 'Hatched when you landed',
-    job: 'Hatched when you launched',
-    finding: 'Hatched when you triaged',
-    upgrade: 'Hatched when the harness updated itself,',
+    escalation: 'Found when you answered',
+    'human-task': 'Found when you settled',
+    plan: 'Found when you accepted',
+    landing: 'Found when you landed',
+    job: 'Found when you launched',
+    finding: 'Found when you triaged',
+    upgrade: 'Found when the harness updated itself,',
   };
   return `${what[pet.originKind]} ${pet.originRef}`;
 }

@@ -231,6 +231,8 @@ test('beats are derived from spend, and feeding refuses more than there is', () 
   answer(store, 'hatch me something');
   const [pet] = pets.scan();
   assert.ok(pet);
+  // A drop arrives as an egg, and an egg is not fed — the shell comes off first.
+  assert.equal(pets.open(pet.id).ok, true);
 
   const broke = pets.feed(pet.id, 100);
   assert.equal(broke.ok, false, 'a fleet that has spent nothing has nothing to feed with');
@@ -406,6 +408,9 @@ test('blending a duplicate credits beats and keeps the record', () => {
   assert.ok(dupSpecies, 'twelve escalations must produce at least one duplicate species');
   const victim = all.find((pet) => pet.species === dupSpecies)!;
 
+  assert.equal(pets.blend(victim.id).ok, false, 'an unopened shell is not a duplicate yet');
+  assert.equal(pets.open(victim.id).ok, true);
+
   const before = pets.state()!.wallet.earned;
   const result = pets.blend(victim.id);
   assert.equal(result.ok, true, 'a duplicate may be blended');
@@ -429,6 +434,7 @@ test('the last of a species is refused, and a dissolved one cannot be fed or re-
   pets.scan();
   const [only] = store.listPets();
   assert.ok(only);
+  assert.equal(pets.open(only.id).ok, true);
   const refused = pets.blend(only.id);
   assert.equal(refused.ok, false, 'blending is for duplicates — the last one stays');
 
@@ -438,6 +444,7 @@ test('the last of a species is refused, and a dissolved one cannot be fed or re-
   const dupes = store.listPets();
   const species = dupes.map((p) => p.species).find((s, _i, l) => l.filter((x) => x === s).length > 1)!;
   const victim = dupes.find((p) => p.species === species)!;
+  assert.equal(pets.open(victim.id).ok, true);
   assert.equal(pets.blend(victim.id).ok, true);
   assert.equal(pets.blend(victim.id).ok, false, 'a dissolved pet cannot be blended twice');
   assert.equal(pets.feed(victim.id, 10).ok, false, 'nor fed');
@@ -475,6 +482,7 @@ test('clearing the vivarium releases the collection and starts the beats from ze
   spend(store, 1);
   const [first] = store.listPets();
   assert.ok(first);
+  assert.equal(pets.open(first.id).ok, true);
   assert.equal(pets.feed(first.id, 25).ok, true, 'a dollar of spend buys 25 beats');
 
   const reset = pets.resetOnce();
@@ -723,6 +731,7 @@ test('the replay accuses only what this same clean build hatched', () => {
       originKind: 'escalation',
       originRef: 'esc_barren',
       hatchedAt: at,
+      openedAt: at,
       placed: false,
       dissolvedAt: null,
       builtSha: claim.sha,

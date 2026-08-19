@@ -2,6 +2,7 @@ import { UnauthorizedError } from './api.js';
 import { useCockpit } from './cockpit/useCockpit.js';
 import { ConsoleRoot } from './console/ConsoleRoot.js';
 import { AgentDrawer } from './components/AgentDrawer.js';
+import { HatchModal } from './components/HatchModal.js';
 import { RetroModal } from './components/RetroModal.js';
 import { ScratchpadModal } from './components/ScratchpadModal.js';
 import { PlanModal } from './components/PlanModal.js';
@@ -118,6 +119,7 @@ export function App() {
   ) : null;
 
   const openAgent = status.view.selectedAgent;
+  const hatchingPet = state.pets?.pets.find((pet) => pet.id === status.view.hatching) ?? null;
 
   return (
     <RefLinks
@@ -150,6 +152,18 @@ export function App() {
       )}
       {status.view.viewingRetro && (
         <RetroModal issueRef={status.view.viewingRetro} onClose={() => status.actions.viewRetro(null)} />
+      )}
+      {/* The pet is looked up on every render rather than captured when the
+          ceremony opened: the shell comes off through the ordinary write path, so
+          the row this draws is the one on the snapshot like everything else. A
+          `hatch=` naming nothing — a stale link, a blended pet — draws nothing
+          rather than an empty modal. */}
+      {hatchingPet !== null && (
+        <HatchModal
+          pet={hatchingPet}
+          onOpen={(id) => status.actions.openPet(id)}
+          onClose={() => status.actions.hatchEgg(null)}
+        />
       )}
       {status.view.viewingScratchpad && (
         <ScratchpadModal issueRef={status.view.viewingScratchpad} onClose={() => status.actions.viewScratchpad(null)} />

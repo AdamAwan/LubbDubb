@@ -9,39 +9,72 @@ import { PetSprite } from '../components/PetSprite.js';
  * scrolls behind it rather than pushing it off the bottom. Always in frame, and
  * it covers nothing.
  *
- * The whole surface is one button, because the whole surface has one
- * destination. A reference inside a button would be two destinations for one
- * click, which is the cockpit's rule about where a ref may go.
+ * **One button per creature, rather than one over the floor.** The floor used to
+ * be a single button because it had a single destination; an egg gives it two, and
+ * a click cannot have two destinations. So each animal is its own control — an egg
+ * opens its shell, anything else opens the panel — and the bar underneath carries
+ * the way in for an empty enclosure. Nested buttons would be the other way to
+ * spell this, and they are not a thing HTML has.
  */
 export function Vivarium({
   pets,
   runningAgents,
   paused,
   onOpen,
+  onHatch,
 }: {
   pets: PetState;
   runningAgents: number;
   paused: boolean;
   onOpen: () => void;
+  onHatch: (id: string) => void;
 }) {
   const placed = pets.pets.filter((pet) => pet.placed);
+  // Everything unopened, placed or not. The count is what the badge says, because
+  // an egg the enclosure had no room for is still an egg you have not looked in —
+  // and it is reachable from the panel the badge's own click opens.
+  const eggs = pets.pets.filter((pet) => pet.openedAt === null);
   return (
     <div className="cn-viv">
-      <button type="button" className="cn-viv-floor" onClick={onOpen} title="Open the vivarium">
+      <div className="cn-viv-floor">
         {placed.length === 0 ? (
-          <span className="cn-viv-empty">Nothing has hatched yet</span>
+          <button type="button" className="cn-viv-empty" onClick={onOpen}>
+            Nothing has hatched yet
+          </button>
         ) : (
-          placed.map((pet) => (
-            <PetSprite key={pet.id} pet={pet} size={sizeFor(pet.stage)} beatMs={beatMs(runningAgents, paused)} />
-          ))
+          placed.map((pet) =>
+            pet.openedAt === null ? (
+              <button
+                key={pet.id}
+                type="button"
+                className="cn-viv-egg"
+                title="An egg. Click to open it."
+                onClick={() => onHatch(pet.id)}
+              >
+                <PetSprite pet={pet} size={sizeFor(pet.stage)} beatMs={beatMs(runningAgents, paused)} />
+              </button>
+            ) : (
+              <button key={pet.id} type="button" className="cn-viv-pet" title="Open the vivarium" onClick={onOpen}>
+                <PetSprite pet={pet} size={sizeFor(pet.stage)} beatMs={beatMs(runningAgents, paused)} />
+              </button>
+            ),
+          )
         )}
-      </button>
-      <div className="cn-viv-bar">
+      </div>
+      <button type="button" className="cn-viv-bar" onClick={onOpen}>
         <span>
           Vivarium · {placed.length} of {pets.pets.length}
         </span>
+        {/* Said plainly rather than drawn as an alert. An egg is a nice thing
+            waiting, and nothing in this subsystem nags: it sits there for as long
+            as the operator leaves it, and nothing expires it. */}
+        {eggs.length > 0 ? (
+          <span className="cn-viv-eggs">
+            {eggs.length} egg{eggs.length === 1 ? '' : 's'}
+          </span>
+        ) : null}
         <span className="cn-viv-beats">{pets.wallet.balance.toLocaleString()} beats</span>
-      </div>
+      </button>
     </div>
   );
 }

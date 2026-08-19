@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { PetView } from '../types.js';
 import { paletteFor } from '../pets/palette.js';
-import { spriteFor } from '../pets/sprites.js';
+import { crackFor, eggFor, spriteFor } from '../pets/sprites.js';
 
 /**
  * One creature, drawn on a canvas at an integer scale with smoothing off.
@@ -17,10 +17,29 @@ import { spriteFor } from '../pets/sprites.js';
  *
  * The bob is CSS on the wrapper rather than a redraw, so however many pets are on
  * screen they animate on one clock and cost one composite.
+ *
+ * **An unopened pet draws as its shell, and the species is never consulted.** The
+ * one place that decision could leak is here, and it leaks silently: `pet.species`
+ * rides on the wire from the moment the drop is rolled — it has to, since the
+ * reveal is a ceremony over something already decided — so a component that
+ * reached for it would draw the animal through the shell with nothing red.
+ * `rocks` is how many times the egg has rocked, and drives the crack overlay.
  */
-export function PetSprite({ pet, size, beatMs }: { pet: PetView; size: number; beatMs: number }) {
+export function PetSprite({
+  pet,
+  size,
+  beatMs,
+  rocks = 0,
+}: {
+  pet: PetView;
+  size: number;
+  beatMs: number;
+  rocks?: number;
+}) {
   const canvas = useRef<HTMLCanvasElement>(null);
-  const grid = spriteFor(pet.species, pet.rarity, pet.stage);
+  const egg = pet.openedAt === null;
+  const grid = egg ? eggFor(pet.rarity) : spriteFor(pet.species, pet.rarity, pet.stage);
+  const crack = egg ? crackFor(rocks) : null;
   const palette = paletteFor(pet.seed);
 
   useEffect(() => {
@@ -60,13 +79,30 @@ export function PetSprite({ pet, size, beatMs }: { pet: PetView; size: number; b
         ctx.fillRect(x * px, y * px, px, px);
       }
     }
-  }, [grid, palette, size]);
+    if (crack === null) return;
+    // Over the shell rather than baked into it: one egg grid per tier serves every
+    // stage of breaking, and the two views cannot disagree about which shell is
+    // cracking. `k` clears rather than paints — a hole in a shell is the canvas
+    // showing through, and painting the rail's colour into it would be a colour no
+    // theme can reach.
+    for (let y = 0; y < crack.length; y++) {
+      const row = crack[y]!;
+      for (let x = 0; x < row.length; x++) {
+        if (row[x] === 'c') {
+          ctx.fillStyle = palette.outline;
+          ctx.fillRect(x * px, y * px, px, px);
+        } else if (row[x] === 'k') {
+          ctx.clearRect(x * px, y * px, px, px);
+        }
+      }
+    }
+  }, [grid, crack, palette, size]);
 
   return (
     <span
       className={beatMs > 0 ? 'pet-sprite is-beating' : 'pet-sprite'}
       style={beatMs > 0 ? { animationDuration: `${beatMs}ms` } : undefined}
-      title={`${pet.name ?? pet.display} · ${pet.stage}`}
+      title={egg ? `a ${pet.rarity} egg` : `${pet.name ?? pet.display} · ${pet.stage}`}
     >
       <canvas ref={canvas} aria-hidden="true" />
     </span>

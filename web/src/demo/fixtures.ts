@@ -941,6 +941,7 @@ export function buildDemoState(): DemoSeed {
           originKind: 'escalation',
           originRef: 'esc_9f2a',
           hatchedAt: ago(4_320),
+          openedAt: ago(4_320),
           placed: true,
           dissolvedAt: null,
           flaw: null,
@@ -962,6 +963,7 @@ export function buildDemoState(): DemoSeed {
           originKind: 'human-task',
           originRef: 'htk_31c',
           hatchedAt: ago(2_880),
+          openedAt: ago(2_880),
           placed: true,
           dissolvedAt: null,
           flaw: null,
@@ -983,6 +985,7 @@ export function buildDemoState(): DemoSeed {
           originKind: 'landing',
           originRef: 'land_77b',
           hatchedAt: ago(600),
+          openedAt: ago(600),
           placed: true,
           dissolvedAt: null,
           flaw: null,
@@ -1004,6 +1007,9 @@ export function buildDemoState(): DemoSeed {
           originKind: 'upgrade',
           originRef: '9c1d4a2',
           hatchedAt: ago(90),
+          // The demo's one unopened egg: the newest drop, still a shell in the
+          // corner of the rail, so the hatch is one click away in the tour.
+          openedAt: null,
           placed: false,
           dissolvedAt: null,
           flaw: null,

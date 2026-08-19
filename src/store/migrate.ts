@@ -79,13 +79,30 @@ function hasColumn(db: Database.Database, table: string, column: string): boolea
   return info.some((c) => c.name === column);
 }
 
-export function ensureColumns(db: Database.Database, migrations: ColumnMigrations): void {
+/**
+ * Returns the columns it actually added, as `table.column`.
+ *
+ * The return value is for the one kind of column a plain `ALTER TABLE` gets
+ * wrong: one whose **null means something** on the rows that predate it. A new
+ * `opened_at` is null on every pet in an existing vivarium, and null spells *still
+ * an egg* — so a collection raised over months would go back to being shells. The
+ * fix is a backfill, and a backfill is only correct **on the boot the column
+ * arrives**: run unconditionally on every boot it opens every egg the operator
+ * has not got to yet, which is the same silence in the other direction.
+ *
+ * So this reports, and the composition root gates the backfill on the report.
+ */
+export function ensureColumns(db: Database.Database, migrations: ColumnMigrations): string[] {
+  const added: string[] = [];
   for (const [table, columns] of Object.entries(migrations)) {
     const existing = new Set(
       (db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name),
     );
     for (const [name, type] of Object.entries(columns)) {
-      if (!existing.has(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`);
+      if (existing.has(name)) continue;
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${type}`);
+      added.push(`${table}.${name}`);
     }
   }
+  return added;
 }

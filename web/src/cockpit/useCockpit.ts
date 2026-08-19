@@ -193,6 +193,7 @@ export function useCockpit(): CockpitStatus {
       setValidation: (issueNumber, checkId, act) => then(api.setValidation(issueNumber, checkId, act)),
       viewPlan: (planId) => go({ plan: planId }),
       viewRetro: (issueRef) => go({ retro: issueRef }),
+      hatchEgg: (id) => go({ hatch: id }),
       viewScratchpad: (issueRef) => go({ scratchpad: issueRef }),
       openConfig: (where) => go({ tab: 'config', goal: null, ...where }),
       openSpend: (open) => go({ spend: open }),
@@ -216,6 +217,7 @@ export function useCockpit(): CockpitStatus {
       upgrade: (action, opts) => then(api.upgrade(action, opts)),
       checkBuild: () => then(api.checkBuild()),
 
+      openPet: (id) => then(api.openPet(id)),
       feedPet: (id, beats) => then(api.feedPet(id, beats)),
       renamePet: (id, name) => then(api.renamePet(id, name)),
       placePet: (id, placed) => then(api.placePet(id, placed)),
@@ -266,6 +268,7 @@ export function useCockpit(): CockpitStatus {
       lastPulseAt: lastPulse.current,
       viewingPlan: place.plan,
       viewingRetro: place.retro,
+      hatching: place.hatch,
       viewingScratchpad: place.scratchpad,
       spendOpen: place.spend,
       reliabilityOpen: place.reliability,
