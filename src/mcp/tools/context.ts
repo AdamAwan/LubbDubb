@@ -22,7 +22,7 @@ import type { TicketFiler } from '../../tickets/filing.js';
 import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
 import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAssayVerdictName } from '../goalAssay.js';
-import { issueOrigin, planOriginIssue } from '../../plans/planning.js';
+import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
 
 /**
@@ -178,7 +178,7 @@ function statusEnvelope(store: Store, agent: Agent, task: Task): StatusEnvelope 
     task: { title: task.title, status: task.status },
     awaitingHuman: open ? { prompt: open.prompt } : null,
   };
-  const issue = planOriginIssue(task.originRef);
+  const issue = originIssueNumber(task.originRef);
   const plan = issue === null ? null : store.getPlanByOrigin(issueOrigin(issue));
   if (plan) {
     env.plan = {
