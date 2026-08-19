@@ -21,7 +21,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `plan_submit`        | Submit a decomposition verdict. Replaces writing `.lubbdubb/plan.json`.                                                                                                                                                                                                                                                 |
 | `escalate`           | Ask the human a question and park. The typed form of the WAITING sentinel.                                                                                                                                                                                                                                              |
 | `world_read`         | Read the harness's own view of a PR or issue.                                                                                                                                                                                                                                                                           |
-| `report_finding`     | File something noticed outside the agent's own task.                                                                                                                                                                                                                                                                    |
+| `report_finding`     | File a claim for an operator: something noticed outside the agent's own task, or a fact about the repository its docs do not state.                                                                                                                                                                                     |
 | `request_human_task` | Ask for work only a person can do. Files a durable work item, parks nobody, dispatches nobody.                                                                                                                                                                                                                          |
 | `note_progress`      | Say in one line what the agent is working on right now.                                                                                                                                                                                                                                                                 |
 | `link_ticket`        | File the tracker item for a filed finding or a bug an operator raised: the agent hands over the title and body, or names an existing item it duplicates.                                                                                                                                                                 |
@@ -31,7 +31,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `conclude_part`      | Close **one plan part** that finished without a pull request — a report, or the determination that nothing needs building. Fenced to `issue:<n>:part:<slug>` origins.                                                                                                                                                   |
 | `scratch_append`     | Leave a note on the shared scratchpad for the issue this agent is working. Append-only, attributed from the credential. Refused outside an issue subtree.                                                                                                                                                               |
 | `scratch_read`       | Read that pad — every note left by every agent on the goal, oldest first. Same access rule as the write. The operator reads the same trail in the cockpit's notepad modal (`GET /api/scratchpads/:ref`), which resolves a ref through the same `padOriginFor`.                                                          |
-| `retro_submit`       | Submit the retrospective for a delivered goal: what shipped, how the run went, and the lessons it taught about working the repository. Fenced to `issue:<n>:retro` origins. → [13](13-jobs-and-findings.md#lessons)                                                                                                      |
+| `retro_submit`       | Submit the retrospective for a delivered goal: what shipped, how the run went, and the lessons it taught about working the repository. Fenced to `issue:<n>:retro` origins. → [13](13-jobs-and-findings.md#lessons)                                                                                                     |
 | `validation_amend`   | Correct the validation plan for the goal this agent is working: add or amend checks, withdraw one with a reason, declare a resource. **Merge-only** — an omitted check is untouched. Open to every agent on the goal; refused to the planner, which has `plan_submit`. → [20](20-validation.md)                         |
 | `validation_report`  | Record the reading of the one validation check this agent was dispatched to run: `passed`, `failed`, or `handback` — could not run it, which records nothing and returns the check to the operator with the reason. Refused to every caller but that check's own agent, by name. → [20](20-validation.md#the-hand-over) |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`).                                                                               |
@@ -145,8 +145,16 @@ so it cannot reach another repository or project.
 
 ### `report_finding`
 
-Arguments `{kind: 'duplicate'|'blocked'|'out_of_scope', summary, where?, detail?, ref?}`. See
-[13](13-jobs-and-findings.md) for the full vocabulary and the promotion path. Four properties:
+Arguments `{kind: 'duplicate'|'blocked'|'out_of_scope'|'docs', summary, where?, detail?, ref?}`. See
+[13](13-jobs-and-findings.md) for the full vocabulary and the promotion path. Five properties:
+
+- **The description carries two directions, not one.** It used to open "file something you noticed
+  that is NOT your task", which was true of every kind there was. `docs` is learned _inside_ the task
+  — a fact about this repository its own documentation does not state, the paragraph the agent would
+  have wanted to read before it started — so the description names both and tells the agent to file
+  the fact when it learns it rather than saving it for a write-up. The `where` field's description
+  gains the docs reading too: the document that should say it. The description **is** the vocabulary,
+  so a kind the enum has and the prose does not is a kind no agent ever sends.
 
 - **It queues nothing, and that is the design.** A queued job is dispatched by rule `manual-job` ahead of every
   world-driven rule, so an agent that could queue jobs could put agents on the fleet — a capability
@@ -708,6 +716,12 @@ refused with nothing in the logs. A field on a tool that already exists needs no
 The general rule it is an instance of: **a new capability belongs on an existing tool when it is part
 of the same submission, and on its own tool when a different caller would reach for it.** Nobody but a
 retro agent proposes a lesson.
+
+The same rule decided the docs route the other way (#397). A fact about the repository is _not_ part of
+the retrospective's submission — any agent that learns one can file it, and the one that learns it
+first is rarely the one writing the retrospective — so it is a **kind on `report_finding`** rather than
+a second field on `retro_submit`. Which also means no new tool, no new grant, and no second cap: the
+claim reuses a row and a gate that already exist. → [13](13-jobs-and-findings.md#the-four-kinds)
 
 ## Degradation
 

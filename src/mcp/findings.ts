@@ -12,6 +12,13 @@
  * hoping a human read it: nothing landed in the store, nothing surfaced in the
  * cockpit, and nothing could act on it later.
  *
+ * The `docs` kind (#397) closes the same gap from the other side: a fact about
+ * the repository that its own documentation does not state is learned *inside*
+ * the task rather than outside it, and had nowhere to go but prose in a
+ * retrospective read once by a person. It rides these rails because the shape is
+ * identical — a provenanced claim an operator promotes or dismisses — and two
+ * gates for one problem is how two gates come to disagree.
+ *
  * ## Does a finding become work? No — deliberately.
  *
  * #108 floats "optionally becomes a queued job". It does not, and the reason is
@@ -39,19 +46,40 @@ import type { Finding, FindingInput, FindingKind } from '../types.js';
 /**
  * The kinds a finding can be.
  *
- * Three, taken from the three things agents concretely could not say (Exhibit C
- * of #108) rather than invented as a taxonomy. What earns each one a slot is that
- * it implies a *different operator action* — that is the axis worth splitting on,
- * and it is why there is no catch-all fourth: a bucket that implies no action is
- * a place for findings to rot, and the summary already carries the detail.
+ * The first three are taken from the three things agents concretely could not
+ * say (Exhibit C of #108) rather than invented as a taxonomy. What earns each one
+ * a slot is that it implies a *different operator action* — that is the axis
+ * worth splitting on, and it is why there is still no catch-all: a bucket that
+ * implies no action is a place for findings to rot, and the summary already
+ * carries the detail.
+ *
+ * `docs` (#397) clears that bar rather than widening it. "Promote → an agent
+ * writes the documentation change and opens a pull request against the worked
+ * repository" is a genuinely different action from closing a duplicate,
+ * unblocking work, or scheduling a bug. It is the fourth answer to the
+ * retrospective's discriminator — does this describe **the repository**, or
+ * **working the repository**? — and the only one that had no rail: a lesson goes
+ * to the store, a defect here, a goal-local fact to the pad, and a fact about the
+ * *code* went into a document read once by a person.
+ *
+ * It is also the one kind that is **not** something noticed outside the agent's
+ * own task. A repo fact is learned *inside* it, at the cost of learning it, which
+ * is exactly why it is worth writing down — and why `report_finding`'s
+ * description can no longer say "NOT your task" as though it covered every kind.
+ * The row needs nothing new to carry one: `summary` is the fact, `where` is the
+ * file that should say it, `detail` is the evidence, and attribution is already
+ * structural.
  */
-export const FINDING_KINDS = ['duplicate', 'blocked', 'out_of_scope'] as const satisfies readonly FindingKind[];
+export const FINDING_KINDS = ['duplicate', 'blocked', 'out_of_scope', 'docs'] as const satisfies readonly FindingKind[];
 
 /** What each kind means, as told to the agent — the description *is* the vocabulary. */
 export const FINDING_KIND_HELP: Record<FindingKind, string> = {
   duplicate: 'this work item is the same work as another one (the operator closes or links one of them)',
   blocked: "the fix needs a change outside what you can touch — another repo, a package you don't own",
   out_of_scope: 'something real you found that is not your task — an unrelated bug, a gap nobody has filed',
+  docs:
+    'something true of this repository that its own documentation does not say — a seam, an invariant, ' +
+    'a second place a thing must be registered (the operator promotes it and an agent opens a docs PR)',
 };
 
 /**
@@ -157,6 +185,13 @@ function findingHeadline(finding: Finding): string {
  * origin — because the promoted agent's first question is always "says who, and
  * were they looking at this or at something else?", and the answer is the one
  * thing a PR comment could never be trusted to keep attached.
+ *
+ * A `docs` finding is promoted through {@link findingDocsFields} and the
+ * `docs-change` template instead, because *how* a documentation change is worded
+ * and where it belongs is house style rather than harness logic. This function
+ * still renders one correctly — `FINDING_KIND_HELP` covers every kind — so an
+ * operator who overrides the prompt by hand gets a sane default and nothing here
+ * has an arm that would go stale unnoticed.
  */
 export function findingJobRequest(finding: Finding): { title: string; prompt: string } {
   const label = `[${finding.kind}]${finding.ref ? ` ${finding.ref}` : ''} `;
@@ -164,8 +199,8 @@ export function findingJobRequest(finding: Finding): { title: string; prompt: st
   const about = finding.ref ? ` about ${finding.ref}` : '';
   const prompt = [
     `An operator promoted a finding${about} into work. It was reported by an agent working ` +
-      `${finding.originRef ?? 'an unrelated task'}, who found it outside its own scope (kind: ${finding.kind} — ` +
-      `${FINDING_KIND_HELP[finding.kind]}).`,
+      `${finding.originRef ?? 'an unrelated task'}, who ${finding.kind === 'docs' ? 'learned it doing that work' : 'found it outside its own scope'} ` +
+      `(kind: ${finding.kind} — ${FINDING_KIND_HELP[finding.kind]}).`,
     '',
     'The report, verbatim:',
     '',
@@ -175,6 +210,42 @@ export function findingJobRequest(finding: Finding): { title: string; prompt: st
       'not to hold, say so and stop rather than inventing work to justify the dispatch.',
   ].join('\n');
   return { title, prompt };
+}
+
+/**
+ * What a promoted `docs` finding is rendered with — the fourth answer to the
+ * retrospective's discriminator, and the only one that ends outside the harness.
+ *
+ * A lesson lives in SQLite because it is **ours**: the harness's operating notes
+ * have no business in someone else's tree. A repo fact is the opposite — it is
+ * **theirs** — so the only honest destination is a pull request a human merges.
+ * Never a direct push, never a commit to the integration branch, never a
+ * documentation change the harness makes to a repository it merely operates. If
+ * that pull request is not opened, nothing has happened, which is correct.
+ *
+ * Pure and template-driven for `finding-ticket`'s reason: *how* a documentation
+ * change should be worded and *where in a tree* it belongs is exactly the house
+ * style an operator override exists for, so it is an entry in the template book
+ * rather than a string built here. Which also means the fields ride in on
+ * placeholders the `docs-change` entry declares, and the whole report goes
+ * through `{summary}` — the same recomposition {@link findingTicketFields} uses,
+ * so an override that never learned about `where` and `detail` still renders
+ * them. → CLAUDE.md, "Prompts and templates".
+ *
+ * `title` is the job's, not the document's: a title in the Up next queue only has
+ * to be recognisable, while what the docs actually end up saying is the judgement
+ * being delegated.
+ */
+export function findingDocsFields(finding: Finding): { title: string; vars: Record<string, string> } {
+  const title = `Document: ${findingHeadline(finding)}`.slice(0, MAX_TITLE);
+  return {
+    title,
+    vars: {
+      ref: finding.ref ?? 'nothing the harness tracks',
+      summary: findingReport(finding),
+      originRef: finding.originRef ?? 'an untracked task',
+    },
+  };
 }
 
 /**

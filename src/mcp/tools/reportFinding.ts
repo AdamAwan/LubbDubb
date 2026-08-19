@@ -4,9 +4,17 @@ import type { ToolFactory } from './context.js';
 
 export const reportFinding: ToolFactory = ({ deps, agent, ok }) => ({
   description:
-    'File something you noticed that is NOT your task — a duplicate, work blocked on something ' +
-    'outside your reach, an unrelated problem you ran into. It lands in the harness and shows up ' +
-    'in the cockpit for an operator, instead of being buried in a PR comment nobody reads. ' +
+    'File something an operator should see that your own task will not deliver. It lands in the ' +
+    'harness and shows up in the cockpit, instead of being buried in a PR comment nobody reads. ' +
+    'Two things come here, and they arrive from opposite directions:\n\n' +
+    '- Something you noticed that is NOT your task — a duplicate, work blocked on something outside ' +
+    'your reach, an unrelated problem you ran into.\n' +
+    '- Something you learned about THIS REPOSITORY, doing your task, that the repository itself does ' +
+    'not say: a seam, an invariant, a second place a thing must be registered — the paragraph you ' +
+    'would have wanted to read before you started. That is kind "docs", and promoted it becomes a ' +
+    "pull request against the repository's own documentation. File it when you learn it; do not " +
+    'save it for a write-up, and do not edit the docs yourself as a sideline to the work you were ' +
+    'sent for.\n\n' +
     'It does NOT create work or dispatch anyone: an operator decides whether it becomes a job. ' +
     'So report it and carry on with your own task — do not wait, and do not go fix it yourself. ' +
     'Report it plainly either way: if another agent already filed the same claim, yours merges ' +
@@ -29,6 +37,7 @@ export const reportFinding: ToolFactory = ({ deps, agent, ok }) => ({
         type: 'string',
         description:
           'Where you saw it: file and line, package, service, endpoint — whatever locates it. ' +
+          'For a "docs" finding, the document you think should say it, if you know which. ' +
           'Omit it when the summary already says, or when there is nowhere to point.',
       },
       detail: {

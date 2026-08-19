@@ -366,10 +366,11 @@ test('a miss names what the harness is tracking instead of just saying no', () =
 
 // -- report_finding's pure layer ---------------------------------------------
 
-test('the finding kinds are the three things agents concretely could not say', () => {
-  // Not a taxonomy: one kind per gap in Exhibit C of #108, each implying a
-  // different operator action. A catch-all fourth would be where findings rot.
-  assert.deepEqual([...FINDING_KINDS], ['duplicate', 'blocked', 'out_of_scope']);
+test('the finding kinds are the four things agents concretely could not say', () => {
+  // Not a taxonomy: one kind per gap — the first three from Exhibit C of #108,
+  // `docs` from #397 — each implying a different operator action. That bar is
+  // what keeps a catch-all out, and a catch-all is where findings would rot.
+  assert.deepEqual([...FINDING_KINDS], ['duplicate', 'blocked', 'out_of_scope', 'docs']);
   for (const kind of FINDING_KINDS) assert.ok(FINDING_KIND_HELP[kind], `${kind} is described to the agent`);
 });
 

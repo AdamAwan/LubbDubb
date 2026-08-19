@@ -736,10 +736,16 @@ class DemoServer {
   async promoteFinding(id: string): Promise<{ ok: true }> {
     const finding = (this.state.findings ?? []).find((f) => f.id === id);
     if (finding && finding.status === 'open') {
-      const title = `[${finding.kind}]${finding.ref ? ` ${finding.ref}` : ''} ${finding.summary.split('\n')[0]!}`.slice(
-        0,
-        80,
-      );
+      const headline = finding.summary.split('\n')[0]!;
+      // A `docs` claim is promoted through the `docs-change` template on the real
+      // backend and lands as "Document: …" in the queue; every other kind keeps
+      // the derived `[kind] ref headline`. Mirrored here so the demo's Up next
+      // shows what the button it just relabelled actually queues.
+      const title = (
+        finding.kind === 'docs'
+          ? `Document: ${headline}`
+          : `[${finding.kind}]${finding.ref ? ` ${finding.ref}` : ''} ${headline}`
+      ).slice(0, 80);
       await this.launchJob({ prompt: finding.summary, title });
       finding.status = 'promoted';
       finding.jobId = this.state.jobs[0]?.id ?? null;

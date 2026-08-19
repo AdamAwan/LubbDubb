@@ -318,13 +318,20 @@ duplicates #41", "the real fix is in a package I don't own", "there's an unrelat
 touched" all ended up in a PR comment, hoping a human read it: nothing landed in the store, nothing
 surfaced in the cockpit, and nothing could act on it later.
 
+The `docs` kind closes the same gap from the other side (#397). A fact about **the repository** that
+its own documentation does not state is learned _inside_ the task rather than beside it, and its only
+destination was prose in a retrospective read once by a person — the fate #355 opened by objecting to.
+It rides these rails rather than a surface of its own because the shape is identical: a provenanced
+claim an operator promotes or dismisses. Two gates for one problem is how two gates come to disagree
+about what "an operator decided" means.
+
 ```ts
 interface Finding {
   id;
   agentId;
   taskId;
   originRef; // from the credential, never from an argument
-  kind: 'duplicate' | 'blocked' | 'out_of_scope';
+  kind: 'duplicate' | 'blocked' | 'out_of_scope' | 'docs';
   ref: string | null; // the world item it is about
   summary; // the claim, one line — validation refuses a newline
   where: string | null; // what locates it: file and line, package, service
@@ -337,19 +344,29 @@ interface Finding {
 }
 ```
 
-### The three kinds
+### The four kinds
 
-Three, taken from three concrete gaps rather than invented as a taxonomy. What earns each a slot is
+Four, taken from four concrete gaps rather than invented as a taxonomy. What earns each a slot is
 that it implies a **different operator action** — that is the axis worth splitting on:
 
-| Kind           | Means                                                                                             | The operator…                     |
-| -------------- | ------------------------------------------------------------------------------------------------- | --------------------------------- |
-| `duplicate`    | This work item is the same work as another one.                                                   | closes or links one of them.      |
-| `blocked`      | The fix needs a change outside what the agent can touch — another repo, a package it doesn't own. | unblocks it or parks it.          |
-| `out_of_scope` | Something real, not the agent's task — an unrelated bug, a gap nobody has filed.                  | decides whether it becomes a job. |
+| Kind           | Means                                                                                             | The operator…                                         |
+| -------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| `duplicate`    | This work item is the same work as another one.                                                   | closes or links one of them.                          |
+| `blocked`      | The fix needs a change outside what the agent can touch — another repo, a package it doesn't own. | unblocks it or parks it.                              |
+| `out_of_scope` | Something real, not the agent's task — an unrelated bug, a gap nobody has filed.                  | decides whether it becomes a job.                     |
+| `docs`         | Something true of this repository that its own documentation does not say.                        | promotes it, and an agent opens a docs PR against it. |
 
-There is deliberately **no catch-all fourth**: a bucket implying no action is where findings rot, and
-the summary is free text already.
+There is still deliberately **no catch-all**: a bucket implying no action is where findings rot, and
+the summary is free text already. `docs` clears the bar rather than widening it — "an agent writes the
+documentation change and opens a pull request" is a genuinely different action from the other three,
+and the row already carries what a docs claim needs: `summary` is the fact, `where` is the document
+that should say it, `detail` is the evidence, and attribution is structural.
+
+**The tension worth stating rather than hiding.** The first three are things noticed _outside_ the
+agent's own task; a repo fact is learned _inside_ it, at the cost of learning it, which is exactly why
+it is worth writing down. So `report_finding`'s description no longer says "NOT your task" as though
+it covered every kind — it names both directions, and the `docs` bullet says to file the fact the
+moment it is learned rather than saving it for a write-up that may summarise it away.
 
 ### The three text fields
 
@@ -471,6 +488,36 @@ The only path from a finding to an agent, and it starts with an operator's click
 - The job is created **first**, then the finding is resolved to `promoted` with the job id — so a
   failed create leaves the finding open.
 - A cycle is kicked.
+
+#### Promoting a `docs` claim
+
+The one arm that does not take the derived prompt. A `docs` finding ends in a **pull request against
+the worked repository**, and how a documentation change should be worded and where in a tree it
+belongs is exactly the house style an override exists for — so it renders `docs-change` from the
+template book, the way filing renders `finding-ticket`. `findingDocsFields(finding)` (pure,
+`src/mcp/findings.ts`) supplies its `{ref}`, `{summary}` and `{originRef}`; the report's `where` and
+`detail` ride in on `{summary}` like everywhere else, so an override that predates them still renders
+them.
+
+- **A `code` job, not a `desk` one.** It writes files in a tree and pushes a branch to open the pull
+  request from, and a desk job would cut neither. The body's `kind` defaults to `code`, which is why
+  nothing here forces it — the cockpit sends no body at all, so every promotion from the panel is a
+  code job, and the override stays available for the operator who wants otherwise, the same as for
+  every kind.
+- The title is `Document: <first line>`, capped at 80 characters. It is the **job's** title, not the
+  document's: what the docs end up saying is the judgement being delegated, and this only has to be
+  recognisable in Up next.
+- **The prompt ends in a pull request, and nothing else finishes it.** Never a direct push, never a
+  commit to the integration branch, never a documentation change the harness makes to a repository it
+  merely operates. If the pull request is not opened, nothing has happened — which is correct: a
+  lesson lives in SQLite because it is _ours_, and a repo fact is _theirs_.
+- It also tells the agent to **check the claim against the code first** and to say so and stop if it
+  does not hold. A document is the wrong place to record a plausible mistake, because everyone after
+  reads it as settled; stopping costs one dispatch and saves a false line nothing would go red about.
+  And to change documentation only — a defect turned up while checking is a separate `report_finding`,
+  not a fix smuggled into a docs PR.
+
+Tests: `test/docsFindings.test.ts`.
 
 ### Filing a ticket
 
@@ -629,12 +676,24 @@ make the claim safe are the reason the store is allowed to exist at all:
 The question that decides it is: does this describe **the repository**, or **working the
 repository**?
 
-| The lesson is…                                                      | Destination                                     | Why                                                            |
-| ------------------------------------------------------------------- | ----------------------------------------------- | -------------------------------------------------------------- |
-| A fact about the code — a seam, an invariant, a second registration | The repo's own docs, as a change a human merges | It is the repo's knowledge and belongs where the repo keeps it |
-| A fact about working the goal                                       | The lesson store, promoted                      | Ours, not theirs; no business in someone else's tree           |
-| A one-off defect noticed in passing                                 | `report_finding` → promotion → job              | Already built above; needs nothing                             |
-| Something true only of this goal                                    | The goal's scratchpad                           | Already built; dies with the goal, correctly                   |
+| The lesson is…                                                      | Destination                                              | Why                                                            |
+| ------------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------- |
+| A fact about the code — a seam, an invariant, a second registration | `report_finding` kind `docs` → promotion → **a docs PR** | It is the repo's knowledge and belongs where the repo keeps it |
+| A fact about working the goal                                       | The lesson store, promoted                               | Ours, not theirs; no business in someone else's tree           |
+| A one-off defect noticed in passing                                 | `report_finding` kind `out_of_scope` → promotion → job   | Already built above; needs nothing                             |
+| Something true only of this goal                                    | The goal's scratchpad                                    | Already built; dies with the goal, correctly                   |
+
+Row one was prose until #397: the `issue-retro` template said "say so in the document; do not file it
+as a lesson", and the document is read once, by a person. Three of the four answers were rails and the
+fourth was not, which made the most durable thing an agent learns the one thing with nowhere to put it.
+It is a rail now, and it stays out of the lesson store on the same argument the store rests on: a claim
+about _working_ the repository is a lesson, and a claim about the repository is theirs.
+
+The discriminator is stated in **three** places for the reason it was already stated in two:
+`issue-retro`'s template is operator-overridable, `retro_submit`'s tool description always arrives,
+and `report_finding`'s description is what an agent that never gets to a retrospective reads — which
+matters most here, because a repo fact is learned mid-run and filing it then beats waiting for a
+retrospective that may summarise it away.
 
 ### The three states, and the two that are one-way
 
@@ -651,10 +710,10 @@ Both transitions are guarded **in the write** (`WHERE id=? AND status=…`), the
 A lesson is proposed from one of two places, and both land `proposed`. There is no arm that writes a
 promoted lesson.
 
-| Writer                | Reaches the store through                  | Provenance                                     |
-| --------------------- | ------------------------------------------ | ---------------------------------------------- |
-| The operator, typing  | `POST /api/lessons`                        | Whatever `originRef` they give, or null        |
-| The retrospective     | `retro_submit`'s `lessons` field (phase 2) | The issue it wrote up — `issue:<n>`, never null |
+| Writer               | Reaches the store through                  | Provenance                                      |
+| -------------------- | ------------------------------------------ | ----------------------------------------------- |
+| The operator, typing | `POST /api/lessons`                        | Whatever `originRef` they give, or null         |
+| The retrospective    | `retro_submit`'s `lessons` field (phase 2) | The issue it wrote up — `issue:<n>`, never null |
 
 Both go through `validateLessonText` in `src/lessons.ts`, which is where the 2,000-character bound
 lives. It is there rather than in either writer because a bound written twice is a bound that
@@ -690,11 +749,11 @@ one or two a reader would thank the agent for.
 
 Two rules decide what happens to the rest, and they differ from the document's on purpose:
 
-| Not filed because…    | What happens        | Why                                                                                                                                                 |
-| --------------------- | ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Over the length bound | **Dropped whole**   | Half a write-up is a shorter write-up; half a lesson is a _different claim_, still promotable — and the safeguard is a person reading the claim.     |
-| Over the count cap    | **Dropped whole**   | Same reason, one level up: the cap exists to protect the reading, so trimming to fit would defeat it.                                                |
-| Anything at all       | **Never a refusal** | The write-up must not sink after the work of assembling it — `MAX_RETRO_DOCUMENT`'s rule, applied to the field beside it.                            |
+| Not filed because…    | What happens        | Why                                                                                                                                              |
+| --------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Over the length bound | **Dropped whole**   | Half a write-up is a shorter write-up; half a lesson is a _different claim_, still promotable — and the safeguard is a person reading the claim. |
+| Over the count cap    | **Dropped whole**   | Same reason, one level up: the cap exists to protect the reading, so trimming to fit would defeat it.                                            |
+| Anything at all       | **Never a refusal** | The write-up must not sink after the work of assembling it — `MAX_RETRO_DOCUMENT`'s rule, applied to the field beside it.                        |
 
 Every drop is counted back to the agent as `lessonsDropped`. A lesson that did not land is one an
 operator will never be asked about, and an agent that believes it filed eight has no other way to
@@ -720,7 +779,7 @@ through `ClaudeArgsOptions` rather than a store handed to `agentProtocol.ts`: th
 unable to read a lesson, and `src/system.ts` — already the composition root — is the only module on
 it that knows lessons exist. A change that needs that assertion relaxed has the seam wrong.
 
-That structural test used to ban the *word*, across four directories. It matches the store's methods
+That structural test used to ban the _word_, across four directories. It matches the store's methods
 instead as of phase 2, because a prompt that tells an agent the channel exists is the dispatcher
 describing a tool rather than a rule consulting the table — and the thing that would actually break
 the invariant is a call.
@@ -729,21 +788,22 @@ the invariant is a call.
 
 Four properties, and each is one of the four the table above rests on, carried through to the render:
 
-| Holds                                           | How                                                                                                                                                                                                                             |
-| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Only vouched-for claims render                  | `renderLessonBlock` filters to `promoted` itself rather than trusting its caller. The gate has no bypass on this path either.                                                                                                    |
-| A reader can date what it is told               | Each lesson renders with the goal it was learned on and the date it was written, under a header saying the repository in front of the agent is the authority. Claims with provenance, not instructions — so a stale one can be discounted. |
-| The cost is bounded                             | `lessonBlockChars` (default 6,000), on **characters**, since a lesson runs from a line to 2,000 of them. `0` renders nothing. → [02](02-configuration.md#agent-launch)                                                          |
-| The drop is visible to the person who can act   | Over the cap, whole lessons are dropped **oldest-vouched first** — never a truncated claim. The **operator** sees which, per row, in the Lessons panel; the **agent** is told nothing about the cap, the drop, or that the list is partial. |
+| Holds                                         | How                                                                                                                                                                                                                                         |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Only vouched-for claims render                | `renderLessonBlock` filters to `promoted` itself rather than trusting its caller. The gate has no bypass on this path either.                                                                                                               |
+| A reader can date what it is told             | Each lesson renders with the goal it was learned on and the date it was written, under a header saying the repository in front of the agent is the authority. Claims with provenance, not instructions — so a stale one can be discounted.  |
+| The cost is bounded                           | `lessonBlockChars` (default 6,000), on **characters**, since a lesson runs from a line to 2,000 of them. `0` renders nothing. → [02](02-configuration.md#agent-launch)                                                                      |
+| The drop is visible to the person who can act | Over the cap, whole lessons are dropped **oldest-vouched first** — never a truncated claim. The **operator** sees which, per row, in the Lessons panel; the **agent** is told nothing about the cap, the drop, or that the list is partial. |
 
 With no promoted lessons, nothing is appended at all — not a header, not a newline — and the launch
 arguments are byte-identical to a build without the feature. A retired lesson stops appearing at the
 agent's **next** launch, not mid-run: the block is re-appended on every launch, `--resume` included,
 so an agent already running keeps the block it started with.
 
-What is still to come, and is deliberately not here: the docs route (#355 phase 4), where a retro
-lesson classified as a fact about the *code* becomes a proposed documentation change rather than a
-store row.
+What the lesson store deliberately does **not** hold: a fact about the _code_. That is a `docs`
+finding (#397, split out of #355 phase 4) — it becomes a proposed documentation change against the
+worked repository rather than a store row, and it reaches no agent's context at all. The cap and the
+visible drop above bound this block; that route touches none of it.
 
 Tests: `test/lessons.test.ts`, and the lessons block in `test/retrospective.test.ts`.
 

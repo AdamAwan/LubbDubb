@@ -1426,8 +1426,9 @@ export function buildDemoState(): DemoSeed {
     // Empty for the same reason `canFileTickets` is false: the demo has no tracker
     // to raise a bug into, so a row here would be a link to nothing.
     bugFilings: [],
-    // What agents noticed outside their own tasks — one of each kind, which is
-    // the whole vocabulary (`report_finding`).
+    // What agents filed for an operator — one of each kind, which is the whole
+    // vocabulary (`report_finding`). Three are things noticed *outside* a task;
+    // the `docs` one arrives from the other direction, which is why it is here.
     findings: [
       {
         id: 'find-1',
@@ -1466,6 +1467,31 @@ export function buildDemoState(): DemoSeed {
         ticketRef: null,
         createdAt: ago(20),
         updatedAt: ago(20),
+      },
+      // A fact about the repository itself, learned *inside* the task rather than
+      // beside it (#397). Its promote button says "Queue docs PR", because what
+      // that click produces is a pull request against the worked repository's own
+      // documentation and not a fix for the thing described.
+      {
+        id: 'find-5',
+        agentId: 'agent-a2',
+        taskId: 'task-a2',
+        originRef: 'issue:376',
+        kind: 'docs',
+        ref: null,
+        summary:
+          'A new retriever must be registered in the factory *and* in the eval harness, or evals silently skip it',
+        where: 'docs/architecture/retrieval.md',
+        detail:
+          'Cost me most of an afternoon: `RETRIEVERS` in `packages/retrieval/src/factory.ts` is what production ' +
+          'reads, and `EVAL_TARGETS` in `eval/src/targets.ts` is a second list nothing checks against it. A ' +
+          'retriever in only the first one works everywhere except the numbers you judge it by. Neither file ' +
+          'mentions the other, and no document says there are two.',
+        status: 'open',
+        jobId: null,
+        ticketRef: null,
+        createdAt: ago(26),
+        updatedAt: ago(26),
       },
       {
         id: 'find-3',
