@@ -417,7 +417,7 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     path: 'worktreePoolSize',
     type: 'number',
     access: 'advanced',
-    why: 'How many worktree slots the pool grows to. Defaults from the agent cap.',
+    why: 'How many worktree slots the pool grows to. Unset, it follows the live agent cap.',
   },
   { path: 'deskRoot', type: 'string', access: 'advanced', why: 'Scratch root for desk agents.' },
   { path: 'attachmentRoot', type: 'string', access: 'advanced', why: 'Where blueprint attachments are written.' },

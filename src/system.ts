@@ -275,6 +275,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const connector = new CompositeConnector(integrations, now);
   const backend = opts.backend ?? new NodePtyBackend();
 
+  // Live, in-memory dispatch controls both the harness and executor read by
+  // reference each cycle. Ephemeral by design: a restart reverts to config. Built
+  // here rather than beside its other consumers because the worktree pool's bound
+  // reads the cap too — see below.
+  const runtimeControl = new RuntimeControl(config.maxConcurrentAgents, config.startPaused);
+
   // Worktrees are a bounded pool of directories leased to branches, not one
   // directory per branch — so a dispatch lands in a tree that still has the last
   // occupant's ignored build state. `held` is the durable half of the lease: it is
@@ -282,10 +288,23 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // what releases one the moment crash recovery settles the task behind it.
   const worktrees =
     opts.worktrees ??
-    new WorktreeManager(config.repoRoot, config.worktreeRoot, {
-      size: config.worktreePoolSize ?? defaultPoolSize(config.maxConcurrentAgents),
-      held: (branch) => store.findActiveTaskByBranch(branch) !== null,
-    });
+    new WorktreeManager(
+      config.repoRoot,
+      config.worktreeRoot,
+      {
+        // A getter, so the bound is the *live* cap's — the same by-reference read
+        // the harness's headroom does. The two are separate limits over one fleet
+        // and the lower wins: read once at boot, a cap raised in the cockpit would
+        // dispatch past the pool and be rejected for want of a directory forever,
+        // which presents as a full queue and an idle fleet with nothing red.
+        // Explicit `worktreePoolSize` still wins, for a disk that cannot hold more.
+        get size() {
+          return config.worktreePoolSize ?? defaultPoolSize(runtimeControl.cap);
+        },
+        held: (branch) => store.findActiveTaskByBranch(branch) !== null,
+      },
+      errors,
+    );
   // Branch reality for plan reconciliation — read-only, and the seam a test swaps
   // to script "has this part pushed" without a repo.
   const gitObserver = opts.gitObserver ?? new GitCliObserver(config.repoRoot);
@@ -565,10 +584,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     bootedAt: opts.bootedAt,
     errors,
   });
-
-  // Live, in-memory dispatch controls both the harness and executor read by
-  // reference each cycle. Ephemeral by design: a restart reverts to config.
-  const runtimeControl = new RuntimeControl(config.maxConcurrentAgents, config.startPaused);
 
   // Recorded before the executor, which asks it whether a rung's merge is already
   // authorized. It reaches nothing but the store and the inbox, so the two are

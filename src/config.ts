@@ -424,17 +424,16 @@ export interface Config {
   /**
    * How many worktree directories the pool may hold at once (issue #352).
    *
-   * Unset — the default — derives it from `maxConcurrentAgents` plus slack, which
-   * is the answer that stays right when an operator changes the cap. Set it only to
-   * override that: a deployment on a small disk wanting fewer full checkouts, or one
-   * whose slots are routinely left carrying uncommitted changes and so needs more.
+   * Unset — the default — derives it from the **live** agent cap plus slack, so the
+   * cap raised through `POST /api/control` raises the pool's ceiling with it. Set it
+   * only to pin that: a deployment on a small disk wanting fewer full checkouts.
+   * Pinning it *below* the cap is a real choice with a real cost — the bound and the
+   * cap are two limits over one fleet and the lower one wins.
    *
    * It is a **hard bound**, and exhaustion rejects the dispatch rather than blocking
    * it — the executor already settles a rejected dispatch and the next cycle tries
-   * again, whereas waiting on a directory would hold the pulse. Read once at boot:
-   * the live cap from `POST /api/control` moves the number of *agents*, not the
-   * number of directories, so raising the cap past the pool trades dispatches for
-   * rejections until the bound is raised too.
+   * again, whereas waiting on a directory would hold the pulse. Growing the ceiling
+   * mints nothing: a slot is created only when a dispatch needs one.
    */
   worktreePoolSize?: number;
   /** Root under which desk (no-code) scratch dirs are created. */

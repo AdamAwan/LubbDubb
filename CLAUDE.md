@@ -282,6 +282,17 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
   `WorktreeManager.ensure`, and anything that frees one goes through `remove` / `deleteBranch` — a
   path that picks a directory itself puts two agents in one tree on different branches.
   → [09](docs/spec/09-execution.md#the-lease)
+- **The pool bound and the agent cap are two limits over one fleet, and the lower one wins.** The
+  bound is `worktreePoolSize` or, unset, the **live** `RuntimeControl.cap` plus slack — read by
+  reference on every `ensure`, exactly as `harness.ts` reads the cap. Snapshot it at boot (or pin
+  `worktreePoolSize` under the cap) and every dispatch above the lower number is refused for want of
+  a directory and retried forever: a full "Up next" queue, an idle fleet, nothing paused and nothing
+  red. A slot stranded carrying uncommitted changes is reclaimed the same way it is refused — only at
+  `acquire`'s dead end, only when nothing holds it, and only by stashing the work to
+  `refs/lubbdubb/salvage/…` first. Anything that reclaims on a schedule instead pays `git status`
+  across every checkout in the pool per pulse; anything that wipes instead of stashing destroys the
+  one copy of an agent's work, and the slot looks identically clean either way.
+  → [09](docs/spec/09-execution.md#exhaustion)
 - **`resolveCommit` prefers `origin/<ref>` over the local ref** and returns a SHA, because the
   harness's clone never checks the integration branch out. New `GitObserver` methods stay read-only
   and fetch-free.
