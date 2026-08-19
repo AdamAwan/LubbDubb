@@ -137,6 +137,28 @@ export interface IssueCommentInput {
   commentRef: string | null;
 }
 
+/**
+ * Where a filing would land and who it would be filed by — the answer to "can I
+ * file, and where, and as whom", asked live rather than read off config
+ * (issue #413).
+ *
+ * Config already says which tracker is *selected*; what it cannot say is whether
+ * the credential behind it still works, and that is the half worth asking before
+ * an operator types a report into a box. So this is resolved by a real provider
+ * call and **throws** when the provider will not answer — a dead token is the
+ * outcome this exists to catch, not an inconvenience to hide.
+ *
+ * `identity` is null for a provider with no notion of who is authenticated (the
+ * fake), never an invented name: "filing as nobody in particular" is a true thing
+ * to show an operator and a made-up login is not.
+ */
+export interface FilingTarget {
+  /** The destination in the provider's own vocabulary — `octo/demo`, `contoso/Web`. */
+  target: string;
+  /** Who the credential authenticates as, or null where the provider has no such notion. */
+  identity: string | null;
+}
+
 export interface SendResult {
   ok: boolean;
   /** A provider-side reference for the sent artifact (e.g. a comment id/URL), for the audit log. */

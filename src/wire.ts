@@ -35,6 +35,7 @@
  * a key that is always sent but may be empty is `| null`.
  */
 
+import type { FilingTarget } from './sink/actionSink.js';
 import type { PlanDiff } from './plans/planDiff.js';
 import type { AcceptanceCriterion } from './plans/parts.js';
 import type { PlanningPolicy } from './plans/planning.js';
@@ -822,6 +823,51 @@ export interface TicketRow {
   parent?: { number: number; title: string } | null;
   /** The parent's hue slot, so a row can be drawn in its feature's colour. */
   featureSlot: number | null;
+}
+
+/**
+ * `GET /api/issues/filing-target` — whether the harness can file an issue right
+ * now, where it would land, and as whom (issue #413).
+ *
+ * A **union rather than four independent fields**, because the two readings are
+ * not the same row with blanks in it: an available target always names itself and
+ * an unavailable one always says why, and a shape that allowed
+ * `{available: true, target: null}` would leave the compose modal free to draw a
+ * head naming nowhere.
+ *
+ * Never on `/api/state`: it costs a provider round trip, and the only reader is a
+ * modal that opens rarely. The static half of the gate — whether a real tracker is
+ * configured at all — is already on the snapshot as
+ * {@link CockpitConfig.canFileTickets}, and is the cheaper cut to make first.
+ *
+ * `available: false` is an ordinary **200**, not a 5xx: "the token is dead" is an
+ * answer to the question that was asked, and a status code would make it look like
+ * the probe itself broke.
+ */
+export type FilingTargetProbe =
+  | ({ available: true; reason: null } & FilingTarget)
+  | {
+      available: false;
+      target: null;
+      identity: null;
+      /** Plain prose for the modal to show — the provider's own message, or the gate that refused. */
+      reason: string;
+    };
+
+/**
+ * `POST /api/issues` — what the harness created, in the harness's own vocabulary
+ * (issue #413).
+ *
+ * `url` is resolved rather than composed: the connector knows the repository
+ * identity and the cockpit does not, and it is what lets the modal's success state
+ * be a link to the thing that was just filed rather than a number to go and find.
+ * Null where no provider can resolve a ref — the fake world has no web address.
+ */
+export interface IssueFiled {
+  ok: true;
+  /** The new item as `issue:<n>` — what a filing row stores and `link_ticket` speaks. */
+  ref: string;
+  url: string | null;
 }
 
 /**

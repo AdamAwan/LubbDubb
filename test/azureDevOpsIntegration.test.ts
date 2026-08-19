@@ -1016,6 +1016,19 @@ test('work items snapshot maps state / tags→labels / linked PR', async () => {
   store.close();
 });
 
+test('the filing-target probe names the project and the authenticated identity', async () => {
+  const { api } = fakeApi({ viewer: 'adam@contoso.com' });
+  const issues = new AzureDevOpsWorkItemsIntegration({ api, organization: 'contoso', project: 'Web' });
+
+  // The **project**, not the repository: work items belong to the project, and
+  // naming the repo would point an operator at the wrong half of the target
+  // (issue #413).
+  assert.deepEqual(await issues.describeFilingTarget(), {
+    target: 'contoso/Web',
+    identity: 'adam@contoso.com',
+  });
+});
+
 test('createIssue creates the work item as its type, tagged and assigned, in one write', async () => {
   const { api, recorded } = fakeApi({ createdWorkItemId: 314 });
   const issues = new AzureDevOpsWorkItemsIntegration({ api });

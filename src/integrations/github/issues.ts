@@ -1,5 +1,11 @@
 import type { ErrorRecorder } from '../../errorLog.js';
-import type { IssueCommentInput, IssueCreateInput, IssueLabelInput, SendResult } from '../../sink/actionSink.js';
+import type {
+  FilingTarget,
+  IssueCommentInput,
+  IssueCreateInput,
+  IssueLabelInput,
+  SendResult,
+} from '../../sink/actionSink.js';
 import type { Issue, IssueState, TrackerItem } from '../../types.js';
 import type {
   Capability,
@@ -114,6 +120,21 @@ export class GitHubIssuesIntegration
       assignee: input.assignee,
     });
     return { ok: true, ref: `issue:${created.number}` };
+  }
+
+  /**
+   * Where a filing would land and as whom (issue #413).
+   *
+   * `viewerLogin()` is the probe rather than a call invented for it: it is one
+   * authenticated round trip that a revoked or expired `GITHUB_TOKEN` fails
+   * outright, which is the only thing about filing that boot cannot already prove.
+   * Owner and repo come from the same opts ref resolution uses, so the name the
+   * cockpit shows is the repository links go to.
+   */
+  async describeFilingTarget(): Promise<FilingTarget> {
+    const identity = await this.opts.api.viewerLogin();
+    const { owner, repo } = this.opts;
+    return { target: owner && repo ? `${owner}/${repo}` : 'an unnamed GitHub repository', identity };
   }
 
   /** The outbound side of the cockpit's watch/ignore toggle. PRs and issues share the labels API. */
