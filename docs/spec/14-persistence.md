@@ -381,6 +381,24 @@ first. It is what the prior-work briefing's file section renders
 - **No promotion flag and no tool on the returned row.** The reader renders neither, and a field carried
   but unrendered is one a later reader has to guess the meaning of.
 
+`listGoalNeighbours(goalRef, paths)` asks the same table the other way round: which **other** goals have
+been in any of `paths`, folded to one `GoalNeighbour` (`goalRef`, `retroSummary`, `sharedPaths`,
+`lastWriteAt`) per goal. It is the briefing's neighbour section
+([09](09-execution.md#what-earlier-agents-worked-out-reaches-the-next-one)). It inherits the code-tasks
+narrowing and the prefix scoping above, and settles three more:
+
+- **The retrospective is the join, not a filter after it.** `retrospectives.origin_ref` is always the
+  `issue:<n>` root (`retroSubmitOrigin` resolves it), so joining `tasks` to it on `origin_ref` or
+  `origin_ref || ':%'` yields the neighbour's goal ref, the "this goal is finished" gate and the summary
+  being handed over in one pass — and the pattern carries no `LIKE` wildcards, so `issue:1` still does
+  not reach `issue:12`.
+- **A goal still being worked is excluded by that gate and by no other**, rather than by a second
+  liveness predicate. One reading of "finished" in the codebase, not two.
+- **Paths are folded in TypeScript, not with `group_concat`.** A path is arbitrary text, so any
+  separator that joins one is a separator a path may itself contain. Rows come back ordered newest
+  first, so the first row for a goal dates it and the fold's insertion order is the order the reader
+  renders — no sort after the query, and none by overlap count, which would be a ranking.
+
 ### Findings
 
 `recordFinding(agentId, taskId, originRef, input)` → `{finding, created}`; a verbatim repeat refreshes

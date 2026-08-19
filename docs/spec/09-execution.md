@@ -305,8 +305,9 @@ prompt.
   `outOfScope`**, which reach the plan sheet and no agent — and on a one-part plan are the entire
   product of a code agent that read the whole repository, while rule `issue-pickup`'s prompt is the issue title and
   body; a part's **`rationale` / `acceptance`**, stored and rendered nowhere at all; the **prose
-  behind each standing verdict** (assay, conclusion, delivery, shortfall); and **the paths the goal has
-  been edited in**. It therefore omits
+  behind each standing verdict** (assay, conclusion, delivery, shortfall); **the paths the goal has
+  been edited in**; and **the retrospectives of the goals that have been in those same paths**. It
+  therefore omits
   `plan.reason` (rendered by `currentPlanSummary` to a replanner and as `{plan}` to a part agent) and a
   part's status, branch and PR number (`currentPlanSummary`, `siblingContext`).
 - **No world facts.** A pull request's state is live through `world_read`; pasted into a prompt it would
@@ -327,6 +328,34 @@ prompt.
   - **Promoted paths are in it and unmarked**, and it **stays on for a part dispatch**: `forPart`
     suppresses the parts section alone, because `siblingContext` renders what a sibling was _for_ and
     nowhere renders where it has been.
+- **Other goals that have been in these same files** (issue #354, phase 2) is that join asked once more
+  with a goal on the far side of it, and it sits last of all — under the index it is derived from. One
+  line per neighbour: the paths in common, then its retrospective summary quoted whole, from
+  `Store.listGoalNeighbours` ([14](14-persistence.md#flags-and-files)). It answers the same two rules
+  the same way, and settles three things of its own:
+  - **"Closed" is spelled `has a retrospective`, and that is the world-fact rule rather than a
+    shortcut.** Whether an issue is closed is a fact about the world *now*; a retrospective is a row
+    this database owns, written by rule `issue-retro` only once a goal is done. So it is the harness's
+    own stored answer to the same question, and it is the thing being handed over besides — the gate
+    and the payload are one join. A goal still being worked is therefore absent with no second liveness
+    predicate: `detectFileOverlaps` owns "is this happening now"
+    ([12](12-artifacts-and-files.md#file-overlap-detection)), and a briefing with an opinion on that
+    would be the drift both modules exist to avoid.
+  - **It is not sorted by overlap.** Neighbours come back by the recency of their last write, a stored
+    timestamp, and the number of shared paths is *stated* rather than allowed to rank — "most
+    overlapping" is a relevance score, which is the judgement the section above refuses in the same
+    words.
+  - **The summary is quoted, not pointed at**, because no tool an agent has reaches another goal's
+    write-up — `scratch_read` is scoped to the caller's own pad. The sentence is therefore the whole
+    delivery, and the document stays where it is. The section **stays on for a part dispatch** for a
+    stronger version of the file list's reason: it is about goals no sibling was ever part of, so there
+    is no surface it could duplicate.
+- **The neighbour query is seeded from two places**, `neighbourSeedPaths`: the paths this goal has been
+  edited in, and the paths its plan cites as `evidence`. The second exists because the first is empty on
+  exactly the dispatch the lookup is worth most on — a goal's file rows appear only once an agent has
+  written under it, while a plan's evidence is written before any part is dispatched. They mean
+  different things and neither is widened into the other; what keeps that honest is that the section
+  names the paths a neighbour **shares** and never claims this goal edited them.
 - **Scoped by `padOriginFor`, not a fresh predicate** — already the harness's answer to "which goal is
   this agent working": the `issue:<n>` root plus its `:plan`, `:assay`, `:assess` and `:part:<slug>`
   arms. Everything else (a PR concern, a job, a filing) is handed nothing, which is the rejection note's
@@ -341,10 +370,12 @@ prompt.
 - **Bounded, and it names what it dropped.** Appended text lands after the cached prefix, so a briefing
   is fresh input tokens on every dispatch. An untouched goal renders the empty string, so a first
   agent's prompt is byte-identical to one composed before this existed; the pad is capped at the most
-  recent 15 entries, the file list at the most recent 25 paths and the write-up at 4 000 characters,
-  with the elision stated and `scratch_read` named, or a partial record reads as the whole one. The
-  file cap is the tightest because it is the one section that scales with the **size** of the work
-  rather than with what anyone chose to write down.
+  recent 15 entries, the file list at the most recent 25 paths, the neighbour list at 4 goals of 4 named
+  paths each and the write-up at 4 000 characters, with the elision stated and `scratch_read` named, or
+  a partial record reads as the whole one. The file cap is tight because it is the section that scales
+  with the **size** of the work rather than with what anyone chose to write down; the neighbour cap is
+  tighter still, because each of its lines carries a whole summary and is a pointer to work done
+  somewhere else.
 
 ## The operator's own instructions reach the agent
 

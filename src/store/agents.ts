@@ -7,6 +7,7 @@ import type {
   AgentFlagInput,
   AgentUsage,
   GoalFile,
+  GoalNeighbour,
   UsageEvent,
 } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
@@ -335,6 +336,72 @@ export class AgentStore {
       )
       .all(goalRef, `${goalRef}:%`) as { path: string; origin_ref: string; created_at: string }[];
     return rows.map((r) => ({ path: r.path, originRef: r.origin_ref, createdAt: r.created_at }));
+  }
+
+  /**
+   * Which **other** goals have already been in `paths`, and what each one's
+   * retrospective said — {@link listGoalFiles}'s join with a goal on the far side
+   * of it rather than the near one (issue #354, phase 2).
+   *
+   * **"Closed" is spelled `has a retrospective`, and that is not a shortcut.** An
+   * issue's open/closed state is a *world* fact, and the briefing this feeds
+   * refuses those on principle: pasted into a prompt it would be a stale second
+   * reading of something `world_read` answers properly. A retrospective is a row
+   * this database owns, written by rule `issue-retro` only once a goal is done —
+   * so it is the harness's own stored answer to the same question, and it is also
+   * the thing being handed over. The gate and the payload are one join.
+   *
+   * **The liveness test is dropped, not inverted.** `detectFileOverlaps` scopes to
+   * concurrently-live agents because it is answering "is this happening now"; this
+   * asks who has been here before. A goal still being worked is excluded anyway, by
+   * the retrospective gate rather than by a second liveness predicate — one reading
+   * of "finished", not two.
+   *
+   * **Code tasks only, and the subtree is a prefix**, both {@link listGoalFiles}'s
+   * rules for its reasons. The prefix is built from `retrospectives.origin_ref`,
+   * which is always the `issue:<n>` root (`retroSubmitOrigin` resolves it), so it
+   * carries no `LIKE` wildcards and `issue:1` never reaches `issue:12`.
+   *
+   * **No ranking.** Neighbours come back by the recency of their last write and
+   * ties break on the ref, which is a stored timestamp and a stored key. Ordering
+   * them by how many paths they share would be a relevance score — the second
+   * opinion about somebody else's work that `priorWork.ts` and `retroDossier` both
+   * refuse — so the count is stated by the reader and never sorts the list.
+   */
+  listGoalNeighbours(goalRef: string, paths: string[]): GoalNeighbour[] {
+    if (paths.length === 0) return [];
+    const holes = paths.map(() => '?').join(',');
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT r.origin_ref AS goal_ref, r.summary AS summary, f.path AS path,
+                MAX(f.created_at) AS created_at
+           FROM agent_files f
+           JOIN agents a ON a.id = f.agent_id
+           JOIN tasks t ON t.id = a.task_id
+           JOIN retrospectives r
+             ON t.origin_ref = r.origin_ref OR t.origin_ref LIKE r.origin_ref || ':%'
+          WHERE t.kind = 'code' AND r.origin_ref <> ? AND f.path IN (${holes})
+          GROUP BY r.origin_ref, f.path
+          ORDER BY created_at DESC, r.origin_ref ASC, f.path ASC`,
+      )
+      .all(goalRef, ...paths) as { goal_ref: string; summary: string; path: string; created_at: string }[];
+    // Folded here rather than with a `group_concat`, because a path is arbitrary
+    // text and any separator that joins it is one a path may contain.
+    const byGoal = new Map<string, GoalNeighbour>();
+    for (const row of rows) {
+      const seen = byGoal.get(row.goal_ref);
+      if (seen) seen.sharedPaths.push(row.path);
+      // Rows arrive newest-first, so the first one for a goal is the write that
+      // dates it and insertion order is the order the caller renders.
+      else
+        byGoal.set(row.goal_ref, {
+          goalRef: row.goal_ref,
+          retroSummary: row.summary,
+          sharedPaths: [row.path],
+          lastWriteAt: row.created_at,
+        });
+    }
+    return [...byGoal.values()];
   }
 
   /** Every recorded file across all agents, newest first — the snapshot feed. */

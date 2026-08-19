@@ -947,6 +947,31 @@ export interface GoalFile {
   createdAt: string;
 }
 
+/**
+ * Another goal that has been in the same files as this one, and what its
+ * retrospective said about the run.
+ *
+ * The neighbour is keyed on the **goal**, not the agent that did the writing:
+ * `detectFileOverlaps` answers "who is editing this path right now" and this
+ * answers "who has been here before", so the unit is the thing that has a
+ * write-up. → `Store.listGoalNeighbours`.
+ */
+export interface GoalNeighbour {
+  /** The neighbour goal, always the `issue:<n>` root — a retrospective's own key. */
+  goalRef: string;
+  /**
+   * The neighbour's retrospective summary, quoted whole. Carried rather than
+   * pointed at because no tool an agent has reaches another goal's write-up:
+   * `scratch_read` is scoped to the caller's own pad, and this is the only place
+   * the sentence is ever put in front of them.
+   */
+  retroSummary: string;
+  /** The paths both goals have been in, the neighbour's most recent write first. */
+  sharedPaths: string[];
+  /** The neighbour's most recent write among those paths. */
+  lastWriteAt: string;
+}
+
 // ---------------------------------------------------------------------------
 // Findings (what an agent discovers outside its own task)
 // ---------------------------------------------------------------------------
