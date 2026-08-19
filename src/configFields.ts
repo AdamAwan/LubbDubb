@@ -1,0 +1,511 @@
+import { defaultConfig, type Config } from './config.js';
+
+/**
+ * What every configurable leaf *is* — the one declaration the config form, the
+ * save validator, the live-apply switch and the reset action all read from.
+ *
+ * `RunningConfigEntry` carries `value: unknown`, which is enough to draw a value
+ * back and nothing like enough to draw a control for it: a form generator has no
+ * way to tell a number from a duration from a three-member enum, and four
+ * consumers each guessing separately is four places to disagree. So the type, the
+ * members, the reach and the reason live here once.
+ *
+ * What is deliberately *not* here is liveness. Whether saving a key takes effect
+ * now is decided by whether `configApply.ts` has an arm that re-seats whoever
+ * holds it — a fact about the wiring, not a claim a table can make. A list here
+ * saying "these read late so they're fine" would be right the day it was written
+ * and wrong the day someone hoists `config.heartbeatIntervalMs` into a const,
+ * with nothing red. → `docs/spec/02-configuration.md#liveness`
+ */
+export type ConfigFieldType = 'number' | 'boolean' | 'string' | 'enum' | 'stringList' | 'json';
+
+/**
+ * How far an operator has to reach to edit a field.
+ *
+ * `advanced` is not "harder", it is "this one can lock you out of the cockpit or
+ * point the fleet at the wrong repository" — Paths, Server, and the agent command
+ * line. `fileOnly` is for a field no form should offer: `whitelistedApprovals`
+ * types text into an agent's session on a substring match, which is a thing to
+ * write deliberately in a file rather than to fill in beside twenty other rows.
+ */
+export type ConfigFieldAccess = 'plain' | 'advanced' | 'fileOnly';
+
+interface ConfigField {
+  /** Dotted path into the config object, e.g. `planning.requireApproval`. */
+  path: string;
+  type: ConfigFieldType;
+  /** The members, for an `enum`. */
+  options?: readonly string[];
+  access: ConfigFieldAccess;
+  /** One line, shown under the key. The reason it exists, not a restatement of its name. */
+  why: string;
+  /**
+   * The environment variable that beats the file for this key. A field carrying
+   * one is drawn as overridden and refused for edit whenever it is set: the file
+   * would be written and nothing would change, which is the silent kind of
+   * failure this repo refuses to ship.
+   */
+  env?: string;
+  /** A duration in milliseconds, so the cockpit can say "5m" beside the number. */
+  ms?: boolean;
+}
+
+/**
+ * Every leaf, in no particular order — display order is `GROUPS` in
+ * `server/runningConfig.ts`, which groups by the first path segment.
+ *
+ * A `json` field is edited whole because it has no fixed shape to draw: an
+ * ordered rule list where the order *is* the semantics (`ci.checks`), or a map
+ * whose keys the operator invents (`issuePriorityLabels`, `agentModels`).
+ */
+export const CONFIG_FIELDS: readonly ConfigField[] = [
+  // ---- Dispatch ----------------------------------------------------------
+  {
+    path: 'heartbeatIntervalMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'Gap between timer-driven cycles.',
+  },
+  {
+    path: 'maxConcurrentAgents',
+    type: 'number',
+    access: 'plain',
+    why: 'Hard cap on concurrently-running agents. Seeds the live cap, which a restart reverts to.',
+  },
+  {
+    path: 'startPaused',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Boot with dispatch paused. Live pause/resume is ephemeral and separate.',
+  },
+  {
+    path: 'closedPrWindowMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How far back a provider looks for pull requests that have left the open set.',
+  },
+  {
+    path: 'upNextOverrideTtlMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How long an operator’s Up next override outranks the dispatcher’s own order.',
+  },
+
+  // ---- Agents ------------------------------------------------------------
+  {
+    path: 'agentMode',
+    type: 'enum',
+    options: ['stream', 'pty', 'raw'],
+    access: 'plain',
+    why: 'How agents are launched. The runtime object is picked once, at boot.',
+  },
+  {
+    path: 'agentPermissionMode',
+    type: 'string',
+    access: 'plain',
+    why: 'Permission posture handed to each agent. `bypassPermissions` is refused under root.',
+  },
+  {
+    path: 'agentModels',
+    type: 'json',
+    access: 'plain',
+    why: 'Which model each rule and each pinned profile dispatches on.',
+  },
+  {
+    path: 'agentAllowedTools',
+    type: 'stringList',
+    access: 'plain',
+    why: 'Tools an agent may use without asking. Rides in --settings, not --allowedTools.',
+  },
+  {
+    path: 'agentPromptDelayMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'Wait before the prompt is delivered.',
+  },
+  {
+    path: 'agentSubmitDelayMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'Gap between a PTY message and the carriage return that submits it.',
+  },
+  {
+    path: 'agentIdleWaitMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How long a silent agent is left before it is read as waiting.',
+  },
+  {
+    path: 'agentWaitingPatterns',
+    type: 'stringList',
+    access: 'plain',
+    why: 'Extra output patterns that mean an agent is waiting on a person.',
+  },
+  {
+    path: 'agentStallNudges',
+    type: 'number',
+    access: 'plain',
+    why: 'Nudges a stalled agent gets before it is given up on.',
+  },
+  {
+    path: 'agentResumeAttempts',
+    type: 'number',
+    access: 'plain',
+    why: 'How many times a mid-run crash is re-attached before the run is failed.',
+  },
+  {
+    path: 'lessonBlockChars',
+    type: 'number',
+    access: 'plain',
+    why: 'Cap on the lesson block an agent is launched with. Read at every launch.',
+  },
+  {
+    path: 'whitelistedApprovals',
+    type: 'json',
+    access: 'fileOnly',
+    why: 'Prompt substrings the harness may answer on your behalf. Written deliberately, in the file.',
+  },
+  {
+    path: 'claudeCommand',
+    type: 'string',
+    access: 'advanced',
+    why: 'The agent binary to launch.',
+  },
+  {
+    path: 'claudeArgs',
+    type: 'stringList',
+    access: 'advanced',
+    why: 'Extra arguments, appended last — an --allowedTools here silently drops the harness’s MCP grants.',
+  },
+  {
+    path: 'sessionTranscriptRoot',
+    type: 'string',
+    access: 'advanced',
+    why: 'Where agent session transcripts are read from.',
+  },
+
+  // ---- Integrations ------------------------------------------------------
+  {
+    path: 'integrations.sourceControl',
+    type: 'enum',
+    options: ['fake', 'github', 'azure'],
+    access: 'plain',
+    why: 'Which provider fulfils pull requests and branches.',
+  },
+  {
+    path: 'integrations.issues',
+    type: 'enum',
+    options: ['fake', 'github', 'azure'],
+    access: 'plain',
+    why: 'Which provider fulfils issues.',
+  },
+  {
+    path: 'userId',
+    type: 'string',
+    access: 'plain',
+    why: 'Who this harness acts as. Gates pickup ownership, filing assignment and PR authorship together.',
+  },
+  { path: 'github.owner', type: 'string', access: 'plain', why: 'Repository owner (user or org).' },
+  { path: 'github.repo', type: 'string', access: 'plain', why: 'Repository name.' },
+  {
+    path: 'azureDevOps.organization',
+    type: 'string',
+    access: 'plain',
+    why: 'The dev.azure.com/{organization} segment.',
+  },
+  { path: 'azureDevOps.project', type: 'string', access: 'plain', why: 'Project name — work items are scoped to it.' },
+  {
+    path: 'azureDevOps.repository',
+    type: 'string',
+    access: 'plain',
+    why: 'Git repository name within the project.',
+  },
+  {
+    path: 'azureDevOps.filters.workItemTag',
+    type: 'string',
+    access: 'plain',
+    why: 'Only surface work items carrying this tag.',
+  },
+  {
+    path: 'azureDevOps.policyChecks',
+    type: 'json',
+    access: 'plain',
+    why: 'Which branch-policy kinds become CI checks, and how.',
+  },
+  {
+    path: 'labelPrefix',
+    type: 'string',
+    access: 'plain',
+    why: 'Derives the ${prefix}-watch tag behind the cockpit’s watch toggle. Empty turns the gate off.',
+  },
+  {
+    path: 'issuePriorityLabels',
+    type: 'json',
+    access: 'plain',
+    why: 'Label → weight, for ordering pickup when headroom is short.',
+  },
+  {
+    path: 'issueDefaultPriority',
+    type: 'number',
+    access: 'plain',
+    why: 'Weight for an issue carrying no matching priority label.',
+  },
+  {
+    path: 'issuePickupStates',
+    type: 'stringList',
+    access: 'plain',
+    why: 'Only pick up items in these provider-native states. Empty = no state gate.',
+  },
+  {
+    path: 'issueInReviewState',
+    type: 'string',
+    access: 'plain',
+    why: 'State an item moves to once a pull request is open for it.',
+  },
+  {
+    path: 'issueContainerTypes',
+    type: 'stringList',
+    access: 'plain',
+    why: 'Item types that hold work rather than being work. Their children are the work.',
+  },
+  {
+    path: 'issueFilingTypes',
+    type: 'stringList',
+    access: 'plain',
+    why: 'The work item types the harness may file. Passed to the provider verbatim.',
+  },
+
+  // ---- Features ----------------------------------------------------------
+  {
+    path: 'planning.maxConcurrentPartsPerIssue',
+    type: 'number',
+    access: 'plain',
+    why: 'How many parts of one plan may have agents at once.',
+  },
+  {
+    path: 'planning.requireApproval',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Put a planner’s verdict to you before anything is scheduled from it.',
+  },
+  {
+    path: 'planning.gitFetchIntervalMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'Minimum gap between the fetches plan reconciliation runs before reading branch reality.',
+  },
+  { path: 'validation.desktop', type: 'boolean', access: 'plain', why: 'The desktop channel for validation checks.' },
+  {
+    path: 'validation.desktopClaimMinutes',
+    type: 'number',
+    access: 'plain',
+    why: 'How long a claimed validation check is held before it is offered again.',
+  },
+  {
+    path: 'validation.desktopSocketPath',
+    type: 'string',
+    access: 'advanced',
+    why: 'Where the desktop channel binds.',
+  },
+  {
+    path: 'validation.desktopCredentialPath',
+    type: 'string',
+    access: 'advanced',
+    why: 'Where the desktop channel’s minted token is written.',
+  },
+  {
+    path: 'spendBurn.enabled',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Watch a run spending past what its kind costs.',
+  },
+  {
+    path: 'spendBurn.multiple',
+    type: 'number',
+    access: 'plain',
+    why: 'How many times the typical cost counts as burning. Must be above 1.',
+  },
+  {
+    path: 'spendBurn.minimumRuns',
+    type: 'number',
+    access: 'plain',
+    why: 'How many comparable runs are needed before the watch has an opinion.',
+  },
+  { path: 'spendBurn.floorUsd', type: 'number', access: 'plain', why: 'Spend below which nothing is ever flagged.' },
+  {
+    path: 'spendBurn.ceilingUsd',
+    type: 'number',
+    access: 'plain',
+    why: 'Spend above which a run is flagged whatever its comparables say.',
+  },
+  { path: 'selfUpdate.enabled', type: 'boolean', access: 'plain', why: 'Check this build against its upstream.' },
+  { path: 'selfUpdate.remote', type: 'string', access: 'plain', why: 'The remote the build is checked against.' },
+  { path: 'selfUpdate.branch', type: 'string', access: 'plain', why: 'The branch the build is checked against.' },
+  {
+    path: 'selfUpdate.checkIntervalMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How often the upstream tip is read.',
+  },
+  {
+    path: 'ci.checks',
+    type: 'json',
+    access: 'plain',
+    why: 'What a red check gets, first match wins — so the order is the policy.',
+  },
+
+  // ---- Paths -------------------------------------------------------------
+  {
+    path: 'repoRoot',
+    type: 'string',
+    access: 'advanced',
+    env: 'LUBBDUBB_REPO_ROOT',
+    why: 'The git repository worktrees are cut from.',
+  },
+  {
+    path: 'defaultBranch',
+    type: 'string',
+    access: 'advanced',
+    why: 'The integration branch. Not auto-detected.',
+  },
+  { path: 'worktreeRoot', type: 'string', access: 'advanced', why: 'Root for the pool of worktree slot directories.' },
+  {
+    path: 'worktreePoolSize',
+    type: 'number',
+    access: 'advanced',
+    why: 'How many worktree slots the pool grows to. Defaults from the agent cap.',
+  },
+  { path: 'deskRoot', type: 'string', access: 'advanced', why: 'Scratch root for desk agents.' },
+  { path: 'attachmentRoot', type: 'string', access: 'advanced', why: 'Where blueprint attachments are written.' },
+  { path: 'validationRoot', type: 'string', access: 'advanced', why: 'Where validation resources are written.' },
+  { path: 'promptTemplatesDir', type: 'string', access: 'advanced', why: 'Where prompt-book overrides are read from.' },
+  {
+    path: 'docsFolderPrefix',
+    type: 'json',
+    access: 'advanced',
+    why: 'Path prefixes an agent’s artifacts may be read from.',
+  },
+  {
+    path: 'dbPath',
+    type: 'string',
+    access: 'advanced',
+    env: 'LUBBDUBB_DB',
+    why: 'SQLite file.',
+  },
+
+  // ---- Server ------------------------------------------------------------
+  { path: 'port', type: 'number', access: 'advanced', env: 'PORT', why: 'HTTP/WS port.' },
+  {
+    path: 'host',
+    type: 'string',
+    access: 'advanced',
+    env: 'LUBBDUBB_HOST',
+    why: 'Bind address. Anything off-loopback requires auth.enabled.',
+  },
+  {
+    path: 'auth.enabled',
+    type: 'boolean',
+    access: 'advanced',
+    why: 'Require a bearer token on /api/* and /ws.',
+  },
+  {
+    path: 'auth.tokenFile',
+    type: 'string',
+    access: 'advanced',
+    why: 'Where a minted token is persisted. Ignored when LUBBDUBB_TOKEN is set.',
+  },
+];
+
+const BY_PATH = new Map(CONFIG_FIELDS.map((field) => [field.path, field]));
+
+/** The declaration for one dotted path, or undefined for a path nothing declares. */
+export function configField(path: string): ConfigField | undefined {
+  return BY_PATH.get(path);
+}
+
+/** Read a dotted path out of a config object. `undefined` for an unset optional. */
+export function readPath(config: Config, path: string): unknown {
+  let cursor: unknown = config;
+  for (const segment of path.split('.')) {
+    if (typeof cursor !== 'object' || cursor === null) return undefined;
+    cursor = (cursor as Record<string, unknown>)[segment];
+  }
+  return cursor;
+}
+
+/**
+ * The environment variable currently overriding this field, if any.
+ *
+ * Read from `process.env` at call time rather than captured, because the answer
+ * is about the process the operator is looking at — and a captured copy is one
+ * more thing that can disagree with `loadDeploymentConfig`, which reads it live.
+ */
+export function envOverride(field: ConfigField): string | undefined {
+  return field.env && process.env[field.env] ? field.env : undefined;
+}
+
+/**
+ * Why this value cannot be saved into this field, or null.
+ *
+ * The loader does not type-check the file — `loadDeploymentConfig` casts a parsed
+ * object to `Partial<Config>`, so `"port": "4300"` boots and fails later, at the
+ * point something tries to listen on a string. A form that can only emit values
+ * of the declared type is a real improvement on that, and this is where it is
+ * made true rather than in the widget: a widget checks what it drew, and the
+ * route is what anything else reaches.
+ *
+ * What it deliberately does not check is *meaning* — whether a burn multiple is
+ * above 1, whether a CI rule's `onFailure` is a real routing. Those are
+ * `loadConfig`'s, and a save is validated by building the config it would produce
+ * so they answer for themselves. Two checks for one question is how two checks
+ * come to disagree.
+ */
+export function fieldValueRefusal(field: ConfigField, value: unknown): string | null {
+  switch (field.type) {
+    case 'number':
+      return typeof value === 'number' && Number.isFinite(value) ? null : `${field.path} must be a number`;
+    case 'boolean':
+      return typeof value === 'boolean' ? null : `${field.path} must be true or false`;
+    case 'string':
+      return typeof value === 'string' ? null : `${field.path} must be a string`;
+    case 'enum':
+      return typeof value === 'string' && field.options?.includes(value)
+        ? null
+        : `${field.path} must be one of ${field.options?.join(', ')}`;
+    case 'stringList':
+      return Array.isArray(value) && value.every((entry) => typeof entry === 'string')
+        ? null
+        : `${field.path} must be a list of strings`;
+    case 'json':
+      // Shipped whole and shaped by its own validator in `loadConfig`. The only
+      // thing left to refuse here is a value JSON cannot carry at all.
+      return value === undefined ? `${field.path} must be a value` : null;
+  }
+}
+
+/**
+ * Every top-level key of a default config, for the test that keeps this table
+ * honest: a config key added without a declaration here fails `npm run check`
+ * rather than quietly becoming un-editable.
+ */
+export function declaredTopLevelKeys(): Set<string> {
+  return new Set(CONFIG_FIELDS.map((field) => topSegment(field.path)));
+}
+
+/** The top-level config key a dotted path belongs to. */
+export function topSegment(path: string): string {
+  return path.split('.')[0] ?? path;
+}
+
+/** The keys a default config carries, for the same test. */
+export function configTopLevelKeys(): Set<string> {
+  return new Set(Object.keys(defaultConfig()));
+}

@@ -16,6 +16,7 @@ import type {
   PromptsPayload,
   RetrospectivePayload,
   RunningConfigPayload,
+  ConfigSavePayload,
   ScratchpadPayload,
   ReliabilityPayload,
   SpendPayload,
@@ -186,6 +187,15 @@ const realApi = {
   // The running config, fetched on open for the same reason as the prompt book:
   // `loadConfig` runs once at boot, so this can never change while the tab is up.
   getConfig: () => authFetch('/api/config').then((r) => json<RunningConfigPayload>(r)),
+  // Save it. `baseline` is the revision the form was built from, so a file that
+  // moved underneath — an editor, or Claude — refuses the save rather than being
+  // clobbered by it.
+  saveConfig: (edits: { set?: Record<string, unknown>; clear?: string[]; baseline: string }) =>
+    post<ConfigSavePayload>('/api/config', edits),
+  // Pause dispatch and hand this process off to the supervisor, so a restart-only
+  // change takes effect. Refused with the reason where there is no supervisor, or
+  // where agents are still running and `interrupt` was not asked for.
+  restartHarness: (interrupt: boolean) => post<{ ok: true }>('/api/config/restart', { interrupt }),
   // The effective CI policy behind the settings modal's CI tab. Derived on the
   // server from the same defaults `classifyCiFailures` reads, so the tab cannot
   // claim a routing the dispatcher would not take.

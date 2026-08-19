@@ -32,8 +32,8 @@ Values are merged in this order, later winning:
 
 Layers 2 and 3 exist only under `loadDeploymentConfig`; `loadConfig` sees 1 and 4.
 
-Four keys are **deep-merged** rather than replaced, so a config file can set one field of them
-without dropping the rest: `integrations`, `planning`, `validation`, `auth`. The deep merge holds
+Six keys are **deep-merged** rather than replaced, so a config file can set one field of them
+without dropping the rest: `integrations`, `planning`, `spendBurn`, `selfUpdate`, `validation`, `auth`. The deep merge holds
 _between_ layers as well — an explicit `{planning: {requireApproval: true}}` keeps the other
 `planning` fields the operator's file set. Everything else — including `issuePriorityLabels` and
 `ci.checks` — is replaced wholesale.
@@ -76,6 +76,12 @@ rather than the field inside it. The list:
 
 Both lists are permanent — a config written before a removal outlives the release that made it.
 
+A third function, `loadConfigFromText`, builds the config a given file text *would* produce on this
+machine — the same three layers, from text rather than from disk. That is how a save from the cockpit
+is validated, and it is a function rather than a second copy of the env layer for the reason the split
+above exists: two lists of environment variables is how a UI comes to offer an edit to a key the
+environment silently beats.
+
 `loadConfig` **throws** for one combination: a `host` that is reachable off this machine together
 with `auth.enabled: false`. Each half alone is a supported deliberate choice; together they expose an
 endpoint that queues jobs — which spawn agents with write access to the repo — to every peer on the
@@ -83,6 +89,111 @@ network. A warning would scroll past in a boot log, so it is refused instead.
 
 No secret is ever a config key. The GitHub token comes from `GITHUB_TOKEN`, and the cockpit token
 from `LUBBDUBB_TOKEN` or a minted 0600 file, so `lubbdubb.config.json` stays safe to paste.
+
+## Fields
+
+Every configurable leaf is declared once, in `src/configFields.ts`: its type (`number`, `boolean`,
+`string`, `enum`, `stringList`, `json`), the members where it is an enum, how far an operator reaches
+to edit it, the environment variable that beats it, and one line saying why it exists.
+
+The declaration exists because `RunningConfigEntry` carries `value: unknown`, which is enough to read a
+value back and nothing like enough to draw a control for it. Four consumers read the table — the form's
+widgets, the save validator, the reset action and the running-config viewer — and each guessing
+separately is four places to disagree.
+
+`access` is the reach:
+
+| `access`   | Where it is drawn                                                                      |
+| ---------- | --------------------------------------------------------------------------------------- |
+| `plain`    | Inline, in its group.                                                                     |
+| `advanced` | Behind one disclosure with a warning: Paths, Server, `claudeCommand`/`claudeArgs`. These can leave an operator unable to reach their own cockpit, or point the fleet at the wrong repository. |
+| `fileOnly` | Drawn, never offered. `whitelistedApprovals` types text into an agent's session on a substring match — a thing to write deliberately in a file, not to fill in beside twenty other rows. |
+
+A `json` field is edited whole because it has no fixed shape to draw: an ordered rule list where the
+order is the semantics (`ci.checks`), or a map whose keys the operator invents
+(`issuePriorityLabels`, `agentModels`).
+
+`test/configFields.test.ts` asserts every top-level key of `defaultConfig()` is declared, so a config
+key added without one fails `npm run check` rather than quietly arriving un-editable — the failure
+`lubbdubb.config.example.json` already had as a hand-maintained discovery surface.
+
+The table also gives the loader something it never had: a **type check**. `loadDeploymentConfig` casts
+the parsed file to `Partial<Config>`, so `"port": "4300"` boots and fails later at the point something
+tries to listen on a string. A save is refused for it by name. What the table deliberately does not
+check is *meaning* — whether a burn multiple is above 1, whether a CI routing exists — because that is
+`loadConfig`'s, and a save is validated by building the config it would produce.
+
+## Liveness
+
+Whether saving a key takes effect now is decided by one thing: whether `src/configApply.ts` holds a
+named **arm** that re-seats whoever is holding the value. A key with an arm is live. A key without one
+is `restart`, and the cockpit says so on its own row.
+
+It is not a list of keys that "read late". That list is right the day it is written and wrong the day
+somebody hoists `config.heartbeatIntervalMs` into a const, with nothing red — which is the exact
+failure this repo catalogues. `test/configFields.test.ts` asserts the classification and the arms agree
+in both directions; `test/configApply.test.ts` asserts each arm through its *effect*, never through the
+flag, so an arm that stops doing anything fails rather than passing.
+
+Three keys have arms, and the shortness is deliberate — every arm is a second place a value lives, and
+so a place two copies can disagree:
+
+| Key                   | The arm                                                                        |
+| --------------------- | ------------------------------------------------------------------------------ |
+| `maxConcurrentAgents` | Assign, and re-seat `RuntimeControl`, which the harness reads by reference each cycle. The live cap stays ephemeral: a restart still comes back to the file. |
+| `lessonBlockChars`    | Assign. `system.ts` renders the lesson block through a closure at every launch, so the object *is* the late reader. |
+| `ci.checks`           | Assign, and hand `RuleDispatcher` a new policy — it took `{checks}` at construction, so assignment alone would leave the cockpit drawing one policy while the dispatcher ran another. |
+
+Everything else is restart-only, including the ones that could be made live. A key nobody changes twice
+a year is better left restart-only than made live for the sake of it. Some cannot be otherwise:
+`agentMode` picks a runtime object once, `integrations` builds the provider clients once, and
+`dbPath`/`port`/`host`/`repoRoot` are boot decisions.
+
+What has landed in the file and is waiting is held by `LiveConfig.pending()` — **recomputed** from the
+running config against the file on every apply rather than accumulated. Once the arms have run,
+whatever still differs *is* the definition of waiting for a restart, so editing a key twice leaves one
+row and putting one back leaves none.
+
+## Writing the file
+
+Nothing in the harness wrote `lubbdubb.config.json` until the config form existed. The write is
+**surgical**: find the span of the value being set, splice the new one in, leave every other byte
+alone. A `JSON.parse` → mutate → `JSON.stringify` round trip is not acceptable, and the reason is the
+file's own documentation convention — the `"// key"` entries survive a round trip (they are ordinary
+JSON members) but the blank lines that group them, the indent style and the inline `{ "a": 1 }` blocks
+do not. An operator who saves one field and finds their whole file rewritten has been given a reason
+never to use the form again, and a real config carries paragraphs of that prose.
+
+It follows that a key the form has never heard of — a comment, a future key, a typo being fixed — is
+carried through untouched rather than dropped.
+
+The write is **atomic**: a temp file beside it and a rename, so a crash mid-save cannot leave the
+harness with a config its next boot cannot read. The temp file is in the same directory on purpose — a
+rename across filesystems is not atomic. `editConfigText` is exported separately from the write so the
+round trip is testable without a filesystem; `test/configFile.test.ts` round-trips a commented config
+and asserts the comments, the key order and every unchanged line survive.
+
+## The watcher
+
+`lubbdubb.config.json` is watched, and a change on disk lands on the **same** `LiveConfig.apply` a
+cockpit save lands on: live keys through their arms, everything else held as pending and reported to
+every open cockpit. That is the whole of keeping the file first-class — one apply path means a hand
+edit and a form save cannot produce different outcomes.
+
+It polls the file's content rather than watching it. `fs.watch` binds to an inode, and an editor that
+writes through a temp file and a rename replaces it, leaving the handle quiet with nothing to say it
+has; `fs.watchFile` keeps the path but takes its baseline stat asynchronously, so an edit landing
+between starting the watch and that first stat is absorbed into the baseline and never reported.
+Comparing bytes has neither hole.
+
+A parse failure or a validation throw is **recorded through `errors.record` and dropped**, and the
+running config is left exactly as it was. A half-typed file is a normal thing to observe — the operator
+is mid-keystroke — and a watcher that applied one would take the fleet down over a missing brace.
+
+Wired in `src/server/main.ts` rather than `buildSystem`, for `loadDeploymentConfig`'s reason: only a
+deployment has an ambient file to watch. `System.configFile` is the path, injectable in tests — without
+that a test exercising the save rewrites the `lubbdubb.config.json` of whatever checkout the suite is
+running in.
 
 ## Path resolution at load
 

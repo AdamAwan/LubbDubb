@@ -18,6 +18,10 @@ export type ServerEvent =
   | { type: 'escalation:dismissed'; escalation: unknown }
   | { type: 'world:changed' }
   | { type: 'control:changed'; cap: number; paused: boolean }
+  // The running config moved — a cockpit save, or an edit to the file the watcher
+  // picked up. Coarse on purpose: the payload is what `/api/config` answers, and
+  // a form that has to re-read it anyway is better told to than handed half of it.
+  | { type: 'config:changed' }
   | { type: 'world:events'; events: unknown[] }
   | { type: 'error:logged'; error: unknown }
   | { type: 'dirty' };

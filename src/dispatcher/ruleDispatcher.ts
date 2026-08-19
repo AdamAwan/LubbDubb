@@ -115,7 +115,7 @@ export class RuleDispatcher implements Dispatcher {
   /** Only the one field any rule reads — see the constructor's narrowing below. */
   private readonly validation: Pick<ValidationPolicy, 'desktopClaimMinutes'>;
   private readonly validationRoot: string;
-  private readonly ci: CiPolicy;
+  private ci: CiPolicy;
 
   /**
    * `pickup` gates and orders issue pickup (`issue-pickup`). Omitted/partial => no
@@ -174,6 +174,20 @@ export class RuleDispatcher implements Dispatcher {
       maxAttempts: cooldown.maxAttempts ?? DEFAULT_COOLDOWN.maxAttempts,
       cooldownMs: cooldown.cooldownMs ?? DEFAULT_COOLDOWN.cooldownMs,
     };
+  }
+
+  /**
+   * Re-seat the CI policy on a running dispatcher.
+   *
+   * The constructor takes a *copy* (`{checks: ci.checks ?? []}`), so a config
+   * reload that only assigned onto the config object would leave the cockpit
+   * drawing one policy while this went on running another — silently, with
+   * nothing red. This is the arm that makes `ci.checks` a live key.
+   *
+   * @public — reached structurally, as `CiPolicyHolder` in `src/configApply.ts`.
+   */
+  setCiPolicy(ci: CiPolicy): void {
+    this.ci = { checks: ci.checks ?? [] };
   }
 
   async decide(ctx: DispatchContext): Promise<DispatchResult> {

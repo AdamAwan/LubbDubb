@@ -1250,18 +1250,49 @@ actionable, since overriding is a file drop ([16](16-http-api.md#get-apiprompts)
 serves an empty book — the web bundle imports no server code, and a copy of eighteen prompts shipped to
 fill the panel would be free to drift from the originals with nothing to catch it.
 
-The config tab is **read-only and fetched on open**, both for the prompt book's reasons:
-`loadConfig` runs once at boot so polling would be paying for a constant, and a write route's honest
-answer to "when does this take effect" is "at the next restart". Values are grouped, and each one that
-differs from the built-in default is marked — the question an operator opens this to ask is not "what
-are the values" but "what did I change", and answering it needs a baseline, which is why the server
-computes the comparison rather than shipping the object alone.
+### Configuration
 
-Two values would make that block a lie, and are drawn separately above it: `maxConcurrentAgents` and
+The config tab is **fetched on open and editable** (`web/src/components/ConfigForm.tsx`). Fetched on
+open for the prompt book's reason — the config is read once at boot, so polling would be paying for a
+constant; the form re-fetches after a save. Values are grouped, and each one that differs from the
+built-in default is marked: the question an operator opens this to ask is not "what are the values" but
+"what did I change", and answering it needs a baseline, which is why the server computes the comparison
+rather than shipping the object alone.
+
+It was read-only until #401, on the argument that a write route's honest answer to "when does this take
+effect" is "at the next restart". The answer differs per field, the harness knows which is which, and
+the form says so **per row** rather than the surface claiming one answer for fifty keys. Three facts
+per row all come from the server for `isDefault`'s reason — a browser that decided them would be a
+second copy free to drift:
+
+| Drawn from      | Decided by                                                          |
+| --------------- | ------------------------------------------------------------------- |
+| the widget      | `entry.type` — `configFields.ts` ([02](02-configuration.md#fields))  |
+| applies now / needs restart | `entry.live` — true only where `configApply.ts` holds an arm |
+| not editable    | `entry.env` (the environment beats the file), or `access: 'fileOnly'` |
+
+Saving writes `lubbdubb.config.json` and nothing else; the file stays the source of truth and editing it
+by hand lands on the same apply path ([02](02-configuration.md#the-watcher)). A **reset clears the key**
+rather than writing the default back — the browser is never told what a default *is*, only `isDefault`.
+Staged edits are counted in a save bar and nothing reaches the file until it is pressed; a save whose
+baseline has moved is refused with "reload" rather than clobbering whoever moved it.
+
+**Paths, Server and the agent command line sit behind an advanced disclosure** with a warning. Not
+because they are harder, but because `repoRoot`, `dbPath`, `host`, `port` and `auth` can leave an
+operator unable to reach their own cockpit, and an `--allowedTools` in `claudeArgs` silently drops the
+harness's own MCP grants (`CLAUDE.md`).
+
+What has reached the file and is waiting for a restart is drawn as a **pending block**, with an
+_Apply and restart_ control that pauses dispatch and hands this process off to the supervisor. Where no
+supervisor launched it (`canRestart: false`) the reason is drawn instead of the button: a control that
+would stop the harness without bringing it back is worse than none.
+
+Two values would make the block a lie, and are drawn separately above it: `maxConcurrentAgents` and
 `startPaused` are both shadowed at runtime by `RuntimeControl` ([09](09-execution.md)) and revert on
-restart. The modal shows the live cap and pause state from `control`, naming the configured value it is
+restart. The form shows the live cap and pause state from `control`, naming the configured value it is
 overriding where the two differ. Both halves of that pair are read out of the same fetched block, so
-they can never come from two readings that disagree.
+they can never come from two readings that disagree. Saving `maxConcurrentAgents` re-seats the live cap
+as well as the configured one; the live one stays ephemeral.
 
 Nothing is redacted, and that is not an oversight: `Config` holds no secrets by construction
 ([02](02-configuration.md)), which is the same rule that keeps `GITHUB_TOKEN`, `AZURE_DEVOPS_PAT` and
@@ -1270,9 +1301,9 @@ hide a useful value while implying the invariant is not real.
 
 ### Notifications
 
-The one **writable** thing on the settings tab, which is not the inconsistency it looks like: the
-running config is read-only because its honest answer to "when does this take effect" is "at the next
-restart", and this answers "now". It is a preference of the _browser_, not of the harness.
+A preference of the _browser_ rather than of the harness — held in `localStorage` beside the token and
+never sent anywhere, which is why two people on one deployment can want different things without either
+being wrong. It is the one thing on this tab that is not a config key at all.
 
 Everything the harness asks of a person lands in the queue rail, and the queue rail is only visible in
 an open tab, on loopback, on the machine the harness runs on. Nothing carried it further — so a parked
@@ -1369,8 +1400,9 @@ unmatched routing, and the tab says so.
 
 Every effective value is computed by `describeCiPolicy` on the server
 ([16](16-http-api.md#get-apici-policy)) — the component asserts nothing of its own about the policy, so
-it cannot claim a routing the dispatcher would not take. Read-only, and deliberately: there is no
-config-write path in the harness at all.
+it cannot claim a routing the dispatcher would not take. Read-only, and deliberately: `ci.checks` is an
+**ordered** rule list where the order is the semantics, so a rule editor is its own shape and its own
+decision. The config tab saves the list *whole*, which is the part #401 covers.
 
 ## Spend
 

@@ -1,5 +1,5 @@
 {
-  "//": "LubbDubb example config. Copy to lubbdubb.config.json (gitignored). Every key is OPTIONAL — omit any to take its default. The '//'-prefixed keys are inline docs; they are ignored at load, so this file stays copy-and-run. As shipped it drives the mock agent (agentMode 'raw' + fake integrations), so `npm start` works with no model or provider auth. Precedence: explicit overrides > env (PORT, LUBBDUBB_HOST, LUBBDUBB_DB, LUBBDUBB_REPO_ROOT) > this file > defaults. Four keys are DEEP-MERGED rather than replaced, so you can set one field of them alone: integrations, planning, validation, auth. Everything else — including issuePriorityLabels and ci.checks — is replaced wholesale. Full reference: docs/spec/02-configuration.md.",
+  "//": "LubbDubb example config. Copy to lubbdubb.config.json (gitignored). Every key is OPTIONAL — omit any to take its default. The '//'-prefixed keys are inline docs; they are ignored at load, so this file stays copy-and-run. As shipped it drives the mock agent (agentMode 'raw' + fake integrations), so `npm start` works with no model or provider auth. Precedence: explicit overrides > env (PORT, LUBBDUBB_HOST, LUBBDUBB_DB, LUBBDUBB_REPO_ROOT) > this file > defaults. Six keys are DEEP-MERGED rather than replaced, so you can set one field of them alone: integrations, planning, spendBurn, selfUpdate, validation, auth. Everything else — including issuePriorityLabels and ci.checks — is replaced wholesale. Since #401 the cockpit's Settings tab edits this file directly — it writes the keys you change and leaves these comments, the key order and everything else alone, so hand-editing and the form are two ways at one file. Full reference: docs/spec/02-configuration.md.",
 
   "// heartbeatIntervalMs": "How often (ms) the heartbeat fires a dispatch cycle. Default 300000 (5 min).",
   "heartbeatIntervalMs": 300000,
@@ -72,10 +72,10 @@
   "// integrations": "Which provider fulfils each capability — the swap switch. One provider per capability, deep-merged so you can override just one. Providers: 'fake' (editable, injectable world — the demo default), 'github' and 'azure' (real). Capabilities: sourceControl (pull requests), issues (issues / work items).",
   "integrations": { "sourceControl": "fake", "issues": "fake" },
 
-  "// github": "Target for the real 'github' provider — required only when integrations.sourceControl or .issues is 'github' (ignored otherwise). owner/repo name the repository; filters.prAuthor narrows the PR slice to one author. All open issues are ingested (the watch/ignore gate decides what's acted on, not an ingest filter). defaultAssignee is the login that issues the harness FILES (a deferred finding, unrecorded work, a blueprint, a raised bug) are assigned to — not a filter, it narrows nothing; unset files them unassigned. Auth is NOT here — set the GITHUB_TOKEN env var so a secret never lands in a committed file.",
+  "// github": "Target for the real 'github' provider — required only when integrations.sourceControl or .issues is 'github' (ignored otherwise). owner/repo name the repository, and that is all it carries: PR authorship and the assignee on items the harness FILES both follow userId now, so 'filters' and 'defaultAssignee' are retired keys — warned about at boot and dropped. All open issues are ingested (the watch gate decides what is acted on, not an ingest filter). Auth is NOT here — set the GITHUB_TOKEN env var so a secret never lands in a committed file.",
   "github": { "owner": "acme", "repo": "app" },
 
-  "// azureDevOps": "Target for the real 'azure' provider (Azure DevOps Repos + Boards) — required only when integrations.sourceControl or .issues is 'azure' (ignored otherwise). organization/project/repository name the repo; filters.prAuthor narrows PRs by uniqueName/UPN, filters.workItemTag narrows work items to one tag, filters.workItemAssignedTo narrows work items to one assignee by uniqueName/UPN. When both workItemTag and workItemAssignedTo are set they AND (an item must match both). defaultAssignee is the UPN that work items the harness FILES are assigned to — it narrows nothing, and defaults to filters.workItemAssignedTo, since where that filter is set an item filed to anyone else is invisible to the harness that filed it. Auth is NOT here — set AZURE_DEVOPS_PAT (Basic), or leave it unset to use the logged-in `az` CLI (Bearer).",
+  "// azureDevOps": "Target for the real 'azure' provider (Azure DevOps Repos + Boards) — required only when integrations.sourceControl or .issues is 'azure' (ignored otherwise). organization/project/repository name the repo. The only filter left is filters.workItemTag, which narrows work items to one tag: identity-based narrowing follows userId, so filters.prAuthor, filters.workItemAssignedTo and defaultAssignee are retired keys — warned about at boot and dropped. Auth is NOT here — set AZURE_DEVOPS_PAT (Basic), or leave it unset to use the logged-in `az` CLI (Bearer).",
   "azureDevOps": {
     "organization": "acme",
     "project": "app",
@@ -86,7 +86,7 @@
     "policyChecks": { "workItems": "check" }
   },
 
-  "// labelPrefix": "The prefix behind the cockpit's watch/ignore toggle, shared by PRs and issues. It derives two labels: '<prefix>-watch' ('work this') and '<prefix>-ignore' ('leave this alone'). The no-tag default differs by type: PRs are opt-out (watched unless <prefix>-ignore), issues are opt-in (ignored unless <prefix>-watch). Default 'lubbdubb', so 'lubbdubb-ignore' keeps its historical meaning as the PR exclusion tag. Set it to '' to disable both gates (PRs never excluded, all open issues acted on).",
+  "// labelPrefix": "The prefix behind the cockpit's watch toggle, shared by PRs and issues. It derives ONE label — '<prefix>-watch' ('work this') — and everything is opt-in: an item without the tag is left alone, pull requests and issues alike, and the harness tags the pull requests it opens itself so its own work never waits on a click. The old '<prefix>-ignore' tag is read nowhere any more. Set it to '' to turn the gate off entirely (every open item is worked), which is the first-run posture. Default 'lubbdubb'.",
   "labelPrefix": "lubbdubb",
 
   "// issuePriorityLabels": "Label -> priority weight for ordering issue pickup when headroom is limited (higher = first). REPLACED wholesale by an override, not merged, so you can define your own scheme (e.g. p0/p1/p2). Default { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 }.",
@@ -101,10 +101,8 @@
   "// issueInReviewState": "The state a work item is moved to once a PR is open for it, so agents stop re-picking work already awaiting review/CI (e.g. 'In Review'). Takes effect only alongside issuePickupStates and needs a provider that can write state back (Azure). Unset = no automatic transition.",
   "issueInReviewState": "In Review",
 
-  "// planning": "The planning funnel for multi-PR issues. ON by default. Every watched open issue first gets a PLANNING agent (rule issue-plan, on branch plan/issue/<n>) that reads the repo and submits a verdict through the plan_submit tool (or .lubbdubb/plan.json as the fallback): 'single' (one PR — falls through to normal pickup, unchanged) or 'parts' (a decomposition the part scheduler owns: rule plan-part puts one agent per part on issue/<n>/<slug>, stacked on its dependency's branch while that dependency's PR is open). Progress is mirrored to the tracker as ONE status comment per plan, edited in place; completion never closes the issue. A planner that crashes or writes no plan fails OPEN after the usual attempt cap: the issue routes to 'single' and is worked as it would be without plans, so a planner failure can never park an issue. OFF leaves the funnel out entirely — rule issue-pickup un-narrowed, no planner ever dispatched. Deep-merged.",
+  "// planning": "The planning funnel for multi-PR issues. ON by default. Every watched open issue first gets a PLANNING agent (rule issue-plan, on branch plan/issue/<n>) that reads the repo and submits a verdict through the plan_submit tool (or .lubbdubb/plan.json as the fallback): 'single' (one PR — falls through to normal pickup, unchanged) or 'parts' (a decomposition the part scheduler owns: rule plan-part puts one agent per part on issue/<n>/<slug>, stacked on its dependency's branch while that dependency's PR is open). Progress is mirrored to the tracker as ONE status comment per plan, edited in place; completion never closes the issue. A planner that crashes or writes no plan fails OPEN after the usual attempt cap: the issue routes to 'single' and is worked as it would be without plans, so a planner failure can never park an issue. There is no switch: the funnel is unconditional, and a 'planning.enabled' left in a config file is warned about at boot and dropped. Deep-merged.",
   "planning": {
-    "// enabled": "Master switch. Default true.",
-    "enabled": true,
     "// maxConcurrentPartsPerIssue": "How many parts of one plan may have agents at once — a cap rather than fanning the whole graph out as soon as dependencies are satisfied. These slots come out of maxConcurrentAgents, so one issue can occupy several of them. Default 2.",
     "maxConcurrentPartsPerIssue": 2,
     "// requireApproval": "Put a 'parts' verdict to you before anything is scheduled from it — approve-before rather than replan-after. On, ingestion persists the decomposition as 'awaiting_approval', rule plan-approval proposes it once, and rule plan-part schedules nothing (its ready parts queue as 'unapproved' in Up next) until you accept. Rejecting retires the parts nothing was started for and works the issue as one PR. A 'single' verdict is never gated. Default true.",
@@ -112,6 +110,31 @@
     "// gitFetchIntervalMs": "Floor on how often plan reconciliation runs `git fetch` before reading branch reality. The git observer is fetch-free by design, so without a fetch it never sees a branch pushed from another machine — and 'has the dependency actually pushed' is what a stacked part waits on. This only stops a deliberately fast heartbeat becoming a fetch storm. 0 = every pulse. Default 60000.",
     "gitFetchIntervalMs": 60000
   },
+
+  "// selfUpdate": "Whether the harness checks its OWN build against upstream, and how often. Note what it does not name: a repo. The check runs against the directory LubbDubb is installed in, resolved from the running module, and never against repoRoot — a deployment working on someone else's codebase still wants to hear that its own build moved. On by default and cheap: the steady state is one ls-remote an hour, which transfers no objects. Deep-merged.",
+  "selfUpdate": {
+    "enabled": true,
+    "// remote": "The remote the build is checked against. Configurable because a fork tracks somewhere else. Default 'origin'.",
+    "remote": "origin",
+    "// branch": "The branch the build is checked against. Default 'main'.",
+    "branch": "main",
+    "// checkIntervalMs": "How often the upstream tip is read. Default 3600000 (1h).",
+    "checkIntervalMs": 3600000
+  },
+
+  "// validation": "How anyone checks the GOAL was met, as steps a person or an agent runs rather than a paragraph nobody executes. Unconditional — a planner is asked for checks, a person marks them off, and the only consequence is that closing a goal with checks outstanding says so. 'desktop' is the one part with a footprint outside the harness: a second MCP socket your OWN Claude Code registers against, so a check can run on a machine the fleet cannot reach. Deep-merged.",
+  "validation": {
+    "// desktop": "The desktop channel. Off by default because it binds a stable socket and writes into your home directory; the /lubbdubb skill rides with it rather than switching separately.",
+    "desktop": false,
+    "// desktopClaimMinutes": "How long a claimed check is held before it is offered again. Default 30.",
+    "desktopClaimMinutes": 30
+  },
+
+  "// issueContainerTypes": "Provider-native item types that HOLD work rather than being work — an Azure DevOps Feature or Epic. One of these is never picked up, planned or assayed: its children are the work, and an agent put on the container would implement a decomposition that already exists beside it in the tracker. Meaningful only for providers that report an item type (Azure); GitHub issues carry none. Set [] to turn the gate off. Default ['Feature', 'Epic'], matched case-insensitively.",
+  "issueContainerTypes": ["Feature", "Epic"],
+
+  "// issueFilingTypes": "The work item types the harness may CREATE when you file a finding, a blueprint or unrecorded work. The filing agent picks one and is told it may create nothing else. The names are passed to the provider verbatim, so they must match your process template exactly — a Scrum project files ['Product Backlog Item', 'Bug']. Unlike issueContainerTypes there is no 'off': [] falls back to the default, because a work item is created AS something. Default ['User Story', 'Bug'].",
+  "issueFilingTypes": ["User Story", "Bug"],
 
   "// spendBurn": "The LIVE burn watch — the one cost reading taken while the money is still being spent. Every other spend surface is a post-mortem you have to go and open; this one compares a RUNNING agent's cost so far against the median of settled runs of its own kind of work, and files a visible 'burn' obligation when it is far past. The bucket is the dispatch rule AND the profile, never the rule alone: a goal pinned to 'deep' legitimately costs several times the same rule on 'fast', so a rule-only baseline would flag every pinned run and nothing else. It HOLDS NOTHING AND KILLS NOTHING — an expensive run is not a wrong run and no threshold can tell the two apart, so the notice is the prompt to open the transcript and decide. It refreshes its figures every pulse and settles itself when the run ends. Three gates must ALL hold, because a multiple on its own fires constantly and a notice you learn to dismiss unread is worse than none. On by default; deep-merged, so you can set one field alone. NOTE: PTY mode reports no usage at all, so on agentMode 'pty' nothing can ever trip this — that is the fail-open direction and the only safe one.",
   "spendBurn": {
@@ -205,8 +228,17 @@
   "// worktreeRoot": "Root under which per-branch worktrees are created. A relative value resolves against repoRoot (not the launch dir). Default '.lubbdubb/worktrees'.",
   "worktreeRoot": ".lubbdubb/worktrees",
 
+  "// worktreePoolSize": "How many worktree slot directories the pool grows to. Slots are LEASED to branches, not owned by them: a free slot already on your branch is handed back with its node_modules and build output intact, which is what stops every re-dispatch paying for a cold install. Unset derives it from maxConcurrentAgents.",
+  "worktreePoolSize": 4,
+
   "// deskRoot": "Root under which desk (no-code) scratch dirs are created — one per task id. Relative resolves against repoRoot. Default '.lubbdubb/desk'.",
   "deskRoot": ".lubbdubb/desk",
+
+  "// attachmentRoot": "Where images attached to a blueprint are written. The absolute path is load-bearing twice: it is what an agent's prompt names, and what the launch grants read access to. Relative resolves against repoRoot. Default '.lubbdubb/attachments'.",
+  "attachmentRoot": ".lubbdubb/attachments",
+
+  "// validationRoot": "Where validation resources are written, for the same two reasons as attachmentRoot. Relative resolves against repoRoot. Default '.lubbdubb/validation'.",
+  "validationRoot": ".lubbdubb/validation",
 
   "// dbPath": "SQLite file. Overridable via the LUBBDUBB_DB env var. ':memory:' is supported (tests). Default '.lubbdubb/lubbdubb.sqlite'.",
   "dbPath": ".lubbdubb/lubbdubb.sqlite",

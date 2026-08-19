@@ -2321,7 +2321,18 @@ export const demoApi = {
   // resolved by `loadConfig` on the server, and the web bundle imports no server
   // code — so a demo copy would be a duplicate free to drift with nothing to
   // catch it. The demo shows an empty config and says so.
-  getConfig: () => Promise.resolve({ groups: [] as RunningConfigGroup[] }),
+  getConfig: () =>
+    Promise.resolve({
+      groups: [] as RunningConfigGroup[],
+      file: 'lubbdubb.config.json',
+      revision: 'demo',
+      pending: [],
+      canRestart: false,
+    }),
+  // The demo has no file to write, and saying so is more honest than pretending a
+  // save landed: the form draws the refusal exactly as it draws a real one.
+  saveConfig: () => Promise.reject(new Error('the demo has no config file to write')),
+  restartHarness: () => Promise.reject(new Error('the demo has no process to restart')),
   // The demo configures no `ci.checks`, so an empty policy is not a stand-in —
   // it is what this backend is actually running on, and the tab's empty state is
   // the true reading of it. `unmatched` is a constant of `classifyCiFailures`

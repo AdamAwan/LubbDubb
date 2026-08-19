@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Config } from './config.js';
+import { configFilePath, type Config } from './config.js';
 import { Store } from './store/store.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
 import { buildIntegrations } from './integrations/registry.js';
@@ -61,6 +61,7 @@ import { resolveModelTag } from './modelLabels.js';
 import { orderedProfiles } from './agents/modelPolicy.js';
 import { Harness } from './harness.js';
 import { RuntimeControl } from './runtimeControl.js';
+import { LiveConfig } from './configApply.js';
 import { ErrorLog } from './errorLog.js';
 import type { ErrorLogEntry } from './types.js';
 
@@ -118,6 +119,12 @@ export interface System {
   /** Live, ephemeral dispatch controls (cap + pause). Seeded from config at boot. */
   runtimeControl: RuntimeControl;
   /**
+   * Applies a reloaded config to this running process, and holds what is waiting
+   * for a restart. The one apply path a cockpit save and a hand edit to
+   * `lubbdubb.config.json` both go through.
+   */
+  liveConfig: LiveConfig;
+  /**
    * The issue-pickup policy the dispatcher honours, exposed so the snapshot can
    * compute the same per-issue pickup verdict the dispatcher will act on.
    */
@@ -172,6 +179,15 @@ export interface System {
   worktrees: Worktrees;
   /** Central error log: every caught failure is persisted here and streamed to the cockpit. */
   errors: ErrorLog;
+  /**
+   * The config file a save writes and the watcher watches. Defaults to
+   * `lubbdubb.config.json` beside the launch directory, which for the test suite
+   * is **this repository** — so a test that exercises the config route without
+   * overriding it rewrites the developer's own config. Same hazard as
+   * `config.repoRoot` defaulting to `process.cwd()`, and the same fix: tests
+   * inject a temp path.
+   */
+  configFile: string;
 }
 
 interface BuildOptions {
@@ -210,6 +226,12 @@ interface BuildOptions {
   worktrees?: Worktrees;
   /** Override where recorded errors are mirrored (tests silence the default stderr echo). */
   errorMirror?: (entry: ErrorLogEntry) => void;
+  /**
+   * Override the config file the write route targets (tests point it at a temp
+   * file). Without it a test that saves config rewrites the `lubbdubb.config.json`
+   * of whatever checkout the suite is running in — see {@link System.configFile}.
+   */
+  configFile?: string;
   /**
    * Override when crash recovery considers this process to have started (tests).
    * Everything older is a previous run's orphan; everything newer is a dispatch
@@ -587,7 +609,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // no longer only the dispatcher's: `POST /api/findings/:id/file` renders
   // `finding-ticket` from it, and that must work whether or not a cycle is running.
   const prompts = loadPromptTemplates(config.promptTemplatesDir);
-  const dispatcher: Dispatcher = new RuleDispatcher(
+  const rules = new RuleDispatcher(
     issuePickup,
     {},
     prompts,
@@ -597,6 +619,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     config.validation,
     config.validationRoot,
   );
+  const dispatcher: Dispatcher = rules;
+
+  // What a config change does to *this* process — the live keys' arms and the
+  // pending list behind them. Wired here because an arm reaches components only
+  // the composition root holds; a save from the cockpit and an edit to the file
+  // both land on it, which is what keeps the two from behaving differently.
+  const liveConfig = new LiveConfig({ running: config, runtimeControl, dispatcher: rules });
 
   // The store holds scheduling intent; this folds git + provider reality back onto
   // it every pulse. Its `git fetch` is wired only for the real observer: the seam
@@ -852,6 +881,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     tickets,
     updates,
     runtimeControl,
+    liveConfig,
+    configFile: opts.configFile ?? configFilePath(),
     issuePickup,
     prompts,
     rateLimits,

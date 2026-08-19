@@ -15,10 +15,10 @@ import type { CiPolicyDescription, CiRuleDescription, PolicyKindDescription } fr
  * a default `classifyCiFailures` owns, free to drift with nothing to catch it —
  * so this component renders the payload and asserts nothing of its own about it.
  *
- * **Read-only**, for the running config's reason: there is no config-write path
- * in the harness, and a route whose honest answer to "when does this take effect"
- * is "at the next restart" is worse than not offering one. Editing stays an edit
- * to `lubbdubb.config.json` and a restart.
+ * **Read-only**, which the config form becoming writable (#401) did not change:
+ * `ci.checks` is an *ordered* rule list where the order is the semantics, so
+ * editing it rule-by-rule is its own shape and its own decision. The config tab
+ * saves the list whole, and this tab is what says what the list means.
  */
 export function CiPolicyTab() {
   const [policy, setPolicy] = useState<CiPolicyDescription | null>(null);
