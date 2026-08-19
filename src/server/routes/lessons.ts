@@ -21,10 +21,12 @@ import type { RouteContext } from './context.js';
  * the cockpit polls, which is what `findings` does and for the same reason —
  * the panel draws them beside refs the snapshot's own link map resolves.
  *
- * **Nothing here reaches an agent.** No dispatcher rule reads a lesson, no
- * prompt renders one, and promoting one changes no launch argument; promotion
- * records that an operator vouched for it and nothing more. Rendering is #355's
- * phase 3, and it is a separate change with its own cap and its own spec.
+ * **Promotion is the whole gate, and it is what puts a claim in front of the
+ * fleet** (#355 phase 3): a promoted lesson is rendered into every agent's
+ * system-prompt append at that agent's next launch, capped and dated. No
+ * dispatcher rule reads one and no dispatch prompt renders one — the launch is
+ * the only reader, and it is handed a finished string by `src/system.ts` rather
+ * than reaching this store itself.
  *
  * These routes are the *operator's* arm of the store. The other writer is the
  * retrospective (phase 2), which reaches `proposeLesson` through the tool channel

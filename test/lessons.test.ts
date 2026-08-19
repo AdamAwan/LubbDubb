@@ -1,4 +1,5 @@
 import { test } from 'node:test';
+import { EventEmitter } from 'node:events';
 import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -9,6 +10,10 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { Lesson } from '../src/types.js';
+import type { LessonView } from '../src/wire.js';
+import { renderLessonBlock } from '../src/lessonBlock.js';
+import type { StreamChild } from '../src/agents/streamJsonSession.js';
+import { failPlanningOpen } from './support/plans.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 /**
@@ -19,8 +24,14 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
  * reason the ticket was split: a lesson store that reached agents on its
  * author's say-so would be the stale fleet-wide instruction block the issue
  * argues against. So the assertions below are as much about what promotion does
- * *not* do — it changes no launch argument, and no rendered prompt — as about
- * what it does.
+ * *not* do — a proposal reaches nobody, a retired claim stops reaching anybody,
+ * and with nothing promoted the launch arguments are byte-identical to a build
+ * without the feature — as about what it does.
+ *
+ * Phase 3 (rendering, below) is the half the ticket was hedged against, so its
+ * tests are the bounds rather than the feature: the cap drops whole claims
+ * oldest-vouched first, the block is the same bytes on every dispatch, and the
+ * drop is visible to the operator and to no agent.
  */
 
 function testConfig() {
@@ -180,12 +191,188 @@ test('a promoted lesson changes no launch argument', () => {
   const lesson = system.store.proposeLesson({ text: 'Never skip the build step.', originRef: 'issue:41' });
   system.store.promoteLesson(lesson.id);
 
-  // The acceptance criterion phase 1 has to hold on its own: with lessons in the
-  // store — promoted ones included — the arguments are byte-identical to what
-  // they were, because nothing renders a lesson yet. Rendering is #355 phase 3,
-  // and when it lands this assertion is what says the empty case still matches.
+  // The acceptance criterion phase 1 had to hold on its own, and phase 3 did not
+  // get to soften it: with lessons in the store — promoted ones included — a
+  // launch carrying no rendered block is byte-identical to what it was before any
+  // of this existed. Not an empty header, not a trailing newline. The block is
+  // simply absent unless `src/system.ts` puts one there.
   assert.deepEqual(buildClaudeArgs({}), before.pty);
   assert.deepEqual(buildClaudeStreamArgs({}), before.stream);
+});
+
+// -- what phase 3 renders ------------------------------------------------------
+
+/**
+ * Real dispatches, and the argv each launched with — the way production reaches
+ * the launch path, on the runtime named.
+ *
+ * At the `buildSystem` seam rather than by calling a builder with hand-written
+ * options, because the thing most likely to break is the wiring: `src/system.ts`
+ * is the only module on this path that knows lessons exist, and a builder that
+ * accepts the block and forgets to forward it type-checks clean and drops it
+ * silently — the trap `ArgsBuilder`'s own comment names for `model`.
+ */
+async function dispatchLaunches(
+  agentMode: 'stream' | 'pty',
+  seed: (system: System) => void,
+  issues: number[],
+): Promise<string[][]> {
+  const launches: string[][] = [];
+  const backend = new FakePtyBackend();
+  const system = buildSystem(
+    { ...testConfig(), agentMode },
+    {
+      worktrees: new FakeWorktreeManager(),
+      backend,
+      streamSpawner: (_command, args) => {
+        launches.push(args);
+        return new FakeChild();
+      },
+      errorMirror: () => {},
+    },
+  );
+  seed(system);
+  for (const number of issues) {
+    system.connector.inject({ kind: 'new_issue', number, title: `Add login ${number}` });
+    failPlanningOpen(system.store, number);
+  }
+  await system.harness.runCycle('manual');
+  const args = agentMode === 'stream' ? launches : backend.spawned.map((s) => s.args);
+  system.store.close();
+  assert.equal(args.length, issues.length, `${agentMode} dispatched ${args.length} agents, expected ${issues.length}`);
+  return args;
+}
+
+/** What a launch appends to the system prompt — the protocol, and the lessons. */
+function appendedPrompt(args: string[]): string {
+  const value = args[args.indexOf('--append-system-prompt') + 1];
+  assert.ok(value, 'the launch carried no appended system prompt');
+  return value;
+}
+
+test('a promoted lesson rides in both runtimes\u2019 launch arguments; a retired one does not', async () => {
+  for (const agentMode of ['stream', 'pty'] as const) {
+    const [args] = await dispatchLaunches(
+      agentMode,
+      (system) => {
+        const kept = system.store.proposeLesson({ text: 'Build the web bundle first.', originRef: 'issue:41' });
+        const gone = system.store.proposeLesson({ text: 'Take the devops lock first.', originRef: 'issue:9' });
+        system.store.promoteLesson(kept.id);
+        system.store.promoteLesson(gone.id);
+        system.store.retireLesson(gone.id);
+        // A proposal is not a claim anyone vouched for. The gate is the reason
+        // this store is allowed to exist, so the launch may not route around it.
+        system.store.proposeLesson({ text: 'Unvouched claim.', originRef: null });
+      },
+      [771],
+    );
+    const prompt = appendedPrompt(args!);
+    assert.match(prompt, /Build the web bundle first\./, `${agentMode} must carry a promoted lesson`);
+    // Provenance rides with it: what taught the claim and when are what let an
+    // agent discount a stale one, and a bare block of assertions strips exactly
+    // that.
+    assert.match(prompt, /learned on issue:41/, `${agentMode} must carry the lesson's provenance`);
+    assert.doesNotMatch(prompt, /devops lock/, `${agentMode} must not carry a retired lesson`);
+    assert.doesNotMatch(prompt, /Unvouched claim\./, `${agentMode} must not carry a proposal`);
+  }
+});
+
+test('the block is byte-identical between two dispatches', async () => {
+  const launches = await dispatchLaunches(
+    'stream',
+    (system) => {
+      const lesson = system.store.proposeLesson({ text: 'The suite wants a built bundle.', originRef: 'issue:41' });
+      system.store.promoteLesson(lesson.id);
+    },
+    [881, 882],
+  );
+  const [first, second] = launches.map(appendedPrompt);
+  // Two goals, two branches, two sessions — and the same appended prompt. The
+  // block is worth putting in the system prompt only because it is a cached
+  // prefix, and it is only cacheable while it is the same bytes for every agent
+  // on every dispatch. So nothing per-dispatch may enter it: no goal name, no
+  // branch, no agent id, no timestamp of "now".
+  assert.notEqual(
+    launches[0]![launches[0]!.indexOf('--session-id') + 1],
+    launches[1]![launches[1]!.indexOf('--session-id') + 1],
+    'the two launches must really be two dispatches',
+  );
+  assert.equal(first, second);
+  assert.ok(first!.includes('The suite wants a built bundle.'), 'and the block is actually in there');
+});
+
+test('the cap drops whole lessons, oldest-vouched first', () => {
+  // Pure, and with the promotion times written out, because that is exactly what
+  // the ordering turns on: promoted in one order, vouched for in another, so
+  // "newest promotion first" and "the oldest-vouched one is what goes" cannot
+  // both pass by accident.
+  const lessons = [
+    vouched('oldest', '2026-01-01T00:00:00.000Z'),
+    vouched('middle', '2026-02-01T00:00:00.000Z'),
+    vouched('newest', '2026-03-01T00:00:00.000Z'),
+  ];
+  const whole = renderLessonBlock(lessons, 6_000);
+  assert.deepEqual(whole.dropped, [], 'nothing is dropped under a cap everything fits inside');
+  assert.deepEqual(
+    whole.rendered.map((l) => l.id),
+    ['newest', 'middle', 'oldest'],
+  );
+
+  const capped = renderLessonBlock(lessons, whole.text.length - 1);
+  assert.deepEqual(
+    capped.dropped.map((l) => l.id),
+    ['oldest'],
+    'the oldest-vouched claim is the one dropped — it is the one most likely to have gone stale',
+  );
+  // Whole, never truncated: half a claim is a *different* claim, and one no
+  // operator ever vouched for. So the drop is the whole text and its provenance
+  // together, not a sentence of it.
+  assert.equal(capped.text.includes('oldest'), false);
+  assert.ok(capped.text.includes('middle') && capped.text.includes('newest'));
+
+  // Zero is the off switch, and off means byte-identical to a build without the
+  // feature — not an empty header.
+  assert.equal(renderLessonBlock(lessons, 0).text, '');
+  assert.equal(renderLessonBlock(lessons, 0).dropped.length, 3);
+  // And a proposal is never in the block whatever room there is: the gate is the
+  // only way in.
+  assert.equal(
+    renderLessonBlock([{ ...vouched('x', '2026-01-01T00:00:00.000Z'), status: 'proposed' }], 6_000).text,
+    '',
+  );
+});
+
+/** A lesson an operator vouched for at `at` — `updatedAt` is the promotion. */
+function vouched(id: string, at: string): Lesson {
+  return {
+    id,
+    text: `claim ${id} ${'x'.repeat(100)}`,
+    originRef: 'issue:41',
+    status: 'promoted',
+    createdAt: at,
+    updatedAt: at,
+  };
+}
+
+test('the cockpit is told which promoted lessons are actually reaching agents', async () => {
+  const system = build();
+  const older = system.store.proposeLesson({ text: 'a'.repeat(300), originRef: null });
+  const newer = system.store.proposeLesson({ text: 'b'.repeat(300), originRef: null });
+  system.store.promoteLesson(older.id);
+  system.store.promoteLesson(newer.id);
+  // A cap that fits one of the two, so the snapshot has a real drop to report.
+  system.config.lessonBlockChars = renderLessonBlock(system.store.listLessons(), 6_000).text.length - 1;
+
+  const { app } = await buildApp(system);
+  const snap = (await app.inject({ method: 'GET', url: '/api/state' })).json() as { lessons: LessonView[] };
+  const byId = new Map(snap.lessons.map((l) => [l.id, l.rendered]));
+  // Per row, and only the operator sees it: the agent is never told the list it
+  // reads is partial, which is the failure the cap exists to bound. The operator
+  // is told exactly *which* claim is not reaching anyone, because "one is over
+  // the cap" leaves them to work out which before they can retire something.
+  assert.equal(byId.get(newer.id), true, 'the newest-vouched claim is the one that fits');
+  assert.equal(byId.get(older.id), false, 'the dropped claim is marked, not merely absent');
+  await app.close();
 });
 
 /**
@@ -213,8 +400,8 @@ test('no dispatch or execution path touches the lesson store at all', () => {
   // decision made elsewhere, which is the same objection the lens rule states;
   // and a rule that *wrote* one would be the harness proposing claims to itself
   // with no run behind them. Phase 3's rendering path is neither of these — it
-  // reads promoted lessons in `src/agents/agentProtocol.ts`, which is why that
-  // directory is governed by the test below instead.
+  // renders promoted lessons from `src/system.ts`, the composition root, which is
+  // the only module on the launch path that knows lessons exist at all.
   for (const dir of ['src/dispatcher', 'src/executor']) {
     for (const file of srcFiles(dir)) {
       const source = readFileSync(file, 'utf8');
@@ -233,11 +420,13 @@ test('no dispatch or execution path touches the lesson store at all', () => {
 });
 
 test('the tool channel may propose a lesson and nothing else', () => {
-  // The half of the rule phase 2 did *not* relax. Filing a proposal is a claim
-  // an operator still has to read; reading the list back would hand an agent the
-  // fleet's promoted claims through a side door, ahead of the capped, spec'd
-  // block phase 3 owes it — and ruling on one would be the gate deciding for the
-  // person it exists for.
+  // The half of the rule neither later phase relaxed. Filing a proposal is a
+  // claim an operator still has to read; reading the list back would hand an
+  // agent the fleet's promoted claims through a side door, beside the capped,
+  // spec'd block phase 3 renders — and ruling on one would be the gate deciding
+  // for the person it exists for. It is also why that block reaches
+  // `agentProtocol.ts` as a finished *string*: a seam that made this assertion
+  // fail would be the wrong seam.
   for (const dir of ['src/mcp', 'src/agents']) {
     for (const file of srcFiles(dir)) {
       const source = readFileSync(file, 'utf8');
@@ -257,6 +446,21 @@ test('the tool channel may propose a lesson and nothing else', () => {
     'the retrospective still files its lessons',
   );
 });
+
+/** A `claude` stream-JSON process that is only ever spawned and read back. */
+class FakeChild extends EventEmitter implements StreamChild {
+  pid = 771;
+  private out = new EventEmitter();
+  stdout = { on: (ev: string, cb: (d: string) => void) => this.out.on(ev, cb) } as unknown as NodeJS.ReadableStream;
+  stderr = null;
+  stdin = { write: () => {}, end: () => {} } as unknown as NodeJS.WritableStream;
+  override on(event: 'exit', cb: (code: number | null) => void): this {
+    return super.on(event, cb);
+  }
+  kill(): void {
+    this.emit('exit', 143);
+  }
+}
 
 function srcFiles(dir: string): string[] {
   const out: string[] = [];

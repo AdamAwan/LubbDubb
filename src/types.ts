@@ -1036,8 +1036,10 @@ export type FindingInput = Pick<Finding, 'kind' | 'ref' | 'summary' | 'where' | 
  *
  * - `proposed` — written down, visible to the operator, and **read by nothing
  *   else**. This is where every lesson starts.
- * - `promoted` — the operator has vouched for it. Fleet-visible, once anything
- *   renders lessons at all (issue #355, phase 3 — nothing does yet).
+ * - `promoted` — the operator has vouched for it, and it is rendered into every
+ *   agent's system-prompt append at that agent's next launch: dated, attributed
+ *   to the goal it was learned on, and capped (`lessonBlockChars`). This is the
+ *   only status any agent ever sees.
  * - `retired` — pruned. Terminal, and the reason the surface is allowed to
  *   exist: a store that could only grow is the unprunable pad.
  *
@@ -1059,14 +1061,16 @@ export type LessonStatus = 'proposed' | 'promoted' | 'retired';
  * either — that is a {@link Finding}. And not something true only of one goal —
  * that is the goal's scratchpad, which dies with the goal, correctly.
  *
- * The provenance is not decoration. A reader deciding whether a lesson still
- * holds needs to know what it was learned on and when, and those are the two
- * things a rendered block of assertions strips.
+ * The provenance is not decoration, and since #355 phase 3 it is not only for the
+ * operator: both halves are rendered beside the claim in the block agents read,
+ * because a reader deciding whether a lesson still holds needs to know what it
+ * was learned on and when — and those are the two things a bare block of
+ * assertions strips.
  */
 export interface Lesson {
   id: string;
   /**
-   * The lesson itself, in the words it will one day be rendered in. Markdown,
+   * The lesson itself, in the words it is rendered in. Markdown,
    * as everything an operator or an agent writes here is, and free-form: a
    * lesson is prose, and a shape imposed on it now would be a shape guessed at.
    */

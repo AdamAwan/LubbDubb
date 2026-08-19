@@ -794,6 +794,8 @@ class DemoServer {
         status: 'proposed',
         createdAt: at,
         updatedAt: at,
+        // Nothing unpromoted is ever in the block agents read (#355 phase 3).
+        rendered: false,
       },
       ...this.state.lessons,
     ];
@@ -817,6 +819,12 @@ class DemoServer {
     if (lesson && from.includes(lesson.status)) {
       lesson.status = status;
       lesson.updatedAt = new Date().toISOString();
+      // The block is ordered newest-promotion-first, so the one just vouched for
+      // is the last thing the cap would drop — and a retired lesson reaches
+      // nobody. The demo asserts that much and no more: what the cap does to the
+      // *older* rows is `renderLessonBlock`'s answer, computed server-side, and
+      // guessing at it here would put a second opinion in front of the operator.
+      lesson.rendered = status === 'promoted';
       this.dirty();
     }
     return { ok: true };

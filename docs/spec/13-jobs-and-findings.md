@@ -680,24 +680,44 @@ an override written before phase 2 would otherwise dispatch an agent that never 
 exists: the customised deployments losing the feature silently. `retro_submit`'s tool description
 always arrives.
 
-### Nothing reaches an agent
+### What a promoted lesson reaches, and what it does not
 
-**No dispatcher rule reads a lesson, no prompt renders one, and promoting one changes no launch
-argument.** Filing a proposal is all the tool channel got; promotion is a click in the cockpit and
-stays one. `test/lessons.test.ts` asserts both halves — that `buildClaudeArgs` and
-`buildClaudeStreamArgs` are byte-identical with promoted lessons on the books, and, structurally,
-that `src/dispatcher/` and `src/executor/` never touch the store in any direction while `src/mcp/`
-and `src/agents/` reach `proposeLesson` and nothing else.
+**No dispatcher rule reads a lesson, and no dispatch prompt renders one.** A promoted lesson reaches
+agents through exactly one channel: the fleet's system-prompt append, rendered by `src/lessonBlock.ts`
+and threaded in by `src/system.ts` → [10](10-agent-runtimes.md#the-lesson-block). Filing a proposal is
+all the tool channel got; promotion is still a click in the cockpit and stays one.
+
+`test/lessons.test.ts` asserts that structurally: `src/dispatcher/` and `src/executor/` never touch
+the store in any direction, and `src/mcp/` and `src/agents/` reach `proposeLesson` and nothing else —
+never `listLessons` or `getLesson`. Which is why phase 3's seam is a **rendered string** passed
+through `ClaudeArgsOptions` rather than a store handed to `agentProtocol.ts`: the launch path stays
+unable to read a lesson, and `src/system.ts` — already the composition root — is the only module on
+it that knows lessons exist. A change that needs that assertion relaxed has the seam wrong.
 
 That structural test used to ban the *word*, across four directories. It matches the store's methods
 instead as of phase 2, because a prompt that tells an agent the channel exists is the dispatcher
 describing a tool rather than a rule consulting the table — and the thing that would actually break
 the invariant is a call.
 
-What is still to come, and is deliberately not here: rendering promoted lessons into the fleet's
-cached system-prompt append — capped, with the cap's drop visible to the operator and never to the
-agent, which must not see a partial list presented as whole. That is #355 phase 3, with its own
-design.
+### What the block is, and what bounds it
+
+Four properties, and each is one of the four the table above rests on, carried through to the render:
+
+| Holds                                           | How                                                                                                                                                                                                                             |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Only vouched-for claims render                  | `renderLessonBlock` filters to `promoted` itself rather than trusting its caller. The gate has no bypass on this path either.                                                                                                    |
+| A reader can date what it is told               | Each lesson renders with the goal it was learned on and the date it was written, under a header saying the repository in front of the agent is the authority. Claims with provenance, not instructions — so a stale one can be discounted. |
+| The cost is bounded                             | `lessonBlockChars` (default 6,000), on **characters**, since a lesson runs from a line to 2,000 of them. `0` renders nothing. → [02](02-configuration.md#agent-launch)                                                          |
+| The drop is visible to the person who can act   | Over the cap, whole lessons are dropped **oldest-vouched first** — never a truncated claim. The **operator** sees which, per row, in the Lessons panel; the **agent** is told nothing about the cap, the drop, or that the list is partial. |
+
+With no promoted lessons, nothing is appended at all — not a header, not a newline — and the launch
+arguments are byte-identical to a build without the feature. A retired lesson stops appearing at the
+agent's **next** launch, not mid-run: the block is re-appended on every launch, `--resume` included,
+so an agent already running keeps the block it started with.
+
+What is still to come, and is deliberately not here: the docs route (#355 phase 4), where a retro
+lesson classified as a fact about the *code* becomes a proposed documentation change rather than a
+store row.
 
 Tests: `test/lessons.test.ts`, and the lessons block in `test/retrospective.test.ts`.
 

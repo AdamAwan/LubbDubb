@@ -289,6 +289,33 @@ export interface CockpitWorld extends WorldSnapshot {
  * it is a join across `agent_files` and `tasks` that the cockpit does not hold and
  * should not have to.
  */
+/**
+ * A lesson, plus whether agents are actually getting it (issue #355 phase 3).
+ *
+ * The one thing the operator can see and the agent must not: promoted lessons are
+ * rendered into the fleet's system-prompt append newest-vouched first, up to
+ * `lessonBlockChars`, and whatever does not fit is dropped whole. The agent is
+ * never told the list it reads is partial — a partial list presented as whole is
+ * the failure the cap exists to bound — so the drop has to surface *here*, per
+ * row, or the only person who can act on it cannot see it.
+ *
+ * Per row rather than as a count, because a count says "two are not reaching
+ * agents" and leaves the operator to work out which two before they can retire
+ * something to make room.
+ *
+ * Computed server-side from the same `renderLessonBlock` the launch uses, never
+ * re-derived in the browser: a second implementation of "what fits" would be free
+ * to disagree with the one that actually ran.
+ */
+export interface LessonView extends Lesson {
+  /**
+   * Whether this lesson is in the block agents get at their **next** launch.
+   * False for anything not `promoted`, and for a promoted lesson the cap left
+   * out.
+   */
+  rendered: boolean;
+}
+
 export interface PlanPartView extends PlanPart {
   /**
    * How deep in the stack this part sits — `partDepth`, the longest path to a part
@@ -585,9 +612,8 @@ export interface CockpitState {
    * The retired ones ship too, and that is the point: the surface that prunes
    * lessons has to show what it pruned, or "retired" reads as "deleted" and the
    * operator cannot tell a list they have finished with from one that lost rows.
-   * Nothing here reaches an agent — see {@link Lesson}.
    */
-  lessons: Lesson[];
+  lessons: LessonView[];
   /**
    * Bugs the operator raised from a story row, oldest first — `filing` while the
    * desk agent writes one, `filed` with a ref once it exists.

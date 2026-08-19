@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { Lesson } from '../types.js';
+import type { LessonView } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { renderMarkdown } from './markdown.js';
@@ -19,10 +19,13 @@ import { Ref } from './refs.js';
  * *what wants a decision*, *what is vouched for*, and *what did we stop
  * believing*.
  *
- * **Nothing on this surface reaches an agent.** Promoting is an operator saying
- * "this is worth telling the fleet"; the telling is a later change. The panel
- * says so out loud, because a control that looks like it changes what agents see
- * and does not is worse than no control.
+ * **Promotion is the only thing that puts a claim in front of an agent**, and
+ * since #355 phase 3 it does: promoted lessons are rendered into the fleet's
+ * system-prompt append, newest-vouched first, up to a character cap. That is why
+ * every promoted row says whether it is actually being sent. The agent is told
+ * nothing about the cap — a partial list presented as whole is the failure the
+ * cap exists to bound — so this panel is the only place a dropped claim is
+ * visible, and the only place something can be retired to make room for it.
  */
 export function LessonsPanel({
   lessons,
@@ -32,7 +35,7 @@ export function LessonsPanel({
   onPromote,
   onRetire,
 }: {
-  lessons: Lesson[];
+  lessons: LessonView[];
   now: number;
   refUrls: Record<string, string>;
   onPropose: (text: string, originRef: string | null) => Promise<unknown>;
@@ -67,7 +70,7 @@ export function LessonsPanel({
       />
       <LessonSection
         title="Promoted"
-        blurb="Vouched for. Nothing renders these to an agent yet — promotion records your judgement and changes no launch argument."
+        blurb="Vouched for, and appended to every agent's system prompt at its next launch — newest promotion first, until the character cap is spent. What is over the cap is marked below and reaches nobody; retire something to make room."
         lessons={promoted}
         now={now}
         refUrls={refUrls}
@@ -178,7 +181,7 @@ function LessonSection({
 }: {
   title: string;
   blurb: string;
-  lessons: Lesson[];
+  lessons: LessonView[];
   now: number;
   refUrls: Record<string, string>;
   onPromote: (id: string) => Promise<unknown> | unknown;
@@ -215,7 +218,7 @@ function LessonCard({
   onPromote,
   onRetire,
 }: {
-  lesson: Lesson;
+  lesson: LessonView;
   now: number;
   refUrls: Record<string, string>;
   onPromote: (id: string) => Promise<unknown> | unknown;
@@ -242,12 +245,29 @@ function LessonCard({
           )}{' '}
           · {relTime(lesson.createdAt, now)}
         </span>
+        {/* Whether agents are getting this one. Per row rather than as a count,
+            because "two are over the cap" leaves the operator to work out which
+            two before they can retire anything — and the drop is the one thing
+            here that is invisible to the agent by design. */}
+        {lesson.status === 'promoted' &&
+          (lesson.rendered ? (
+            <span className="chip small ok" title="In the block every agent reads at its next launch">
+              sent to agents
+            </span>
+          ) : (
+            <span
+              className="chip small warn"
+              title="Over the block's character cap, so no agent sees it. Retire an older promoted lesson to make room."
+            >
+              over the cap
+            </span>
+          ))}
         <span className="lesson-actions">
           {lesson.status === 'proposed' && (
             <AsyncButton
               className="ghost"
               onClick={() => onPromote(lesson.id)}
-              title="Vouch for this — it becomes what the fleet is told, once anything renders lessons"
+              title="Vouch for this — it joins the block every agent reads at its next launch"
             >
               Promote
             </AsyncButton>

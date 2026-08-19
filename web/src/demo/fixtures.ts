@@ -1519,6 +1519,7 @@ export function buildDemoState(): DemoSeed {
         status: 'proposed',
         createdAt: ago(20),
         updatedAt: ago(20),
+        rendered: false,
       },
       {
         id: 'lesn-2',
@@ -1529,6 +1530,21 @@ export function buildDemoState(): DemoSeed {
         status: 'promoted',
         createdAt: ago(70),
         updatedAt: ago(66),
+        rendered: true,
+      },
+      {
+        // The other half of the marking, and the reason it is per row: vouched
+        // for, older than the one above, and over the block's cap — so no agent
+        // is reading it, and the only way to find that out is here (#355 phase 3).
+        id: 'lesn-4',
+        text:
+          'The integration suite talks to a real Azure DevOps project, so a run from two branches at once ' +
+          'trips over the same work items. Take the lock in `scripts/devops-lock.sh` before you start one.',
+        originRef: 'issue:301',
+        status: 'promoted',
+        createdAt: ago(300),
+        updatedAt: ago(280),
+        rendered: false,
       },
       {
         // Retired rather than deleted, and drawn: the operator has to be able to
@@ -1539,6 +1555,7 @@ export function buildDemoState(): DemoSeed {
         status: 'retired',
         createdAt: ago(400),
         updatedAt: ago(90),
+        rendered: false,
       },
     ],
     // Work only a person can do. Four, so the panel shows each shape it has: a

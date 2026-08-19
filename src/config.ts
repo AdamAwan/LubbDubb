@@ -338,6 +338,24 @@ export interface Config {
    * runtimes that cannot resume (mock, raw), which have no session to re-open.
    */
   agentResumeAttempts: number;
+  /**
+   * How many characters of promoted lessons may ride in every agent's
+   * system-prompt append (issue #355 phase 3). `0` renders nothing at all.
+   *
+   * Characters rather than a count of lessons, because the cost being bounded is
+   * **context** and a lesson runs from one line to 2,000 characters — ten of one
+   * shape and ten of the other are not the same purchase. The block is a cached
+   * prefix, identical across the fleet, so it is paid once rather than per
+   * dispatch; the cap is what stops "paid once" turning into "unbounded and
+   * unread".
+   *
+   * Over it, whole lessons are dropped **oldest-vouched first** — never a
+   * truncated claim, which would be a claim nobody promoted. The agent is told
+   * nothing about the cap or the drop, because a partial list presented as whole
+   * is the failure this bound exists to prevent; the operator sees it per row in
+   * the cockpit's Lessons panel and retires something to make room.
+   */
+  lessonBlockChars: number;
   /** Command used to launch an agent session (overridable for tests). */
   claudeCommand: string;
   /** Extra args passed to the agent command. */
@@ -553,6 +571,7 @@ const DEFAULTS: Config = {
   agentWaitingPatterns: [],
   agentStallNudges: 2,
   agentResumeAttempts: 3,
+  lessonBlockChars: 6_000,
   claudeCommand: 'claude',
   claudeArgs: [],
   promptTemplatesDir: '.lubbdubb/prompts',

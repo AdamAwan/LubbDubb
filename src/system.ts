@@ -36,6 +36,7 @@ import { StackLandingDesk } from './stacks/landingDesk.js';
 import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.js';
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
 import { McpDesktopServer } from './mcp/desktop.js';
+import { renderLessonBlock } from './lessonBlock.js';
 import { PrNamingDesk } from './prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import { ValidationAskDesk } from './validation/askDesk.js';
@@ -323,6 +324,19 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // `model` is per-launch for the same reason and with the same trap: it is the
   // task's own resolved model (issue #321), so a builder that accepts it and
   // forgets to forward it type-checks clean and silently drops the flag.
+
+  // The fleet's promoted lessons, rendered (issue #355 phase 3). A **function**,
+  // read at each launch rather than a value fixed at wiring time: a lesson
+  // promoted or retired now must reach the next launch, not the next restart.
+  // Recomputing an identical string per launch is free; producing a *different*
+  // one would cost the fleet its cached prefix, which is why `renderLessonBlock`
+  // takes nothing per-dispatch.
+  //
+  // This closure is the whole of what knows lessons exist on the launch path.
+  // `agentProtocol.ts` is handed the finished string and never sees the store —
+  // `test/lessons.test.ts` asserts structurally that it cannot.
+  const lessonBlock = (): string => renderLessonBlock(store.listLessons(), config.lessonBlockChars).text;
+
   type ArgsBuilder = (opts: {
     sessionId: string;
     resume: boolean;
@@ -349,6 +363,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           permissionPromptTool,
           model: model ?? undefined,
           effort: effort ?? undefined,
+          lessonBlock: lessonBlock(),
         })) as ArgsBuilder,
       factory: streamFactory,
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
@@ -372,6 +387,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
           permissionPromptTool,
           model: model ?? undefined,
           effort: effort ?? undefined,
+          lessonBlock: lessonBlock(),
         })) as ArgsBuilder,
       factory: ptyFactory(true),
       initialInput: (task: Parameters<typeof buildInitialMessage>[0]) => buildInitialMessage(task),
