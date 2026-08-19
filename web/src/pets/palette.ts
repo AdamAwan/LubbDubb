@@ -22,13 +22,21 @@ function hash32(input: string): number {
   return hash >>> 0;
 }
 
-/** The five inks one sprite is drawn in. */
+/** The inks one sprite is drawn in. */
 interface PetPalette {
   outline: string;
   body: string;
   highlight: string;
   eye: string;
   marking: string;
+  /** The lit body's underside. → {@link inkFor} */
+  shade: string;
+  /** The mythic's light, spilled one pixel past the outline. */
+  glow: string;
+  /** The rare's four sparks at the bounding box. */
+  glint: string;
+  sparkCore: string;
+  sparkArm: string;
 }
 
 /**
@@ -39,6 +47,11 @@ interface PetPalette {
  * of them every ninth pet. Clamping the two axes that carry contrast — and
  * leaving hue to vary fully — is what keeps every individual legible without
  * making them look like a set.
+ *
+ * The five decoration inks below the first five follow the same rule and the same
+ * two hues: the body's for light on the body, the marking's for everything that
+ * leaves the outline. A rarity device drawn in a hue of its own would be the one
+ * thing on the creature the seed did not choose.
  */
 export function paletteFor(seed: string): PetPalette {
   const hash = hash32(seed);
@@ -46,11 +59,44 @@ export function paletteFor(seed: string): PetPalette {
   // A second, independent read of the same hash, so two pets one apart in hue are
   // not also one apart in every other axis.
   const shift = (hash >>> 9) % 40;
+  const markHue = (hue + 24 + shift) % 360;
   return {
     outline: `hsl(${hue} 55% 22%)`,
     body: `hsl(${hue} ${58 + (shift % 18)}% 62%)`,
     highlight: `hsl(${hue} 85% 84%)`,
     eye: `hsl(${hue} 60% 14%)`,
-    marking: `hsl(${(hue + 24 + shift) % 360} 70% 74%)`,
+    marking: `hsl(${markHue} 70% 74%)`,
+    shade: `hsl(${hue} ${52 + (shift % 14)}% 44%)`,
+    glow: `hsl(${markHue} 88% 74% / 0.42)`,
+    glint: `hsl(${markHue} 92% 82%)`,
+    sparkCore: `hsl(${markHue} 96% 93%)`,
+    sparkArm: `hsl(${markHue} 92% 80% / 0.8)`,
+  };
+}
+
+/**
+ * Which ink each character of a grid is drawn in, and the only mapping of that.
+ *
+ * Here rather than in `SpeciesSprite` because the grid characters are now
+ * produced by two things — the hand-placed grids and the passes in `sprites.ts` —
+ * and a pass that emits a character the draw loop has no colour for draws
+ * *nothing*: no error, no blank, just a device silently missing from one tier.
+ * `test/petSprites.test.ts` holds every character either can emit against this.
+ *
+ * `undefined` is "leave the canvas alone", which is what `.` means and what the
+ * crack overlay's `k` relies on.
+ */
+export function inkFor(palette: PetPalette): Readonly<Record<string, string | undefined>> {
+  return {
+    o: palette.outline,
+    O: palette.body,
+    h: palette.highlight,
+    e: palette.eye,
+    m: palette.marking,
+    d: palette.shade,
+    g: palette.glow,
+    s: palette.glint,
+    A: palette.sparkCore,
+    a: palette.sparkArm,
   };
 }
