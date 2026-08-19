@@ -24,6 +24,7 @@ function sinkRecording(created: IssueCreateInput[], ref: string | null = 'issue:
       created.push(input);
       return ref === null ? { ok: true } : { ok: true, ref };
     },
+    requeueCiCheck: unused,
     postPrReply: unused,
     mergePr: unused,
     setPrLabel: unused,

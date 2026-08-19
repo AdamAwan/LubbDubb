@@ -194,6 +194,7 @@ function azureSink(evals: AzPolicyEvaluation[], requeue: RequeueScript): ActionS
   };
   return {
     requeueCiCheck: (input) => integration.requeueCiCheck(input),
+    createIssue: unused('createIssue'),
     postPrReply: unused('postPrReply'),
     mergePr: unused('mergePr'),
     setPrLabel: unused('setPrLabel'),
