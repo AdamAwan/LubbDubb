@@ -77,9 +77,44 @@ covers `--r-*` (radius), `--font-ui|mono|display`, and `--border-hi`/`--border-l
 that makes a bevel expressible.
 
 The console's own colours are `--cn-*` properties on `:root` in `console.css` — a separate prefix so
-the two sheets cannot collide while both are loaded, and custom properties rather than literals at
-each use site because **no visual theme is settled**: the palette ported from the mockup is a
-placeholder, and the point of the token seam is that replacing it is one block.
+the two sheets cannot collide while both are loaded. The two families are a real distinction rather
+than a namespace: `--accent` is orange and `--cn-accent` is blue, and `--panel` sits two steps lighter
+than `--cn-panel`. The prefix boundary is by component family and **not by file** — `styles.css`
+carries more `var(--cn-*)` references than `console.css` does, because the Tickets tab and the config
+page are console-family surfaces that happen to be styled in the shared sheet.
+
+The token layer is also the theme. Every colour the cockpit draws is a custom property that an
+operator can set from [the Theme section](#the-theme), which turns the old claim that the palette is
+"a placeholder nobody has replaced yet" into a rule with teeth:
+
+> **A colour written as a literal at a use site is a colour no theme can reach.** That is a bug, not a
+> style preference.
+
+It reads as a tidiness rule and is not one. The failure is silent in the way this repo cares about: the
+sheet is correct, the component renders, every test is green, and the panel is simply still dark when
+somebody switches to Light. Getting here meant sweeping 189 such literals out of the two sheets, and
+what keeps them out is `test/cockpitTheme.test.ts` — a colour may appear on a line that declares a
+custom property, and nowhere else, in either sheet. No line ranges and no allow-list, so it cannot rot
+as the sheets grow. Note that neither `format:check` nor `lint` reads CSS at all, so that test is the
+only thing in `npm run check` that does.
+
+Three consequences worth stating, because each is a thing a reasonable change would undo:
+
+- **The tokens live in exactly two `:root` blocks**, and the four scoped families — `--cn-tone-*` on
+  `.cn-t-*`, `--sp-*` on `.sp`, `--rl-*` on `.rl` — are **pure aliases** of them. They have to be. A
+  declaration on `.cn-t-red` shadows an inherited value unconditionally, so while those tints were
+  written there a theme setting them on the root could not reach inside a tone at all. The alias form
+  also keeps their names, which matters more than it looks: `--sp-*` and `--rl-*` are never `var()`-ed
+  from CSS but composed at runtime in TSX as `` var(`--sp-${phase}`) ``, where a rename typechecks,
+  passes and silently paints nothing.
+- **Most `--cn-*` tints are `color-mix` of the core rather than values.** `--cn-red-bg`, `-fill`,
+  `-line` and `-ink` are all mixes of `--cn-red` with a ground, so setting the hue moves all four — in
+  a preset, and under a picker drag. That is the leverage; it is also why a preset is sixty-odd lines
+  instead of a hundred.
+- **The shared family's warm tints stay literals**, and that is deliberate. A mix that reproduces
+  `--amber-fill` numerically has to be read as something like "6% accent over the well", and a formula
+  nobody can reason about is worse than a value they can see. They were hand-tuned against stated
+  contrast targets; a formula does not reproduce hand-tuning.
 
 `console.css` is imported from `main.tsx`, not from a module under `console/`. A `.css` import there
 would be invisible to `tsx`, which has no CSS loader and would throw when `test/console.test.ts` pulls
@@ -182,6 +217,12 @@ Where the operator is lives in the URL's **query string**, so the browser's back
 bookmark and a second tab all mean what they say. `web/src/cockpit/place.ts` holds the whole of it:
 one `Place` record, a `readPlace` that parses one out of a query string and a `placeQuery` that
 writes one back.
+
+`?section=theme` is a place; **the theme is not.** The distinction is the one the address bar is for: a
+section is somewhere you can be, and a theme is true of every place at once. Putting it in the query
+string would give a Light operator two spellings of the overview, make every link the cockpit writes
+re-theme whoever clicked it, and — since live preview writes tokens on every frame of a drag — push a
+history entry sixty times a second.
 
 `Place` is every piece of state that answers _what am I looking at_ — the tab, the selected goal, the
 panel in front, the open drawer, the plan sheet, the retrospective, the notepad, and the three top-bar
@@ -1277,7 +1318,7 @@ showing (`?keys=`). `keys` rather than `group` because the tickets tab already o
 surfaces reading one parameter is a page that opens showing whatever the other one was set to, which
 `test/cockpitPlace.test.ts`'s round-trip caught on the day it was written.
 
-Five sections: **Values**, **Raw file**, **CI policy**, **Prompts**, **Notifications**. Fetched on
+Six sections: **Values**, **Raw file**, **CI policy**, **Prompts**, **Notifications**, **Theme**. Fetched on
 open for the prompt book's reason — the config is read once at boot, so polling would be paying for a
 constant; the page re-reads after a write and when the socket says the file moved. Values are grouped,
 and each one that differs from the built-in default is marked: the question an operator opens this to
@@ -1420,6 +1461,154 @@ agent is in the list from the moment it spawns and a dead one stays there.
 **A null previous snapshot yields nothing.** The first state after a load, a reconnect or a token
 entry seeds the comparison. Without it every row already waiting announces itself at once — a storm on
 exactly the deployments with the most waiting.
+
+### The theme
+
+A preference of the _browser_, for [Notifications](#notifications)' reason exactly, and the second thing
+on this page that is not a config key: `localStorage` under `lubbdubb.theme`, never sent anywhere, no
+route and nothing on the wire. Two operators on one deployment want different colours and neither is
+wrong. The whole feature is `web/src/cockpit/theme.ts`, `web/src/cockpit/tokens.ts`, `web/src/theme.css`
+and `web/src/components/ThemeSettings.tsx`.
+
+#### What is stored
+
+A preset id and a **sparse** map of the tokens moved off it — not a snapshot of all hundred-odd. Two
+things fall out of sparseness that a snapshot would lose. Switching Dark → Light keeps three deliberate
+edits, where a snapshot would carry ninety dark values into Light and produce a hybrid nobody chose. And
+a token added in a later build themes itself, because an absent key means "whatever the preset says"
+rather than "the value that was current when this was written".
+
+There is deliberately **no `version` field**. Every field is validated on the way in, as
+`loadNotifyPrefs` does it; a version number is a promise to write migrations for a preference cheap
+enough to lose. Two degradations are worth naming because both are one line to get wrong:
+
+- **A renamed preset** resolves through `PRESET_ALIASES`, the `TAB_ALIASES` idea from `place.ts`. An
+  unknown id falls back to Dark **keeping the overrides** — landing on Dark with your edits intact is
+  recoverable, a wiped theme is not.
+- **A token removed in a later build** has its override dropped on load, rather than retained and
+  ignored, because a retained `--foo` gets re-applied the day someone adds a token by that name meaning
+  something else. The drop is not persisted until the operator saves, so upgrading, looking and going
+  back loses nothing.
+
+Values are validated against a grammar per `kind`. That is not tidiness: they are handed to
+`style.setProperty`, and a custom property substituted into a property that accepts a URL is the
+ordinary shape of CSS-variable injection. A colour is a hex literal and nothing else — which is why the
+four overlay tokens are eight-digit hex rather than `rgba()`, since alpha is part of their value and a
+colour input cannot express it in any other form.
+
+#### The presets
+
+Nine, and **Dark has no block**: Dark _is_ `:root`, which is what makes it the default with no second
+copy of the palette to drift. The other eight live in `web/src/theme.css` as `html[data-theme='x']`.
+Five are ports — Solarized Dark, Monokai, Dracula, Atom One Dark, Moonlight — one is Light, one is High
+contrast, and **Amber is not a port of anything**: a warm low-blue palette for a room with the lights
+off. Amber is deliberately _not_ monochrome, which is the obvious reading of an amber phosphor screen and
+the wrong one here, because this cockpit carries verdicts in colour and a green that is amber makes a
+passing pipeline look like a failing one.
+
+They are CSS rather than a TypeScript table because eight at sixty-three tokens each is 504 values: in a
+module they would ship in the JS bundle and nobody could review them against the sheet they override.
+`html[data-theme='x']` counts (0,2,0) against `:root`'s (0,1,0), so a preset wins on **specificity, not
+order** — which matters because Vite injects styles through JS in dev and extracts a stylesheet in
+production.
+
+A block declares only the tokens whose `:root` value is a **literal**; the `color-mix` ones follow from
+the core on their own. That rule is not written down anywhere but the CSS itself — the test derives the
+required set by reading `:root` — so adding a core token makes every preset fail until it has an answer.
+Each preset was built from ~27 anchors with the tints derived by the same ratios `:root` uses, and the
+ratios differ between a dark theme and a light one on purpose: 31% of a hue over a dark ground is a
+border you can see, and the same 31% over near-white is a tint you cannot. What stays constant is the
+contrast against the ground, not the proportion.
+
+Two of the ports needed a value changed to be usable rather than faithful. Dracula's comment grey and
+Monokai's sit at 2.4 and 2.2 against their own panels — fine for a comment, too quiet for the secondary
+text this UI puts there — so both are lifted. Every text pair in every preset clears 3:1.
+
+#### How it reaches the DOM
+
+Two mechanisms, one per half of the shape, mirroring the split VS Code makes between a theme
+contribution and `colorCustomizations`:
+
+- the **preset** is `data-theme` on `<html>`, because the palettes are CSS and a block wins on
+  specificity;
+- the **overrides** are inline custom properties on the root element, because only those express a
+  sparse set — one `setProperty` per moved token.
+
+The default preset **removes** the attribute rather than writing `dark`, so each theme has one spelling
+in the DOM, for the reason `placeQuery` omits defaults.
+
+`applyTheme` visits **every** registered token, not only the overridden ones. That is what makes it
+idempotent and two-way: applying a draft that has dropped a token clears it, where tracking what was set
+last time would leave a reverted edit standing — the bug that makes live preview one-way.
+
+#### Before the first paint
+
+Vite extracts the stylesheets to a blocking `<link>` and `main.tsx` is a deferred module, so the browser
+can paint `body{background:var(--bg)}` from `:root` well before any of our code runs. Applying the theme
+from the bundle therefore shows a dark frame and then a light one, on every load, to everyone not on
+Dark. So `web/index.html` carries a **classic inline `<script>`** in `<head>`: synchronous at parse time,
+before `<body>` exists.
+
+It is a second implementation of "apply", and that is the cost of the feature. Two things contain it. It
+knows the storage key and nothing else — no registry, no preset list — so it never needs editing when
+either grows; and `applyTheme` runs moments later and _does_ filter against the registry, so a stale
+override the script over-applies is corrected rather than needing to be kept in step. What has to stay in
+step is the key, and `test/cockpitTheme.test.ts` asserts the HTML names the string `THEME_KEY` exports.
+Renaming it otherwise leaves the script reading a key nothing writes, and the only symptom is a flash of
+dark nobody can attribute.
+
+`applyTheme` is then called once at **module scope** in `main.tsx`, not from a hook: `<StrictMode>`
+double-invokes effects in dev, so a mount effect with a cleanup would apply, revert and apply again.
+
+#### Paper is not a theme
+
+The print block restates every literal colour token, and the mechanism is worth understanding because it
+is what the rule rests on: it declares them **on `#print-sheet`**, and a declaration targeting an element
+beats any inherited value — including an inline one on `<html>`. So the theme cannot reach paper. That
+only holds for tokens the block actually restates, though. Restating the greys was enough while every
+preset was dark; with Monokai or Dracula live, an unrestated warm tint prints as a dark smudge on white.
+So paper owes every literal an answer exactly as a preset does, and is held to it by the same test.
+`theme.css` names no class selector at all, and in particular never `#print-sheet`.
+
+#### The section
+
+Live preview: a change applies to the whole cockpit as it is made, with **Revert unsaved** and **Save**.
+"Revert unsaved" rather than "Revert" because with the preview already applied, "Revert" is ambiguous
+between "undo my edits" and "back to the preset" — the latter is a third control, **Reset to ‹preset›**,
+which sits beside the picker rather than in the save bar because it is a statement about the preset and
+not about the edit.
+
+Three things about the drawing that are decisions rather than details:
+
+- **The picker writes the DOM, React does the bookkeeping.** `onInput` calls `applyToken` straight to
+  `documentElement.style` — that _is_ the preview — and `setState` only so the rows and counts redraw.
+  React never sits in the drag path. It must be `onInput` and not `onChange`: Chrome fires `change` on a
+  colour input only when the picker is dismissed, so `onChange` alone gives no live preview at all.
+- **Leaving the section with unsaved edits keeps the preview**, because the whole point is to go and look
+  at a real goal page in the theme you are building. So the applier is a plain call and **never an effect
+  whose cleanup reverts it**, and the bar states the cost: a reload drops them. Saving is not a visual
+  event — the colours are already on screen — so the bar has to make a statement, or a Save that appears
+  to do nothing gets pressed twice.
+- **A preview card cannot lie about its preset.** Each preset block in `theme.css` carries a second
+  selector, `[data-theme-swatch='x']`, and a card is a `<span>` with that attribute whose swatches read
+  `var(--bg)` and friends — so a card's colours arrive through the same declaration block as the theme.
+  Dark needed its own four-value block for this and only this: with no rule to match, the Dark card
+  inherited whatever theme was live and drew Monokai's colours while offering Dark. The one card that had
+  to be honest about the default was the one lying about it. Those four values are the feature's only real
+  duplication, and the test holds each against `:root`.
+
+Each row names the property as well as labelling it, because `--panel-2` is what appears in a bug report
+and a label alone cannot answer "which token is that". It also carries one line of _what will change_,
+which is the question a colour picker actually raises. The registry (`tokens.ts`) holds all three, and the
+reset control is drawn only on an overridden row — a hundred disabled buttons is furniture. Search covers
+name, label and reason together, since someone typing "border" and someone typing "the line between two
+cards" are both after `--border`. Radii and typefaces are in as well as colours: the two halves of the
+cockpit disagree about corners today (`--r-*` are all `0`, `--cn-r` is `8px`), and the theme page is where
+that becomes choosable.
+
+Not on `Place` — see [the address bar](#the-address-bar). Deliberately untested: whether a colour _looks_
+right. There are no WCAG assertions in the suite and no screenshot diffing; the presets were checked for
+contrast when they were written, and the section offers the operator no opinion about what they pick.
 
 ### The CI policy tab
 
@@ -2225,7 +2414,7 @@ structurally — a missing arm is a compile error at the call site, not dead wei
 
 ## Tests
 
-Nine files, split on what they can see:
+Ten files, split on what they can see:
 
 - `test/cockpitViewModel.test.ts` — the derivations `buildViewModel` folds, untestable while they lived
   inside a component.
@@ -2234,7 +2423,13 @@ Nine files, split on what they can see:
   goal, and the prefix trap `issue:14` versus `issue:1`.
 - `test/console.test.ts` — the structural rules and the renders, against the demo fixtures.
 - `test/cockpitPlace.test.ts` — the [address bar](#the-address-bar)'s codec: the round trip, the one
-  spelling per place, and what a hand-typed URL that names nothing reads as.
+  spelling per place, and what a hand-typed URL that names nothing reads as. Both whitelists are read
+  off their types rather than listed, so a panel or a config section added to one and forgotten in the
+  other fails here rather than becoming a control that cannot open.
+- `test/cockpitTheme.test.ts` — [the theme](#the-theme) and the token layer, which is also the only
+  thing in `check` that reads the stylesheets: no literal outside a declaration, every `var()`
+  resolving, the registry and the sheets naming the same tokens in both directions, each token's kind
+  matching the value it is declared with, and every preset — and paper — answering every literal.
 - `test/insightExport.test.ts` — the [exports](#exporting-a-reading): the CSV quoting, the sections and
   their order, that figures leave unrounded, and that each caveat the panel speaks leaves as a row.
 - `test/markdown.test.ts` and `test/richText.test.ts` — the two prose renderers, and the line between

@@ -1,0 +1,685 @@
+/*
+ * The presets. One block per theme, keyed on `data-theme` on the root element.
+ *
+ * **Dark has no block here: Dark *is* `:root`.** That is what makes it the
+ * default with nothing to keep in step — a second copy of the default palette
+ * would be a second thing to edit and a first thing to drift.
+ *
+ * The presets are CSS rather than TypeScript on purpose. Four of them at sixty-odd
+ * tokens each is 252 values; in a module they would ship in the JS bundle, and
+ * nobody could review them against the sheet that declares what they override.
+ * Here they are the same grammar as the tokens themselves and read as a diff.
+ *
+ * A block declares only the tokens whose value in `:root` is a **literal**. The
+ * ones declared there as `color-mix` of the core follow on their own — set
+ * `--cn-red` and its bg, fill, line and ink move with it — which is both why a
+ * preset is this short and why a picker drag moves more than one swatch.
+ * `test/cockpitTheme.test.ts` holds that line in both directions.
+ *
+ * `html[data-theme='x']` counts (0,2,0) against `:root`'s (0,1,0), so a preset wins
+ * on **specificity, not order** — nothing here depends on where this sheet lands
+ * in the bundle, which matters because Vite injects styles through JS in dev and
+ * extracts a stylesheet in production.
+ *
+ * The second selector in each pair, `[data-theme-swatch='x']`, is how the Theme
+ * section draws its preview cards: the card is a `<span>` carrying the attribute,
+ * and its swatches read `var(--bg)`, `var(--panel)` and so on. The card's colours
+ * therefore arrive through the *same declaration block* as the theme itself, so a
+ * card cannot show a palette the preset does not have.
+ *
+ * There are **no class selectors in this file**, and in particular nothing naming
+ * `#print-sheet`. Paper keeps its own palette: that block declares tokens *on* the
+ * print element, and a declaration targeting an element beats any inherited value,
+ * including an inline one on `<html>`. The theme does not reach print, by
+ * construction rather than by care.
+ *
+ * → docs/spec/17-cockpit.md#the-theme
+ */
+
+/* ---------- Dark ----------
+   Dark has no theme block, and needs none: it *is* `:root`. But its preview card
+   does need one. A card reads its swatches through `[data-theme-swatch]`, and with
+   no rule to match, the Dark card inherits whatever theme is live — so while
+   Monokai was applied, the card offering Dark drew Monokai. The card that has to be
+   honest about the default was the one lying about it.
+
+   Only the four values a card draws, and `test/cockpitTheme.test.ts` holds each
+   against `:root` so this cannot drift from the palette it advertises. */
+[data-theme-swatch='dark'] {
+  --bg: #191b1c;
+  --panel: #313436;
+  --text: #e9e7e1;
+  --accent: #ff9c1a;
+}
+
+/* ---------- Light ----------
+   The print sheet's light values were the starting point; the hues are darkened until each holds its own against white rather than merely differing from it. */
+html[data-theme='light'],
+[data-theme-swatch='light'] {
+  --bg: #f2f2ef;
+  --well: #e9e9e6;
+  --panel: #ffffff;
+  --panel-2: #fafaf8;
+  --border: #cfcfc9;
+  --text: #1c1b1a;
+  --muted: #5f5f5b;
+  --border-lo: #b4b4ae;
+  --accent: #b96a00;
+  --blue: #2b6c94;
+  --green: #3d7f2e;
+  --amber: #8a6a12;
+  --red: #b3271a;
+  --grey: #6a6d6f;
+  --violet: #6d4fa0;
+
+  /* A line is the hue partway onto the ground, a fill a tenth of the way, an
+     ink the hue carried most of the way to the lettering. The ratios differ
+     between a dark theme and a light one on purpose: what stays constant is
+     the contrast against the ground, not the proportion. */
+  --amber-line: #aa955a;
+  --amber-fill: #dbd6c6;
+  --red-line: #c5695f;
+  --red-fill: #e1ccc7;
+  --green-line: #77a36d;
+  --green-fill: #cfd9ca;
+  --accent-fill: #e0d2bd;
+  --link-ink: #285a79;
+  --on-light: #1c1b1a;
+  --on-warm: #1c1b1a;
+  --veil: #0000000d;
+
+  --term-fg: #213745;
+  --term-fg-dim: #476575;
+  --ansi-cyan: #317273;
+  --ansi-gray: #4b4c4d;
+  --ansi-red: #6f221a;
+  --ansi-green: #305926;
+
+  /* Twelve hues at one saturation and one lightness, alternating cool and
+     warm so neighbouring slots never read as the same feature. */
+  --feat-0: #2e669e;
+  --feat-1: #9e9e2e;
+  --feat-2: #662e9e;
+  --feat-3: #2e9e2e;
+  --feat-4: #9e2e66;
+  --feat-5: #2e9e9e;
+  --feat-6: #9e662e;
+  --feat-7: #2e2e9e;
+  --feat-8: #669e2e;
+  --feat-9: #9e2e9e;
+  --feat-10: #2e9e66;
+  --feat-11: #9e2e2e;
+
+  --cn-bg: #eef0f3;
+  --cn-panel: #ffffff;
+  --cn-panel-2: #f6f7f9;
+  --cn-line: #d5d8de;
+  --cn-line-soft: #e6e8ec;
+  --cn-fg: #14161a;
+  --cn-fg-dim: #5a616b;
+  --cn-fg-faint: #868d97;
+  --cn-accent: #2a5fd8;
+  --cn-red: #c4302f;
+  --cn-amber: #9a6300;
+  --cn-green: #167a52;
+  --cn-violet: #6d4fc4;
+  --cn-red-ink-hi: #682224;
+  --cn-amber-ink: #4f380f;
+  --cn-amber-ink-hi: #734d08;
+  --cn-blue-ink: #2650b2;
+  --cn-on-accent: #ffffff;
+  --cn-on-red: #ffffff;
+}
+
+/* ---------- High contrast ----------
+   Pure black ground, white lettering, and one grey border light enough to be a line rather than a suggestion. The hues are the brightest reading of each that still says which one it is. */
+html[data-theme='contrast'],
+[data-theme-swatch='contrast'] {
+  --bg: #000000;
+  --well: #000000;
+  --panel: #0d0d0d;
+  --panel-2: #070707;
+  --border: #8a8a8a;
+  --text: #ffffff;
+  --muted: #d4d4d4;
+  --border-lo: #5a5a5a;
+  --accent: #ffb000;
+  --blue: #4fc1ff;
+  --green: #4ade80;
+  --amber: #ffd700;
+  --red: #ff4d4d;
+  --grey: #9a9a9a;
+  --violet: #c58aff;
+
+  /* A line is the hue partway onto the ground, a fill a tenth of the way, an
+     ink the hue carried most of the way to the lettering. The ratios differ
+     between a dark theme and a light one on purpose: what stays constant is
+     the contrast against the ground, not the proportion. */
+  --amber-line: #4f4300;
+  --amber-fill: #171300;
+  --red-line: #4f1818;
+  --red-fill: #170707;
+  --green-line: #174528;
+  --green-fill: #07140c;
+  --accent-fill: #1f1500;
+  --link-ink: #89d5ff;
+  --on-light: #000000;
+  --on-warm: #000000;
+  --veil: #ffffff1f;
+
+  --term-fg: #c1e9ff;
+  --term-fg-dim: #97cbe8;
+  --ansi-cyan: #4dcad6;
+  --ansi-gray: #c2c2c2;
+  --ansi-red: #ff9d9d;
+  --ansi-green: #8febb0;
+
+  /* Twelve hues at one saturation and one lightness, alternating cool and
+     warm so neighbouring slots never read as the same feature. */
+  --feat-0: #56a8fb;
+  --feat-1: #fbfb56;
+  --feat-2: #a856fb;
+  --feat-3: #56fb56;
+  --feat-4: #fb56a8;
+  --feat-5: #56fbfb;
+  --feat-6: #fba856;
+  --feat-7: #5656fb;
+  --feat-8: #a8fb56;
+  --feat-9: #fb56fb;
+  --feat-10: #56fba8;
+  --feat-11: #fb5656;
+
+  --cn-bg: #000000;
+  --cn-panel: #0d0d0d;
+  --cn-panel-2: #070707;
+  --cn-line: #8a8a8a;
+  --cn-line-soft: #5a5a5a;
+  --cn-fg: #ffffff;
+  --cn-fg-dim: #e0e0e0;
+  --cn-fg-faint: #b0b0b0;
+  --cn-accent: #4fc1ff;
+  --cn-red: #ff4d4d;
+  --cn-amber: #ffd700;
+  --cn-green: #4ade80;
+  --cn-violet: #c58aff;
+  --cn-red-ink-hi: #ffaaaa;
+  --cn-amber-ink: #ffed8f;
+  --cn-amber-ink-hi: #ffe34a;
+  --cn-blue-ink: #72cdff;
+  --cn-on-accent: #000000;
+  --cn-on-red: #000000;
+}
+
+/* ---------- Solarized Dark ----------
+   Ethan Schoonover's base03..base3 and the eight accents, mapped role for role. `--accent` takes orange because the default palette's accent is the warm one. */
+html[data-theme='solarized-dark'],
+[data-theme-swatch='solarized-dark'] {
+  --bg: #002b36;
+  --well: #00212b;
+  --panel: #073642;
+  --panel-2: #04303b;
+  --border: #0f4a58;
+  --text: #93a1a1;
+  --muted: #839496;
+  --border-lo: #001b23;
+  --accent: #cb4b16;
+  --blue: #268bd2;
+  --green: #859900;
+  --amber: #b58900;
+  --red: #dc322f;
+  --grey: #586e75;
+  --violet: #6c71c4;
+
+  /* A line is the hue partway onto the ground, a fill a tenth of the way, an
+     ink the hue carried most of the way to the lettering. The ratios differ
+     between a dark theme and a light one on purpose: what stays constant is
+     the contrast against the ground, not the proportion. */
+  --amber-line: #38411e;
+  --amber-fill: #102a27;
+  --red-line: #44262c;
+  --red-fill: #14232b;
+  --green-line: #29461e;
+  --green-fill: #0c2c27;
+  --accent-fill: #182628;
+  --link-ink: #4a92c2;
+  --on-light: #002b36;
+  --on-warm: #002b36;
+  --veil: #ffffff0d;
+
+  --term-fg: #6d99b2;
+  --term-fg-dim: #5890b2;
+  --ansi-cyan: #448f8f;
+  --ansi-gray: #708287;
+  --ansi-red: #bb6462;
+  --ansi-green: #8a9c3d;
+
+  /* Twelve hues at one saturation and one lightness, alternating cool and
+     warm so neighbouring slots never read as the same feature. */
+  --feat-0: #307fcf;
+  --feat-1: #cfcf30;
+  --feat-2: #7f30cf;
+  --feat-3: #30cf30;
+  --feat-4: #cf3080;
+  --feat-5: #30cfcf;
+  --feat-6: #cf8030;
+  --feat-7: #3030cf;
+  --feat-8: #80cf30;
+  --feat-9: #cf30cf;
+  --feat-10: #30cf80;
+  --feat-11: #cf3030;
+
+  --cn-bg: #002b36;
+  --cn-panel: #073642;
+  --cn-panel-2: #05323d;
+  --cn-line: #0f4a58;
+  --cn-line-soft: #0a3f4c;
+  --cn-fg: #93a1a1;
+  --cn-fg-dim: #839496;
+  --cn-fg-faint: #7b8f93;
+  --cn-accent: #268bd2;
+  --cn-red: #dc322f;
+  --cn-amber: #b58900;
+  --cn-green: #859900;
+  --cn-violet: #6c71c4;
+  --cn-red-ink-hi: #b66c6a;
+  --cn-amber-ink: #a2965a;
+  --cn-amber-ink-hi: #ab902f;
+  --cn-blue-ink: #3c8fc8;
+  --cn-on-accent: #002b36;
+  --cn-on-red: #fdf6e3;
+}
+
+/* ---------- Monokai ----------
+   The classic editor palette. Its foreground is nearly white and its ground nearly black, so the console family sits one step below the shared one exactly as it does on Dark. */
+html[data-theme='monokai'],
+[data-theme-swatch='monokai'] {
+  --bg: #272822;
+  --well: #1e1f1c;
+  --panel: #3e3d32;
+  --panel-2: #34352c;
+  --border: #4a4b40;
+  --text: #f8f8f2;
+  --muted: #a89f8c;
+  --border-lo: #141510;
+  --accent: #fd971f;
+  --blue: #66d9ef;
+  --green: #a6e22e;
+  --amber: #e6db74;
+  --red: #f92672;
+  --grey: #75715e;
+  --violet: #ae81ff;
+
+  /* A line is the hue partway onto the ground, a fill a tenth of the way, an
+     ink the hue carried most of the way to the lettering. The ratios differ
+     between a dark theme and a light one on purpose: what stays constant is
+     the contrast against the ground, not the proportion. */
+  --amber-line: #5c5937;
+  --amber-fill: #303024;
+  --red-line: #622137;
+  --red-fill: #322024;
+  --green-line: #485b22;
+  --green-fill: #2a311e;
+  --accent-fill: #392d1c;
+  --link-ink: #96e3f0;
+  --on-light: #272822;
+  --on-warm: #272822;
+  --veil: #ffffff0f;
+
+  --term-fg: #c5edf1;
+  --term-fg-dim: #8ababa;
+  --ansi-cyan: #7adcb1;
+  --ansi-gray: #a9a799;
+  --ansi-red: #f984ac;
+  --ansi-green: #c5ea78;
+
+  /* Twelve hues at one saturation and one lightness, alternating cool and
+     warm so neighbouring slots never read as the same feature. */
+  --feat-0: #74a8dc;
+  --feat-1: #dcdc74;
+  --feat-2: #a874dc;
+  --feat-3: #74dc74;
+  --feat-4: #dc74a8;
+  --feat-5: #74dcdc;
+  --feat-6: #dca874;
+  --feat-7: #7474dc;
+  --feat-8: #a8dc74;
+  --feat-9: #dc74dc;
+  --feat-10: #74dca8;
+  --feat-11: #dc7474;
+
+  --cn-bg: #1e1f1c;
+  --cn-panel: #272822;
+  --cn-panel-2: #2f302a;
+  --cn-line: #414339;
+  --cn-line-soft: #33352d;
+  --cn-fg: #f8f8f2;
+  --cn-fg-dim: #a6a28c;
+  --cn-fg-faint: #75715e;
+  --cn-accent: #66d9ef;
+  --cn-red: #f92672;
+  --cn-amber: #e6db74;
+  --cn-green: #a6e22e;
+  --cn-violet: #ae81ff;
+  --cn-red-ink-hi: #f893b5;
+  --cn-amber-ink: #f0ebbb;
+  --cn-amber-ink-hi: #ebe399;
+  --cn-blue-ink: #83dff0;
+  --cn-on-accent: #1e1f1c;
+  --cn-on-red: #1e1f1c;
+}
+
+/* ---------- Dracula ----------
+   Zeno Rocha's palette. Its comment grey is the one value that could not come across unchanged: at 2.4 against the panel it is a fine colour for a comment and too quiet for secondary text. */
+html[data-theme='dracula'],
+[data-theme-swatch='dracula'] {
+  --bg: #282a36;
+  --well: #21222c;
+  --panel: #343746;
+  --panel-2: #2d303e;
+  --border: #44475a;
+  --text: #f8f8f2;
+  --muted: #a5abcc;
+  --border-lo: #191a21;
+  --accent: #ffb86c;
+  --blue: #8be9fd;
+  --green: #50fa7b;
+  --amber: #f1fa8c;
+  --red: #ff5555;
+  --grey: #6272a4;
+  --violet: #bd93f9;
+
+  /* A line is the hue partway onto the ground, a fill a tenth of the way, an
+     ink the hue carried most of the way to the lettering. The ratios differ
+     between a dark theme and a light one on purpose: what stays constant is
+     the contrast against the ground, not the proportion. */
+  --amber-line: #61654a;
+  --amber-fill: #343535;
+  --red-line: #663239;
+  --red-fill: #352730;
+  --green-line: #306544;
+  --green-fill: #253533;
+  --accent-fill: #3c3434;
+  --link-ink: #afeef9;
+  --on-light: #21222c;
+  --on-warm: #21222c;
+  --veil: #ffffff0f;
+
+  --term-fg: #d2f3f6;
+  --term-fg-dim: #99c8e3;
+  --ansi-cyan: #78eed3;
+  --ansi-gray: #9ea8c3;
+  --ansi-red: #fc9e9c;
+  --ansi-green: #90f9a8;
+
+  /* Twelve hues at one saturation and one lightness, alternating cool and
+     warm so neighbouring slots never read as the same feature. */
+  --feat-0: #83b2e2;
+  --feat-1: #e2e283;
+  --feat-2: #b283e2;
+  --feat-3: #83e283;
+  --feat-4: #e283b3;
+  --feat-5: #83e2e2;
+  --feat-6: #e2b283;
+  --feat-7: #8383e2;
+  --feat-8: #b3e283;
+  --feat-9: #e283e2;
+  --feat-10: #83e2b3;
+  --feat-11: #e28383;
+
+  --cn-bg: #21222c;
+  --cn-panel: #282a36;
+  --cn-panel-2: #2f3241;
+  --cn-line: #44475a;
+  --cn-line-soft: #3a3d4d;
+  --cn-fg: #f8f8f2;
+  --cn-fg-dim: #c3c8e0;
+  --cn-fg-faint: #9096b8;
+  --cn-accent: #8be9fd;
+  --cn-red: #ff5555;
+  --cn-amber: #ffb86c;
+  --cn-green: #50fa7b;
+  --cn-violet: #bd93f9;
+  --cn-red-ink-hi: #fbaaa7;
+  --cn-amber-ink: #fbdcb7;
+  --cn-amber-ink-hi: #fdcb93;
+  --cn-blue-ink: #a1ecfb;
+  --cn-on-accent: #21222c;
+  --cn-on-red: #21222c;
+}
+
+/* ---------- Atom One Dark ----------
+   Atom's One Dark. The transcript already spoke it, in a way - the default `--ansi-cyan` is One Dark's #56b6c2, ported in with the mockup. */
+html[data-theme='one-dark'],
+[data-theme-swatch='one-dark'] {
+  --bg: #282c34;
+  --well: #21252b;
+  --panel: #333842;
+  --panel-2: #2c313a;
+  --border: #3e4451;
+  --text: #d7dae0;
+  --muted: #a7aebc;
+  --border-lo: #181b20;
+  --accent: #d19a66;
+  --blue: #61afef;
+  --green: #98c379;
+  --amber: #e5c07b;
+  --red: #e06c75;
+  --grey: #5c6370;
+  --violet: #c678dd;
+
+  /* A line is the hue partway onto the ground, a fill a tenth of the way, an
+     ink the hue carried most of the way to the lettering. The ratios differ
+     between a dark theme and a light one on purpose: what stays constant is
+     the contrast against the ground, not the proportion. */
+  --amber-line: #5e5544;
+  --amber-fill: #333332;
+  --red-line: #5c3b42;
+  --red-fill: #322b32;
+  --green-line: #465643;
+  --green-fill: #2c3332;
+  --accent-fill: #363332;
+  --link-ink: #88bdea;
+  --on-light: #21252b;
+  --on-warm: #21252b;
+  --veil: #ffffff0f;
+
+  --term-fg: #aecbe5;
+  --term-fg-dim: #87aed3;
+  --ansi-cyan: #73b5c9;
+  --ansi-gray: #8d939d;
+  --ansi-red: #dc9ea5;
+  --ansi-green: #b0cca0;
+
+  /* Twelve hues at one saturation and one lightness, alternating cool and
+     warm so neighbouring slots never read as the same feature. */
+  --feat-0: #79a8d8;
+  --feat-1: #d8d879;
+  --feat-2: #a879d8;
+  --feat-3: #79d879;
+  --feat-4: #d879a8;
+  --feat-5: #79d8d8;
+  --feat-6: #d8a879;
+  --feat-7: #7979d8;
+  --feat-8: #a8d879;
+  --feat-9: #d879d8;
+  --feat-10: #79d8a8;
+  --feat-11: #d87979;
+
+  --cn-bg: #21252b;
+  --cn-panel: #282c34;
+  --cn-panel-2: #2f343d;
+  --cn-line: #3e4451;
+  --cn-line-soft: #343a44;
+  --cn-fg: #d7dae0;
+  --cn-fg-dim: #abb2bf;
+  --cn-fg-faint: #868e9c;
+  --cn-accent: #61afef;
+  --cn-red: #e06c75;
+  --cn-amber: #e5c07b;
+  --cn-green: #98c379;
+  --cn-violet: #c678dd;
+  --cn-red-ink-hi: #dba5ad;
+  --cn-amber-ink: #ddcfb4;
+  --cn-amber-ink-hi: #e1c898;
+  --cn-blue-ink: #79b8ec;
+  --cn-on-accent: #21252b;
+  --cn-on-red: #21252b;
+}
+
+/* ---------- Moonlight ----------
+   atomiks' Moonlight II. The least widely known of these, kept for being the only cool-violet ground among them. */
+html[data-theme='moonlight'],
+[data-theme-swatch='moonlight'] {
+  --bg: #212337;
+  --well: #191a2a;
+  --panel: #2f334d;
+  --panel-2: #262840;
+  --border: #383c5c;
+  --text: #c8d3f5;
+  --muted: #a3abd4;
+  --border-lo: #141521;
+  --accent: #ff966c;
+  --blue: #82aaff;
+  --green: #c3e88d;
+  --amber: #ffc777;
+  --red: #ff757f;
+  --grey: #7f85a3;
+  --violet: #c099ff;
+
+  /* A line is the hue partway onto the ground, a fill a tenth of the way, an
+     ink the hue carried most of the way to the lettering. The ratios differ
+     between a dark theme and a light one on purpose: what stays constant is
+     the contrast against the ground, not the proportion. */
+  --amber-line: #605042;
+  --amber-fill: #2e2a31;
+  --red-line: #603644;
+  --red-fill: #2e2232;
+  --green-line: #4e5a49;
+  --green-fill: #282d33;
+  --accent-fill: #352932;
+  --link-ink: #99b8fc;
+  --on-light: #191a2a;
+  --on-warm: #191a2a;
+  --veil: #ffffff0f;
+
+  --term-fg: #b0c5f8;
+  --term-fg-dim: #94abe8;
+  --ansi-cyan: #97bedb;
+  --ansi-gray: #9ca4c4;
+  --ansi-red: #e69fb4;
+  --ansi-green: #c5e0b5;
+
+  /* Twelve hues at one saturation and one lightness, alternating cool and
+     warm so neighbouring slots never read as the same feature. */
+  --feat-0: #86b8ea;
+  --feat-1: #eaea86;
+  --feat-2: #b886ea;
+  --feat-3: #86ea86;
+  --feat-4: #ea86b8;
+  --feat-5: #86eaea;
+  --feat-6: #eab886;
+  --feat-7: #8686ea;
+  --feat-8: #b8ea86;
+  --feat-9: #ea86ea;
+  --feat-10: #86eab8;
+  --feat-11: #ea8686;
+
+  --cn-bg: #191a2a;
+  --cn-panel: #212337;
+  --cn-panel-2: #292c44;
+  --cn-line: #383c5c;
+  --cn-line-soft: #2e3150;
+  --cn-fg: #c8d3f5;
+  --cn-fg-dim: #a9b8e8;
+  --cn-fg-faint: #868da8;
+  --cn-accent: #82aaff;
+  --cn-red: #ff757f;
+  --cn-amber: #ffc777;
+  --cn-green: #c3e88d;
+  --cn-violet: #c099ff;
+  --cn-red-ink-hi: #e2a6bc;
+  --cn-amber-ink: #e0cebe;
+  --cn-amber-ink-hi: #efca9c;
+  --cn-blue-ink: #90b2fd;
+  --cn-on-accent: #191a2a;
+  --cn-on-red: #191a2a;
+}
+
+/* ---------- Amber ----------
+   Not a port of an editor theme: a warm, low-blue palette for a room with the lights off. Deliberately not monochrome, which is the obvious reading of an amber phosphor screen and the wrong one here - this cockpit carries verdicts in colour, and a green that is amber makes a passing pipeline look like a failing one. The hues stay six things you can tell apart; only the ground, the lettering and the accent go warm. */
+html[data-theme='amber'],
+[data-theme-swatch='amber'] {
+  --bg: #17120a;
+  --well: #100c06;
+  --panel: #241c0f;
+  --panel-2: #1d160b;
+  --border: #4a3a1c;
+  --text: #f5d9a8;
+  --muted: #c1a273;
+  --border-lo: #0a0805;
+  --accent: #ffb733;
+  --blue: #8fbfa8;
+  --green: #b5c95e;
+  --amber: #ffc866;
+  --red: #ff7a52;
+  --grey: #8a7a5f;
+  --violet: #d9a8cf;
+
+  /* A line is the hue partway onto the ground, a fill a tenth of the way, an
+     ink the hue carried most of the way to the lettering. The ratios differ
+     between a dark theme and a light one on purpose: what stays constant is
+     the contrast against the ground, not the proportion. */
+  --amber-line: #5a4624;
+  --amber-fill: #261d0f;
+  --red-line: #5a2e1e;
+  --red-fill: #26160d;
+  --green-line: #434721;
+  --green-fill: #1f1d0e;
+  --accent-fill: #2d210b;
+  --link-ink: #b1c8a8;
+  --on-light: #17120a;
+  --on-warm: #17120a;
+  --veil: #ffffff0f;
+
+  --term-fg: #d1d0a8;
+  --term-fg-dim: #aaaf8b;
+  --ansi-cyan: #9bc290;
+  --ansi-gray: #b5a07c;
+  --ansi-red: #faa579;
+  --ansi-green: #cdcf7a;
+
+  /* Twelve hues at one saturation and one lightness, alternating cool and
+     warm so neighbouring slots never read as the same feature. */
+  --feat-0: #6e9ecf;
+  --feat-1: #cfcf6e;
+  --feat-2: #9e6ecf;
+  --feat-3: #6ecf6e;
+  --feat-4: #cf6e9e;
+  --feat-5: #6ecfcf;
+  --feat-6: #cf9e6e;
+  --feat-7: #6e6ecf;
+  --feat-8: #9ecf6e;
+  --feat-9: #cf6ecf;
+  --feat-10: #6ecf9e;
+  --feat-11: #cf6e6e;
+
+  --cn-bg: #100c06;
+  --cn-panel: #17120a;
+  --cn-panel-2: #1f1810;
+  --cn-line: #3d3018;
+  --cn-line-soft: #2c2212;
+  --cn-fg: #f5d9a8;
+  --cn-fg-dim: #c1a273;
+  --cn-fg-faint: #9a8560;
+  --cn-accent: #ffb733;
+  --cn-red: #ff7a52;
+  --cn-amber: #ffc866;
+  --cn-green: #b5c95e;
+  --cn-violet: #d9a8cf;
+  --cn-red-ink-hi: #faab7f;
+  --cn-amber-ink: #f9d28b;
+  --cn-amber-ink-hi: #fccd79;
+  --cn-blue-ink: #fdbe4a;
+  --cn-on-accent: #17120a;
+  --cn-on-red: #17120a;
+}

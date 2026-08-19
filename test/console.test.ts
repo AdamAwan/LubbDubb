@@ -10,6 +10,7 @@ import type { CockpitView } from '../web/src/view/viewModel.js';
 import type { GoalPartView } from '../web/src/view/goalPage.js';
 import type { CockpitActions, ConsolePanel } from '../web/src/cockpit/actions.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE } from '../web/src/console/QueueRail.js';
+import { PRESETS } from '../web/src/cockpit/theme.js';
 
 // `tsx` compiles JSX with the classic runtime, which emits bare
 // `React.createElement`; the bundle uses the automatic one. The global goes in
@@ -21,6 +22,7 @@ const { ConsoleRoot } = await import('../web/src/console/ConsoleRoot.js');
 const { Panel } = await import('../web/src/console/Panel.js');
 const { RefLinks } = await import('../web/src/components/refs.js');
 const { goalIssue } = await import('../web/src/view/goalPage.js');
+const { ThemeSettings } = await import('../web/src/components/ThemeSettings.js');
 
 function view(over: Partial<CockpitView> = {}): CockpitView {
   const state = buildDemoState().state;
@@ -794,6 +796,44 @@ test('a held goal is a way into the goal it names', () => {
   // part of the tab this seam can see.
   const html = render(view({ tab: 'tickets' }));
   assert.ok(html.includes('tickets-intake-name'));
+});
+
+/**
+ * Every section in the strip has a render arm.
+ *
+ * The other half of registering a config section. `cockpitPlace.test.ts` proves
+ * `?section=x` survives the URL; this proves the page has something to draw when it
+ * arrives. A section in `TABS` with no arm draws the *previous* section's body under
+ * its own heading, which reads as the wrong content rather than as a bug.
+ *
+ * Asserted over the source rather than a render because `ConfigPage` draws nothing
+ * but "Loading…" until `api.getConfig()` resolves, and stubbing the api to reach the
+ * strip would be testing the stub.
+ */
+test('every config section in the strip has a render arm', () => {
+  const source = readFileSync('web/src/components/ConfigPage.tsx', 'utf8');
+  const strip = /const TABS: readonly \{ id: ConfigTab; label: string \}\[\] = \[([\s\S]*?)\];/.exec(source);
+  assert.ok(strip, 'TABS is declared where this test looks for it');
+  const sections = [...strip[1]!.matchAll(/id: '([a-z]+)'/g)].map((m) => m[1]!);
+  assert.ok(sections.length >= 6, `found ${sections.length} sections, which is too few to be the real list`);
+  for (const id of sections) {
+    assert.ok(source.includes(`tab === '${id}' &&`), `the ${id} section is in the strip with nothing to draw`);
+  }
+});
+
+test('the theme section draws a preset picker, the token rows and the save bar', () => {
+  const html = renderToStaticMarkup(createElement(ThemeSettings));
+  // The swatches read `var(--bg)` and friends, which resolve through the same
+  // declaration block as the theme — so the attribute is what makes a card honest.
+  for (const preset of PRESETS) {
+    assert.ok(html.includes(`data-theme-swatch="${preset.id}"`), `${preset.id} has no preview card`);
+  }
+  assert.ok(html.includes('--panel-2'), 'a row names the property, not only its label');
+  assert.ok(html.includes('The slightly recessed face inside a card'), 'and says what moving it changes');
+  assert.ok(html.includes('Dark, unmodified'), 'the bar states where the theme stands');
+  // Advanced is folded away on arrival, so the ninety-odd derived tokens are not
+  // the first thing an operator meets.
+  assert.ok(!html.includes('--cn-violet-line'), 'an advanced group must start folded');
 });
 
 test('a goal with no measured spend draws no spend row rather than $0.00', () => {
