@@ -91,7 +91,7 @@ Four surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ident │ Overview Backlog Work │ Scan · Fleet    Spend Yield … Launch ⚙ │  top bar
+│ ident ↗issue │ Overview Backlog Work │ Scan · Fleet  Spend Yield … Launch ⚙ │ top bar
 ├────────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned            │
 ├───────────────┬────────────────────────────────────────────────────────┤
@@ -1069,6 +1069,18 @@ The strip carries the ident, the nav, the pulse, the fleet cap, and nine reading
 a plain label-and-number face. None reaches `api.js`: every one is a method on `CockpitActions`, and
 the fleet cap is the shared `FleetControl`, which is already on that seam.
 
+**The ident carries the one link on the bar that leaves.** `↗ Raise an issue` opens LubbDubb's own
+new-issue form in a new tab, and its URL is a constant in `TopBar.tsx` — not `github.owner`/`github.repo`,
+which name the repo the fleet _works on_ and are LubbDubb's only while it is dogfooding itself. A fault
+in the cockpit belongs on the cockpit's tracker whatever repo the deployment is pointed at, so a fork or
+a customer's repo is sent to the same place; nothing on the wire has to carry it. It lands on the form
+rather than the repo or the issue list because the feature is the number of clicks between noticing
+something and having written it down. It sits in the ident rather than among the readings for the reason
+the readings are a group at all — each is a gauge on the fleet or on this build, read left to right as
+one sentence about what is happening, and "raise an issue" answers nothing in it. `.cn-issue` sizes it
+out of the wordmark's weight through a console-owned wrapper, since `console.css` styling `.ext-ref`
+directly is what this stylesheet is tested not to do.
+
 Four rules hold them:
 
 - **A reading that opens something carries a chevron; a reading that acts does not.** `Scan` presses
@@ -1228,6 +1240,12 @@ are not rendered at all — one `Off the air` card in their place, saying that t
 and that the console returns by itself. `test/console.test.ts` asserts that no gauge, no rail and no
 situation area survive the drop.
 
+**The ident survives it whole, tracker link included.** `Ident` is one component drawn by both arms of
+`TopBar` — the lamp turning red is the only difference — because a socket that just went down is a
+moment an operator has something to report, and a way to report it that is only there while the harness
+is healthy is missing exactly then. Both arms are asserted, since the offline one is the return a change
+to the bar forgets.
+
 ## Settings
 
 A reading in the top bar opens a shared modal carrying **three tabs**, which is everything an operator
@@ -1268,7 +1286,7 @@ at and dismiss. The decisive argument is smaller than that, though — **a modal
 and "look at what `agentMode` is set to on the box" is a URL now.
 
 It is not in the nav. The nav is the three surfaces work happens on, and a fourth button beside them
-would say configuration is a fourth thing you *do* rather than the thing you set up once; the reading
+would say configuration is a fourth thing you _do_ rather than the thing you set up once; the reading
 in the bar is where an operator already reached for it. `?settings=1`, which opened the modal, is
 honoured as a way in for `?tab=backlog`'s reason.
 
@@ -1290,20 +1308,20 @@ the form says so **per row** rather than the surface claiming one answer for fif
 per row all come from the server for `isDefault`'s reason — a browser that decided them would be a
 second copy free to drift:
 
-| Drawn from      | Decided by                                                          |
-| --------------- | ------------------------------------------------------------------- |
-| the widget      | `entry.type` — `configFields.ts` ([02](02-configuration.md#fields))  |
-| applies now / needs restart | `entry.live` — true only where `configApply.ts` holds an arm |
-| not editable    | `entry.env` (the environment beats the file), or `access: 'fileOnly'` |
+| Drawn from                  | Decided by                                                            |
+| --------------------------- | --------------------------------------------------------------------- |
+| the widget                  | `entry.type` — `configFields.ts` ([02](02-configuration.md#fields))   |
+| applies now / needs restart | `entry.live` — true only where `configApply.ts` holds an arm          |
+| not editable                | `entry.env` (the environment beats the file), or `access: 'fileOnly'` |
 
 Saving writes `lubbdubb.config.json` and nothing else; the file stays the source of truth and editing it
 by hand lands on the same apply path ([02](02-configuration.md#the-watcher)). A **reset clears the key**
-rather than writing the default back — the browser is never told what a default *is*, only `isDefault`.
+rather than writing the default back — the browser is never told what a default _is_, only `isDefault`.
 Staged edits are counted in a save bar and nothing reaches the file until the write; a save whose
 baseline has moved is refused with "reload" rather than clobbering whoever moved it.
 
-**The write goes through a review step** (`ReviewWrite.tsx`), which draws its diff from the *server's own
-candidate bytes* (`POST /api/config/preview`) rather than splicing the file in the browser. That is the
+**The write goes through a review step** (`ReviewWrite.tsx`), which draws its diff from the _server's own
+candidate bytes_ (`POST /api/config/preview`) rather than splicing the file in the browser. That is the
 whole reason it can promise anything: the edit that preserves comments, key order and every untouched
 line is server code, and a second implementation of it here would be free to disagree with the one that
 actually writes — silently, and in the direction of "your file is fine, honestly". Beside the diff, each
@@ -1441,7 +1459,7 @@ Every effective value is computed by `describeCiPolicy` on the server
 ([16](16-http-api.md#get-apici-policy)) — the component asserts nothing of its own about the policy, so
 it cannot claim a routing the dispatcher would not take. Read-only, and deliberately: `ci.checks` is an
 **ordered** rule list where the order is the semantics, so a rule editor is its own shape and its own
-decision. The config tab saves the list *whole*, which is the part #401 covers.
+decision. The config tab saves the list _whole_, which is the part #401 covers.
 
 ## Spend
 
