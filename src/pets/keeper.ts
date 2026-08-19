@@ -70,9 +70,23 @@ export class PetKeeper {
    * nothing. That is what lets the routes call it for latency while `cycle:end`
    * remains the thing that guarantees delivery — **forgetting the call on a new
    * route costs a delay, never a pet.**
+   *
+   * An action stamped **before the vivarium started** is recorded and rolls
+   * nothing. That is the whole of what stops a build shipping pets to a long-lived
+   * database from treating a year of escalations, jobs and findings as this
+   * afternoon's work — and it is recorded rather than passed over, because an
+   * unrecorded action stays fresh forever and would pay the whole backlog out at
+   * once the day anything moved the boundary.
    */
   scan(): Pet[] {
     if (!this.policy.enabled) return [];
+    // Stamped here rather than in the `Store`'s constructor, so a deployment
+    // sitting with `pets.enabled` false for months does not silently burn its
+    // start date on boots that could hatch nothing anyway. It does mean the value
+    // depends on ordering in `src/server/main.ts` — `resetOnce` runs before the
+    // first cycle scan — and a route that scanned earlier would stamp it seconds
+    // early, which costs nothing but is why this is worth saying.
+    const since = this.store.beginVivarium();
     const seen = this.store.petActionKeys();
     const fresh = collectActions(this.store)
       .filter((action) => !seen.has(`${action.kind}:${action.ref}`))
@@ -81,13 +95,21 @@ export class PetKeeper {
     // One counter per kind. A single counter is spent by whatever the deployment
     // does most — jobs and findings, by an order of magnitude — so the kinds a
     // pity floor is actually for never reach theirs.
-    const sinceHatch = this.store.petActionsSinceHatch();
-    // Carried across the pass rather than re-read per action. `seen` is captured
-    // before the loop, so asking it would call *every* action in a first scan the
-    // deployment's first — seven guaranteed pets out of one afternoon, which is
-    // the thing having a single guarantee exists to stop.
-    let anyRolled = seen.size > 0;
+    const sinceHatch = this.store.petActionsSinceHatch(since);
+    // Carried across the pass rather than re-read per action, and asked of the
+    // rolls rather than of `seen`: the key set holds the backlog too, so a
+    // deployment taking this build has thousands of keys and has still never
+    // rolled anything. Re-reading it per action instead would call *every* action
+    // in a first scan the deployment's first — seven guaranteed pets out of one
+    // afternoon, which is the thing having a single guarantee exists to stop.
+    let anyRolled = this.store.petRolledSince(since);
     for (const action of fresh) {
+      if (action.at < since) {
+        // Inert, not pending: written with no pet so a re-scan stays free, and
+        // touching neither the pity counter nor the guarantee.
+        this.store.recordPetAction({ kind: action.kind, ref: action.ref, at: action.at, petId: null });
+        continue;
+      }
       const firstEver = !anyRolled;
       const missed = sinceHatch.get(action.kind) ?? 0;
       const forced = missed + 1 >= this.rules.rates[action.kind].pity;
@@ -125,9 +147,12 @@ export class PetKeeper {
    * blend credits. What stays is `pet_actions`, and it has to: it is the scan's
    * watermark, so an action that has already been rolled is skipped rather than
    * rolled again, and the released collection cannot hatch straight back out of
-   * the history it came from. The consequence to hold onto is that a clearance
-   * costs those actions for good — the vivarium starts again from what the
-   * operator does *next*, which is the whole of what "from here on" means.
+   * the history it came from. What is re-stamped, in the same transaction, is the
+   * vivarium's start: those surviving rows all fall before it, so they are inert
+   * rather than merely spent — no pity floor inherited from them, and the
+   * deployment's one first-action guarantee handed back. The vivarium starts again
+   * from what the operator does *next*, which is the whole of what "from here on"
+   * means.
    *
    * Skipped entirely while `pets.enabled` is off, because off is the one setting
    * that has never deleted anything and this is not the change that makes it. A
@@ -296,7 +321,7 @@ export class PetKeeper {
       actions: this.store.petActionIndex(),
       paid: this.store.petPaidTotals(),
       chain: replayChain(this.store.petChainLog()),
-      barren: replayBarren(this.store.petActionLog(), this.rules),
+      barren: replayBarren(this.store.petActionLog(), this.rules, this.store.vivariumStart() ?? EPOCH),
       build: this.stamp(),
     };
   }
@@ -338,7 +363,8 @@ export class PetKeeper {
 
 /**
  * Before any timestamp this harness can hold, so `at >= EPOCH` is every usage
- * event ever recorded. An empty string would compare the same way and read as an
+ * event ever recorded — and, on a vivarium that has never been scanned, every
+ * action ever rolled. An empty string would compare the same way and read as an
  * accident.
  */
 const EPOCH = '0000-01-01T00:00:00.000Z';
