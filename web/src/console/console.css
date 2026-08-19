@@ -811,6 +811,15 @@
   font: 11px var(--cn-mono);
   color: var(--cn-fg-faint);
 }
+/* The way into a part's agent. It sits inside the dependency line, so it keeps
+   that line's mono and says "control" by colour alone — a filled button here
+   would outweigh the part's own title, which is what the row is for. */
+.cn-part .cn-openagent {
+  color: var(--cn-accent);
+}
+.cn-part .cn-openagent:hover {
+  text-decoration: underline;
+}
 .cn-arrow {
   width: 26px;
   display: grid;

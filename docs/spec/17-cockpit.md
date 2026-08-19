@@ -434,6 +434,17 @@ a resolved PR ask needs to say both — its goal page is where it belongs, and `
 in question. `subjectLabel` words it once for the rail and the panel: `#12`, else `PR #142`, else
 nothing.
 
+**A row names the run it is about, never that run's id.** An agent id is minted
+(`agent_${nanoid(10)}`, `src/store/agents.ts`) and an agent has no name of its own, so `agent_ab4sc`
+on a queue row was a label that identified nothing and read as though it ought to. The harness's own
+answer to "what is this run" is its **task's title**, which the fleet card, the drawer and the goal
+page all already use — so `buildNeedsYou` resolves it onto the row as `agentLabel`, clamped to its
+first line because a title is free text and a queue row is one line. The id stays on the row as
+`agentId`: it is what a control resumes and what the drawer is keyed on, and it is simply not what
+the rail prints. A row whose agent the snapshot no longer carries draws the phrase _a run with no
+task on record_ — the fact stated, rather than an id offered as a name. `test/needsYou.test.ts`
+pins the resolution, the clamp and both fallbacks.
+
 **The ask panel states its subject, always as a link.** It is the one surface with no context drawn
 around it, so `AskSubject` sits above the scrolling body: a goal reads _On goal #12 — read it in
 context →_, which closes the panel and opens that page (the band there draws the same ask, and a panel
@@ -682,6 +693,15 @@ which was retired, with those parts below it.
 
 A part's row names its pull request as a way there rather than as text (`PR #412`), the one ref a wave
 carries; the goal it is under is the page it is already on.
+
+**The agent on a part is a door, not an id.** The row used to end ` · agent_ab4sc`, which named
+nothing — agent ids are minted and an agent has no name — while the one thing an operator wanted from
+it, that run's transcript, its cost and its controls, sat on a surface the row did not lead to. It is
+drawn as `open the agent ↗` instead, on `select(agentId)`, the same seam every other way into the
+drawer uses ([The agent drawer](#the-agent-drawer)). A control rather than a name because the row
+already says which part this is, and repeating the task's title beside it would name the same work
+twice. It sits **beside** the pull-request reference inside the dependency line and never around it:
+one click cannot have two destinations, which is why the row is not itself a button.
 
 **The card's header carries the way into the plan sheet** — `open the full plan ↗`, `viewPlan` on the
 plan this goal's parts came from, drawn only when there is a plan to open. The waves are the shape of

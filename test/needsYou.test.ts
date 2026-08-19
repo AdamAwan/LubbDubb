@@ -363,3 +363,99 @@ test('an unanswered profile proposal is a row, and an answered one is not', () =
 
   assert.deepEqual(buildNeedsYou(proposed({ awaiting: false })), [], 'a settled proposal asks nothing');
 });
+
+/** A demo agent that has a task on the snapshot, with that task beside it. */
+function agentWithTask(state: AppState) {
+  for (const agent of state.agents) {
+    const t = state.tasks.find((x) => x.id === agent.taskId);
+    if (t) return { agent, task: t };
+  }
+  throw new Error('the demo carries no agent with a task — this suite needs one');
+}
+
+test('a parked agent’s row says what that run is on, and never its id', () => {
+  const demo = buildDemoState();
+  const { agent, task: onIt } = agentWithTask(demo);
+  const rows = buildNeedsYou({
+    ...demo,
+    escalations: [escalation({ id: 'e1', agentId: agent.id })],
+    humanTasks: [],
+    proposals: [],
+    recovery: [],
+    parkedOnLimit: [],
+  });
+
+  assert.equal(rows[0]?.agentId, agent.id, 'the id stays on the row — it is what opens the drawer');
+  assert.equal(rows[0]?.agentLabel, onIt.title, 'and the label is the work, which is what a surface draws');
+  assert.notEqual(rows[0]?.agentLabel, agent.id);
+});
+
+test('a usage-limit park is named by the work it stopped', () => {
+  const demo = buildDemoState();
+  const { agent, task: onIt } = agentWithTask(demo);
+  const rows = buildNeedsYou({
+    ...demo,
+    escalations: [],
+    humanTasks: [],
+    proposals: [],
+    recovery: [],
+    parkedOnLimit: [agent.id],
+  });
+
+  const park = rows.find((r) => r.kind === 'limit');
+  assert.equal(park?.agentLabel, onIt.title);
+});
+
+test('a title over more than one line is clamped to its first', () => {
+  const demo = buildDemoState();
+  const { agent, task: onIt } = agentWithTask(demo);
+  const rows = buildNeedsYou({
+    ...demo,
+    tasks: demo.tasks.map((t) => (t.id === onIt.id ? { ...t, title: `${onIt.title}\nand a second paragraph` } : t)),
+    escalations: [escalation({ id: 'e1', agentId: agent.id })],
+    humanTasks: [],
+    proposals: [],
+    recovery: [],
+    parkedOnLimit: [],
+  });
+
+  assert.equal(rows[0]?.agentLabel, onIt.title, 'a queue row is one line, and a title is free text');
+});
+
+test('an agent the snapshot no longer carries resolves to no label, not to its id', () => {
+  const demo = buildDemoState();
+  const rows = buildNeedsYou({
+    ...demo,
+    escalations: [escalation({ id: 'e1', agentId: 'agent_gone01234' })],
+    humanTasks: [],
+    proposals: [],
+    recovery: [],
+    parkedOnLimit: [],
+  });
+
+  assert.equal(rows[0]?.agentId, 'agent_gone01234');
+  assert.equal(rows[0]?.agentLabel, null, 'null is what the rail words for itself — it never prints the id');
+});
+
+test('a burn notice names the spending run; every other human task carries neither id nor label', () => {
+  const demo = buildDemoState();
+  const { agent, task: onIt } = agentWithTask(demo);
+  const rows = buildNeedsYou({
+    ...demo,
+    escalations: [],
+    proposals: [],
+    recovery: [],
+    parkedOnLimit: [],
+    humanTasks: [
+      task({ id: 'burn1', kind: 'burn', agentId: agent.id, title: 'This run has spent $40' }),
+      task({ id: 'ask1', kind: 'ask', agentId: agent.id }),
+    ],
+  });
+
+  assert.equal(rows.find((r) => r.id === 'burn1')?.agentLabel, onIt.title);
+  assert.equal(
+    rows.find((r) => r.id === 'ask1')?.agentLabel,
+    null,
+    'the agent that merely asked is not what the row is about',
+  );
+});
