@@ -1,4 +1,4 @@
-import type { ConsolePanel, ConsoleTab } from './actions.js';
+import type { ConfigTab, ConsolePanel, ConsoleTab } from './actions.js';
 import type {
   TicketOrder,
   TicketStateFacet,
@@ -33,7 +33,10 @@ export interface Place {
   retro: string | null;
   /** The goal whose notepad is open, as an `issue:<n>` ref. */
   scratchpad: string | null;
-  settings: boolean;
+  /** Which section of the config page is in front. */
+  configTab: ConfigTab;
+  /** The config group the page is showing, or null for the first one. */
+  configGroup: string | null;
   spend: boolean;
   reliability: boolean;
   /**
@@ -82,7 +85,8 @@ export const NOWHERE: Place = {
   plan: null,
   retro: null,
   scratchpad: null,
-  settings: false,
+  configTab: 'values',
+  configGroup: null,
   spend: false,
   reliability: false,
   collapsed: [],
@@ -94,7 +98,8 @@ export const NOWHERE: Place = {
   ticketOrder: 'added',
 };
 
-const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets'];
+const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets', 'config'];
+const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'notifications'];
 /**
  * Tabs that no longer exist, and where they went.
  *
@@ -135,7 +140,12 @@ export function readPlace(search: string): Place {
   const panel = param(query, 'panel');
   const ask = param(query, 'ask');
   return {
-    tab: TABS.find((t) => t === tab) ?? (tab !== null ? TAB_ALIASES[tab] : undefined) ?? 'overview',
+    // `?settings=1` opened the modal this page replaced, so it is honoured as a
+    // way in for `?tab=backlog`'s reason: a bookmark that lands somewhere else
+    // with nothing saying so is a bug report.
+    tab: query.has('settings')
+      ? 'config'
+      : (TABS.find((t) => t === tab) ?? (tab !== null ? TAB_ALIASES[tab] : undefined) ?? 'overview'),
     goal: param(query, 'goal'),
     // The ask panel carries its row, so it is its own parameter rather than a
     // prefix on `panel` — an id is opaque and free to contain whatever the
@@ -145,7 +155,11 @@ export function readPlace(search: string): Place {
     plan: param(query, 'plan'),
     retro: param(query, 'retro'),
     scratchpad: param(query, 'pad'),
-    settings: query.has('settings'),
+    configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
+    // `keys`, not `group`: the tickets tab already owns `?group=` (its feature
+    // heading mode), and two places reading one parameter is a place that opens
+    // showing whatever the other one was set to.
+    configGroup: param(query, 'keys'),
     spend: query.has('spend'),
     reliability: query.has('reliability'),
     collapsed: readNumbers(param(query, 'collapsed')),
@@ -259,7 +273,8 @@ export function placeQuery(place: Place): string {
   if (place.plan !== null) query.set('plan', place.plan);
   if (place.retro !== null) query.set('retro', place.retro);
   if (place.scratchpad !== null) query.set('pad', place.scratchpad);
-  if (place.settings) query.set('settings', '1');
+  if (place.configTab !== 'values') query.set('section', place.configTab);
+  if (place.configGroup !== null) query.set('keys', place.configGroup);
   if (place.spend) query.set('spend', '1');
   if (place.reliability) query.set('reliability', '1');
   // Sorted on the way out as on the way in, so folding A then B and folding B

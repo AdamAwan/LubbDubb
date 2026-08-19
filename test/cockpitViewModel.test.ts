@@ -43,7 +43,6 @@ function build(state: AppState, over: Partial<Parameters<typeof buildViewModel>[
     viewingPlan: null,
     viewingRetro: null,
     viewingScratchpad: null,
-    settingsOpen: false,
     spendOpen: false,
     reliabilityOpen: false,
     selectedGoal: null,

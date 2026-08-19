@@ -1261,12 +1261,28 @@ fill the panel would be free to drift from the originals with nothing to catch i
 
 ### Configuration
 
-The config tab is **fetched on open and editable** (`web/src/components/ConfigForm.tsx`). Fetched on
+Configuration is a **page** (`web/src/components/ConfigPage.tsx`), reached from the Config reading in
+the top bar and addressed as `?tab=config`. It was a modal with three tabs until the surface outgrew
+it: fifty keys, five sections and a file to reconcile against is a thing you work in rather than glance
+at and dismiss. The decisive argument is smaller than that, though — **a modal cannot be linked to**,
+and "look at what `agentMode` is set to on the box" is a URL now.
+
+It is not in the nav. The nav is the three surfaces work happens on, and a fourth button beside them
+would say configuration is a fourth thing you *do* rather than the thing you set up once; the reading
+in the bar is where an operator already reached for it. `?settings=1`, which opened the modal, is
+honoured as a way in for `?tab=backlog`'s reason.
+
+Its place is on `Place`, never a `useState`: the section (`?section=`) and the group of keys it is
+showing (`?keys=`). `keys` rather than `group` because the tickets tab already owns `?group=` — two
+surfaces reading one parameter is a page that opens showing whatever the other one was set to, which
+`test/cockpitPlace.test.ts`'s round-trip caught on the day it was written.
+
+Five sections: **Values**, **Raw file**, **CI policy**, **Prompts**, **Notifications**. Fetched on
 open for the prompt book's reason — the config is read once at boot, so polling would be paying for a
-constant; the form re-fetches after a save. Values are grouped, and each one that differs from the
-built-in default is marked: the question an operator opens this to ask is not "what are the values" but
-"what did I change", and answering it needs a baseline, which is why the server computes the comparison
-rather than shipping the object alone.
+constant; the page re-reads after a write and when the socket says the file moved. Values are grouped,
+and each one that differs from the built-in default is marked: the question an operator opens this to
+ask is not "what are the values" but "what did I change", and answering it needs a baseline, which is
+why the server computes the comparison rather than shipping the object alone.
 
 It was read-only until #401, on the argument that a write route's honest answer to "when does this take
 effect" is "at the next restart". The answer differs per field, the harness knows which is which, and
@@ -1283,8 +1299,22 @@ second copy free to drift:
 Saving writes `lubbdubb.config.json` and nothing else; the file stays the source of truth and editing it
 by hand lands on the same apply path ([02](02-configuration.md#the-watcher)). A **reset clears the key**
 rather than writing the default back — the browser is never told what a default *is*, only `isDefault`.
-Staged edits are counted in a save bar and nothing reaches the file until it is pressed; a save whose
+Staged edits are counted in a save bar and nothing reaches the file until the write; a save whose
 baseline has moved is refused with "reload" rather than clobbering whoever moved it.
+
+**The write goes through a review step** (`ReviewWrite.tsx`), which draws its diff from the *server's own
+candidate bytes* (`POST /api/config/preview`) rather than splicing the file in the browser. That is the
+whole reason it can promise anything: the edit that preserves comments, key order and every untouched
+line is server code, and a second implementation of it here would be free to disagree with the one that
+actually writes — silently, and in the direction of "your file is fine, honestly". Beside the diff, each
+change says whether it applies now or waits for a restart.
+
+**The Raw file section** is the escape hatch that keeps the rest of the page a layer rather than a
+replacement: the same bytes, edited as a file, for everything a form cannot draw — a key this build does
+not declare, a comment, a block being restructured. It is not a way to brick a deployment, because the
+check is the loader's own: the preview route builds the config the text would produce and hands back its
+refusal, so a removed key is named here exactly as it would be at boot. The file moving under an unsaved
+edit is a first-class state — the page is told, and says so, rather than writing over whoever moved it.
 
 **Paths, Server and the agent command line sit behind an advanced disclosure** with a warning. Not
 because they are harder, but because `repoRoot`, `dbPath`, `host`, `port` and `auth` can leave an
@@ -1296,9 +1326,9 @@ _Apply and restart_ control that pauses dispatch and hands this process off to t
 supervisor launched it (`canRestart: false`) the reason is drawn instead of the button: a control that
 would stop the harness without bringing it back is worse than none.
 
-Two values would make the block a lie, and are drawn separately above it: `maxConcurrentAgents` and
+Two values would make the block a lie, and are drawn separately: `maxConcurrentAgents` and
 `startPaused` are both shadowed at runtime by `RuntimeControl` ([09](09-execution.md)) and revert on
-restart. The form shows the live cap and pause state from `control`, naming the configured value it is
+restart. The page shows the live cap and pause state from `control`, naming the configured value it is
 overriding where the two differ. Both halves of that pair are read out of the same fetched block, so
 they can never come from two readings that disagree. Saving `maxConcurrentAgents` re-seats the live cap
 as well as the configured one; the live one stays ephemeral.

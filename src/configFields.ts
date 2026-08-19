@@ -275,6 +275,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Item types that hold work rather than being work. Their children are the work.',
   },
   {
+    path: 'issueBugType',
+    type: 'string',
+    access: 'plain',
+    why: 'The work item type a raised bug is filed as. Passed to the provider verbatim.',
+  },
+  {
     path: 'issueFilingTypes',
     type: 'stringList',
     access: 'plain',

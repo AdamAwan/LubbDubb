@@ -28,6 +28,13 @@ export type ValidationAct =
  * unrepresentable: a second field would let an ask and the fault log both be in
  * front, which is the state this type exists to rule out.
  */
+/**
+ * The config page's own sections. On `Place` rather than in the component for the
+ * tickets query's reason: a section is a thing you send someone a link to, and one
+ * held in a `useState` works right up until the back button steps over it.
+ */
+export type ConfigTab = 'values' | 'raw' | 'ci' | 'prompts' | 'notifications';
+
 export type ConsolePanel = 'findings' | 'lessons' | 'faults' | 'output' | 'launch' | 'build' | { ask: string } | null;
 
 /**
@@ -39,7 +46,7 @@ export type ConsolePanel = 'findings' | 'lessons' | 'faults' | 'output' | 'launc
  * A selected goal outranks all three, so this says where the nav last was, never
  * what is drawn.
  */
-export type ConsoleTab = 'overview' | 'work' | 'tickets';
+export type ConsoleTab = 'overview' | 'work' | 'tickets' | 'config';
 
 /**
  * Every mutation the cockpit can perform, pre-bound and refetching on completion.
@@ -125,7 +132,8 @@ export interface CockpitActions {
    * off the shell (it reaches `/api/config`, which `console/` may not do), while
    * the reading that opens it sits in the top bar.
    */
-  openSettings(open: boolean): void;
+  /** Which section of the config page is in front, and which group it is scrolled to. */
+  openConfig(where: { configTab?: ConfigTab; configGroup?: string | null }): void;
   /**
    * Open or close the spend breakdown — where the money on the Power gauge went.
    * On the seam for `openSettings`' reason exactly: the panel reaches `/api/spend`,

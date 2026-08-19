@@ -12,6 +12,7 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
   work: 'Work',
   tickets: 'Tickets',
+  config: 'Config',
 };
 
 /**
@@ -304,7 +305,17 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
           title="Blueprints waiting for a free slot — open the launch desk"
         />
         <Build view={view} actions={actions} />
-        <Read label="Settings" value={null} quiet={false} onOpen={() => actions.openSettings(true)} title="Settings" />
+        {/* Config is a destination now, not a modal — but it stays here rather
+            than joining the nav: the nav is the three surfaces work happens on,
+            and a fourth button beside them would say configuration is a fourth
+            thing you do rather than the thing you set up once. */}
+        <Read
+          label="Config"
+          value={null}
+          quiet={false}
+          onOpen={() => actions.openConfig({})}
+          title="How this harness is configured"
+        />
       </div>
     </div>
   );

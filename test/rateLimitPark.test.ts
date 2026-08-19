@@ -467,7 +467,6 @@ test('the cockpit draws the park where the agent is, with a way out of it', asyn
     viewingPlan: null,
     viewingRetro: null,
     viewingScratchpad: null,
-    settingsOpen: false,
     spendOpen: false,
     reliabilityOpen: false,
     selectedGoal: null,

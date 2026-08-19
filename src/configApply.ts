@@ -100,7 +100,7 @@ export function liveFieldPaths(): readonly string[] {
  * cockpit through the running config's "Other" group, which is where a typo is
  * meant to be visible.
  */
-function diffConfig(running: Config, next: Config): ConfigChange[] {
+export function diffConfig(running: Config, next: Config): ConfigChange[] {
   const changes: ConfigChange[] = [];
   for (const field of CONFIG_FIELDS) {
     const from = readPath(running, field.path);

@@ -5,7 +5,6 @@ import { AgentDrawer } from './components/AgentDrawer.js';
 import { RetroModal } from './components/RetroModal.js';
 import { ScratchpadModal } from './components/ScratchpadModal.js';
 import { PlanModal } from './components/PlanModal.js';
-import { SettingsModal } from './components/SettingsModal.js';
 import { ReliabilityModal } from './components/ReliabilityModal.js';
 import { SpendModal } from './components/SpendModal.js';
 import { RefLinks } from './components/refs.js';
@@ -154,9 +153,6 @@ export function App() {
       )}
       {status.view.viewingScratchpad && (
         <ScratchpadModal issueRef={status.view.viewingScratchpad} onClose={() => status.actions.viewScratchpad(null)} />
-      )}
-      {status.view.settingsOpen && (
-        <SettingsModal control={state.control} onClose={() => status.actions.openSettings(false)} />
       )}
       {status.view.spendOpen && <SpendModal onClose={() => status.actions.openSpend(false)} />}
       {status.view.reliabilityOpen && <ReliabilityModal onClose={() => status.actions.openReliability(false)} />}

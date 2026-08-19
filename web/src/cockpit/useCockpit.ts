@@ -108,6 +108,12 @@ export function useCockpit(): CockpitStatus {
           e.type === 'world:events'
         )
           scheduleRefresh();
+        // The config file moved — a save from another cockpit, or the watcher
+        // picking up an edit on disk. Re-broadcast as a DOM event rather than
+        // folded into `scheduleRefresh`: the config is not on `/api/state` (it is
+        // a constant this socket is the only news about), and the page that cares
+        // is the one place that should pay for re-reading it.
+        else if (e.type === 'config:changed') window.dispatchEvent(new Event('lubbdubb:config-changed'));
         else if (e.type === 'agent:output' && e.agentId && e.delta) {
           const cur = liveOutput.current.get(e.agentId) ?? '';
           // Full output now only arrives for the subscribed (open) agent, so we
@@ -188,7 +194,7 @@ export function useCockpit(): CockpitStatus {
       viewPlan: (planId) => go({ plan: planId }),
       viewRetro: (issueRef) => go({ retro: issueRef }),
       viewScratchpad: (issueRef) => go({ scratchpad: issueRef }),
-      openSettings: (open) => go({ settings: open }),
+      openConfig: (where) => go({ tab: 'config', goal: null, ...where }),
       openSpend: (open) => go({ spend: open }),
       openReliability: (open) => go({ reliability: open }),
       selectGoal: (ref) => go({ goal: ref }),
@@ -257,13 +263,14 @@ export function useCockpit(): CockpitStatus {
       viewingPlan: place.plan,
       viewingRetro: place.retro,
       viewingScratchpad: place.scratchpad,
-      settingsOpen: place.settings,
       spendOpen: place.spend,
       reliabilityOpen: place.reliability,
       selectedGoal: place.goal,
       consolePanel: place.panel,
       tab: place.tab,
       collapsed: place.collapsed,
+      configTab: place.configTab,
+      configGroup: place.configGroup,
       ticketWatch: place.ticketWatch,
       ticketTracking: place.ticketTracking,
       ticketState: place.ticketState,

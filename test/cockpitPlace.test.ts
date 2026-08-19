@@ -28,7 +28,9 @@ test('every place round-trips through the query string', () => {
     at({ plan: 'plan-395' }),
     at({ retro: 'issue:142' }),
     at({ scratchpad: 'issue:142' }),
-    at({ settings: true }),
+    at({ tab: 'config' }),
+    at({ tab: 'config', configTab: 'raw' }),
+    at({ tab: 'config', configTab: 'prompts', configGroup: 'Agents' }),
     at({ spend: true, reliability: true }),
   ];
   for (const place of places) assert.deepEqual(readPlace(placeQuery(place)), place, placeQuery(place));
