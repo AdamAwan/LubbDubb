@@ -14,6 +14,13 @@ function keeper(policy: Partial<PetPolicy> = {}): { store: Store; pets: PetKeepe
   return { store, pets: new PetKeeper(store, { ...POLICY, ...policy }) };
 }
 
+/** A settled `ask`: a second kind of action, for the tests that need two. */
+function settle(store: Store, title: string): string {
+  const { task } = store.recordHumanTask({ title, detail: '', agentId: null, taskId: null, originRef: null });
+  store.settleHumanTask(task.id, 'done', 'sorted');
+  return task.id;
+}
+
 /** An answered escalation: the cleanest operator action in the harness. */
 function answer(store: Store, prompt: string): string {
   const escalation = store.createEscalation({
@@ -31,12 +38,12 @@ test('the roll is a pure function of the action, so re-reading it is free', () =
   const first = rollAction('escalation', 'esc_9f2a', '2026-04-12T14:00:00.000Z', {
     dropChance: 0.5,
     forced: false,
-    firstOfKind: false,
+    firstEver: false,
   });
   const again = rollAction('escalation', 'esc_9f2a', '2026-04-12T14:00:00.000Z', {
     dropChance: 0.5,
     forced: false,
-    firstOfKind: false,
+    firstEver: false,
   });
   assert.deepEqual(first, again, 'the same action must always come to the same answer');
   assert.equal(hash32('escalation:esc_9f2a'), hash32('escalation:esc_9f2a'));
@@ -55,7 +62,7 @@ test('scanning twice hatches nothing the second time', () => {
 
 test('an action that hatched nothing is still recorded, so pity can count it', () => {
   const { store, pets } = keeper({ dropChance: 0, pity: 1_000 });
-  // The first of a kind always hatches, so the miss under test is the second.
+  // The deployment's first action always hatches, so the miss under test is the second.
   answer(store, 'the first question ever asked');
   answer(store, 'a question nobody gets a pet for');
   assert.equal(pets.scan().length, 1, 'only the first-of-kind hatches at a zero chance');
@@ -64,19 +71,45 @@ test('an action that hatched nothing is still recorded, so pity can count it', (
 
 test('pity forces a hatch once enough actions have missed', () => {
   const { store, pets } = keeper({ dropChance: 0, pity: 3 });
-  // One first-of-kind, then three that would all miss — the third is forced.
+  // The first action ever, then three that would all miss — the third is forced.
   for (let i = 0; i < 4; i++) answer(store, `question ${i}`);
   const hatched = pets.scan();
-  assert.equal(hatched.length, 2, 'the first-of-kind, and then the one pity forces');
+  assert.equal(hatched.length, 2, 'the first action ever, and then the one pity forces');
   assert.equal(store.petActionsSinceHatch(), 0, 'and the counter resets behind it');
 });
 
-test('the first action of a kind hatches, and draws something above a common', () => {
+test('the deployment’s first action hatches, and draws something above a common', () => {
   const { store, pets } = keeper({ dropChance: 0 });
   answer(store, 'the first question ever asked');
   const [pet] = pets.scan();
-  assert.ok(pet, 'a first-of-kind drops whatever the chance says');
+  assert.ok(pet, 'the first action ever drops whatever the chance says');
   assert.notEqual(SPECIES[pet.species].rarity, 'common', 'and rolls on the table with the commons removed');
+});
+
+test('the guarantee is spent once, not once per kind of action', () => {
+  // The bug this replaced: `firstOfKind` re-armed for every one of the seven
+  // kinds, so an afternoon that touched each of them handed out seven pets —
+  // and, because the guarantee strips the commons and most tables hold exactly
+  // one non-common by day, handed out the *rare* tier while `nib` and `tuft`
+  // stayed unreachable.
+  const { store, pets } = keeper({ dropChance: 0, pity: 1_000 });
+  answer(store, 'the first question ever asked');
+  settle(store, 'a task of an entirely different kind');
+
+  const hatched = pets.scan();
+  assert.equal(hatched.length, 1, 'only the very first action ever is guaranteed');
+  assert.equal(hatched[0]!.originKind, 'escalation', 'and it is the earliest one, not the newest kind');
+});
+
+test('a second scan does not re-arm the guarantee for an action rolled later', () => {
+  // `seen` is read once per pass, so a flag derived from it and never advanced
+  // would call every action in a first scan the deployment's first.
+  const { store, pets } = keeper({ dropChance: 0, pity: 1_000 });
+  answer(store, 'the first question ever asked');
+  assert.equal(pets.scan().length, 1);
+
+  answer(store, 'a question asked in a later pass entirely');
+  assert.deepEqual(pets.scan(), [], 'the guarantee is gone, and a zero chance hatches nothing');
 });
 
 test('nocturne is drawn only by an action taken at night, in the action’s own hours', () => {

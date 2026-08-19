@@ -72,7 +72,6 @@ import type {
   LessonInput,
   Pet,
   PetAction,
-  PetActionKind,
   Plan,
   PlanPart,
   PlanPartInput,
@@ -969,9 +968,6 @@ export class Store {
   }
   petActionKeys(): Set<string> {
     return this.pets.petActionKeys();
-  }
-  hasPetActionOfKind(kind: PetActionKind): boolean {
-    return this.pets.hasPetActionOfKind(kind);
   }
   petActionsSinceHatch(): number {
     return this.pets.petActionsSinceHatch();

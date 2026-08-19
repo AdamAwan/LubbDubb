@@ -95,14 +95,6 @@ export class PetStore {
     return new Set(rows.map((row) => `${row.kind}:${row.ref}`));
   }
 
-  /** Whether any action of this kind has been rolled — what "first of a kind" reads. */
-  hasPetActionOfKind(kind: PetActionKind): boolean {
-    const row = this.ctx.db.prepare(`SELECT 1 AS hit FROM pet_actions WHERE kind=? LIMIT 1`).get(kind) as
-      | { hit: number }
-      | undefined;
-    return row !== undefined;
-  }
-
   /**
    * Actions rolled since the last one that hatched something.
    *

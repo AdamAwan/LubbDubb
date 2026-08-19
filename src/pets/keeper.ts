@@ -53,15 +53,18 @@ export class PetKeeper {
       .sort((a, b) => a.at.localeCompare(b.at));
     const hatched: Pet[] = [];
     let sinceHatch = this.store.petActionsSinceHatch();
+    // Carried across the pass rather than re-read per action. `seen` is captured
+    // before the loop, so asking it would call *every* action in a first scan the
+    // deployment's first — seven guaranteed pets out of one afternoon, which is
+    // the thing having a single guarantee exists to stop.
+    let anyRolled = seen.size > 0;
     for (const action of fresh) {
-      // Read per action rather than once: the first landing of a session is a
-      // first-of-kind, and the second one — rolled in the same pass — is not.
-      const firstOfKind = !this.store.hasPetActionOfKind(action.kind);
+      const firstEver = !anyRolled;
       const forced = sinceHatch + 1 >= this.policy.pity;
       const roll = rollAction(action.kind, action.ref, action.at, {
         dropChance: this.policy.dropChance,
         forced,
-        firstOfKind,
+        firstEver,
       });
       const pet = roll.hatches
         ? this.store.hatchPet({
@@ -73,6 +76,7 @@ export class PetKeeper {
           })
         : null;
       this.store.recordPetAction({ kind: action.kind, ref: action.ref, at: action.at, petId: pet?.id ?? null });
+      anyRolled = true;
       if (pet) {
         hatched.push(pet);
         sinceHatch = 0;

@@ -42,14 +42,14 @@ export function rollAction(
   kind: PetActionKind,
   ref: string,
   at: string,
-  opts: { dropChance: number; forced: boolean; firstOfKind: boolean },
+  opts: { dropChance: number; forced: boolean; firstEver: boolean },
 ): RollOutcome {
   const key = `${kind}:${ref}`;
   // Local, like `job_schedules.cron` — 2am means 2am where the operator was,
   // not where a server happens to think it is.
   const hour = new Date(at).getHours();
-  const table = tableFor(kind, hour, opts.firstOfKind);
-  const hatches = opts.forced || opts.firstOfKind || hash32(key) % 10_000 < Math.round(opts.dropChance * 10_000);
+  const table = tableFor(kind, hour, opts.firstEver);
+  const hatches = opts.forced || opts.firstEver || hash32(key) % 10_000 < Math.round(opts.dropChance * 10_000);
   return { hatches, species: pick(table, hash32(`${key}:species`)) };
 }
 

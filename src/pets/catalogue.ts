@@ -100,19 +100,25 @@ function eligible(species: PetSpecies, hour: number): boolean {
 /**
  * The table an action rolls against, narrowed to what it may actually draw.
  *
- * `firstOfKind` drops the commons: the first escalation an operator ever answers
- * is the most memorable action they will take in the harness, and spending it on
- * a `pip` wastes the one moment this feature is guaranteed an audience. When
- * removing them leaves nothing — a table that is all commons — the full one is
- * used rather than nothing being drawn.
+ * `firstEver` drops the commons: the very first action an operator takes in a new
+ * deployment is the most memorable one they will take, and spending it on a `pip`
+ * wastes the one moment this feature is guaranteed an audience. When removing
+ * them leaves nothing — a table that is all commons — the full one is used rather
+ * than nothing being drawn.
+ *
+ * It fires **once per deployment**, not once per kind. Per kind, most tables have
+ * exactly one non-common species available by day, so the guarantee handed out a
+ * *deterministic rare* on the first plan, the first finding and the first landing
+ * alike — which inverted the tiers it was meant to decorate, making the rare ones
+ * the easiest in the game to collect and `nib` and `tuft` the hardest.
  */
 export function tableFor(
   kind: PetActionKind,
   hour: number,
-  firstOfKind: boolean,
+  firstEver: boolean,
 ): readonly { species: PetSpecies; weight: number }[] {
   const open = DROP_TABLES[kind].filter((entry) => eligible(entry.species, hour));
-  if (!firstOfKind) return open;
+  if (!firstEver) return open;
   const notable = open.filter((entry) => SPECIES[entry.species].rarity !== 'common');
   return notable.length > 0 ? notable : open;
 }

@@ -121,13 +121,27 @@ Each action kind carries a weighted table over the species it can draw. Every ta
 so no action is a dead end, and the weights are what make a rarity rare — the tier on the row above
 is a label for the cockpit, never an input to the pick.
 
-### First of a kind
+### The first action ever
 
-The first qualifying action of each kind drops unconditionally and picks from the table with the
-common weights removed. This is the only place the roll is overridden, and it exists because the
-first escalation an operator ever answers is the single most memorable action they will take in the
-harness, and rolling a 90% chance of nothing on it is a waste of the one moment the feature is
-guaranteed an audience.
+The **deployment's first qualifying action, of any kind**, drops unconditionally and picks from the
+table with the common weights removed. This is the only place the roll is overridden, and it exists
+because the first thing an operator ever settles in the harness is the single most memorable action
+they will take in it, and rolling a 98% chance of nothing on it is a waste of the one moment the
+feature is guaranteed an audience.
+
+It fires **once per deployment**, not once per kind, and the distinction is the whole of why the
+rule is worth stating. Per kind it fired seven times — and because stripping the commons leaves most
+tables holding exactly one non-common species by day, each of those seven was a *deterministic
+rare*: a guaranteed `quill` on the first plan and again on the first finding, a guaranteed `lander`
+on the first landing. That inverted the tiers it was meant to decorate. The rare species became the
+easiest in the catalogue to collect, `nib` and `tuft` became the hardest — reachable only through a
+roll that excludes them the one time it is certain to fire — and an afternoon that touched each kind
+once ended with seven pets and most of the rare tier.
+
+The flag is therefore carried across the scan rather than re-read per action. `petActionKeys` is
+captured once before the loop, so a flag derived from it and never advanced would call *every*
+action in a first scan the deployment's first — the same seven-pet afternoon, arriving by a
+different route.
 
 ## Growth
 
@@ -304,13 +318,20 @@ transaction, so there is no window in which a pet has been paid for and not grow
 | ---------------------- | ------- | ----------------------------------------------------------- |
 | `pets.enabled`         | `true`  | Off stops the scan and hides the vivarium. Nothing is lost. |
 | `pets.beatsPerDollar`  | `25`    | The conversion. Raising it makes every pet cheaper to raise. |
-| `pets.dropChance`      | `0.1`   | Per qualifying action, before pity.                         |
+| `pets.dropChance`      | `0.02`  | Per qualifying action, before pity.                         |
 | `pets.pity`            | `15`    | Actions without a hatch before the next one is forced.      |
 
-The defaults are set to be generous early and slow later: at a fleet spending thirty dollars a day,
-an adult common is about ten days of feeding, and a working week produces a handful of pets. An
-empty vivarium is the failure mode worth tuning against, so the first move on a quiet deployment is
-`dropChance` up, not `pity` down.
+The defaults are set so a pet is an event rather than a receipt: one guaranteed drop to open the
+vivarium, and roughly one per thirteen actions after it. At a fleet spending thirty dollars a day an
+adult common is about ten days of feeding.
+
+`dropChance` and `pity` are two limits over one rate, and the **lower one wins** — which is worth
+reading off the arithmetic rather than the table, because the table makes them look independent. At
+`0.02` the roll misses fourteen times running in 75% of streaks, so **three pets in four arrive
+because pity forced them**, and the drop chance has largely stopped being the thing that decides.
+Lowering it further barely moves the rate; raising `pity` is what hands the decision back to the
+roll. An empty vivarium is still the failure mode worth tuning against, so the first move on a quiet
+deployment is `dropChance` up, not `pity` down.
 
 ## Sharp edges
 

@@ -584,7 +584,7 @@ const DEFAULTS: Config = {
   // Generous early and slow later: a working week of ordinary use produces a
   // handful of creatures, and a common takes about ten days of a thirty-dollar
   // fleet to raise. An empty vivarium is the failure mode worth tuning against.
-  pets: { enabled: true, beatsPerDollar: 25, dropChance: 0.1, pity: 15 },
+  pets: { enabled: true, beatsPerDollar: 25, dropChance: 0.02, pity: 15 },
   selfUpdate: { enabled: true, remote: 'origin', branch: 'main', checkIntervalMs: 60 * 60 * 1000 },
   validation: DEFAULT_VALIDATION,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
