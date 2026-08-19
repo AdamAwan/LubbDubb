@@ -81,7 +81,7 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 
 ```
 -p --input-format stream-json --output-format stream-json --verbose
---append-system-prompt <protocol>
+--append-system-prompt <protocol [+ tool addendum] [+ promoted lessons]>
 (--session-id <id> | --resume <id>)
 [--settings <file-events + permissions fragments>]
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
@@ -93,7 +93,7 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 **`buildClaudeArgs`** (PTY):
 
 ```
---append-system-prompt <protocol>
+--append-system-prompt <protocol [+ tool addendum] [+ promoted lessons]>
 (--session-id <id> | --resume <id>)
 [--settings <merged status-line + file-events + permissions fragments>]
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
@@ -152,6 +152,44 @@ Points that are load-bearing:
 
 `buildInitialMessage(task)` is the task prompt. `buildResumeMessage()` is the nudge typed into a
 resumed agent that was mid-work.
+
+### The lesson block
+
+Since #355 phase 3 the appended system prompt carries a third part: the fleet's **promoted lessons**
+— what working past goals taught about working _this repository_ → [13](13-jobs-and-findings.md#lessons).
+
+It goes here, and not in the task prompt, because of what the two cost. This block is **identical
+across every agent in the fleet**, so it is a cached prefix paid once; everything `recordDispatchTask`
+appends is per-goal and variable, so it is fresh input tokens on every dispatch. That is the placement
+rule for all future context, and it is the reason nothing per-dispatch may enter this block: no goal
+name, no branch, no agent id, no timestamp of "now". A block that churns is a block that never caches.
+Recomputing an identical string per launch is free; producing a _different_ one is the bug.
+
+- **The seam is a string, not a store.** `src/lessonBlock.ts` renders it, `src/system.ts` calls that
+  renderer in its `ArgsBuilder`, and `agentProtocol.ts` receives a finished `lessonBlock` string and
+  appends it. So this module stays pure and can no more read the lesson store than the dispatcher can
+  — `test/lessons.test.ts` asserts structurally that `src/agents/` and `src/mcp/` never call
+  `listLessons` or `getLesson`, and passing a rendered string is what keeps that true. It carries the
+  same trap `--model` does: a builder that accepts the field and forgets to forward it type-checks
+  clean and silently drops the block on both runtimes.
+- **With no promoted lessons, nothing is appended at all** — not a header, not a newline. The argv is
+  byte-identical to a build without the feature, which is #355's own acceptance criterion and what
+  `test/lessons.test.ts` pins.
+- **Capped at `lessonBlockChars` (default 6,000), on characters rather than on a count**, since a
+  lesson runs from a line to 2,000 characters. Over the cap, whole lessons are dropped **oldest-vouched
+  first** — ordered by promotion time, descending, so what goes is the claim most likely to have gone
+  stale. Never a truncated claim: half a lesson is a different claim, and one nobody promoted. `0`
+  disables rendering entirely. → [02](02-configuration.md#agent-launch)
+- **The agent is never told the block is partial.** No count, no "…and 3 more", no mention of a cap: a
+  partial list presented as whole is the failure the cap exists to bound. The drop is shown to the
+  **operator**, per row, in the cockpit's Lessons panel → [17](17-cockpit.md#the-console).
+- **It is claims, not instructions.** Each lesson renders with the goal it was learned on and the date
+  it was written, under a header saying the repository in front of the agent is the authority. That is
+  what lets an agent discount a stale one, and it is exactly what a bare block of assertions strips.
+- **The block is re-appended on every launch, `--resume` included**, exactly as the protocol prompt is.
+  So promoting or retiring a lesson reaches a running agent at its **next** launch, never mid-run — an
+  agent already running keeps the block it started with until it is relaunched or resumed.
+
 
 ## Permission model (issue #130)
 

@@ -178,9 +178,19 @@ export function stallReason(lastWords: string): string {
   return `${head}\n\nIt last said: "${quoted}"`;
 }
 
-/** The system prompt for a launch: the protocol, plus the tool addendum when tools are wired. */
+/**
+ * The system prompt for a launch: the protocol, the tool addendum when tools are
+ * wired, and the fleet's promoted lessons when there are any (issue #355).
+ *
+ * Each part is appended, never interpolated, and each is omitted entirely when it
+ * does not apply — so a deployment with no tool channel and no promoted lesson
+ * gets the same bytes it got before either existed.
+ */
 function protocolPrompt(opts: ClaudeArgsOptions): string {
-  return opts.mcpConfigPath ? PROTOCOL_SYSTEM_PROMPT + '\n' + MCP_PROTOCOL_ADDENDUM : PROTOCOL_SYSTEM_PROMPT;
+  const parts = [PROTOCOL_SYSTEM_PROMPT];
+  if (opts.mcpConfigPath) parts.push(MCP_PROTOCOL_ADDENDUM);
+  if (opts.lessonBlock) parts.push(opts.lessonBlock);
+  return parts.join('\n');
 }
 
 interface ClaudeArgsOptions {
@@ -266,6 +276,32 @@ interface ClaudeArgsOptions {
    * operator adjusting one must not be able to clobber the MCP grants.
    */
   additionalDirectories?: string[];
+  /**
+   * The fleet's promoted lessons, already rendered (issue #355, phase 3) — what
+   * working past goals taught about working *this repository*, appended to the
+   * system prompt as dated claims with the goal each was learned on.
+   *
+   * A **string**, not a store and not a list of rows, and that is the seam rather
+   * than an implementation detail. `src/system.ts` is the composition root and is
+   * the only place on this path that knows lessons exist; this module stays pure,
+   * testable, and — structurally, asserted by `test/lessons.test.ts` — unable to
+   * read the lesson store at all, which is what keeps the operator's gate the only
+   * way a claim reaches an agent.
+   *
+   * Unset or empty appends **nothing**: not a header, not a newline. With no
+   * promoted lessons the argv is byte-identical to a build without the feature,
+   * which is the acceptance criterion the whole ticket is hedged on.
+   *
+   * It belongs here rather than in the task prompt because it is fleet-wide and
+   * stable, so it is a cached prefix paid once across the fleet, where everything
+   * `recordDispatchTask` appends is paid per dispatch. That is also why nothing
+   * per-dispatch may enter it — see `src/lessonBlock.ts`.
+   *
+   * Re-appended on **every** launch, `--resume` included, exactly as the protocol
+   * is: a lesson promoted or retired mid-run reaches that agent at its next
+   * launch, never during one.
+   */
+  lessonBlock?: string;
   /**
    * The qualified MCP tool name for `--permission-prompt-tool` — the permission
    * backstop (issue #130 phase B). When a tool call is covered by neither the

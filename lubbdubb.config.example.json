@@ -51,6 +51,9 @@
   "// agentResumeAttempts": "How many times an agent whose process dies mid-run is re-attached to its own conversation before the harness settles it as failed. Counted on the agent row, so it survives a restart and bounds the agent's whole life, not one launch. 0 disables. Default 3.",
   "agentResumeAttempts": 3,
 
+  "// lessonBlockChars": "How many characters of PROMOTED lessons ride in every agent's system prompt (#355). Characters rather than a count, because what is being bounded is context and a lesson runs from one line to 2,000 characters. The block is identical for every agent in the fleet, so it is a cached prefix paid once rather than per dispatch — which is also why nothing per-dispatch may go in it. Over the cap, whole lessons are dropped OLDEST-VOUCHED FIRST (never a truncated claim, which would be a claim nobody promoted), and the drop is shown to you per row in the cockpit's Lessons panel — the agent is never told the list it reads is partial. 0 renders nothing at all, and then launch arguments are byte-identical to a build without the feature. Default 6000.",
+  "lessonBlockChars": 6000,
+
   "// whitelistedApprovals": "PTY waiting prompts the harness may auto-answer instead of escalating. Each rule: { match: <substring of the waiting prompt>, response: <text typed back> }. Default [].",
   "whitelistedApprovals": [{ "match": "Allow running tests", "response": "yes" }],
 

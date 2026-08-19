@@ -48,6 +48,7 @@ export type {
   JobSchedule,
   Lesson,
   LessonStatus,
+  LessonView,
   OpenPullRequest,
   OrphanedWork,
   AcceptanceCriterion,

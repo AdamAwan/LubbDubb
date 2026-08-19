@@ -1122,15 +1122,24 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   and nothing else, for the Findings count's reason: a count of what is already promoted would tick
   up on the operator's own click and never come down.
 
-  Two things about this panel are load-bearing rather than presentational. **Retired lessons are
+  Three things about this panel are load-bearing rather than presentational. **Retired lessons are
   drawn**, muted, rather than dropped: this is the surface one prunes from, and a row that vanished
   on being pruned would leave no way to tell a list you have finished with from one that lost rows.
-  And **the panel says out loud that nothing here reaches an agent** — promotion records the
-  operator's judgement and changes no launch argument — because a control that looks like it changes
-  what agents see and does not is worse than no control. Every card carries its provenance, the goal
-  it was learned on drawn as a `<Ref>` and the date beside it, since those are exactly the two things
-  a rendered block of assertions strips. Retire is a `ConfirmButton`: it is the one irreversible act
-  on the surface.
+  Every card carries its **provenance**, the goal it was learned on drawn as a `<Ref>` and the date
+  beside it, since those are exactly the two things a bare block of assertions strips — and since
+  #355 phase 3 they are rendered to the agent too. Retire is a `ConfirmButton`: it is the one
+  irreversible act on the surface.
+
+  And every **promoted** row says whether agents are actually getting it — a `sent to agents` chip,
+  or `over the cap`. Promoted lessons are rendered into the fleet's system-prompt append newest-vouched
+  first, up to `lessonBlockChars`, and whatever does not fit is dropped whole
+  → [10](10-agent-runtimes.md#the-lesson-block). The agent is never told the list it reads is partial —
+  a partial list presented as whole is the failure the cap exists to bound — so this panel is the only
+  place a dropped claim is visible, and the only place something can be retired to make room for it.
+  Per row rather than as a count, because "two are over the cap" leaves the operator to work out
+  *which* two before they can act. `rendered` is computed server-side by the same `renderLessonBlock`
+  the launch calls (`LessonView` in `src/wire.ts`), never re-derived in the browser: a second
+  implementation of "what fits" would be free to disagree with the one that actually ran.
 
 - **Faults** — the recorded failures, forty rows, the surface you went looking for rather than a crop
   for a column. It offers a **two-step clear**, drawn **above** the rows and **at zero rows as well**:

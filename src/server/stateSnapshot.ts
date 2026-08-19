@@ -26,6 +26,7 @@ import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { trackerCoordinates } from '../mcp/findings.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
+import { renderLessonBlock } from '../lessonBlock.js';
 import { acceptanceCriteria, bySlug, partDepth, planIssueNumber } from '../plans/parts.js';
 import { planScopeDrift } from '../plans/scopeDrift.js';
 import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
@@ -96,6 +97,13 @@ export function buildStateSnapshot(
   // the world has long since dropped is exactly the one a dated lesson points at,
   // so its ref has to be resolved directly rather than looked up off the snapshot.
   const lessons = store.listLessons();
+  // Which promoted lessons are actually in the block agents get (issue #355
+  // phase 3), from the same renderer the launch calls with the same cap — so the
+  // per-row marking below is what really happened, not a second opinion about it.
+  // The agent is never told the list it reads is partial; this is the surface
+  // where that is visible, and the only one from which something can be retired
+  // to make room.
+  const inLessonBlock = new Set(renderLessonBlock(lessons, config.lessonBlockChars).rendered.map((l) => l.id));
   // Work only a person can do. Read here rather than only in the panel for
   // findings' reason: each row's `originRef` names the work it belongs to, and the
   // panel links it through the same ref map as everything else.
@@ -598,11 +606,11 @@ export function buildStateSnapshot(
     // Operator-facing only: nothing in the dispatcher reads them, and one becomes
     // work only through `POST /api/findings/:id/promote`.
     findings,
-    // What working a goal taught about working this repository (issue #355).
-    // Operator-facing only, and more so than findings: a promoted lesson is one an
-    // operator has vouched for and nothing else — no rule reads it, no prompt
-    // renders it, and the launch arguments are the same bytes with or without one.
-    lessons,
+    // What working a goal taught about working this repository (issue #355). No
+    // rule reads one — a promoted lesson reaches agents only as a claim in the
+    // fleet's system-prompt append, and `rendered` says which promoted ones the
+    // cap actually let through.
+    lessons: lessons.map((lesson) => ({ ...lesson, rendered: inLessonBlock.has(lesson.id) })),
     // Bugs raised from a story row: `filing` while the desk agent writes one, `filed`
     // with a ref once it exists. Several per story is the normal case, not an error —
     // a story can be wrong in more than one way.
