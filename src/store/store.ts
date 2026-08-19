@@ -55,6 +55,7 @@ import type {
   FindingInput,
   FindingStatus,
   GoalFile,
+  GoalNeighbour,
   HumanTask,
   HumanTaskKind,
   HumanTaskStatus,
@@ -695,6 +696,9 @@ export class Store {
   }
   listGoalFiles(goalRef: string): GoalFile[] {
     return this.agents.listGoalFiles(goalRef);
+  }
+  listGoalNeighbours(goalRef: string, paths: string[]): GoalNeighbour[] {
+    return this.agents.listGoalNeighbours(goalRef, paths);
   }
 
   // -- Transcripts ---------------------------------------------------------
