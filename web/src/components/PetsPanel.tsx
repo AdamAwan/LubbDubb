@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { PetState, PetView } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
+import { petLabel, speciesKnown } from '../pets/reveal.js';
 import { PetSprite } from './PetSprite.js';
 import { relTime } from './util.js';
 
@@ -128,12 +129,13 @@ function PetCard({
         <PetSprite pet={pet} size={84} beatMs={2400} />
       </div>
       <div className="pet-name">
-        {/* `pet.display` is the species' own name, so it is the placeholder for
-            everything except a shell — where printing it would put the answer in
-            the box above the thing withholding it. */}
+        {/* Through `petLabel`, never `pet.display` — the species' own name is the
+            answer to a question the sprite below is still asking, and printing it
+            in the box above would hand it over at the shell *and* at the
+            hatchling. It comes back when the juvenile says it itself. */}
         <input
           value={name}
-          placeholder={egg ? 'egg' : pet.display}
+          placeholder={petLabel(pet)}
           aria-label="Name"
           onChange={(e) => setName(e.target.value)}
           onBlur={() => {
@@ -216,7 +218,13 @@ function PetCard({
             <AsyncButton
               className="ghost small"
               disabled={!duplicate}
-              title={duplicate ? undefined : `This is your only ${pet.display} — blending is for duplicates`}
+              title={
+                duplicate
+                  ? undefined
+                  : speciesKnown(pet)
+                    ? `This is your only ${pet.display} — blending is for duplicates`
+                    : 'This is the only one of these you have — blending is for duplicates'
+              }
               onClick={() => onBlend(pet.id)}
             >
               Blend

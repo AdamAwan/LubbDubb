@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { PetView } from '../types.js';
 import { paletteFor } from '../pets/palette.js';
+import { petLabel } from '../pets/reveal.js';
 import { crackFor, eggFor, spriteFor } from '../pets/sprites.js';
 
 /**
@@ -102,7 +103,7 @@ export function PetSprite({
     <span
       className={beatMs > 0 ? 'pet-sprite is-beating' : 'pet-sprite'}
       style={beatMs > 0 ? { animationDuration: `${beatMs}ms` } : undefined}
-      title={egg ? `a ${pet.rarity} egg` : `${pet.name ?? pet.display} · ${pet.stage}`}
+      title={petLabel(pet)}
     >
       <canvas ref={canvas} aria-hidden="true" />
     </span>

@@ -19,11 +19,14 @@ const ROCK_MS = 700;
 const FLASH_MS = 260;
 
 export function HatchModal({
-  pet,
+  petId,
+  pets,
   onOpen,
   onClose,
 }: {
-  pet: PetView;
+  petId: string;
+  /** The live collection. The modal finds its own pet in it — see below. */
+  pets: readonly PetView[];
   onOpen: (id: string) => Promise<unknown>;
   onClose: () => void;
 }) {
@@ -33,12 +36,24 @@ export function HatchModal({
   // render and not once per rock: `openPet` is idempotent, but a re-run would
   // still put a write on the socket for every frame React felt like giving us.
   const asked = useRef(false);
+  // The first pet this modal ever matched, kept for as long as it is open.
+  //
+  // The lookup lives here rather than at the call site because a caller that
+  // renders `pet !== null && <HatchModal/>` unmounts the whole ceremony the
+  // instant a snapshot arrives without this row in it — a reconnect, a refetch
+  // mid-write — and a remount restarts the sequence from the first rock. The
+  // symptom is an egg that wobbles twice as long as it should, on exactly the
+  // machines where the socket is slowest, and nothing about it is red.
+  const held = useRef<PetView | null>(null);
+  const live = pets.find((p) => p.id === petId) ?? null;
+  if (live !== null) held.current = live;
+  const pet = held.current;
 
   useEffect(() => {
     if (asked.current) return;
     asked.current = true;
-    void onOpen(pet.id);
-  }, [onOpen, pet.id]);
+    void onOpen(petId);
+  }, [onOpen, petId]);
 
   useEffect(() => {
     // Reduced motion gets the reveal and none of the shaking. The click still
@@ -74,6 +89,10 @@ export function HatchModal({
   // machine and hold it on to the end on a slow one, and the surface would be
   // right both times.
   const out = phase === 'out';
+  // A `?hatch=` naming nothing — a stale link, a pet that has since been blended —
+  // draws nothing rather than an empty modal. After the hooks, so the ceremony's
+  // own clock is never conditional on the snapshot.
+  if (pet === null) return null;
   const shown: PetView = { ...pet, openedAt: out ? (pet.openedAt ?? new Date().toISOString()) : null };
 
   return (

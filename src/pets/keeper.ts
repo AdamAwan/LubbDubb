@@ -257,9 +257,15 @@ export class PetKeeper {
     // shown what is in it.
     if (pet.openedAt === null)
       return { ok: false, error: 'that one is still an egg — open it before you decide it is a duplicate' };
-    const { display } = SPECIES[pet.species];
-    if (this.store.livePetsOfSpecies(pet.species) < 2)
-      return { ok: false, error: `this is your only ${display} — blending is for duplicates` };
+    if (this.store.livePetsOfSpecies(pet.species) < 2) {
+      // The species is named only once the pet is old enough to have said so
+      // itself. A hatchling has not — one grid serves every animal of a tier — so
+      // a refusal that named it would hand over, in an error message, the answer
+      // the whole juvenile stage exists to make you wait for.
+      const { display } = SPECIES[pet.species];
+      const which = petStage(pet.species, pet.fed) === 'hatchling' ? 'one of these' : display;
+      return { ok: false, error: `this is your only ${which} — blending is for duplicates` };
+    }
     const blended = this.store.blendPet(id, blendValue(pet.species, this.rules.blendYield));
     return blended ? { ok: true, pet: blended } : { ok: false, error: 'no such pet' };
   }

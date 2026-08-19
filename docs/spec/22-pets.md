@@ -185,7 +185,12 @@ So an egg is a **reveal over a decided outcome**, and everything downstream foll
   row turns into a hatchling on whatever pulse the socket delivers — somewhere around the second
   rock on a quick machine. `HatchModal` therefore holds the shell on until its own sequence says
   otherwise. Drawing the prop would pop the egg open mid-wobble on one machine and hold it shut to
-  the end on another, and the surface would be right both times.
+  the end on another, and the surface would be right both times. For the same reason it **finds its
+  own pet in the collection and keeps the first match**, rather than being handed one by a caller
+  that renders it conditionally: a snapshot arriving without that row — a reconnect, a refetch
+  landing mid-write — would unmount the ceremony, and a remount starts the wobble again from the
+  first rock. An egg that rocks twice as long as it should, on exactly the machines with the slowest
+  socket.
 - **The chain does not cover it.** `chainLink` hashes what the roll decided; opening is the
   operator's own act afterwards. Hashing it in would break every link the moment a shell came off,
   and an honest collection would start reporting `broken-chain` on the pets its owner had just
@@ -209,10 +214,22 @@ seed's palette does the rest, so no two eggs of a tier are the same egg either.
 
 The species does ride on the wire from the moment of the drop — it has to, since the reveal is a
 ceremony over something already decided — so **the one place it can leak is the cockpit**, and it
-leaks silently: a component reaching for `pet.species` or `pet.display` on an unopened pet draws the
-answer through the shell with nothing red. `PetSprite` picks the egg grid without consulting the
-species at all, and the panel's name field falls back to `egg` rather than to the species' display
-name, which is the leak that was there first.
+leaks silently: a surface reaching for `pet.species` or `pet.display` draws the answer through the
+shell with nothing red. `PetSprite` picks the egg grid without consulting the species at all, and
+every surface that *names* a pet goes through `petLabel` (`web/src/pets/reveal.ts`) — which is one
+helper rather than a rule, because a rule is a thing a surface written later does not know about and
+the field is right there on the view.
+
+**The withholding runs to the juvenile, not to the shell.** A hatchling shares one grid per tier, so
+its species is exactly as unknown as an egg's — and the panel named it anyway, in the name field's
+placeholder, from the day it shipped. That quietly cost the juvenile stage its entire point, and
+nothing was red: the card was correct, the sprite was correct, and the only symptom was that the
+wait the sprites were built around had already been answered on the surface beside them. The hatch
+modal is what made it obvious, by promising a wait the next click did not keep. Two rules follow, and
+they are the same rule twice: **the operator's own name always wins** — it is theirs, chosen knowing
+what they had — and copy that is *about* the species without naming the pet (`this is your only
+Ouroboros`) is reworded rather than renamed, on the server as well as in the cockpit, since a refusal
+is a sentence the operator reads.
 
 ### Three reveals, not two
 

@@ -119,7 +119,6 @@ export function App() {
   ) : null;
 
   const openAgent = status.view.selectedAgent;
-  const hatchingPet = state.pets?.pets.find((pet) => pet.id === status.view.hatching) ?? null;
 
   return (
     <RefLinks
@@ -153,14 +152,13 @@ export function App() {
       {status.view.viewingRetro && (
         <RetroModal issueRef={status.view.viewingRetro} onClose={() => status.actions.viewRetro(null)} />
       )}
-      {/* The pet is looked up on every render rather than captured when the
-          ceremony opened: the shell comes off through the ordinary write path, so
-          the row this draws is the one on the snapshot like everything else. A
-          `hatch=` naming nothing — a stale link, a blended pet — draws nothing
-          rather than an empty modal. */}
-      {hatchingPet !== null && (
+      {/* The collection goes in whole and the modal finds its own pet in it. A
+          conditional here would unmount the ceremony the first time a snapshot
+          arrived without that row, and a remount starts the wobble again. */}
+      {status.view.hatching !== null && (
         <HatchModal
-          pet={hatchingPet}
+          petId={status.view.hatching}
+          pets={state.pets?.pets ?? []}
           onOpen={(id) => status.actions.openPet(id)}
           onClose={() => status.actions.hatchEgg(null)}
         />

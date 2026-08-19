@@ -516,7 +516,11 @@ test('an egg cannot be fed or blended, and can still be put out', () => {
   assert.equal(store.getPet(egg.id)?.dissolvedAt, null, 'nor lost');
 
   // Putting one out is the one act an egg has, and it is the point of an egg: the
-  // corner of the rail is where you find it.
+  // corner of the rail is where you find it. A slot is freed first — twelve drops
+  // fill the enclosure, and a full one is refused for being full, not for holding
+  // a shell.
+  const standing = store.listPets().find((p) => p.placed)!;
+  assert.equal(pets.place(standing.id, false).ok, true);
   assert.equal(pets.place(egg.id, true).ok, true);
 });
 
