@@ -278,9 +278,7 @@ test('the Dark preview card draws :root, not whatever theme is live', () => {
   const sheet = withoutComments(readFileSync('web/src/theme.css', 'utf8'));
   const block = /\[data-theme-swatch='dark'\]\s*\{([\s\S]*?)\n\}/.exec(sheet);
   assert.ok(block, 'theme.css must carry the Dark card its own swatch values');
-  const declared = new Map(
-    [...block[1]!.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1]!, m[2]!.trim()]),
-  );
+  const declared = new Map([...block[1]!.matchAll(/(--[a-z0-9-]+)\s*:\s*([^;]+);/g)].map((m) => [m[1]!, m[2]!.trim()]));
   assert.deepEqual([...declared.keys()].sort(), [...SWATCH_TOKENS].sort());
   for (const token of SWATCH_TOKENS) {
     assert.equal(declared.get(token), root.get(token), `${token} has drifted from :root`);
@@ -415,10 +413,13 @@ test('the default preset removes the attribute rather than spelling itself out',
 test('applying a theme clears the tokens it no longer overrides', () => {
   const target = stub();
   applyTheme({ preset: 'dark', overrides: { '--bg': '#010203', '--text': '#fefefe' } }, target);
-  assert.deepEqual([...target.props], [
-    ['--bg', '#010203'],
-    ['--text', '#fefefe'],
-  ]);
+  assert.deepEqual(
+    [...target.props],
+    [
+      ['--bg', '#010203'],
+      ['--text', '#fefefe'],
+    ],
+  );
   // The bug this guards is a one-way live preview: tracking only what was set last
   // time would leave a reverted edit standing on the element.
   applyTheme({ preset: 'dark', overrides: { '--bg': '#010203' } }, target);

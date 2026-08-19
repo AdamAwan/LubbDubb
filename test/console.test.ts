@@ -856,7 +856,7 @@ test('every colour input in the cockpit is the shared field', () => {
   const owners: string[] = [];
   for (const path of readdirSync('web/src/components').filter((f) => f.endsWith('.tsx'))) {
     const source = readFileSync(join('web/src/components', path), 'utf8');
-    if (source.includes("type=\"color\"")) owners.push(path);
+    if (source.includes('type="color"')) owners.push(path);
   }
   assert.deepEqual(owners, ['ColourField.tsx'], 'a second colour input has appeared beside the shared one');
 });

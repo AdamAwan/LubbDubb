@@ -131,8 +131,7 @@ export function readThemePrefs(raw: string | null): ThemePrefs {
   if (typeof parsed !== 'object' || parsed === null) return DEFAULT_PREFS;
   const record = parsed as { preset?: unknown; overrides?: unknown };
   const named = typeof record.preset === 'string' ? record.preset : '';
-  const preset =
-    PRESETS.some((p) => p.id === named) ? (named as PresetId) : (PRESET_ALIASES[named] ?? DEFAULT_PRESET);
+  const preset = PRESETS.some((p) => p.id === named) ? (named as PresetId) : (PRESET_ALIASES[named] ?? DEFAULT_PRESET);
   const overrides: Record<string, string> = {};
   const source = record.overrides;
   if (typeof source === 'object' && source !== null && !Array.isArray(source)) {

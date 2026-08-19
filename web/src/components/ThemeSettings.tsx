@@ -60,9 +60,7 @@ export function ThemeSettings() {
 
   const root = typeof document === 'undefined' ? null : document.documentElement;
 
-  const dirty =
-    preset !== saved.preset ||
-    THEME_TOKENS.some((t) => draft[t.name] !== saved.overrides[t.name]);
+  const dirty = preset !== saved.preset || THEME_TOKENS.some((t) => draft[t.name] !== saved.overrides[t.name]);
 
   const choosePreset = (id: PresetId): void => {
     setPreset(id);
@@ -116,17 +114,13 @@ export function ThemeSettings() {
         if (!advanced && TOKEN_GROUPS[t.group].advanced && !needle && !onlyChanged) return false;
         if (!needle) return true;
         return (
-          t.name.includes(needle) ||
-          t.label.toLowerCase().includes(needle) ||
-          t.why.toLowerCase().includes(needle)
+          t.name.includes(needle) || t.label.toLowerCase().includes(needle) || t.why.toLowerCase().includes(needle)
         );
       }),
     [needle, onlyChanged, advanced, draft],
   );
 
-  const groups = (Object.keys(TOKEN_GROUPS) as TokenGroup[]).filter((g) =>
-    visible.some((t) => t.group === g),
-  );
+  const groups = (Object.keys(TOKEN_GROUPS) as TokenGroup[]).filter((g) => visible.some((t) => t.group === g));
   const changed = THEME_TOKENS.filter((t) => draft[t.name] !== undefined).length;
   const presetLabel = PRESETS.find((p) => p.id === preset)?.label ?? preset;
 

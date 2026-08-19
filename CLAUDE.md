@@ -234,7 +234,7 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
 ### Cockpit
 
 - **A colour written as a literal in a stylesheet is a colour no theme can reach.** Every colour the
-  cockpit draws is a custom property on one of two `:root` blocks, because the token layer *is* the
+  cockpit draws is a custom property on one of two `:root` blocks, because the token layer _is_ the
   theme an operator picks from the config page — so a hex at a use site is a surface that stays dark
   when somebody switches to Light. It reads as a tidiness rule and is not one: the sheet is correct,
   the component renders, and the only symptom arrives on a theme nobody tested. `format:check` and
