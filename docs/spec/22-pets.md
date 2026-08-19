@@ -198,7 +198,7 @@ So an egg is a **reveal over a decided outcome**, and everything downstream foll
 - **An egg cannot be fed and cannot be blended.** Both are decisions about a creature, and nobody has
   been shown one yet — blending especially, since "only a duplicate goes" is a promise about
   something you have seen twice. It **can** be put out: a shell in the corner of the rail is the
-  whole point of a shell. The flaw check runs *before* the shell check in both, because "open it
+  whole point of a shell. The flaw check runs _before_ the shell check in both, because "open it
   first" on a forgery is an invitation to carry on.
 - **Nothing expires.** An egg sits for as long as the operator leaves it, the same way nothing else
   here decays. The enclosure counts them in its bar and the shell stirs every few seconds; that is
@@ -231,7 +231,7 @@ nothing was red: the card was correct, the sprite was correct, and the only symp
 wait the sprites were built around had already been answered on the surface beside them. The hatch
 modal is what made it obvious, by promising a wait the next click did not keep. Two rules follow, and
 they are the same rule twice: **the operator's own name always wins** — it is theirs, chosen knowing
-what they had — and copy that is *about* the species without naming the pet (`this is your only
+what they had — and copy that is _about_ the species without naming the pet (`this is your only
 Ouroboros`) is reworded rather than renamed, on the server as well as in the cockpit, since a refusal
 is a sentence the operator reads.
 
@@ -330,6 +330,13 @@ captured once before the loop, so a flag derived from it and never advanced woul
 action in a first scan the deployment's first — the same seven-pet afternoon, arriving by a
 different route.
 
+It is seeded from `petRolledSince(start)` rather than from that key set, and the difference is the
+whole of what [the vivarium's start](#the-vivariums-start) buys. The key set holds the backlog too: a
+deployment that takes a build shipping pets has thousands of keys the moment its first scan finishes
+and has still never _rolled_ anything, so a guarantee gated on "is the table empty" would already
+have been spent — on an escalation answered last spring — before the operator saw the vivarium at
+all.
+
 ## Growth
 
 A pet is fed beats. `fed` is the cumulative count, and the stage is derived from it:
@@ -372,12 +379,12 @@ two-views-of-one-bytes split that component was made to prevent.
 
 Each tier keeps everything the tier below has and adds one device it is not allowed:
 
-| Tier         | Adds                                                          |
-| ------------ | ------------------------------------------------------------- |
-| `common`     | the lit body, and nothing else                                 |
-| `uncommon`   | one appendage above the head, drawn in its own grid            |
-| `rare`       | an angular silhouette, and four glints at its bounding box     |
-| `mythic`     | a glow past the outline, and a sparkle that moves              |
+| Tier       | Adds                                                       |
+| ---------- | ---------------------------------------------------------- |
+| `common`   | the lit body, and nothing else                             |
+| `uncommon` | one appendage above the head, drawn in its own grid        |
+| `rare`     | an angular silhouette, and four glints at its bounding box |
+| `mythic`   | a glow past the outline, and a sparkle that moves          |
 
 Rarity used to be carried by the egg and by however much marking a grid happened to have, and by
 nothing else — so a common with a good silhouette out-dressed a rare with a dull one, which is
@@ -502,6 +509,14 @@ whoever was there is the cockpit deciding something the operator did not. Clicki
 Four rather than all of them because the rail is a single narrow column and a vivarium that scrolled would
 be a second queue in the one place on the screen reserved for the first.
 
+**Under the bar, the date the vivarium started counting from** — `counting since 14 Aug 2026`, drawn
+from `PetState.startedAt` and outside the bar's button, because the bar has a destination and this is
+a fact with nowhere to go. It is here because this corner is where "nothing has hatched" is read: an
+enclosure still empty after a week of work looks identical to one on a harness whose entire history
+sorts before [the vivarium's start](#the-vivariums-start), and the date is the only thing that tells
+them apart. Nothing is drawn while `startedAt` is null — one boot, before the first scan settles it —
+since a sentence about a boundary nothing has decided yet is worse than the silence.
+
 ## The panel
 
 `ConsolePanel` gains `'pets'`, so the panel is a place — it survives a reload and the back button
@@ -532,6 +547,14 @@ was priced against how often each kind comes up, a single number would make whic
 deployment presses most into the whole vivarium. The matrix's step-down column carries its `↓`
 legend **only when some row actually steps down** — every pool is currently full, so none do, and a
 standing legend for an arrow the table never draws sends a reader hunting for it.
+
+The intro carries the **one line on the page that is about this deployment rather than about the
+tables**: the date the vivarium started counting, and that anything done before it is on record and
+pays nothing. Every rate below it is a claim about what an action is worth, so on a harness that took
+pets long after it started working there is a visible history those rates did not pay for — which
+reads as the feature being broken rather than as [the start](#the-vivariums-start) doing its job.
+`PetState.startedAt` exists on the wire for this line and the vivarium's; it is null until the first
+enabled scan stamps one, and both surfaces draw nothing rather than a placeholder.
 
 ### What it withholds
 
@@ -604,6 +627,54 @@ route written later. The `cycle:end` scan is what guarantees delivery for anythi
 the surface — and a scan triggered twice for one action still produces one pet, because the roll is
 a hash and the origin is unique.
 
+### The vivarium's start
+
+**An action stamped before the vivarium started is recorded and rolls nothing.** The start is one row
+in `pet_vivarium`, stamped by `PetKeeper.scan` the first time it runs with pets enabled, and it is
+the only lower bound anywhere in the subsystem — `collectActions` still reads every source in full,
+because `at` is a different column per source and several of them move under the row, and cutting
+there would lose the ability to record a pre-boundary action at all.
+
+Without it, the first enabled boot of a build that ships pets treats a deployment's entire history as
+this afternoon's work: `pet_actions` is empty, so every escalation, ask, plan, landing, job, finding
+and upgrade in the database is fresh, is sorted oldest-first, and is rolled in one pass — with
+[the first action ever](#the-first-action-ever) landing on the oldest row in the backlog rather than
+on anything the operator did while the feature was on screen.
+
+What the first stamp takes is the whole of the migration decision:
+
+- **`pet_actions` empty → `now()`.** Nothing here has ever been rolled, so nothing is being cut off.
+  The backlog is recorded inert and the deployment's first pet comes from what its operator does
+  next.
+- **`pet_actions` non-empty → `MIN(at)` over it.** Every already-rolled row is then at or after the
+  start, which makes the filter a **provable no-op** for an existing collection: the same pity walk,
+  the same `firstEver`, the same replay, the same pets. `now()` here instead would mark honestly
+  earned actions pre-boundary and put an `unearned` badge on a real animal on the boot its owner took
+  the build, which is the failure [authenticity](#authenticity) is written to avoid above all others.
+
+The row's own absence is the migration gate, which is why the start is a table and not a column: it
+is true on exactly one boot however the schema arrived, and it needs no `ColumnMigrations` entry and
+no `ensureColumns` report to know that boot from the next
+([14](14-persistence.md#when-a-null-means-something)). It is stamped by the **keeper**, not by the
+`Store`'s constructor, so a deployment sitting with `pets.enabled` false for months does not burn its
+start date on boots that could hatch nothing anyway.
+
+A pre-boundary action is **recorded** — a `pet_actions` row with `pet_id` null — rather than passed
+over. `petActionKeys` is the only thing that makes a re-scan free, so an unrecorded action stays
+fresh forever and would pay the whole backlog out at once the day anything moved the boundary. Inert,
+not pending.
+
+**Three readers honour it, and they have to agree.** `PetKeeper.scan` skips the roll,
+`petActionsSinceHatch(start)` leaves those rows out of the pity count, and `replayBarren(log, rules,
+start)` skips them in the attestation replay and takes `firstEver` from the first row at or after the
+start. A boundary the scan honoured and the replay did not would be worse than no boundary at all: it
+would accuse existing collections, one pet at a time, with nothing red anywhere.
+
+The `pet_resets` stamp is deliberately **not** reused as the start, though it exists, is already the
+wallet's floor and would be re-stamped for free. It is the wrong value on exactly the deployments
+this rule was written for — a clearance that ran _after_ their backlog was rolled puts every existing
+pet's action before it — and a database that has never had a clearance has no row at all.
+
 ### The sources
 
 `src/pets/scan.ts` holds one table of sources, each naming a store read and how to key a row:
@@ -664,12 +735,20 @@ designed has nothing to report and `npm run check` has no opinion about a consta
 clearance is a further id, added deliberately, and the old one stays so the deployments that have
 already had it are not given it twice.
 
-**`pet_actions` survives it, and that is the load-bearing part.** The table is the scan's watermark,
-so the actions a released collection hatched from are still marked as rolled and the next scan writes
-nothing. Clearing it too would read as the tidier wipe and would undo itself on the first pulse — the
-same creatures, out of the same history, by the same hashes. The cost is the honest one: the actions
-behind a cleared collection are spent, the deployment's one first-action guarantee stays spent with
-them, and the vivarium fills again from what the operator does **next**.
+**`pet_actions` survives it, and that is the load-bearing part.** The actions a released collection
+hatched from are still marked as rolled, so the next scan writes nothing. Clearing it too would read
+as the tidier wipe and would undo itself on the first pulse — the same creatures, out of the same
+history, by the same hashes.
+
+**The vivarium's start is re-stamped in the same transaction**, and that is what makes "starts again
+from zero" true of the rolls and not only of the wallet. Every `pet_actions` row a clearance leaves
+standing now falls _before_ the new start, so it is inert rather than merely spent: it lends the next
+action no pity floor, and the deployment's one first-action guarantee comes back with it — the first
+thing the operator settles after a clearance drops unconditionally, exactly as the first thing they
+ever settled did. A clearance is a once-per-build act of the harness rather than something an
+operator can ask for or farm, which is why handing the guarantee back is safe; keeping it spent
+forever would make "from here on" mean "from here on, except the one moment the feature was built
+around". The vivarium fills again from what the operator does **next**.
 
 Purchases and blend credits go with the pets, in the same transaction, because a beat spent on a
 creature that no longer exists is a balance drawn down against nothing.
@@ -711,18 +790,19 @@ and a hand-written demo copy of twenty species would be stale the first time one
 
 ## Persistence
 
-`src/store/pets.ts`, five tables. A new table needs no `ColumnMigrations` entry — but `pets` is no
+`src/store/pets.ts`, six tables. A new table needs no `ColumnMigrations` entry — but `pets` is no
 longer new, so **`dissolved_at` has one**, in `PET_COLUMNS`. Without it the column is invisible on
 every database from before blending existed, and invisible here means every historical pet reads as
 alive again ([14](14-persistence.md#migrations)).
 
-| Table           | Holds                                                                                                                                               |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Table           | Holds                                                                                                                                                                   |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `pets`          | One row per pet, egg or opened. `UNIQUE (origin_kind, origin_ref)` is what makes the scan idempotent. Also carries `opened_at`, `built_sha`, `built_clean` and `chain`. |
-| `pet_actions`   | One row per operator action rolled, hatched or not, keyed `(kind, ref)`.                                                                            |
-| `pet_purchases` | One row per beat spent, with the pet it was spent on. The only source of `beatsSpent`.                                                              |
-| `pet_blends`    | One row per duplicate blended, with what it credited. The only source of the blend half of `beatsEarned`.                                           |
-| `pet_resets`    | One row per clearance, keyed by its name. Its timestamp is the floor `beatsEarned` counts spend from.                                               |
+| `pet_actions`   | One row per operator action rolled, hatched or not, keyed `(kind, ref)`.                                                                                                |
+| `pet_purchases` | One row per beat spent, with the pet it was spent on. The only source of `beatsSpent`.                                                                                  |
+| `pet_blends`    | One row per duplicate blended, with what it credited. The only source of the blend half of `beatsEarned`.                                                               |
+| `pet_resets`    | One row per clearance, keyed by its name. Its timestamp is the floor `beatsEarned` counts spend from.                                                                   |
+| `pet_vivarium`  | One row, `id` pinned to 1: when this vivarium started counting. Stamped by the first enabled scan, re-stamped by a clearance.                                           |
 
 `opened_at` is in `PET_COLUMNS` too, and it is the one column here whose migration is not finished by
 the `ALTER TABLE`. **Null in it means _still an egg_** — so on every existing deployment the added
@@ -738,10 +818,13 @@ the identical silence, pointed the other way. → [14](14-persistence.md#migrati
 reason. Each of them reads as a _weaker_ claim when absent rather than a false one, which is what lets
 a database from before them keep every pet it holds.
 
-**There is no scan cursor.** `pet_actions` is the watermark: an action whose key is already in it is
-skipped rather than re-rolled, which is stronger than a timestamp high-water mark and needs nothing
-kept in step. A source whose own timestamp moves under it — a plan re-saved, a finding re-triaged —
-cannot pay out twice or consume a second slot of its kind's pity counter.
+**There is no scan cursor, and the boundary is not one.** `pet_actions` decides what has _already
+been rolled_: an action whose key is in it is skipped rather than re-rolled, which is stronger than a
+high-water mark and needs nothing kept in step. A source whose own timestamp moves under it — a plan
+re-saved, a finding re-triaged — cannot pay out twice or consume a second slot of its kind's pity
+counter. `pet_vivarium` answers a different question, once: _when did this vivarium start counting_.
+Nothing advances it, so it is not a cursor and cannot fall behind one — see
+[The vivarium's start](#the-vivariums-start).
 
 `pets.fed` is a cached sum of that pet's purchases, kept because the vivarium reads it on every
 snapshot and the panel reads it per card. The purchase and the increment are written in one

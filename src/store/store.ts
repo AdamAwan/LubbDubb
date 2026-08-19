@@ -995,8 +995,17 @@ export class Store {
   petPaidTotals(): Map<string, number> {
     return this.pets.petPaidTotals();
   }
-  petActionsSinceHatch(): Map<PetActionKind, number> {
-    return this.pets.petActionsSinceHatch();
+  petActionsSinceHatch(since: string): Map<PetActionKind, number> {
+    return this.pets.petActionsSinceHatch(since);
+  }
+  petRolledSince(since: string): boolean {
+    return this.pets.petRolledSince(since);
+  }
+  vivariumStart(): string | null {
+    return this.pets.vivariumStart();
+  }
+  beginVivarium(): string {
+    return this.pets.beginVivarium();
   }
   feedPet(id: string, beats: number): Pet | null {
     return this.pets.feedPet(id, beats);

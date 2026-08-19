@@ -73,9 +73,20 @@ export function collectActions(store: Store): PetActionCandidate[] {
 }
 
 /**
- * These tables are hundreds of rows on a long-lived deployment, not millions, and
- * the scan filters by key against what it has already rolled rather than by a
- * watermark — so it reads all of them and lets the set do the work. A limit here
- * would silently stop paying out for anything older than it.
+ * These tables are hundreds of rows on a long-lived deployment, not millions, so
+ * every read here is unbounded and the keeper does the deciding.
+ *
+ * **Both bounds belong there rather than here.** What has already been rolled is a
+ * set of keys, not a high-water mark, so a source whose timestamp moves under it
+ * cannot pay out twice; and what is too old to pay out at all is the vivarium's
+ * start, which the keeper applies to an action it has already collected — because
+ * an action from before the start is *recorded* as inert rather than skipped, and
+ * a row never read cannot be recorded. Cutting either in SQL is also cutting on a
+ * different column per source — `answeredAt`, `resolvedAt`, `updatedAt`,
+ * `createdAt` — several of which move under the row.
+ *
+ * A `LIMIT` on these reads, meanwhile, is not a boundary but a leak: it would
+ * silently stop paying out for anything older than it, on the deployments that had
+ * done the most. → `docs/spec/22-pets.md#the-vivariums-start`
  */
 const ALL = 100_000;

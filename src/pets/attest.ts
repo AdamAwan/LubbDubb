@@ -47,23 +47,35 @@ export interface PetLedger {
  * actions pity forced — and disagreeing here does not read as a bug, it reads as
  * `unearned` on a pet that was honestly earned.
  *
+ * **`since` is the vivarium's start, and a row older than it is skipped whole.**
+ * The scan never rolled those actions — it recorded them inert — so a replay that
+ * walked them would count a pity floor the harness never counted and would put
+ * `firstEver` on a row the harness passed over. Both disagreements land as an
+ * `unearned` badge on a pet that was honestly earned, which is the failure this
+ * file exists to avoid: the filter here and the filter in `PetKeeper.scan` are one
+ * rule and must be read as one.
+ *
  * What this closes: taking the rates out of the config stops the config route to a
  * free vivarium, and stops nothing for somebody editing `src/pets/rules.ts`. A
  * replay against the shipped constants sees those hatches for what they are.
  */
-export function replayBarren(log: PetAction[], rules: PetRules): Set<string> {
+export function replayBarren(log: PetAction[], rules: PetRules, since: string): Set<string> {
   const barren = new Set<string>();
   const sinceHatch = new Map<PetActionKind, number>();
-  for (const [index, action] of log.entries()) {
+  let anyRolled = false;
+  for (const action of log) {
+    if (action.at < since) continue;
     const missed = sinceHatch.get(action.kind) ?? 0;
     const roll = rollAction(action.kind, action.ref, action.at, {
       rules,
       forced: missed + 1 >= rules.rates[action.kind].pity,
       // Still once per deployment rather than once per kind, because the scan
       // grants it once per deployment: the two must agree or an honest first pet
-      // replays as one this build would not have hatched.
-      firstEver: index === 0,
+      // replays as one this build would not have hatched. On the first row at or
+      // after the start, which is the same row the scan called first.
+      firstEver: !anyRolled,
     });
+    anyRolled = true;
     if (!roll.hatches) barren.add(`${action.kind}:${action.ref}`);
     sinceHatch.set(action.kind, action.petId === null ? missed + 1 : 0);
   }

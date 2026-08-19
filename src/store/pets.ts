@@ -30,9 +30,9 @@ export const PET_COLUMNS: ColumnMigrations = {
 };
 
 /**
- * The four `pet_*` tables: what has hatched, every operator action that has been
- * rolled, every beat that has been spent, and every clearance that has released
- * the collection.
+ * The five `pet_*` tables: what has hatched, every operator action that has been
+ * rolled, every beat that has been spent, every clearance that has released the
+ * collection, and the one row saying when this vivarium started counting.
  *
  * Each arrived as a fresh `CREATE TABLE` and so needed no `ColumnMigrations` entry
  * — and a table being new **once** does not keep it exempt: `pets` has needed one
@@ -162,10 +162,15 @@ export class PetStore {
   /**
    * Every action key already rolled, as `<kind>:<ref>`.
    *
-   * The whole of what makes a re-scan a no-op, and the reason the scan needs no
-   * watermark: an action in this set is skipped rather than re-rolled, so a
-   * source whose timestamp moves under it — a plan re-saved, a finding re-triaged
-   * — cannot pay out twice or consume a second slot of the pity counter.
+   * The whole of what makes a re-scan a no-op: an action in this set is skipped
+   * rather than re-rolled, so a source whose timestamp moves under it — a plan
+   * re-saved, a finding re-triaged — cannot pay out twice or consume a second slot
+   * of the pity counter. It is a set of keys and not a watermark, which is why an
+   * action from before the vivarium started is still written here: skipping it
+   * unrecorded would leave it fresh forever.
+   *
+   * It says nothing about whether anything has been *rolled* — see
+   * {@link petRolledSince}, which is the question the first-action guarantee asks.
    */
   petActionKeys(): Set<string> {
     const rows = this.ctx.db.prepare(`SELECT kind, ref FROM pet_actions`).all() as { kind: string; ref: string }[];
@@ -250,18 +255,80 @@ export class PetStore {
    * pass and a busy minute stamps them identically, so a timestamp comparison
    * counts a tie as "not after" and quietly reports zero — the counter then never
    * moves and pity never fires, with every row present and correct.
+   *
+   * **`since` is the vivarium's start, and rows older than it do not count.** They
+   * are in the table — recorded so a re-scan stays free — but they were never
+   * rolled, and counting them would hand the deployment's first genuine action a
+   * pity floor built out of a backlog nobody was paid for. The one place that is
+   * *not* a `rowid` comparison, because a boundary is a time and only a time.
    */
-  petActionsSinceHatch(): Map<PetActionKind, number> {
+  petActionsSinceHatch(since: string): Map<PetActionKind, number> {
     const rows = this.ctx.db
       .prepare(
         `SELECT kind, COUNT(*) AS n FROM pet_actions AS a
-          WHERE a.rowid > (SELECT COALESCE(MAX(b.rowid), 0)
+          WHERE a.at >= @since
+            AND a.rowid > (SELECT COALESCE(MAX(b.rowid), 0)
                              FROM pet_actions AS b
                             WHERE b.pet_id IS NOT NULL AND b.kind = a.kind)
           GROUP BY a.kind`,
       )
-      .all() as { kind: string; n: number }[];
+      .all({ since }) as { kind: string; n: number }[];
     return new Map(rows.map((row) => [row.kind as PetActionKind, row.n]));
+  }
+
+  /**
+   * Whether anything at or after the vivarium's start has been rolled yet.
+   *
+   * The `firstEver` signal, and it is a query rather than `petActionKeys().size`
+   * because that set holds the backlog too: a deployment that took this build with
+   * months of history behind it has thousands of keys and has still never rolled
+   * anything, and the one guaranteed drop belongs to the first thing its operator
+   * does *after* the vivarium started.
+   */
+  petRolledSince(since: string): boolean {
+    const row = this.ctx.db.prepare(`SELECT 1 AS n FROM pet_actions WHERE at >= ? LIMIT 1`).get(since) as
+      | { n: number }
+      | undefined;
+    return row !== undefined;
+  }
+
+  /** When this vivarium started counting, or null before its first enabled scan. */
+  vivariumStart(): string | null {
+    const row = this.ctx.db.prepare(`SELECT started_at FROM pet_vivarium WHERE id=1`).get() as
+      | { started_at: string }
+      | undefined;
+    return row?.started_at ?? null;
+  }
+
+  /**
+   * The vivarium's start, stamping it on the one boot that has none.
+   *
+   * The row's own absence is the migration gate, and the value it takes is the
+   * whole of the migration decision:
+   *
+   * - **`pet_actions` empty → `now()`.** Nothing here has ever been rolled, so
+   *   nothing is being cut off. The deployment's whole history is recorded inert
+   *   and its first pet comes from what the operator does next — which is the
+   *   point: a build that shipped pets to a year-old database would otherwise roll
+   *   that year in one pass and spend the first-action guarantee on an escalation
+   *   answered last spring.
+   * - **`pet_actions` non-empty → `MIN(at)` over it.** Every row that has already
+   *   been rolled is then at or after the start, which makes the filter a provable
+   *   no-op for an existing collection: the same pity walk, the same `firstEver`,
+   *   the same replay, the same pets. A start of `now()` here would mark honestly
+   *   earned actions pre-boundary and put an `unearned` badge on somebody's real
+   *   animal on the boot they took the build.
+   */
+  beginVivarium(): string {
+    const begin = this.ctx.db.transaction((): string => {
+      const existing = this.vivariumStart();
+      if (existing !== null) return existing;
+      const row = this.ctx.db.prepare(`SELECT MIN(at) AS at FROM pet_actions`).get() as { at: string | null };
+      const at = row.at ?? this.ctx.now();
+      this.ctx.db.prepare(`INSERT OR IGNORE INTO pet_vivarium (id, started_at) VALUES (1, ?)`).run(at);
+      return at;
+    });
+    return begin();
   }
 
   /**
@@ -383,17 +450,24 @@ export class PetStore {
   /**
    * Release the whole collection, and stamp when.
    *
-   * **`pet_actions` is deliberately left standing.** It is the scan's watermark:
-   * an action whose key is in it is skipped rather than re-rolled, so keeping it
-   * is the whole of what stops the next scan hatching the released collection
-   * straight back out of the same history. Clearing it too would read as the
-   * tidier wipe and would undo itself on the next pulse.
+   * **`pet_actions` is deliberately left standing.** An action whose key is in it
+   * is skipped rather than re-rolled, so keeping it is the whole of what stops the
+   * next scan hatching the released collection straight back out of the same
+   * history. Clearing it too would read as the tidier wipe and would undo itself
+   * on the next pulse.
    *
    * Purchases and blends go with the pets, because a beat spent on a creature
    * that no longer exists is a balance drawn down against nothing. One
    * transaction: a crash between the deletes would leave purchases pointing at
    * pets that had gone, which reads from the wallet as spend nobody can account
    * for.
+   *
+   * **The start is re-stamped in that same transaction**, which is what makes
+   * "starts the beats again from zero" true of the rolls as well as the wallet:
+   * every surviving `pet_actions` row falls before the new start, so the backlog a
+   * clearance leaves standing is inert rather than merely spent — no pity floor
+   * inherited from it, and the first-action guarantee handed back to whatever the
+   * operator does next.
    */
   clearVivarium(id: string): PetReset {
     const wipe = this.ctx.db.transaction((): PetReset => {
@@ -402,6 +476,12 @@ export class PetStore {
       this.ctx.db.prepare(`DELETE FROM pet_purchases`).run();
       this.ctx.db.prepare(`DELETE FROM pet_blends`).run();
       this.ctx.db.prepare(`INSERT OR IGNORE INTO pet_resets (id, at, cleared) VALUES (?,?,?)`).run(id, at, cleared);
+      this.ctx.db
+        .prepare(
+          `INSERT INTO pet_vivarium (id, started_at) VALUES (1, ?)
+             ON CONFLICT(id) DO UPDATE SET started_at=excluded.started_at`,
+        )
+        .run(at);
       return { id, at, cleared };
     });
     return wipe();

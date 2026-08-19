@@ -926,6 +926,9 @@ export function buildDemoState(): DemoSeed {
     // whether they want it at all. Four species, four stages, one of each rarity.
     pets: {
       slots: 4,
+      // Well before the demo's own pets, so the line reads as a deployment that has
+      // been counting for a while rather than as one that started this morning.
+      startedAt: '2026-05-02T09:00:00.000Z',
       wallet: { earned: 6_240, spent: 2_900, balance: 3_340 },
       pets: [
         {

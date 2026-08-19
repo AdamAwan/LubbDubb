@@ -36,9 +36,21 @@ function rules(over: RuleOverrides = {}): PetRules {
   return { ...PET_RULES, ...rest, rates: rates ?? spread };
 }
 
-function keeper(over: RuleOverrides = {}, build = BUILD): { store: Store; pets: PetKeeper } {
+/** A keeper over a database whose vivarium has not started yet. */
+function coldKeeper(over: RuleOverrides = {}, build = BUILD): { store: Store; pets: PetKeeper } {
   const store = new Store(':memory:');
   return { store, pets: new PetKeeper(store, { enabled: true }, rules(over), () => build) };
+}
+
+function keeper(over: RuleOverrides = {}, build = BUILD): { store: Store; pets: PetKeeper } {
+  const { store, pets } = coldKeeper(over, build);
+  // The boot before the operator does anything: it hatches nothing and stamps the
+  // vivarium's start, so the actions a test goes on to make fall *after* it. A
+  // deployment reaches this scan the same way — `main.ts` runs one at boot — and a
+  // test that skipped it would be manufacturing a backlog and then asking why it
+  // paid nothing.
+  pets.scan();
+  return { store, pets };
 }
 
 /** The build the suite pretends to be running, so a stamp does not need a checkout. */
@@ -50,9 +62,16 @@ function ledger(store: Store, build = BUILD): PetLedger {
     actions: store.petActionIndex(),
     paid: store.petPaidTotals(),
     chain: replayChain(store.petChainLog()),
-    barren: replayBarren(store.petActionLog(), PET_RULES),
+    barren: replayBarren(store.petActionLog(), PET_RULES, started(store)),
     build,
   };
+}
+
+/** When this store's vivarium started counting, which the boundary-aware reads take. */
+function started(store: Store): string {
+  const at = store.vivariumStart();
+  assert.ok(at !== null, 'a scan stamps the start, and every keeper here has scanned');
+  return at;
 }
 
 /** Every action that can roll, which several tests walk. */
@@ -103,7 +122,11 @@ test('an action that hatched nothing is still recorded, so pity can count it', (
   answer(store, 'the first question ever asked');
   answer(store, 'a question nobody gets a pet for');
   assert.equal(pets.scan().length, 1, 'only the first-of-kind hatches at a zero chance');
-  assert.equal(store.petActionsSinceHatch().get('escalation'), 1, 'a miss is a row, or the counter can never move');
+  assert.equal(
+    store.petActionsSinceHatch(started(store)).get('escalation'),
+    1,
+    'a miss is a row, or the counter can never move',
+  );
 });
 
 test('pity forces a hatch once enough actions have missed', () => {
@@ -114,7 +137,11 @@ test('pity forces a hatch once enough actions have missed', () => {
   assert.equal(hatched.length, 2, 'the first action ever, and then the one pity forces');
   // Sparse by design: the last escalation row hatched, so nothing sits after it
   // and the kind has no row of its own. Absent is how zero is spelled.
-  assert.equal(store.petActionsSinceHatch().get('escalation') ?? 0, 0, 'and the counter resets behind it');
+  assert.equal(
+    store.petActionsSinceHatch(started(store)).get('escalation') ?? 0,
+    0,
+    'and the counter resets behind it',
+  );
 });
 
 test('pity is counted per kind, so a busy action cannot spend a quiet one’s floor', () => {
@@ -133,7 +160,7 @@ test('pity is counted per kind, so a busy action cannot spend a quiet one’s fl
   for (let i = 0; i < 10; i++) settle(store, `task ${i}`);
   pets.scan();
 
-  const byKind = store.petActionsSinceHatch();
+  const byKind = store.petActionsSinceHatch(started(store));
   assert.equal(byKind.get('escalation'), 1, 'the escalation counter counts escalations only');
   assert.ok((byKind.get('human-task') ?? 0) > 0, 'and the task counter runs on its own');
   const hatched = store.listPets().filter((pet) => pet.originKind === 'escalation' && pet.originRef !== undefined);
@@ -208,6 +235,120 @@ test('a second scan does not re-arm the guarantee for an action rolled later', (
 
   answer(store, 'a question asked in a later pass entirely');
   assert.deepEqual(pets.scan(), [], 'the guarantee is gone, and a zero chance hatches nothing');
+});
+
+// -- Where the vivarium starts -----------------------------------------------
+
+/**
+ * The boundary a replay used before this one existed: earlier than any timestamp
+ * the harness can hold, so every row in the log passes it. What "the same answer
+ * as before the boundary" is asserted against.
+ */
+const BEFORE_EVERYTHING = '0000-01-01T00:00:00.000Z';
+
+test('a backlog from before the vivarium started is recorded, and pays for nothing', () => {
+  // The deployment the report came from: months of history, pets switched on for
+  // the first time, and a scan that read the lot as this afternoon's work.
+  const { store, pets } = coldTimedKeeper({ dropChance: 0, pity: 1_000 });
+  answer(store, 'answered five days before the upgrade');
+  settle(store, 'a task from before pets existed');
+
+  assert.deepEqual(pets.scan(), [], 'a deployment’s whole history is not one afternoon’s work');
+  assert.deepEqual(store.listPets(), []);
+  const log = store.petActionLog();
+  assert.equal(log.length, 2, 'recorded all the same, or they stay fresh forever');
+  assert.deepEqual(
+    log.map((row) => row.petId),
+    [null, null],
+    'inert rather than pending: written with no pet',
+  );
+  assert.deepEqual(
+    [...store.petActionsSinceHatch(started(store)).values()],
+    [],
+    'and lending no pity floor to whatever comes next',
+  );
+
+  const first = answer(store, 'the first thing done with the vivarium open');
+  const hatched = pets.scan();
+  assert.equal(hatched.length, 1, 'the guarantee is still there at a zero drop chance');
+  assert.equal(hatched[0]?.originRef, first, 'and it falls on the first action after the start, not the oldest row');
+});
+
+test('a clearance re-stamps the start, so what it leaves standing lends nothing', () => {
+  const { store, pets } = timedKeeper({ dropChance: 0, pity: 1_000 });
+  answer(store, 'the first question ever asked');
+  assert.equal(pets.scan().length, 1, 'the deployment’s one guarantee');
+  for (let i = 0; i < 5; i++) answer(store, `question ${i}`);
+  pets.scan();
+  const before = started(store);
+
+  const reset = pets.resetOnce();
+  assert.ok(reset);
+  assert.equal(store.vivariumStart(), reset.at, 'the start moves to the clearance');
+  assert.ok(reset.at > before, 'which is later than where the vivarium began');
+  assert.deepEqual(
+    [...store.petActionsSinceHatch(started(store)).values()],
+    [],
+    'the six actions it left standing are behind the new start, so no floor is inherited',
+  );
+
+  answer(store, 'the first thing done after the clearance');
+  assert.equal(pets.scan().length, 1, 'and the first-action guarantee comes back with the start');
+});
+
+test('a vivarium carried over from before the boundary keeps every pet it has', () => {
+  // The risk worth a test of its own: a start computed one row too late marks an
+  // honestly earned action pre-boundary, which moves the pity walk and `firstEver`
+  // in the replay and puts an `unearned` badge on somebody’s real animal, on the
+  // boot they take the build.
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-vivarium-'));
+  const path = join(dir, 'old.db');
+  let tick = 0;
+  const clock = (): string => new Date(Date.parse('2026-04-12T09:00:00.000Z') + tick++ * 60_000).toISOString();
+  try {
+    const store = new Store(path, clock);
+    const pets = new PetKeeper(store, { enabled: true }, rules({ dropChance: 0.5 }), () => BUILD);
+    pets.scan();
+    for (let i = 0; i < 20; i++) answer(store, `question ${i}`);
+    for (let i = 0; i < 20; i++) settle(store, `task ${i}`);
+    pets.scan();
+    const collection = store.listPets().map((pet) => pet.id);
+    assert.ok(collection.length > 1, 'a collection worth carrying over');
+    const log = store.petActionLog();
+    const earliest = log.map((row) => row.at).sort()[0];
+    const barren = [...replayBarren(log, PET_RULES, BEFORE_EVERYTHING)].sort();
+    store.close();
+
+    // A database from before this change holds no start at all. Every reader of
+    // one has to survive that, and the value the first boot writes is the whole of
+    // whether an existing collection comes through it untouched.
+    const raw = new Database(path);
+    raw.exec(`DELETE FROM pet_vivarium`);
+    raw.close();
+
+    const rebooted = new Store(path, clock);
+    const back = new PetKeeper(rebooted, { enabled: true }, rules({ dropChance: 0.5 }), () => BUILD);
+    assert.deepEqual(back.scan(), [], 'nothing is rolled a second time');
+    assert.equal(rebooted.vivariumStart(), earliest, 'the start is the earliest action already rolled');
+    assert.deepEqual(
+      rebooted.listPets().map((pet) => pet.id),
+      collection,
+      'and the collection is exactly the one from before',
+    );
+    assert.deepEqual(
+      [...replayBarren(rebooted.petActionLog(), PET_RULES, started(rebooted))].sort(),
+      barren,
+      'the replay says precisely what it said when it had no boundary to honour',
+    );
+    assert.deepEqual(
+      back.state()?.pets.filter((pet) => pet.flaw !== null),
+      [],
+      'so no pet that was honestly earned draws a flaw badge on the boot that takes this build',
+    );
+    rebooted.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('nocturne is drawn only by an action taken at night, in the action’s own hours', () => {
@@ -454,12 +595,18 @@ test('the last of a species is refused, and a dissolved one cannot be fed or re-
 // -- Clearing the vivarium ---------------------------------------------------
 
 /** A keeper on a clock that moves a minute per read, so an epoch can be compared. */
-function timedKeeper(over: RuleOverrides = {}): { store: Store; pets: PetKeeper } {
+function coldTimedKeeper(over: RuleOverrides = {}): { store: Store; pets: PetKeeper } {
   let tick = 0;
   const store = new Store(':memory:', () =>
     new Date(Date.parse('2026-04-12T09:00:00.000Z') + tick++ * 60_000).toISOString(),
   );
   return { store, pets: new PetKeeper(store, { enabled: true }, rules(over), () => BUILD) };
+}
+
+function timedKeeper(over: RuleOverrides = {}): { store: Store; pets: PetKeeper } {
+  const { store, pets } = coldTimedKeeper(over);
+  pets.scan(); // The boot before the operator acts — see `keeper`.
+  return { store, pets };
 }
 
 /** One dollar of fleet spend, which is 25 beats at the shipped rate. */
@@ -555,6 +702,7 @@ test('a vivarium from before eggs is not turned back into a crate of shells', ()
     // And the backfill is a one-off, not a boot chore: an egg laid after the
     // upgrade is still an egg on the next restart.
     const pets = new PetKeeper(store, { enabled: true }, rules({ dropChance: 1 }), () => BUILD);
+    pets.scan(); // The boot, which stamps the vivarium's start before the operator acts.
     answer(store, 'a question after the upgrade');
     const [fresh] = pets.scan();
     assert.ok(fresh);
@@ -795,16 +943,18 @@ test('the replay accuses only what this same clean build hatched', () => {
   // The failure worth avoiding above all others: telling an honest operator their
   // collection is fake, on their machine, months later. A pet decided by constants
   // this process does not hold is a pet this process may not judge.
-  const at = '2026-04-12T14:00:00.000Z';
   const { store, pets } = keeper({ dropChance: 1 });
   answer(store, 'a real one');
   pets.scan();
+  // After the vivarium started, or the replay skips it as a backlog row and the
+  // check under test never runs.
+  const at = new Date(Date.parse(started(store)) + 60_000).toISOString();
 
   // An action the shipped rules would have hatched nothing on, with a pet against
   // it anyway — which is what editing the drop chance and restarting looks like.
   store.recordPetAction({ kind: 'escalation', ref: 'esc_barren', at, petId: null });
   const log = store.petActionLog();
-  const barren = replayBarren(log, PET_RULES);
+  const barren = replayBarren(log, PET_RULES, started(store));
   assert.ok(barren.has('escalation:esc_barren'), 'at the shipped chance, this one hatches nothing');
 
   // A species that origin really can roll, so the earlier checks pass and the
@@ -972,6 +1122,23 @@ test('the roll never reaches for randomness', () => {
       `${file} must stay deterministic — a random roll turns every re-read into a fresh chance at a pet`,
     );
   }
+});
+
+test('the state carries the vivarium’s start, so the cockpit can say why a backlog paid nothing', () => {
+  const { store, pets } = coldKeeper({ dropChance: 1 });
+  assert.equal(
+    pets.state()?.startedAt,
+    null,
+    'before the first scan there is no start, and a surface draws nothing rather than a placeholder',
+  );
+  // Read, never stamped: `state()` runs on every heartbeat, and a read that wrote
+  // the boundary would start the vivarium on whichever pulse first drew the
+  // cockpit rather than on the first scan that could hatch anything.
+  assert.equal(store.vivariumStart(), null, 'drawing the cockpit does not start the vivarium');
+
+  answer(store, 'hatch me something');
+  pets.scan();
+  assert.equal(pets.state()?.startedAt, store.vivariumStart(), 'and afterwards it is the store’s own start');
 });
 
 /** Source with block and line comments removed, so prose about a call is not the call. */
