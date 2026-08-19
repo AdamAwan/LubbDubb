@@ -45,12 +45,17 @@ async function main(): Promise<void> {
   // run on the sentinels alone, which is a supported configuration, not a failed start.
   const mcpReady = await system.mcp.listen();
 
-  // The desktop channel is the one thing here still behind a flag, because it is
-  // the one thing with a footprint outside the harness: `listen()` binds the
-  // stable socket and writes into the operator's home directory. The skill rides
-  // with it rather than switching separately — the channel without its skill is
-  // the channel failing at the job it was turned on for.
-  const desktopReady = config.validation.desktop ? await system.desktop.listen() : false;
+  // The desktop channel, unconditionally. It is the one thing here with a
+  // footprint outside the harness — `listen()` binds the stable socket and writes
+  // into the operator's home directory — and it used to be behind a switch for
+  // that reason. Nothing downstream ever read the switch: the cockpit offers a
+  // desktop prompt on every unrun check, so a deployment that took the defaults
+  // was handed a prompt that reached nothing. The skill rides with the channel
+  // rather than switching separately — the channel without its skill is the
+  // channel failing at the job it exists for. Best-effort by contract, like the
+  // fleet's: a false return is a harness whose checks are all run by the fleet,
+  // not a failed start, and the boot lines below say which of the two happened.
+  const desktopReady = await system.desktop.listen();
   if (desktopReady) installDesktopSkill(config.validation.desktopSkillPath, system.errors);
 
   // Runs before the boot cycle, though the hold does not depend on that: the
@@ -83,6 +88,13 @@ async function main(): Promise<void> {
     console.log(`[lubbdubb]   claude mcp add --scope user lubbdubb -- ${command} ${args.join(' ')}`);
     console.log(`[lubbdubb] credential at ${system.desktop.credentialPath()} (0600), reminted every start`);
     console.log(`[lubbdubb] /lubbdubb skill installed at ${config.validation.desktopSkillPath}`);
+  } else {
+    // The state, not the intent — there is no intent left to print. A bind that
+    // did not happen is now the only reason this line appears, and the error log
+    // carries which one (a live socket on the stable path is another harness).
+    console.log(
+      `[lubbdubb] desktop validation channel unavailable — nothing is listening on ${config.validation.desktopSocketPath}; see the error log`,
+    );
   }
 
   // The file, watched — so an edit made in an editor or by Claude lands on the

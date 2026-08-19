@@ -613,8 +613,12 @@ load-bearing both ways:
 
 `src/mcp/desktop.ts`. A second socket, for the operator's **own** Claude Code rather than for a
 spawned agent — so a validation check needing a browser and a login the fleet does not have can be
-run at their keyboard and reported onto the same row. Off unless `validation.desktop`;
-[20](20-validation.md#the-desktop-channel) owns the behaviour.
+run at their keyboard and reported onto the same row. **Unconditional** — every start binds the
+stable socket, mints the credential at `validation.desktopCredentialPath` (`0600`) and rewrites the
+skill at `validation.desktopSkillPath`, on a deployment that configured none of it. That footprint is
+the whole of what the channel costs a deployment that never uses it, and it is the price of the
+cockpit's **Copy desktop prompt** reaching something. [20](20-validation.md#the-desktop-channel) owns
+the behaviour.
 
 | Tool                | Purpose                                                                                               |
 | ------------------- | ----------------------------------------------------------------------------------------------------- |

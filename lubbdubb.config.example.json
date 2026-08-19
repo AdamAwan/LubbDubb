@@ -122,11 +122,9 @@
     "checkIntervalMs": 3600000
   },
 
-  "// validation": "How anyone checks the GOAL was met, as steps a person or an agent runs rather than a paragraph nobody executes. Unconditional — a planner is asked for checks, a person marks them off, and the only consequence is that closing a goal with checks outstanding says so. 'desktop' is the one part with a footprint outside the harness: a second MCP socket your OWN Claude Code registers against, so a check can run on a machine the fleet cannot reach. Deep-merged.",
+  "// validation": "How anyone checks the GOAL was met, as steps a person or an agent runs rather than a paragraph nobody executes. Unconditional — a planner is asked for checks, a person marks them off, and the only consequence is that closing a goal with checks outstanding says so. The desktop channel is unconditional too: every start binds a stable socket your OWN Claude Code registers against, writes a 0600 credential and installs the /lubbdubb skill, so a check can run on a machine the fleet cannot reach. There is no switch for it — the paths below are the only choices, and they are how two harnesses share one machine. Deep-merged.",
   "validation": {
-    "// desktop": "The desktop channel. Off by default because it binds a stable socket and writes into your home directory; the /lubbdubb skill rides with it rather than switching separately.",
-    "desktop": false,
-    "// desktopClaimMinutes": "How long a claimed check is held before it is offered again. Default 30.",
+    "// desktopClaimMinutes": "How long a claimed check is held before it is offered again. Default 60.",
     "desktopClaimMinutes": 30
   },
 

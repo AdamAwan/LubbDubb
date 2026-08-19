@@ -606,6 +606,13 @@ test('the skill installs, and says what it is for without restating the procedur
   // The three answers, and the one that is easiest to leave out.
   assert.match(written, /handback/);
   assert.match(written, /Do not report `passed` from evidence you did not gather/);
+  // The managed-by comment is the one thing in the body about the file itself, so
+  // it is the one thing that goes stale silently: it used to name a switch that
+  // kept a local copy, and there is no such switch — the channel is unconditional
+  // and every start overwrites this file. An operator reading it must be told that
+  // rather than pointed at a setting the loader refuses.
+  assert.match(written, /rewritten from scratch every time the harness starts/);
+  assert.doesNotMatch(written, /desktopSkill\b/);
 });
 
 /**

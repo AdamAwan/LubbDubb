@@ -313,7 +313,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     access: 'plain',
     why: 'Minimum gap between the fetches plan reconciliation runs before reading branch reality.',
   },
-  { path: 'validation.desktop', type: 'boolean', access: 'plain', why: 'The desktop channel for validation checks.' },
   {
     path: 'validation.desktopClaimMinutes',
     type: 'number',

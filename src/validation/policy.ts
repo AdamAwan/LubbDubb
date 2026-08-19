@@ -9,19 +9,20 @@
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+/**
+ * The desktop channel — a second MCP socket the operator's *own* Claude Code
+ * connects to, so a check that needs a browser and a login the fleet does not
+ * have can be run at their keyboard and reported back through the same rows — is
+ * **unconditional**. It used to be behind a switch, on the argument
+ * that its footprint sits outside the harness: a credential in the operator's
+ * home directory, a skill installed into their Claude Code, and a socket at a
+ * fixed path. What settled it the other way is that nothing else was ever behind
+ * the flag — the cockpit draws **Copy desktop prompt** on every unrun check, so a
+ * deployment that took the defaults was offered a prompt that connected to
+ * nothing, with no error and no marker to say why. The paths below are what is
+ * left to choose, and they are the whole of how two harnesses share a machine.
+ */
 export interface ValidationPolicy {
-  /**
-   * The desktop channel: a second MCP socket the operator's *own* Claude Code
-   * connects to, so a check that needs a browser and a login the fleet does not
-   * have can be run at their keyboard and reported back through the same rows.
-   *
-   * **Off by default**, unlike the rest of validation, and for a reason none of
-   * the rest has: this one has a footprint outside the harness. It writes a
-   * credential into the operator's home directory, installs a skill into their
-   * Claude Code, and binds a socket at a fixed path. None of that should happen
-   * because a deployment took the defaults.
-   */
-  desktop: boolean;
   /**
    * How long a desktop claim holds a check without being released.
    *
@@ -63,7 +64,6 @@ export interface ValidationPolicy {
 }
 
 export const DEFAULT_VALIDATION: ValidationPolicy = {
-  desktop: false,
   desktopClaimMinutes: 60,
   // Under the OS tmpdir for the fleet socket's reason: POSIX caps a socket path
   // at about 104 characters, which a repo-relative path clears easily.
