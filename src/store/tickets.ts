@@ -337,6 +337,57 @@ export class TicketStore {
     const rows = this.ctx.db.prepare(`SELECT * FROM tracker_items ORDER BY number DESC`).all() as TrackerItemRow[];
     return rows.map(rowToTicket);
   }
+
+  /**
+   * Fold a label change the provider has just taken onto the mirrored rows —
+   * `WorldStore.patchWorldLabels`' half of the same click, for the surface
+   * that reads this table instead of the baseline.
+   *
+   * The Tickets tab is the only screen carrying an explicit **Unwatch**, and it
+   * draws the toggle and its watch filter from `labels` here, not from the world.
+   * Nothing else writes this column between sweeps: `TicketSweep` runs last in a
+   * cycle, and the `runCycle('manual')` a watch route ends with coalesces away
+   * while another cycle is in flight — most clicks on a busy fleet. So without
+   * this the row an operator just un-watched goes on reporting `watched`, the
+   * Unwatched filter cannot find it, and clicking again does exactly as little,
+   * which is a toggle that reads as broken while the tag is long gone from the
+   * tracker (issue #417).
+   *
+   * Observed fact arriving early rather than a guess, for `patchWorldLabels`'
+   * reason: only ever called for a write the provider confirmed, and the next
+   * sweep overlays the same labels back off the world. A number the mirror does
+   * not hold is skipped — this is a record of what was *seen*, and a row invented
+   * for it would be a ticket the tracker never handed us. An empty label is a
+   * no-op: that is `labelPrefix: ''`, the gate off, where there is no tag at all.
+   */
+  patchTicketLabels(patch: TicketLabelPatch): void {
+    if (patch.label === '' || patch.numbers.length === 0) return;
+    const read = this.ctx.db.prepare(`SELECT labels FROM tracker_items WHERE number = ?`);
+    const write = this.ctx.db.prepare(`UPDATE tracker_items SET labels = ?, updated_at = ? WHERE number = ?`);
+    const ts = this.ctx.now();
+    this.ctx.db.transaction(() => {
+      for (const number of patch.numbers) {
+        const row = read.get(number) as { labels: string } | undefined;
+        if (row === undefined) continue;
+        const next = new Set(parseLabels(row.labels));
+        if (patch.present) next.add(patch.label);
+        else next.delete(patch.label);
+        write.run(JSON.stringify([...next]), ts, number);
+      }
+    })();
+  }
+}
+
+/**
+ * A label change to fold onto the mirror: which items carry it now, and whether it
+ * went on or came off. One label per call and issues only, because that is the
+ * shape of every caller and the shape of this table — the mirror holds tracker
+ * items, and a pull request was never one.
+ */
+export interface TicketLabelPatch {
+  numbers: readonly number[];
+  label: string;
+  present: boolean;
 }
 
 /** A goal the mirror holds as closed, and the instant it was last changed. */

@@ -38,6 +38,7 @@ import {
   type LiveTicketFacts,
   type MirroredTicket,
   type TicketClosure,
+  type TicketLabelPatch,
   type TrackerSweepMark,
 } from './tickets.js';
 import type {
@@ -951,6 +952,9 @@ export class Store {
   }
   listTrackerItems(): MirroredTicket[] {
     return this.tickets.listTrackerItems();
+  }
+  patchTicketLabels(patch: TicketLabelPatch): void {
+    this.tickets.patchTicketLabels(patch);
   }
   // -- Pets -----------------------------------------------------------------
 
