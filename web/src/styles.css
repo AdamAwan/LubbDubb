@@ -3030,6 +3030,18 @@ body {
   border-bottom-color: var(--blue);
   font-weight: 600;
 }
+/* The plain table the CI policy and prompt tabs still read as. The running config
+   grew a form and stopped being one (#401); these two are readings and remain. */
+.settings-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.settings-table td {
+  padding: 3px 6px;
+  border-top: 1px solid var(--border);
+  vertical-align: top;
+}
 /* CI policy tab. Same table as the running config, plus the ordinal that makes
    "first match wins" readable at a glance. */
 /* `auto`, against the running config's `fixed`: the glob column is short and the
@@ -3117,16 +3129,6 @@ body {
   font-size: 12px;
   margin-bottom: 3px;
 }
-.settings-table {
-  width: 100%;
-  border-collapse: collapse;
-  table-layout: fixed;
-}
-.settings-table td {
-  padding: 3px 6px;
-  border-top: 1px solid var(--border);
-  vertical-align: top;
-}
 .settings-key {
   width: 40%;
   color: var(--muted);
@@ -3134,17 +3136,194 @@ body {
   font-size: 12px;
   word-break: break-word;
 }
-/* A value somebody chose, against one that was inherited. The whole reason the
-   server computes `isDefault` rather than shipping the object alone. */
-.settings-table tr.chosen .settings-key,
-.settings-table tr.chosen .settings-value {
-  color: var(--text);
-  font-weight: 600;
-}
 .settings-value {
   font-family: var(--mono, monospace);
   font-size: 12px;
   word-break: break-word;
+}
+
+/* ── The config form (#401) ───────────────────────────────────────────────
+   The read-only table became a form, and the row grew three things a table did
+   not carry: what the value is, where it came from, and when saving it takes
+   effect. Four columns rather than two, and the reset is a control rather than a
+   thing you do in a text editor. */
+.settings-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 128px 62px;
+  gap: 10px;
+  align-items: start;
+  padding: 6px 6px;
+  border-top: 1px solid var(--border);
+}
+.settings-field .settings-key {
+  width: auto;
+}
+/* A value somebody chose, against one that was inherited — the same mark the
+   read-only table carried, for the same reason. */
+.settings-field.chosen .settings-key {
+  color: var(--text);
+  font-weight: 600;
+}
+/* Staged, and not yet written to the file. */
+.settings-field.staged {
+  background: var(--amber-fill);
+}
+.settings-why {
+  display: block;
+  margin-top: 2px;
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.settings-control {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.settings-input {
+  width: 100%;
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 7px;
+}
+.settings-input-tall {
+  resize: vertical;
+  line-height: 1.45;
+}
+/* Not editable here, and the row says which of the three reasons it is. */
+.settings-input.locked {
+  color: var(--muted);
+  border-style: dashed;
+}
+.settings-unit {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted);
+}
+.settings-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+}
+/* When saving this field takes effect. Never a claim the form makes — it is
+   drawn from `entry.live`, which is true only because an arm re-seats the value. */
+.settings-when {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--amber);
+}
+.settings-when.now {
+  color: var(--green);
+}
+.settings-act {
+  display: flex;
+  justify-content: flex-end;
+}
+.settings-refusal-inline {
+  font-size: 11.5px;
+  color: var(--red);
+}
+.settings-refusal {
+  margin: 8px 0 0;
+  padding: 7px 9px;
+  border: 1px solid var(--red-line);
+  background: var(--red-fill);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.settings-saved {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--green);
+}
+
+/* The keys that can leave an operator unable to reach their own cockpit. Behind
+   one disclosure with a warning, rather than beside the ordinary ones. */
+.settings-advanced {
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+}
+.settings-advanced-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  background: none;
+  border: 0;
+  color: var(--text);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-advanced-head .chip {
+  margin-left: auto;
+}
+.settings-advanced-warn {
+  margin: 0;
+  padding: 8px 10px;
+  border-top: 1px solid var(--amber-line);
+  background: var(--amber-fill);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.settings-advanced .settings-group {
+  padding: 0 10px 6px;
+}
+
+/* What has reached the file and is waiting for a restart — the same block a hand
+   edit to the file produces, since both go through one apply path. */
+.settings-pending {
+  margin: 10px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--amber-line);
+  background: var(--amber-fill);
+}
+.settings-pending-row {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 3px 0;
+}
+.settings-pending-row .settings-key {
+  width: 45%;
+}
+
+/* Staged edits, counted, with the two ways out of them. */
+.settings-savebar {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--amber-line);
+  background: var(--amber-fill-2);
+  font-size: 12px;
+}
+.settings-dirty {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--amber);
+}
+.settings-savebar-acts {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 /* Stacks. Tokens only — the shared-component contract in this file's header.

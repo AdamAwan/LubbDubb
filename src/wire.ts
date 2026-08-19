@@ -52,6 +52,7 @@ import type { PrAttention } from './prAttention.js';
 import type { PrHealth } from './prHealth.js';
 import type { ControlState } from './runtimeControl.js';
 import type { RunningConfigGroup } from './server/runningConfig.js';
+import type { ConfigChange } from './configApply.js';
 import type { ReliabilityInsights, RunTally } from './reliabilityInsights.js';
 import type { SpendInsights } from './spendInsights.js';
 import type { SpendTrend } from './spendTrend.js';
@@ -905,9 +906,33 @@ export interface PromptsPayload {
   templates: PromptTemplateDescription[];
 }
 
-/** `/api/config` — the running config, fetched on open for the prompt book's reason. */
+/**
+ * `/api/config` — the running config, fetched on open for the prompt book's
+ * reason and re-fetched after a save.
+ *
+ * `revision` fingerprints the file the groups were built from and rides back on
+ * the save: a form whose baseline has moved (an editor, or Claude, wrote the file
+ * meanwhile) is refused rather than allowed to clobber it. `pending` is what has
+ * reached the file and is waiting for a restart — the same list a hand edit
+ * produces, because both go through one apply path.
+ */
 export interface RunningConfigPayload {
   groups: RunningConfigGroup[];
+  /** Absolute path of the file a save writes. */
+  file: string;
+  revision: string;
+  pending: readonly ConfigChange[];
+  /** Whether this process can restart itself — false when no supervisor launched it. */
+  canRestart: boolean;
+}
+
+/** `POST /api/config` — what a save answers with, so the form can settle without a refetch. */
+export interface ConfigSavePayload {
+  ok: true;
+  revision: string;
+  /** Every change the save made, each saying whether it took effect or is waiting. */
+  changes: readonly ConfigChange[];
+  pending: readonly ConfigChange[];
 }
 
 /**
@@ -982,6 +1007,8 @@ export type { PromptTemplateDescription } from './dispatcher/promptTemplates.js'
 export type { FileOverlap } from './fileOverlap.js';
 export type { UnrecordedWork } from './graph/unrecorded.js';
 export type { RunningConfigGroup } from './server/runningConfig.js';
+export type { RunningConfigEntry } from './server/runningConfig.js';
+export type { ConfigChange } from './configApply.js';
 export type {
   CiHealth,
   CiSubject,

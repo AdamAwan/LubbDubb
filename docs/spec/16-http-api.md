@@ -733,10 +733,23 @@ effect", and the honest answer is "at the next restart".
 
 ### `GET /api/config`
 
-The configuration this process resolved at boot, for the cockpit's settings modal
-([17](17-cockpit.md)): `{ groups }`, each group a titled list of `{path, value, isDefault}` entries —
-dotted paths into the config object, with nested blocks expanded to leaves so one overridden member
-of `planning` does not make the other three read as chosen.
+The configuration this process resolved at boot, for the cockpit's config form
+([17](17-cockpit.md#configuration)): `{ groups, file, revision, pending, canRestart }`. Each group is a
+titled list of entries — dotted paths into the config object, with nested blocks expanded to leaves so
+one overridden member of `planning` does not make the other three read as chosen — carrying:
+
+| Field                | What it answers                                                                     |
+| -------------------- | ----------------------------------------------------------------------------------- |
+| `value`, `isDefault` | what it is, and whether anybody chose it                                              |
+| `type`, `options`     | what widget draws it, from `CONFIG_FIELDS` ([02](02-configuration.md#fields))         |
+| `access`              | `plain`, `advanced` (behind the disclosure) or `fileOnly` (not offered)               |
+| `live`                | whether saving it takes effect now, because `configApply.ts` holds an arm for it      |
+| `env`                 | the environment variable currently beating the file, or null                          |
+| `why`, `ms`           | the one line under the key, and whether the number is a duration                      |
+
+`file` is the absolute path a save writes. `revision` fingerprints that file's current text and rides
+back on the save, which is what makes a stale one refusable. `pending` is what has reached the file and
+is waiting for a restart. `canRestart` says whether this process has a supervisor to hand off to.
 
 `isDefault` is computed here rather than in the browser, against `defaultConfig()` — the built-in
 defaults put through the **same path resolution** `loadConfig` applies. That indirection is the whole
@@ -752,8 +765,44 @@ them would key rows on an array index), and a top-level key naming no group fall
 rather than vanishing — the grouping is a display hint, never a filter, so a config field added later
 is visible on the day it is written.
 
-Fetched on open and **read-only**, both for `GET /api/prompts`' reasons. Nothing is redacted: `Config`
-holds no secrets by construction ([02](02-configuration.md)).
+Fetched on open rather than polled, for `GET /api/prompts`' reason. Nothing is redacted: `Config` holds
+no secrets by construction ([02](02-configuration.md)), and a write path is a new reason that has to
+hold rather than a reason to weaken it — no field on the form accepts a credential.
+
+### `POST /api/config`
+
+Save it. Body is `{set?, clear?, baseline}` — dotted paths to set, dotted paths to clear, and the
+`revision` the form was built from. Answers `{ok, revision, changes, pending}`, each change saying
+whether it was applied or is waiting.
+
+The order is the whole of it, and every step before the write is a refusal that leaves the file
+untouched:
+
+1. **409** when `baseline` is not the file's current revision — an editor, or Claude, wrote it in
+   between, and a form that wrote anyway would clobber them. The refusal says to reload.
+2. **400** for a path nothing declares, one whose field is `fileOnly`, one the environment is already
+   beating, or a value of the wrong type for its declared one — `port: "4300"` is refused here rather
+   than booting and failing at the point something tries to listen on a string.
+3. **400** with **the loader's own message** when the config the candidate file would produce does not
+   load. The candidate is built and run through `loadConfig` ([02](02-configuration.md#two-loaders)),
+   so the CI policy, the policy kinds, the model policy, the burn watch and the
+   reachable-host-with-`auth.enabled: false` refusal all answer for themselves. The form cannot save a
+   config the next boot would reject.
+
+Only then is the file written — surgically and atomically ([02](02-configuration.md#writing-the-file))
+— and the result applied through the one `LiveConfig.apply` a hand edit also lands on. Broadcasts
+`config:changed`.
+
+### `POST /api/config/restart`
+
+Apply a restart-only change: pause dispatch and hand this process off to the supervisor, which
+relaunches it on the config the file now holds. Body is `{interrupt?}`.
+
+Two **409**s, with the upgrade route's reasoning — the request is well-formed and the operator is not
+wrong, the world is simply not ready. Agents still running is the first (`interrupt: true` stops them;
+they come back on the next boot). The second is the honest degradation: a deployment the supervisor did
+not start has nothing to come back from an exit, so the restart is refused by name rather than stopping
+a harness nothing will relaunch.
 
 ### `GET /api/ci-policy`
 
@@ -780,8 +829,9 @@ so a cockpit-side derivation would be a second copy of these defaults, free to d
 that consults them with nothing to catch it. `test/ciPolicy.test.ts` covers the empty policy, the
 inherited `ignore`, a partial `policyChecks` map merging over the defaults, and Azure absent.
 
-Fetched on open and **read-only**, both for `GET /api/prompts`' reasons. There is no config-write path
-in the harness, and inventing one for this is a larger decision than making the policy visible.
+Fetched on open and **read-only**, both for `GET /api/prompts`' reasons. `POST /api/config` can save
+`ci.checks` whole, which is a different thing from a rule editor: the list is ordered and the order is
+the semantics, so editing it rule-by-rule is its own shape and its own decision.
 
 ### Launching a blueprint
 

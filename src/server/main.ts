@@ -1,4 +1,5 @@
 import { loadDeploymentConfig } from '../config.js';
+import { watchConfigFile } from '../configWatch.js';
 import { UPGRADE_EXIT_CODE } from '../selfUpdate/handoff.js';
 import { buildSystem } from '../system.js';
 import { installDesktopSkill } from '../validation/desktopSkill.js';
@@ -46,7 +47,7 @@ async function main(): Promise<void> {
   // been answered the harness dispatches nothing.
   const crashed = system.recovery.detect();
 
-  const { app, cockpitUrl, tokenPath } = await buildApp(system);
+  const { app, hub, cockpitUrl, tokenPath } = await buildApp(system);
   await app.listen({ port: config.port, host: config.host });
   console.log(`[lubbdubb] cockpit listening on ${config.host}:${config.port}`);
   if (cockpitUrl) {
@@ -71,12 +72,26 @@ async function main(): Promise<void> {
     console.log(`[lubbdubb] /lubbdubb skill installed at ${config.validation.desktopSkillPath}`);
   }
 
+  // The file, watched — so an edit made in an editor or by Claude lands on the
+  // same apply path a cockpit save does. Wired here rather than in `buildSystem`
+  // for `loadDeploymentConfig`'s reason: only a deployment has an ambient file to
+  // watch, and a test that grew one would pick up whatever config the developer
+  // runs the app with.
+  const stopConfigWatch = watchConfigFile({
+    filePath: system.configFile,
+    liveConfig: system.liveConfig,
+    errors: system.errors,
+    reload: () => loadDeploymentConfig(),
+    onChanged: () => hub.broadcast({ type: 'config:changed' }),
+  });
+
   // Everything that can start an agent is below this line. See the note above.
   const shutdown = (exitCode: number) => async (): Promise<void> => {
     console.log(
       exitCode === UPGRADE_EXIT_CODE ? '\n[lubbdubb] going down for an upgrade...' : '\n[lubbdubb] shutting down...',
     );
     system.harness.stop();
+    stopConfigWatch();
     // Interrupt (not kill) so the next boot offers this in-flight work for restore.
     system.agents.interruptAll();
     await system.mcp.close();

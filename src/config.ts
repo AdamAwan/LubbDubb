@@ -781,25 +781,62 @@ function mergeLayers(lower: Partial<Config>, upper: Partial<Config>): Partial<Co
  * deployment wants the environment.
  */
 export function loadDeploymentConfig(overrides: Partial<Config> = {}): Config {
-  const filePath = resolve(process.cwd(), 'lubbdubb.config.json');
-  let fromFile: Partial<Config> = {};
-  if (existsSync(filePath)) {
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(readFileSync(filePath, 'utf8'));
-    } catch (err) {
-      throw new Error(`Failed to parse ${filePath}: ${(err as Error).message}`);
-    }
-    if (typeof parsed === 'object' && parsed !== null) refuseRemovedKeys(parsed, filePath);
-    fromFile = parsed as Partial<Config>;
-    dropRetiredKeys(fromFile, filePath);
-  }
+  const filePath = configFilePath();
+  const fromFile = existsSync(filePath) ? readFileLayer(readFileSync(filePath, 'utf8'), filePath) : {};
+  return loadConfig(mergeLayers(mergeLayers(fromFile, envLayer()), overrides));
+}
+
+/** Where a deployment's config file lives. One answer, so nothing looks elsewhere. */
+export function configFilePath(): string {
+  return resolve(process.cwd(), 'lubbdubb.config.json');
+}
+
+/**
+ * The env overrides, as a layer.
+ *
+ * Its own function because the config-write path has to build the config a
+ * candidate file *would* produce, and a second copy of this list is a second
+ * thing to keep in step with the loader — which is exactly how a UI comes to
+ * offer an edit to a key the environment silently beats.
+ */
+function envLayer(): Partial<Config> {
   const fromEnv: Partial<Config> = {};
   if (process.env.PORT) fromEnv.port = Number(process.env.PORT);
   if (process.env.LUBBDUBB_HOST) fromEnv.host = process.env.LUBBDUBB_HOST;
   if (process.env.LUBBDUBB_DB) fromEnv.dbPath = process.env.LUBBDUBB_DB;
   if (process.env.LUBBDUBB_REPO_ROOT) fromEnv.repoRoot = process.env.LUBBDUBB_REPO_ROOT;
-  return loadConfig(mergeLayers(mergeLayers(fromFile, fromEnv), overrides));
+  return fromEnv;
+}
+
+/** Parse one file's text into a config layer, refusing removed keys and dropping retired ones. */
+function readFileLayer(text: string, filePath: string): Partial<Config> {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (err) {
+    throw new Error(`Failed to parse ${filePath}: ${(err as Error).message}`);
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    throw new Error(`Failed to parse ${filePath}: the config file must hold a JSON object`);
+  }
+  refuseRemovedKeys(parsed, filePath);
+  const fromFile = parsed as Partial<Config>;
+  dropRetiredKeys(fromFile, filePath);
+  return fromFile;
+}
+
+/**
+ * The config a given file text *would* produce on this machine — the same three
+ * layers `loadDeploymentConfig` folds, from text rather than from disk.
+ *
+ * This is how a save is validated: build the config the candidate file would
+ * produce and let it throw. That reuses every check `loadConfig` already runs —
+ * the CI policy, the policy kinds, the model policy, the burn watch, and the
+ * reachable-host-with-auth-off refusal — for free, and guarantees the form cannot
+ * write a config the next boot would reject.
+ */
+export function loadConfigFromText(text: string, filePath = configFilePath()): Config {
+  return loadConfig(mergeLayers(readFileLayer(text, filePath), envLayer()));
 }
 
 /**
