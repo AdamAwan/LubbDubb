@@ -384,6 +384,12 @@ const realApi = {
   fileFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/file`),
   dismissFinding: (id: string) => post<{ ok: true }>(`/api/findings/${id}/dismiss`),
 
+  // The vivarium. No read arm: `PetState` rides on `/api/state`, so the corner of
+  // the rail updates on the same socket as the queue above it.
+  feedPet: (id: string, beats: number) => post<{ ok: true }>(`/api/pets/${id}/feed`, { beats }),
+  renamePet: (id: string, name: string) => post<{ ok: true }>(`/api/pets/${id}/name`, { name }),
+  placePet: (id: string, placed: boolean) => post<{ ok: true }>(`/api/pets/${id}/place`, { placed }),
+
   // Lessons (#355). Proposing is the operator's own arm — the retrospective's
   // will land beside it — and promote/retire are the gate and the prune.
   proposeLesson: (text: string, originRef: string | null) => post<{ ok: true }>('/api/lessons', { text, originRef }),

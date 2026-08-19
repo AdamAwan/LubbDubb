@@ -105,7 +105,7 @@ Three consequences worth stating, because each is a thing a reasonable change wo
   declaration on `.cn-t-red` shadows an inherited value unconditionally, so while those tints were
   written there a theme setting them on the root could not reach inside a tone at all. The alias form
   also keeps their names, which matters more than it looks: `--sp-*` and `--rl-*` are never `var()`-ed
-  from CSS but composed at runtime in TSX as `` var(`--sp-${phase}`) ``, where a rename typechecks,
+  from CSS but composed at runtime in TSX as ``var(`--sp-${phase}`)``, where a rename typechecks,
   passes and silently paints nothing.
 - **Most `--cn-*` tints are `color-mix` of the core rather than values.** `--cn-red-bg`, `-fill`,
   `-line` and `-ink` are all mixes of `--cn-red` with a ground, so setting the hue moves all four — in
@@ -951,6 +951,23 @@ that was just clicked counted sixty-eight. Each facet therefore carries `live` b
 says are unreachable — never on any other, so a state with live rows narrows as it always did and
 nothing here ever makes the list smaller than the chip's own count implies. The chip's tooltip says it
 before the click, because a filter that moves a control the reader did not touch has to say so.
+
+**And the widening says so after the click too, with the way back beside it.** The tooltip warns the
+reader who reads tooltips; the axis then moves, and nothing put it back — the State tier's own `Any`
+returns every state under the _widened_ axis, so a reader who lands on the tab, picks `Closed` and then
+asks for every state again is left on the whole history with no sentence anywhere saying which control
+moved. That is issue #418, and the symptom is exact: the filter set the tab _starts_ on is the one it
+cannot offer. So a band between the two controls names the state the axis is widened for — `widenedFor`
+(`web/src/cockpit/place.ts`), which is `statePick`'s own predicate read back off the two `Place` fields
+that state it, never a third field remembering it happened.
+
+**The offer is the coarse pair, not the axis.** Narrowing to `live` while `Closed` is still picked is the
+empty list the widening exists to avoid, so the button restores `LIVE_WORK` — both axes at once, which is
+the view being asked for. `LIVE_WORK` is read off `NOWHERE` rather than written out, so it cannot drift
+from the default it is offering back. And it **announces and offers; it never moves an axis nobody
+touched** — an operator who chose `any` by hand and then picked a closing state reads the same band and
+keeps their axis, because undoing it for them would be the silent move the band exists to apologise for,
+in the other direction.
 
 That the closed rows are _in_ the mirror with their own word on them at all is the store's business
 and was not always true — the state used to be taken only from the live overlay, so a closed item

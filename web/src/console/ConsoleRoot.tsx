@@ -15,6 +15,8 @@ import { WorkTreePanel } from '../components/WorkTreePanel.js';
 import { FindingsPanel } from '../components/FindingsPanel.js';
 import { LessonsPanel } from '../components/LessonsPanel.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
+import { PetsPanel } from '../components/PetsPanel.js';
+import { Vivarium } from './Vivarium.js';
 import { BuildPanel } from '../components/BuildPanel.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
 import { InjectPanel } from '../components/InjectPanel.js';
@@ -86,6 +88,18 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
       <div className="cn-body">
         <aside className="cn-rail">
           <QueueRail view={view} actions={actions} />
+          {/* Below the rail's scrolling list rather than inside it: a queue longer
+              than the rail scrolls behind the enclosure instead of pushing it off
+              the bottom, so the corner is always in frame and covers nothing.
+              Absent entirely when `pets.enabled` is off. */}
+          {view.state.pets !== null && (
+            <Vivarium
+              pets={view.state.pets}
+              runningAgents={view.state.agents.filter((a) => a.status === 'running').length}
+              paused={view.state.control.paused}
+              onOpen={() => actions.openPanel('pets')}
+            />
+          )}
         </aside>
         <main className="cn-sit">{situation}</main>
       </div>
@@ -185,6 +199,7 @@ const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string>
   output: 'Output',
   launch: 'Launch',
   build: 'Build',
+  pets: 'Vivarium',
 };
 
 /**
@@ -295,6 +310,16 @@ function panelBody(
           onPropose={(text, originRef) => actions.proposeLesson(text, originRef)}
           onPromote={(id) => actions.promoteLesson(id)}
           onRetire={(id) => actions.retireLesson(id)}
+        />
+      );
+    case 'pets':
+      return state.pets === null ? null : (
+        <PetsPanel
+          pets={state.pets}
+          now={view.now}
+          onFeed={(id, beats) => actions.feedPet(id, beats)}
+          onRename={(id, name) => actions.renamePet(id, name)}
+          onPlace={(id, placed) => actions.placePet(id, placed)}
         />
       );
     case 'faults':

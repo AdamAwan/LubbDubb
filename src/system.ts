@@ -62,6 +62,7 @@ import { resolveModelTag } from './modelLabels.js';
 import { orderedProfiles } from './agents/modelPolicy.js';
 import { Harness } from './harness.js';
 import { RuntimeControl } from './runtimeControl.js';
+import { PetKeeper } from './pets/keeper.js';
 import { LiveConfig } from './configApply.js';
 import { ErrorLog } from './errorLog.js';
 import type { ErrorLogEntry } from './types.js';
@@ -126,6 +127,13 @@ export interface System {
   updates: UpdateDesk;
   /** Live, ephemeral dispatch controls (cap + pause). Seeded from config at boot. */
   runtimeControl: RuntimeControl;
+  /**
+   * The vivarium (`src/pets/`). Always constructed; with `pets.enabled` off it
+   * scans nothing and reports null, which is what the snapshot ships and what the
+   * routes refuse on — one object either way, rather than an optional every
+   * caller has to remember to check twice.
+   */
+  pets: PetKeeper;
   /**
    * Applies a reloaded config to this running process, and holds what is waiting
    * for a restart. The one apply path a cockpit save and a hand edit to
@@ -890,6 +898,20 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     });
   });
 
+  // The vivarium reads what the operator has already done and writes only its own
+  // three tables. Wired to the pulse's own event rather than into `Harness` — it
+  // decides nothing, so `harness.ts` has no reason to know it exists, and the
+  // pulse does not wait on it. The routes that settle an operator action call
+  // `scan()` too, for latency; this is what guarantees delivery.
+  const pets = new PetKeeper(store, config.pets);
+  harness.on('cycle:end', () => {
+    try {
+      pets.scan();
+    } catch (err) {
+      errors.record({ source: 'cycle', message: `Pet scan failed: ${(err as Error).message}` });
+    }
+  });
+
   return {
     config,
     store,
@@ -908,6 +930,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     filing,
     updates,
     runtimeControl,
+    pets,
     liveConfig,
     configFile: opts.configFile ?? configFilePath(),
     issuePickup,

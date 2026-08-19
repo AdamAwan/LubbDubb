@@ -876,6 +876,46 @@ CREATE TABLE IF NOT EXISTS upgrade_intent (
   updated_at      TEXT NOT NULL
 );
 
+-- Pets (docs/spec/22-pets.md). One vivarium per database: a deployment has one
+-- collection however many projects it works across, so no row here names an owner.
+--
+-- The unique origin is the whole of what makes the scan idempotent. A roll is a
+-- hash of the action's identity, so re-reading an action produces the same
+-- creature; this constraint is what makes writing it again a no-op rather than a
+-- second pet.
+CREATE TABLE IF NOT EXISTS pets (
+  id          TEXT PRIMARY KEY,
+  species     TEXT NOT NULL,
+  seed        TEXT NOT NULL,      -- the action key it hatched from; drives its colours
+  name        TEXT,               -- the operator's, or null for the species' own
+  fed         INTEGER NOT NULL DEFAULT 0,   -- beats spent on it; the only input to its stage
+  origin_kind TEXT NOT NULL,
+  origin_ref  TEXT NOT NULL,
+  hatched_at  TEXT NOT NULL,      -- when the action happened, not when the scan reached it
+  placed      INTEGER NOT NULL DEFAULT 0,   -- 0/1: standing in the vivarium
+  UNIQUE (origin_kind, origin_ref)
+);
+
+-- Every operator action the scan has rolled, hatched or not. Recorded for the
+-- misses too, because "how many actions since the last pet" is what the pity rule
+-- reads and a table of hatches alone cannot answer it.
+CREATE TABLE IF NOT EXISTS pet_actions (
+  kind   TEXT NOT NULL,
+  ref    TEXT NOT NULL,
+  at     TEXT NOT NULL,
+  pet_id TEXT,                    -- what it hatched, or null for a miss
+  PRIMARY KEY (kind, ref)
+);
+
+-- One row per beat spent. The only source of the wallet total the cockpit shows as
+-- spent, summed at read time rather than kept in a column beside it.
+CREATE TABLE IF NOT EXISTS pet_purchases (
+  id         TEXT PRIMARY KEY,
+  pet_id     TEXT NOT NULL,
+  beats      INTEGER NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);
@@ -899,4 +939,6 @@ CREATE INDEX IF NOT EXISTS idx_error_events_created ON error_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_work_nodes_parent ON work_nodes(parent_ref);
 CREATE INDEX IF NOT EXISTS idx_issue_bug_filings_origin ON issue_bug_filings(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_tasks_origin ON tasks(origin_ref);
+CREATE INDEX IF NOT EXISTS idx_pet_actions_at ON pet_actions(at);
+CREATE INDEX IF NOT EXISTS idx_pet_purchases_pet ON pet_purchases(pet_id);
 `;

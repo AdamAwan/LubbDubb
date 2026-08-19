@@ -25,6 +25,7 @@ import { register as registerHumanTasks } from './routes/humanTasks.js';
 import { register as registerIssues } from './routes/issues.js';
 import { register as registerJobs } from './routes/jobs.js';
 import { register as registerLessons } from './routes/lessons.js';
+import { register as registerPets } from './routes/pets.js';
 import { register as registerPlans } from './routes/plans.js';
 import { register as registerReadings } from './routes/readings.js';
 import { register as registerReliability } from './routes/reliability.js';
@@ -55,6 +56,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerIssues,
   registerJobs,
   registerLessons,
+  registerPets,
   registerPlans,
   registerReadings,
   registerReliability,
@@ -201,6 +203,24 @@ export async function buildApp(system: System): Promise<BuiltApp> {
       detail: err instanceof Error ? (err.stack ?? null) : null,
     });
     return reply.code(500).send({ error: message });
+  });
+
+  // Roll for a pet after any successful write, so a creature that an operator's
+  // click earned appears while they are still looking at the screen rather than
+  // at the next pulse.
+  //
+  // One hook rather than a call in each settling route, and that is the point:
+  // the scan is idempotent — an action already rolled is skipped by key, and the
+  // roll is a hash — so calling it after every write costs a few small reads and
+  // **cannot be forgotten by a route written later**. `cycle:end` still runs it,
+  // which is what guarantees delivery for anything that settles off the surface.
+  app.addHook('onResponse', async (req, reply) => {
+    if (req.method !== 'POST' || reply.statusCode >= 400) return;
+    try {
+      system.pets.scan();
+    } catch (err) {
+      errors.record({ source: 'server', message: `Pet scan failed: ${(err as Error).message}` });
+    }
   });
 
   // -- Live stream ---------------------------------------------------------

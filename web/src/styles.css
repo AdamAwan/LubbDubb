@@ -3252,7 +3252,6 @@ body {
   word-break: break-word;
 }
 
-
 /* Stacks. Tokens only — the shared-component contract in this file's header.
    The rung column carries a
    left rule rather than a per-rung border, so a stack reads as one run of work
@@ -4103,7 +4102,6 @@ body {
   }
 }
 
-
 /* ---------------------------------------------------------------------------
    The tickets tab as the one work surface (#351): the backlog's controls, its
    feature headings and its intake call-out, folded into the mirror's list.
@@ -4183,6 +4181,38 @@ body {
   color: var(--cn-amber-ink);
 }
 
+/* The tracking axis saying it moved, between the control that moved and the one
+   that moved it — amber because it is a reading of the list that the reader did
+   not ask for, and the button beside it is the way back. */
+.tickets-widened {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 7px 11px;
+  margin-bottom: 8px;
+  border: 1px solid var(--cn-amber-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-amber-bg);
+  font-size: 11.5px;
+  color: var(--cn-amber-ink);
+}
+.tickets-widened button {
+  margin-left: auto;
+  padding: 3px 9px;
+  border: 1px solid var(--cn-amber-line-hi);
+  border-radius: 99px;
+  background: var(--cn-panel-2);
+  font-size: 11.5px;
+  color: var(--cn-fg);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.tickets-widened button:hover {
+  border-color: var(--cn-blue-line-hi);
+  background: var(--cn-blue-bg);
+}
+
 /* The tracker's own states, drawn only where the provider has any. */
 .tickets-states,
 .tickets-legend {
@@ -4248,7 +4278,13 @@ body {
   flex: none;
   /* The unassigned case, and the orphan bucket: hatched rather than coloured, so
      "no feature" cannot be mistaken for a feature. */
-  background: repeating-linear-gradient(45deg, var(--cn-line-hi), var(--cn-line-hi) 2px, var(--cn-line) 2px, var(--cn-line) 4px);
+  background: repeating-linear-gradient(
+    45deg,
+    var(--cn-line-hi),
+    var(--cn-line-hi) 2px,
+    var(--cn-line) 2px,
+    var(--cn-line) 4px
+  );
 }
 .tickets-sw {
   width: 8px;
@@ -5438,4 +5474,158 @@ body {
   .th-why {
     display: none;
   }
+}
+
+/* -- Pets -------------------------------------------------------------------
+   The sprite is shared between the rail's vivarium and the panel, so it styles
+   itself through the token layer like every other shared component.
+
+   The bob is one CSS animation on a wrapper rather than a redraw per frame:
+   however many creatures are on screen they move on one clock and cost one
+   composite. `is-beating` is absent while dispatch is paused, which is what
+   makes a still vivarium mean something. */
+.pet-sprite {
+  display: inline-flex;
+  align-items: flex-end;
+  line-height: 0;
+}
+.pet-sprite.is-beating {
+  animation-name: pet-bob;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+.pet-sprite canvas {
+  image-rendering: pixelated;
+}
+@keyframes pet-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  6% {
+    transform: translateY(-3px);
+  }
+  14% {
+    transform: translateY(0);
+  }
+  20% {
+    transform: translateY(-2px);
+  }
+  30% {
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pet-sprite.is-beating {
+    animation: none;
+  }
+}
+
+.pets {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pets-wallet {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pets-wallet b {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.pets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+  gap: 12px;
+}
+.pet-card {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pet-frame {
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--well);
+  border: 1px solid var(--border);
+}
+.pet-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pet-name input {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  padding: 3px 6px;
+}
+.pet-rarity {
+  font: 9.5px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 5px;
+  border: 1px solid currentColor;
+  flex: none;
+}
+/* Semantic-by-tier rather than by the accent: rarity is a category, and drawing
+   all four in the one accent would make the mythic indistinguishable from the
+   commonest thing in the grid. */
+.pet-rarity.is-common {
+  color: var(--grey);
+}
+.pet-rarity.is-uncommon {
+  color: var(--green);
+}
+.pet-rarity.is-rare {
+  color: var(--blue);
+}
+.pet-rarity.is-mythic {
+  color: var(--accent);
+}
+.pet-origin {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  word-break: break-word;
+}
+.pet-meter {
+  height: 4px;
+  background: var(--border);
+  position: relative;
+}
+.pet-meter i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  display: block;
+}
+.pet-stage {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.pet-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
