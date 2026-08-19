@@ -9,6 +9,7 @@ import { NotificationSettings } from './NotificationSettings.js';
 import { PromptsTab } from './PromptsTab.js';
 import { RawConfigTab } from './RawConfigTab.js';
 import { ReviewWrite } from './ReviewWrite.js';
+import { ThemeSettings } from './ThemeSettings.js';
 
 /**
  * Configuration, as a surface rather than a modal.
@@ -37,6 +38,7 @@ const TABS: readonly { id: ConfigTab; label: string }[] = [
   { id: 'ci', label: 'CI policy' },
   { id: 'prompts', label: 'Prompts' },
   { id: 'notifications', label: 'Notifications' },
+  { id: 'theme', label: 'Theme' },
 ];
 
 /**
@@ -152,6 +154,7 @@ export function ConfigPage({ view, actions }: { view: CockpitView; actions: Cock
           {tab === 'ci' && <CiPolicyTab />}
           {tab === 'prompts' && <PromptsTab />}
           {tab === 'notifications' && <NotificationSettings />}
+          {tab === 'theme' && <ThemeSettings />}
         </>
       )}
     </div>

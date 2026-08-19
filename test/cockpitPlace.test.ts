@@ -29,7 +29,6 @@ test('every place round-trips through the query string', () => {
     at({ retro: 'issue:142' }),
     at({ scratchpad: 'issue:142' }),
     at({ tab: 'config' }),
-    at({ tab: 'config', configTab: 'raw' }),
     at({ tab: 'config', configTab: 'prompts', configGroup: 'Agents' }),
     at({ spend: true, reliability: true }),
   ];
@@ -58,6 +57,27 @@ test('every panel the type admits round-trips through the URL', () => {
   for (const panel of panels) {
     const place = at({ panel: panel as Place['panel'] });
     assert.deepEqual(readPlace(placeQuery(place)), place, `panel=${panel} is dropped by readPlace`);
+  }
+});
+
+/**
+ * Every section `ConfigTab` admits survives the query string.
+ *
+ * The sibling of the panel test above, and the same failure: `place.ts` keeps its
+ * own `CONFIG_TABS` whitelist, so a section added to the type and forgotten there
+ * is parsed straight back to `values` and **cannot be opened at all** — a tab in
+ * the strip that draws the wrong body, with nothing red anywhere. Read off the
+ * type rather than listed here, because the list is exactly what this guards.
+ */
+test('every config section the type admits round-trips through the URL', () => {
+  const source = readFileSync('web/src/cockpit/actions.ts', 'utf8');
+  const declaration = /export type ConfigTab =([\s\S]*?);/.exec(source)?.[1];
+  assert.ok(declaration, 'ConfigTab is declared where this test looks for it');
+  const sections = [...declaration.matchAll(/'([a-z]+)'/g)].map((m) => m[1]!);
+  assert.ok(sections.length >= 5, `found ${sections.length} sections, which is too few to be the real list`);
+  for (const section of sections) {
+    const place = at({ tab: 'config', configTab: section as Place['configTab'] });
+    assert.deepEqual(readPlace(placeQuery(place)), place, `section=${section} is dropped by readPlace`);
   }
 });
 

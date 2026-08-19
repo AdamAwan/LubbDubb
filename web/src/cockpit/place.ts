@@ -99,7 +99,7 @@ export const NOWHERE: Place = {
 };
 
 const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets', 'config'];
-const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'notifications'];
+const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'notifications', 'theme'];
 /**
  * Tabs that no longer exist, and where they went.
  *

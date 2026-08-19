@@ -233,6 +233,15 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
 
 ### Cockpit
 
+- **A colour written as a literal in a stylesheet is a colour no theme can reach.** Every colour the
+  cockpit draws is a custom property on one of two `:root` blocks, because the token layer _is_ the
+  theme an operator picks from the config page — so a hex at a use site is a surface that stays dark
+  when somebody switches to Light. It reads as a tidiness rule and is not one: the sheet is correct,
+  the component renders, and the only symptom arrives on a theme nobody tested. `format:check` and
+  `lint` do not read CSS at all; `test/cockpitTheme.test.ts` is the only thing in `check` that does.
+  A new tint belongs on `:root` — ideally as a `color-mix` of the core, so it follows the hue — and in
+  the registry in `web/src/cockpit/tokens.ts`, which the same test holds against the sheets in both
+  directions. → [17](docs/spec/17-cockpit.md#tokens)
 - **A reference is drawn with `<Ref to={ref}/>` (`web/src/components/refs.tsx`), never as text.** A
   surface that names a goal or a pull request and offers no way there is the cockpit's most repeated
   bug, and it is invisible: the row reads correctly, renders correctly, and is simply a dead end. The

@@ -10,13 +10,20 @@
  * the shared component stop being separable, and a change to one silently
  * redraws the other.
  *
- * The mockup's dark palette is a placeholder — a visual theme is chosen
- * separately later — so every colour is a custom property here rather than a
- * literal at each use site, and the properties are `--cn-*` so they cannot
- * collide with the shared-component tokens in `styles.css` while both sheets are
- * loaded together.
+ * Every colour is a custom property rather than a literal at each use site,
+ * because the token layer *is* the theme: the operator sets these from the config
+ * page, so a literal here would be a colour no theme could reach. The properties
+ * are `--cn-*` so they cannot collide with the shared-component tokens in
+ * `styles.css` while both sheets are loaded together — the two families are a
+ * real distinction, not a prefix, since `--accent` is orange and `--cn-accent` is
+ * blue. → docs/spec/17-cockpit.md#tokens
  */
 :root {
+  /* The core: the thirteen a theme actually chooses. Everything under it is
+     derived from these by `color-mix`, which is what makes a preset cheap — answer
+     the core and the tints follow, and so do they under a picker drag, because a
+     custom property substitutes at computed-value time rather than at parse.
+     → docs/spec/17-cockpit.md#tokens */
   --cn-bg: #0d0e11;
   --cn-panel: #15171b;
   --cn-panel-2: #1b1e23;
@@ -30,6 +37,60 @@
   --cn-amber: #f5a524;
   --cn-green: #3ecf8e;
   --cn-violet: #a78bfa;
+
+  /* Neutrals one step off the core: a raised or hovered edge, an empty track, and
+     a grey that is deliberately *not* a verdict. Each replaced a small family of
+     values within five of each other — five spellings of one decision. */
+  --cn-line-hi: color-mix(in srgb, var(--cn-fg) 11%, var(--cn-line));
+  --cn-hover: color-mix(in srgb, var(--cn-fg) 4%, var(--cn-panel-2));
+  --cn-track: color-mix(in srgb, var(--cn-fg) 4%, var(--cn-line));
+  --cn-inert: color-mix(in srgb, var(--cn-fg) 21%, var(--cn-line));
+
+  /* The five tone families, four slots each, in the order they stack: `bg` is the
+     faintest tinted ground — a band body; `fill` the ground of a filled chip;
+     `line` a border that reads as the hue without competing with the words on it;
+     `ink` the hue carried far enough from the ground to letter with.
+     The `-hi` slots exist only where one value provably could not do both jobs. */
+  --cn-red-bg: color-mix(in srgb, var(--cn-red) 6%, var(--cn-bg));
+  --cn-red-fill: color-mix(in srgb, var(--cn-red) 4%, var(--cn-panel));
+  --cn-red-line: color-mix(in srgb, var(--cn-red) 22%, var(--cn-panel));
+  --cn-red-ink: color-mix(in srgb, var(--cn-red) 69%, var(--cn-fg));
+  --cn-amber-bg: color-mix(in srgb, var(--cn-amber) 4%, var(--cn-bg));
+  --cn-amber-fill: color-mix(in srgb, var(--cn-amber) 7%, var(--cn-panel));
+  --cn-amber-line: color-mix(in srgb, var(--cn-amber) 24%, var(--cn-panel));
+  --cn-amber-line-hi: color-mix(in srgb, var(--cn-amber) 35%, var(--cn-bg));
+  --cn-green-bg: color-mix(in srgb, var(--cn-green) 6%, var(--cn-bg));
+  --cn-green-fill: color-mix(in srgb, var(--cn-green) 6%, var(--cn-panel));
+  --cn-green-line: color-mix(in srgb, var(--cn-green) 26%, var(--cn-panel));
+  --cn-green-ink: color-mix(in srgb, var(--cn-green) 57%, var(--cn-fg));
+  --cn-blue-bg: color-mix(in srgb, var(--cn-accent) 11%, var(--cn-bg));
+  --cn-blue-fill: color-mix(in srgb, var(--cn-accent) 8%, var(--cn-panel));
+  --cn-blue-line: color-mix(in srgb, var(--cn-accent) 26%, var(--cn-panel));
+  --cn-blue-line-hi: color-mix(in srgb, var(--cn-accent) 37%, var(--cn-panel));
+  --cn-blue-ink-hi: color-mix(in srgb, var(--cn-accent) 62%, var(--cn-fg));
+  --cn-violet-fill: color-mix(in srgb, var(--cn-violet) 5%, var(--cn-panel));
+  --cn-violet-line: color-mix(in srgb, var(--cn-violet) 24%, var(--cn-panel));
+
+  /* Four inks that are not a tint of the hue they belong to. `--cn-blue-ink` is
+     the plainest case: it leans cyan where `--cn-accent` leans violet, so no
+     amount of accent mixed into the foreground reaches it. A preset answers these
+     itself, which is also why they are literals — a literal here is the signal to
+     the guard test that every preset owes it a value. */
+  --cn-red-ink-hi: #ffb3ad;
+  --cn-amber-ink: #e1c488;
+  --cn-amber-ink-hi: #ffc46b;
+  --cn-blue-ink: #63b3ed;
+
+  /* Lettering *on* a filled ground. A decision per theme rather than a mix: what
+     colour a word takes on the accent is not a tint of the accent. */
+  --cn-on-accent: #08122b;
+  --cn-on-red: #180404;
+
+  /* The alpha lives inside this token because the alpha is the decision. A scrim
+     stays dark even on a light theme, so it is set deliberately and never derived
+     from a ground that inverts. */
+  --cn-scrim: #04050699;
+
   --cn-r: 8px;
   --cn-r-sm: 6px;
   --cn-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -106,7 +167,7 @@
   height: 7px;
   border-radius: 50%;
   background: var(--cn-green);
-  box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cn-green) 15%, transparent);
 }
 .cn-sep {
   width: 1px;
@@ -141,8 +202,8 @@
   letter-spacing: 0.6px;
 }
 .cn-read.cn-act:hover {
-  border-color: #333842;
-  background: #20242a;
+  border-color: var(--cn-line-hi);
+  background: var(--cn-hover);
 }
 .cn-read .cn-chev {
   color: var(--cn-fg-faint);
@@ -154,15 +215,15 @@
   color: var(--cn-fg-faint);
 }
 .cn-scan {
-  border-color: #2b3a5c;
-  background: #161c2b;
+  border-color: var(--cn-blue-line-hi);
+  background: var(--cn-blue-bg);
 }
 /* The build gauge. Amber only when there is something to take or take now: its
    resting state is the muted `current` reading, which is where it spends nearly
    all of its life, and a gauge that is always coloured is one nobody reads. */
 .cn-build-due {
-  border-color: #5a4413;
-  background: #241d0c;
+  border-color: var(--cn-amber-line-hi);
+  background: var(--cn-amber-bg);
 }
 .cn-build-due b {
   color: var(--cn-amber);
@@ -263,7 +324,7 @@
   margin-left: auto;
   font: 600 11px/1 var(--cn-mono);
   background: var(--cn-red);
-  color: #180404;
+  color: var(--cn-on-red);
   padding: 3px 7px;
   border-radius: 99px;
 }
@@ -294,34 +355,38 @@
    text; `--cn-tone-ink` the hue lightened enough to carry running words at 11px,
    which the raw token is not on this ground.
 
-   Set on the row and the band, so anything inside either inherits them. */
+   Set on the row and the band, so anything inside either inherits them — which is
+   why the five values themselves live on `:root` and these blocks are pure
+   aliases. A declaration on `.cn-t-red` shadows an inherited value unconditionally,
+   so while the tints were written here a theme setting them on the root could
+   never reach inside a tone at all. */
 .cn-t-red {
   --cn-tone: var(--cn-red);
-  --cn-tone-fill: #291518;
-  --cn-tone-line: #4a2226;
-  --cn-tone-ink: #ff8f8f;
-  --cn-tone-bg: #1a1214;
+  --cn-tone-fill: var(--cn-red-fill);
+  --cn-tone-line: var(--cn-red-line);
+  --cn-tone-ink: var(--cn-red-ink);
+  --cn-tone-bg: var(--cn-red-bg);
 }
 .cn-t-amber {
   --cn-tone: var(--cn-amber);
-  --cn-tone-fill: #271f11;
-  --cn-tone-line: #4a3a1c;
-  --cn-tone-ink: #e8c37a;
-  --cn-tone-bg: #1a1610;
+  --cn-tone-fill: var(--cn-amber-fill);
+  --cn-tone-line: var(--cn-amber-line);
+  --cn-tone-ink: var(--cn-amber-ink);
+  --cn-tone-bg: var(--cn-amber-bg);
 }
 .cn-t-blue {
   --cn-tone: var(--cn-accent);
-  --cn-tone-fill: #16203a;
-  --cn-tone-line: #27395c;
-  --cn-tone-ink: #9dbaff;
-  --cn-tone-bg: #111725;
+  --cn-tone-fill: var(--cn-blue-fill);
+  --cn-tone-line: var(--cn-blue-line);
+  --cn-tone-ink: var(--cn-blue-ink-hi);
+  --cn-tone-bg: var(--cn-blue-bg);
 }
 .cn-t-green {
   --cn-tone: var(--cn-green);
-  --cn-tone-fill: #12271e;
-  --cn-tone-line: #1f4838;
-  --cn-tone-ink: #7fdcb4;
-  --cn-tone-bg: #101c17;
+  --cn-tone-fill: var(--cn-green-fill);
+  --cn-tone-line: var(--cn-green-line);
+  --cn-tone-ink: var(--cn-green-ink);
+  --cn-tone-bg: var(--cn-green-bg);
 }
 
 /* The glyph inside a tag or a band header. Sized down from the word it precedes:
@@ -347,11 +412,11 @@
   width: 100%;
 }
 .cn-q:hover {
-  border-color: #343943;
+  border-color: var(--cn-line-hi);
 }
 .cn-q[aria-current='true'] {
   border-color: var(--cn-accent);
-  background: #171c28;
+  background: var(--cn-panel);
 }
 /* The other half of the same reading: while a goal's page is open, its asks are
    marked and everyone else's recede. Opacity only — the row stays readable and
@@ -670,15 +735,15 @@
    landed, blue for what is moving, red for what is stuck, dimmed for what has
    not started. */
 .cn-part.cn-merged {
-  border-color: #1e4733;
+  border-color: var(--cn-green-line);
 }
 .cn-part.cn-now {
-  border-color: #26456f;
-  background: #141d2e;
+  border-color: var(--cn-blue-line-hi);
+  background: var(--cn-blue-bg);
 }
 .cn-part.cn-held {
-  border-color: #4a2226;
-  background: #1e1315;
+  border-color: var(--cn-red-line);
+  background: var(--cn-red-bg);
 }
 .cn-part.cn-waiting {
   opacity: 0.55;
@@ -694,7 +759,7 @@
   text-decoration: line-through;
 }
 .cn-part .cn-why {
-  color: #ff8f8f;
+  color: var(--cn-red-ink);
 }
 
 /* plan approval */
@@ -744,17 +809,17 @@
   width: 26px;
   display: grid;
   place-items: center;
-  color: #3a3f48;
+  color: var(--cn-line-hi);
   font-size: 15px;
 }
 .cn-warnbox {
-  border: 1px solid #4a3a1c;
-  background: #1c1710;
+  border: 1px solid var(--cn-amber-line);
+  background: var(--cn-amber-bg);
   border-radius: var(--cn-r);
   padding: 11px 13px;
   margin-bottom: 12px;
   font-size: 12.5px;
-  color: #e8c37a;
+  color: var(--cn-amber-ink);
 }
 .cn-criteria {
   padding: 12px 13px;
@@ -839,13 +904,13 @@
   white-space: nowrap;
 }
 .cn-tgl:hover {
-  border-color: #39404c;
+  border-color: var(--cn-line-hi);
   color: var(--cn-fg);
 }
 .cn-tgl.cn-watch {
-  border-color: #26456f;
-  color: #7fa8ff;
-  background: #141d2e;
+  border-color: var(--cn-blue-line-hi);
+  color: var(--cn-blue-ink-hi);
+  background: var(--cn-blue-bg);
 }
 /* The model-profile picker (#342). Shaped like the toggles it sits beside, so a
    goal's controls read as one row rather than a form dropped into a header. */
@@ -858,7 +923,7 @@
   color: var(--cn-fg-dim);
 }
 .cn-profile:hover {
-  border-color: #39404c;
+  border-color: var(--cn-line-hi);
   color: var(--cn-fg);
 }
 /* Loud when a profile is actually named. A pin departs from the fleet's own
@@ -866,9 +931,9 @@
    like an untouched control is the one failure this whole surface exists to
    prevent — the decision would be invisible to the person who made it. */
 .cn-profile.cn-profile-set {
-  border-color: #6b4a12;
-  color: #ffc46b;
-  background: #241a08;
+  border-color: var(--cn-amber-line-hi);
+  color: var(--cn-amber-ink-hi);
+  background: var(--cn-amber-bg);
 }
 .cn-lbl {
   font: 11px var(--cn-mono);
@@ -894,7 +959,7 @@
 }
 .cn-pill.cn-on {
   color: var(--cn-fg);
-  border-color: #39404c;
+  border-color: var(--cn-line-hi);
   background: var(--cn-panel-2);
 }
 
@@ -978,7 +1043,7 @@
   border-bottom: 0;
 }
 .cn-row:hover {
-  background: #181b20;
+  background: var(--cn-panel-2);
 }
 /* A row that is also a way in — the button reset above strips the chrome, so only
    the box model is restated here. */
@@ -1070,17 +1135,17 @@ button.cn-grow {
 }
 .cn-lamp.cn-run {
   background: var(--cn-green);
-  box-shadow: 0 0 0 3px rgba(62, 207, 142, 0.13);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cn-green) 13%, transparent);
 }
 .cn-lamp.cn-ask {
   background: var(--cn-red);
-  box-shadow: 0 0 0 3px rgba(255, 95, 95, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--cn-red) 15%, transparent);
 }
 .cn-lamp.cn-wait {
   background: var(--cn-amber);
 }
 .cn-lamp.cn-off {
-  background: #3a3f48;
+  background: var(--cn-line-hi);
 }
 /* A person at their keyboard, and every part of this says "not a dispatch": a
    hollow lamp where an agent's is filled, and violet, which no agent status
@@ -1099,8 +1164,8 @@ button.cn-grow {
   padding-left: 11px;
 }
 .cn-chip.cn-desk-chip {
-  background: #1c1830;
-  border-color: #342a55;
+  background: var(--cn-violet-fill);
+  border-color: var(--cn-violet-line);
   color: var(--cn-violet);
 }
 
@@ -1115,23 +1180,23 @@ button.cn-grow {
   white-space: nowrap;
 }
 .cn-chip.cn-you {
-  background: #2b1517;
-  border-color: #4a2226;
+  background: var(--cn-red-fill);
+  border-color: var(--cn-red-line);
   color: var(--cn-red);
 }
 .cn-chip.cn-harness {
-  background: #12212e;
-  border-color: #1f3b52;
-  color: #63b3ed;
+  background: var(--cn-blue-fill);
+  border-color: var(--cn-blue-line);
+  color: var(--cn-blue-ink);
 }
 .cn-chip.cn-stall {
-  background: #2a2118;
-  border-color: #4a3a1c;
+  background: var(--cn-amber-fill);
+  border-color: var(--cn-amber-line);
   color: var(--cn-amber);
 }
 .cn-chip.cn-ok {
-  background: #122a1e;
-  border-color: #1e4733;
+  background: var(--cn-green-fill);
+  border-color: var(--cn-green-line);
   color: var(--cn-green);
 }
 
@@ -1139,29 +1204,29 @@ button.cn-grow {
    one vocabulary of colour across the two surfaces, so a Bug is the same red on
    the row it was opened from. An unrecognised type keeps the plain chip. */
 .cn-chip.cn-type.bug {
-  background: #2b1517;
-  border-color: #4a2226;
+  background: var(--cn-red-fill);
+  border-color: var(--cn-red-line);
   color: var(--cn-red);
 }
 .cn-chip.cn-type.story {
-  background: #122a1e;
-  border-color: #1e4733;
+  background: var(--cn-green-fill);
+  border-color: var(--cn-green-line);
   color: var(--cn-green);
 }
 .cn-chip.cn-type.debt {
-  background: #2a2118;
-  border-color: #4a3a1c;
+  background: var(--cn-amber-fill);
+  border-color: var(--cn-amber-line);
   color: var(--cn-amber);
 }
 .cn-chip.cn-type.container {
-  background: #1c1830;
-  border-color: #342a55;
+  background: var(--cn-violet-fill);
+  border-color: var(--cn-violet-line);
   color: var(--cn-violet);
 }
 .cn-chip.cn-type.task {
-  background: #12212e;
-  border-color: #1f3b52;
-  color: #63b3ed;
+  background: var(--cn-blue-fill);
+  border-color: var(--cn-blue-line);
+  color: var(--cn-blue-ink);
 }
 
 /* goal progress */
@@ -1182,7 +1247,7 @@ button.cn-grow {
   width: 16px;
   height: 6px;
   border-radius: 2px;
-  background: #2a2f37;
+  background: var(--cn-track);
 }
 .cn-seg.cn-done {
   background: var(--cn-green);
@@ -1206,13 +1271,13 @@ button.cn-grow {
   width: 6px;
   height: 6px;
   border-radius: 2px;
-  background: #2a2f37;
+  background: var(--cn-track);
 }
 .cn-cd.cn-pass {
   background: var(--cn-green);
 }
 .cn-cd.cn-fail {
-  background: #4a4f58;
+  background: var(--cn-inert);
 }
 .cn-cd.cn-notours {
   background: var(--cn-amber);
@@ -1222,7 +1287,7 @@ button.cn-grow {
 }
 .cn-cd.cn-mute {
   background: transparent;
-  border: 1px dashed #3a3f48;
+  border: 1px dashed var(--cn-line-hi);
 }
 
 .cn-empty {
@@ -1255,8 +1320,8 @@ button.cn-grow {
   color: var(--cn-fg-faint);
 }
 .cn-ask {
-  border: 1px solid #4a2226;
-  background: #1a1214;
+  border: 1px solid var(--cn-red-line);
+  background: var(--cn-red-bg);
   border-radius: var(--cn-r);
   padding: 14px;
   margin-bottom: 12px;
@@ -1273,14 +1338,14 @@ button.cn-grow {
   margin-bottom: 10px;
 }
 .cn-opt {
-  border: 1px solid #39404c;
+  border: 1px solid var(--cn-line-hi);
   background: var(--cn-panel-2);
   border-radius: var(--cn-r-sm);
   padding: 7px 12px;
 }
 .cn-opt:hover {
   border-color: var(--cn-accent);
-  background: #1a2030;
+  background: var(--cn-blue-bg);
 }
 .cn textarea {
   width: 100%;
@@ -1308,11 +1373,11 @@ button.cn-grow {
 .cn-btn.cn-primary {
   background: var(--cn-accent);
   border-color: var(--cn-accent);
-  color: #08122b;
+  color: var(--cn-on-accent);
   font-weight: 600;
 }
 .cn-btn:hover {
-  border-color: #39404c;
+  border-color: var(--cn-line-hi);
 }
 
 .cn-ctx {
@@ -1360,16 +1425,16 @@ button.cn-grow {
   font-size: 17px;
 }
 .cn-box.cn-done {
-  border-color: #1e4733;
-  background: #102a1e;
+  border-color: var(--cn-green-line);
+  background: var(--cn-green-fill);
 }
 .cn-box.cn-live {
-  border-color: #26456f;
-  background: #141d2e;
+  border-color: var(--cn-blue-line-hi);
+  background: var(--cn-blue-bg);
 }
 .cn-box.cn-ask {
-  border-color: #4a2226;
-  background: #1e1315;
+  border-color: var(--cn-red-line);
+  background: var(--cn-red-bg);
 }
 .cn-box.cn-todo {
   opacity: 0.45;
@@ -1387,7 +1452,7 @@ button.cn-grow {
   min-width: 18px;
 }
 .cn-link.cn-done {
-  background: #1e4733;
+  background: var(--cn-green-line);
 }
 
 /* ---------- off the air ---------- */
@@ -1413,7 +1478,7 @@ button.cn-grow {
 .cn-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(4, 5, 6, 0.6);
+  background: var(--cn-scrim);
   display: grid;
   place-items: center;
   padding: 24px;

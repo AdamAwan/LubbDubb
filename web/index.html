@@ -5,6 +5,42 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <title>LubbDubb — Cockpit</title>
+    <script>
+      /*
+       * The theme, before the first paint.
+       *
+       * Vite extracts the stylesheets to a blocking <link>, and `main.tsx` is a
+       * deferred module — so the browser can paint `body{background:var(--bg)}`
+       * from `:root` well before any of our code runs. Applying the theme from the
+       * bundle therefore shows a dark frame and then a light one, on every load, to
+       * everyone not on Dark. Classic and inline is what makes this synchronous at
+       * parse time, before <body> exists.
+       *
+       * It knows the storage key and nothing else: no registry, no preset list. So
+       * it never needs editing when either grows, and the regexes are the whole of
+       * its safety. `applyTheme` runs moments later and does filter against the
+       * registry, so a stale override this over-applies is corrected there rather
+       * than needing to be kept in step here.
+       *
+       * The key is asserted against `THEME_KEY` by `test/cockpitTheme.test.ts`.
+       */
+      try {
+        var t = JSON.parse(localStorage.getItem('lubbdubb.theme') || '{}');
+        if (typeof t.preset === 'string' && /^[a-z-]{1,32}$/.test(t.preset) && t.preset !== 'dark') {
+          document.documentElement.setAttribute('data-theme', t.preset);
+        }
+        var o = t.overrides;
+        if (o && typeof o === 'object') {
+          for (var k in o) {
+            if (/^--[a-z0-9-]+$/.test(k) && typeof o[k] === 'string' && /^[#0-9a-zA-Z.,%' -]{1,200}$/.test(o[k])) {
+              document.documentElement.style.setProperty(k, o[k]);
+            }
+          }
+        }
+      } catch (e) {
+        /* A preference is never worth a blank page. */
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
