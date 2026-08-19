@@ -17,19 +17,19 @@ interface Dispatcher {
 what makes an LLM decision-maker safe: it can only ever ask for one of these, and anything malformed
 is rejected and audited rather than executed.
 
-| Action                | Required payload                          | Optional payload                                                               |
-| --------------------- | ----------------------------------------- | ------------------------------------------------------------------------------ |
-| `dispatch_code_agent` | `branch`, `title`, `prompt`, `reason`     | `originRef`, `originTitle`, `originSummary`, `jobId`, `partId`, `base`, `rule` |
-| `dispatch_desk_agent` | `title`, `prompt`, `reason`               | `originRef`, `originTitle`, `originSummary`, `jobId`, `rule`                   |
-| `escalate_to_human`   | `escalationType`, `prompt`, `reason`      | `context`, `taskId`, `agentId`, `rule`                                         |
-| `respond_to_agent`    | `agentId`, `response`, `reason`           | `originRefs`, `rule`                                                           |
-| `reply_on_pr`         | `prNumber`, `draft`, `reason`             | `commentId`, `confidence` (0..1), `rule`                                       |
-| `merge_pr`            | `prNumber`, `reason`                      | `method` (`merge`\|`squash`\|`rebase`, default `squash`), `confidence`, `rule` |
-| `propose_plan`        | `planId`, `originRef`, `prompt`, `reason` | `rule`                                                                         |
-| `update_pr_branch`    | `prNumber`, `base`, `originRef`, `reason` | `rule`                                                                         |
-| `requeue_ci_check`    | `prNumber`, `checks`, `originRef`, `reason` | `rule`                                                                       |
-| `set_work_item_state` | `number`, `state`, `reason`               | `rule`                                                                         |
-| `no_op`               | `reason`                                  | `rule`                                                                         |
+| Action                | Required payload                            | Optional payload                                                               |
+| --------------------- | ------------------------------------------- | ------------------------------------------------------------------------------ |
+| `dispatch_code_agent` | `branch`, `title`, `prompt`, `reason`       | `originRef`, `originTitle`, `originSummary`, `jobId`, `partId`, `base`, `rule` |
+| `dispatch_desk_agent` | `title`, `prompt`, `reason`                 | `originRef`, `originTitle`, `originSummary`, `jobId`, `rule`                   |
+| `escalate_to_human`   | `escalationType`, `prompt`, `reason`        | `context`, `taskId`, `agentId`, `rule`                                         |
+| `respond_to_agent`    | `agentId`, `response`, `reason`             | `originRefs`, `rule`                                                           |
+| `reply_on_pr`         | `prNumber`, `draft`, `reason`               | `commentId`, `confidence` (0..1), `rule`                                       |
+| `merge_pr`            | `prNumber`, `reason`                        | `method` (`merge`\|`squash`\|`rebase`, default `squash`), `confidence`, `rule` |
+| `propose_plan`        | `planId`, `originRef`, `prompt`, `reason`   | `rule`                                                                         |
+| `update_pr_branch`    | `prNumber`, `base`, `originRef`, `reason`   | `rule`                                                                         |
+| `requeue_ci_check`    | `prNumber`, `checks`, `originRef`, `reason` | `rule`                                                                         |
+| `set_work_item_state` | `number`, `state`, `reason`                 | `rule`                                                                         |
+| `no_op`               | `reason`                                    | `rule`                                                                         |
 
 `reason` is mandatory on every action — it is what the audit log shows. `rule` defaults to `null`,
 because an act reaching the executor from outside the pulse (an accepted proposal, agent lifecycle)
@@ -72,29 +72,33 @@ pipeline is the ordered subset that runs.
 `enabled` is the predicate that switches an optional rule into the pipeline; a rule with none is
 unconditional.
 
-| Id                         | Name                                 | `enabled`        | Fires when                                                                                                                                                                  |
-| -------------------------- | ------------------------------------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `manual-job`               | Operator-launched job                | —                | A queued job exists. Drained ahead of every world-driven rule.                                                                                                              |
-| `pr-review-comment`        | Unhandled review comments            | —                | A PR carries unhandled review threads. All of them go to one agent.                                                                                                         |
-| `pr-ci-failing`            | Failing CI                           | —                | An open PR has failing CI that is not inherited from its base, at least one failing check is actionable under `ci.checks`, and no agent is on its branch.                   |
-| `pr-ci-blocked`            | CI blocked elsewhere                 | —                | Same, but every failing check is configured non-actionable and at least one asks to escalate. Asked once; no agent is dispatched.                                           |
-| `pr-ci-gate`               | Check waiting on an action           | —                | A check is waiting rather than failing: a `ci.checks` rule watches it in a non-failing state (`states`), or the provider reports it `expired`. Own origin `pr:<n>:ci-gate`. |
-| `pr-base-update`           | Base out of date                     | —                | A PR is `behind` its base (merged up to date with no agent) or conflicts with it (a code agent resolves it).                                                                |
-| `pr-merge-ready`           | Merge-ready PR                       | —                | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                                                                                              |
-| `work-item-in-review`      | Back off to review state             | `workItemStates` | A work item in a pickup state has an open PR (or is decomposed).                                                                                                            |
-| `work-item-back-to-pickup` | Return from review state             | `workItemStates` | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                                    |
-| `issue-assay`              | Issue goal needs checking            | `assay`          | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                          |
-| `issue-plan`               | Issue needs a plan                   | `planning`       | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                                   |
-| `issue-assess`             | Issue may be finished                | `assessment`     | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR.                                                                         |
-| `issue-shortfall`          | Assessment says the goal was missed  | —                | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                                          |
-| `issue-retro`              | Delivered goal needs a retrospective | `retrospective`  | A goal the harness parked as delivered, with nothing in flight under it and no write-up yet, gets one desk agent to write the run up. Retained runs included.               |
-| `plan-approval`            | Plan needs your approval             | `planning`       | With `planning.requireApproval` on, a planner's verdict — either arm — is `awaiting_approval` and no verdict is pending.                                                    |
-| `plan-blocked`             | Approved plan is going nowhere       | `planning`       | Every live part of a released plan is blocked, so nothing will be dispatched for it. Asks a human once; dispatches nobody.                                                  |
-| `plan-part`                | Plan part ready                      | `planning`       | A part of an active plan is `ready` and unstaffed.                                                                                                                          |
-| `issue-pickup`             | Open issue without a PR              | —                | An eligible open issue has no **open** PR and no agent on it, and the funnel **failed open** on it (route `unplanned`). Never a retained run.                               |
+| Id                         | Name                                 | `enabled`            | Fires when                                                                                                                                                                  |
+| -------------------------- | ------------------------------------ | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `manual-job`               | Operator-launched job                | —                    | A queued job exists. Drained ahead of every world-driven rule.                                                                                                              |
+| `pr-review-comment`        | Unhandled review comments            | —                    | A PR carries unhandled review threads. All of them go to one agent.                                                                                                         |
+| `pr-ci-failing`            | Failing CI                           | —                    | An open PR has failing CI that is not inherited from its base, at least one failing check is actionable under `ci.checks`, and no agent is on its branch.                   |
+| `pr-ci-blocked`            | CI blocked elsewhere                 | —                    | Same, but every failing check is configured non-actionable and at least one asks to escalate. Asked once; no agent is dispatched.                                           |
+| `pr-ci-gate`               | Check waiting on an action           | —                    | A check is waiting rather than failing: a `ci.checks` rule watches it in a non-failing state (`states`), or the provider reports it `expired`. Own origin `pr:<n>:ci-gate`. |
+| `pr-base-update`           | Base out of date                     | —                    | A PR is `behind` its base (merged up to date with no agent) or conflicts with it (a code agent resolves it).                                                                |
+| `pr-merge-ready`           | Merge-ready PR                       | —                    | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                                                                                              |
+| `work-item-in-progress`    | Advance to in-progress state         | `workItemInProgress` | A work item in a pickup state has a live **work** agent on it, no open PR and no plan.                                                                                      |
+| `work-item-in-review`      | Back off to review state             | `workItemStates`     | A work item in a pickup state has an open PR (or is decomposed).                                                                                                            |
+| `work-item-back-to-pickup` | Return from review state             | `workItemStates`     | A still-open work item parked in the review state has no open PR and an explicit `more_work` conclusion.                                                                    |
+| `issue-assay`              | Issue goal needs checking            | `assay`              | A watched open issue nothing has been started for has no verdict on its goal text.                                                                                          |
+| `issue-plan`               | Issue needs a plan                   | `planning`           | A watched open issue has no plan yet — or an operator asked for a replan.                                                                                                   |
+| `issue-assess`             | Issue may be finished                | `assessment`         | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR.                                                                         |
+| `issue-shortfall`          | Assessment says the goal was missed  | —                    | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                                          |
+| `issue-retro`              | Delivered goal needs a retrospective | `retrospective`      | A goal the harness parked as delivered, with nothing in flight under it and no write-up yet, gets one desk agent to write the run up. Retained runs included.               |
+| `plan-approval`            | Plan needs your approval             | `planning`           | With `planning.requireApproval` on, a planner's verdict — either arm — is `awaiting_approval` and no verdict is pending.                                                    |
+| `plan-blocked`             | Approved plan is going nowhere       | `planning`           | Every live part of a released plan is blocked, so nothing will be dispatched for it. Asks a human once; dispatches nobody.                                                  |
+| `plan-part`                | Plan part ready                      | `planning`           | A part of an active plan is `ready` and unstaffed.                                                                                                                          |
+| `issue-pickup`             | Open issue without a PR              | —                    | An eligible open issue has no **open** PR and no agent on it, and the funnel **failed open** on it (route `unplanned`). Never a retained run.                               |
 
 `workItemStates` is the one condition that is not a feature flag: it is true when the operator has
-configured **both** `issueInReviewState` and a non-empty `issuePickupStates`.
+configured **both** `issueInReviewState` and a non-empty `issuePickupStates`. `workItemInProgress` is
+the same shape over the other pair — `issueInProgressState` and a non-empty `issuePickupStates` — and
+is a separate condition because the two states are separate knobs: setting one must not switch on the
+rule that reads the other.
 
 The five PR-concern rules and `pr-merge-ready` run as **one pass** over the open PRs rather than six,
 because at most one agent works a branch and the fold that picks the top concern has to see them
@@ -573,6 +577,35 @@ Notify de-duplication reads `recentDecisions`: `notifiedOriginsByAgent` collects
 pairs from **executed** `respond_to_agent` decisions, so a persistent signal is not re-notified every
 cycle. It is best-effort over the recent window — a note that ages out simply gets sent again.
 
+## `work-item-in-progress` — the item is being worked
+
+Opt-in: it fires only when the operator set **both** `issueInProgressState` and a non-empty
+`issuePickupStates`, and only for items carrying a native `workItemState`. It never fires on a closed
+item or on a retained run.
+
+- Item in an effective pickup state, **not already in** `issueInProgressState`, with **no open PR**,
+  **no plan** (`partsPlanFor` is null) and a **live work task** on it → move it to
+  `issueInProgressState`.
+
+"Live work task" is `issueOriginRole(number, task.originRef) === 'work'` over the active tasks — the
+pickup root `issue:<n>` and a plan part, and nothing else. An assay, a planner, an assessor or a retro
+leaves the item where it is: those are deliberation about the goal, not work on it.
+
+It fires off an **observed task**, not off the dispatch that started one, and that is the design
+rather than an implementation detail. The obvious alternative is to stamp the move where a pickup
+candidate becomes a dispatch, at the headroom cut — but that cut is generic, fires exactly once, and
+fires for candidates that are then held or superseded. A provider write refused there would never be
+retried, and a candidate cut for want of headroom would park an item in "Doing" nobody is working.
+Observing costs one pulse of lag and is idempotent and self-healing instead.
+
+It is **mutually exclusive with `work-item-in-review` by construction**: that rule owns an item with
+an open PR _or_ a decomposed one, and this one refuses both. If the two ever overlapped the item would
+ping-pong, one provider write per pulse, forever — so the exclusivity is a test rather than a comment.
+
+A decomposed item is the review state's business for the whole life of its plan, even though agents
+plainly are working: `work-item-in-review` parks it there deliberately, and since the in-progress
+state is folded into the pickup set, a rule that disagreed would flip the item back every cycle.
+
 ## `work-item-in-review` / `work-item-back-to-pickup` — work-item state
 
 Opt-in: it fires only when the operator set **both** `issueInReviewState` and a non-empty
@@ -590,6 +623,11 @@ issues have none, so it is a no-op for them). It never fires on a closed item.
   state: the first pickup state is the operator's own "start here".
 
 Both directions are idempotent — after either move the item no longer matches.
+
+The pickup states these two read are the **effective** ones (`effectivePickupStates`, see
+[06](06-issue-pickup.md#the-effective-pickup-states)), so an item `work-item-in-progress` moved to
+`issueInProgressState` is still one this rule can advance when its PR opens. Without the fold it
+would be stranded there: outside the pickup list, so never picked up again and never moved on.
 
 The inverse arm's gate is the conclusion, **not** the absence of a PR, and that is load-bearing.
 `openPrForIssue` reads only the open list, so "this PR merged" and "there was never a PR" are one
