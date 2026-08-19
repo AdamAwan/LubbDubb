@@ -5871,7 +5871,15 @@ body {
 .species-spacer {
   flex: 1;
 }
+/* Its own chrome rather than a borrowed `.pet-rarity`: an hour gate is not a tier,
+   and a chip that reads as one would put a fifth rarity on the card. The shapes
+   match because both are chips, not because one is the other. */
 .species-night {
+  font: 9.5px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  padding: 3px 5px;
+  border: 1px solid currentColor;
+  flex: none;
   color: var(--muted);
   cursor: help;
 }

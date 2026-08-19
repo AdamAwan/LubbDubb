@@ -212,7 +212,7 @@ function SpeciesCard({
         <span className="species-spacer" />
         {entry.hours === null ? null : (
           <span
-            className="pet-rarity species-night"
+            className="species-night"
             title={
               window === null
                 ? 'Only drops in certain hours, going by the time of the action rather than the time you look.'
