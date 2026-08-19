@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { api } from '../api.js';
+import { isStateColour } from '../stateColour.js';
 import type { ConfigChange, RunningConfigEntry, RunningConfigGroup, RunningConfigPayload } from '../types.js';
 
 /**
@@ -39,6 +40,7 @@ export function ConfigValues({
   saved,
   group,
   control,
+  states,
   onGroup,
   onStage,
   onReview,
@@ -49,6 +51,13 @@ export function ConfigValues({
   saved: readonly ConfigChange[] | null;
   group: string | null;
   control: { cap: number; paused: boolean };
+  /**
+   * The state words the tracker is actually reporting, so the colour picker
+   * offers the vocabulary in front of the operator rather than asking them to
+   * spell it. Not a closed list: a state that has left the board is still one you
+   * can colour, so the control takes a typed word too.
+   */
+  states: readonly string[];
   onGroup: (group: string | null) => void;
   onStage: (staged: Staged) => void;
   onReview: () => void;
@@ -175,6 +184,7 @@ export function ConfigValues({
                 entry={entry}
                 draft={drafts[entry.path]}
                 staged={stagedFor(staged, entry.path)}
+                states={states}
                 onEdit={(raw) => edit(entry, raw)}
                 onReset={() => reset(entry.path)}
                 onUndo={() => undo(entry.path)}
@@ -205,6 +215,7 @@ export function ConfigValues({
                       entry={entry}
                       draft={drafts[entry.path]}
                       staged={stagedFor(staged, entry.path)}
+                      states={states}
                       onEdit={(raw) => edit(entry, raw)}
                       onReset={() => reset(entry.path)}
                       onUndo={() => undo(entry.path)}
@@ -324,6 +335,7 @@ function Row({
   entry,
   draft,
   staged,
+  states,
   onEdit,
   onReset,
   onUndo,
@@ -331,6 +343,7 @@ function Row({
   entry: RunningConfigEntry;
   draft: Draft | undefined;
   staged: 'set' | 'cleared' | null;
+  states: readonly string[];
   onEdit: (raw: string) => void;
   onReset: () => void;
   onUndo: () => void;
@@ -352,7 +365,7 @@ function Row({
         {staged === 'cleared' ? (
           <span className="muted">will fall back to its default</span>
         ) : (
-          <Widget entry={entry} raw={raw} locked={locked} onEdit={onEdit} />
+          <Widget entry={entry} raw={raw} locked={locked} states={states} onEdit={onEdit} />
         )}
         {draft?.error && <span className="cfg-bad">{draft.error}</span>}
         {entry.ms && !draft?.error && staged !== 'cleared' && Number.isFinite(Number(raw)) && (
@@ -401,14 +414,23 @@ function Widget({
   entry,
   raw,
   locked,
+  states,
   onEdit,
 }: {
   entry: RunningConfigEntry;
   raw: string;
   locked: boolean;
+  states: readonly string[];
   onEdit: (raw: string) => void;
 }): React.JSX.Element {
   if (locked) return <input className="cfg-in locked" value={raw} readOnly />;
+  if (entry.type === 'colourMap') {
+    const map = readColourMap(raw);
+    // A value no picker can draw — an array, a number, a hand-edited half-map —
+    // is handed back as JSON rather than silently replaced. Losing an operator's
+    // typo is worse than showing it to them.
+    if (map) return <ColourMap map={map} states={states} onEdit={onEdit} />;
+  }
   if (entry.type === 'boolean') {
     return (
       <label className="cfg-toggle">
@@ -428,7 +450,7 @@ function Widget({
       </select>
     );
   }
-  if (entry.type === 'stringList' || entry.type === 'json') {
+  if (entry.type === 'stringList' || entry.type === 'json' || entry.type === 'colourMap') {
     return (
       <textarea
         className="cfg-in cfg-in-tall"
@@ -446,6 +468,124 @@ function Widget({
       onChange={(e) => onEdit(e.target.value)}
     />
   );
+}
+
+/** What a state starts on when it is first given a colour. Neutral, and not grey. */
+const NEW_COLOUR = '#7fb3ff';
+
+/**
+ * The state → colour control: one swatch per coloured state, and one way to add
+ * another.
+ *
+ * Drawn rather than typed because the value is a *colour*: JSON is the wrong
+ * instrument for picking one, and a hex an operator typed is a hex nobody looked
+ * at next to the chip it lands on. Each row previews itself in the chip's own
+ * shape, so what is picked here is what the backlog draws.
+ *
+ * The add control is a text input over a `datalist` on purpose. A closed dropdown
+ * of the states the tracker is reporting would refuse the one case that most needs
+ * colouring — a state no open item is sitting in — and a bare text box would make
+ * the operator spell a word the cockpit already knows. This is both.
+ */
+function ColourMap({
+  map,
+  states,
+  onEdit,
+}: {
+  map: Readonly<Record<string, string>>;
+  states: readonly string[];
+  onEdit: (raw: string) => void;
+}): React.JSX.Element {
+  const [adding, setAdding] = useState('');
+  const write = (next: Record<string, string>): void => onEdit(JSON.stringify(next, null, 2));
+
+  const add = (): void => {
+    const state = adding.trim();
+    if (state === '' || Object.hasOwn(map, state)) return;
+    setAdding('');
+    write({ ...map, [state]: NEW_COLOUR });
+  };
+
+  const known = states.filter((state) => !Object.hasOwn(map, state));
+
+  return (
+    <div className="cfg-colours">
+      {Object.entries(map).map(([state, colour]) => (
+        <div className="cfg-colour" key={state}>
+          <input
+            type="color"
+            className="cfg-swatch"
+            value={colour}
+            aria-label={`Colour for ${state}`}
+            onChange={(e) => write({ ...map, [state]: e.target.value })}
+          />
+          <i className="tickets-state" style={{ color: colour, borderColor: colour }}>
+            {state}
+          </i>
+          <button
+            className="btn ghost small"
+            title={`Stop colouring "${state}" — it goes back to the reading it had before`}
+            onClick={() => {
+              const { [state]: _dropped, ...rest } = map;
+              write(rest);
+            }}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+
+      <div className="cfg-colouradd">
+        <input
+          className="cfg-in"
+          list="cfg-states"
+          placeholder={known.length > 0 ? 'A state to colour…' : 'A state to colour'}
+          value={adding}
+          onChange={(e) => setAdding(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') add();
+          }}
+        />
+        <datalist id="cfg-states">
+          {known.map((state) => (
+            <option key={state} value={state} />
+          ))}
+        </datalist>
+        <button className="btn small" disabled={adding.trim() === ''} onClick={add}>
+          Add
+        </button>
+        {Object.keys(map).length === 0 && (
+          <span className="muted">Nothing is coloured — every state draws as it always has.</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The map a colour picker can draw, or null for a value it cannot.
+ *
+ * Two callers with the same answer and different jobs: {@link Widget} asks so it
+ * can fall back to the textarea, and {@link parseValue} asks so a rescued edit is
+ * refused rather than written.
+ */
+function asColourMap(value: unknown): Record<string, string> | null {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return null;
+  const out: Record<string, string> = {};
+  for (const [state, colour] of Object.entries(value)) {
+    if (!isStateColour(colour)) return null;
+    out[state] = colour;
+  }
+  return out;
+}
+
+/** The same, from the row's raw text. Unparseable text is not a map. */
+function readColourMap(raw: string): Record<string, string> | null {
+  try {
+    return asColourMap(JSON.parse(raw));
+  } catch {
+    return null;
+  }
 }
 
 function stagedFor(staged: Staged, path: string): 'set' | 'cleared' | null {
@@ -515,6 +655,18 @@ function parseValue(entry: RunningConfigEntry, raw: string): { value: unknown; e
       } catch (err) {
         return { value: null, error: (err as Error).message };
       }
+    case 'colourMap': {
+      // The picker only ever writes this shape; the rescue textarea can write
+      // anything, and the refusal is what stops it reaching the file.
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(raw);
+      } catch (err) {
+        return { value: null, error: (err as Error).message };
+      }
+      const map = asColourMap(parsed);
+      return map ? { value: map, error: null } : { value: null, error: 'each state needs a #rrggbb colour' };
+    }
     default:
       return { value: raw, error: null };
   }

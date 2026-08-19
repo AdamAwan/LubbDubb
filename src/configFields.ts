@@ -17,7 +17,7 @@ import { defaultConfig, type Config } from './config.js';
  * and wrong the day someone hoists `config.heartbeatIntervalMs` into a const,
  * with nothing red. → `docs/spec/02-configuration.md#liveness`
  */
-export type ConfigFieldType = 'number' | 'boolean' | 'string' | 'enum' | 'stringList' | 'json';
+export type ConfigFieldType = 'number' | 'boolean' | 'string' | 'enum' | 'stringList' | 'json' | 'colourMap';
 
 /**
  * How far an operator has to reach to edit a field.
@@ -249,6 +249,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     type: 'json',
     access: 'plain',
     why: 'Label → weight, for ordering pickup when headroom is short.',
+  },
+  {
+    path: 'issueStateColours',
+    type: 'colourMap',
+    access: 'plain',
+    why: 'Tracker state → colour for its chip, so a state is one you read rather than one you spell out.',
   },
   {
     path: 'issueDefaultPriority',
@@ -494,7 +500,28 @@ export function fieldValueRefusal(field: ConfigField, value: unknown): string | 
       // Shipped whole and shaped by its own validator in `loadConfig`. The only
       // thing left to refuse here is a value JSON cannot carry at all.
       return value === undefined ? `${field.path} must be a value` : null;
+    case 'colourMap':
+      // A colour is drawn straight into a `style`, so the shape is refused here
+      // rather than left to the renderer to skip: a map half of whose values do
+      // nothing is a map an operator reads as broken with nothing saying why.
+      // `stateColour` still guards the read, for the file this route never saw.
+      return isColourMap(value) ? null : `${field.path} must map a state to a #rrggbb colour`;
   }
+}
+
+/** `#rrggbb`, the one form the cockpit's picker writes. */
+const HEX_COLOUR = /^#[0-9a-f]{6}$/i;
+
+/**
+ * A state → colour map, checked leaf by leaf.
+ *
+ * The same form `web/src/stateColour.ts` reads, stated twice for `parseValue`'s
+ * reason: that one is about the keystroke in front of the operator, and this one
+ * is about anything that reaches the route. This is the one that decides.
+ */
+function isColourMap(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  return Object.values(value).every((entry) => typeof entry === 'string' && HEX_COLOUR.test(entry));
 }
 
 /**

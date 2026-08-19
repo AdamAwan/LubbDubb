@@ -4762,6 +4762,37 @@ body {
   color: var(--cn-fg-faint);
   border-style: dashed;
 }
+/* The state-colour picker. Each row previews itself in the backlog's own chip, so
+   the swatch beside it is the only thing that has to be read as a control. */
+.cfg-colours {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+.cfg-colour,
+.cfg-colouradd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cfg-colouradd .cfg-in {
+  max-width: 180px;
+}
+.cfg-swatch {
+  width: 30px;
+  height: 24px;
+  padding: 2px;
+  background: #0f1114;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  cursor: pointer;
+}
+.cfg-colour .tickets-state {
+  min-width: 90px;
+  justify-content: center;
+}
+
 .cfg-toggle {
   display: flex;
   align-items: center;
