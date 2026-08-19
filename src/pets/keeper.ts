@@ -177,6 +177,11 @@ export class PetKeeper {
       pets: this.store.listPets().map((pet) => this.view(pet, ledger)),
       wallet: this.wallet(),
       slots: VIVARIUM_SLOTS,
+      // Read rather than stamped: `state()` is called on every heartbeat, and a
+      // read that wrote the boundary would start the vivarium on whichever pulse
+      // first drew the cockpit rather than on the first scan that could hatch
+      // something. `scan()` owns the stamp; this only reports it.
+      startedAt: this.store.vivariumStart(),
     };
   }
 

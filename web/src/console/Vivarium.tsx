@@ -1,5 +1,6 @@
 import type { PetState } from '../types.js';
 import { PetSprite } from '../components/PetSprite.js';
+import { absDate } from '../components/util.js';
 
 /**
  * The enclosure at the foot of the queue rail.
@@ -75,6 +76,18 @@ export function Vivarium({
         ) : null}
         <span className="cn-viv-beats">{pets.wallet.balance.toLocaleString()} beats</span>
       </button>
+      {/* Under the bar rather than in it, and not a control: the bar is a button,
+          and this is a fact about the deployment with nowhere of its own to go.
+          It is here at all because this corner is where "nothing has hatched" is
+          read — an enclosure that has stayed empty through a week of work looks
+          identical to one on a harness whose whole history sorts before the
+          start, and only the date tells them apart. Nothing is drawn before the
+          first scan has settled one. */}
+      {pets.startedAt === null ? null : (
+        <p className="cn-viv-since" title="Actions from before this date are on record and roll nothing.">
+          counting since {absDate(pets.startedAt)}
+        </p>
+      )}
     </div>
   );
 }
