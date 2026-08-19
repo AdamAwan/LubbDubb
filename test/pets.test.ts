@@ -351,6 +351,96 @@ test('the last of a species is refused, and a dissolved one cannot be fed or re-
   assert.equal(pets.place(victim.id, true).ok, false, 'nor put out');
 });
 
+// -- Clearing the vivarium ---------------------------------------------------
+
+/** A keeper on a clock that moves a minute per read, so an epoch can be compared. */
+function timedKeeper(over: Partial<PetRules> = {}): { store: Store; pets: PetKeeper } {
+  let tick = 0;
+  const store = new Store(':memory:', () =>
+    new Date(Date.parse('2026-04-12T09:00:00.000Z') + tick++ * 60_000).toISOString(),
+  );
+  return { store, pets: new PetKeeper(store, { enabled: true }, rules(over), () => BUILD) };
+}
+
+/** One dollar of fleet spend, which is 25 beats at the shipped rate. */
+function spend(store: Store, costUsd: number): void {
+  const agent = store.createAgent({ taskId: `task_${costUsd}`, cwd: '.', pid: null, sessionId: null });
+  store.recordAgentUsage(agent.id, {
+    costUsd,
+    inputTokens: null,
+    outputTokens: null,
+    cacheReadTokens: null,
+    cacheCreationTokens: null,
+    numTurns: null,
+  });
+}
+
+test('clearing the vivarium releases the collection and starts the beats from zero', () => {
+  const { store, pets } = timedKeeper({ dropChance: 1 });
+  for (let i = 0; i < 3; i++) answer(store, `question ${i}`);
+  pets.scan();
+  spend(store, 1);
+  const [first] = store.listPets();
+  assert.ok(first);
+  assert.equal(pets.feed(first.id, 25).ok, true, 'a dollar of spend buys 25 beats');
+
+  const reset = pets.resetOnce();
+  assert.equal(reset?.cleared, 3, 'it reports what it released');
+  assert.deepEqual(store.listPets(), [], 'and the collection is gone');
+  assert.deepEqual(pets.state()?.wallet, { earned: 0, spent: 0, balance: 0 }, 'beats start again from zero');
+});
+
+test('a cleared collection does not hatch back out of the history it came from', () => {
+  const { store, pets } = timedKeeper({ dropChance: 1 });
+  for (let i = 0; i < 3; i++) answer(store, `question ${i}`);
+  pets.scan();
+  pets.resetOnce();
+
+  assert.deepEqual(pets.scan(), [], 'the actions are still rolled, so nothing is rolled again');
+  assert.deepEqual(store.listPets(), []);
+
+  // The vivarium is empty, not dead: the next thing the operator does still lands.
+  answer(store, 'something new');
+  assert.equal(pets.scan().length, 1, 'a fresh action hatches into the cleared enclosure');
+});
+
+test('a clearance runs once, and never takes what hatched after it', () => {
+  const { store, pets } = timedKeeper({ dropChance: 1 });
+  answer(store, 'before');
+  pets.scan();
+  assert.equal(pets.resetOnce()?.cleared, 1);
+
+  answer(store, 'after');
+  pets.scan();
+  assert.equal(pets.resetOnce(), null, 'the stamp is what makes every later boot a no-op');
+  assert.equal(store.listPets().length, 1, 'and the pet that hatched after it stays');
+});
+
+test('the beats a cleared vivarium earns are the spend since it was cleared', () => {
+  const { store, pets } = timedKeeper({ dropChance: 1 });
+  answer(store, 'hatch me something');
+  pets.scan();
+  spend(store, 4);
+  assert.equal(pets.state()?.wallet.earned, 100);
+
+  pets.resetOnce();
+  assert.equal(pets.state()?.wallet.earned, 0, 'spend from before the clearance buys nothing after it');
+  spend(store, 2);
+  assert.equal(pets.state()?.wallet.earned, 50, 'and what the fleet spends afterwards does');
+});
+
+test('a clearance is skipped entirely while pets are turned off', () => {
+  const { store, pets } = timedKeeper({ dropChance: 1 });
+  answer(store, 'hatch me something');
+  pets.scan();
+
+  const off = new PetKeeper(store, { enabled: false });
+  assert.equal(off.resetOnce(), null);
+  assert.equal(store.listPets().length, 1, 'off has never deleted anything, and this is not the change that does');
+  // Turned on later, the deployment still gets its clearance.
+  assert.equal(pets.resetOnce()?.cleared, 1);
+});
+
 // -- Authenticity ------------------------------------------------------------
 
 test('no configuration key can reach the roll', () => {

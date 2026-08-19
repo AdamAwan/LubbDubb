@@ -899,7 +899,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   });
 
   // The vivarium reads what the operator has already done and writes only its own
-  // three tables. Wired to the pulse's own event rather than into `Harness` — it
+  // five tables. Wired to the pulse's own event rather than into `Harness` — it
   // decides nothing, so `harness.ts` has no reason to know it exists, and the
   // pulse does not wait on it. The routes that settle an operator action call
   // `scan()` too, for latency; this is what guarantees delivery.

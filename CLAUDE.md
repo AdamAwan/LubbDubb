@@ -81,6 +81,12 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   existed — and invisible is the whole failure: nothing errors. A brand-new table needs no entry,
   but a table being new **once** does not keep it exempt.
   → [14](docs/spec/14-persistence.md#migrations)
+- **`VIVARIUM_RESET` in `src/pets/keeper.ts` is never edited in place.** The string names one
+  clearance, and `resetOnce` runs it on any database holding no `pet_resets` row under that name —
+  so changing it is not a rename, it is a second clearance that releases every operator's whole pet
+  collection on the boot after they take the build. A wipe that ran as designed reports nothing, and
+  `check` has no opinion about a constant. A further clearance is a further id, added deliberately.
+  → [22](docs/spec/22-pets.md#clearing-the-vivarium)
 - **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled
   `DELETE`.**
   Which of `issue_conclusions` / `issue_deliveries` / `issue_shortfalls` / `issue_assays` may coexist
