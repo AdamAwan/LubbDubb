@@ -13,7 +13,9 @@ import type {
   BuildReading,
   CockpitDecision,
   Decision,
+  FilingTargetProbe,
   Issue,
+  IssueFiled,
   Job,
   JobSchedule,
   LessonStatus,
@@ -2457,6 +2459,24 @@ export const demoApi = {
   // Same reason, and the cockpit never calls it: `canFileTickets` is false in the
   // demo fixtures, so the "raise issue" button is not drawn to be clicked.
   raiseBug: (_issueNumber: number, _summary: string, _title?: string) => Promise.resolve({ ok: false }),
+  // The demo answers the probe the way the real route does under the fake issues
+  // provider — `available: false` with the reason — rather than refusing, because
+  // that reading is what the compose modal is built to fall back from. Reached only
+  // if someone opens the modal by hand: `canFileTickets` is false in the fixtures,
+  // so the bar draws the external link and no compose button at all.
+  probeFilingTarget: (): Promise<FilingTargetProbe> =>
+    Promise.resolve({
+      available: false,
+      target: null,
+      identity: null,
+      reason: 'this is the demo — there is no tracker behind it to file into',
+    }),
+  // No arm to give this one: the demo cannot create what it has nowhere to create.
+  // It rejects rather than resolving a made-up issue number, since the modal's
+  // success state is a link to the thing that was filed and there would be nothing
+  // at the other end of it.
+  raiseIssue: (_title: string, _body: string, _watch: boolean): Promise<IssueFiled> =>
+    Promise.reject(new Error('this is the demo — there is no tracker behind it to file into')),
   setWorkItemIgnored: (_ref: string, _ignored: boolean) => Promise.resolve({ ok: true as const }),
   pulse: () => getServer().pulse(),
   clearErrors: () => getServer().clearErrors(),

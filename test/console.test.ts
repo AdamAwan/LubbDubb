@@ -25,6 +25,7 @@ const { goalIssue } = await import('../web/src/view/goalPage.js');
 const { ThemeSettings } = await import('../web/src/components/ThemeSettings.js');
 const { ColourField } = await import('../web/src/components/ColourField.js');
 const { ConfigValues } = await import('../web/src/components/ConfigValues.js');
+const { RaiseIssueModal, composeGate, canFile } = await import('../web/src/components/RaiseIssueModal.js');
 
 function view(over: Partial<CockpitView> = {}): CockpitView {
   const state = buildDemoState().state;
@@ -127,6 +128,92 @@ test('the bar offers LubbDubb’s own tracker, online and off', () => {
     const html = render(view({ connected }));
     assert.ok(link.test(html), `no new-issue link that keeps the opener, while connected=${connected}`);
   }
+});
+
+/**
+ * Issue #413. The bar's control has two faces and the fallback is the load-bearing
+ * one: the compose modal posts to this harness's own server, so on a dropped socket
+ * — the state an operator is most likely to have something to file about — there is
+ * nothing behind it. The demo fixtures carry `canFileTickets: false`, which is why
+ * the test above still finds the external link on both arms; this one raises the
+ * flag and asserts the other face, then puts the socket down under it.
+ */
+test('the bar composes where the harness can file, and links out where it cannot', () => {
+  const filing = (canFileTickets: boolean, connected: boolean): CockpitView => {
+    const v = view({ connected });
+    return { ...v, state: { ...v.state, config: { ...v.state.config, canFileTickets } } };
+  };
+  const link = /<a[^>]*href="https:\/\/github\.com\/AdamAwan\/LubbDubb\/issues\/new"/;
+
+  const composing = render(filing(true, true));
+  assert.ok(composing.includes('cn-issue-btn'), 'no compose button where the harness can file');
+  assert.ok(!link.test(composing), 'the external link is drawn beside the compose button');
+
+  for (const [canFileTickets, connected] of [
+    [false, true],
+    [true, false],
+    [false, false],
+  ] as const) {
+    const html = render(filing(canFileTickets, connected));
+    assert.ok(
+      link.test(html) && !html.includes('cn-issue-btn'),
+      `no way out to the tracker with canFileTickets=${canFileTickets}, connected=${connected}`,
+    );
+  }
+});
+
+/**
+ * The resting state, which is the one `renderToStaticMarkup` can reach: effects do
+ * not run, so this is the modal exactly as it paints before the probe answers. That
+ * is the state worth pinning — both fields disabled and the submit dead — because
+ * everything the modal is for depends on nobody being invited to type a paragraph
+ * the harness may turn out to be unable to file.
+ */
+test('the compose modal is unusable until the probe has answered', () => {
+  const html = renderToStaticMarkup(
+    createElement(RaiseIssueModal, {
+      probe: () => new Promise<never>(() => undefined),
+      fallbackUrl: 'https://github.com/AdamAwan/LubbDubb/issues/new',
+      onSubmit: () => Promise.reject(new Error('not reached')),
+      onClose: () => undefined,
+    }),
+  );
+  assert.equal(html.match(/<(?:input|textarea)[^>]*disabled/g)?.length, 3, 'title, body and the watch opt-in');
+  assert.ok(/<button[^>]*disabled[^>]*>raise issue<\/button>/.test(html), 'the submit must start dead');
+  assert.ok(decode(html).includes('checking where this would go'), 'and must say why it is waiting');
+});
+
+/**
+ * The two rules the control turns on, as rules rather than as a rendering of them.
+ * `null` is a reading and not a missing one — "not yet" and "no" disable the same
+ * fields for opposite reasons, and only one of them ever becomes typeable.
+ */
+test('the probe decides three readings, and only one of them can file', () => {
+  assert.equal(composeGate(null), 'checking');
+  assert.equal(composeGate({ available: true, reason: null, target: 'octo/demo', identity: 'octocat' }), 'ready');
+  assert.equal(
+    composeGate({ available: false, target: null, identity: null, reason: 'the token is dead' }),
+    'unavailable',
+  );
+
+  assert.equal(canFile('ready', 'a title', 'a body'), true);
+  for (const [title, body] of [
+    ['', 'a body'],
+    ['a title', ''],
+    // Trimmed, so a page of spaces is empty — the route trims before it refuses,
+    // and a live button over it would promise a 400.
+    ['   ', 'a body'],
+    ['a title', '\n  '],
+  ] as const) {
+    assert.equal(
+      canFile('ready', title, body),
+      false,
+      `submit live on title=${JSON.stringify(title)} body=${JSON.stringify(body)}`,
+    );
+  }
+  // No amount of text unlocks a target that cannot be filed into.
+  assert.equal(canFile('checking', 'a title', 'a body'), false);
+  assert.equal(canFile('unavailable', 'a title', 'a body'), false);
 });
 
 test('the recovery banner sits outside the situation area', () => {

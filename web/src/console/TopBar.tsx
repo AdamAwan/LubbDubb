@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import type { JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions, ConsoleTab } from '../cockpit/actions.js';
 import { FleetControl } from '../components/FleetControl.js';
 import { ExtLink } from '../components/util.js';
+import { RaiseIssueModal } from '../components/RaiseIssueModal.js';
 import { untriagedCount } from '../worldBuckets.js';
 import { productionReading } from '../view/production.js';
 
@@ -16,8 +18,8 @@ import { productionReading } from '../view/production.js';
 const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets'];
 
 /**
- * Where a bug in LubbDubb goes — fixed, and deliberately not derived from
- * `github.owner`/`github.repo`.
+ * Where a bug in LubbDubb goes when the harness cannot file one itself — fixed, and
+ * deliberately not derived from `github.owner`/`github.repo`.
  *
  * Those name the repo this harness *works on*, which is LubbDubb only while it is
  * dogfooding itself. A fault in the cockpit belongs on the cockpit's own tracker
@@ -28,6 +30,12 @@ const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets'];
  * It lands on the *form* rather than the repo or the issue list, because the whole
  * point is the number of clicks between noticing something and having written it
  * down (#404).
+ *
+ * Since #413 it is the **fallback** rather than the only path: a deployment that can
+ * file gets a compose modal that creates the issue directly, in the tracker the
+ * fleet is pointed at. The constant survives because the modal's every refusal ends
+ * here, and because the one state this control most has to work in — a dropped
+ * socket — is the one the harness cannot be posted to.
  */
 const NEW_ISSUE_URL = 'https://github.com/AdamAwan/LubbDubb/issues/new';
 
@@ -105,25 +113,65 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
  * differs between the two: green from the stylesheet, red inline when the link is
  * gone.
  *
+ * That is also why the control has two faces rather than one. Where the harness can
+ * file, it is a button opening {@link RaiseIssueModal} and the issue is created in
+ * the tracker directly; where it cannot — no tracker configured, or no socket — it
+ * is the external link it has always been. The fallback is not a nicety: this whole
+ * component exists because the offline bar draws it, and a compose modal is the one
+ * shape of this feature that offline cannot serve.
+ *
  * The link sits here and not among the readings for the reason the readings are a
  * group at all — every one of them is a gauge on the fleet or on this build, read
  * left to right as one sentence about what is happening. "Raise an issue" answers
  * nothing about the fleet, and a tenth chip in a group that already wraps at laptop
  * widths would cost a line to say so.
  */
-function Ident({ view }: { view: CockpitView }): JSX.Element {
+function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const [composing, setComposing] = useState(false);
+
+  // Two cuts, and both are made before a round trip is spent. `canFileTickets` is
+  // the static half — it is false wherever no real tracker is configured, and it
+  // already hides "File ticket" on a finding — and `connected` is the half that
+  // matters most here: a modal that posts to this harness's own server has nothing
+  // to post to with the socket down, which is exactly when an operator has
+  // something to report. Either one failing leaves the link that was always here.
+  // The live half of the gate is the probe, and it runs inside the modal.
+  const canCompose = view.connected && view.state.config.canFileTickets;
+
   return (
     <div className="cn-ident">
       <i className="cn-dot" style={view.connected ? undefined : { background: 'var(--cn-red)' }} />
       LubbDubb
       {view.demo && <span style={{ color: 'var(--cn-fg-faint)', fontWeight: 400 }}>· demo</span>}
-      {/* `.cn-issue` is the console's own hook for sizing the link out of the
+      {/* `.cn-issue` is the console's own hook for sizing the control out of the
           wordmark — see `console.css`; it styles nothing `ExtLink` owns. */}
       <span className="cn-issue">
-        <ExtLink href={NEW_ISSUE_URL} title="Raise an issue on the LubbDubb repo">
-          Raise an issue
-        </ExtLink>
+        {canCompose ? (
+          <button
+            type="button"
+            className="cn-issue-btn"
+            title="Write an issue and file it into the tracker, without leaving the cockpit"
+            onClick={() => setComposing(true)}
+          >
+            Raise an issue
+          </button>
+        ) : (
+          <ExtLink href={NEW_ISSUE_URL} title="Raise an issue on the LubbDubb repo">
+            Raise an issue
+          </ExtLink>
+        )}
       </span>
+      {/* Local state and not `Place`: a half-typed report is not somewhere you can
+          come back to, so it is not somewhere the URL should be able to send you.
+          `GoalPage`'s compose modals are held the same way. */}
+      {composing && (
+        <RaiseIssueModal
+          probe={actions.probeFilingTarget}
+          fallbackUrl={NEW_ISSUE_URL}
+          onSubmit={actions.raiseIssue}
+          onClose={() => setComposing(false)}
+        />
+      )}
     </div>
   );
 }
@@ -243,7 +291,8 @@ function Build({ view, actions }: { view: CockpitView; actions: CockpitActions }
  * The control-room strip: ident, the nav, the pulse, the fleet cap, and seven
  * readings. The nav is here because this is the only row of the shell that never
  * scrolls — everything else lives inside `.cn-sit`, which does. The ident carries
- * the one link that leaves for LubbDubb's own tracker ({@link Ident}).
+ * the one way off this bar to a tracker — the compose modal where the harness can
+ * file, and the external form it falls back to where it cannot ({@link Ident}).
  *
  * Each reading is one subject stated once, mirroring `StatusBar`'s rule but
  * with the mockup's plain text-and-number face — the console has no icon set of
@@ -267,7 +316,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
   if (!view.connected) {
     return (
       <div className="cn-bar">
-        <Ident view={view} />
+        <Ident view={view} actions={actions} />
         <div className="cn-read">
           <span>Link</span>
           <b>offline</b>
@@ -297,7 +346,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
 
   return (
     <div className="cn-bar">
-      <Ident view={view} />
+      <Ident view={view} actions={actions} />
       <div className="cn-sep" />
 
       <Nav view={view} actions={actions} />

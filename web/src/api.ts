@@ -12,6 +12,8 @@ import type {
 // or re-nested key is a compile error here instead of an empty panel.
 import type {
   CiPolicyPayload,
+  FilingTargetProbe,
+  IssueFiled,
   PetCatalogue,
   PlanHistory,
   PromptsPayload,
@@ -316,6 +318,22 @@ const realApi = {
   // the bug is its own work item and carries the work.
   raiseBug: (issueNumber: number, summary: string, title?: string) =>
     post<{ ok: true; filing: BugFiling }>(`/api/issues/${issueNumber}/bug`, { summary, title }),
+  // Where an issue raised from the cockpit would land, and as whom — asked of the
+  // provider itself, on the modal opening. Deliberately not on `/api/state`: it
+  // costs a round trip to the tracker and the only reader opens rarely. The static
+  // half of the same gate, `config.canFileTickets`, is already on the snapshot and
+  // is the cheaper cut to make first.
+  //
+  // A dead credential comes back as a 200 carrying `available: false`, so this
+  // rejects only when the *probe route* is unreachable — which the modal treats the
+  // same way, since either means it must offer the way out to the tracker's own form.
+  probeFilingTarget: () => authFetch('/api/issues/filing-target').then((r) => json<FilingTargetProbe>(r)),
+  // The operator's own issue, filed straight into the configured tracker. Unlike
+  // `raiseBug` above there is no desk agent between the click and the create: the
+  // operator has already written the thing up, so there is no judgement left to
+  // delegate. `watch` is what decides whether the fleet picks it up, and it is asked
+  // rather than inherited.
+  raiseIssue: (title: string, body: string, watch: boolean) => post<IssueFiled>('/api/issues', { title, body, watch }),
   // End the harness's run at a goal (issues #203, #234). A run is retained so its
   // report stays reachable; this is the one thing that ends it, it
   // persists across a restart, and it stops the dispatcher acting on the goal.
