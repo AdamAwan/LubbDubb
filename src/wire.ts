@@ -920,10 +920,28 @@ export interface RunningConfigPayload {
   groups: RunningConfigGroup[];
   /** Absolute path of the file a save writes. */
   file: string;
+  /** The file's current text, for the raw editor and the review diff. */
+  text: string;
   revision: string;
   pending: readonly ConfigChange[];
   /** Whether this process can restart itself — false when no supervisor launched it. */
   canRestart: boolean;
+}
+
+/**
+ * `POST /api/config/preview` — the same ladder a save walks, stopping short of the
+ * write: the bytes that would be written, and what applying them would do.
+ *
+ * The review step draws its diff from `text` rather than computing the candidate
+ * in the browser, which is what lets it promise anything about the file: the
+ * splice that preserves comments and key order is server code, and a second
+ * implementation of it in the cockpit would be free to disagree with the one that
+ * actually writes.
+ */
+export interface ConfigPreviewPayload {
+  ok: true;
+  text: string;
+  changes: readonly ConfigChange[];
 }
 
 /** `POST /api/config` — what a save answers with, so the form can settle without a refetch. */

@@ -16,7 +16,7 @@ import { buildNeedsYou } from './needsYou.js';
 import type { NeedRow } from './needsYou.js';
 import { buildGoalPage } from './goalPage.js';
 import type { GoalPageView } from './goalPage.js';
-import type { ConsolePanel, ConsoleTab } from '../cockpit/actions.js';
+import type { ConfigTab, ConsolePanel, ConsoleTab } from '../cockpit/actions.js';
 
 /**
  * Everything the console draws, derived once per render and handed over as plain data.
@@ -86,6 +86,9 @@ export interface CockpitView {
    * model rather than read from the place in the panel, so every surface reads one
    * shape and the panel stays a component that is *told* where it is.
    */
+  /** Which section of the config page is in front, and the group it is showing. */
+  configTab: ConfigTab;
+  configGroup: string | null;
   ticketWatch: TicketWatchFilter;
   ticketTracking: TicketTrackingFilter;
   ticketState: TicketStateFilter;
@@ -148,7 +151,6 @@ export interface CockpitView {
   /** The goal whose shared scratchpad is open, as an `issue:<n>` ref. */
   viewingScratchpad: string | null;
   /** Whether the settings modal is open. */
-  settingsOpen: boolean;
   /** Whether the spend breakdown is open. */
   spendOpen: boolean;
   /** Whether the reliability breakdown is open. */
@@ -221,7 +223,6 @@ interface ViewInputs {
   /** The goal whose shared scratchpad is open, as an `issue:<n>` ref. */
   viewingScratchpad: string | null;
   /** Whether the settings modal is open. */
-  settingsOpen: boolean;
   /** Whether the spend breakdown is open. */
   spendOpen: boolean;
   /** Whether the reliability breakdown is open. */
@@ -239,6 +240,8 @@ interface ViewInputs {
    */
   collapsed?: readonly number[];
   /** Optional for `collapsed`'s reason: the defaults are what a bare URL means. */
+  configTab?: ConfigTab;
+  configGroup?: string | null;
   ticketWatch?: TicketWatchFilter;
   ticketTracking?: TicketTrackingFilter;
   ticketState?: TicketStateFilter;
@@ -296,6 +299,8 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     consolePanel: input.consolePanel,
     tab: input.tab,
     collapsedFeatures: new Set(input.collapsed ?? []),
+    configTab: input.configTab ?? 'values',
+    configGroup: input.configGroup ?? null,
     ticketWatch: input.ticketWatch ?? 'any',
     ticketTracking: input.ticketTracking ?? 'live',
     ticketState: input.ticketState ?? 'any',
@@ -324,7 +329,6 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     viewingPlan: input.viewingPlan,
     viewingRetro: input.viewingRetro,
     viewingScratchpad: input.viewingScratchpad,
-    settingsOpen: input.settingsOpen,
     spendOpen: input.spendOpen,
     reliabilityOpen: input.reliabilityOpen,
   };

@@ -170,7 +170,7 @@ test('a save whose baseline has moved is refused rather than allowed to clobber 
   const res = await save(system, { baseline: revision, set: { maxConcurrentAgents: 9 } });
 
   assert.equal(res.status, 409);
-  assert.match(res.body.error ?? '', /changed since this form was loaded — reload before saving/);
+  assert.match(res.body.error ?? '', /changed since this was loaded — reload before saving/);
   assert.match(readFileSync(file, 'utf8'), /"agentMode": "stream"/, 'the other write stands');
   assert.doesNotMatch(readFileSync(file, 'utf8'), /"maxConcurrentAgents": 9/);
 
@@ -243,6 +243,83 @@ test('a field the form must not offer is refused: unknown, file-only, or set by 
   } finally {
     if (before === undefined) delete process.env['PORT'];
     else process.env['PORT'] = before;
+  }
+
+  system.store.close();
+});
+
+async function preview(
+  system: System,
+  body: Record<string, unknown>,
+): Promise<{
+  status: number;
+  body: { text?: string; changes?: { path: string; applied: boolean }[]; error?: string };
+}> {
+  const { app } = await buildApp(system);
+  try {
+    const res = await app.inject({ method: 'POST', url: '/api/config/preview', payload: body });
+    return { status: res.statusCode, body: res.json() as never };
+  } finally {
+    await app.close();
+  }
+}
+
+test('the preview answers the bytes that would be written, and writes nothing', async () => {
+  const { system, file, text } = fixture();
+  const { revision } = await read(system);
+
+  const res = await preview(system, { baseline: revision, set: { maxConcurrentAgents: 6, agentMode: 'pty' } });
+
+  assert.equal(res.status, 200);
+  assert.match(res.body.text ?? '', /"maxConcurrentAgents": 6,/);
+  assert.match(res.body.text ?? '', /"\/\/ maxConcurrentAgents": "Raised for the backlog push/, 'comments survive');
+  assert.deepEqual(
+    (res.body.changes ?? []).map((change) => `${change.path}:${change.applied ? 'now' : 'restart'}`).sort(),
+    ['agentMode:restart', 'maxConcurrentAgents:now'],
+  );
+  assert.equal(readFileSync(file, 'utf8'), text, 'the file is untouched');
+  assert.equal(system.runtimeControl.cap, 4, 'and nothing was applied');
+
+  system.store.close();
+});
+
+test('the preview refuses exactly what the save would refuse, so it cannot promise more', async () => {
+  const { system } = fixture();
+  const { revision } = await read(system);
+
+  const stale = await preview(system, { baseline: 'nonsense', set: { maxConcurrentAgents: 6 } });
+  assert.equal(stale.status, 409);
+
+  const typed = await preview(system, { baseline: revision, set: { maxConcurrentAgents: '6' } });
+  assert.equal(typed.status, 400);
+  assert.match(typed.body.error ?? '', /maxConcurrentAgents must be a number/);
+
+  system.store.close();
+});
+
+test('the raw arm writes the whole file, and the loader refuses one that would not boot', async () => {
+  const { system, file } = fixture();
+  const { revision } = await read(system);
+  const { app } = await buildApp(system);
+  try {
+    const bad = await app.inject({
+      method: 'POST',
+      url: '/api/config/raw',
+      payload: { baseline: revision, text: '{ "autoSend": { "enabled": true } }' },
+    });
+    assert.equal(bad.statusCode, 400);
+    assert.match((bad.json() as { error: string }).error, /autoSend/, 'a removed key is refused by name');
+
+    const good = await app.inject({
+      method: 'POST',
+      url: '/api/config/raw',
+      payload: { baseline: revision, text: '{\n  "dbPath": ":memory:",\n  "maxConcurrentAgents": 7\n}\n' },
+    });
+    assert.equal(good.statusCode, 200);
+    assert.equal(system.runtimeControl.cap, 7, 'a hand-written file applies its live keys like any other save');
+    assert.match(readFileSync(file, 'utf8'), /"maxConcurrentAgents": 7/);
+  } finally {
+    await app.close();
   }
 
   system.store.close();

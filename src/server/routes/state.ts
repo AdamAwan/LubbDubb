@@ -1,8 +1,15 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { CiPolicyPayload, ConfigSavePayload, PromptsPayload, RunningConfigPayload } from '../../wire.js';
+import type {
+  CiPolicyPayload,
+  ConfigPreviewPayload,
+  ConfigSavePayload,
+  PromptsPayload,
+  RunningConfigPayload,
+} from '../../wire.js';
 import { describeCiPolicy } from '../../ci/describeCiPolicy.js';
-import { loadConfigFromText } from '../../config.js';
+import { loadConfigFromText, type Config } from '../../config.js';
+import { diffConfig } from '../../configApply.js';
 import { configField, envOverride, fieldValueRefusal } from '../../configFields.js';
 import { configRevision, editConfigText, readConfigText, writeConfigText } from '../../configFile.js';
 import { describeRunningConfig } from '../runningConfig.js';
@@ -63,6 +70,7 @@ export function register(app: FastifyInstance, { system, artifactSigner, attachm
       ({
         groups: describeRunningConfig(config),
         file: filePath,
+        text: readConfigText(filePath),
         revision: configRevision(readConfigText(filePath)),
         pending: liveConfig.pending(),
         // Whether this process has anywhere to hand off to. `main.ts` wires the
@@ -72,6 +80,85 @@ export function register(app: FastifyInstance, { system, artifactSigner, attachm
         canRestart: updates.onHandoff !== null,
       }) satisfies RunningConfigPayload,
   );
+
+  /**
+   * Everything a write has to get past, in the order a reader would blame it —
+   * and the reason all three write routes share one function rather than three
+   * copies of a ladder that must not differ: a preview that refused less than the
+   * save it previews is worse than no preview.
+   *
+   * Answers the candidate file text and the config it would produce, or the
+   * refusal with the status to send it under.
+   */
+  type Prepared = { ok: true; text: string; next: Config } | { ok: false; status: number; error: string };
+
+  function prepare(
+    current: string,
+    baseline: string,
+    edits: { set?: Record<string, unknown>; clear?: readonly string[]; text?: string },
+  ): Prepared {
+    // A form built against a file that has moved would clobber whatever moved it
+    // — an editor, or Claude, both of which are supported ways to configure this
+    // harness. Refused with what to do about it.
+    if (configRevision(current) !== baseline) {
+      return {
+        ok: false,
+        status: 409,
+        error: `${filePath} changed since this was loaded — reload before saving.`,
+      };
+    }
+
+    let candidate: string;
+    if (edits.text !== undefined) {
+      // The raw arm hands over the whole file, so there is no per-field ladder to
+      // walk: what a hand-written file may say is the loader's question, below,
+      // exactly as it is at boot.
+      candidate = edits.text;
+    } else {
+      const set = edits.set ?? {};
+      for (const path of [...Object.keys(set), ...(edits.clear ?? [])]) {
+        const field = configField(path);
+        if (!field) return { ok: false, status: 400, error: `${path} is not a configurable field` };
+        if (field.access === 'fileOnly') {
+          return { ok: false, status: 400, error: `${path} is edited in the file, not here` };
+        }
+        const env = envOverride(field);
+        if (env) {
+          return {
+            ok: false,
+            status: 400,
+            error: `${path} is set by ${env} in this harness's environment, which beats the file`,
+          };
+        }
+        const refusal = Object.hasOwn(set, path) ? fieldValueRefusal(field, set[path]) : null;
+        if (refusal) return { ok: false, status: 400, error: refusal };
+      }
+      try {
+        candidate = editConfigText(current, { set, clear: edits.clear ?? [] });
+      } catch (err) {
+        return { ok: false, status: 400, error: `${filePath} could not be edited: ${(err as Error).message}` };
+      }
+    }
+
+    try {
+      return { ok: true, text: candidate, next: loadConfigFromText(candidate, filePath) };
+    } catch (err) {
+      return { ok: false, status: 400, error: (err as Error).message };
+    }
+  }
+
+  /** Write the prepared text and apply it. Shared by the field save and the raw one. */
+  function commit(text: string, next: Config): ConfigSavePayload | { failed: string } {
+    try {
+      writeConfigText(filePath, text);
+    } catch (err) {
+      errors.record({ source: 'server', message: `Failed to write ${filePath}: ${(err as Error).message}` });
+      return { failed: `${filePath} could not be written: ${(err as Error).message}` };
+    }
+    const changes = liveConfig.apply(next);
+    hub.broadcast({ type: 'config:changed' });
+    return { ok: true, revision: configRevision(text), changes, pending: liveConfig.pending() };
+  }
 
   // Saving is: refuse what must not be written, build the file the edits would
   // produce, build the *config* that file would produce, and only then write.
@@ -89,67 +176,67 @@ export function register(app: FastifyInstance, { system, artifactSigner, attachm
     '/api/config',
     { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
     checked({ body: ConfigSaveBody }, async ({ body, reply }) => {
-      const set = body.set ?? {};
-      const clear = body.clear ?? [];
-      if (Object.keys(set).length === 0 && clear.length === 0) {
+      if (Object.keys(body.set ?? {}).length === 0 && (body.clear ?? []).length === 0) {
         return reply.code(400).send({ error: 'nothing to save: neither set nor clear named a field' });
       }
+      const prepared = prepare(readConfigText(filePath), body.baseline, { set: body.set, clear: body.clear });
+      if (!prepared.ok) return reply.code(prepared.status).send({ error: prepared.error });
 
-      const current = readConfigText(filePath);
-      // A form built against a file that has moved would clobber whatever moved
-      // it — an editor, or Claude, both of which are supported ways to configure
-      // this harness. Refused with what to do about it.
-      if (configRevision(current) !== body.baseline) {
-        return reply
-          .code(409)
-          .send({ error: `${filePath} changed since this form was loaded — reload before saving.` });
-      }
+      const result = commit(prepared.text, prepared.next);
+      if ('failed' in result) return reply.code(500).send({ error: result.failed });
+      return result;
+    }),
+  );
 
-      for (const path of [...Object.keys(set), ...clear]) {
-        const field = configField(path);
-        if (!field) return reply.code(400).send({ error: `${path} is not a configurable field` });
-        if (field.access === 'fileOnly') {
-          return reply.code(400).send({ error: `${path} is edited in the file, not here` });
-        }
-        const env = envOverride(field);
-        if (env) {
-          return reply
-            .code(400)
-            .send({ error: `${path} is set by ${env} in this harness's environment, which beats the file` });
-        }
-        const refusal = Object.hasOwn(set, path) ? fieldValueRefusal(field, set[path]) : null;
-        if (refusal) return reply.code(400).send({ error: refusal });
-      }
-
-      let candidate: string;
-      try {
-        candidate = editConfigText(current, { set, clear });
-      } catch (err) {
-        return reply.code(400).send({ error: `${filePath} could not be edited: ${(err as Error).message}` });
-      }
-
-      let next;
-      try {
-        next = loadConfigFromText(candidate, filePath);
-      } catch (err) {
-        return reply.code(400).send({ error: (err as Error).message });
-      }
-
-      try {
-        writeConfigText(filePath, candidate);
-      } catch (err) {
-        errors.record({ source: 'server', message: `Failed to write ${filePath}: ${(err as Error).message}` });
-        return reply.code(500).send({ error: `${filePath} could not be written: ${(err as Error).message}` });
-      }
-
-      const changes = liveConfig.apply(next);
-      hub.broadcast({ type: 'config:changed' });
+  // The same ladder, stopping short of the write: what the file *would* say, and
+  // what applying it would do. The review step draws the diff from this, which is
+  // the whole reason it can promise anything about the bytes — it is shown the
+  // ones that would be written, not a browser's guess at them.
+  const ConfigPreviewBody = z.object({
+    set: z.record(z.unknown(), { invalid_type_error: 'set must be an object of path → value' }).optional(),
+    clear: z.array(z.string(), { invalid_type_error: 'clear must be a list of paths' }).optional(),
+    text: z.string({ invalid_type_error: 'text must be a string' }).optional(),
+    baseline: z.string({ required_error: 'baseline is required', invalid_type_error: 'baseline must be a string' }),
+  });
+  app.post(
+    '/api/config/preview',
+    { config: { rateLimit: { max: 120, timeWindow: '1 minute' } } },
+    checked({ body: ConfigPreviewBody }, async ({ body, reply }) => {
+      const prepared = prepare(readConfigText(filePath), body.baseline, {
+        set: body.set,
+        clear: body.clear,
+        ...(body.text !== undefined ? { text: body.text } : {}),
+      });
+      if (!prepared.ok) return reply.code(prepared.status).send({ error: prepared.error });
       return {
         ok: true,
-        revision: configRevision(candidate),
-        changes,
-        pending: liveConfig.pending(),
-      } satisfies ConfigSavePayload;
+        text: prepared.text,
+        changes: diffConfig(config, prepared.next),
+      } satisfies ConfigPreviewPayload;
+    }),
+  );
+
+  // The whole file, written by hand in the cockpit.
+  //
+  // Deliberately the same ladder and the same apply as the field save: the raw
+  // arm skips only the per-field checks, which have nothing to check when the
+  // operator has handed over every byte. What it does not skip is the loader —
+  // so a removed key is refused by name here exactly as it would be at boot,
+  // which is what makes this an editor rather than a way to brick a deployment.
+  const ConfigRawBody = z.object({
+    text: z.string({ required_error: 'text is required', invalid_type_error: 'text must be a string' }),
+    baseline: z.string({ required_error: 'baseline is required', invalid_type_error: 'baseline must be a string' }),
+  });
+  app.post(
+    '/api/config/raw',
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute' } } },
+    checked({ body: ConfigRawBody }, async ({ body, reply }) => {
+      const prepared = prepare(readConfigText(filePath), body.baseline, { text: body.text });
+      if (!prepared.ok) return reply.code(prepared.status).send({ error: prepared.error });
+
+      const result = commit(prepared.text, prepared.next);
+      if ('failed' in result) return reply.code(500).send({ error: result.failed });
+      return result;
     }),
   );
 

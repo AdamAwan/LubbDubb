@@ -3142,189 +3142,6 @@ body {
   word-break: break-word;
 }
 
-/* ── The config form (#401) ───────────────────────────────────────────────
-   The read-only table became a form, and the row grew three things a table did
-   not carry: what the value is, where it came from, and when saving it takes
-   effect. Four columns rather than two, and the reset is a control rather than a
-   thing you do in a text editor. */
-.settings-field {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr) 128px 62px;
-  gap: 10px;
-  align-items: start;
-  padding: 6px 6px;
-  border-top: 1px solid var(--border);
-}
-.settings-field .settings-key {
-  width: auto;
-}
-/* A value somebody chose, against one that was inherited — the same mark the
-   read-only table carried, for the same reason. */
-.settings-field.chosen .settings-key {
-  color: var(--text);
-  font-weight: 600;
-}
-/* Staged, and not yet written to the file. */
-.settings-field.staged {
-  background: var(--amber-fill);
-}
-.settings-why {
-  display: block;
-  margin-top: 2px;
-  font-family: var(--font-ui);
-  font-size: 11.5px;
-  font-weight: 400;
-  color: var(--muted);
-}
-.settings-control {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 7px;
-  min-width: 0;
-}
-.settings-input {
-  width: 100%;
-  background: var(--well);
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  color: var(--text);
-  font-family: var(--font-mono);
-  font-size: 12px;
-  padding: 4px 7px;
-}
-.settings-input-tall {
-  resize: vertical;
-  line-height: 1.45;
-}
-/* Not editable here, and the row says which of the three reasons it is. */
-.settings-input.locked {
-  color: var(--muted);
-  border-style: dashed;
-}
-.settings-unit {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--muted);
-}
-.settings-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 3px;
-}
-/* When saving this field takes effect. Never a claim the form makes — it is
-   drawn from `entry.live`, which is true only because an arm re-seats the value. */
-.settings-when {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--amber);
-}
-.settings-when.now {
-  color: var(--green);
-}
-.settings-act {
-  display: flex;
-  justify-content: flex-end;
-}
-.settings-refusal-inline {
-  font-size: 11.5px;
-  color: var(--red);
-}
-.settings-refusal {
-  margin: 8px 0 0;
-  padding: 7px 9px;
-  border: 1px solid var(--red-line);
-  background: var(--red-fill);
-  font-size: 12px;
-  line-height: 1.5;
-}
-.settings-saved {
-  margin: 8px 0 0;
-  font-size: 12px;
-  color: var(--green);
-}
-
-/* The keys that can leave an operator unable to reach their own cockpit. Behind
-   one disclosure with a warning, rather than beside the ordinary ones. */
-.settings-advanced {
-  margin-top: 10px;
-  border: 1px solid var(--border);
-  background: var(--panel-2);
-}
-.settings-advanced-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
-  background: none;
-  border: 0;
-  color: var(--text);
-  font: inherit;
-  font-size: 12.5px;
-  text-align: left;
-  cursor: pointer;
-}
-.settings-advanced-head .chip {
-  margin-left: auto;
-}
-.settings-advanced-warn {
-  margin: 0;
-  padding: 8px 10px;
-  border-top: 1px solid var(--amber-line);
-  background: var(--amber-fill);
-  font-size: 11.5px;
-  line-height: 1.55;
-}
-.settings-advanced .settings-group {
-  padding: 0 10px 6px;
-}
-
-/* What has reached the file and is waiting for a restart — the same block a hand
-   edit to the file produces, since both go through one apply path. */
-.settings-pending {
-  margin: 10px 0;
-  padding: 8px 10px;
-  border: 1px solid var(--amber-line);
-  background: var(--amber-fill);
-}
-.settings-pending-row {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  padding: 3px 0;
-}
-.settings-pending-row .settings-key {
-  width: 45%;
-}
-
-/* Staged edits, counted, with the two ways out of them. */
-.settings-savebar {
-  position: sticky;
-  bottom: 0;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-  padding: 9px 10px;
-  border: 1px solid var(--amber-line);
-  background: var(--amber-fill-2);
-  font-size: 12px;
-}
-.settings-dirty {
-  font-family: var(--font-mono);
-  font-weight: 600;
-  color: var(--amber);
-}
-.settings-savebar-acts {
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 
 /* Stacks. Tokens only — the shared-component contract in this file's header.
    The rung column carries a
@@ -4701,4 +4518,568 @@ body {
   font-family: var(--font-mono);
   font-size: 12px;
   overflow-x: auto;
+}
+
+/* ── The config page ──────────────────────────────────────────────────────
+   A console surface, so it wears the console's tokens like the tickets tab
+   does — its classes live here rather than in `console.css` for the same
+   reason that one's do: the component is in `components/`, because it reaches
+   its own routes, and `console.css` styles no shared component's class. */
+.cfg {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  height: 100%;
+}
+.cfg-head {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid var(--cn-line);
+}
+.cfg-title {
+  margin: 0;
+  font-size: 19px;
+  line-height: 1.3;
+  font-weight: 600;
+}
+.cfg-where {
+  display: block;
+  margin-top: 3px;
+  font: 11.5px var(--cn-mono);
+  color: var(--cn-fg-faint);
+}
+.cfg-where b {
+  color: var(--cn-fg-dim);
+  font-weight: 600;
+}
+.cfg-headacts {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+
+/* The sections. Underlined rather than boxed: the page is already the box. */
+.cfg-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--cn-line);
+  flex: none;
+}
+.cfg-tab {
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: none;
+  color: var(--cn-fg-faint);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.cfg-tab:hover {
+  color: var(--cn-fg-dim);
+}
+.cfg-tab.on {
+  color: var(--cn-fg);
+  border-bottom-color: var(--cn-accent);
+  font-weight: 600;
+}
+.cfg-tabn {
+  margin-left: 6px;
+  font: 600 10.5px var(--cn-mono);
+  color: var(--cn-amber);
+  font-style: normal;
+}
+
+.cfg-body {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  min-height: 0;
+  flex: 1;
+}
+.cfg-rail {
+  border-right: 1px solid var(--cn-line);
+  padding: 12px 10px 12px 0;
+}
+.cfg-railhead {
+  font-size: 10.5px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+  padding: 0 8px 8px;
+}
+.cfg-railrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--cn-r-sm);
+  background: none;
+  color: var(--cn-fg-dim);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.cfg-railrow.on {
+  background: var(--cn-panel-2);
+  color: var(--cn-fg);
+  border-color: var(--cn-line);
+}
+.cfg-count {
+  margin-left: auto;
+  font: 600 11px var(--cn-mono);
+  color: var(--cn-fg-faint);
+}
+.cfg-count.set {
+  color: var(--cn-accent);
+}
+.cfg-railnote {
+  margin: 14px 8px 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--cn-line);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--cn-fg-faint);
+}
+.cfg-railnote code {
+  font: 11px var(--cn-mono);
+  color: var(--cn-fg-dim);
+}
+
+.cfg-main {
+  padding: 14px 0 0 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.cfg-card {
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cfg-card > h3 {
+  margin: 0;
+  padding: 10px 13px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  font-size: 11.5px;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--cn-fg-dim);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cfg-more {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--cn-fg-faint);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.cfg-hint {
+  margin: 0;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--cn-fg-faint);
+}
+.cfg-hint code,
+.cfg-foot code {
+  font: 11px var(--cn-mono);
+  color: var(--cn-fg-dim);
+}
+
+/* One field: what it is called, what it is, where it came from, and the way to
+   put it back. Four columns, because the last two are what a read-only table
+   never had to carry. */
+.cfg-row {
+  display: grid;
+  grid-template-columns: minmax(0, 300px) minmax(0, 1fr) 132px 74px;
+  align-items: start;
+  gap: 12px;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  min-width: 0;
+}
+.cfg-row:last-child {
+  border-bottom: 0;
+}
+.cfg-row.staged {
+  background: #1a1608;
+}
+.cfg-key {
+  font: 12px var(--cn-mono);
+  color: var(--cn-fg-dim);
+  word-break: break-word;
+}
+.cfg-row.set .cfg-key {
+  color: var(--cn-fg);
+  font-weight: 600;
+}
+.cfg-why {
+  display: block;
+  margin-top: 2px;
+  font: 11.5px var(--cn-ui);
+  font-weight: 400;
+  color: var(--cn-fg-faint);
+}
+.cfg-inwrap {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.cfg-in {
+  width: 100%;
+  max-width: 260px;
+  background: #0f1114;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  color: var(--cn-fg);
+  font: 12px var(--cn-mono);
+  padding: 5px 8px;
+}
+.cfg-in-tall {
+  max-width: none;
+  resize: vertical;
+  line-height: 1.5;
+}
+.cfg-in.locked {
+  color: var(--cn-fg-faint);
+  border-style: dashed;
+}
+.cfg-toggle {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.cfg-unit {
+  font: 11px var(--cn-mono);
+  color: var(--cn-fg-faint);
+}
+.cfg-bad {
+  font-size: 11.5px;
+  color: var(--cn-red);
+}
+/* Where a value came from. The one thing every row has to answer before an
+   operator can trust any of the others. */
+.cfg-src {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border: 1px solid var(--cn-line);
+  border-radius: 4px;
+  font: 600 10px/1.3 var(--cn-mono);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+  white-space: nowrap;
+}
+.cfg-src.file {
+  color: var(--cn-accent);
+  border-color: #2b3a5c;
+  background: #131824;
+}
+.cfg-src.env {
+  color: var(--cn-violet);
+  border-color: #3b3357;
+  background: #191527;
+}
+.cfg-src.now,
+.cfg-src.ok {
+  color: var(--cn-green);
+  border-color: #1e4d33;
+  background: #0f1d15;
+}
+.cfg-src.restart {
+  color: var(--cn-amber);
+  border-color: #5a4413;
+  background: #1a1608;
+}
+/* When saving takes effect. Never a claim the page makes — it is drawn from
+   `entry.live`, true only because an arm re-seats the value. */
+.cfg-effect {
+  margin-top: 4px;
+  font: 10.5px var(--cn-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--cn-amber);
+}
+.cfg-effect.now {
+  color: var(--cn-green);
+}
+.cfg-act {
+  display: flex;
+  justify-content: flex-end;
+}
+.cfg-liverow {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  padding: 7px 13px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  font: 12px var(--cn-mono);
+}
+.cfg-liverow:last-child {
+  border-bottom: 0;
+}
+.cfg-liverow .cfg-key {
+  min-width: 190px;
+}
+.cfg-value {
+  color: var(--cn-fg-dim);
+}
+.cfg-value b {
+  color: var(--cn-fg);
+}
+
+/* The keys that can leave an operator unable to reach their own cockpit. */
+.cfg-advhead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 13px;
+  background: none;
+  border: 0;
+  color: var(--cn-fg);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+.cfg-advhead .chip {
+  margin-left: auto;
+}
+.cfg-advwarn {
+  margin: 0;
+  padding: 9px 13px;
+  border-top: 1px solid #5a4413;
+  background: #1a1608;
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: #e8cf94;
+}
+.cfg-pending {
+  border-color: #5a4413;
+}
+.cfg-pending > h3 {
+  background: #1a1608;
+  color: var(--cn-amber);
+}
+
+/* Staged edits, counted, with the two ways out. Sticky: the rows above it are
+   longer than a screen, and a save bar you have to scroll to find is one an
+   operator does not know is there. */
+.cfg-dirty {
+  position: sticky;
+  bottom: 0;
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 10px 18px;
+  border-top: 1px solid #5a4413;
+  background: #1a1608;
+}
+.cfg-dirtyn {
+  font: 600 12px var(--cn-mono);
+  color: var(--cn-amber);
+}
+.cfg-dirtywhat {
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+.cfg-dirtyacts {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.cfg-saved {
+  margin: 0;
+  font-size: 12px;
+  color: var(--cn-green);
+}
+.cfg-refusal {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #5a231d;
+  background: #1d1211;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #ffb3ad;
+}
+
+/* The review step: the bytes, and what they do. */
+.cfg-review {
+  padding-left: 0;
+  overflow: auto;
+}
+.cfg-diff {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+@media (min-width: 1400px) {
+  .cfg-diff {
+    grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  }
+}
+.cfg-code {
+  padding: 10px 0;
+  font: 12px/1.7 var(--cn-mono);
+  overflow-x: auto;
+}
+.cfg-ln {
+  display: flex;
+  gap: 12px;
+  padding: 0 13px;
+  white-space: pre;
+}
+.cfg-gut {
+  width: 30px;
+  text-align: right;
+  color: #3a3f47;
+  flex: none;
+}
+.cfg-ln.add {
+  background: #0f1d15;
+  color: #9be7c0;
+}
+.cfg-ln.del {
+  background: #1d1211;
+  color: #ffb3ad;
+}
+.cfg-ln.ctx {
+  color: var(--cn-fg-faint);
+}
+.cfg-eff {
+  display: flex;
+  gap: 10px;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  align-items: flex-start;
+}
+.cfg-effk {
+  font: 12px var(--cn-mono);
+  color: var(--cn-fg);
+}
+.cfg-effv {
+  display: block;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+}
+.cfg-eff .cfg-src {
+  margin-left: auto;
+  flex: none;
+}
+.cfg-foot {
+  margin: 0;
+  padding: 10px 13px;
+  border-top: 1px solid var(--cn-line);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--cn-fg-faint);
+}
+.cfg-footacts {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+/* The raw file. */
+.cfg-rawhead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  font: 11.5px var(--cn-mono);
+  color: var(--cn-fg-dim);
+}
+.cfg-rawacts {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cfg-raw {
+  width: 100%;
+  border: 0;
+  background: #0f1114;
+  color: var(--cn-fg);
+  font: 12px/1.7 var(--cn-mono);
+  padding: 10px 13px;
+  resize: vertical;
+}
+.cfg-raw:focus {
+  outline: 1px solid var(--cn-accent);
+  outline-offset: -1px;
+}
+.cfg-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  border: 1px solid #3b3357;
+  border-radius: var(--cn-r);
+  background: #191527;
+  font-size: 12.5px;
+  color: var(--cn-fg-dim);
+}
+.cfg-banner b {
+  color: var(--cn-violet);
+}
+.cfg-bacts {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+}
+.cfg-mark {
+  display: flex;
+  gap: 10px;
+  padding: 9px 13px;
+  align-items: flex-start;
+}
+.cfg-markwhat {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--cn-fg-dim);
+}
+.cfg-badge {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font: 600 10px/1.5 var(--cn-mono);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+}
+.cfg-badge.ok {
+  color: var(--cn-green);
+  border: 1px solid #1e4d33;
+  background: #0f1d15;
+}
+.cfg-badge.err {
+  color: var(--cn-red);
+  border: 1px solid #5a231d;
+  background: #1d1211;
 }

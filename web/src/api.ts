@@ -17,6 +17,7 @@ import type {
   RetrospectivePayload,
   RunningConfigPayload,
   ConfigSavePayload,
+  ConfigPreviewPayload,
   ScratchpadPayload,
   ReliabilityPayload,
   SpendPayload,
@@ -196,6 +197,14 @@ const realApi = {
   // change takes effect. Refused with the reason where there is no supervisor, or
   // where agents are still running and `interrupt` was not asked for.
   restartHarness: (interrupt: boolean) => post<{ ok: true }>('/api/config/restart', { interrupt }),
+  // The same ladder a save walks, stopping short of the write: the bytes that
+  // would be written, and what applying them would do. The review step draws its
+  // diff from this rather than splicing the file itself — that splice is server
+  // code, and a second one here would be free to disagree with the one that writes.
+  previewConfig: (edits: { set?: Record<string, unknown>; clear?: string[]; text?: string; baseline: string }) =>
+    post<ConfigPreviewPayload>('/api/config/preview', edits),
+  // The whole file, written by hand. Refused by the loader exactly as a save is.
+  saveRawConfig: (edits: { text: string; baseline: string }) => post<ConfigSavePayload>('/api/config/raw', edits),
   // The effective CI policy behind the settings modal's CI tab. Derived on the
   // server from the same defaults `classifyCiFailures` reads, so the tab cannot
   // claim a routing the dispatcher would not take.

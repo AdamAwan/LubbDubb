@@ -2331,6 +2331,7 @@ export const demoApi = {
     Promise.resolve({
       groups: [] as RunningConfigGroup[],
       file: 'lubbdubb.config.json',
+      text: '{}\n',
       revision: 'demo',
       pending: [],
       canRestart: false,
@@ -2339,6 +2340,8 @@ export const demoApi = {
   // save landed: the form draws the refusal exactly as it draws a real one.
   saveConfig: () => Promise.reject(new Error('the demo has no config file to write')),
   restartHarness: () => Promise.reject(new Error('the demo has no process to restart')),
+  previewConfig: () => Promise.reject(new Error('the demo has no config file to preview')),
+  saveRawConfig: () => Promise.reject(new Error('the demo has no config file to write')),
   // The demo configures no `ci.checks`, so an empty policy is not a stand-in —
   // it is what this backend is actually running on, and the tab's empty state is
   // the true reading of it. `unmatched` is a constant of `classifyCiFailures`

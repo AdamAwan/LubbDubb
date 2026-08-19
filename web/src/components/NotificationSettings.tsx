@@ -1,7 +1,4 @@
 import { useState } from 'react';
-import { CiPolicyTab } from './CiPolicyTab.js';
-import { ConfigForm } from './ConfigForm.js';
-import { PromptsTab } from './PromptsTab.js';
 import {
   loadNotifyPrefs,
   notifyPermission,
@@ -12,99 +9,6 @@ import {
   type NotifyPrefs,
   type NotifyTestResult,
 } from '../cockpit/notify.js';
-
-/**
- * Settings: what this harness is running on.
- *
- * **Three tabs since #244.** Everything an operator configures now answers to
- * one cog: the resolved config, the CI policy that decides what a red PR gets,
- * and the prompt book. The last two were reachable only by reading files on the
- * host — `ci.checks` not at all, and the book through a disclosure hanging off
- * the Work panel, which is a place nobody looks for a setting.
- *
- * Each tab fetches its own payload and keeps it: the bodies are mounted lazily
- * on first visit and stay mounted, so switching back is free and no tab pays for
- * a route it never opened.
- *
- * **Fetched on open, never polled.** The config is read once at boot, so polling
- * it would be paying for a constant; the form re-fetches after a save and when
- * the socket says the file moved.
- *
- * **Editable since #401**, which the "when does this take effect" objection did
- * not survive: the answer differs per field, the harness knows which is which,
- * and {@link ConfigForm} draws it per row rather than the surface claiming one
- * answer for all fifty keys. What has not changed is where configuration lives —
- * every save writes `lubbdubb.config.json`, and editing that file by hand still
- * works and lands on the same apply path.
- */
-export function SettingsModal({
-  control,
-  onClose,
-}: {
-  /** The live dispatch controls, off the snapshot. */
-  control: { cap: number; paused: boolean };
-  onClose: () => void;
-}) {
-  const [tab, setTab] = useState<TabId>('settings');
-  // Which bodies have ever been shown. A tab is mounted on its first visit and
-  // never unmounted, so its fetched-once payload survives a switch away — the
-  // alternative re-fetches a constant every time the operator changes tab.
-  const [visited, setVisited] = useState<ReadonlySet<TabId>>(() => new Set<TabId>(['settings']));
-
-  const show = (id: TabId) => {
-    setTab(id);
-    setVisited((seen) => (seen.has(id) ? seen : new Set([...seen, id])));
-  };
-
-  return (
-    <div className="settings-backdrop" onClick={onClose}>
-      <div className="settings-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="pm-head">
-          <span className="pm-title">Settings</span>
-          <button className="btn ghost small pm-close" onClick={onClose}>
-            close
-          </button>
-        </div>
-
-        {/* Tabs, not a scroll: the three are different questions ("how is it
-            configured", "what happens to a red PR", "what do the agents get
-            told") and stacking them made the last two unfindable. */}
-        <div className="settings-tabs" role="tablist">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              role="tab"
-              aria-selected={tab === t.id}
-              className={`btn ghost settings-tab${tab === t.id ? ' active' : ''}`}
-              onClick={() => show(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {visited.has('ci') && (
-          <div hidden={tab !== 'ci'} role="tabpanel">
-            <CiPolicyTab />
-          </div>
-        )}
-        {visited.has('prompts') && (
-          <div hidden={tab !== 'prompts'} role="tabpanel">
-            <PromptsTab />
-          </div>
-        )}
-
-        <div hidden={tab !== 'settings'} role="tabpanel">
-          <NotificationSettings />
-          {/* `control` is handed down rather than fetched again: the live cap and
-              pause flag are on the state snapshot, and the form draws them beside
-              the configured values it already holds. */}
-          <ConfigForm control={control} />
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /**
  * Desktop notifications: the switch, the browser's grant, and the categories.
@@ -139,7 +43,7 @@ const NOTIFY_TEST_WORDING: Record<NotifyTestResult, string> = {
   failed: 'This browser refused to construct the notification.',
 };
 
-function NotificationSettings() {
+export function NotificationSettings() {
   const [prefs, setPrefs] = useState<NotifyPrefs>(() => loadNotifyPrefs());
   const [permission, setPermission] = useState(() => notifyPermission());
   // Whether the ask has been made on this visit. A browser that neither grants
@@ -240,11 +144,3 @@ function NotificationSettings() {
     </div>
   );
 }
-
-type TabId = 'settings' | 'ci' | 'prompts';
-
-const TABS: readonly { id: TabId; label: string }[] = [
-  { id: 'settings', label: 'Settings' },
-  { id: 'ci', label: 'CI policy' },
-  { id: 'prompts', label: 'Prompts' },
-];

@@ -80,6 +80,7 @@ export type {
   RunningConfigPayload,
   ConfigChange,
   ConfigSavePayload,
+  ConfigPreviewPayload,
   SpendGoal,
   SpendInsights,
   SpendPhase,

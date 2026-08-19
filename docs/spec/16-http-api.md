@@ -733,8 +733,8 @@ effect", and the honest answer is "at the next restart".
 
 ### `GET /api/config`
 
-The configuration this process resolved at boot, for the cockpit's config form
-([17](17-cockpit.md#configuration)): `{ groups, file, revision, pending, canRestart }`. Each group is a
+The configuration this process resolved at boot, for the cockpit's config page
+([17](17-cockpit.md#configuration)): `{ groups, file, text, revision, pending, canRestart }`. Each group is a
 titled list of entries — dotted paths into the config object, with nested blocks expanded to leaves so
 one overridden member of `planning` does not make the other three read as chosen — carrying:
 
@@ -747,7 +747,8 @@ one overridden member of `planning` does not make the other three read as chosen
 | `env`                 | the environment variable currently beating the file, or null                          |
 | `why`, `ms`           | the one line under the key, and whether the number is a duration                      |
 
-`file` is the absolute path a save writes. `revision` fingerprints that file's current text and rides
+`file` is the absolute path a save writes, and `text` is its current contents — what the raw editor edits
+and what the review step diffs against. `revision` fingerprints that file's current text and rides
 back on the save, which is what makes a stale one refusable. `pending` is what has reached the file and
 is waiting for a restart. `canRestart` says whether this process has a supervisor to hand off to.
 
@@ -792,6 +793,26 @@ untouched:
 Only then is the file written — surgically and atomically ([02](02-configuration.md#writing-the-file))
 — and the result applied through the one `LiveConfig.apply` a hand edit also lands on. Broadcasts
 `config:changed`.
+
+### `POST /api/config/preview`
+
+The same ladder `POST /api/config` walks, stopping short of the write: `{ok, text, changes}` — the bytes
+that would be written, and what applying them would do. Body is the save's, plus an alternative `text`
+for the raw arm.
+
+It exists so the review step can promise something about the file. The splice that preserves comments,
+key order and every untouched line is server code; a second implementation of it in the cockpit would be
+free to disagree with the one that actually writes. One function answers both routes, for the same
+reason inverted — a preview that refused *less* than the save it previews is worse than no preview.
+
+### `POST /api/config/raw`
+
+The whole file, written by hand from the cockpit's Raw file section. Body is `{text, baseline}`.
+
+Deliberately the same ladder and the same apply as the field save. It skips only the per-field checks,
+which have nothing to check when the operator has handed over every byte — and it does **not** skip the
+loader, so a removed key is refused by name here exactly as it would be at boot. That is what makes the
+section an editor rather than a way to brick a deployment.
 
 ### `POST /api/config/restart`
 
