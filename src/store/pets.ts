@@ -223,7 +223,16 @@ export class PetStore {
   }
 
   /**
-   * Actions rolled since the last one that hatched something.
+   * Actions rolled since the last one that hatched something, **per kind**.
+   *
+   * One counter per action kind rather than one over the whole table, and the
+   * reason is the shape of a real deployment rather than a preference: the
+   * harness settles jobs and findings by the dozen and accepts an upgrade a few
+   * times a year, so a shared counter is spent almost entirely by whichever
+   * action is most frequent. The scarce kinds then never reach their ceiling —
+   * pity fires constantly on job launches and, in practice, never on a landing
+   * or a self-update, which is the opposite of what a floor is for. Sparse by
+   * design: a kind with no rolled actions has no row and reads as zero.
    *
    * Counted over the ordered table rather than kept in a column: a stored counter
    * is one more thing a torn write can leave wrong, and wrong here means the pity
@@ -234,14 +243,17 @@ export class PetStore {
    * counts a tie as "not after" and quietly reports zero — the counter then never
    * moves and pity never fires, with every row present and correct.
    */
-  petActionsSinceHatch(): number {
-    const row = this.ctx.db
+  petActionsSinceHatch(): Map<PetActionKind, number> {
+    const rows = this.ctx.db
       .prepare(
-        `SELECT COUNT(*) AS n FROM pet_actions
-          WHERE rowid > (SELECT COALESCE(MAX(rowid), 0) FROM pet_actions WHERE pet_id IS NOT NULL)`,
+        `SELECT kind, COUNT(*) AS n FROM pet_actions AS a
+          WHERE a.rowid > (SELECT COALESCE(MAX(b.rowid), 0)
+                             FROM pet_actions AS b
+                            WHERE b.pet_id IS NOT NULL AND b.kind = a.kind)
+          GROUP BY a.kind`,
       )
-      .get() as { n: number };
-    return row.n;
+      .all() as { kind: string; n: number }[];
+    return new Map(rows.map((row) => [row.kind as PetActionKind, row.n]));
   }
 
   /**

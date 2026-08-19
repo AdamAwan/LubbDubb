@@ -2683,8 +2683,8 @@ export interface UpgradeIntent {
 // -- Pets --------------------------------------------------------------------
 
 /**
- * The nine creatures a deployment can collect. One vivarium per database, so a
- * species is a fact about the harness rather than about a profile of it.
+ * The twenty-seven creatures a deployment can collect. One vivarium per database,
+ * so a species is a fact about the harness rather than about a profile of it.
  *
  * The set is closed and the keys are stored, so a species is never renamed — the
  * display name in `src/pets/catalogue.ts` is what changes when one reads wrong.
@@ -2712,7 +2712,14 @@ export type PetSpecies =
   | 'lander'
   | 'quill'
   | 'cairn'
-  // mythic
+  | 'ingot'
+  // mythic — one signature per action kind, and no action without one
+  | 'clarion'
+  | 'covenant'
+  | 'oracle'
+  | 'keystone'
+  | 'forge'
+  | 'lodestone'
   | 'ouroboros';
 
 /** How hard a species is to draw, and how long it takes to raise. */
