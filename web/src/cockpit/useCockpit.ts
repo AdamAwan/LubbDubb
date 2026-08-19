@@ -243,6 +243,18 @@ export function useCockpit(): CockpitStatus {
       addInstruction: (n, text) => then(api.addInstruction(n, text)),
       withdrawInstruction: (n, id) => then(api.withdrawInstruction(n, id)),
       raiseBug: (n, summary, title) => then(api.raiseBug(n, summary, title)),
+      // A read, so no refetch — nothing about asking where a filing would land
+      // changes the world.
+      probeFilingTarget: () => api.probeFilingTarget(),
+      // Refetched like every other mutation, but the filed issue is handed back
+      // rather than swallowed: the modal's done state links to it. The refresh is
+      // awaited so the new issue is in the world the cockpit draws before the modal
+      // says it exists.
+      raiseIssue: async (title, body, watch) => {
+        const filed = await api.raiseIssue(title, body, watch);
+        await refresh();
+        return filed;
+      },
       dismissRun: (n) => then(api.dismissRun(n)),
 
       // A read, so no refetch: the work graph rides its own route precisely
