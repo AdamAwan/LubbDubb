@@ -68,6 +68,9 @@ function countingSink(fail = false): ActionSink & { merges: number[] } {
     async linkWorkItem() {
       return { ok: true };
     },
+    async createIssue() {
+      return { ok: true as const, ref: 'issue:1' };
+    },
     async upsertIssueComment() {
       return { ok: true };
     },

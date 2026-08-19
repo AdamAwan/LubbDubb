@@ -932,10 +932,24 @@ list, and a doc string.
 
 Ids: `issue-plan`, `issue-replan`, `discuss-plan`, `plan-part`, `plan-approval`, `issue-shortfall`,
 `plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-assay`,
-`issue-retro`, `validation-check`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`, `pr-review-comment`,
-`pr-concern-escalation`, `finding-ticket`, `work-item-ticket`. The last two are route-driven rather than
-dispatcher-driven — they are here because _how a ticket should be worded_ is the operator's opinion,
-which is what the book exists to make overridable.
+`issue-retro`, `validation-check`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
+`pr-review-comment`, `pr-concern-escalation`, `pr-title`, `finding-ticket`, `raise-bug`,
+`work-item-ticket-body`, `blueprint-ticket-body`, and the retired `work-item-ticket` and
+`blueprint-ticket`. The filing ids are route-driven rather than dispatcher-driven — they are here
+because _how a ticket should be worded_ is the operator's opinion, which is what the book exists to
+make overridable.
+
+Not every entry is a prompt. `pr-title` is rendered straight onto a pull request, and the two
+`*-ticket-body` ids are written straight into the tracker: the harness files those two items itself
+([13](13-jobs-and-findings.md#filing-a-ticket)), so what stays overridable is the item's **body**
+rather than an instruction to an agent.
+
+**Retired ids stay in the book.** `work-item-ticket` and `blueprint-ticket` are no longer rendered —
+[#394](13-jobs-and-findings.md#filing-a-ticket) replaced the desk agents they were sent to — but
+deleting them would make `loadPromptTemplates` throw on a deployment that had overridden one, which is
+a harness that will not boot over a file it no longer reads. They carry `retired: true` instead, which
+`describe()` ships to the Prompts panel, so an override that is no longer sent says so rather than
+looking live.
 
 Overrides: drop `<id>.md` into `promptTemplatesDir` (default `.lubbdubb/prompts`). They are read
 **once at boot**. `loadPromptTemplates` fails fast — at boot, not as a silently broken prompt — when a

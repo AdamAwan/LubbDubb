@@ -271,7 +271,8 @@ reading the file is not the same as knowing the policy.
 | `issuePickupStates`    | `string[]` (optional)    | unset                                                             | When non-empty, only items whose provider-native state is listed are eligible. Items with no such state bypass it.                                                                               |
 | `issueInReviewState`   | `string` (optional)      | unset                                                             | The state an item is moved to once a PR is open for it. Takes effect only alongside `issuePickupStates`.                                                                                         |
 | `issueContainerTypes`  | `string[]`               | `["Feature", "Epic"]`                                             | Item types that **hold** work rather than being work. Never picked up, planned or assayed. Matched case-insensitively; `[]` turns the gate off; items with no type bypass it.                    |
-| `issueFilingTypes`     | `string[]`               | `["User Story", "Bug"]`                                           | The types the harness may **create** when filing a finding, a blueprint or unrecorded work — see [what a filed item is](#what-type-a-filed-item-is). Azure only; `[]` falls back to the default. |
+| `issueFilingTypes`     | `string[]`               | `["User Story", "Bug"]`                                           | The types the harness **creates** at when filing a finding, a blueprint or unrecorded work; the **first** entry is the one it uses — see [what a filed item is](#what-type-a-filed-item-is). Azure only; `[]` falls back to the default. |
+| `issueBugType`         | `string` (optional)      | `"Bug"`                                                           | The type a bug an operator raised is filed as. A project on the Basic process sets `"Issue"`. Azure only.                                                                                        |
 
 ### Feature policies
 
@@ -578,16 +579,18 @@ pull request is surfaced. That is the first-run and test posture, and it is why 
 the `fake` provider resolves no identity at all, and a harness that demanded one could not boot
 against it.
 
-#### How assignment reaches the agent
+#### How assignment reaches the ticket
 
-It rides inside the **tracker coordinates** rather than as a prompt placeholder (`ticketAssignment`,
-`src/ticketAssignment.ts`), which is what keeps it working under an operator's prompt override:
-`{tracker}` is already rendered by all four filing templates ([13](13-jobs-and-findings.md)), while a
-new `{assignee}` token would be dropped silently by every override written before it. Concretely, the
-create command grows `--assignee <login>` / `--assigned-to "<upn>"` — the flag spelling is the
-tracker's business, and the only thing still resolved per provider — followed by a paragraph saying
-the flag is not optional, applies only to an item the agent **creates** (linking an existing one
-leaves its assignee alone), and must not cost the ticket if the tracker refuses the identity.
+It is passed to the create (`ticketAssignee`, `src/ticketAssignment.ts` →
+[`createIssue`](15-integrations.md)), and each provider spells it in its own vocabulary — `assignees`
+on GitHub, `System.AssignedTo` on Azure — on the **create itself**, so a filed item is never briefly
+in nobody's queue.
+
+It used to be a `--assignee` / `--assigned-to` flag spliced into the `gh`/`az` command the filing
+prompt carried, followed by a paragraph saying the flag was not optional. Those three sentences existed
+because an agent editing the command down drops a flag first;
+[#394](13-jobs-and-findings.md#filing-a-ticket) removed the command, so there is no longer a sentence
+to forget.
 
 Assignment applies to the four filing arms and to nothing the harness merely reads: it is not a
 filter, and it never narrows pickup. The narrowing is the other two gates, and they are separate
@@ -595,29 +598,30 @@ mechanisms that happen to share a name.
 
 ### What type a filed item is
 
-`issueFilingTypes` is the closed set of Azure work item types the harness may **create**, and the
-filing agent picks one from it (`ticketTypeGuidance`, `src/ticketTypes.ts`). The three non-bug filing
-arms — a deferred finding, a blueprint, unrecorded work — used to hardcode `--type Task`, which is
-the altitude a story is **broken down** at rather than the one a backlog is filed at: an item created
-there has no story above it, rolls up to nothing, and appears on no backlog anybody grooms. A raised
-bug is the fourth arm and does not consult the list; what it is filing was never in question.
+`issueFilingTypes` names the Azure work item types the harness **creates** at, and the **first** entry
+is the one it uses (`filingType`, `src/ticketTypes.ts`). The three non-bug filing arms — a deferred
+finding, a blueprint, unrecorded work — used to hardcode `--type Task`, which is the altitude a story
+is **broken down** at rather than the one a backlog is filed at: an item created there has no story
+above it, rolls up to nothing, and appears on no backlog anybody grooms.
 
-Which type a given report is, is left to the agent on the same argument that leaves it the wording:
-it is a judgement about the report, and only the agent has read it. What the harness supplies is the
-menu and the prohibition — the list is closed, a decomposition type is named and refused outright
-(the failure this exists to stop; "pick the right one" does not read to an agent as excluding the one
-it has always picked), and an imperfect fit resolves to the nearest entry rather than an invented
-type, because Azure refuses a type the project does not define and the ticket is lost with it.
+It used to be a menu a filing agent picked from, spliced into a `--type` flag in the create command
+the prompt carried. Since [#394](13-jobs-and-findings.md#filing-a-ticket) the harness files the item
+itself, so there is no picker left — and no create that can arrive without a type, which Azure refuses
+outright. The remaining entries still document what the project files at, which is what keeps the key
+readable; the order is the operator's, so its head is the honest default.
 
-It reaches the agent the same way assignment does and for the same reason: spliced into the create
-command inside `{tracker}`, never as a `{type}` placeholder an older override would drop. The default
-`["User Story", "Bug"]` is the Agile template's names, on the reasoning `issueContainerTypes` already
-uses; a Scrum project sets `["Product Backlog Item", "Bug"]`, and a process extended with a custom
-type lists it (`["User Story", "Tech Debt", "Bug"]`). Names are passed to `az` verbatim. Unlike
-`issueContainerTypes` there is no "off" — a work item is created _as_ something, so `[]` falls back
-to the default rather than emitting a create with no `--type`. A single-entry list is spliced in
-literally and the agent is given no choice to make. GitHub is untouched throughout: an issue carries
-no type, so its coordinates read exactly as they always did.
+A **raised bug** files at `issueBugType` instead, defaulting to `"Bug"` — its own key rather than a
+bug-looking entry picked out of the list, because what a process template calls its bug type is
+exactly the thing that varies (the Basic process calls it "Issue") and matching on the word would file
+a story as a bug on the one project it is wrong for, with nothing red.
+
+The default `["User Story", "Bug"]` is the Agile template's names, on the reasoning
+`issueContainerTypes` already uses; a Scrum project sets `["Product Backlog Item", "Bug"]`, and a
+process extended with a custom type puts it first (`["Tech Debt", "User Story"]`). Names are sent to
+Azure verbatim, so they must match the project's exactly. Unlike `issueContainerTypes` there is no
+"off" — a work item is created _as_ something, so `[]` falls back to the default rather than emitting
+a create with no type. GitHub is untouched throughout: an issue is not created _as_ anything, so the
+field is dropped there.
 
 ### `azureDevOps.policyChecks`
 

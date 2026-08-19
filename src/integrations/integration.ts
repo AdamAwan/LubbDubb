@@ -5,6 +5,7 @@ import type { InjectableEvent } from '../connector/connector.js';
 import type {
   BranchDeleteInput,
   IssueCommentInput,
+  IssueCreateInput,
   IssueLabelInput,
   PrBaseInput,
   PrBaseUpdateInput,
@@ -272,6 +273,24 @@ export interface WorkItemLinkCapable {
 
 export function isWorkItemLinkCapable(x: Integration): x is Integration & WorkItemLinkCapable {
   return typeof (x as Partial<WorkItemLinkCapable>).linkWorkItem === 'function';
+}
+
+/**
+ * An integration that can **create** a tracker item — the seam the four filing
+ * arms used to have no answer for (issue #394).
+ *
+ * Its own capability rather than a method on {@link IssueCommentCapable}, for
+ * {@link PrBaseUpdateCapable}'s reason: a provider genuinely may read issues and
+ * not accept new ones, and the honest answer there is "nothing serves this" rather
+ * than a method that throws. Every issues provider in the tree implements it, and
+ * a future read-only one would simply not.
+ */
+export interface IssueCreateCapable {
+  createIssue(input: IssueCreateInput): Promise<SendResult>;
+}
+
+export function isIssueCreateCapable(x: Integration): x is Integration & IssueCreateCapable {
+  return typeof (x as Partial<IssueCreateCapable>).createIssue === 'function';
 }
 
 /** An integration that can comment on an issue / work item — the plan's status comment. */

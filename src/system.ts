@@ -5,6 +5,7 @@ import { Store } from './store/store.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
 import { buildIntegrations } from './integrations/registry.js';
 import type { ActionSink } from './sink/actionSink.js';
+import { ticketFiler, type TicketFiler } from './tickets/filing.js';
 import type { CiEvidenceReader } from './ci/ciEvidence.js';
 import { ticketAmendCommands } from './goalInstructions.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
@@ -107,6 +108,13 @@ export interface System {
    * and different facts.
    */
   tickets: TicketSweep;
+  /**
+   * Files a tracker item (issue #394). Exposed because filing is **route-driven**:
+   * the operator clicks, waits, and is told the item's ref — so it is neither an
+   * executor action nor a desk pass on the pulse, and the four routes reach it
+   * here.
+   */
+  filing: TicketFiler;
   /**
    * Where the harness watches its **own** build and drives a deliberate upgrade of
    * it. Always constructed and always exposed — the route and the snapshot need a
@@ -447,6 +455,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
       // to the fleet.
       watchLabel,
     }),
+    // Lazy for the same reason: `link_ticket` files the item an agent wrote up
+    // (issue #394), and the sink it files through is built below.
+    filing: (): McpToolDeps['filing'] => filing,
     errors,
   });
 
@@ -503,10 +514,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // The `plan.json` transport's half of the approval gate — the tool transport
     // gets the same flag above, so a verdict lands identically either way.
     requirePlanApproval: config.planning.requireApproval,
-    // So `link_ticket` can move a blueprint's images off the filing job and onto
-    // the ticket it just created (issue #249) — the same instance the launch route
-    // wrote them with, since both halves must agree about the root.
-    attachments,
     errors,
   });
   const escalations = new EscalationInbox(store, agents);
@@ -708,6 +715,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     checkIntervalMs: config.selfUpdate.checkIntervalMs,
   });
 
+  // How the harness files a tracker item: three of the four filing arms call this
+  // straight from their route, and `link_ticket` calls it for the two that still
+  // have an agent writing the words (issue #394).
+  const filing = ticketFiler(config, opts.sink ?? connector);
   const graph = new WorkGraphRecorder({ store, errors });
 
   // The ticket mirror's keeper: one month of backfill on a fresh database, then an
@@ -850,6 +861,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     harness,
     graph,
     tickets,
+    filing,
     updates,
     runtimeControl,
     issuePickup,

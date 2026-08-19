@@ -119,34 +119,40 @@ export function unrecordedWork(
   return out;
 }
 
-/** How long a filing job's title may be before it stops being a title. */
+/** How long a filed item's title may be before it stops being a title. */
 const MAX_TITLE = 80;
 
 /**
- * The values the `work-item-ticket` prompt is rendered with — pure, so the wording
- * an agent acts on is testable without a server and the route is left with
- * `render` + `createJob`. The mirror of `findingTicketFields`, and deliberately
- * the same shape: `title` is the *job's*, not the ticket's, because the ticket's
- * title is the judgement being delegated and this one only has to be recognisable
- * in the Up next queue.
+ * The title and body vars for the work item the harness files (issue #394).
+ *
+ * Pure, so what lands in the tracker is testable without a tracker or a server.
+ *
+ * **The title is the node's own**, where it used to be the filing *job's* — a
+ * separate string that only had to be recognisable in the Up next queue, because
+ * the ticket's title was the one thing being delegated to a desk agent. There is no
+ * desk agent and no queue entry now, so the two collapse into one: the work's title
+ * is what the work item is called, and the operator can still reword it before it
+ * files (`body.title`).
+ *
+ * The body is rendered from `work-item-ticket-body`, which is why `produced` is
+ * composed here — it is the harness's own walk of the work subtree, and it was
+ * already the whole of what a filing agent had to say.
  */
 export function workItemTicketFields(
   node: WorkNode,
   subtree: WorkNode[],
-  tracker: string,
 ): { title: string; vars: Record<string, string> } {
   const produced = subtree
     .filter((n) => n.ref !== node.ref)
     .map((n) => `- ${n.ref} (${n.kind}) — ${n.title} [${n.status}${n.provenance ? `, ${n.provenance}` : ''}]`);
   return {
-    title: `File work item: ${node.title}`.slice(0, MAX_TITLE),
+    title: node.title.slice(0, MAX_TITLE),
     vars: {
       ref: node.ref,
       workTitle: node.title,
       // A merge the harness only *inferred* is weaker evidence than one it
       // watched, which stage 1 recorded the distinction specifically to preserve.
       produced: produced.length ? produced.join('\n') : 'Nothing the harness could observe — no pull request opened.',
-      tracker,
     },
   };
 }

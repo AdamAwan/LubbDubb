@@ -113,6 +113,20 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   placeholders — so an override that never learned about your new `{token}` silently drops it, on
   exactly the deployments that customised most. Appending has no fallback to get wrong.
   → [09](docs/spec/09-execution.md), [05](docs/spec/05-dispatcher.md#prompt-templates)
+- **A `PromptId` is never deleted — it is marked `retired: true`.** `loadPromptTemplates` throws on a
+  file naming no known id, so removing an id turns every deployment that overrode it into a harness
+  that will not boot, over a file it no longer reads. The flag keeps it loadable and says so in the
+  Prompts panel. → [05](docs/spec/05-dispatcher.md#prompt-templates)
+
+### Filing a tracker item
+
+- **What a filed ticket must carry goes in `IssueCreateInput`, never in a sentence in a prompt.** The
+  type, the labels, the assignee and the bug/story relation are arguments to
+  `ActionSink.createIssue`, resolved by `ticketFiler` (`src/tickets/filing.ts`). Told to an agent
+  instead, each is only as reliable as its memory of one line — and every failure is silent: a
+  blueprint's ticket without the watch label is created, linked, shown complete in the cockpit, and
+  **never dispatched for**; an Azure bug without its relation is a bug nobody can trace back.
+  → [13](docs/spec/13-jobs-and-findings.md#filing-a-ticket), [15](docs/spec/15-integrations.md)
 
 ### Dispatch
 

@@ -28,7 +28,7 @@ import { ReviewWaitStore } from './reviewWaits.js';
 import { DecisionStore, DECISION_COLUMNS } from './decisions.js';
 import { WorldStore } from './world.js';
 import { ErrorStore } from './errors.js';
-import { GraphStore } from './graph.js';
+import { GraphStore, GRAPH_REBUILDS } from './graph.js';
 import { BugFilingStore } from './bugFilings.js';
 import { adoptFloorCompletions, FloorStore, FLOOR_COLUMNS } from './floor.js';
 import {
@@ -161,7 +161,7 @@ export class Store {
     // out of the way so `SCHEMA`'s own definition creates the new shape, then its
     // rows are copied across resolving the old key into the new one. All in one
     // transaction — a crash halfway leaves the old table exactly as it was.
-    rebuildTables(this.db, VALIDATION_REBUILDS, () => this.db.exec(SCHEMA));
+    rebuildTables(this.db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS], () => this.db.exec(SCHEMA));
     // Before any module is constructed, let alone reads: a domain module reading
     // a migrated column on a database created by an older build reads `undefined`.
     for (const columns of [
@@ -293,12 +293,6 @@ export class Store {
   }
   listAllAttachments(): JobAttachment[] {
     return this.jobs.listAllAttachments();
-  }
-  nextAttachmentIndex(targetRef: string): number {
-    return this.jobs.nextAttachmentIndex(targetRef);
-  }
-  rekeyAttachments(targetRef: string, moved: Parameters<JobStore['rekeyAttachments']>[1]): void {
-    this.jobs.rekeyAttachments(targetRef, moved);
   }
   deleteAttachments(targetRef: string): void {
     this.jobs.deleteAttachments(targetRef);
@@ -880,11 +874,11 @@ export class Store {
   listWorkItemFilings(): WorkItemFiling[] {
     return this.graph.listWorkItemFilings();
   }
-  findWorkItemFilingByJobId(jobId: string): WorkItemFiling | null {
-    return this.graph.findWorkItemFilingByJobId(jobId);
+  linkWorkItemFiling(targetRef: string, ticketRef: string): WorkItemFiling | null {
+    return this.graph.linkWorkItemFiling(targetRef, ticketRef);
   }
-  linkWorkItemFiling(jobId: string, ticketRef: string): WorkItemFiling | null {
-    return this.graph.linkWorkItemFiling(jobId, ticketRef);
+  dropWorkItemFiling(targetRef: string): void {
+    this.graph.dropWorkItemFiling(targetRef);
   }
   ignoreWorkItem(targetRef: string): void {
     this.graph.ignoreWorkItem(targetRef);

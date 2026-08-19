@@ -23,27 +23,27 @@ import type {
   ScratchEntry,
   ShortfallCause,
   Task,
-  WorkItemFiling,
   BugFiling,
 } from '../types.js';
 
 /**
- * What `link_ticket` settled. A filing job is created for a finding, for a work
- * item, *or* for a bug an operator raised — never more than one, so the arms are
- * exclusive — kept as a union rather than three nullable fields so a caller
- * cannot read the ones that were not filled.
+ * What `link_ticket` settled. A filing job is created for a finding *or* for a bug
+ * an operator raised — never both, so the arms are exclusive — kept as a union
+ * rather than two nullable fields so a caller cannot read the one that was not
+ * filled.
  */
 type LinkTicketResult =
-  | { ok: true; finding: Finding; filing?: undefined; bug?: undefined }
-  | {
-      ok: true;
-      filing: WorkItemFiling;
-      finding?: undefined;
-      bug?: undefined;
-      /** How many of the operator's images moved from the filing job onto the ticket (issue #249). */
-      attachments: number;
-    }
-  | { ok: true; bug: BugFiling; finding?: undefined; filing?: undefined }
+  | { ok: true; finding: Finding; bug?: undefined }
+  | { ok: true; bug: BugFiling; finding?: undefined }
+  | { ok: false; error: string };
+
+/**
+ * Which filing a credential resolves to, and — for a bug — the story it must end up
+ * related to. The harness reads this before it creates the item, so neither the
+ * work item type nor the relation is ever an argument an agent could get wrong.
+ */
+type FilingTargetResult =
+  | { ok: true; kind: 'finding' | 'bug'; storyNumber: number | null }
   | { ok: false; error: string };
 import { conclusionOrigin } from '../issueConclusion.js';
 import { assessmentOrigin, type AssessmentVerdict } from '../mcp/assessment.js';
@@ -178,29 +178,8 @@ interface AgentManagerOptions {
    * else. Unset = the default (no approval gate).
    */
   requirePlanApproval?: boolean;
-  /**
-   * The disk half of a blueprint's attachments (issue #249). Present so
-   * {@link AgentManager.linkTicket} can move an operator's images off the filing
-   * job and onto the ticket that filing created; unset in tests and runtimes that
-   * never file, where a re-key has nothing to move.
-   */
-  attachments?: AttachmentRelocator;
   /** Central error sink: agent failures (spawn errors, crashes + exit codes) are recorded here. */
   errors?: ErrorRecorder;
-}
-
-/**
- * What this class needs of {@link ../jobs/attachmentFiles.js AttachmentFiles}:
- * to empty one ref's directory into another's. Narrow for the reason
- * {@link McpChannel} is — the manager moves files it never wrote and never reads.
- */
-interface AttachmentRelocator {
-  relocate(
-    fromRef: string,
-    toRef: string,
-    files: { id: string; path: string }[],
-    nextIndex: number,
-  ): { id: string; index: number; path: string }[];
 }
 
 /**
@@ -746,49 +725,78 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   }
 
   /**
-   * Record the ticket a filing agent created (the `link_ticket` tool): the
-   * finding it was dispatched for moves `filing -> filed`.
+   * What this agent was dispatched to file, resolved from its credential — a
+   * finding an agent reported, or a bug an operator raised on a story.
    *
-   * The finding is reached from the credential — agent → task → the `job:<id>`
-   * origin it was dispatched on → the finding that job was created for — so the
-   * tool takes only a ref. An agent on any other task resolves to no finding and
-   * is told so, which is the whole access check: there is no id to point at
-   * someone else's.
+   * Split out of {@link linkTicket} because the harness now *creates* the item
+   * (issue #394) and needs to know which of the two arms it is in **before** it
+   * files: a bug is created as a different work item type and linked back to its
+   * story, and neither fact is the agent's to pass. The credential resolves it —
+   * agent → task → the `job:<id>` origin it was dispatched on → the row that job
+   * was created for — so there is no id to point at someone else's.
+   */
+  filingTarget(agentId: string): FilingTargetResult {
+    return this.withCaller(agentId, ({ task }): FilingTargetResult => {
+      const jobId = task.originRef?.startsWith('job:') ? task.originRef.slice('job:'.length) : null;
+      const finding = jobId ? this.store.findFindingByJobId(jobId) : null;
+      if (finding) return { ok: true, kind: 'finding', storyNumber: null };
+      const bug = jobId ? this.store.findBugFilingByJobId(jobId) : null;
+      if (bug) {
+        // `issue:12` — the story the operator raised it from, and the one number
+        // the create needs so the two ends up related in the tracker.
+        const parsed = Number(bug.originRef.replace(/^issue:/, '').split(':')[0]);
+        return { ok: true, kind: 'bug', storyNumber: Number.isInteger(parsed) ? parsed : null };
+      }
+      return {
+        ok: false,
+        error:
+          `link_ticket is only for a job dispatched to file a finding as a ticket or to raise a bug ` +
+          `an operator reported. This task's origin is ${task.originRef ?? '(none)'}, which was ` +
+          `created from neither.`,
+      };
+    });
+  }
+
+  /**
+   * Record the ticket a filing job produced (the `link_ticket` tool): the finding
+   * or bug it was dispatched for moves `filing -> filed`.
+   *
+   * The row is reached from the credential exactly as {@link filingTarget} reaches
+   * it, so the tool takes only a ref. An agent on any other task resolves to
+   * nothing and is told so, which is the whole access check.
    *
    * Routed through the manager for the same reason as {@link recordFinding}: the
    * `finding` event is what repaints the cockpit now rather than next pulse.
-
    */
   linkTicket(agentId: string, ticketRef: string): LinkTicketResult {
     return this.withCaller(agentId, ({ task }): LinkTicketResult => {
       const jobId = task.originRef?.startsWith('job:') ? task.originRef.slice('job:'.length) : null;
       const finding = jobId ? this.store.findFindingByJobId(jobId) : null;
       // A job is created for at most one of the two, so there is nothing to
-      // disambiguate — the credential resolves to a finding, a work-item filing, or
+      // disambiguate — the credential resolves to a finding, a bug filing, or
       // neither, and neither is the whole access check.
-      const filing = jobId && !finding ? this.store.findWorkItemFilingByJobId(jobId) : null;
-      const bug = jobId && !finding && !filing ? this.store.findBugFilingByJobId(jobId) : null;
-      if (!finding && !filing && !bug) {
+      const bug = jobId && !finding ? this.store.findBugFilingByJobId(jobId) : null;
+      if (!finding && !bug) {
         return {
           ok: false,
           error:
-            `link_ticket is only for a job dispatched to file a finding as a ticket, to file a work ` +
-            `item for unrecorded work, or to raise a bug an operator reported. This task's origin is ` +
-            `${task.originRef ?? '(none)'}, which was created from none of them.`,
+            `link_ticket is only for a job dispatched to file a finding as a ticket or to raise a bug ` +
+            `an operator reported. This task's origin is ${task.originRef ?? '(none)'}, which was ` +
+            `created from neither.`,
         };
       }
 
       if (bug) {
-        // The same check the work-item arm makes, for its reason: a bug is an issue
-        // in both trackers the harness reads, and a `pr:` ref here would be a link
-        // the cockpit draws as a work item and the tracker knows as something else.
+        // A bug is an issue in both trackers the harness reads, and a `pr:` ref here
+        // would be a link the cockpit draws as a work item and the tracker knows as
+        // something else.
         if (!ticketRef.startsWith('issue:')) {
           return {
             ok: false,
             error: `A bug must be an issue ref like "issue:314"; got "${ticketRef}".`,
           };
         }
-        // Idempotence in the write, as in both arms below.
+        // Idempotence in the write, as in the arm below.
         const linked = this.store.linkBugFiling(bug.jobId, ticketRef);
         if (!linked) {
           return {
@@ -797,38 +805,6 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
           };
         }
         return { ok: true, bug: linked };
-      }
-
-      if (filing) {
-        // A work item is an issue in both trackers the harness reads (a GitHub issue,
-        // an Azure work item), and the graph stands a placeholder node up under that
-        // ref when the world never lists it — so guessing a node kind off a `pr:`
-        // ref is a case worth removing rather than answering.
-        if (!ticketRef.startsWith('issue:')) {
-          return {
-            ok: false,
-            error:
-              `A work item must be an issue ref like "issue:314"; got "${ticketRef}". If you filed ` +
-              'something else, file the work item too and link that.',
-          };
-        }
-        // Idempotence in the write, as below.
-        const linked = this.store.linkWorkItemFiling(filing.jobId, ticketRef);
-        if (!linked) {
-          return {
-            ok: false,
-            error: `the work item for ${filing.targetRef} is ${filing.status}, not awaiting a ticket — nothing to link.`,
-          };
-        }
-        // The images the operator attached to the blueprint this filing came from
-        // now belong to the ticket (issue #249). Done here rather than in the tool,
-        // because the filing — and so the `job:<id>` the images are keyed under —
-        // is resolved from the credential, and this is the one moment the harness
-        // learns which issue that blueprint became.
-        const moved = this.rekeyAttachments(filing.targetRef, ticketRef);
-        // No bespoke event: the Work panel is fetch-on-open, and the parent edge it
-        // draws is written by the next pulse's fold, not from here.
-        return { ok: true, filing: linked, attachments: moved };
       }
 
       // Idempotence lives in the write, not in a read-then-check here.
@@ -842,41 +818,6 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       this.emit('finding', { agentId, taskId: task.id, finding: linked, created: false });
       return { ok: true, finding: linked };
     });
-  }
-
-  /**
-   * Move an operator's attachments from the ref they arrived on to the one the
-   * work now lives under, returning how many moved (issue #249).
-   *
-   * **Why the attachments move at all.** A code blueprint carrying a screenshot is
-   * not dispatched onto a branch when a tracker is configured: it is filed as a
-   * ticket, and the planning funnel — assay, planner, each part agent, the retro —
-   * takes over under `issue:<n>`. Left keyed on `job:<id>`, the image would be
-   * visible to exactly one agent, the one that filed the ticket and wrote no code.
-   * Re-keying is what makes it the *goal's* image rather than the job's.
-   *
-   * **Failure is recorded, not raised.** The link is the act the agent was
-   * dispatched to perform and it has already succeeded in the store; refusing it
-   * because a rename failed would leave a filing the operator sees as incomplete
-   * over a screenshot. What is lost instead is the image's onward visibility, and
-   * that is a recorded error rather than a silent one.
-   */
-  private rekeyAttachments(fromRef: string, toRef: string): number {
-    const rows = this.store.listAttachments(fromRef);
-    if (rows.length === 0 || !this.opts.attachments) return 0;
-    try {
-      const moved = this.opts.attachments.relocate(fromRef, toRef, rows, this.store.nextAttachmentIndex(toRef));
-      this.store.rekeyAttachments(toRef, moved);
-      return moved.length;
-    } catch (err) {
-      this.opts.errors?.record({
-        source: 'agent',
-        message:
-          `Could not move ${rows.length} attachment(s) from ${fromRef} to ${toRef}: ${(err as Error).message}. ` +
-          `The files are still keyed to the filing job, so the agents working the ticket will not see them.`,
-      });
-      return 0;
-    }
   }
 
   /**

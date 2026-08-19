@@ -131,17 +131,19 @@ export interface Config {
    */
   issueContainerTypes: string[];
   /**
-   * The work item types the harness may **file**, when an operator files a
-   * finding, a blueprint or unrecorded work from the cockpit. The filing agent
-   * picks one from this list and is told it may create nothing else — which of
-   * them a given report is, is a judgement about the report, and only the agent
-   * has read it.
+   * The work item types the harness **files** at, when an operator files a
+   * finding, a blueprint or unrecorded work from the cockpit. The **first** entry
+   * is the one it creates; the rest document what the project files at.
+   *
+   * It used to be a menu a filing agent picked from. Since #394 the harness files
+   * the item itself, so there is no picker left — a bug goes to `issueBugType` and
+   * everything else to the head of this list.
    *
    * Defaults to `["User Story", "Bug"]`: the altitude a backlog is groomed at,
    * on the Agile process template's names. Set your own — a Scrum project files
    * `["Product Backlog Item", "Bug"]`, and a process extended with a custom type
-   * lists it (`["User Story", "Tech Debt", "Bug"]`). The names are passed to
-   * `az` verbatim, so they must match the project's exactly.
+   * lists it (`["Tech Debt", "User Story"]`). The names are sent to Azure
+   * verbatim, so they must match the project's exactly.
    *
    * Meaningful only for Azure DevOps, the one provider whose items carry a type;
    * GitHub issues have none and are unaffected. Unlike `issueContainerTypes`
@@ -149,6 +151,17 @@ export interface Config {
    * created *as* something.
    */
   issueFilingTypes: string[];
+  /**
+   * The work item type a **bug** an operator raised is filed as. Defaults to
+   * `"Bug"` — the Agile and Scrum templates' name for it. A project on the Basic
+   * process, which calls a bug an "Issue", sets that here.
+   *
+   * Its own key rather than a bug-looking entry picked out of `issueFilingTypes`:
+   * what the type is called is exactly the thing that varies between process
+   * templates, and matching on the word would file a story as a bug on the one
+   * project it is wrong for, with nothing red. Meaningful only for Azure DevOps.
+   */
+  issueBugType?: string;
   /**
    * The planning funnel for multi-PR issues. **On by default**: every watched open
    * issue gets a planning agent before any implementation work, and its verdict —

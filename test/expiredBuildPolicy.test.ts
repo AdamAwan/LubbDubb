@@ -126,6 +126,8 @@ function fakeApi(evals: AzPolicyEvaluation[]): AzureDevOpsApi {
     completePullRequest: unused('completePullRequest'),
     setPullLabel: unused('setPullLabel'),
     setWorkItemState: unused('setWorkItemState'),
+    createWorkItem: unused('createWorkItem'),
+    relateWorkItem: unused('relateWorkItem'),
     setWorkItemTag: unused('setWorkItemTag'),
     linkWorkItemToPull: unused('linkWorkItemToPull'),
     createWorkItemComment: unused('createWorkItemComment'),

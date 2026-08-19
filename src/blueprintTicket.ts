@@ -13,52 +13,45 @@
  * to that convergence.
  *
  * So a code blueprint, when a tracker is configured, is filed as a **watched
- * ticket** instead of dispatched: a desk agent creates the issue with `gh`/`az`
- * and the funnel takes over with no new dispatcher wiring, because the funnel
- * already keys on watched issues. The one thing a finding-filed ticket does not
- * need and a blueprint does: the issue must carry the effective `-watch` label,
- * or the watch gate never picks it up.
+ * ticket** instead of dispatched, and the funnel takes over with no new dispatcher
+ * wiring, because the funnel already keys on watched issues. The one thing a
+ * finding-filed ticket does not need and a blueprint does: the issue must carry the
+ * effective `-watch` label, or the watch gate never picks it up.
  *
- * This is the same shape as `finding-ticket` / `work-item-ticket`: a desk job, an
- * overridable prompt naming the tracker, and `link_ticket` to report the ref
- * back. The wording an operator has opinions about lives in the template, so this
- * module is only the pure fields the route renders it with — testable without a
- * server, and leaving the route with nothing but `render` + `createJob`.
+ * That label is why this arm no longer spends a desk agent (issue #394). An agent
+ * that forgot it left the item created, the filing shown complete in the cockpit,
+ * and **nothing ever dispatched** for it — no error and nothing red, which is
+ * exactly the genre `CLAUDE.md` collects. The harness passes the label to the
+ * create, so it cannot be forgotten; and the ticket's body was always the
+ * operator's own request verbatim, so the only judgement being delegated was a
+ * title.
+ *
+ * The wording an operator has opinions about still lives in a template
+ * (`blueprint-ticket-body`), so this module is only the pure fields the route
+ * renders it with — testable without a server.
  */
 
 const MAX_TITLE = 80;
 
 /**
- * The title and template vars for a blueprint's ticket-filing desk job.
+ * The title and body vars for the ticket a blueprint becomes.
  *
- * `request` is the operator's prompt, carried verbatim so the desk agent writes
- * the ticket from the actual ask. `title` is the *job's*, not the ticket's — the
- * agent writes the ticket's title (that is the judgement being delegated); this
- * one only has to be recognisable in the Up next queue.
+ * `request` is the operator's prompt, carried verbatim: it *is* the ticket's body,
+ * which is why nothing was ever being delegated here but a title. The title is
+ * derived from its first line, and the operator may still replace it before it
+ * files (`body.title` on the launch route).
  *
- * `labelling` is composed here rather than in the template because the empty case
- * is real: `labelPrefix: ''` turns the watch gate off (the harness acts on every
- * open issue), so there is then no label to add and instructing the agent to tag
- * a `` label would be a bug. Both readings are decided in one pure place. The raw
- * `watchLabel` is passed through too, so an override can word its own instruction.
+ * The watch label is no longer here. It used to be composed into a `{labelling}`
+ * paragraph telling the agent to add it — with an empty-case branch, because
+ * `labelPrefix: ''` turns the watch gate off and instructing an agent to add a
+ * `` label would be a bug. The harness passes the label to the create now, so both
+ * readings are a `labels` array and neither is a sentence.
  */
-export function blueprintTicketFields(
-  request: string,
-  tracker: string,
-  watchLabel: string,
-): { title: string; vars: Record<string, string> } {
+export function blueprintTicketFields(request: string): { title: string; vars: Record<string, string> } {
   const firstLine =
     request
       .split('\n')
       .map((l) => l.trim())
       .find((l) => l.length > 0) ?? request;
-  const title = `File ticket: ${firstLine}`.slice(0, MAX_TITLE);
-  const labelling = watchLabel
-    ? `Add the label \`${watchLabel}\` to the issue when you create it. That label is what the ` +
-      'harness watches: without it, nothing will pick the issue up to work it.'
-    : 'The harness is configured to act on every open issue (no watch label), so no label is required.';
-  return {
-    title,
-    vars: { request, tracker, watchLabel, labelling },
-  };
+  return { title: firstLine.slice(0, MAX_TITLE), vars: { request } };
 }

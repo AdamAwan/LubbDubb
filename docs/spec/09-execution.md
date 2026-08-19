@@ -393,9 +393,9 @@ dispatch prompt whenever the goal carries an instruction nobody has concluded ye
 
 A blueprint launched from the cockpit may carry images (issue #249) — a screenshot of the panel to
 change, the broken screen, a before/after pair. They are written once under `attachmentRoot`
-(`src/jobs/attachmentFiles.ts`) and recorded in `job_attachments`, keyed on the ref they belong to,
-which while the request is a blueprint is `job:<id>` and afterwards is the `issue:<n>` the blueprint
-was filed as. See [14](14-persistence.md#blueprint-attachments) for the rows and the re-key, and
+(`src/jobs/attachmentFiles.ts`) and recorded in `job_attachments`, keyed on the ref they belong to —
+`job:<id>` for a blueprint that dispatches, and the `issue:<n>` it was filed as for one that becomes a
+ticket. See [14](14-persistence.md#blueprint-attachments) for the rows, and
 [16](16-http-api.md#launching-a-blueprint) for how they arrive.
 
 `recordDispatchTask` appends `attachmentsNote(...)` (`src/jobs/attachments.ts`, pure) to the dispatch

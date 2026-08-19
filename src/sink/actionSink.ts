@@ -88,6 +88,34 @@ export interface IssueLabelInput {
   present: boolean;
 }
 
+/**
+ * A tracker item the harness is creating — the outbound half of a filing.
+ *
+ * Everything a create needs is here, and that is the point: the four filing arms
+ * used to spell this out as a `gh`/`az` command string for a model to run, so a
+ * label, a type or a relation the harness knew about was only ever as reliable as
+ * the model's memory of the sentence naming it (issue #394).
+ *
+ * `type` and `relatedTo` are **provider-native, not provider-specific**: each
+ * adapter expresses them in its own vocabulary or ignores them. GitHub has no work
+ * item type and drops it; it draws a relation as a `#<n>` cross-reference in the
+ * body, which is the only edge it has. Azure DevOps creates *as* a type and hangs a
+ * `related` link off the new item. A caller states the intent once and never learns
+ * which tracker it landed in.
+ */
+export interface IssueCreateInput {
+  title: string;
+  body: string;
+  /** Labels / tags applied as it is created — the watch label, the bug label. */
+  labels: string[];
+  /** The provider-native item type, or null where the caller has no opinion. */
+  type: string | null;
+  /** Who it belongs to (a GitHub login, an Azure UPN), or null to leave it unassigned. */
+  assignee: string | null;
+  /** A tracker item this one is *related* to — the bug/story edge. Null for none. */
+  relatedTo: number | null;
+}
+
 export interface IssueCommentInput {
   /** The issue / work item to comment on. */
   number: number;
@@ -128,6 +156,21 @@ export interface ActionSink {
    * fails. Only providers with a comment API implement it.
    */
   upsertIssueComment(input: IssueCommentInput): Promise<SendResult>;
+  /**
+   * Create a tracker item — the harness filing its own, rather than composing a
+   * `gh`/`az` command for an agent to run (issue #394).
+   *
+   * `ref` on the result is the new item in the harness's own vocabulary
+   * (`issue:314`), not a provider id: that is what a filing row stores, what
+   * `link_ticket` accepts and what the cockpit resolves to a URL, so the one
+   * translation happens here rather than at each of the four call sites.
+   *
+   * Throws when the provider has the operation and it failed. Unlike
+   * {@link updatePrBranch} there is no `ok: false` arm — a caller only reaches this
+   * once a tracker is configured, and a configured tracker that cannot create an
+   * item is a fault, not a shape.
+   */
+  createIssue(input: IssueCreateInput): Promise<SendResult>;
   /**
    * Link a work item to the pull request that resolves it — the tracker-side
    * relation, not a mention in prose.

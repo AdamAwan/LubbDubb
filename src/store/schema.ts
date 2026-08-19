@@ -666,7 +666,6 @@ CREATE TABLE IF NOT EXISTS work_nodes (
 -- neither, and forging them is the lie structural identity exists to prevent.
 CREATE TABLE IF NOT EXISTS work_item_filings (
   target_ref TEXT PRIMARY KEY,
-  job_id     TEXT NOT NULL,
   status     TEXT NOT NULL,          -- filing | filed
   ticket_ref TEXT,                   -- the item it was filed as ("issue:314"), once created
   created_at TEXT NOT NULL,
@@ -677,7 +676,9 @@ CREATE TABLE IF NOT EXISTS work_item_filings (
 -- and it does not do what they expect, which is the one fact no agent on the goal
 -- can derive. Keyed on the *job*, not the story, so one story can carry several
 -- bugs over its life — the difference from work_item_filings above, whose target
--- key deliberately allows one filing per node.
+-- key deliberately allows one filing per node. It still has a job because a bug is
+-- still written up by a desk agent (#394 kept that arm and took the *create* off
+-- it); a work item's filing has none, because nothing is dispatched for one.
 --
 -- The operator's report is not a column: the desk job's prompt carries it verbatim
 -- and is durable, and a second copy is two records of one sentence free to drift.
@@ -691,10 +692,9 @@ CREATE TABLE IF NOT EXISTS issue_bug_filings (
 );
 
 -- The other answer to the same question, and the reason it is a table of its own
--- rather than a third work_item_filings status: that row's job_id is NOT NULL
--- because a filing *is* an agent doing something, and an ignore is the operator
--- saying nothing should be. Keyed on the node, so ignoring twice is one row and
--- un-ignoring is a delete — which is what leaves the verdict exactly one
+-- rather than a third work_item_filings status: a filing is the harness creating
+-- the item, and an ignore is the operator saying nothing should be. Keyed on the
+-- node, so ignoring twice is one row and un-ignoring is a delete — which is what leaves the verdict exactly one
 -- representation, the way clearing an issue conclusion does.
 CREATE TABLE IF NOT EXISTS work_item_ignores (
   target_ref TEXT PRIMARY KEY,
@@ -897,7 +897,6 @@ CREATE INDEX IF NOT EXISTS idx_world_events_created ON world_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_usage_events_at ON usage_events(at);
 CREATE INDEX IF NOT EXISTS idx_error_events_created ON error_events(created_at);
 CREATE INDEX IF NOT EXISTS idx_work_nodes_parent ON work_nodes(parent_ref);
-CREATE INDEX IF NOT EXISTS idx_work_item_filings_job ON work_item_filings(job_id);
 CREATE INDEX IF NOT EXISTS idx_issue_bug_filings_origin ON issue_bug_filings(origin_ref);
 CREATE INDEX IF NOT EXISTS idx_tasks_origin ON tasks(origin_ref);
 `;

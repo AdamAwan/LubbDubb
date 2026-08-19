@@ -3,6 +3,7 @@ import type {
   ActionSink,
   BranchDeleteInput,
   IssueCommentInput,
+  IssueCreateInput,
   IssueLabelInput,
   PrBaseInput,
   PrBaseUpdateInput,
@@ -73,6 +74,9 @@ export class FakeConnector implements Connector, ActionSink {
     return this.composite.linkWorkItem(input);
   }
 
+  createIssue(input: IssueCreateInput): Promise<SendResult> {
+    return this.composite.createIssue(input);
+  }
   upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
     return this.composite.upsertIssueComment(input);
   }

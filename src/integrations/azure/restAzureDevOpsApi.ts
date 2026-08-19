@@ -770,6 +770,54 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     }
   }
 
+  async createWorkItem(input: {
+    type: string;
+    title: string;
+    description: string;
+    tags: string[];
+    assignedTo: string | null;
+  }): Promise<{ id: number }> {
+    // The type is a path segment — `$Bug`, `$User Story` — and the URL-encoded
+    // space is why the type travels as a name rather than an id: what a project
+    // calls its types is process-template data, and the name is the only handle an
+    // operator can put in config.
+    const url = `${this.projectUrl}/_apis/wit/workitems/$${encodeURIComponent(input.type)}`;
+    const patch: { op: string; path: string; value: string }[] = [
+      { op: 'add', path: '/fields/System.Title', value: input.title },
+      { op: 'add', path: '/fields/System.Description', value: input.description },
+    ];
+    // Semicolon-delimited, the one shape `setWorkItemTag` also writes.
+    if (input.tags.length > 0) patch.push({ op: 'add', path: '/fields/System.Tags', value: input.tags.join('; ') });
+    if (input.assignedTo) patch.push({ op: 'add', path: '/fields/System.AssignedTo', value: input.assignedTo });
+    const data = await this.request<{ id: number }>(this.withApiVersion(url), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json-patch+json' },
+      body: JSON.stringify(patch),
+    });
+    return { id: data.id };
+  }
+
+  async relateWorkItem(id: number, relatedId: number): Promise<void> {
+    try {
+      await this.request(this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json-patch+json' },
+        body: JSON.stringify([
+          {
+            op: 'add',
+            path: '/relations/-',
+            value: {
+              rel: 'System.LinkTypes.Related',
+              url: `${this.orgUrl}/_apis/wit/workItems/${relatedId}`,
+            },
+          },
+        ]),
+      });
+    } catch (err) {
+      if (!isRelationAlreadyExists((err as Error).message)) throw err;
+    }
+  }
+
   async setWorkItemTag(id: number, tag: string, present: boolean): Promise<void> {
     // System.Tags is a single semicolon-delimited string, so a tag add/remove is a
     // read-modify-write: fetch current tags, adjust the set, PATCH the whole field.

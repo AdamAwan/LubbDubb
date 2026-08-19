@@ -57,6 +57,8 @@ interface McpBridgeServerOptions {
    * every prompt still describes.
    */
   openPr?: () => McpToolDeps['openPr'];
+  /** Lazy for `openPr`'s reason: the sink it files through is built after this server. */
+  filing?: () => McpToolDeps['filing'];
   errors?: ErrorRecorder;
 }
 
@@ -246,6 +248,7 @@ export class McpBridgeServer {
         profiles: this.opts.profiles,
         permissions: this.opts.permissions?.(),
         openPr: this.opts.openPr?.(),
+        filing: this.opts.filing?.(),
         errors: this.opts.errors,
       },
       resolved.identity,
