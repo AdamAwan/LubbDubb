@@ -128,6 +128,12 @@ export interface CockpitActions {
    */
   viewRetro(issueRef: string | null): void;
   /**
+   * Which egg is being opened, by pet id, or null to close the ceremony. On the
+   * seam for `viewRetro`'s reason: the modal is shared, and the control that opens
+   * it is the enclosure the console draws.
+   */
+  hatchEgg(id: string | null): void;
+  /**
    * Which goal's shared scratchpad is open, as an `issue:<n>` ref. On the seam for
    * `viewRetro`'s reason exactly: the modal is shared and fetches its trail from
    * `api.js`, while the controls that open it are embedded by the surfaces that
@@ -197,10 +203,15 @@ export interface CockpitActions {
   reorderUpNext(origins: string[]): Promise<void>;
 
   /**
-   * The vivarium (`docs/spec/22-pets.md`). Three acts and no fourth: feeding is
-   * the only thing beats are spent on, a name is the operator's own, and putting
-   * a pet out is what the corner of the rail draws.
+   * The vivarium (`docs/spec/22-pets.md`). Opening a shell, and then three acts:
+   * feeding is the only thing beats are spent on, a name is the operator's own,
+   * and putting a pet out is what the corner of the rail draws.
    */
+  /**
+   * Crack an egg open. Reveals what the drop already decided and decides nothing
+   * — see `docs/spec/22-pets.md#the-egg`.
+   */
+  openPet(id: string): Promise<void>;
   feedPet(id: string, beats: number): Promise<void>;
   renamePet(id: string, name: string): Promise<void>;
   placePet(id: string, placed: boolean): Promise<void>;

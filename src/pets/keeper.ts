@@ -155,6 +155,30 @@ export class PetKeeper {
     };
   }
 
+  /**
+   * Crack an egg open — the one act that reveals rather than decides.
+   *
+   * Nothing is rolled here. The species and the tier were settled by
+   * `hash32(kind:ref)` the instant the scan reached the action, and the shell only
+   * withholds them; a roll at this point would move the subsystem's one decision
+   * from the action to the click, and with it every guarantee the hash buys — a
+   * re-scan would stop being free, and two operators on one database would open
+   * different animals out of one egg.
+   *
+   * **A second open is a success, not a refusal.** A double click, a retried
+   * request and a reload of a shared link all arrive here after the stamp is set,
+   * and none of them is the operator getting something wrong — the store's own
+   * `opened_at IS NULL` guard means they change nothing either way.
+   */
+  open(id: string): PetResult {
+    if (!this.policy.enabled) return { ok: false, error: 'pets are turned off for this deployment' };
+    const existing = this.store.getPet(id);
+    if (existing === null) return { ok: false, error: 'no such pet' };
+    if (existing.openedAt !== null) return { ok: true, pet: existing };
+    const pet = this.store.openPet(id);
+    return pet ? { ok: true, pet } : { ok: false, error: 'no such pet' };
+  }
+
   feed(id: string, beats: number): PetResult {
     if (!this.policy.enabled) return { ok: false, error: 'pets are turned off for this deployment' };
     if (!Number.isInteger(beats) || beats <= 0) return { ok: false, error: 'beats must be a whole number above zero' };
@@ -164,8 +188,15 @@ export class PetKeeper {
     const existing = this.store.getPet(id);
     if (existing !== null && existing.dissolvedAt !== null)
       return { ok: false, error: 'that one was blended — a dissolved pet keeps its record but stops growing' };
+    // The flaw is checked before the shell, here and in `blend`: a pet that does
+    // not verify is refused for *that*, whether or not it has been opened, because
+    // "open it first" on a forgery is an invitation to carry on.
     const flawed = existing === null ? null : this.refuseFlawed(existing, 'fed');
     if (flawed !== null) return flawed;
+    // Growth is a decision about a creature, and an egg is not one yet: what the
+    // beats would be buying is hidden from the operator spending them.
+    if (existing !== null && existing.openedAt === null)
+      return { ok: false, error: 'that one is still an egg — open it before you feed it' };
     const pet = this.store.feedPet(id, beats);
     return pet ? { ok: true, pet } : { ok: false, error: 'no such pet' };
   }
@@ -221,9 +252,20 @@ export class PetKeeper {
     if (pet.dissolvedAt !== null) return { ok: false, error: 'that one has already been blended' };
     const flawed = this.refuseFlawed(pet, 'blended');
     if (flawed !== null) return flawed;
-    const { display } = SPECIES[pet.species];
-    if (this.store.livePetsOfSpecies(pet.species) < 2)
-      return { ok: false, error: `this is your only ${display} — blending is for duplicates` };
+    // The last guard against losing something unseen: an unopened shell is not a
+    // duplicate yet, whatever the species column says, because nobody has been
+    // shown what is in it.
+    if (pet.openedAt === null)
+      return { ok: false, error: 'that one is still an egg — open it before you decide it is a duplicate' };
+    if (this.store.livePetsOfSpecies(pet.species) < 2) {
+      // The species is named only once the pet is old enough to have said so
+      // itself. A hatchling has not — one grid serves every animal of a tier — so
+      // a refusal that named it would hand over, in an error message, the answer
+      // the whole juvenile stage exists to make you wait for.
+      const { display } = SPECIES[pet.species];
+      const which = petStage(pet.species, pet.fed) === 'hatchling' ? 'one of these' : display;
+      return { ok: false, error: `this is your only ${which} — blending is for duplicates` };
+    }
     const blended = this.store.blendPet(id, blendValue(pet.species, this.rules.blendYield));
     return blended ? { ok: true, pet: blended } : { ok: false, error: 'no such pet' };
   }

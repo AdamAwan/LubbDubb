@@ -1,4 +1,5 @@
 import type { PetView } from '../types.js';
+import { petLabel } from '../pets/reveal.js';
 import { SpeciesSprite } from './SpeciesSprite.js';
 
 /**
@@ -16,15 +17,38 @@ import { SpeciesSprite } from './SpeciesSprite.js';
  *
  * The bob is CSS on the wrapper rather than a redraw, so however many pets are on
  * screen they animate on one clock and cost one composite.
+ *
+ * **An unopened pet draws as its shell**, and `rocks` is how far through the hatch
+ * it is. The form is what decides the grid, so the species goes down to the canvas
+ * exactly as it does for a hatchling — and is ignored there just the same, which is
+ * what keeps the reveal honest rather than merely unrendered. The name on hover
+ * goes through `petLabel` for the same reason.
  */
-export function PetSprite({ pet, size, beatMs }: { pet: PetView; size: number; beatMs: number }) {
+export function PetSprite({
+  pet,
+  size,
+  beatMs,
+  rocks = 0,
+}: {
+  pet: PetView;
+  size: number;
+  beatMs: number;
+  rocks?: number;
+}) {
   return (
     <span
       className={beatMs > 0 ? 'pet-sprite is-beating' : 'pet-sprite'}
       style={beatMs > 0 ? { animationDuration: `${beatMs}ms` } : undefined}
-      title={`${pet.name ?? pet.display} · ${pet.stage}`}
+      title={petLabel(pet)}
     >
-      <SpeciesSprite species={pet.species} rarity={pet.rarity} stage={pet.stage} seed={pet.seed} size={size} />
+      <SpeciesSprite
+        species={pet.species}
+        rarity={pet.rarity}
+        stage={pet.openedAt === null ? 'egg' : pet.stage}
+        seed={pet.seed}
+        size={size}
+        rocks={rocks}
+      />
     </span>
   );
 }

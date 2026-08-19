@@ -99,6 +99,7 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
               runningAgents={view.state.agents.filter((a) => a.status === 'running').length}
               paused={view.state.control.paused}
               onOpen={() => actions.openPanel('pets')}
+              onHatch={(id) => actions.hatchEgg(id)}
             />
           )}
         </aside>
@@ -331,6 +332,7 @@ function panelBody(
           onRename={(id, name) => actions.renamePet(id, name)}
           onPlace={(id, placed) => actions.placePet(id, placed)}
           onBlend={(id) => actions.blendPet(id)}
+          onHatch={(id) => actions.hatchEgg(id)}
         />
       );
     case 'faults':

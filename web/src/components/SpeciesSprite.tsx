@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import type { PetRarity, PetSpecies, PetStage } from '../types.js';
 import { paletteFor } from '../pets/palette.js';
-import { spriteFor } from '../pets/sprites.js';
+import { crackFor, spriteFor } from '../pets/sprites.js';
 
 /**
  * One creature drawn on a canvas, and the only implementation of that.
@@ -20,6 +20,11 @@ import { spriteFor } from '../pets/sprites.js';
  * the Pets page withholds an unfound species with. A blur was the other option and
  * is worse: blurred pixel art reads as a rendering fault rather than as a state,
  * and a silhouette stays recognisable enough to be worth going and finding.
+ *
+ * `rocks` breaks the shell of an `egg`, and belongs here for the reason the rest of
+ * the loop does: the crack is drawn over the same grid, in the same ink, and a
+ * second canvas that only knew about shells is exactly the two-views-of-one-bytes
+ * split this component exists to prevent.
  */
 export function SpeciesSprite({
   species,
@@ -28,17 +33,22 @@ export function SpeciesSprite({
   seed,
   size,
   blank = false,
+  rocks = 0,
 }: {
   species: PetSpecies;
   rarity: PetRarity;
-  stage: PetStage;
+  /** The form to draw. `'egg'` is the one that comes before a stage. */
+  stage: PetStage | 'egg';
   /** The action key the colours are derived from. Ignored when `blank`. */
   seed: string;
   size: number;
   blank?: boolean;
+  /** How many times an egg has rocked, which is how broken its shell is. */
+  rocks?: number;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const grid = spriteFor(species, rarity, stage);
+  const crack = stage === 'egg' ? crackFor(rocks) : null;
   const palette = paletteFor(seed);
 
   useEffect(() => {
@@ -78,7 +88,23 @@ export function SpeciesSprite({
         ctx.fillRect(x * px, y * px, px, px);
       }
     }
-  }, [grid, palette, size, blank]);
+    if (crack === null) return;
+    // Over the shell rather than baked into it: one egg grid per tier serves every
+    // stage of breaking, so the two cannot disagree about which shell is cracking.
+    // `k` clears rather than paints — a hole in a shell is the canvas showing
+    // through, and painting the ground into it would be a colour no theme can reach.
+    for (let y = 0; y < crack.length; y++) {
+      const row = crack[y]!;
+      for (let x = 0; x < row.length; x++) {
+        if (row[x] === 'c') {
+          ctx.fillStyle = blank ? SILHOUETTE : palette.outline;
+          ctx.fillRect(x * px, y * px, px, px);
+        } else if (row[x] === 'k') {
+          ctx.clearRect(x * px, y * px, px, px);
+        }
+      }
+    }
+  }, [grid, crack, palette, size, blank]);
 
   return <canvas ref={canvas} aria-hidden="true" />;
 }

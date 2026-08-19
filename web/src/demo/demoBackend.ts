@@ -738,13 +738,25 @@ class DemoServer {
   }
 
   /**
-   * The vivarium's three acts (demo mirrors of POST /api/pets/:id/*).
+   * Opening a shell, and the vivarium's three acts (demo mirrors of
+   * POST /api/pets/:id/*).
    *
    * The wallet is recomputed here rather than left alone: the demo has no usage
    * events to derive `earned` from, so `spent` moving without the balance moving
    * would show a meter that never runs out — which is the one thing the real
    * economy is built to do.
    */
+  async openPet(id: string): Promise<{ ok: true }> {
+    const pet = this.state.pets?.pets.find((p) => p.id === id);
+    // Stamped, never rolled — the species the demo already gave it is the one the
+    // shell comes off to reveal, exactly as the harness's hash decides it there.
+    if (pet && pet.openedAt === null) {
+      pet.openedAt = new Date().toISOString();
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   async feedPet(id: string, beats: number): Promise<{ ok: true }> {
     const pets = this.state.pets;
     const pet = pets?.pets.find((p) => p.id === id);
@@ -2493,6 +2505,7 @@ export const demoApi = {
   ) => getServer().updateSchedule(id, patch),
   runSchedule: (id: string) => getServer().runSchedule(id),
   deleteSchedule: (id: string) => getServer().deleteSchedule(id),
+  openPet: (id: string) => getServer().openPet(id),
   feedPet: (id: string, beats: number) => getServer().feedPet(id, beats),
   renamePet: (id: string, name: string) => getServer().renamePet(id, name),
   placePet: (id: string, placed: boolean) => getServer().placePet(id, placed),

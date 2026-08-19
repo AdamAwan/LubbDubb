@@ -231,6 +231,8 @@ test('beats are derived from spend, and feeding refuses more than there is', () 
   answer(store, 'hatch me something');
   const [pet] = pets.scan();
   assert.ok(pet);
+  // A drop arrives as an egg, and an egg is not fed — the shell comes off first.
+  assert.equal(pets.open(pet.id).ok, true);
 
   const broke = pets.feed(pet.id, 100);
   assert.equal(broke.ok, false, 'a fleet that has spent nothing has nothing to feed with');
@@ -406,6 +408,9 @@ test('blending a duplicate credits beats and keeps the record', () => {
   assert.ok(dupSpecies, 'twelve escalations must produce at least one duplicate species');
   const victim = all.find((pet) => pet.species === dupSpecies)!;
 
+  assert.equal(pets.blend(victim.id).ok, false, 'an unopened shell is not a duplicate yet');
+  assert.equal(pets.open(victim.id).ok, true);
+
   const before = pets.state()!.wallet.earned;
   const result = pets.blend(victim.id);
   assert.equal(result.ok, true, 'a duplicate may be blended');
@@ -429,6 +434,7 @@ test('the last of a species is refused, and a dissolved one cannot be fed or re-
   pets.scan();
   const [only] = store.listPets();
   assert.ok(only);
+  assert.equal(pets.open(only.id).ok, true);
   const refused = pets.blend(only.id);
   assert.equal(refused.ok, false, 'blending is for duplicates — the last one stays');
 
@@ -438,6 +444,7 @@ test('the last of a species is refused, and a dissolved one cannot be fed or re-
   const dupes = store.listPets();
   const species = dupes.map((p) => p.species).find((s, _i, l) => l.filter((x) => x === s).length > 1)!;
   const victim = dupes.find((p) => p.species === species)!;
+  assert.equal(pets.open(victim.id).ok, true);
   assert.equal(pets.blend(victim.id).ok, true);
   assert.equal(pets.blend(victim.id).ok, false, 'a dissolved pet cannot be blended twice');
   assert.equal(pets.feed(victim.id, 10).ok, false, 'nor fed');
@@ -468,6 +475,100 @@ function spend(store: Store, costUsd: number): void {
   });
 }
 
+test('a drop arrives as an egg, and opening it reveals rather than decides', () => {
+  const { store, pets } = timedKeeper({ dropChance: 1 });
+  answer(store, 'hatch me something');
+  const [pet] = pets.scan();
+  assert.ok(pet);
+  assert.equal(pet.openedAt, null, 'a drop is a shell until somebody opens it');
+
+  const opened = pets.open(pet.id);
+  assert.equal(opened.ok, true);
+  const after = store.getPet(pet.id)!;
+  assert.notEqual(after.openedAt, null, 'and the stamp is the whole of what opening writes');
+
+  // The point of the whole design: the click reveals what the hash already
+  // settled. A roll here would put the subsystem's one decision behind a click,
+  // and a re-scan would stop being free.
+  assert.equal(after.species, pet.species, 'the species is the one the roll landed on');
+  assert.equal(after.seed, pet.seed, 'and so are its colours');
+  assert.equal(after.chain, pet.chain, 'and the chain does not cover the shell coming off');
+
+  const again = pets.open(pet.id);
+  assert.equal(again.ok, true, 'a second open is a success — a double click is not an error');
+  assert.equal(store.getPet(pet.id)?.openedAt, after.openedAt, 'and it does not move the stamp');
+});
+
+test('an egg cannot be fed or blended, and can still be put out', () => {
+  const { store, pets } = keeper({ dropChance: 1 });
+  spend(store, 1);
+  for (let i = 0; i < 12; i++) answer(store, `question ${i}`);
+  pets.scan();
+  const all = store.listPets();
+  const species = all.map((p) => p.species).find((s, _i, l) => l.filter((x) => x === s).length > 1)!;
+  const egg = all.find((p) => p.species === species)!;
+
+  const fed = pets.feed(egg.id, 25);
+  assert.match(fed.ok ? '' : fed.error, /still an egg/);
+  const blended = pets.blend(egg.id);
+  assert.match(blended.ok ? '' : blended.error, /still an egg/);
+  assert.equal(store.getPet(egg.id)?.fed, 0, 'and nothing was spent on it');
+  assert.equal(store.getPet(egg.id)?.dissolvedAt, null, 'nor lost');
+
+  // Putting one out is the one act an egg has, and it is the point of an egg: the
+  // corner of the rail is where you find it. A slot is freed first — twelve drops
+  // fill the enclosure, and a full one is refused for being full, not for holding
+  // a shell.
+  const standing = store.listPets().find((p) => p.placed)!;
+  assert.equal(pets.place(standing.id, false).ok, true);
+  assert.equal(pets.place(egg.id, true).ok, true);
+});
+
+test('a vivarium from before eggs is not turned back into a crate of shells', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-eggs-'));
+  const path = join(dir, 'old.db');
+  try {
+    // The `pets` table exactly as a build from before the shell wrote it — no
+    // `opened_at` at all, which is the state every deployment upgrades from.
+    const old = new Database(path);
+    old.exec(`CREATE TABLE pets (
+      id TEXT PRIMARY KEY, species TEXT NOT NULL, seed TEXT NOT NULL, name TEXT,
+      fed INTEGER NOT NULL DEFAULT 0, origin_kind TEXT NOT NULL, origin_ref TEXT NOT NULL,
+      hatched_at TEXT NOT NULL, placed INTEGER NOT NULL DEFAULT 0, dissolved_at TEXT,
+      built_sha TEXT, built_clean INTEGER NOT NULL DEFAULT 0, chain TEXT,
+      UNIQUE (origin_kind, origin_ref))`);
+    old
+      .prepare(
+        `INSERT INTO pets (id, species, seed, fed, origin_kind, origin_ref, hatched_at, placed)
+         VALUES ('pet_old', 'pip', 'escalation:esc_old', 4000, 'escalation', 'esc_old', '2026-01-02T03:04:05.000Z', 1)`,
+      )
+      .run();
+    old.close();
+
+    const store = new Store(path);
+    assert.equal(
+      store.getPet('pet_old')?.openedAt,
+      '2026-01-02T03:04:05.000Z',
+      'a pet raised before the shell existed was revealed when it dropped, and is stamped so',
+    );
+
+    // And the backfill is a one-off, not a boot chore: an egg laid after the
+    // upgrade is still an egg on the next restart.
+    const pets = new PetKeeper(store, { enabled: true }, rules({ dropChance: 1 }), () => BUILD);
+    answer(store, 'a question after the upgrade');
+    const [fresh] = pets.scan();
+    assert.ok(fresh);
+    assert.equal(fresh.openedAt, null);
+    store.close();
+
+    const rebooted = new Store(path);
+    assert.equal(rebooted.getPet(fresh.id)?.openedAt, null, 'the operator’s unopened egg survives a restart');
+    rebooted.close();
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('clearing the vivarium releases the collection and starts the beats from zero', () => {
   const { store, pets } = timedKeeper({ dropChance: 1 });
   for (let i = 0; i < 3; i++) answer(store, `question ${i}`);
@@ -475,6 +576,7 @@ test('clearing the vivarium releases the collection and starts the beats from ze
   spend(store, 1);
   const [first] = store.listPets();
   assert.ok(first);
+  assert.equal(pets.open(first.id).ok, true);
   assert.equal(pets.feed(first.id, 25).ok, true, 'a dollar of spend buys 25 beats');
 
   const reset = pets.resetOnce();
@@ -723,6 +825,7 @@ test('the replay accuses only what this same clean build hatched', () => {
       originKind: 'escalation',
       originRef: 'esc_barren',
       hatchedAt: at,
+      openedAt: at,
       placed: false,
       dissolvedAt: null,
       builtSha: claim.sha,

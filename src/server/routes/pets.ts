@@ -5,9 +5,9 @@ import type { RouteContext } from './context.js';
 import { PET_CATALOGUE } from '../../pets/compendium.js';
 
 /**
- * The four things an operator does to a creature: feed it, name it, decide
- * whether it stands in the vivarium, and blend a duplicate back into beats — and
- * the one read that is not the operator's own collection.
+ * The five things an operator does to a creature: open its shell, feed it, name
+ * it, decide whether it stands in the vivarium, and blend a duplicate back into
+ * beats — and the one read that is not the operator's own collection.
  *
  * **The collection has no read route.** `PetState` rides on the state snapshot
  * with everything else the cockpit draws, so the corner of the rail updates on the
@@ -29,6 +29,21 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // operator and every deployment. That is the point of the surface — a rate an
   // operator could move is a rate not worth reading.
   app.get('/api/pets/catalogue', async () => PET_CATALOGUE);
+
+  // No body: opening decides nothing. The species and the tier were fixed by the
+  // hash of the action that dropped it, and this only stamps the moment the
+  // operator looked — so a client with anything to say here would be a client
+  // deciding what it found. Repeating it is a success, not a 400: a double click
+  // and a reloaded link both land here after the stamp.
+  app.post(
+    '/api/pets/:id/open',
+    checked({ params: IdParams }, async ({ params, reply }) => {
+      const result = pets.open(params.id);
+      if (!result.ok) return reply.code(400).send({ error: result.error });
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, pet: result.pet };
+    }),
+  );
 
   const FeedBody = z.object({
     beats: z.number({ required_error: 'beats is required', invalid_type_error: 'beats must be a number' }),

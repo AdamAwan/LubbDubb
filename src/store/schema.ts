@@ -892,6 +892,7 @@ CREATE TABLE IF NOT EXISTS pets (
   origin_kind TEXT NOT NULL,
   origin_ref  TEXT NOT NULL,
   hatched_at  TEXT NOT NULL,      -- when the action happened, not when the scan reached it
+  opened_at   TEXT,               -- when the operator cracked the shell; null while it is an egg
   placed      INTEGER NOT NULL DEFAULT 0,   -- 0/1: standing in the vivarium
   dissolved_at TEXT,                -- when a duplicate was blended; the row survives it
   built_sha   TEXT,               -- the harness build that rolled it, or null for no reading

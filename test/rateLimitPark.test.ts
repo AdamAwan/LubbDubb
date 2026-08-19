@@ -466,6 +466,7 @@ test('the cockpit draws the park where the agent is, with a way out of it', asyn
     lastPulseAt: Date.now(),
     viewingPlan: null,
     viewingRetro: null,
+    hatching: null,
     viewingScratchpad: null,
     spendOpen: false,
     reliabilityOpen: false,

@@ -503,6 +503,13 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     why: "The console's own modal dimming",
   },
   {
+    name: '--cn-hatch-flash',
+    label: 'Hatch flash',
+    group: 'overlays',
+    kind: 'colour',
+    why: 'The light a shell comes off in',
+  },
+  {
     name: '--term-fg',
     label: 'Transcript text',
     group: 'terminal',

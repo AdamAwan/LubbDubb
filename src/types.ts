@@ -2755,6 +2755,21 @@ export interface Pet {
   originRef: string;
   /** When the action it hatched from happened — not when the scan reached it. */
   hatchedAt: string;
+  /**
+   * When the operator cracked the shell, or null while it is still an egg.
+   *
+   * The drop and the reveal are two moments, and this is the second one. Nothing
+   * about the creature is decided here — the species and the tier were fixed by
+   * the hash of the action the instant it was rolled, and the shell only withholds
+   * them. A roll at opening time would put the one decision this subsystem makes
+   * behind a click, which is the whole of what the hash exists to prevent.
+   *
+   * Null on nothing that predates eggs: `openPetsFromBeforeEggs` stamps every
+   * existing row on the boot the column arrives, because a collection an operator
+   * spent months on must not turn back into a pile of shells because the harness
+   * learned a new trick. → `docs/spec/22-pets.md#the-egg`
+   */
+  openedAt: string | null;
   /** Whether it stands in the vivarium at the foot of the rail. */
   placed: boolean;
   /**

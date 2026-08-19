@@ -826,8 +826,154 @@ const ADULTS: Record<PetSpecies, readonly string[]> = {
   ],
 };
 
-/** The grid for one pet, at its stage. */
-export function spriteFor(species: PetSpecies, rarity: PetRarity, stage: PetStage): readonly string[] {
+/**
+ * The shell a drop arrives in, one grid per tier.
+ *
+ * The tier shows and the species does not, which is the whole shape of the
+ * reveal: `mote` and `ouroboros` drop into the same corner of the rail, and only
+ * one of them is worth stopping what you are doing for. A shell that gave away
+ * nothing would make every egg the same egg; a shell that gave away the animal
+ * would leave the click with nothing to say. Markings carry the tier — a common
+ * has one speck, a mythic is banded end to end — and the seed's own palette does
+ * the rest, so no two eggs of a tier are the same egg either.
+ */
+const EGGS: Record<PetRarity, readonly string[]> = {
+  common: [
+    '...oooo...',
+    '..oOOOOo..',
+    '.oOhhOOOo.',
+    '.oOhOOOOo.',
+    'oOOOOOOOOo',
+    'oOOOOOOOOo',
+    'oOOOOmOOOo',
+    'oOOOOOOOOo',
+    'oOOOOOOOOo',
+    'oOOOOOOOOo',
+    '.oOOOOOOo.',
+    '..oooooo..',
+  ],
+  uncommon: [
+    '...oooo...',
+    '..oOOOOo..',
+    '.oOhhOOOo.',
+    '.oOhOOOOo.',
+    'oOOOOOOOOo',
+    'oOmmmmmmOo',
+    'oOOOOOOOOo',
+    'oOOOOOOOOo',
+    'oOmmmmmmOo',
+    'oOOOOOOOOo',
+    '.oOOOOOOo.',
+    '..oooooo..',
+  ],
+  rare: [
+    '...oooo...',
+    '..oOOOOo..',
+    '.oOhhOOOo.',
+    '.oOhOOmOo.',
+    'oOOOmmOOOo',
+    'oOOmOOOOOo',
+    'oOmOOOmmOo',
+    'oOOOOmOOOo',
+    'oOOmmOOOOo',
+    'oOOOOOOmOo',
+    '.oOOOOOOo.',
+    '..oooooo..',
+  ],
+  mythic: [
+    '...oooo...',
+    '..oOmmOo..',
+    '.oOhmmOOo.',
+    '.oOhmmOOo.',
+    'oOOmmmOOOo',
+    'oOmmOmmmOo',
+    'oOmmmOmmOo',
+    'oOOmmmmOOo',
+    'oOmmOmmmOo',
+    'oOOmmmOOOo',
+    '.oOmmmOOo.',
+    '..oooooo..',
+  ],
+};
+
+/**
+ * How far gone the shell is, drawn over the egg: `c` splits it along the outline
+ * ink, `k` takes the pixel out altogether.
+ *
+ * Three grids rather than a fracture simulation, and indexed by how many times
+ * the egg has rocked — the animation is a sequence of *states*, so a run that is
+ * interrupted, replayed or arrived at from a reload draws the same shell at the
+ * same count rather than wherever a physics clock had got to.
+ */
+const CRACKS: readonly (readonly string[])[] = [
+  [
+    '..........',
+    '..........',
+    '..........',
+    '..........',
+    '.....c....',
+    '....c.....',
+    '.....c....',
+    '..........',
+    '..........',
+    '..........',
+    '..........',
+    '..........',
+  ],
+  [
+    '..........',
+    '..........',
+    '...c......',
+    '...c......',
+    '..c.c.....',
+    '...c......',
+    '....c.....',
+    '...c......',
+    '..c.......',
+    '..........',
+    '..........',
+    '..........',
+  ],
+  [
+    '..........',
+    '..........',
+    '...c......',
+    '...c......',
+    '..c.c.....',
+    '.ckckckck.',
+    '..cc.cc...',
+    '...c......',
+    '..c.......',
+    '..........',
+    '..........',
+    '..........',
+  ],
+];
+
+/**
+ * The crack overlay after `rocks` rocks, or null before the first one.
+ *
+ * Clamped rather than indexed blind: the caller counts rocks, and a count that
+ * runs past the last grid should draw the most broken shell there is instead of
+ * an undefined one.
+ */
+export function crackFor(rocks: number): readonly string[] | null {
+  if (rocks <= 0) return null;
+  return CRACKS[Math.min(rocks, CRACKS.length) - 1]!;
+}
+
+/**
+ * The grid for one form.
+ *
+ * `'egg'` rides beside the three stages rather than in `PetStage`, because a stage
+ * is what `fed` bought and a shell is what nobody has opened yet — two different
+ * facts, and the domain type answers the first. Both of the first two forms ignore
+ * `species` entirely, which is the catalogue's whole shape: the tier is what an
+ * egg and a hatchling say, and the juvenile is the first form that names an
+ * animal.
+ */
+export function spriteFor(species: PetSpecies, rarity: PetRarity, stage: PetStage | 'egg'): readonly string[] {
+  if (stage === 'egg') return EGGS[rarity]!;
   if (stage === 'hatchling') return HATCHLINGS[rarity]!;
   return stage === 'juvenile' ? JUVENILES[species]! : ADULTS[species]!;
 }

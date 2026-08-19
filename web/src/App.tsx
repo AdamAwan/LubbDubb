@@ -2,6 +2,7 @@ import { UnauthorizedError } from './api.js';
 import { useCockpit } from './cockpit/useCockpit.js';
 import { ConsoleRoot } from './console/ConsoleRoot.js';
 import { AgentDrawer } from './components/AgentDrawer.js';
+import { HatchModal } from './components/HatchModal.js';
 import { RetroModal } from './components/RetroModal.js';
 import { ScratchpadModal } from './components/ScratchpadModal.js';
 import { PlanModal } from './components/PlanModal.js';
@@ -150,6 +151,17 @@ export function App() {
       )}
       {status.view.viewingRetro && (
         <RetroModal issueRef={status.view.viewingRetro} onClose={() => status.actions.viewRetro(null)} />
+      )}
+      {/* The collection goes in whole and the modal finds its own pet in it. A
+          conditional here would unmount the ceremony the first time a snapshot
+          arrived without that row, and a remount starts the wobble again. */}
+      {status.view.hatching !== null && (
+        <HatchModal
+          petId={status.view.hatching}
+          pets={state.pets?.pets ?? []}
+          onOpen={(id) => status.actions.openPet(id)}
+          onClose={() => status.actions.hatchEgg(null)}
+        />
       )}
       {status.view.viewingScratchpad && (
         <ScratchpadModal issueRef={status.view.viewingScratchpad} onClose={() => status.actions.viewScratchpad(null)} />

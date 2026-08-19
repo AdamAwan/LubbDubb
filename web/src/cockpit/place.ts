@@ -31,6 +31,17 @@ export interface Place {
   plan: string | null;
   /** The goal whose retrospective is open, as an `issue:<n>` ref. */
   retro: string | null;
+  /**
+   * The egg whose shell is coming off, by pet id.
+   *
+   * A place rather than a `useState` for the reason every field here is one: the
+   * back button steps out of the ceremony, and a link to it opens on the creature
+   * it named. It survives a reload landing on an already-opened pet, which is the
+   * ordinary case — the shell comes off the moment the modal mounts, so a refresh
+   * mid-wobble is a reveal rather than a second roll. Nothing is ever re-decided
+   * by arriving here. → `docs/spec/22-pets.md#the-egg`
+   */
+  hatch: string | null;
   /** The goal whose notepad is open, as an `issue:<n>` ref. */
   scratchpad: string | null;
   /** Which section of the config page is in front. */
@@ -84,6 +95,7 @@ export const NOWHERE: Place = {
   agent: null,
   plan: null,
   retro: null,
+  hatch: null,
   scratchpad: null,
   configTab: 'values',
   configGroup: null,
@@ -154,6 +166,7 @@ export function readPlace(search: string): Place {
     agent: param(query, 'agent'),
     plan: param(query, 'plan'),
     retro: param(query, 'retro'),
+    hatch: param(query, 'hatch'),
     scratchpad: param(query, 'pad'),
     configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
     // `keys`, not `group`: the tickets tab already owns `?group=` (its feature
@@ -325,6 +338,7 @@ export function placeQuery(place: Place): string {
   if (place.agent !== null) query.set('agent', place.agent);
   if (place.plan !== null) query.set('plan', place.plan);
   if (place.retro !== null) query.set('retro', place.retro);
+  if (place.hatch !== null) query.set('hatch', place.hatch);
   if (place.scratchpad !== null) query.set('pad', place.scratchpad);
   if (place.configTab !== 'values') query.set('section', place.configTab);
   if (place.configGroup !== null) query.set('keys', place.configGroup);
