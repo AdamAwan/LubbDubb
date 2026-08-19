@@ -44,6 +44,9 @@ import type { ValidationAct } from '../cockpit/actions.js';
 import { buildDemoState, demoPlanHistory } from './fixtures.js';
 import { isContainerType } from '../issueGroups.js';
 
+/** The demo's catalogue carries no rates, so every kind names the same empty one. */
+const ZERO_RATE = { dropChance: 0, pity: 0 };
+
 type Emit = Record<string, unknown>;
 interface Conn {
   onEvent: (ev: unknown) => void;
@@ -2393,8 +2396,15 @@ export const demoApi = {
   getPetCatalogue: (): Promise<PetCatalogue> =>
     Promise.resolve({
       rules: {
-        dropChance: 0,
-        pity: 0,
+        rates: {
+          job: ZERO_RATE,
+          finding: ZERO_RATE,
+          'human-task': ZERO_RATE,
+          escalation: ZERO_RATE,
+          plan: ZERO_RATE,
+          landing: ZERO_RATE,
+          upgrade: ZERO_RATE,
+        },
         rarity: { common: 0, uncommon: 0, rare: 0, mythic: 0 },
         beatsPerDollar: 0,
         blendYield: 0,

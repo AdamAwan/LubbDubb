@@ -6007,6 +6007,20 @@ body {
 .species-table tbody tr:last-child td {
   border-bottom: 0;
 }
+/* The heading's own aside, so a legend for a column that is currently empty is
+   simply absent rather than drawn small. */
+.species-legend {
+  margin-left: 10px;
+  font: 10px/1 var(--font-mono);
+  font-weight: 400;
+  color: var(--muted);
+  cursor: help;
+}
+.species-figure {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
 .species-kind {
   font: 12px/1.4 var(--font-mono);
   white-space: nowrap;

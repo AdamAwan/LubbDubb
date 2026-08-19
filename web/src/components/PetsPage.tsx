@@ -77,7 +77,11 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
   // Counted off the sources rather than off a literal seven, so an eighth action
   // collapses the same way rather than turning every universal card into a wall of
   // chips.
-  const everyKind = new Set(sources.map((row) => row.kind)).size;
+  const kinds = [...new Set(sources.map((row) => row.kind))];
+  const everyKind = kinds.length;
+  // What one action is worth on average, which is what turns a species' share of
+  // drops into "one in how many actions". Read off the rules rather than assumed.
+  const meanDrop = kinds.reduce((sum, kind) => sum + rules.rates[kind].dropChance, 0) / Math.max(1, kinds.length);
 
   return (
     <div className="species">
@@ -95,16 +99,6 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
       <h3 className="species-h">Drop rates</h3>
       <dl className="species-odds">
         <Odd
-          label="Drop chance"
-          value={`${Math.round(rules.dropChance * 100)}%`}
-          why={`One action in ${Math.round(1 / rules.dropChance)} gives you a pet. The result comes from the action itself, not a random number, so reading the same action twice can never give you a second pet.`}
-        />
-        <Odd
-          label="Pity"
-          value={rules.pity.toLocaleString()}
-          why={`After ${rules.pity.toLocaleString()} actions with no pet, the next one is a pet. That is twice the usual wait, so it caps bad luck rather than setting a schedule. It does not change which tier you get.`}
-        />
-        <Odd
           label="Beats per $"
           value={rules.beatsPerDollar.toLocaleString()}
           why="Beats are what you feed a pet. You earn them from money the fleet has already spent — you cannot buy them."
@@ -115,6 +109,42 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
           why="Beats returned for dissolving a spare, scaled by how big that pet is. Always less than one stage costs."
         />
       </dl>
+
+      {/* A rate per action rather than one figure. The price runs roughly inverse to
+          how often the action comes up, so a single number would make whichever
+          button the deployment presses most into the whole vivarium — which is the
+          thing the per-kind table exists to stop. */}
+      <div className="species-scroll">
+        <table className="species-table">
+          <thead>
+            <tr>
+              <th>Action</th>
+              <th>Drop chance</th>
+              <th>That is</th>
+              <th>Pity</th>
+            </tr>
+          </thead>
+          <tbody>
+            {kinds.map((kind) => (
+              <tr key={kind}>
+                <td className="species-kind" title={KIND_NOTE[kind]}>
+                  {KIND_LABEL[kind]}
+                </td>
+                <td className="species-figure">{pct(rules.rates[kind].dropChance)}</td>
+                <td className="species-figure muted">
+                  1 in {Math.round(1 / rules.rates[kind].dropChance).toLocaleString()}
+                </td>
+                <td
+                  className="species-figure muted"
+                  title={`After ${rules.rates[kind].pity.toLocaleString()} of these with no pet, the next one is a pet. That is twice the usual wait, so it caps bad luck rather than setting a schedule — and it does not change which tier you get.`}
+                >
+                  {rules.rates[kind].pity.toLocaleString()}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
       <div
         className="species-tiers"
@@ -158,6 +188,7 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
                   eggSeen={members.some((sibling) => found.has(sibling.species))}
                   rules={rules}
                   everyKind={everyKind}
+                  meanDrop={meanDrop}
                 />
               ))}
             </div>
@@ -165,13 +196,25 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
         );
       })}
 
-      <h3 className="species-h">Where each pet comes from</h3>
-      <SourceTable sources={sources} rarities={rarities} species={species} found={found} />
+      <h3 className="species-h">
+        Where each pet comes from
+        {sources.some((row) => row.landed !== row.rolled) ? (
+          <span
+            className="species-legend"
+            title="If an action has no pet at the tier you rolled, the roll steps down a tier — never up."
+          >
+            ↓ = stepped down a tier
+          </span>
+        ) : null}
+      </h3>
+      <SourceTable sources={sources} rarities={rarities} species={species} found={found} kinds={kinds} />
 
       <p className="muted small species-foot">
-        Drop rates assume you do all seven actions about equally often; the table above is exact per action. Every pet
-        of a tier hatches as the same egg, so you find out what you got at the juvenile stage. ☾ marks a pet that can
-        only drop in certain hours, going by the time of the action rather than the time you look.
+        A pet&rsquo;s share of drops assumes you do all seven actions about equally often, and weighs each action by its
+        own drop chance — so an upgrade counts for more of the catalogue than a job launch does. The two tables are
+        exact per action. Every pet of a tier hatches as the same egg, so you find out what you got at the juvenile
+        stage. ☾ marks a pet that can only drop in certain hours, going by the time of the action rather than the time
+        you look.
       </p>
     </div>
   );
@@ -193,6 +236,7 @@ function SpeciesCard({
   eggSeen,
   rules,
   everyKind,
+  meanDrop,
 }: {
   entry: PetCatalogueEntry;
   /** Whether this species is in the collection, which is what decides the reveal. */
@@ -202,9 +246,11 @@ function SpeciesCard({
   rules: PetCatalogue['rules'];
   /** How many actions there are in total, which is what makes the list collapsible. */
   everyKind: number;
+  /** What one action is worth on average, so a share can be read as "one in how many". */
+  meanDrop: number;
 }): JSX.Element {
   const window = entry.hours === null ? null : hourWindow(entry.hours);
-  const oneIn = Math.round(1 / (entry.share * rules.dropChance)).toLocaleString();
+  const oneIn = Math.round(1 / (entry.share * meanDrop)).toLocaleString();
   return (
     <div className={`species-card is-${entry.rarity}${known ? '' : ' is-unknown'}`}>
       <div className="species-top">
@@ -312,15 +358,16 @@ function SourceTable({
   rarities,
   species,
   found,
+  kinds,
 }: {
   sources: PetCatalogueSource[];
   rarities: PetRarity[];
   species: PetCatalogueEntry[];
   found: Set<PetSpecies>;
+  kinds: PetActionKind[];
 }): JSX.Element {
   const display = new Map(species.map((entry) => [entry.species, entry.display]));
   const gated = new Set(species.filter((entry) => entry.hours !== null).map((entry) => entry.species));
-  const kinds = [...new Set(sources.map((row) => row.kind))];
   const cell = (kind: PetActionKind, rolled: PetRarity) => sources.find((r) => r.kind === kind && r.rolled === rolled);
   return (
     <div className="species-scroll">

@@ -70,9 +70,25 @@ function widestHour(): number {
   return best;
 }
 
+/**
+ * How much of a deployment's drops each action accounts for, if the operator takes
+ * the seven of them equally often.
+ *
+ * **Weighted by each kind's own `dropChance`, not uniform.** Since #427 the rate is
+ * priced against how often an action comes up — an upgrade is one in five and a job
+ * one in sixty-six — so a share that counted the kinds evenly would describe a
+ * deployment nobody runs. The weights are read off the rules rather than written
+ * down, which is what keeps this true the next time the prices move.
+ */
+function kindWeights(): Map<PetActionKind, number> {
+  const total = PET_ACTION_KINDS.reduce((sum, kind) => sum + PET_RULES.rates[kind].dropChance, 0);
+  return new Map(PET_ACTION_KINDS.map((kind) => [kind, total <= 0 ? 0 : PET_RULES.rates[kind].dropChance / total]));
+}
+
 /** Every species this deployment can produce, and how often, over the whole clock. */
 function entries(): PetCatalogueEntry[] {
   const shares = tierShares();
+  const weights = kindWeights();
   const share = new Map<PetSpecies, number>();
   const kinds = new Map<PetSpecies, Set<PetActionKind>>();
   const hours = new Map<PetSpecies, Set<number>>();
@@ -80,7 +96,7 @@ function entries(): PetCatalogueEntry[] {
   for (const kind of PET_ACTION_KINDS) {
     for (let hour = 0; hour < HOURS; hour++) {
       for (const [species, weight] of drawAt(kind, hour, shares)) {
-        share.set(species, (share.get(species) ?? 0) + weight / (PET_ACTION_KINDS.length * HOURS));
+        share.set(species, (share.get(species) ?? 0) + (weight * (weights.get(kind) ?? 0)) / HOURS);
         (kinds.get(species) ?? kinds.set(species, new Set()).get(species)!).add(kind);
         (hours.get(species) ?? hours.set(species, new Set()).get(species)!).add(hour);
       }

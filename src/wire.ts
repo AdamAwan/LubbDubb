@@ -1151,10 +1151,15 @@ export interface PetCatalogueEntry {
   /**
    * Share of all drops, over an even mix of the seven actions and a uniform hour.
    *
-   * An assumption, and the page says so: no deployment takes the seven actions in
-   * equal numbers. It is the only figure that can be stated about a species rather
-   * than about a species-and-an-action, which is why {@link PetCatalogueSource}
-   * ships the exact per-action answer beside it.
+   * Each action is weighted by its own `dropChance` rather than counted evenly,
+   * because since #427 the rate is priced against how often the action comes up —
+   * an upgrade is one in five and a job one in sixty-six, so counting them evenly
+   * would describe a deployment nobody runs.
+   *
+   * It is still an assumption and the page says so: no deployment takes the seven
+   * actions in equal numbers. It is the only figure that can be stated about a
+   * species rather than about a species-and-an-action, which is why
+   * {@link PetCatalogueSource} ships the exact per-action answer beside it.
    */
   share: number;
   /** The actions that can draw it, in pool order. */
