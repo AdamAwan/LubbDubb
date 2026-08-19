@@ -50,6 +50,30 @@ A schema that encodes a **domain rule** rather than a request shape lives with t
 route: `ShortfallBody` is in `src/delivery/shortfall.ts` beside `SHORTFALL_CAUSES` and
 `shortfallArm`, which routes on the same fact its cross-field refinement checks.
 
+### The SPA fallback
+
+`web/dist` is served by `@fastify/static` off the root, **read from disk per request**: the plugin
+snapshots nothing at boot, so a rebuild under a running server is picked up by the next request and
+restarting to see a cockpit change is unnecessary. What the restart in `npm run serve` actually buys
+is the `web:build` in front of it ([19](19-development.md#scripts)).
+
+Anything the static plugin misses reaches `setNotFoundHandler`, which decides between the app shell
+and a 404 through `wantsAppShell` in `app.ts`. Deep links are the reason the shell arm exists —
+`/goals/42` is a route in the bundle, not a path on disk, and a reload of one has to be answered with
+`index.html`. **A request carrying a file extension is never given the shell.** Vite hashes asset
+names and `emptyOutDir` deletes the previous ones, so every browser still holding the last
+`index.html` goes on asking for chunks that no longer exist; answering those with the shell returns
+`200 text/html` for a JavaScript module, which the browser refuses on the MIME type. The cockpit does
+not start, a reload does not clear it, and the server logged a successful request — the symptom is a
+harness that looks broken after an upgrade, with nothing anywhere naming the bundle. A 404 says the
+same staleness out loud, and one reload fixes it.
+
+The extension is the test, rather than `Accept`: a module request and curl both ask for any type at
+all, so deciding on that header would 404 a deep link typed into a terminal and fix nothing. Cockpit
+routes are ref ids and slugs, which carry no dot. `test/appShell.test.ts` asserts both directions
+against the predicate rather than through `buildApp` — the test job builds no `web/dist`, so the
+static plugin is never registered there and an injected request would prove nothing.
+
 ## Authentication
 
 `src/server/auth.ts` holds the whole decision as one pure function, `authorizeRequest`, with a

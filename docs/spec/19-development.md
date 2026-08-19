@@ -217,6 +217,14 @@ it to understand why a decision was made, and check the code before relying on a
 paragraph gives: an upgrade that relaunched on the previous bundle would be silent, and the change
 the operator upgraded for is usually one they expect to see ([21](21-self-update.md#applying-it)).
 
+**Nothing needs restarting to pick a new bundle up.** `@fastify/static` reads `web/dist` from disk
+per request and snapshots nothing at boot, so `npm run web:build` against a running server is served
+by the request after it. Cancelling `npm run serve` and starting it again works because of the
+`web:build` in front of it, not because of the relaunch — which is also why cockpit work belongs in
+`npm run web:dev` rather than in a watcher bolted to the supervisor. What a browser holding the
+previous `index.html` then asks for is handled in
+[16](16-http-api.md#the-spa-fallback).
+
 **`npm start` builds the cockpit first, and that is not a convenience.** The server needs no
 build step — tsx runs it from source — but the SPA does, and `web/dist` is gitignored, so it is
 whatever the last `web:build` on that machine produced. The server serves it on an `existsSync`

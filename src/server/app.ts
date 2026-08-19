@@ -247,7 +247,7 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   if (existsSync(distDir)) {
     await app.register(fastifyStatic, { root: distDir });
     app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith('/api') || req.url.startsWith('/ws')) return reply.code(404).send({ error: 'not found' });
+      if (!wantsAppShell(req.url)) return reply.code(404).send({ error: 'not found' });
       return reply.sendFile('index.html');
     });
   }
@@ -263,4 +263,29 @@ export async function buildApp(system: System): Promise<BuiltApp> {
     cockpitUrl: auth ? `http://${urlHost}:${config.port}/#t=${auth.token}` : null,
     tokenPath: auth?.source === 'minted' ? auth.path : null,
   };
+}
+
+/**
+ * Does this URL want the SPA shell, or a file that is simply not there?
+ *
+ * The fallback exists for the cockpit's own deep links — `/goals/42` is a route in
+ * the bundle, not a path on disk, so a reload of one must be answered with
+ * `index.html`. Every other miss must be a 404, and **a request for a file is the
+ * case that must not be given the shell**: Vite hashes asset names and
+ * `emptyOutDir` deletes the previous ones, so for as long as any browser still
+ * holds the last `index.html` it goes on asking for chunks that no longer exist.
+ * Answering those with the shell returns `200 text/html` for a JavaScript module —
+ * the browser refuses it on the MIME type, the cockpit does not start, and the
+ * server logged a successful request. A 404 is the same staleness said out loud,
+ * which one reload fixes.
+ *
+ * The test is the path's last segment, not the `Accept` header: a module request
+ * asks for any type at all, and so does curl, so deciding on that header would turn
+ * a deep link typed into a terminal into a 404 while fixing nothing. An extension is
+ * a claim about a file, and cockpit routes are ref ids and slugs.
+ */
+export function wantsAppShell(url: string): boolean {
+  const path = url.split(/[?#]/)[0] ?? '/';
+  if (path.startsWith('/api') || path.startsWith('/ws')) return false;
+  return !path.slice(path.lastIndexOf('/') + 1).includes('.');
 }
