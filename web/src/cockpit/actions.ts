@@ -55,7 +55,7 @@ export type ConsolePanel =
  * A selected goal outranks all three, so this says where the nav last was, never
  * what is drawn.
  */
-export type ConsoleTab = 'overview' | 'work' | 'tickets' | 'config';
+export type ConsoleTab = 'overview' | 'work' | 'tickets' | 'pets' | 'config';
 
 /**
  * Every mutation the cockpit can perform, pre-bound and refetching on completion.

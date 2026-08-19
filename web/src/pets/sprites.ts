@@ -950,11 +950,6 @@ const CRACKS: readonly (readonly string[])[] = [
   ],
 ];
 
-/** The shell a pet of this tier is still sitting in. */
-export function eggFor(rarity: PetRarity): readonly string[] {
-  return EGGS[rarity]!;
-}
-
 /**
  * The crack overlay after `rocks` rocks, or null before the first one.
  *
@@ -967,8 +962,18 @@ export function crackFor(rocks: number): readonly string[] | null {
   return CRACKS[Math.min(rocks, CRACKS.length) - 1]!;
 }
 
-/** The grid for one pet, at its stage. */
-export function spriteFor(species: PetSpecies, rarity: PetRarity, stage: PetStage): readonly string[] {
+/**
+ * The grid for one form.
+ *
+ * `'egg'` rides beside the three stages rather than in `PetStage`, because a stage
+ * is what `fed` bought and a shell is what nobody has opened yet — two different
+ * facts, and the domain type answers the first. Both of the first two forms ignore
+ * `species` entirely, which is the catalogue's whole shape: the tier is what an
+ * egg and a hatchling say, and the juvenile is the first form that names an
+ * animal.
+ */
+export function spriteFor(species: PetSpecies, rarity: PetRarity, stage: PetStage | 'egg'): readonly string[] {
+  if (stage === 'egg') return EGGS[rarity]!;
   if (stage === 'hatchling') return HATCHLINGS[rarity]!;
   return stage === 'juvenile' ? JUVENILES[species]! : ADULTS[species]!;
 }

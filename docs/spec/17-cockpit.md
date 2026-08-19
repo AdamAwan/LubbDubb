@@ -134,7 +134,7 @@ Four surfaces and one shell.
 │ ┌───────────┐ │                                                        │
 │ │ Blocking  │ │                                                        │
 │ │ escalation│ │             the situation area                         │
-│ │ plan      │ │    (a tab — overview, work, tickets — or a goal page)  │
+│ │ plan      │ │    (a tab — overview, work, tickets, pets — or a goal)│
 │ │ permission│ │                                                        │
 │ │ Yours     │ │                                                        │
 │ │ bench     │ │                                                        │
@@ -183,6 +183,12 @@ of buttons over a boolean, for `ConsolePanel`'s reason: a destination that has t
 booleans and four call sites is a destination that arrives half-wired. `test/console.test.ts` renders
 the nav and asserts all three labels, so a tab added to the type and forgotten in the nav is a view
 nothing can reach — and fails.
+
+**Pets is the fourth, and it is conditional.** It is appended to the list only when
+`state.pets` is non-null — the same reading that decides whether the rail draws a vivarium at all —
+because a tab opening on a page that explains a subsystem this deployment does not run is worse
+than no tab. `tabBody` refuses it on the same reading, so a stale `?tab=pets` URL lands on a
+sentence rather than on an empty catalogue. → [22](22-pets.md#the-pets-page)
 
 ### The console at width
 

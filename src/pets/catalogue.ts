@@ -132,6 +132,18 @@ const POOLS: Record<PetActionKind, Record<PetRarity, readonly PetSpecies[]>> = {
 };
 
 /**
+ * Every action that can draw something, in the order the pools declare them.
+ *
+ * Derived from `POOLS` rather than written out again: a kind added to the record
+ * and forgotten here is a whole action the Pets page never mentions, and nothing
+ * is red — the page simply draws six columns where there are seven.
+ *
+ * @public — walked by `src/pets/compendium.ts`, which asks what every pool of
+ * every kind resolves to rather than what one roll landed on.
+ */
+export const PET_ACTION_KINDS = Object.keys(POOLS) as readonly PetActionKind[];
+
+/**
  * The hours a `nocturne` can be drawn in, read off the action's own timestamp.
  *
  * The one species whose availability depends on something other than what you

@@ -2,15 +2,19 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { checked, IdParams, optionalText, requiredBoolean } from '../validation.js';
 import type { RouteContext } from './context.js';
+import { PET_CATALOGUE } from '../../pets/compendium.js';
 
 /**
  * The five things an operator does to a creature: open its shell, feed it, name
  * it, decide whether it stands in the vivarium, and blend a duplicate back into
- * beats.
+ * beats — and the one read that is not the operator's own collection.
  *
- * **No read route.** `PetState` rides on the state snapshot with everything else
- * the cockpit draws, so the corner of the rail updates on the same socket as the
- * queue above it rather than on a poll of its own.
+ * **The collection has no read route.** `PetState` rides on the state snapshot
+ * with everything else the cockpit draws, so the corner of the rail updates on the
+ * same socket as the queue above it rather than on a poll of its own. The
+ * *catalogue* is the opposite case and so is fetched: it is the same bytes on
+ * every request of a build, and putting a constant on a snapshot that ships every
+ * heartbeat would pay for it forever.
  *
  * Every refusal comes back from `PetKeeper` as a sentence, and every one of them
  * is a 400 returned rather than thrown — a request the operator got wrong is not
@@ -19,6 +23,12 @@ import type { RouteContext } from './context.js';
  */
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { pets } = system;
+
+  // No parameters and no state: what exists, what it costs and how often it turns
+  // up are decided by tables this build ships, so the answer is the same for every
+  // operator and every deployment. That is the point of the surface — a rate an
+  // operator could move is a rate not worth reading.
+  app.get('/api/pets/catalogue', async () => PET_CATALOGUE);
 
   // No body: opening decides nothing. The species and the tier were fixed by the
   // hash of the action that dropped it, and this only stamps the moment the
