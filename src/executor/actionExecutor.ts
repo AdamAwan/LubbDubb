@@ -960,8 +960,16 @@ export class ActionExecutor {
   ): Promise<string> {
     // A stacked plan part names the branch it forks from; everything else takes
     // the configured integration branch.
-    if (action.type === 'dispatch_code_agent')
-      return this.deps.worktrees.ensure(action.branch, action.base ?? this.deps.defaultBranch);
+    //
+    // **`readOnly` picks the shape, and nothing else does.** A dispatch that only
+    // reads gets a detached checkout leased under its name rather than a branch cut
+    // for it (issue #396) — one call site, so no rule can arrange its own.
+    if (action.type === 'dispatch_code_agent') {
+      const at = action.base ?? this.deps.defaultBranch;
+      return action.readOnly
+        ? this.deps.worktrees.ensureReadOnly(action.branch, at)
+        : this.deps.worktrees.ensure(action.branch, at);
+    }
     const cwd = resolve(this.deps.deskRoot, task.id);
     mkdirSync(cwd, { recursive: true });
     return cwd;
