@@ -78,7 +78,10 @@ export class PetKeeper {
       .filter((action) => !seen.has(`${action.kind}:${action.ref}`))
       .sort((a, b) => a.at.localeCompare(b.at));
     const hatched: Pet[] = [];
-    let sinceHatch = this.store.petActionsSinceHatch();
+    // One counter per kind. A single counter is spent by whatever the deployment
+    // does most — jobs and findings, by an order of magnitude — so the kinds a
+    // pity floor is actually for never reach theirs.
+    const sinceHatch = this.store.petActionsSinceHatch();
     // Carried across the pass rather than re-read per action. `seen` is captured
     // before the loop, so asking it would call *every* action in a first scan the
     // deployment's first — seven guaranteed pets out of one afternoon, which is
@@ -86,7 +89,8 @@ export class PetKeeper {
     let anyRolled = seen.size > 0;
     for (const action of fresh) {
       const firstEver = !anyRolled;
-      const forced = sinceHatch + 1 >= this.rules.pity;
+      const missed = sinceHatch.get(action.kind) ?? 0;
+      const forced = missed + 1 >= this.rules.rates[action.kind].pity;
       const roll = rollAction(action.kind, action.ref, action.at, { rules: this.rules, forced, firstEver });
       const build = roll.hatches ? this.stamp() : null;
       const pet =
@@ -103,12 +107,8 @@ export class PetKeeper {
             });
       this.store.recordPetAction({ kind: action.kind, ref: action.ref, at: action.at, petId: pet?.id ?? null });
       anyRolled = true;
-      if (pet) {
-        hatched.push(pet);
-        sinceHatch = 0;
-      } else {
-        sinceHatch += 1;
-      }
+      if (pet) hatched.push(pet);
+      sinceHatch.set(action.kind, pet ? 0 : missed + 1);
     }
     return hatched;
   }

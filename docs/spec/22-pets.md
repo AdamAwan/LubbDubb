@@ -65,13 +65,35 @@ Every qualifying operator action is rolled exactly once, in **three stages**, an
 **hash of the action's own identity**, never a random number:
 
 ```
-hatches = hash32(`${kind}:${ref}`) % 10_000 < dropChance × 10_000   -- or forced, or the first ever
+hatches = hash32(`${kind}:${ref}`) % 10_000 < rates[kind].dropChance × 10_000   -- or forced, or first ever
 tier    = weighted pick from PET_RULES.rarity, using hash32(`${kind}:${ref}:tier`)
 species = uniform pick from the kind's members of that tier, using hash32(`${kind}:${ref}:species`)
 ```
 
 Every number in it comes from `PET_RULES` (`src/pets/rules.ts`) and none of them is a config key —
 see [Authenticity](#authenticity) for why.
+
+**The drop chance is per action kind; rarity is rolled once, globally.** The two are separate
+decisions and it is worth keeping them apart: `PET_RULES.rates` says how much _one action of this
+kind_ is worth, and `PET_RULES.rarity` says what a hatch turns out to be. Only the first varies by
+action.
+
+Stage 1 is priced roughly **inverse to how often the action comes up**. A single global rate reads as
+fair and is not: the harness settles jobs and findings by the dozen and accepts an upgrade a handful
+of times a year, so one chance in fifty everywhere means a vivarium drawn almost entirely from
+whichever button the deployment happens to press most, and the animals behind the scarce actions are
+never seen by anybody. The gap is wider than it first looks, because an `upgrade` is **one action per
+accepted self-update**, keyed on upstream's tip — not one per commit the pull brings in.
+
+| Kind         | `dropChance` |  `pity` | About                                    |
+| ------------ | -----------: | ------: | ---------------------------------------- |
+| `job`        |      `0.015` |   `130` | Launched from the cockpit, many a day.   |
+| `finding`    |       `0.02` |   `100` | Triaged in batches.                      |
+| `human-task` |       `0.03` |    `66` | An ask settled.                          |
+| `escalation` |       `0.04` |    `50` | Answered one at a time.                  |
+| `plan`       |       `0.05` |    `40` | Approved a few times a week.             |
+| `landing`    |       `0.08` |    `25` | A chain authorised to land.              |
+| `upgrade`    |        `0.2` |    `10` | A self-update accepted. The rarest act.  |
 
 **Rarity is rolled once, globally.** It used to be an emergent accident of seven hand-tuned weight
 tables — a triaged finding produced a rare 23% of the time and an answered escalation 5%, so no
@@ -90,22 +112,34 @@ produces the same answer forever, so the scan is idempotent by construction rath
 together mean nothing anywhere has to remember whether it has already paid out.
 
 The consequence to keep in mind: **a drop is a property of the action, not of when it was looked
-at.** Changing `dropChance` re-rolls history for actions the scan has not reached yet, and does not
-re-roll the ones it has.
+at.** Changing a kind's `dropChance` re-rolls history for actions the scan has not reached yet, and
+does not re-roll the ones it has.
 
 ### Pity
 
-Actions since the last hatch are counted over `pet_actions`, and at `pets.pity` the next one is
-forced whatever the hash says.
+Actions since the last hatch are counted over `pet_actions`, and at that kind's own `pity` the next
+one is forced whatever the hash says.
+
+**One counter per kind, not one over the table.** A shared counter is spent almost entirely by
+whatever the deployment does most, so pity fires constantly on job launches and, in practice, never
+on a landing or a self-update — the kinds a floor is actually for. `petActionsSinceHatch` therefore
+returns a count per kind, and both the scan and the attestation replay keep their counters the same
+way. They have to: the counters are the one piece of state those two share, and a replay counting
+globally while the harness counted per kind disagrees about which actions pity forced. That
+disagreement does not read as a bug — it reads as `unearned`, on a pet that was honestly earned.
+
+The map is **sparse**: a kind whose most recent rolled action hatched has no rows after it and so no
+row of its own. Absent is how zero is spelled.
 
 **Pity flips stage 1 and stops.** It never touches the tier: a pet you were given because you had
 been unlucky is exactly as likely to be a mythic as one the roll granted. Paying out worse would
 make a consolation a punishment; paying out better would make waiting the strategy.
 
-Set to **twice the expected gap** (`2 / dropChance`) it is a ceiling rather than a schedule — you
-can be unlucky, never more than twice-unlucky, and the roll still decides roughly six drops in
-seven. Set near the expected gap it becomes the schedule instead: at `dropChance` 0.02 and pity 15
-it supplied three pets in four, and lowering the drop chance moved nothing. Nothing stores the counter: a count is one query, and a stored total
+Each kind's pity is set to **twice its own expected gap** (`2 / dropChance`), so it is a ceiling
+rather than a schedule — you can be unlucky, never more than twice-unlucky, and the roll still decides
+roughly six drops in seven. Set near the expected gap it becomes the schedule instead: at a drop
+chance of 0.02 and a pity of 15 it supplied three pets in four, and lowering the drop chance moved
+nothing. Nothing stores the counter: a count is one query, and a stored total
 is one more thing a torn write can leave wrong — wrong here meaning the rule either never fires or
 fires forever, neither of which announces itself.
 
@@ -133,7 +167,7 @@ It is the one species whose availability depends on something other than what yo
 species, because knip runs every rule at `error` and nine separately-exported records read as nine
 unimported symbols.
 
-Twenty species across four tiers. Each action kind declares its members **per tier**; the tier
+Twenty-seven species across four tiers. Each action kind declares its members **per tier**; the tier
 itself is rolled globally.
 
 | Species     | Rarity   | Drawn by                          |
@@ -155,8 +189,15 @@ itself is rolled globally.
 | `drift`     | uncommon | a stack landing authorised        |
 | `bramble`   | uncommon | a finding triaged                 |
 | `lander`    | rare     | a landing, or a self-update       |
-| `quill`     | rare     | an escalation or a plan           |
+| `quill`     | rare     | an escalation, a plan or a task   |
 | `cairn`     | rare     | an escalation or a finding        |
+| `ingot`     | rare     | a job launched from the cockpit   |
+| `clarion`   | mythic   | an escalation answered            |
+| `covenant`  | mythic   | a human task settled              |
+| `oracle`    | mythic   | a plan accepted                   |
+| `keystone`  | mythic   | a stack landing authorised        |
+| `forge`     | mythic   | a job launched from the cockpit   |
+| `lodestone` | mythic   | a finding triaged                 |
 | `ouroboros` | mythic   | the harness updating itself       |
 
 **Every action carries three commons**: the two universals `pip` and `mote`, plus one signature of
@@ -164,12 +205,27 @@ its own. One common per pool put `pip` at 70% of hatches on five of the seven ac
 identical animals before anything else turned up, which is the boredom the extra six exist to fix.
 No species now exceeds a fifth of hatches across a mixed workload, asserted in `test/pets.test.ts`.
 
+**Every action also carries a full ladder** — a rare and a mythic of its own, one mythic per action
+and no mythic shared between two. It did not: `upgrade` held the only mythic in the catalogue, and
+`human-task` and `job` held no rare at all. The arithmetic is what settled it rather than the
+principle. A mythic is 2% of hatches; behind an action taken at one chance in fifty that is one pet
+in twenty-five hundred **accepted self-updates**, which on any real deployment is an animal nobody
+ever sees, and it made a twentieth of the catalogue decoration. A mythic per action makes the tier
+reachable — roughly one a quarter across a mixed workload — and one action per mythic is what keeps
+each of them worth having.
+
 ### Ceilings, and degrading downward
 
-A tier a pool cannot fill hands the roll **down** one tier at a time, never up. That is the only way
-a ceiling is expressed: `human-task` and `job` hold no rare, so their rare and mythic rolls become
-uncommon, and only `upgrade` holds a mythic at all. Degrading upward instead would make the scarcest
-actions the easiest source of the scarcest animals — the inversion this design removed.
+A tier a pool cannot fill hands the roll **down** one tier at a time, never up.
+
+**No shipped pool has a hole in it any more**, so this is a guard rather than a mechanic: it is what
+keeps a pool edited badly, or one the `nocturne` night gate has filtered empty, from dropping a hatch
+on the floor rather than throwing inside the scan. A hole used to be how a ceiling was expressed, and
+that is exactly what went wrong — it put the scarcest animals behind the scarcest action, where the
+odds made them unreachable. The ceiling is `PET_RULES.rates` now, where it can be read as a number.
+
+The direction stays the invariant it always was. Degrading upward would make the scarcest actions the
+easiest source of the scarcest animals — the inversion this design removed.
 
 ### The first action ever
 
@@ -225,12 +281,12 @@ place to change when a sprite changes.
 
 ### Why a hatchling has no species
 
-Every species in a rarity tier shares one hatchling grid, so four grids cover all nine. The juvenile
-is the first form that says what you have.
+Every species in a rarity tier shares one hatchling grid, so four grids cover all twenty-seven. The
+juvenile is the first form that says what you have.
 
-This started as an art-bill saving — twenty-two grids instead of twenty-seven — and turned out to be
-the better mechanic: a hatchling is a thing you are waiting to find out about, and the reveal is
-worth more than the extra four sprites would have been.
+This started as an art-bill saving — four grids instead of twenty-seven — and turned out to be the
+better mechanic: a hatchling is a thing you are waiting to find out about, and the reveal is worth
+more than the twenty-three sprites it saves.
 
 ### Why a seed as well as a species
 
@@ -328,8 +384,8 @@ source nobody adds is invisible rather than broken.
 
 ## Blending a duplicate
 
-The catalogue is twenty and the vivarium holds four, so duplicates are the common case rather than
-the edge. Blending dissolves one back into beats at `blendYield × growth` — a mythic is worth four
+The catalogue is twenty-seven and the vivarium holds four, so duplicates are the common case rather
+than the edge. Blending dissolves one back into beats at `blendYield × growth` — a mythic is worth four
 commons, and the yield sits deliberately below what the same tier costs to reach juvenile, so
 blending is a use for surplus rather than a currency press.
 
@@ -419,7 +475,7 @@ a database from before them keep every pet it holds.
 **There is no scan cursor.** `pet_actions` is the watermark: an action whose key is already in it is
 skipped rather than re-rolled, which is stronger than a timestamp high-water mark and needs nothing
 kept in step. A source whose own timestamp moves under it — a plan re-saved, a finding re-triaged —
-cannot pay out twice or consume a second slot of the pity counter.
+cannot pay out twice or consume a second slot of its kind's pity counter.
 
 `pets.fed` is a cached sum of that pet's purchases, kept because the vivarium reads it on every
 snapshot and the panel reads it per card. The purchase and the increment are written in one
@@ -431,7 +487,7 @@ transaction, so there is no window in which a pet has been paid for and not grow
 | -------------- | ------- | ----------------------------------------------------------- |
 | `pets.enabled` | `true`  | Off stops the scan and hides the vivarium. Nothing is lost. |
 
-**That is the whole of it, and the shortness is the point.** `beatsPerDollar`, `dropChance`, `pity`,
+**That is the whole of it, and the shortness is the point.** `beatsPerDollar`, `rates`,
 `rarity` and `blendYield` were all keys here once. Each of them was a way of writing a pet into
 existence without doing anything: `dropChance: 1` hatches on every action, `pity: 1` does the same by
 another road, a `rarity` table zeroed everywhere but `mythic` turns the scarcest animal in the
@@ -441,22 +497,21 @@ scan, carry real origin lines, and look exactly like earned ones.
 
 They live in `PET_RULES` (`src/pets/rules.ts`) now, frozen, identical on every deployment:
 
-| Rate             | Value                                            | Does                                                         |
-| ---------------- | ------------------------------------------------ | ------------------------------------------------------------ |
-| `dropChance`     | `0.02`                                           | Per qualifying action, before pity.                          |
-| `pity`           | `100`                                            | Actions without a hatch before one is forced.                |
-| `rarity`         | `{common 700, uncommon 200, rare 80, mythic 20}` | The one tier table stage 2 rolls.                            |
-| `beatsPerDollar` | `25`                                             | The conversion.                                              |
-| `blendYield`     | `500`                                            | Beats a blended duplicate hands back, per point of `growth`. |
+| Rate             | Value                                            | Does                                                             |
+| ---------------- | ------------------------------------------------ | ---------------------------------------------------------------- |
+| `rates`          | one `{dropChance, pity}` per action kind          | What one action of that kind is worth. Tabled under [The roll](#the-roll). |
+| `rarity`         | `{common 700, uncommon 200, rare 80, mythic 20}` | The one tier table stage 2 rolls.                                |
+| `beatsPerDollar` | `25`                                             | The conversion.                                                  |
+| `blendYield`     | `500`                                            | Beats a blended duplicate hands back, per point of `growth`.     |
 
 The defaults are set so a pet is an event rather than a receipt: one guaranteed drop to open the
-vivarium, and roughly one per thirteen actions after it. At a fleet spending thirty dollars a day an
+vivarium, and a handful a week of ordinary use after it. At a fleet spending thirty dollars a day an
 adult common is about ten days of feeding.
 
-`dropChance` and `pity` are two limits over one rate, and the **lower one wins** — which is worth
-reading off the arithmetic rather than the table, because the table makes them look independent. At
-`0.02` the roll misses ninety-nine times running rarely enough that the roll keeps the decision;
-setting pity near the expected gap is what takes it away. An empty vivarium is the failure mode worth
+A kind's `dropChance` and its `pity` are two limits over one rate, and the **lower one wins** — which
+is worth reading off the arithmetic rather than the table, because the table makes them look
+independent. At twice the expected gap the roll misses its way to the ceiling rarely enough that the
+roll keeps the decision; setting pity near the expected gap is what takes it away. An empty vivarium is the failure mode worth
 watching for, and the answer to one is now a change in this table, in a release everybody gets,
 rather than a dial one deployment turns and the rest do not.
 
@@ -488,8 +543,8 @@ thing that cannot be chosen.
 ### Why the roll being a hash is what makes this possible
 
 Stage 3 hashes the action's key under a `:species` salt and indexes the tier's members with it, so
-the animal is a **property of the action's identity** — an origin key reaches two or three species
-out of twenty, and never the one you wanted. A forger has to grind for an origin ref that happens to give them the animal, and that
+the animal is a **property of the action's identity** — an origin key reaches exactly four species
+out of twenty-seven, one per tier, and never the one you wanted. A forger has to grind for an origin ref that happens to give them the animal, and that
 ref has to belong to something really settled. The same determinism that makes the scan idempotent
 makes every pet recomputable, which is the whole of the check.
 
@@ -515,8 +570,10 @@ misdated pet rolls a different hour and would report an impossible species too.
 Deliberately: the exact tier depends on the weight table, which this build ships and an older build
 may have shipped differently. A pet from a deployment that once tuned `pets.rarity` is still an
 honestly earned pet, and a check that called it a forgery would take something away from the one
-operator who had done nothing wrong. Weight-independent is still narrow — two or three species out of
-twenty — because stage 3 is the hash either way.
+operator who had done nothing wrong. Weight-independent is still narrow — four species out of
+twenty-seven, one per tier — because stage 3 is the hash either way. Filling every ladder did widen
+this from the two or three a holey pool reached; four in twenty-seven is still tighter than three in
+twenty was, and the property that matters is untouched.
 
 ### What a flaw costs
 
@@ -571,6 +628,10 @@ would have hatched anything. A pet against an action they would not have is `une
 
 Two things about it are load-bearing:
 
+- **It keeps one pity counter per kind, exactly as the scan does.** The counters are the only state
+  the replay and `PetKeeper.scan` share, so counting globally on one side and per kind on the other
+  makes them disagree about which actions pity forced — and the disagreement surfaces as `unearned`
+  on an honest pet, not as anything red.
 - **It reads the pity counter off the record, not off its own simulation.** A simulated counter that
   diverges once — one pet hatched under different rates, one restored backup — stays diverged, and
   every action after it is judged against a history that never happened. Taking the counter from the
@@ -618,6 +679,15 @@ instead.
 - **A new species is a row in `SPECIES`, a member of some pool, and two sprite grids.** Miss the pool
   and it exists but can never be drawn; miss the grids and `Record<PetSpecies, …>` fails the web
   typecheck, which is the one of the three that is not silent.
+- **Adding a member to a tier a pool already fills re-picks that tier for every past action.** Stage
+  3 indexes the members by `hash32 % length`, so a second entry moves the answer for origins already
+  hatched — and those pets then fail `impossible` on their own honest record. Filling an **empty**
+  tier is safe for the same reason it is worth checking: it only ever adds to what
+  `speciesCandidates` reaches. A pool edit is a question about the pets already out there, and the
+  answer is not visible in a diff.
+- **A rate is per kind, and every kind must be in `PET_RULES.rates`.** `Record<PetActionKind, …>`
+  makes a missing kind a typecheck failure rather than a silent zero, which is the only reason it is
+  safe to price them separately at all.
 - **Nothing under `src/dispatcher/` may import `src/pets/`.** Asserted structurally in
   `test/pets.test.ts`, alongside the assertion that nothing under `src/mcp/` or `docs/prompt-templates/`
   ever names the vivarium to an agent.

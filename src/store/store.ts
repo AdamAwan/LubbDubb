@@ -73,6 +73,7 @@ import type {
   LessonInput,
   Pet,
   PetAction,
+  PetActionKind,
   PetReset,
   PetSpecies,
   Plan,
@@ -988,7 +989,7 @@ export class Store {
   petPaidTotals(): Map<string, number> {
     return this.pets.petPaidTotals();
   }
-  petActionsSinceHatch(): number {
+  petActionsSinceHatch(): Map<PetActionKind, number> {
     return this.pets.petActionsSinceHatch();
   }
   feedPet(id: string, beats: number): Pet | null {

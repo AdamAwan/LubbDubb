@@ -40,8 +40,10 @@ interface RollOutcome {
  * fresh chance at a pet — with nothing anywhere able to tell that from a first
  * read.
  *
- * 1. **Does anything hatch?** `PET_RULES.dropChance`, or forced by pity, or the
- *    one guaranteed drop a deployment gets.
+ * 1. **Does anything hatch?** The action kind's own `dropChance` from
+ *    `PET_RULES.rates` — priced against how often that kind comes up, so a
+ *    landing is worth many job launches — or forced by that kind's own pity, or
+ *    the one guaranteed drop a deployment gets.
  * 2. **Which tier?** One global weighted table, identical for every action, which
  *    is what lets "a rare is 8% of hatches" be true of the deployment rather than
  *    of whichever button was pressed.
@@ -62,7 +64,11 @@ export function rollAction(
 ): RollOutcome {
   const key = `${kind}:${ref}`;
   const hour = hourOf(at);
-  const hatches = opts.forced || opts.firstEver || hash32(key) % 10_000 < Math.round(opts.rules.dropChance * 10_000);
+  // Per kind, not global: the rate is the ceiling on how much any one action is
+  // worth, and one rate over seven actions of wildly different frequency makes
+  // the busiest of them the whole vivarium.
+  const rate = opts.rules.rates[kind];
+  const hatches = opts.forced || opts.firstEver || hash32(key) % 10_000 < Math.round(rate.dropChance * 10_000);
 
   const tiers = tiersFor(opts.rules.rarity, opts.firstEver);
   const rolled = pickTier(tiers, hash32(`${key}:tier`));
@@ -85,9 +91,13 @@ export function rollAction(
  * tuned them is still an honestly earned pet, and a check that called it a forgery
  * would take something away from the one operator who had done nothing wrong.
  *
- * Weight-independent and still narrow: an origin key reaches two or three species
- * out of twenty, because stage 3 is a hash of that same key. **You cannot choose
- * which animal an action gives you**, which is the whole of what the check is for.
+ * Weight-independent and still narrow: an origin key reaches exactly four species
+ * out of twenty-seven — one per tier, because stage 3 is a hash of that same key
+ * and the tiers hold disjoint members. It reached two or three when pools had
+ * holes in them, so filling every ladder did widen this slightly; four in
+ * twenty-seven is still narrower than three in twenty, and the property that
+ * matters is untouched. **You cannot choose which animal an action gives you**,
+ * which is the whole of what the check is for.
  *
  * @public — read by `src/pets/attest.ts` across the roll/attest seam.
  */

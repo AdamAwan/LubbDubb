@@ -4,8 +4,8 @@ import type { PetActionKind, PetRarity, PetSpecies, PetStage } from '../types.js
  * What each species is, and what it costs to raise.
  *
  * One exported const rather than one export per species: knip runs every rule at
- * `error`, so twenty separately-exported records would read as twenty unimported
- * symbols the day the twentieth is added and nothing imports it directly.
+ * `error`, so twenty-seven separately-exported records would read as twenty-seven
+ * unimported symbols the day the last is added and nothing imports it directly.
  *
  * `growth` is the multiplier on both stage thresholds and on what a duplicate
  * blends back into. It is what makes a rare animal *feel* rare once the novelty
@@ -33,6 +33,13 @@ export const SPECIES: Record<PetSpecies, { rarity: PetRarity; display: string; g
   lander: { rarity: 'rare', display: 'Lander', growth: 2.5 },
   quill: { rarity: 'rare', display: 'Quill', growth: 2.5 },
   cairn: { rarity: 'rare', display: 'Cairn', growth: 2.5 },
+  ingot: { rarity: 'rare', display: 'Ingot', growth: 2.5 },
+  clarion: { rarity: 'mythic', display: 'Clarion', growth: 4 },
+  covenant: { rarity: 'mythic', display: 'Covenant', growth: 4 },
+  oracle: { rarity: 'mythic', display: 'Oracle', growth: 4 },
+  keystone: { rarity: 'mythic', display: 'Keystone', growth: 4 },
+  forge: { rarity: 'mythic', display: 'Forge', growth: 4 },
+  lodestone: { rarity: 'mythic', display: 'Lodestone', growth: 4 },
   ouroboros: { rarity: 'mythic', display: 'Ouroboros', growth: 4 },
 };
 
@@ -65,6 +72,16 @@ const ADULT_AT = 8_000;
  * on five of the seven actions, which is a hundred identical animals before
  * anything else turns up.
  *
+ * **Every action also carries a full ladder — a rare and a mythic of its own.**
+ * It did not: `upgrade` held the only mythic in the catalogue, and `human-task`
+ * and `job` held no rare, so a tier a pool could not fill degraded away and the
+ * scarcest animals sat behind the scarcest action. The arithmetic is the reason
+ * this changed rather than the principle — one mythic reachable only through an
+ * accepted self-update, at 2% of the hatches of an action a deployment takes a
+ * handful of times a year, is an animal nobody ever sees. A pool with a hole in
+ * it is now a pool that is wrong, not a way of expressing a ceiling; the ceiling
+ * is `PET_RULES.rates` instead, where it can be read as a number.
+ *
  * `nocturne` sits in every uncommon pool and is filtered out unless the action's
  * own timestamp falls at night — still the one species gated on something other
  * than what you were doing.
@@ -74,37 +91,37 @@ const POOLS: Record<PetActionKind, Record<PetRarity, readonly PetSpecies[]>> = {
     common: ['pip', 'mote', 'beck'],
     uncommon: ['warden', 'nocturne'],
     rare: ['quill', 'cairn'],
-    mythic: [],
+    mythic: ['clarion'],
   },
   'human-task': {
     common: ['pip', 'mote', 'tuft'],
     uncommon: ['chit', 'nocturne'],
-    rare: [],
-    mythic: [],
+    rare: ['quill'],
+    mythic: ['covenant'],
   },
   plan: {
     common: ['pip', 'mote', 'nib'],
     uncommon: ['vellum', 'nocturne'],
     rare: ['quill'],
-    mythic: [],
+    mythic: ['oracle'],
   },
   landing: {
     common: ['pip', 'mote', 'berth'],
     uncommon: ['drift', 'nocturne'],
     rare: ['lander'],
-    mythic: [],
+    mythic: ['keystone'],
   },
   job: {
     common: ['pip', 'mote', 'stoke'],
     uncommon: ['cinder', 'nocturne'],
-    rare: [],
-    mythic: [],
+    rare: ['ingot'],
+    mythic: ['forge'],
   },
   finding: {
     common: ['pip', 'mote', 'speck'],
     uncommon: ['bramble', 'nocturne'],
     rare: ['cairn'],
-    mythic: [],
+    mythic: ['lodestone'],
   },
   upgrade: {
     common: ['pip', 'mote', 'patch'],
@@ -140,11 +157,12 @@ function membersOf(kind: PetActionKind, tier: PetRarity, hour: number): readonly
  * The tier a roll actually lands on, and what it may draw there.
  *
  * A tier the pool cannot fill hands the roll **down** one tier at a time, never
- * up — which is the only way a ceiling is expressed. `human-task` and `job` hold
- * no rare, so their rare and mythic rolls become uncommon; only `upgrade` holds a
- * mythic at all. Degrading upward instead would make the scarcest actions the
- * easiest source of the scarcest animals, which is the inversion Mark Two exists
- * to remove.
+ * up. **No shipped pool has a hole in it any more** — every action carries all
+ * four tiers — so this is a guard rather than a mechanic now: it is what keeps a
+ * pool edited badly, or one the `nocturne` night gate has filtered empty, from
+ * dropping a hatch on the floor. Degrading upward instead would make the scarcest
+ * actions the easiest source of the scarcest animals, which is the inversion Mark
+ * Two exists to remove, and it stays wrong for the reason it always was.
  *
  * Returns null only if an action's every tier is empty, which no pool allows —
  * the callers still handle it rather than asserting, because a pool edited badly

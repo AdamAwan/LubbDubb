@@ -1,4 +1,4 @@
-import type { Pet, PetAction, PetFlaw, PetProvenance } from '../types.js';
+import type { Pet, PetAction, PetActionKind, PetFlaw, PetProvenance } from '../types.js';
 import { chainLink, type ChainInput } from '../store/pets.js';
 import { SPECIES } from './catalogue.js';
 import { rollAction, speciesCandidates } from './roll.js';
@@ -41,21 +41,31 @@ export interface PetLedger {
  * judged against a history that never happened. Reading the counter off the record
  * keeps each decision local and correct.
  *
+ * **One counter per kind, exactly as the scan keeps them.** The counters are the
+ * one piece of state this replay shares with `PetKeeper.scan`, so a replay that
+ * counted globally while the harness counted per kind would disagree about which
+ * actions pity forced — and disagreeing here does not read as a bug, it reads as
+ * `unearned` on a pet that was honestly earned.
+ *
  * What this closes: taking the rates out of the config stops the config route to a
  * free vivarium, and stops nothing for somebody editing `src/pets/rules.ts`. A
  * replay against the shipped constants sees those hatches for what they are.
  */
 export function replayBarren(log: PetAction[], rules: PetRules): Set<string> {
   const barren = new Set<string>();
-  let sinceHatch = 0;
+  const sinceHatch = new Map<PetActionKind, number>();
   for (const [index, action] of log.entries()) {
+    const missed = sinceHatch.get(action.kind) ?? 0;
     const roll = rollAction(action.kind, action.ref, action.at, {
       rules,
-      forced: sinceHatch + 1 >= rules.pity,
+      forced: missed + 1 >= rules.rates[action.kind].pity,
+      // Still once per deployment rather than once per kind, because the scan
+      // grants it once per deployment: the two must agree or an honest first pet
+      // replays as one this build would not have hatched.
       firstEver: index === 0,
     });
     if (!roll.hatches) barren.add(`${action.kind}:${action.ref}`);
-    sinceHatch = action.petId === null ? sinceHatch + 1 : 0;
+    sinceHatch.set(action.kind, action.petId === null ? missed + 1 : 0);
   }
   return barren;
 }
@@ -119,10 +129,10 @@ function judgeable(pet: Pet, build: { sha: string | null; clean: boolean }): boo
  *   settled. The hour is load-bearing: it is what decides whether a `nocturne`
  *   could have been drawn at all.
  * - **`impossible`** — its species, or its seed, is not something that origin can
- *   produce. Stage 3 is a hash of the action's own key, so one action reaches two
- *   or three species out of twenty and **never the one you wanted** — a forger has
- *   to grind for an origin ref that happens to give them the animal, and the ref
- *   has to belong to a real settled thing.
+ *   produce. Stage 3 is a hash of the action's own key, so one action reaches four
+ *   species out of twenty-seven — one per tier — and **never the one you wanted**:
+ *   a forger has to grind for an origin ref that happens to give them the animal,
+ *   and the ref has to belong to a real settled thing.
  * - **`overfed`** — it has grown by more beats than its purchases paid for, which
  *   is the other half of the exploit: feeding is what a fabricated wallet buys.
  * - **`broken-chain`** — its link, or a link before it, does not recompute. Catches
