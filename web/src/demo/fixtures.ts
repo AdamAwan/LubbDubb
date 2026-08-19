@@ -1010,7 +1010,7 @@ export function buildDemoState(): DemoSeed {
           // The demo's one unopened egg: the newest drop, still a shell in the
           // corner of the rail, so the hatch is one click away in the tour.
           openedAt: null,
-          placed: false,
+          placed: true,
           dissolvedAt: null,
           flaw: null,
           provenance: 'official',

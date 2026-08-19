@@ -1725,9 +1725,6 @@ button.cn-grow {
   color: var(--cn-fg);
   font-size: 13px;
 }
-.cn-hatch-say b {
-  text-transform: lowercase;
-}
 .cn-hatch-say p {
   margin: 4px 0 0;
   color: var(--cn-fg-faint);
