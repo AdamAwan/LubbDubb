@@ -127,6 +127,21 @@ export function relAge(iso: string, now: number = Date.now()): string {
   return new Date(then).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
+/**
+ * A date as somebody would say it out loud: "14 Aug 2026".
+ *
+ * Beside {@link relAge} rather than folded into it, because the two answer
+ * different questions. "3d ago" is right for a thing that is happening; a floor,
+ * a boundary or a start date is a fact about the deployment, and a reader
+ * converting "412d ago" back into a date is doing the work this saves them.
+ * Returns the input unchanged rather than "Invalid Date" if it is not a date.
+ */
+export function absDate(iso: string): string {
+  const at = new Date(iso).getTime();
+  if (!Number.isFinite(at)) return iso;
+  return new Date(at).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 /** Compact USD cost: "$0.42", "$12.30", "$142" — cents only while they matter. */
 export function fmtUsd(n: number): string {
   return n >= 100 ? `$${Math.round(n)}` : `$${n.toFixed(2)}`;

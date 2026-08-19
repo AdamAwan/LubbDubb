@@ -182,8 +182,8 @@ export interface System {
    * The operator's own Claude Code channel — validation checks run at their
    * keyboard, on a machine that can reach what the fleet cannot. Always present
    * and always constructed, but it binds nothing and writes no credential until
-   * `listen()` is called, which `main.ts` only does when
-   * `config.validation.desktop` is on.
+   * `listen()` is called, which `main.ts` does unconditionally at boot. A test's
+   * system therefore has the channel addressable and listening on nothing.
    */
   desktop: McpDesktopServer;
   /**
@@ -513,9 +513,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // The desktop channel (the operator's own Claude Code). Constructed
   // unconditionally so `system.desktop` is addressable, and inert until
   // `listen()` — which is the only thing that binds the stable socket or writes
-  // a credential into the operator's home directory. Neither should happen
-  // because a deployment took the defaults, which is why `validation.desktop`
-  // is off by default and `main.ts` reads it before calling.
+  // a credential into the operator's home directory. `main.ts` calls it on every
+  // boot; keeping the footprint in `listen()` rather than in the constructor is
+  // what keeps a test's system from writing into whoever is running the suite.
   const desktop = new McpDesktopServer({
     store,
     claimMinutes: config.validation.desktopClaimMinutes,

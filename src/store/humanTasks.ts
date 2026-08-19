@@ -94,6 +94,22 @@ export class HumanTaskStore {
     return row ? rowToHumanTask(row) : null;
   }
 
+  /**
+   * The title of each of these asks, by id — the pets panel's label for a
+   * `human-task` origin. By id rather than off {@link listHumanTasks}, whose cap
+   * would leave exactly the oldest pets unnamed. A missing id is absent from the
+   * map, never an error. → `docs/spec/22-pets.md#the-sources`
+   */
+  humanTaskLabels(ids: string[]): Map<string, string> {
+    if (ids.length === 0) return new Map();
+    const holes = ids.map(() => '?').join(',');
+    const rows = this.ctx.db.prepare(`SELECT id, title FROM human_tasks WHERE id IN (${holes})`).all(...ids) as {
+      id: string;
+      title: string;
+    }[];
+    return new Map(rows.map((r) => [r.id, r.title]));
+  }
+
   /** Every human task, newest first — the snapshot feed, open ones and a settled tail alike. */
   listHumanTasks(limit = 100): HumanTask[] {
     const rows = this.ctx.db

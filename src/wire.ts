@@ -35,6 +35,7 @@
  * a key that is always sent but may be empty is `| null`.
  */
 
+import type { FilingTarget } from './sink/actionSink.js';
 import type { PlanDiff } from './plans/planDiff.js';
 import type { AcceptanceCriterion } from './plans/parts.js';
 import type { PlanningPolicy } from './plans/planning.js';
@@ -825,6 +826,51 @@ export interface TicketRow {
 }
 
 /**
+ * `GET /api/issues/filing-target` — whether the harness can file an issue right
+ * now, where it would land, and as whom (issue #413).
+ *
+ * A **union rather than four independent fields**, because the two readings are
+ * not the same row with blanks in it: an available target always names itself and
+ * an unavailable one always says why, and a shape that allowed
+ * `{available: true, target: null}` would leave the compose modal free to draw a
+ * head naming nowhere.
+ *
+ * Never on `/api/state`: it costs a provider round trip, and the only reader is a
+ * modal that opens rarely. The static half of the gate — whether a real tracker is
+ * configured at all — is already on the snapshot as
+ * {@link CockpitConfig.canFileTickets}, and is the cheaper cut to make first.
+ *
+ * `available: false` is an ordinary **200**, not a 5xx: "the token is dead" is an
+ * answer to the question that was asked, and a status code would make it look like
+ * the probe itself broke.
+ */
+export type FilingTargetProbe =
+  | ({ available: true; reason: null } & FilingTarget)
+  | {
+      available: false;
+      target: null;
+      identity: null;
+      /** Plain prose for the modal to show — the provider's own message, or the gate that refused. */
+      reason: string;
+    };
+
+/**
+ * `POST /api/issues` — what the harness created, in the harness's own vocabulary
+ * (issue #413).
+ *
+ * `url` is resolved rather than composed: the connector knows the repository
+ * identity and the cockpit does not, and it is what lets the modal's success state
+ * be a link to the thing that was just filed rather than a number to go and find.
+ * Null where no provider can resolve a ref — the fake world has no web address.
+ */
+export interface IssueFiled {
+  ok: true;
+  /** The new item as `issue:<n>` — what a filing row stores and `link_ticket` speaks. */
+  ref: string;
+  url: string | null;
+}
+
+/**
  * `/api/tickets` — one page of the mirror, fetched on open and again as the list
  * is scrolled. Never on `/api/state`: that endpoint comes round every couple of
  * seconds and this list is all-time.
@@ -1115,6 +1161,19 @@ export interface PetView extends Pet {
    */
   flaw: PetFlaw | null;
   /**
+   * What the origin was, in words — the escalation's question, the ask's title,
+   * the plan's title, the landing's goal, the job's title, the finding's claim,
+   * or the short sha an upgrade was applied at.
+   *
+   * **Derived per snapshot, never stored.** A label read from the source row at
+   * draw time is the name that thing has *now*; a copy taken at hatch would
+   * disagree with it the first time a job is renamed or an escalation reworded.
+   * Null when the source row is gone, which is not a flaw and never reaches the
+   * attestation — the card falls back to the ref it has always shown.
+   * → `docs/spec/22-pets.md#the-sources`
+   */
+  originLabel: string | null;
+  /**
    * What kind of build hatched it: an official one, one running uncommitted
    * changes, or no reading at all.
    *
@@ -1212,4 +1271,21 @@ export interface PetState {
   wallet: PetWallet;
   /** How many pets stand in the enclosure at once, so the cockpit refuses the fifth in the same words the server does. */
   slots: number;
+  /**
+   * When this vivarium started counting, or null on a deployment whose first
+   * enabled scan has not run yet.
+   *
+   * Shipped so the cockpit can *say* it. Nothing an operator can see otherwise
+   * distinguishes a harness that pays nothing for a year of escalations, jobs and
+   * findings from one that is simply broken — the actions are on record, the
+   * enclosure is empty, and the page's own rates argue that something should have
+   * dropped by now. The date is the whole answer, and it only exists here.
+   *
+   * Null is a real state rather than a placeholder, and it lasts one boot: the
+   * start is stamped by the keeper's first scan, not by the `Store`, so a
+   * deployment sitting with pets turned off does not burn a date it cannot use.
+   * A surface draws nothing at all rather than a sentence about a boundary that
+   * has not been decided.
+   */
+  startedAt: string | null;
 }

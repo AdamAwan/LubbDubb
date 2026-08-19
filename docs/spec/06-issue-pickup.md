@@ -99,6 +99,14 @@ Assembled once in `src/system.ts` from config and handed to whichever dispatcher
 A bare `new RuleDispatcher()` takes an empty policy, which means no gate and flat priority — the
 act-on-everything behaviour unit tests rely on.
 
+The dispatcher carries that policy **whole** — its constructor spreads it and defaults only
+`priorityLabels` and `defaultPriority`, the two fields the type makes required. It does not re-list
+the fields, because every other one is optional: a field the list has not learned about reads as
+`undefined` inside the dispatcher rather than erroring, so the cockpit's pickup lens — which gets the
+policy straight from `src/system.ts` — and the dispatcher come to disagree about the same item with
+nothing red. That is exactly what happened to `containerTypes`, where `issueContainerTypes: []` left
+the Feature/Epic gate fully on for dispatch while the cockpit showed it off.
+
 ### The effective pickup states
 
 `effectivePickupStates(policy)` is the pickup list as every gate must actually read it: the

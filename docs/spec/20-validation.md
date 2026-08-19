@@ -497,10 +497,25 @@ A check that needs a browser, a login and a real environment is a check the flee
 can run it, on the machine that has all three, and report the reading onto the same row.
 
 So the harness listens on a second MCP socket (`src/mcp/desktop.ts`,
-[11](11-mcp-tools.md#the-desktop-channel)) that the operator registers in Claude Code **once**. Off
-by default (`validation.desktop`), because unlike everything else in this document it has a footprint
-outside the harness: a credential in a home directory, a skill installed into their Claude Code, and
-a socket at a fixed path.
+[11](11-mcp-tools.md#the-desktop-channel)) that the operator registers in Claude Code **once**.
+
+**Unconditional**, and it was not always. It used to be off by default, because unlike everything
+else in this document it has a footprint outside the harness: every start binds the stable socket,
+writes a `0600` credential at `validation.desktopCredentialPath` and rewrites the skill at
+`validation.desktopSkillPath`, all in the operator's home directory. What settled it the other way is
+that nothing downstream of the socket ever read the switch — the cockpit offers **Copy desktop
+prompt** on every unrun check, the dispatcher honours a desktop claim whatever the config said. So a
+deployment that took the defaults was handed a `/lubbdubb 284:C` that reached nothing, with no error,
+no marker and no boot line to say why. A channel advertised unconditionally and delivered
+conditionally is a dead end you find by walking into it; the footprint is the price of the offer
+being real. The switch is retired, warn-and-drop, in [02](02-configuration.md#retired-keys).
+
+Two consequences worth stating plainly. A hand-edited `SKILL.md` is overwritten on the next start,
+and there is now no setting that stops that — the file says so in its own body. And the second
+harness on a machine is now a case every developer with two checkouts hits: the stable socket is
+exclusive, so the one that boots second refuses it, records the conflict and prints an
+`unavailable` boot line rather than stealing a running harness's registration. Point it at a
+different `validation.desktopSocketPath` (and credential path) to run both.
 
 ### The three tools
 

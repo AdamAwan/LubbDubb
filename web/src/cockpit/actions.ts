@@ -1,4 +1,4 @@
-import type { RecoveryVerdict, UpgradeAction, WorkNodeView } from '../types.js';
+import type { FilingTargetProbe, IssueFiled, RecoveryVerdict, UpgradeAction, WorkNodeView } from '../types.js';
 import type { Place } from './place.js';
 
 /**
@@ -319,6 +319,36 @@ export interface CockpitActions {
    * writes it up, so the wording of the ticket is not decided here.
    */
   raiseBug(issueNumber: number, summary: string, title?: string): Promise<void>;
+
+  /**
+   * Where an issue raised from the top bar would land, and as whom — asked of the
+   * provider on the compose modal opening (issue #413).
+   *
+   * A **read** on this seam, like {@link fetchWorkSubtree}, and for the same
+   * reason: `console/` may not import `api.js`, and the modal is opened from the
+   * bar. Not a snapshot key either — it costs a round trip to the tracker, and the
+   * only reader opens rarely.
+   *
+   * It resolves for both readings. `available: false` is the provider's answer to
+   * the question, not a fault, and the modal shows the reason and offers the
+   * tracker's own form instead; a **rejection** means the probe route itself could
+   * not be reached, which the modal treats the same way.
+   */
+  probeFilingTarget(): Promise<FilingTargetProbe>;
+
+  /**
+   * File the operator's own issue into the configured tracker, directly.
+   *
+   * The one mutation here that resolves with something rather than `void`: the
+   * modal's done state is a link to the issue that was just filed, and a number to
+   * go and find would be a worse answer than the one the server already has.
+   *
+   * Unlike {@link raiseBug} no agent stands between the click and the create — the
+   * operator wrote it, so there is no write-up to delegate. `watch` decides whether
+   * the fleet picks it up and is passed explicitly: an unwatched issue is the right
+   * resting state for a half-formed thought.
+   */
+  raiseIssue(title: string, body: string, watch: boolean): Promise<IssueFiled>;
 
   /**
    * End the harness's run at a goal (issues #203, #234). A run is retained until

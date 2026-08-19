@@ -107,6 +107,17 @@ export function subjectLabel(row: NeedRow): string | null {
 }
 
 /**
+ * What the rail says about a run whose task the snapshot no longer carries.
+ *
+ * The row still has an agent — that is what makes it blocking — so the metadata
+ * line has to say *something*, and the id is what it used to say: `agent_ab4sc`
+ * is minted, means nothing to anybody, and reads as a name the operator ought to
+ * recognise. A phrase is the honest reading of the same fact, and the drawer,
+ * which is where an id is the subject, is still one click away through the row.
+ */
+const UNNAMED_RUN = 'a run with no task on record';
+
+/**
  * What an ask is holding, worded once. The rail row and the band the row opens
  * both state it, and a count read twice in two sentences is a count the reader
  * has to check against itself.
@@ -180,7 +191,7 @@ function Row({
         </div>
         <p className="cn-qtitle">{row.title}</p>
         <div className="cn-qmeta">
-          {row.agentId !== null && <span>{row.agentId}</span>}
+          {row.agentId !== null && <span>{row.agentLabel ?? UNNAMED_RUN}</span>}
           {row.agentId !== null && goal !== null && <span>·</span>}
           {goal !== null && <span>{goal}</span>}
           {row.holding > 0 && <span className="cn-hold">{holdingLabel(row.holding)}</span>}

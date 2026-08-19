@@ -16,8 +16,8 @@ import type { ErrorRecorder } from '../errorLog.js';
  * Kept as a string here rather than as a file asset for the prompt templates'
  * reason: the build emits `.ts` and nothing copies a stray `.md` into `dist`, so
  * an asset would work in development and be missing in a deployment — the exact
- * shape of silent failure this repo's conventions exist to avoid. A readable copy
- * lives at `docs/prompt-templates/lubbdubb-skill.md`.
+ * shape of silent failure this repo's conventions exist to avoid. There is no
+ * second copy under `docs/` either: one of the two would be the stale one.
  *
  * It is deliberately short. Everything about *how* to run a check comes back from
  * `validation_read` and `validation_claim`, which read the live plan; a skill that
@@ -38,8 +38,9 @@ neither of those is the same as the goal working.
 This machine can reach environments the harness's own fleet cannot. That is why
 the check came here.
 
-<!-- Managed by LubbDubb: this file is rewritten whenever the harness starts.
-     Set validation.desktopSkill to false to keep your own version. -->
+<!-- Managed by LubbDubb: the desktop channel is unconditional, so this file is
+     rewritten from scratch every time the harness starts. There is no setting
+     that keeps a local version — edit it and the next start overwrites you. -->
 
 ## The argument
 
@@ -96,8 +97,9 @@ which check if more than one is outstanding.
  *
  * Always overwrites. The alternative — trying to tell an operator's edits from a
  * stale copy — has no honest implementation, and a skill that silently stopped
- * being refreshed would describe a channel that had since changed. The file says
- * so in its own body, and `validation.desktopSkill` turns the writing off.
+ * being refreshed would describe a channel that had since changed. There is no
+ * setting that turns the writing off; the file says so in its own body, and
+ * `validation.desktopSkillPath` is the only way to put it somewhere else.
  */
 export function installDesktopSkill(path: string, errors?: ErrorRecorder): boolean {
   try {

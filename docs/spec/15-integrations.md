@@ -78,14 +78,14 @@ each of them composed a `gh`/`az` command as a string and spent a desk agent typ
 ([13](13-jobs-and-findings.md#filing-a-ticket)). Its input is provider-neutral and every provider
 answers the parts it has:
 
-| Field       | GitHub                                                    | Azure DevOps                                  |
-| ----------- | --------------------------------------------------------- | --------------------------------------------- |
-| `title`     | the issue title                                            | `System.Title`                                 |
-| `body`      | the issue body                                             | `System.Description`                           |
-| `labels`    | `labels` on the create                                     | `System.Tags`, semicolon-joined, on the create |
-| `assignee`  | `assignees: [login]` on the create                         | `System.AssignedTo` on the create              |
-| `type`      | **dropped** — a GitHub issue is not created _as_ anything  | the create's URL segment (`$User Story`)       |
-| `relatedTo` | appended to the body as `Related to #<n>`                  | a second write: a `System.LinkTypes.Related` relation |
+| Field       | GitHub                                                    | Azure DevOps                                          |
+| ----------- | --------------------------------------------------------- | ----------------------------------------------------- |
+| `title`     | the issue title                                           | `System.Title`                                        |
+| `body`      | the issue body                                            | `System.Description`                                  |
+| `labels`    | `labels` on the create                                    | `System.Tags`, semicolon-joined, on the create        |
+| `assignee`  | `assignees: [login]` on the create                        | `System.AssignedTo` on the create                     |
+| `type`      | **dropped** — a GitHub issue is not created _as_ anything | the create's URL segment (`$User Story`)              |
+| `relatedTo` | appended to the body as `Related to #<n>`                 | a second write: a `System.LinkTypes.Related` relation |
 
 Two of those rows are the whole point. Labels and the assignee ride on the **create** rather than on
 follow-up writes, because an item that exists for a moment untagged is one the pickup gate can miss
@@ -97,6 +97,27 @@ it — so the throw carries the id of what was created.
 `ref` on the result is `issue:<n>`, the harness's own vocabulary rather than a provider id: that is
 what a filing row stores, what `link_ticket` speaks and what the cockpit resolves to a URL, so the one
 translation happens in the provider instead of at each call site.
+
+`IssueCreateCapable` carries a second method, `describeFilingTarget()`, which answers **where a
+filing would land and as whom** — a `FilingTarget` of `{target, identity}` (issue #413). It is on the
+same interface rather than a capability of its own because it is not a second thing a provider might
+support: it is the question "would `createIssue` work", and a provider that could create but not say
+where would have the cockpit invite an operator to file blind into a tracker it cannot name.
+
+It is resolved by a **live provider call**, and that is the whole point of it. Config already says
+which tracker is selected; what it cannot say is whether the credential behind it still works. On
+GitHub the probe is `viewerLogin()` — the same authenticated round trip review authorship uses, and
+the one call a revoked or expired `GITHUB_TOKEN` fails outright — and the target is
+`owner/repo`. On Azure it is `viewerUniqueName()`, which also catches an `az` login that has lapsed
+(auth there resolves lazily rather than at boot), and the target is `organization/project`: work
+items belong to the **project**, and naming the repository would point an operator at the wrong half
+of it. The fake answers `the fake tracker` with a null `identity` — nobody is authenticated against a
+fake, and inventing a plausible login would make the one reading the probe exists to give a lie.
+
+Like `createIssue` it **throws** rather than reporting a failure. A dead credential is a fault, and
+which of "no tracker here", "the token is dead" and "the tracker did not answer" an operator should
+be shown is the caller's decision — made once, in `GET /api/issues/filing-target`
+([16](16-http-api.md#get-apiissuesfiling-target)).
 
 `PrBaseUpdateCapable` merges a pull request's **base into it** — the arm of rule `pr-base-update` that
 costs no agent ([05](05-dispatcher.md#pr-base-update--two-arms)). GitHub implements it with
@@ -181,6 +202,13 @@ Implements both seams:
   a lens nothing dispatches from, and a provider with no such listing is an empty tab rather than a
   failed pulse. `tracksTicketHistory` says whether any provider can answer at all, which is what stops
   the sweep stamping a floor for a history it will never read.
+- **`canCreateIssues()` / `describeFilingTarget()`** — the two halves of "can I file, and where".
+  The predicate is the cheap cut, asked first by both filing routes; the probe delegates to the first
+  `IssueCreateCapable` and throws when there is none, exactly as `createIssue` does. They are kept
+  apart because the two answers are different things to show an operator — a provider that cannot
+  file is a **deployment shape**, and a provider that could not be reached is a **fault** — and
+  collapsing them would put "no tracker is configured" in the Errors panel of every fake deployment,
+  every time a compose modal opened.
 - **`inject(event)`** — routes to the fake that owns the event kind and logs it. An event with no fake
   owner is recorded as `inject_unhandled` rather than throwing: you cannot fake-inject onto a real
   provider. **There is no HTTP route behind this**: it is the test suite's world driver (316 call

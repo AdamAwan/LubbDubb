@@ -80,6 +80,22 @@ export function planOriginIssue(originRef: string | null): number | null {
 }
 
 /**
+ * The issue behind *any* origin in the `issue:<n>` subtree — the pickup root, a
+ * part, a planner, an assay, an assessment — or null for a ref naming something
+ * else entirely.
+ *
+ * Deliberately not {@link planOriginIssue}, which answers a narrower question and
+ * is named after it. A reader that wants the plan an origin belongs to needs this
+ * one: a part origin is the only shape that needs the plan and the only shape
+ * `planOriginIssue` refuses, so reaching for it there resolves every part agent's
+ * plan to null and refuses it work it was dispatched to do.
+ */
+export function originIssueNumber(originRef: string | null): number | null {
+  const match = /^issue:(\d+)(?::|$)/.exec(originRef ?? '');
+  return match ? Number(match[1]) : null;
+}
+
+/**
  * The branch a planning agent works on. Deliberately a *separate namespace* from
  * both `issue/<n>` (what an unplanned pickup works on when the funnel fails open)
  * and `issue/<n>/<slug>` (the part branches): git stores refs as files, so

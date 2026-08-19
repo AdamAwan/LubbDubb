@@ -739,6 +739,8 @@ const REMOVED_KEYS: Readonly<Record<string, string>> = {
 const RETIRED_KEYS: Readonly<Record<string, string>> = {
   'planning.enabled': 'the planning funnel is always on — every goal is planned',
   'validation.enabled': 'validation plans are always on',
+  'validation.desktop':
+    'the desktop channel is always on — the cockpit offers a desktop prompt on every unrun check, so a harness that was not listening was a dead end with nothing to say so',
   'validation.desktopSkill': 'the /lubbdubb skill is always installed and refreshed when the desktop channel starts',
   assessment: 'the assessor is always on — a goal with work behind it and nothing in flight is always assessed',
   'assessment.enabled': 'the assessor is always on',

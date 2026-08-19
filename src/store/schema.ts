@@ -944,6 +944,19 @@ CREATE TABLE IF NOT EXISTS pet_resets (
   cleared INTEGER NOT NULL     -- how many pets it released; kept for the record
 );
 
+-- When this vivarium started counting, and the whole of what makes an action from
+-- before the feature existed inert rather than owed. One row, forever: a database
+-- carries one collection, so the key is pinned to 1 rather than naming anything.
+--
+-- Stamped by the keeper's first enabled scan, and re-stamped by a clearance inside
+-- the same transaction that releases the pets. Its absence is the migration gate —
+-- stronger than "the column arrived this boot", because it is true on exactly one
+-- boot however the schema got here.
+CREATE TABLE IF NOT EXISTS pet_vivarium (
+  id         INTEGER PRIMARY KEY CHECK (id = 1),
+  started_at TEXT NOT NULL  -- actions stamped before this are recorded and roll nothing
+);
+
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);

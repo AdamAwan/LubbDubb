@@ -248,6 +248,39 @@ test('a config file setting a retired switch warns and boots rather than refusin
 });
 
 /**
+ * The desktop channel's own retirement, kept separate because its shape is the
+ * one the list is for: the deployment on the other end of this warning switched
+ * the channel *off*, and is getting it back — a socket bound, a credential and a
+ * skill written into a home directory that never asked for either. That has to
+ * come from the boot log rather than from finding the files.
+ */
+test('a config file switching the desktop channel off loads, drops the key and says so', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  const warnings: string[] = [];
+  const realWarn = console.warn;
+  console.warn = (msg: string): void => void warnings.push(msg);
+  t.after(() => {
+    console.warn = realWarn;
+    process.chdir(cwd);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  writeFileSync(
+    join(dir, 'lubbdubb.config.json'),
+    JSON.stringify({ validation: { desktop: false, desktopSkillPath: '/tmp/skill.md' } }),
+    'utf8',
+  );
+
+  const cfg = loadDeploymentConfig();
+  assert.equal(cfg.validation.desktopSkillPath, '/tmp/skill.md', 'the paths are still real choices');
+  assert.ok(!Object.hasOwn(cfg.validation, 'desktop'), 'and nothing later can read the value back off the policy');
+  assert.equal(warnings.length, 1);
+  assert.ok(warnings[0]?.includes('validation.desktop'));
+});
+
+/**
  * The same mechanism over a **top-level** key and a whole block. Both forms are in
  * the list because a block whose every field went unconditional is removed whole,
  * while an operator's file names the block rather than the field inside it — so

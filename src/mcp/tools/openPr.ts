@@ -1,4 +1,4 @@
-import { issueOrigin, planOriginIssue } from '../../plans/planning.js';
+import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
 import { prTitleFields, renderPrTitle } from '../../prTitle.js';
 import { resolveOpenPr } from '../openPr.js';
 import { linkPrWorkItem } from '../../prWorkItemDesk.js';
@@ -56,7 +56,10 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
     const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
     if (!summary) return toolError('open_pr rejected: summary is required and must not be empty.');
 
-    const issueNumber = planOriginIssue(task.originRef);
+    // Any origin in the issue subtree, not just a planner's: the part arm below is
+    // the one that needs the plan, and a part origin is exactly what `planOriginIssue`
+    // does not resolve.
+    const issueNumber = originIssueNumber(task.originRef);
     const plan = issueNumber === null ? null : deps.store.getPlanByOrigin(issueOrigin(issueNumber));
     const target = resolveOpenPr(task.originRef, {
       issues: deps.store.getWorldBaseline()?.issues ?? [],

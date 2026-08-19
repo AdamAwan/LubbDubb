@@ -3,6 +3,7 @@ import type {
   ActionSink,
   BranchDeleteInput,
   CiCheckRequeueInput,
+  FilingTarget,
   IssueCommentInput,
   IssueCreateInput,
   IssueLabelInput,
@@ -78,6 +79,19 @@ export class FakeConnector implements Connector, ActionSink {
   createIssue(input: IssueCreateInput): Promise<SendResult> {
     return this.composite.createIssue(input);
   }
+  /**
+   * The probe, passed through to whichever fake owns issues — so a test that
+   * exercises the filing-target route through this facade gets the same reading a
+   * real deployment's composite gives.
+   *
+   * @public — not on {@link ActionSink}: the probe is a read for one cockpit
+   * control, and putting it on the write seam would oblige every hand-written test
+   * sink to answer a question none of them are about.
+   */
+  describeFilingTarget(): Promise<FilingTarget> {
+    return this.composite.describeFilingTarget();
+  }
+
   upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
     return this.composite.upsertIssueComment(input);
   }

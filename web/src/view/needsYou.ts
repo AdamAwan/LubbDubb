@@ -88,6 +88,16 @@ export interface NeedRow {
    * thing to go and look at.
    */
   agentId: string | null;
+  /**
+   * What that agent is *on*, in words — its task's title, resolved here from the
+   * snapshot the browser already holds. It is what the rail draws, because an
+   * `agent_ab4sc` beside an ask names nothing an operator recognises: the id is
+   * minted (`agent_${nanoid(10)}`, `src/store/agents.ts`) and an agent has no name
+   * of its own, so its task's title is the harness's only answer to "what is this
+   * run". Null when there is no agent, or none the snapshot still carries — the
+   * rail then says so in words rather than falling back to the id.
+   */
+  agentLabel: string | null;
   /** Live plan parts this ask is holding. Zero when it genuinely holds nothing. */
   holding: number;
   raisedAt: string;
@@ -121,6 +131,22 @@ function goalOf(ref: string | null | undefined, state: AppState): string | null 
   if (m?.[1]) return m[1];
   const pr = /^pr:(\d+)/.exec(ref ?? '');
   return pr?.[1] ? goalOfPr(state, Number(pr[1])) : null;
+}
+
+/**
+ * The name of the work an agent is on: its task's title, clamped to one line.
+ *
+ * Resolved once here rather than in the rail, so the row carries a reading and
+ * not an id to look up — and so the fallback is decided in one place. A title is
+ * free text an agent or the dispatcher wrote, so a line break in it would put a
+ * paragraph in a queue row; the first line is the summary either way.
+ */
+function agentLabelOf(agentId: string | null, state: AppState): string | null {
+  if (agentId === null) return null;
+  const agent = state.agents.find((a) => a.id === agentId);
+  const title = agent === undefined ? null : (state.tasks.find((t) => t.id === agent.taskId)?.title ?? null);
+  const line = title?.split('\n')[0]?.trim() ?? '';
+  return line === '' ? null : line;
 }
 
 function holdingForTask(task: HumanTask, parts: readonly PlanPart[]): number {
@@ -194,6 +220,7 @@ export function buildNeedsYou(state: AppState): NeedRow[] {
       // where it is answered, and it is already on screen.
       opens: null,
       agentId: null,
+      agentLabel: null,
       holding: 0,
       raisedAt: '',
     });
@@ -212,6 +239,7 @@ export function buildNeedsYou(state: AppState): NeedRow[] {
       originRef,
       opens: opensAt(goalRef, state),
       agentId: e.agentId,
+      agentLabel: agentLabelOf(e.agentId, state),
       holding: holdingForEscalation(e, state),
       raisedAt: e.createdAt,
     });
@@ -234,6 +262,7 @@ export function buildNeedsYou(state: AppState): NeedRow[] {
       originRef,
       opens: opensAt(goalRef, state),
       agentId,
+      agentLabel: agentLabelOf(agentId, state),
       holding: 0,
       // The park has no row of its own to be stamped, so the agent's own clock is
       // the honest reading: it is the last thing that happened to it.
@@ -269,6 +298,7 @@ export function buildNeedsYou(state: AppState): NeedRow[] {
       // The assayer that proposed it is gone, and it was never parked on the
       // answer — an id here would point at a run that ended.
       agentId: null,
+      agentLabel: null,
       // Nothing is holding parts: the gate stops the goal before there is a plan
       // to hold any, and a count invented here would sort it against asks that
       // really are blocking work.
@@ -292,6 +322,7 @@ export function buildNeedsYou(state: AppState): NeedRow[] {
       // agent that happened to ask, which is not what this field means, so it
       // stays null there rather than putting a bystander's id on the row.
       agentId: t.kind === 'burn' ? t.agentId : null,
+      agentLabel: t.kind === 'burn' ? agentLabelOf(t.agentId, state) : null,
       holding: holdingForTask(t, parts),
       raisedAt: t.createdAt,
     });

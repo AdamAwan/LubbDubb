@@ -2992,6 +2992,23 @@ body {
   resize: vertical;
   width: 100%;
 }
+/* Raise-an-issue modal. It reuses the bug modal's frame and prose fields whole —
+   the same paragraph of the operator's own words — and adds only the two rows that
+   are its own: the opt-in that decides whether the fleet picks the issue up, and
+   what it says once the thing exists. */
+.ri-watch {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: 12px;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.ri-done {
+  font-size: 13px;
+  line-height: 1.5;
+  margin: 12px 0;
+}
 .pm-doc {
   font-size: 13px;
   line-height: 1.5;

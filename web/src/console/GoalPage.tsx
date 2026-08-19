@@ -460,7 +460,7 @@ function PlanWaves({ page, actions }: { page: GoalPageView; actions: CockpitActi
           <div className="cn-col" key={group}>
             <div className="cn-coln">{GROUP_LABEL[group]}</div>
             {parts.map((p) => (
-              <Part key={p.part.id} part={p.part} group={p.group} agentId={p.agentId} />
+              <Part key={p.part.id} part={p.part} group={p.group} agentId={p.agentId} actions={actions} />
             ))}
           </div>
         ))}
@@ -468,7 +468,7 @@ function PlanWaves({ page, actions }: { page: GoalPageView; actions: CockpitActi
           <div className="cn-col">
             <div className="cn-coln">Retired</div>
             {retired.map((part) => (
-              <Part key={part.id} part={part} group="retired" agentId={null} />
+              <Part key={part.id} part={part} group="retired" agentId={null} actions={actions} />
             ))}
           </div>
         )}
@@ -477,15 +477,28 @@ function PlanWaves({ page, actions }: { page: GoalPageView; actions: CockpitActi
   );
 }
 
+/**
+ * One part of the plan.
+ *
+ * **The agent on it is drawn as a way there, never as its id.** `agent_ab4sc`
+ * beside a part named nothing — agent ids are minted and an agent has no name of
+ * its own — and the one thing the operator wanted from it, the run's transcript
+ * and its controls, was on a surface the row did not lead to. The row already
+ * names the part, so the control is a door rather than a second name, and it sits
+ * beside the pull-request reference rather than around it: one click cannot have
+ * two destinations, so a `<Ref>` is never nested inside a button.
+ */
 function Part({
   part,
   group,
   agentId,
+  actions,
 }: {
   part: PlanPart;
   /** The four the page groups by, plus the one that is drawn beside them and counted in none of them. */
   group: PartGroup | 'retired';
   agentId: string | null;
+  actions: CockpitActions;
 }): JSX.Element {
   return (
     <div className={`cn-part cn-${group}`}>
@@ -502,7 +515,19 @@ function Part({
             <Ref to={`pr:${part.prNumber}`} label={`PR #${part.prNumber}`} />
           </>
         )}
-        {agentId !== null && ` · ${agentId}`}
+        {agentId !== null && (
+          <>
+            {' · '}
+            <button
+              type="button"
+              className="cn-openagent"
+              title="Open the agent working this part — its transcript, what it has cost, and its controls"
+              onClick={() => actions.select(agentId)}
+            >
+              open the agent ↗
+            </button>
+          </>
+        )}
       </span>
     </div>
   );

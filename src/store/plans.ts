@@ -185,6 +185,21 @@ export class PlanStore {
     return row ? rowToPlan(row) : null;
   }
 
+  /**
+   * The title of each of these plans, by id — the pets panel's label for a
+   * `plan` origin. A missing id is absent from the map, never an error.
+   * → `docs/spec/22-pets.md#the-sources`
+   */
+  planLabels(ids: string[]): Map<string, string> {
+    if (ids.length === 0) return new Map();
+    const holes = ids.map(() => '?').join(',');
+    const rows = this.ctx.db.prepare(`SELECT id, title FROM plans WHERE id IN (${holes})`).all(...ids) as {
+      id: string;
+      title: string;
+    }[];
+    return new Map(rows.map((r) => [r.id, r.title]));
+  }
+
   getPlanByOrigin(originRef: string): Plan | null {
     const row = this.ctx.db.prepare(`SELECT * FROM plans WHERE origin_ref=?`).get(originRef) as PlanRow | undefined;
     return row ? rowToPlan(row) : null;

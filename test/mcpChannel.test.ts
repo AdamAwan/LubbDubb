@@ -1839,6 +1839,120 @@ test('open_pr opens the pull request for the calling agent, titled by the conven
   system.store.close();
 });
 
+test('open_pr opens a part’s pull request against its own branch, plan and all', async () => {
+  // The end-to-end shape the resolver’s own unit tests cannot reach: they are handed
+  // the plan in their context, so the wiring that *finds* it was uncovered — and it
+  // looked for a planner’s origin, which no part agent has. Every part agent was
+  // refused "issue #N has no plan" and opened its pull request by hand, unstacked.
+  const system = build();
+  system.connector.inject({ kind: 'new_issue', number: 183, title: 'Ticket sync rewrite', body: '' });
+  await system.harness.runCycle('manual');
+  const plan = system.store.upsertPlan({
+    originRef: 'issue:183',
+    title: 'Ticket sync rewrite',
+    status: 'active',
+    reason: 'Schema before reader.',
+  });
+  system.store.upsertPlanParts(plan.id, [
+    {
+      slug: 'schema',
+      seq: 1,
+      title: 'Add the table',
+      scope: 'src/store',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+      touches: [],
+      size: null,
+      expectedKind: 'code',
+    },
+    {
+      slug: 'reader',
+      seq: 2,
+      title: 'Read it',
+      scope: 'src/dispatcher',
+      dependsOn: ['schema'],
+      rationale: null,
+      acceptance: null,
+      touches: [],
+      size: null,
+      expectedKind: 'code',
+    },
+  ]);
+  const bottom = system.store.listPlanParts(plan.id).find((p) => p.slug === 'schema')!;
+  system.store.updatePlanPart(bottom.id, { status: 'dispatched' });
+
+  const first = await callTool(system, spawnAgent(system, 'issue:183:part:schema'), 'open_pr', {
+    summary: 'sync cursor table',
+    type: 'feat',
+    scope: 'store',
+  });
+  const bottomPr = JSON.parse(first.text) as { opened: boolean; pullRequest: number; title: string; base: string };
+  assert.equal(bottomPr.opened, true, 'a part agent is not refused for want of a plan');
+  assert.equal(bottomPr.title, '#183 [1/2] feat(store): sync cursor table');
+  assert.equal(bottomPr.base, 'main', 'the bottom of the stack sits on the integration branch');
+
+  // The rung above: its base is the branch beneath it, which is the whole of what a
+  // hand-opened pull request loses — targeting `main` instead silently un-stacks the
+  // stack, so the diff carries the part below it too.
+  const second = await callTool(system, spawnAgent(system, 'issue:183:part:reader'), 'open_pr', {
+    summary: 'read the cursor table',
+  });
+  const topPr = JSON.parse(second.text) as { pullRequest: number; title: string; base: string };
+  assert.equal(topPr.base, 'issue/183/schema');
+  assert.equal(topPr.title, '#183 [2/2] read the cursor table');
+
+  const world = await system.connector.getState();
+  assert.equal(world.pullRequests.find((p) => p.number === bottomPr.pullRequest)?.branch, 'issue/183/schema');
+  assert.equal(world.pullRequests.find((p) => p.number === topPr.pullRequest)?.branch, 'issue/183/reader');
+  system.store.close();
+});
+
+test('open_pr states no position for a lone part, and the plan roll-up reaches it', async () => {
+  const system = build();
+  system.connector.inject({ kind: 'new_issue', number: 184, title: 'Prune the spool', body: '' });
+  await system.harness.runCycle('manual');
+  const plan = system.store.upsertPlan({
+    originRef: 'issue:184',
+    title: 'Prune the spool',
+    status: 'active',
+    reason: 'One pull request will do.',
+  });
+  system.store.upsertPlanParts(plan.id, [
+    {
+      slug: 'prune',
+      seq: 1,
+      title: 'Prune it',
+      scope: 'src/spool',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+      touches: [],
+      size: null,
+      expectedKind: 'code',
+    },
+  ]);
+
+  const res = await callTool(system, spawnAgent(system, 'issue:184:part:prune'), 'open_pr', {
+    summary: 'prune the spool',
+  });
+  const payload = JSON.parse(res.text) as {
+    title: string;
+    base: string;
+    _status: { plan?: { status: string; parts: { slug: string }[] } };
+  };
+  assert.equal(payload.title, '#184 prune the spool', 'a plan of one part states no position');
+  assert.equal(payload.base, 'main');
+  // The same lookup fills the envelope, so the roll-up its comment describes now
+  // reaches the part agents rather than only the planner that needs it least.
+  assert.equal(payload._status.plan?.status, 'active');
+  assert.deepEqual(
+    payload._status.plan?.parts.map((p) => p.slug),
+    ['prune'],
+  );
+  system.store.close();
+});
+
 test('open_pr is refused for an origin that is not doing an issue’s work', async () => {
   const system = build();
   const agent = spawnAgent(system, 'pr:142:ci');

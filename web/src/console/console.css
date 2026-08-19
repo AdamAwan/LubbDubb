@@ -168,6 +168,19 @@
   font-weight: 400;
   letter-spacing: normal;
 }
+/* The compose control wears the link's face, because it is the same offer in the
+   same spot and the operator should not have to learn two of them: only where it
+   lands differs, and that is what the modal's head is for. It borrows `.ext-ref`'s
+   colours through the token layer rather than the class — `console.css` styling
+   `.ext-ref` directly is the one thing this stylesheet is tested not to do — and it
+   wears no `↗`, since it leaves for nowhere. */
+.cn-issue-btn {
+  color: var(--link-ink);
+  padding: 0;
+}
+.cn-issue-btn:hover {
+  color: var(--text);
+}
 .cn-dot {
   width: 7px;
   height: 7px;
@@ -340,6 +353,10 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  /* A flex item's automatic minimum size is its content, so without this the
+     list refuses to shrink below a long queue and pushes the rail's footer off
+     the bottom instead of scrolling. */
+  min-height: 0;
 }
 /* A queue longer than the rail is tall must scroll, not squash: flex items
    shrink by default, and a row shorter than its text hides the ask's goal and
@@ -810,6 +827,15 @@
 .cn-part .cn-dep {
   font: 11px var(--cn-mono);
   color: var(--cn-fg-faint);
+}
+/* The way into a part's agent. It sits inside the dependency line, so it keeps
+   that line's mono and says "control" by colour alone — a filled button here
+   would outweigh the part's own title, which is what the row is for. */
+.cn-part .cn-openagent {
+  color: var(--cn-accent);
+}
+.cn-part .cn-openagent:hover {
+  text-decoration: underline;
 }
 .cn-arrow {
   width: 26px;
@@ -1572,14 +1598,17 @@ button.cn-grow {
   flex: none;
 }
 
-/* The vivarium: pinned under the rail's scrolling list, so a long queue scrolls
-   behind it rather than pushing it off the bottom. It is the last thing in the
-   rail's flex column and never shrinks, which is the whole of what "always in
-   frame" costs here. */
+/* The vivarium: the rail's footer, below its scrolling list, so a long queue
+   scrolls behind it rather than pushing it off the bottom. It never shrinks,
+   and the `auto` top margin absorbs whatever height the queue leaves over — so
+   a short or empty queue leaves the gap above the enclosure rather than below
+   it, and the corner is the corner at every queue length. Inert when the list
+   already fills the rail. */
 .cn-viv {
   border-top: 1px solid var(--cn-line);
   background: var(--cn-bg);
   flex-shrink: 0;
+  margin-top: auto;
 }
 .cn-viv-floor {
   display: flex;
@@ -1657,6 +1686,15 @@ button.cn-grow {
 }
 .cn-viv-eggs {
   color: var(--cn-accent);
+}
+/* The vivarium's start date, said quietly under the bar. Lower-case and dimmer
+   than the bar above it because it is a footnote, not a reading — it answers one
+   question ("why did none of that pay?") and is otherwise meant to be skipped. */
+.cn-viv-since {
+  margin: 0;
+  padding: 0 12px 8px;
+  font: 10px/1.3 var(--cn-mono);
+  color: var(--cn-fg-faint);
 }
 
 /* ---------- the shell coming off ---------- */

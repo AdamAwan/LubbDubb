@@ -56,6 +56,9 @@ plan is progressing.
 }
 ```
 
+The plan is resolved with `originIssueNumber` for `open_pr`'s reason above: the roll-up is for the
+agents working a plan's parts, and the planner that wrote it is the one caller that needs it least.
+
 ### `plan_submit`
 
 Arguments `{parts, reason, validation?}` plus the narrative fields. At least one part is required — work that is one pull request is a one-part plan, not a shape of its own.
@@ -446,6 +449,12 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
   the operator's account.
 - **Base selection reuses `partBase`.** Two answers to "what does this part stack on" is the drift
   class the branch gate and the reconciler already avoid by sharing one.
+- **The plan behind the origin is found with `originIssueNumber`, never `planOriginIssue`.** The part
+  arm is the only one that needs the plan and a part origin is the only shape `planOriginIssue`
+  refuses — it is named after the *planner's* ref, and confines plan ingestion to it. Reached for
+  here it resolved every part agent's plan to `null`, so every one of them was refused "issue #N has
+  no plan" and opened its pull request by hand: on the default branch rather than the rung beneath
+  it, un-stacked, unseeded and unlinked.
 - **Every other origin is refused by name**, and told which tool it actually wants — a PR-concern
   agent already has a pull request; a planner, assayer, assessor or desk job writes no code. Refusing
   beats silently scoping: an agent handed a target it did not ask for would open a PR for work it is
@@ -604,8 +613,12 @@ load-bearing both ways:
 
 `src/mcp/desktop.ts`. A second socket, for the operator's **own** Claude Code rather than for a
 spawned agent — so a validation check needing a browser and a login the fleet does not have can be
-run at their keyboard and reported onto the same row. Off unless `validation.desktop`;
-[20](20-validation.md#the-desktop-channel) owns the behaviour.
+run at their keyboard and reported onto the same row. **Unconditional** — every start binds the
+stable socket, mints the credential at `validation.desktopCredentialPath` (`0600`) and rewrites the
+skill at `validation.desktopSkillPath`, on a deployment that configured none of it. That footprint is
+the whole of what the channel costs a deployment that never uses it, and it is the price of the
+cockpit's **Copy desktop prompt** reaching something. [20](20-validation.md#the-desktop-channel) owns
+the behaviour.
 
 | Tool                | Purpose                                                                                               |
 | ------------------- | ----------------------------------------------------------------------------------------------------- |

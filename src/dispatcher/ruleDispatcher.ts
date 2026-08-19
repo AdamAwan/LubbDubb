@@ -170,14 +170,15 @@ export class RuleDispatcher implements Dispatcher {
       gitFetchIntervalMs: planning.gitFetchIntervalMs ?? DEFAULT_PLANNING.gitFetchIntervalMs,
     };
     this.templates = templates;
+    // Spread, then default only the two fields that are required on the policy.
+    // Re-listing the fields instead drops any the list has not learned about yet —
+    // silently, since every one of them is optional and reads as `undefined` rather
+    // than erroring. That is how `containerTypes` came to be honoured by the cockpit
+    // and ignored by the dispatcher.
     this.pickup = {
-      watchLabel: pickup.watchLabel,
-      requireOwnLabel: pickup.requireOwnLabel,
+      ...pickup,
       priorityLabels: pickup.priorityLabels ?? {},
       defaultPriority: pickup.defaultPriority ?? 0,
-      pickupStates: pickup.pickupStates,
-      inReviewState: pickup.inReviewState,
-      inProgressState: pickup.inProgressState,
     };
     this.cooldown = {
       maxAttempts: cooldown.maxAttempts ?? DEFAULT_COOLDOWN.maxAttempts,
