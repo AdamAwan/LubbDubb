@@ -117,7 +117,7 @@ const TICKET_ORDER: readonly TicketOrder[] = ['added', 'changed', 'cost'];
 // panel missing from here is not merely unshareable: the place round-trips through
 // the query string, so an unlisted name is parsed straight back to null and the
 // panel will not open at all.
-const PANELS = ['findings', 'lessons', 'faults', 'output', 'launch', 'build'] as const;
+const PANELS = ['findings', 'lessons', 'faults', 'output', 'launch', 'build', 'pets'] as const;
 
 /** A parameter's value, with an empty one read as absent — `?goal=` names nothing. */
 function param(query: URLSearchParams, key: string): string | null {

@@ -527,6 +527,9 @@ export function buildStateSnapshot(
     // cockpit joins parts to `upcoming` by origin to draw the dispatch cut.
     plans: wirePlans,
     planParts: wirePlanParts,
+    // Null when the feature is off, so the cockpit draws nothing at all rather
+    // than an empty enclosure that reads as a deployment nobody has used.
+    pets: system.pets.state(),
     // The validation plan beside the plan graph it hangs off — the checks whole,
     // superseded ones included, because "this check was withdrawn" is a thing the
     // sheet has to be able to say.

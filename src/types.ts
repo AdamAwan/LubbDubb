@@ -2679,3 +2679,75 @@ export interface UpgradeIntent {
    */
   pausedByDrain: boolean;
 }
+
+// -- Pets --------------------------------------------------------------------
+
+/**
+ * The nine creatures a deployment can collect. One vivarium per database, so a
+ * species is a fact about the harness rather than about a profile of it.
+ *
+ * The set is closed and the keys are stored, so a species is never renamed — the
+ * display name in `src/pets/catalogue.ts` is what changes when one reads wrong.
+ */
+export type PetSpecies = 'pip' | 'nib' | 'tuft' | 'warden' | 'cinder' | 'nocturne' | 'lander' | 'quill' | 'ouroboros';
+
+/** How hard a species is to draw, and how long it takes to raise. */
+export type PetRarity = 'common' | 'uncommon' | 'rare' | 'mythic';
+
+/** How far a pet has been raised. Derived from what it has been fed, never stored. */
+export type PetStage = 'hatchling' | 'juvenile' | 'adult';
+
+/**
+ * The operator actions that roll for a pet — and the whole of what does.
+ *
+ * Every member is something a **person** did in the cockpit. The fleet's own
+ * work is deliberately absent: it funds the beats and cannot earn a creature, and
+ * that wall is what stops the collection becoming a picture of the bill.
+ */
+export type PetActionKind = 'escalation' | 'human-task' | 'plan' | 'landing' | 'job' | 'finding' | 'upgrade';
+
+/** One hatched creature. */
+export interface Pet {
+  id: string;
+  species: PetSpecies;
+  /**
+   * The action key it hatched from (`escalation:esc_9f2a`), which is also what
+   * the cockpit derives its colours and markings from — so two `pip`s are the
+   * same animal and visibly not the same pet, at no cost in drawn sprites.
+   */
+  seed: string;
+  /** What the operator called it, or null for the species' own name. */
+  name: string | null;
+  /** Beats spent on it, cumulative. The only input to its stage. */
+  fed: number;
+  originKind: PetActionKind;
+  originRef: string;
+  /** When the action it hatched from happened — not when the scan reached it. */
+  hatchedAt: string;
+  /** Whether it stands in the vivarium at the foot of the rail. */
+  placed: boolean;
+}
+
+/**
+ * One operator action the scan has already rolled, and what came of it.
+ *
+ * Recorded for every qualifying action rather than only the ones that hatched,
+ * because "how many actions since the last pet" is what the pity rule reads and
+ * a table of hatches alone cannot answer it. It is also what makes a re-scan
+ * free: an action already here is skipped rather than re-rolled.
+ */
+export interface PetAction {
+  kind: PetActionKind;
+  ref: string;
+  at: string;
+  /** The pet this action hatched, or null when the roll came up empty. */
+  petId: string | null;
+}
+
+/** What beats there are, and where they went. All three are derived at read time. */
+export interface PetWallet {
+  /** `floor(lifetime cost × beatsPerDollar)`. Only ever grows. */
+  earned: number;
+  spent: number;
+  balance: number;
+}

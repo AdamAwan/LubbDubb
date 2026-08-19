@@ -35,7 +35,16 @@ export type ValidationAct =
  */
 export type ConfigTab = 'values' | 'raw' | 'ci' | 'prompts' | 'notifications' | 'theme';
 
-export type ConsolePanel = 'findings' | 'lessons' | 'faults' | 'output' | 'launch' | 'build' | { ask: string } | null;
+export type ConsolePanel =
+  | 'findings'
+  | 'lessons'
+  | 'faults'
+  | 'output'
+  | 'launch'
+  | 'build'
+  | 'pets'
+  | { ask: string }
+  | null;
 
 /**
  * Which destination the situation area is on. One value rather than a boolean
@@ -186,6 +195,15 @@ export interface CockpitActions {
   discussPlan(planId: string): Promise<void>;
   endPlanDiscussion(planId: string): Promise<void>;
   reorderUpNext(origins: string[]): Promise<void>;
+
+  /**
+   * The vivarium (`docs/spec/22-pets.md`). Three acts and no fourth: feeding is
+   * the only thing beats are spent on, a name is the operator's own, and putting
+   * a pet out is what the corner of the rail draws.
+   */
+  feedPet(id: string, beats: number): Promise<void>;
+  renamePet(id: string, name: string): Promise<void>;
+  placePet(id: string, placed: boolean): Promise<void>;
 
   promoteFinding(id: string): Promise<void>;
   fileFinding(id: string): Promise<void>;
