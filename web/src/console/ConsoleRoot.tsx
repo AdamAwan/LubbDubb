@@ -16,6 +16,7 @@ import { FindingsPanel } from '../components/FindingsPanel.js';
 import { LessonsPanel } from '../components/LessonsPanel.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
 import { PetsPanel } from '../components/PetsPanel.js';
+import { PetsPage } from '../components/PetsPage.js';
 import { Vivarium } from './Vivarium.js';
 import { BuildPanel } from '../components/BuildPanel.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
@@ -141,6 +142,15 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
           actions={actions}
           now={view.now}
         />
+      );
+    case 'pets':
+      // A deployment with the feature off has no tab to reach this, but a stale URL
+      // still can — and an empty page is a better answer than a page describing a
+      // subsystem that is not running.
+      return view.state.pets === null ? (
+        <p className="muted">Pets are off on this deployment.</p>
+      ) : (
+        <PetsPage pets={view.state.pets} />
       );
     case 'config':
       // Embedded exactly as the tickets tab and the work tree are: it reaches its

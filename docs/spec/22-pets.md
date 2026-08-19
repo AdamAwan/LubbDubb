@@ -85,15 +85,15 @@ whichever button the deployment happens to press most, and the animals behind th
 never seen by anybody. The gap is wider than it first looks, because an `upgrade` is **one action per
 accepted self-update**, keyed on upstream's tip — not one per commit the pull brings in.
 
-| Kind         | `dropChance` |  `pity` | About                                    |
-| ------------ | -----------: | ------: | ---------------------------------------- |
-| `job`        |      `0.015` |   `130` | Launched from the cockpit, many a day.   |
-| `finding`    |       `0.02` |   `100` | Triaged in batches.                      |
-| `human-task` |       `0.03` |    `66` | An ask settled.                          |
-| `escalation` |       `0.04` |    `50` | Answered one at a time.                  |
-| `plan`       |       `0.05` |    `40` | Approved a few times a week.             |
-| `landing`    |       `0.08` |    `25` | A chain authorised to land.              |
-| `upgrade`    |        `0.2` |    `10` | A self-update accepted. The rarest act.  |
+| Kind         | `dropChance` | `pity` | About                                   |
+| ------------ | -----------: | -----: | --------------------------------------- |
+| `job`        |      `0.015` |  `130` | Launched from the cockpit, many a day.  |
+| `finding`    |       `0.02` |  `100` | Triaged in batches.                     |
+| `human-task` |       `0.03` |   `66` | An ask settled.                         |
+| `escalation` |       `0.04` |   `50` | Answered one at a time.                 |
+| `plan`       |       `0.05` |   `40` | Approved a few times a week.            |
+| `landing`    |       `0.08` |   `25` | A chain authorised to land.             |
+| `upgrade`    |        `0.2` |   `10` | A self-update accepted. The rarest act. |
 
 **Rarity is rolled once, globally.** It used to be an emergent accident of seven hand-tuned weight
 tables — a triaged finding produced a rare 23% of the time and an answered escalation 5%, so no
@@ -341,6 +341,78 @@ The origin line is the point of the panel. A grid of creatures is a toy; a grid 
 labelled with the night you answered the thing that produced it is a record, and it is the only part
 of this subsystem that gets better the longer a deployment runs.
 
+## The Pets page
+
+`ConsoleTab` gains `'pets'`, so the catalogue is a nav destination rather than a panel over
+whatever was in front. It is the second pets surface and the two answer different questions: the
+panel is **your collection**, reached from the rail's vivarium; the page is **what exists**,
+reached from the nav.
+
+`web/src/components/PetsPage.tsx` draws four things — the two constants and the **rate per action**,
+the tier weights as a bar, every species banded by rarity, and the matrix of every action against
+every tier it can roll. The tab is absent from the nav when `pets.enabled` is off, and `tabBody`
+refuses a stale `?tab=pets` URL for the same reason.
+
+The rate is drawn per action rather than as one figure because that is what it is: since the drop
+was priced against how often each kind comes up, a single number would make whichever button the
+deployment presses most into the whole vivarium. The matrix's step-down column carries its `↓`
+legend **only when some row actually steps down** — every pool is currently full, so none do, and a
+standing legend for an arrow the table never draws sends a reader hunting for it.
+
+### What it withholds
+
+A species you have not hatched keeps its **rate, its cost and the actions that draw it**, and gives
+up its **name, its two grown forms and its colours** — the name is drawn `???` and the juvenile and
+adult are drawn as flat grey silhouettes. The masking reaches the source matrix too: a table that
+spelled out `Ouroboros` in a cell would undo the card grid above it.
+
+The split is the whole design. A page that showed everything would spend the reveal the sprites are
+built around — every tier shares one egg precisely so that finding out _what you got_ is worth
+waiting for ([the sprites](#the-sprites)) — and a page that showed nothing would answer none of the
+questions an operator actually has. **What is withheld is identity; what is published is price.**
+
+The hatchling is the exception, and it follows from the art rather than from a rule: the egg is
+shared by every species of a tier, so finding any one of them is finding the egg. Withholding it
+after that would be a lie about what the operator has already seen.
+
+A silhouette rather than a blur, because blurred pixel art reads as a rendering fault rather than
+as a state — and a silhouette stays recognisable enough to be worth going and finding. It is drawn
+in one grey, a literal in `web/src/components/SpeciesSprite.tsx` rather than a theme token, for the
+same reason `paletteFor`'s five are literals: a canvas takes a colour, not a custom property.
+
+`SpeciesSprite` is where the canvas loop now lives, and `PetSprite` is a wrapper over it that adds
+the bob and the hover name. The page draws forms **nobody owns** — three stages of a species that
+may not be in the collection at all — so both callers name what to draw rather than passing a pet.
+
+### The catalogue is a reading, never a second table
+
+`src/pets/compendium.ts` builds `PET_CATALOGUE` once at import by walking the same roll the scan
+runs: every action, every tier, every hour of the clock. **Nothing in it is a second copy of the
+tables.** `adultAt` comes from `beatsToNextStage`, the same function `PetView` uses; `share` is the
+pool walk rather than a hand-totalled percentage; the step-down rows come from `resolveTier` rather
+than from a reading of which pools look empty.
+
+That constraint is the reason the module exists at all, and the failure it prevents is silent: a
+page carrying its own thresholds advertises a price the harness does not charge, and every card
+renders perfectly. `test/petCatalogue.test.ts` asserts the properties that stop being true the
+moment one of these figures is computed a second way — the shares sum to one, a roll never steps
+_up_, and `petStage` agrees with the thresholds the page prints.
+
+Two figures are shipped as facts rather than as flags, so that nothing outside
+`src/pets/catalogue.ts` has to know which species is which. `hours` is the hours a species may be
+drawn in — `null` for any hour — rather than a `nightOnly` boolean, so a second gated species needs
+no wire change. `rarities` is the tier order, so a fifth tier renders rather than falling off a
+hard-coded four.
+
+`share` is the one figure that carries an assumption, and the page says so: it assumes an even mix
+of the seven actions, which no deployment has, and weighs each of them by its **own** `dropChance` —
+counting them evenly would claim the catalogue is thirteen times more upgrade-flavoured than it is,
+now that an upgrade is one action in five and a job one in sixty-six. The weights are read off
+`PET_RULES.rates` rather than written down, so they follow the next time the prices move. The source matrix beside it is the exact
+per-action answer. The first-ever drop is deliberately **not** folded in — `tiersFor`'s `firstEver`
+arm describes a moment that happens once per deployment ([the first action ever](#the-first-action-ever)),
+and folding it into a headline rate would describe that moment rather than the deployment.
+
 ## Where the scan runs
 
 `src/pets/scan.ts` collects every operator action, `src/pets/keeper.ts` drops the ones already
@@ -448,10 +520,19 @@ refuses by returning a 400, never by throwing ([16](16-http-api.md#request-valid
 | `POST /api/pets/:id/place` | Puts it in the vivarium or takes it out. Refuses a fifth.        |
 | `POST /api/pets/:id/blend` | Dissolves a duplicate into beats. Refuses the last of a species. |
 
-There is no read route. `PetState` rides on the state snapshot with everything else the cockpit
-draws, so the vivarium updates on the same socket as the rail above it — and it is **null** rather
-than empty when `pets.enabled` is off, so the cockpit draws nothing at all instead of an enclosure
-that reads as a deployment nobody has used.
+| `GET /api/pets/catalogue` | The catalogue: rules, tier order, every species, the step-down matrix. |
+
+The **collection** has no read route. `PetState` rides on the state snapshot with everything else
+the cockpit draws, so the vivarium updates on the same socket as the rail above it — and it is
+**null** rather than empty when `pets.enabled` is off, so the cockpit draws nothing at all instead
+of an enclosure that reads as a deployment nobody has used.
+
+The **catalogue** is the opposite case and so is fetched: it is the same bytes on every request of
+a build, and a constant riding a snapshot that ships every heartbeat is paid for forever. It takes
+no parameters and reads no state — what exists and what it costs are decided by tables this build
+ships, which is the point of the surface. The demo backend serves an empty catalogue and the page
+says why: what exists is decided in `src/pets/`, which the web bundle deliberately does not import,
+and a hand-written demo copy of twenty species would be stale the first time one was added.
 
 ## Persistence
 
@@ -497,12 +578,12 @@ scan, carry real origin lines, and look exactly like earned ones.
 
 They live in `PET_RULES` (`src/pets/rules.ts`) now, frozen, identical on every deployment:
 
-| Rate             | Value                                            | Does                                                             |
-| ---------------- | ------------------------------------------------ | ---------------------------------------------------------------- |
-| `rates`          | one `{dropChance, pity}` per action kind          | What one action of that kind is worth. Tabled under [The roll](#the-roll). |
-| `rarity`         | `{common 700, uncommon 200, rare 80, mythic 20}` | The one tier table stage 2 rolls.                                |
-| `beatsPerDollar` | `25`                                             | The conversion.                                                  |
-| `blendYield`     | `500`                                            | Beats a blended duplicate hands back, per point of `growth`.     |
+| Rate             | Value                                            | Does                                                                       |
+| ---------------- | ------------------------------------------------ | -------------------------------------------------------------------------- |
+| `rates`          | one `{dropChance, pity}` per action kind         | What one action of that kind is worth. Tabled under [The roll](#the-roll). |
+| `rarity`         | `{common 700, uncommon 200, rare 80, mythic 20}` | The one tier table stage 2 rolls.                                          |
+| `beatsPerDollar` | `25`                                             | The conversion.                                                            |
+| `blendYield`     | `500`                                            | Beats a blended duplicate hands back, per point of `growth`.               |
 
 The defaults are set so a pet is an event rather than a receipt: one guaranteed drop to open the
 vivarium, and a handful a week of ordinary use after it. At a fleet spending thirty dollars a day an

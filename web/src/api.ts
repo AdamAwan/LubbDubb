@@ -12,6 +12,7 @@ import type {
 // or re-nested key is a compile error here instead of an empty panel.
 import type {
   CiPolicyPayload,
+  PetCatalogue,
   PlanHistory,
   PromptsPayload,
   RetrospectivePayload,
@@ -184,6 +185,13 @@ const realApi = {
   getReliability: () => authFetch('/api/reliability').then((r) => json<ReliabilityPayload>(r)),
   // The prompt book, fetched on open for the opposite reason to the work graph:
   // it is read once at boot, so polling it would be paying for a constant.
+  /**
+   * What exists, what it costs and how often it turns up — the same bytes on every
+   * request of a build, which is why the Pets page fetches it once on open rather
+   * than reading it off a snapshot that ships every heartbeat.
+   */
+  getPetCatalogue: () => authFetch('/api/pets/catalogue').then((r) => json<PetCatalogue>(r)),
+
   getPrompts: () => authFetch('/api/prompts').then((r) => json<PromptsPayload>(r)),
   // The running config, fetched on open for the same reason as the prompt book:
   // `loadConfig` runs once at boot, so this can never change while the tab is up.
