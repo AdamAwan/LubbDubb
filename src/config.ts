@@ -10,6 +10,7 @@ import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
 import { validateAgentModels, type AgentModels } from './agents/modelPolicy.js';
 import { DEFAULT_FILING_TYPES } from './ticketTypes.js';
+import type { PetPolicy } from './pets/keeper.js';
 
 /**
  * Central configuration. Everything the operator can tune lives here.
@@ -189,6 +190,16 @@ export interface Config {
    * one field can be set alone.
    */
   spendBurn: BurnPolicy;
+  /**
+   * The vivarium (`src/pets/`) — creatures that hatch from what the operator does,
+   * fed on beats converted from what the fleet has already spent.
+   *
+   * **On by default and inert**: it spends no agent, gates nothing, dispatches
+   * nothing and is invisible to every agent. Off hides it and stops the scan
+   * without deleting a thing. Deep-merged, so one field can be set alone.
+   * → `docs/spec/22-pets.md`
+   */
+  pets: PetPolicy;
   /**
    * The self-update watch (`src/selfUpdate/`) — whether the harness checks its
    * **own** build against its upstream, and how often.
@@ -571,6 +582,10 @@ const DEFAULTS: Config = {
   // for an *omitted* policy is a separate answer (off) and lives with the rules.
   planning: DEFAULT_PLANNING,
   spendBurn: DEFAULT_BURN,
+  // Generous early and slow later: a working week of ordinary use produces a
+  // handful of creatures, and a common takes about ten days of a thirty-dollar
+  // fleet to raise. An empty vivarium is the failure mode worth tuning against.
+  pets: { enabled: true, beatsPerDollar: 25, dropChance: 0.1, pity: 15 },
   selfUpdate: { enabled: true, remote: 'origin', branch: 'main', checkIntervalMs: 60 * 60 * 1000 },
   validation: DEFAULT_VALIDATION,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
@@ -770,6 +785,7 @@ function mergeLayers(lower: Partial<Config>, upper: Partial<Config>): Partial<Co
     merged.integrations = { ...DEFAULTS.integrations, ...lower.integrations, ...upper.integrations };
   if (lower.planning ?? upper.planning)
     merged.planning = { ...DEFAULTS.planning, ...lower.planning, ...upper.planning };
+  if (lower.pets ?? upper.pets) merged.pets = { ...DEFAULTS.pets, ...lower.pets, ...upper.pets };
   if (lower.spendBurn ?? upper.spendBurn)
     merged.spendBurn = { ...DEFAULTS.spendBurn, ...lower.spendBurn, ...upper.spendBurn };
   if (lower.selfUpdate ?? upper.selfUpdate)

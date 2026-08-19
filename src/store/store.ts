@@ -16,6 +16,7 @@ import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './vali
 import { IssueVerdictStore, ISSUE_VERDICT_COLUMNS } from './issueVerdicts.js';
 import { ScratchStore } from './scratch.js';
 import { UpgradeStore } from './upgrades.js';
+import { PetStore } from './pets.js';
 import { InstructionStore } from './instructions.js';
 import { AgentStore, AGENT_COLUMNS } from './agents.js';
 import { TranscriptStore } from './transcripts.js';
@@ -69,6 +70,9 @@ import type {
   JobSchedule,
   Lesson,
   LessonInput,
+  Pet,
+  PetAction,
+  PetActionKind,
   Plan,
   PlanPart,
   PlanPartInput,
@@ -152,6 +156,7 @@ export class Store {
   private readonly floor: FloorStore;
   private readonly tickets: TicketStore;
   private readonly upgrades: UpgradeStore;
+  private readonly pets: PetStore;
 
   constructor(dbPath: string, clock: Clock = systemClock) {
     if (dbPath !== ':memory:') mkdirSync(dirname(dbPath), { recursive: true });
@@ -225,6 +230,7 @@ export class Store {
     this.floor = new FloorStore(ctx);
     this.tickets = new TicketStore(ctx);
     this.upgrades = new UpgradeStore(ctx);
+    this.pets = new PetStore(ctx);
   }
 
   close(): void {
@@ -943,5 +949,43 @@ export class Store {
   }
   listTrackerItems(): MirroredTicket[] {
     return this.tickets.listTrackerItems();
+  }
+  // -- Pets -----------------------------------------------------------------
+
+  listPets(): Pet[] {
+    return this.pets.listPets();
+  }
+  getPet(id: string): Pet | null {
+    return this.pets.getPet(id);
+  }
+  hatchPet(...args: Parameters<PetStore['hatchPet']>): Pet {
+    return this.pets.hatchPet(...args);
+  }
+  placedCount(): number {
+    return this.pets.placedCount();
+  }
+  recordPetAction(action: PetAction): void {
+    this.pets.recordPetAction(action);
+  }
+  petActionKeys(): Set<string> {
+    return this.pets.petActionKeys();
+  }
+  hasPetActionOfKind(kind: PetActionKind): boolean {
+    return this.pets.hasPetActionOfKind(kind);
+  }
+  petActionsSinceHatch(): number {
+    return this.pets.petActionsSinceHatch();
+  }
+  feedPet(id: string, beats: number): Pet | null {
+    return this.pets.feedPet(id, beats);
+  }
+  renamePet(id: string, name: string | null): Pet | null {
+    return this.pets.renamePet(id, name);
+  }
+  placePet(id: string, placed: boolean): Pet | null {
+    return this.pets.placePet(id, placed);
+  }
+  petBeatsSpent(): number {
+    return this.pets.petBeatsSpent();
   }
 }

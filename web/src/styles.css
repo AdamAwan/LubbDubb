@@ -5114,3 +5114,157 @@ body {
   border: 1px solid #5a231d;
   background: #1d1211;
 }
+
+/* -- Pets -------------------------------------------------------------------
+   The sprite is shared between the rail's vivarium and the panel, so it styles
+   itself through the token layer like every other shared component.
+
+   The bob is one CSS animation on a wrapper rather than a redraw per frame:
+   however many creatures are on screen they move on one clock and cost one
+   composite. `is-beating` is absent while dispatch is paused, which is what
+   makes a still vivarium mean something. */
+.pet-sprite {
+  display: inline-flex;
+  align-items: flex-end;
+  line-height: 0;
+}
+.pet-sprite.is-beating {
+  animation-name: pet-bob;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+.pet-sprite canvas {
+  image-rendering: pixelated;
+}
+@keyframes pet-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  6% {
+    transform: translateY(-3px);
+  }
+  14% {
+    transform: translateY(0);
+  }
+  20% {
+    transform: translateY(-2px);
+  }
+  30% {
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pet-sprite.is-beating {
+    animation: none;
+  }
+}
+
+.pets {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.pets-wallet {
+  border: 1px solid var(--border);
+  background: var(--panel-2);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pets-wallet b {
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+.pets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(216px, 1fr));
+  gap: 12px;
+}
+.pet-card {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.pet-frame {
+  height: 96px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--well);
+  border: 1px solid var(--border);
+}
+.pet-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pet-name input {
+  flex: 1;
+  min-width: 0;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font: inherit;
+  padding: 3px 6px;
+}
+.pet-rarity {
+  font: 9.5px/1 var(--mono, monospace);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 3px 5px;
+  border: 1px solid currentColor;
+  flex: none;
+}
+/* Semantic-by-tier rather than by the accent: rarity is a category, and drawing
+   all four in the one accent would make the mythic indistinguishable from the
+   commonest thing in the grid. */
+.pet-rarity.is-common {
+  color: var(--grey);
+}
+.pet-rarity.is-uncommon {
+  color: var(--green);
+}
+.pet-rarity.is-rare {
+  color: var(--blue);
+}
+.pet-rarity.is-mythic {
+  color: var(--accent);
+}
+.pet-origin {
+  margin: 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--muted);
+  word-break: break-word;
+}
+.pet-meter {
+  height: 4px;
+  background: var(--border);
+  position: relative;
+}
+.pet-meter i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  display: block;
+}
+.pet-stage {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.pet-acts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}

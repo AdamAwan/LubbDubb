@@ -733,6 +733,50 @@ class DemoServer {
     return this.state.build;
   }
 
+  /**
+   * The vivarium's three acts (demo mirrors of POST /api/pets/:id/*).
+   *
+   * The wallet is recomputed here rather than left alone: the demo has no usage
+   * events to derive `earned` from, so `spent` moving without the balance moving
+   * would show a meter that never runs out — which is the one thing the real
+   * economy is built to do.
+   */
+  async feedPet(id: string, beats: number): Promise<{ ok: true }> {
+    const pets = this.state.pets;
+    const pet = pets?.pets.find((p) => p.id === id);
+    if (pets && pet && beats > 0 && beats <= pets.wallet.balance) {
+      pet.fed += beats;
+      if (pet.beatsToNextStage !== null) {
+        const left = pet.beatsToNextStage - beats;
+        pet.beatsToNextStage = left > 0 ? left : null;
+        if (left <= 0) pet.stage = pet.stage === 'hatchling' ? 'juvenile' : 'adult';
+      }
+      pets.wallet.spent += beats;
+      pets.wallet.balance = Math.max(0, pets.wallet.earned - pets.wallet.spent);
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  async renamePet(id: string, name: string): Promise<{ ok: true }> {
+    const pet = this.state.pets?.pets.find((p) => p.id === id);
+    if (pet) {
+      pet.name = name.trim().length === 0 ? null : name.trim();
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  async placePet(id: string, placed: boolean): Promise<{ ok: true }> {
+    const pets = this.state.pets;
+    const pet = pets?.pets.find((p) => p.id === id);
+    if (pets && pet && (!placed || pets.pets.filter((p) => p.placed).length < pets.slots)) {
+      pet.placed = placed;
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
   async promoteFinding(id: string): Promise<{ ok: true }> {
     const finding = (this.state.findings ?? []).find((f) => f.id === id);
     if (finding && finding.status === 'open') {
@@ -2403,6 +2447,9 @@ export const demoApi = {
   ) => getServer().updateSchedule(id, patch),
   runSchedule: (id: string) => getServer().runSchedule(id),
   deleteSchedule: (id: string) => getServer().deleteSchedule(id),
+  feedPet: (id: string, beats: number) => getServer().feedPet(id, beats),
+  renamePet: (id: string, name: string) => getServer().renamePet(id, name),
+  placePet: (id: string, placed: boolean) => getServer().placePet(id, placed),
   promoteFinding: (id: string) => getServer().promoteFinding(id),
   fileFinding: (id: string) => getServer().fileFinding(id),
   dismissFinding: (id: string) => getServer().dismissFinding(id),

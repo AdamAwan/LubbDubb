@@ -1500,3 +1500,52 @@ button.cn-grow {
   border-radius: 3px;
   flex: none;
 }
+
+/* The vivarium: pinned under the rail's scrolling list, so a long queue scrolls
+   behind it rather than pushing it off the bottom. It is the last thing in the
+   rail's flex column and never shrinks, which is the whole of what "always in
+   frame" costs here. */
+.cn-viv {
+  border-top: 1px solid var(--cn-line);
+  background: var(--cn-bg);
+  flex-shrink: 0;
+}
+.cn-viv-floor {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  width: 100%;
+  min-height: 58px;
+  padding: 10px 12px 8px;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.cn-viv-floor:hover {
+  background: var(--cn-panel-2);
+}
+.cn-viv-floor:focus-visible {
+  outline: 2px solid var(--cn-accent);
+  outline-offset: -2px;
+}
+.cn-viv-empty {
+  font: 11px/1.4 var(--cn-mono);
+  color: var(--cn-fg-faint);
+  align-self: center;
+}
+.cn-viv-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 12px 7px;
+  font: 10px/1 var(--cn-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-viv-beats {
+  margin-left: auto;
+  color: var(--cn-fg-dim);
+  font-variant-numeric: tabular-nums;
+}

@@ -80,6 +80,10 @@ import type {
   Issue as WorldIssue,
   Job,
   JobAttachment,
+  Pet,
+  PetRarity,
+  PetStage,
+  PetWallet,
   JobSchedule,
   Lesson,
   Plan,
@@ -528,6 +532,15 @@ export interface CockpitState {
   retainedRuns: Issue[];
   /** The multi-PR plan graph: one plan per planned issue, and every plan's parts. */
   plans: Plan[];
+  /**
+   * The vivarium (`docs/spec/22-pets.md`), or **null** when `pets.enabled` is off
+   * — which is what the cockpit reads to draw nothing at all, rather than an
+   * empty enclosure that looks like a deployment nobody has used.
+   *
+   * Rides on the snapshot rather than a route of its own so the corner of the rail
+   * updates on the same socket as the queue above it.
+   */
+  pets: PetState | null;
   planParts: PlanPartView[];
   /**
    * Every plan's validation checks and the resources they name, keyed to a plan
@@ -1010,6 +1023,11 @@ export type {
   PlanPart,
   PlanPartInput,
   PlanRevision,
+  Pet,
+  PetRarity,
+  PetSpecies,
+  PetStage,
+  PetWallet,
   Proposal,
   Retrospective,
   ScratchEntry,
@@ -1060,3 +1078,30 @@ export type { PlanDiff } from './plans/planDiff.js';
 export type { AcceptanceCriterion } from './plans/parts.js';
 export type { PlanningPolicy } from './plans/planning.js';
 export type { ValidationPolicy } from './validation/policy.js';
+
+/**
+ * One pet as the cockpit draws it: the stored record, plus everything about it
+ * the catalogue decides.
+ *
+ * **Extends the domain type rather than re-declaring it.** `rarity`, `display`,
+ * `stage` and `beatsToNextStage` are all pure functions of `species` and `fed`,
+ * computed once here — because two implementations of one arithmetic is how a
+ * card comes to read `JUVENILE` above a sprite drawn as an adult, with nothing
+ * red to say so.
+ */
+export interface PetView extends Pet {
+  rarity: PetRarity;
+  /** The species' own name, which is what an unnamed pet is called. */
+  display: string;
+  stage: PetStage;
+  /** Beats still owed to the next stage, or null for an adult. */
+  beatsToNextStage: number | null;
+}
+
+/** The whole vivarium, as it rides on the state snapshot. */
+export interface PetState {
+  pets: PetView[];
+  wallet: PetWallet;
+  /** How many pets stand in the enclosure at once, so the cockpit refuses the fifth in the same words the server does. */
+  slots: number;
+}
