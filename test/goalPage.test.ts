@@ -8,7 +8,7 @@ import type {
   PlanPart,
   PlanPartView,
   PullRequest,
-  Task,
+  TaskSummary,
 } from '../web/src/types.js';
 import type { GoalPageView, GoalPartView, GoalTrack, PartGroup } from '../web/src/view/goalPage.js';
 import { buildGoalPage, buildGoalTrack } from '../web/src/view/goalPage.js';
@@ -70,12 +70,11 @@ function plan(originRef: string): Plan {
   };
 }
 
-function task(over: Partial<Task>): Task {
+function task(over: Partial<TaskSummary>): TaskSummary {
   return {
     id: 't:x',
     kind: 'code',
     title: 'work',
-    prompt: '',
     branch: null,
     originRef: null,
     originTitle: null,

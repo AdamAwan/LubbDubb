@@ -1,7 +1,7 @@
 import { nanoid } from 'nanoid';
 import type Database from 'better-sqlite3';
 import { ACTIVE_TASK_STATUS_SQL } from '../tasks.js';
-import type { Task } from '../types.js';
+import type { Task, TaskSummary } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
@@ -123,9 +123,24 @@ export class TaskStore {
     return row ? rowToTask(row) : null;
   }
 
-  listTasks(): Task[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM tasks ORDER BY created_at DESC`).all() as TaskRow[];
-    return rows.map(rowToTask);
+  /**
+   * Every task the harness has ever claimed, newest first — **without the
+   * prompts**, which is the whole reason this is not `SELECT *`.
+   *
+   * A rendered agent prompt is kilobytes, and no reader of the list is one:
+   * the state snapshot, the pulse, the plan reconciler, the work graph, the
+   * branch reap desk and the spend and reliability panels all read origins,
+   * branches, statuses and rules. On a deployment with 1,248 tasks the prompts
+   * were 17.4 MB of the 20.2 MB `SELECT *` returned, and better-sqlite3 is
+   * synchronous — so that read blocked the server for 322 ms every time a
+   * cockpit refreshed. Named columns bring it to 33 ms. Anything that needs a
+   * prompt reads its one row with {@link getTask}.
+   */
+  listTasks(): TaskSummary[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT ${SUMMARY_COLUMNS} FROM tasks ORDER BY created_at DESC`)
+      .all() as TaskSummaryRow[];
+    return rows.map(rowToSummary);
   }
 
   /**
@@ -167,11 +182,43 @@ export class TaskStore {
   }
 }
 
-interface TaskRow {
+/**
+ * The columns {@link TaskStore.listTasks} reads — every one the table has except
+ * `prompt`, spelled out rather than starred so the bulk text cannot come back by
+ * accident.
+ *
+ * `profile` and `profile_source` are named here and are `ensureColumns`
+ * additions, which is safe in exactly one direction: `ALTER TABLE` runs at boot
+ * before any read, so naming them is what a `SELECT *` did implicitly. A column
+ * added to {@link TASK_COLUMNS} and *not* added here reads back as absent —
+ * `rowToSummary` maps by name, so the field is simply undefined rather than an
+ * error. `test/snapshotShape.test.ts` holds the list against the domain type.
+ */
+const SUMMARY_COLUMNS = [
+  'id',
+  'kind',
+  'title',
+  'branch',
+  'origin_ref',
+  'origin_title',
+  'origin_summary',
+  'dispatch_reason',
+  'rule',
+  'ci_checks',
+  'model',
+  'effort',
+  'profile',
+  'profile_source',
+  'status',
+  'agent_id',
+  'created_at',
+  'updated_at',
+].join(', ');
+
+interface TaskSummaryRow {
   id: string;
   kind: string;
   title: string;
-  prompt: string;
   branch: string | null;
   origin_ref: string | null;
   origin_title: string | null;
@@ -188,6 +235,11 @@ interface TaskRow {
   agent_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** A whole row, for the single-row reads that hand back a {@link Task}. */
+interface TaskRow extends TaskSummaryRow {
+  prompt: string;
 }
 
 /**
@@ -269,11 +321,14 @@ function parseChecks(raw: string | null): string[] | null {
 }
 
 function rowToTask(r: TaskRow): Task {
+  return { ...rowToSummary(r), prompt: r.prompt };
+}
+
+function rowToSummary(r: TaskSummaryRow): TaskSummary {
   return {
     id: r.id,
     kind: r.kind as Task['kind'],
     title: r.title,
-    prompt: r.prompt,
     branch: r.branch,
     originRef: r.origin_ref,
     originTitle: r.origin_title,

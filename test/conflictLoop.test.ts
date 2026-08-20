@@ -8,6 +8,7 @@ import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { gitRepo } from './support/gitRepo.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
+import { findTask } from './support/tasks.js';
 
 /**
  * Build a system whose agents run through a fake PTY and whose worktrees live in
@@ -55,7 +56,7 @@ test('a conflicted PR dispatches a resolve-conflicts code agent', async () => {
   system.connector.inject({ kind: 'pr_mergeable', prNumber: 42, mergeable: false, mergeableState: 'dirty' });
   await system.harness.runCycle('manual');
 
-  const task = system.store.listTasks().find((t) => t.originRef === 'pr:42:mergeable');
+  const task = findTask(system.store, (t) => t.originRef === 'pr:42:mergeable');
   assert.ok(task, 'a conflict-resolution task should exist');
   assert.equal(task!.branch, 'feat');
   assert.match(task!.prompt, /resolve the conflicts/i);
@@ -107,7 +108,7 @@ test('a base update the provider refuses falls back to a code agent, and is reco
   // Next pulse: the PR is still behind and the cheap path is spent, so the agent
   // that always did this work is dispatched with the routine-update prompt.
   await system.harness.runCycle('manual');
-  const task = system.store.listTasks().find((t) => t.originRef === 'pr:46:mergeable');
+  const task = findTask(system.store, (t) => t.originRef === 'pr:46:mergeable');
   assert.ok(task, 'the PR is not left sitting behind its base');
   assert.equal(task!.branch, 'feat5');
   assert.match(task!.prompt, /up to date/i);

@@ -1,4 +1,4 @@
-import type { Agent, AgentFile, AgentStatus, Task } from './types.js';
+import type { Agent, AgentFile, AgentStatus, TaskSummary } from './types.js';
 
 /**
  * One agent's write to a path that another agent was writing at the same time.
@@ -92,7 +92,11 @@ function lifetime(agent: Agent): { start: number; end: number } {
  *   write rather than the first. Overlapping lifetimes is the reading the data
  *   actually supports.
  */
-export function detectFileOverlaps(input: { files: AgentFile[]; agents: Agent[]; tasks: Task[] }): FileOverlap[] {
+export function detectFileOverlaps(input: {
+  files: AgentFile[];
+  agents: Agent[];
+  tasks: TaskSummary[];
+}): FileOverlap[] {
   const agents = new Map(input.agents.map((a) => [a.id, a]));
   const tasks = new Map(input.tasks.map((t) => [t.id, t]));
 

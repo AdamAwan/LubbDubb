@@ -109,7 +109,7 @@ export type {
   ChecksSpend,
   Stack,
   StackLanding,
-  Task,
+  TaskSummary,
   TicketFeatureFacet,
   TicketOrder,
   TicketRow,

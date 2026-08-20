@@ -1,11 +1,11 @@
 import type { Store } from './store/store.js';
-import type { Agent, Task } from './types.js';
+import type { Agent, TaskSummary } from './types.js';
 import { burnPass, type BurnPolicy } from './spendBurn.js';
 
 /** The pulse's own reads, handed in — see {@link SpendBurnDesk.run}. */
 interface BurnWorld {
   agents: readonly Agent[];
-  tasks: readonly Task[];
+  tasks: readonly TaskSummary[];
 }
 
 /**

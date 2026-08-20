@@ -36,7 +36,7 @@ import type {
   SpendTrendPeriod,
   SpendTrendWeek,
   SpendRun,
-  Task,
+  TaskSummary,
   UnrecordedWorkView,
   WorkNodeView,
   WorldEvent,
@@ -86,7 +86,7 @@ function applyWatch(labels: string[] | undefined, config: WatchConfig, watched: 
 }
 
 /** The dispatch action a kind of agent is sent as — the executor's two, by name. */
-function dispatchAction(kind: Task['kind']): Decision['action']['type'] {
+function dispatchAction(kind: TaskSummary['kind']): Decision['action']['type'] {
   return kind === 'desk' ? 'dispatch_desk_agent' : 'dispatch_code_agent';
 }
 
@@ -96,7 +96,7 @@ function dispatchAction(kind: Task['kind']): Decision['action']['type'] {
  * a `TaskStatus` at all — so killing or completing an agent left its task row
  * saying `running` forever.
  */
-function isLiveTask(task: Task): boolean {
+function isLiveTask(task: TaskSummary): boolean {
   return task.status === 'queued' || task.status === 'running' || task.status === 'waiting';
 }
 
@@ -1118,11 +1118,10 @@ class DemoServer {
   // Spawn an agent for a piece of work — honouring pause + the concurrency cap,
   // so the FleetControl and pause button visibly matter in the demo.
   private trySpawn(
-    kind: Task['kind'],
+    kind: TaskSummary['kind'],
     title: string,
     branch: string | null,
     originRef: string | null,
-    prompt?: string,
   ): string | null {
     // A PR without the watch label is left alone — mirrors the server harness
     // filtering unwatched PRs out of the dispatch view, so the watch toggle visibly
@@ -1149,7 +1148,6 @@ class DemoServer {
         id: taskId,
         kind,
         title,
-        prompt: prompt ?? title,
         branch,
         originRef,
         originTitle: title,
@@ -1228,7 +1226,7 @@ class DemoServer {
       updatedAt: nowIso,
     };
     this.state.jobs = [job, ...this.state.jobs];
-    const taskId = this.trySpawn(kind, title, branch, `job:${id}`, prompt);
+    const taskId = this.trySpawn(kind, title, branch, `job:${id}`);
     if (taskId) {
       job.status = 'dispatched';
       job.taskId = taskId;

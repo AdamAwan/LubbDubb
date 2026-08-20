@@ -175,7 +175,6 @@ test('an origin with an active task never enters the queue', async () => {
             id: 't1',
             kind: 'code',
             title: 'x',
-            prompt: 'x',
             branch: 'issue/5',
             originRef: 'issue:5',
             originTitle: null,

@@ -402,13 +402,29 @@ type TaskStatus =
   | 'interrupted' // agent died (e.g. server restart)
   | 'failed';
 
-export interface Task {
+/**
+ * A task without the rendered prompt handed to its agent — every column of the
+ * row except the one that holds the bulk text.
+ *
+ * The split exists because the prompt is **large and read by almost nothing**. A
+ * rendered agent prompt is kilobytes of briefing, evidence and prior-work
+ * context; on a real deployment the `tasks` table's prompts were 17.4 MB of a
+ * 20.2 MB read, and `/api/state` shipped every one of them to the cockpit on
+ * every refresh — where no surface reads a task's prompt at all. So the list
+ * reading (`Store.listTasks`) and the wire shape ({@link Task} on
+ * `CockpitState`) are this type, and the prompt is fetched per row, by id,
+ * through {@link Store.getTask} — the same arrangement agent transcripts have.
+ *
+ * `Task` **extends** this rather than the two being declared side by side, so
+ * every reader of a summary field goes on typechecking against one declaration
+ * and a field added to a task lands on both by default. A caller that genuinely
+ * needs the prompt asks for a `Task` and gets a single-row read.
+ */
+export interface TaskSummary {
   id: string;
   kind: TaskKind;
   /** Human-readable summary of what this task is for. */
   title: string;
-  /** The prompt handed to the agent. */
-  prompt: string;
   /** For code tasks: the git branch whose worktree we operate in. */
   branch: string | null;
   /** Free-form link back to the world object that spawned this (e.g. "pr:42"). */
@@ -513,6 +529,16 @@ export interface Task {
   agentId: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * A task, whole: a {@link TaskSummary} plus the rendered prompt its agent was
+ * handed. Produced only by a single-row read or by the write that created it —
+ * see {@link TaskSummary} for why the list reading and the wire shape drop it.
+ */
+export interface Task extends TaskSummary {
+  /** The prompt handed to the agent. */
+  prompt: string;
 }
 
 /**

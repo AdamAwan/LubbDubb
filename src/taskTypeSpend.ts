@@ -1,4 +1,4 @@
-import type { Agent, Task } from './types.js';
+import type { Agent, TaskSummary } from './types.js';
 import { roundUsd } from './issueSpend.js';
 import { DISPATCH_RULES, type DispatchRuleId } from './dispatcher/rules.js';
 
@@ -107,7 +107,7 @@ export interface ChecksSpend {
 
 interface TaskTypeInput {
   agents: readonly Agent[];
-  tasks: readonly Task[];
+  tasks: readonly TaskSummary[];
 }
 
 /** A rule's display name and rationale, or a rendering of an id the registry has lost. */

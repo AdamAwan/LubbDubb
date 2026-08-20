@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import type { Issue, IssueAssay, Task, WorldEvent } from '../types.js';
+import type { Issue, IssueAssay, TaskSummary, WorldEvent } from '../types.js';
 import { hasPriorWork } from '../delivery/assessment.js';
 
 /**
@@ -275,7 +275,7 @@ export function assaySignalQuery(assays: IssueAssay[]): { since: string; refs: s
  * The assessor's and the retrospective's origins are still counted: both only ever
  * fire downstream of work, so either is evidence that some was done.
  */
-export function hasWorkStarted(issueNumber: number, tasks: Task[]): boolean {
+export function hasWorkStarted(issueNumber: number, tasks: TaskSummary[]): boolean {
   return hasPriorWork(issueNumber, tasks);
 }
 

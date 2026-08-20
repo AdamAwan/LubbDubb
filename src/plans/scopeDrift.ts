@@ -1,4 +1,4 @@
-import type { AgentFile, PlanPart, Task } from '../types.js';
+import type { AgentFile, PlanPart, TaskSummary } from '../types.js';
 import { partOrigin } from './parts.js';
 
 /**
@@ -38,7 +38,7 @@ interface ScopeDrift {
 export function planScopeDrift(
   issueNumber: number,
   parts: PlanPart[],
-  tasks: Task[],
+  tasks: TaskSummary[],
   files: AgentFile[],
 ): ScopeDrift[] {
   const filesByAgent = new Map<string, AgentFile[]>();

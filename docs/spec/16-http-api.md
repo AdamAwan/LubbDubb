@@ -1398,7 +1398,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay`, `completion` and `spend` per issue.                                                                    |
 | `retainedRuns`                  | Runs whose issue the world has forgotten (#203, #234), rebuilt from their stored snapshots by the same `retainedRunIssues` the dispatcher unions into its issue list, through the same per-issue enrichment a live one takes. |
 | `plans`, `planParts`            | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                                                                          |
-| `tasks`                         | Every task.                                                                                                                                                                                                                   |
+| `tasks`                         | Every task, **without prompts** — `TaskSummary`, not `Task`. See _Bulk text_ below.                                                                                                                                                                                                                   |
 | `jobs`                          | Operator jobs, newest first.                                                                                                                                                                                                  |
 | `schedules`                     | Recurring blueprints, oldest first — **every** one, paused included, since this is the only surface anywhere that says a paused one exists. What a firing produces is an ordinary entry in `jobs`.                            |
 | `agents`                        | Every agent row, including usage and the progress note.                                                                                                                                                                       |
@@ -1408,7 +1408,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `overlaps`                      | Paths two concurrently-live code agents wrote.                                                                                                                                                                                |
 | `humanTasks`                    | Work only a person can do — open ones and a settled tail, newest first. Beside `findings` rather than inside `escalations`: nobody is parked on one.                                                                          |
 | `findings`                      | Every finding.                                                                                                                                                                                                                |
-| `escalations`                   | Every escalation.                                                                                                                                                                                                             |
+| `escalations`                   | The escalations still waiting on a person — **open only**. See _Bulk text_ below.                                                                                                                                                                                                             |
 | `recovery`                      | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**.                                                   |
 | `decisions`                     | The last 100 decisions, each with `subjectRef` — the one external thing the act is about (`issue:13`, `pr:42`), or null.                                                                                                      |
 | `upcoming`                      | The last cycle's ranked queue with the headroom cut. Null until a cycle has run.                                                                                                                                              |
@@ -1417,6 +1417,40 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `refUrls`                       | The `ref → URL` map.                                                                                                                                                                                                          |
 | `dispatchRules`                 | `DISPATCH_RULES` as data, so a decision row can expand into the rule that fired.                                                                                                                                              |
 | `usage`                         | `{windows: {fiveHourCostUsd, sevenDayCostUsd}, rateLimits, unattributedCostUsd}`.                                                                                                                                             |
+
+### Bulk text
+
+**A collection on this snapshot carries no text nobody draws.** The snapshot is refetched on every
+`dirty`, `world:changed`, `control:changed`, `world:events` and `cycle:end` — several times a pulse,
+per open cockpit — so a bulk column that rides on one of them is not a size cost but a **rate** one,
+and it is silent: the payload still validates and the cockpit still renders. The symptom is that every
+action takes seconds.
+
+Two collections were the whole of it on a real deployment, where `/api/state` was 24 MB and took 6–15 s
+to serve:
+
+- **`tasks` shipped every task's rendered agent prompt** — 17.4 MB of the 24 MB, for 1,248 rows.
+  Nothing in `web/src` reads `task.prompt`; it was built, serialised, transferred, parsed and
+  discarded. `tasks` is now `TaskSummary[]`, and `Store.listTasks` reads named columns
+  ([14](14-persistence.md#tasks)).
+- **`escalations` shipped the all-time list** — 373 rows at 0.57 MB, each carrying a 1,200-character
+  transcript tail in `context.recentOutput`. Every surface that reads them filters to
+  `status === 'open'` first: the needs-you queue, the console band, the view model. It is
+  `Store.listOpenEscalations` now, which is a `WHERE` rather than a filter over the all-time read.
+
+The remaining collections were audited against the same rule and hold none: `agents` carries usage
+counters and a one-line progress note (its transcript is already a route), `decisions`, `worldEvents`
+and `errors` are capped at 100, and `findings`, `humanTasks` and `plans` carry short prose that is
+drawn in full.
+
+**The pattern for text a surface does need is a route of its own, fetched on open** —
+`GET /api/agents/:id/transcript` is the precedent, and `/api/spend`, `/api/work`,
+`/api/retrospectives/:ref` and `/api/scratchpads/:ref` follow it. No route ships a task's prompt,
+because no surface asks for one; a surface that wanted one would gain a per-row route beside the
+transcript's, never a widening of `tasks` back to `Task`.
+
+`test/snapshotShape.test.ts` pins both: that a shipped task has no `prompt` key and that no prompt text
+reaches the payload by any route, and that a settled escalation stays on the server.
 
 Eight consistency points:
 

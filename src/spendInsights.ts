@@ -1,4 +1,4 @@
-import type { Agent, Issue, IssueRun, IssueSpend, Task, UsageEvent, WorkNode } from './types.js';
+import type { Agent, Issue, IssueRun, IssueSpend, TaskSummary, UsageEvent, WorkNode } from './types.js';
 import { issueOriginRole } from './issueOrigins.js';
 import { rollUpIssueSpend, roundUsd } from './issueSpend.js';
 import { rollUpChecks, rollUpTaskTypes, type ChecksSpend, type TaskTypeSpend } from './taskTypeSpend.js';
@@ -256,7 +256,7 @@ export interface SpendInsights {
 
 interface SpendInsightsInput {
   agents: readonly Agent[];
-  tasks: readonly Task[];
+  tasks: readonly TaskSummary[];
   /** The durable work graph — how a pull request's spend finds its goal. */
   nodes: readonly WorkNode[];
   /** The world's issues, for titles only. A goal absent from it still gets a row. */
@@ -345,7 +345,7 @@ interface SpendGoalRollup {
  */
 export function buildSpendGoals(input: {
   agents: readonly Agent[];
-  tasks: readonly Task[];
+  tasks: readonly TaskSummary[];
   nodes: readonly WorkNode[];
   issues: readonly Issue[];
   /**

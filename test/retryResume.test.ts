@@ -185,7 +185,7 @@ test('a first dispatch of an origin starts cold, and says so', async () => {
   await dispatch(system, 'issue:902', { branch: 'issue/902' });
 
   assert.equal(sessionFlag(launches[0]!).flag, '--session-id');
-  const task = system.store.listTasks()[0]!;
+  const task = system.store.getTask(system.store.listTasks()[0]!.id)!;
   assert.doesNotMatch(task.prompt, /this is attempt/i, 'nothing to inherit, so no retry note');
   assert.match(system.store.listDecisions().find((d) => d.outcome === 'executed')!.detail, /^Spawned code agent/);
 

@@ -1,6 +1,6 @@
 import { isOurPr } from './prOwnership.js';
 import { prState } from './prHealth.js';
-import type { PullRequest, Task } from './types.js';
+import type { PullRequest, TaskSummary } from './types.js';
 
 /** One branch to reap, and the pull request whose merge earned it. */
 interface BranchReapInput {
@@ -14,7 +14,7 @@ export interface BranchReapContext {
   /** `github.filters.prAuthor` / `azureDevOps.filters.prAuthor` is configured — see {@link isOurPr}. */
   prAuthorConfigured: boolean;
   /** Every task the store holds; an active one on the branch holds the reap off. */
-  tasks: Task[];
+  tasks: TaskSummary[];
   /** Pull requests already reaped, from `branch_reaps`. The read lives in the desk so this stays pure. */
   reaped: ReadonlySet<number>;
 }
@@ -68,6 +68,6 @@ export function reapableBranches(
   return out;
 }
 
-function isActive(status: Task['status']): boolean {
+function isActive(status: TaskSummary['status']): boolean {
   return status === 'queued' || status === 'running' || status === 'waiting';
 }

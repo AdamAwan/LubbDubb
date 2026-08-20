@@ -18,6 +18,7 @@ import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import type { AzPolicyEvaluation, AzPull, AzureDevOpsApi } from '../src/integrations/azure/azureDevOpsApi.js';
 import type { CiPolicy } from '../src/ci/ciPolicy.js';
 import type { PullRequest, WorldSnapshot } from '../src/types.js';
+import { findTask } from './support/tasks.js';
 
 /**
  * The whole path for a check watched in a **non-failing** state, from the Azure
@@ -218,7 +219,7 @@ test('the harness dispatches a code agent for the waiting gate, through buildSys
   const system = build(GATE, pullRequests);
   await system.harness.runCycle('manual');
 
-  const task = system.store.listTasks().find((t) => t.originRef === 'pr:31676:ci-gate');
+  const task = findTask(system.store, (t) => t.originRef === 'pr:31676:ci-gate');
   assert.ok(task, 'a gate task should exist on its own origin');
   assert.equal(task.branch, 'feature/thing');
   assert.match(task.prompt, /waiting, not failing/);

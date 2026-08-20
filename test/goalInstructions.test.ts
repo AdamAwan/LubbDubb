@@ -10,6 +10,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { operatorInstructionsNote, ticketAmendCommands } from '../src/goalInstructions.js';
 import type { Agent, IssueInstruction } from '../src/types.js';
+import { findTask } from './support/tasks.js';
 
 // -- the pure note -----------------------------------------------------------
 
@@ -251,7 +252,7 @@ test('a standing instruction is in front of the next agent dispatched on the goa
     });
     await system.harness.runCycle('manual');
 
-    const task = system.store.listTasks().find((t) => t.originRef?.startsWith('issue:1'));
+    const task = findTask(system.store, (t) => t.originRef?.startsWith('issue:1') === true);
     assert.ok(task, 'the goal was dispatched');
     assert.match(task.prompt, /change the button to primary/, 'in the operator’s own words');
     assert.match(task.prompt, /What the operator has asked for on this goal/);
@@ -276,7 +277,7 @@ test('an agent on another goal’s pull request is handed none of it', async () 
     system.connector.inject({ kind: 'ci_failed', prNumber: 7 });
     await system.harness.runCycle('manual');
 
-    const prTask = system.store.listTasks().find((t) => t.originRef?.startsWith('pr:7'));
+    const prTask = findTask(system.store, (t) => t.originRef?.startsWith('pr:7') === true);
     assert.ok(prTask, 'the CI concern dispatched');
     assert.doesNotMatch(prTask.prompt, /change the button to primary/);
   } finally {

@@ -102,7 +102,7 @@ import type {
   ShortfallAuthor,
   ShortfallCause,
   StackLanding,
-  Task,
+  TaskSummary,
   ValidationCheck,
   ValidationResource,
   ValidationVerdict,
@@ -598,7 +598,18 @@ export interface CockpitState {
    * the very moment the operator most needs to see it progressing.
    */
   stackLandings: StackLandingView[];
-  tasks: Task[];
+  /**
+   * Every task the harness has claimed, newest first — **without prompts**.
+   *
+   * {@link TaskSummary}, not `Task`, and that is the whole point: a rendered
+   * agent prompt is kilobytes, no cockpit surface reads one, and on a real
+   * deployment they were 17.4 MB of this payload's 24 MB — built, serialised,
+   * transferred and parsed on every refresh, then discarded. No route ships a
+   * task's prompt, because no surface asks for one; adding a surface that does
+   * means adding a per-row route beside `/api/agents/:id/transcript`, never
+   * widening this back to `Task`. → `docs/spec/16-http-api.md#bulk-text`
+   */
+  tasks: TaskSummary[];
   /** Operator-launched jobs, newest first — the queue and its recent history. */
   jobs: Job[];
   /**
@@ -670,6 +681,15 @@ export interface CockpitState {
    * alert: no agent is parked on one, and it outlives every agent that asked.
    */
   humanTasks: HumanTask[];
+  /**
+   * The escalations still waiting on a person, newest first — **open only**.
+   *
+   * Not the all-time list: every surface that reads this filters to `open`, and
+   * each row carries a transcript tail in `context.recentOutput`, so shipping
+   * the settled ones was half a megabyte a refresh spent on rows nothing draws.
+   * A settled escalation is still reachable one at a time on the server; it is
+   * not something the cockpit asks for. → `docs/spec/16-http-api.md#bulk-text`
+   */
   escalations: Escalation[];
   /** Acts put to a human, newest first. */
   proposals: Proposal[];
@@ -1110,7 +1130,7 @@ export type {
   Retrospective,
   ScratchEntry,
   StackLanding,
-  Task,
+  TaskSummary,
   ValidationCheck,
   ValidationCheckState,
   ValidationResource,
