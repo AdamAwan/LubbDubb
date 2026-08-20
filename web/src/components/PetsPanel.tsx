@@ -145,9 +145,26 @@ function PetCard({
         <span className={`pet-rarity is-${pet.rarity}`}>{pet.rarity}</span>
       </div>
       <p className="pet-origin">
-        {originLine(pet)}
+        {/* The sentence carries the label, so it is the thing that can run long —
+            clamped in CSS with the whole of it on hover, rather than shortened
+            here, since only the layout knows how wide this card came out. */}
+        <span className="pet-origin-said" title={originLine(pet)}>
+          {originLine(pet)}
+        </span>
         <br />
-        <span className="muted">{relTime(pet.hatchedAt, now)}</span>
+        <span className="muted">
+          {relTime(pet.hatchedAt, now)}
+          {/* The ref is already the whole sentence when there is no label, and
+              printing it twice would say nothing. Where there is one it stays
+              here, in mono, because it is what an operator quotes back at a
+              database. */}
+          {pet.originLabel === null ? null : (
+            <>
+              {' · '}
+              <code className="pet-origin-ref">{pet.originRef}</code>
+            </>
+          )}
+        </span>
       </p>
       {dissolved ? (
         <p className="pet-blended muted small">
@@ -238,22 +255,44 @@ function PetCard({
 
 /**
  * What the operator was doing when it hatched, in their words rather than the
- * table's. The raw ref rides along because it is the thing they would search for.
+ * table's — the question they answered, the plan they accepted, the job they
+ * launched — from `originLabel`, which the server resolves from the source row
+ * per snapshot (→ docs/spec/22-pets.md#the-label).
+ *
+ * A null label is a source row that has been pruned, and a pet outlives what it
+ * came from by design, so the line falls back to naming the ref it was seeded
+ * from — which is what this line said for every pet before there was a label. It
+ * is a shorter sentence, never a blank one and never a suspicion.
  */
 function originLine(pet: PetView): string {
   // *Found*, not *hatched*: the drop and the reveal are two moments now, and this
   // line dates the first one. It is the moment worth recording — the night you
   // answered the thing — and the shell may have come off weeks later.
-  const what: Record<PetView['originKind'], string> = {
-    escalation: 'Found when you answered',
-    'human-task': 'Found when you settled',
-    plan: 'Found when you accepted',
-    landing: 'Found when you landed',
-    job: 'Found when you launched',
-    finding: 'Found when you triaged',
-    upgrade: 'Found when the harness updated itself,',
+  if (pet.originLabel === null) {
+    const bare: Record<PetView['originKind'], string> = {
+      escalation: 'Found when you answered',
+      'human-task': 'Found when you settled',
+      plan: 'Found when you accepted',
+      landing: 'Found when you landed',
+      job: 'Found when you launched',
+      finding: 'Found when you triaged',
+      upgrade: 'Found when the harness updated itself,',
+    };
+    return `${bare[pet.originKind]} ${pet.originRef}`;
+  }
+  // Quoted where the label is something a person wrote — a question, a title, a
+  // claim — and bare where it is a ref or a sha the harness minted, since quoting
+  // one of those reads as a title it is not.
+  const said: Record<PetView['originKind'], (label: string) => string> = {
+    escalation: (label) => `Found when you answered “${label}”`,
+    'human-task': (label) => `Found when you settled “${label}”`,
+    plan: (label) => `Found when you accepted the plan “${label}”`,
+    landing: (label) => `Found when you landed the stack for ${label}`,
+    job: (label) => `Found when you launched “${label}”`,
+    finding: (label) => `Found when you triaged “${label}”`,
+    upgrade: (label) => `Found when the harness updated itself to ${label}`,
   };
-  return `${what[pet.originKind]} ${pet.originRef}`;
+  return said[pet.originKind](pet.originLabel);
 }
 
 /**
