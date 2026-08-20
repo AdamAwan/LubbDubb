@@ -1618,6 +1618,17 @@ themselves; diffing the queue covers every kind by construction and stays true w
 added. Agents notify on the **transition** into a terminal status rather than on appearing, since an
 agent is in the list from the moment it spawns and a dead one stays there.
 
+**One notification per category per batch.** The diff is per subject, and that is the right record of
+what is new — it is not the right number of interruptions. A cascade records thirty errors inside one
+pulse and a restart fills the queue rail in one go, so an operator got thirty desktop banners for one
+event and ten for one glance's worth of work, every one of them saying the same thing: go and look at
+the cockpit ([#458](https://github.com/AdamAwan/LubbDubb/issues/458)). `coalesce` folds a batch to a
+single notification per category — three subjects named, the rest counted — because what each row _is_
+lives in the queue rail and the error list, which is where it gets answered. A batch of one is left
+exactly as it was, tag and all. The summary's tag is the first subject's plus the batch size: stable
+for the same batch, so a re-render replaces rather than repeats, and different for the next one, so a
+second burst stacks beside the first instead of overwriting its count with a smaller number.
+
 **A null previous snapshot yields nothing.** The first state after a load, a reconnect or a token
 entry seeds the comparison. Without it every row already waiting announces itself at once — a storm on
 exactly the deployments with the most waiting.
