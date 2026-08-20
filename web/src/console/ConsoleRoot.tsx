@@ -92,7 +92,8 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
           {/* Below the rail's scrolling list rather than inside it: a queue longer
               than the rail scrolls behind the enclosure instead of pushing it off
               the bottom, so the corner is always in frame and covers nothing.
-              Absent entirely when `pets.enabled` is off. */}
+              Absent entirely when the snapshot ships no vivarium — the feature off,
+              or on and hidden. */}
           {view.state.pets !== null && (
             <Vivarium
               pets={view.state.pets}
@@ -145,11 +146,12 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
         />
       );
     case 'pets':
-      // A deployment with the feature off has no tab to reach this, but a stale URL
+      // A deployment drawing no vivarium has no tab to reach this, but a stale URL
       // still can — and an empty page is a better answer than a page describing a
-      // subsystem that is not running.
+      // subsystem that is not on the cockpit. "Hidden" covers both reasons the
+      // snapshot ships null, and the cockpit is not told which one it was.
       return view.state.pets === null ? (
-        <p className="muted">Pets are off on this deployment.</p>
+        <p className="muted">Pets are hidden on this deployment.</p>
       ) : (
         <PetsPage pets={view.state.pets} />
       );

@@ -39,7 +39,7 @@ function rules(over: RuleOverrides = {}): PetRules {
 /** A keeper over a database whose vivarium has not started yet. */
 function coldKeeper(over: RuleOverrides = {}, build = BUILD): { store: Store; pets: PetKeeper } {
   const store = new Store(':memory:');
-  return { store, pets: new PetKeeper(store, { enabled: true }, rules(over), () => build) };
+  return { store, pets: new PetKeeper(store, { enabled: true, visible: true }, rules(over), () => build) };
 }
 
 function keeper(over: RuleOverrides = {}, build = BUILD): { store: Store; pets: PetKeeper } {
@@ -307,7 +307,7 @@ test('a vivarium carried over from before the boundary keeps every pet it has', 
   const clock = (): string => new Date(Date.parse('2026-04-12T09:00:00.000Z') + tick++ * 60_000).toISOString();
   try {
     const store = new Store(path, clock);
-    const pets = new PetKeeper(store, { enabled: true }, rules({ dropChance: 0.5 }), () => BUILD);
+    const pets = new PetKeeper(store, { enabled: true, visible: true }, rules({ dropChance: 0.5 }), () => BUILD);
     pets.scan();
     for (let i = 0; i < 20; i++) answer(store, `question ${i}`);
     for (let i = 0; i < 20; i++) settle(store, `task ${i}`);
@@ -327,7 +327,7 @@ test('a vivarium carried over from before the boundary keeps every pet it has', 
     raw.close();
 
     const rebooted = new Store(path, clock);
-    const back = new PetKeeper(rebooted, { enabled: true }, rules({ dropChance: 0.5 }), () => BUILD);
+    const back = new PetKeeper(rebooted, { enabled: true, visible: true }, rules({ dropChance: 0.5 }), () => BUILD);
     assert.deepEqual(back.scan(), [], 'nothing is rolled a second time');
     assert.equal(rebooted.vivariumStart(), earliest, 'the start is the earliest action already rolled');
     assert.deepEqual(
@@ -428,11 +428,27 @@ test('turning pets off scans nothing and reports nothing, and deletes nothing', 
   pets.scan();
   assert.equal(store.listPets().length, 1);
 
-  const off = new PetKeeper(store, { enabled: false });
+  const off = new PetKeeper(store, { enabled: false, visible: true });
   assert.deepEqual(off.scan(), []);
   assert.equal(off.state(), null, 'the cockpit draws nothing rather than an empty enclosure');
   assert.equal(off.feed('anything', 1).ok, false);
   assert.equal(store.listPets().length, 1, 'and what hatched is still there');
+});
+
+test('hiding pets draws nothing and stops nothing', () => {
+  // The whole of what separates hidden from off: an operator who does not want
+  // animals on their cockpit is not also deciding that the months of work they do
+  // while it is off were worth nothing. Turning it back on shows what accrued.
+  const store = new Store(':memory:');
+  const hidden = new PetKeeper(store, { enabled: true, visible: false }, rules({ dropChance: 1 }), () => BUILD);
+  hidden.scan();
+  answer(store, 'hatch me something nobody is looking at');
+
+  assert.equal(hidden.scan().length, 1, 'the scan still runs and the roll still lands');
+  assert.equal(hidden.state(), null, 'and the cockpit is handed the same null the feature being off ships');
+
+  const shown = new PetKeeper(store, { enabled: true, visible: true }, rules({ dropChance: 1 }), () => BUILD);
+  assert.equal(shown.state()?.pets.length, 1, 'what accrued out of sight is there when it comes back');
 });
 
 test('every action kind can draw something, so no action is a dead end', () => {
@@ -600,7 +616,7 @@ function coldTimedKeeper(over: RuleOverrides = {}): { store: Store; pets: PetKee
   const store = new Store(':memory:', () =>
     new Date(Date.parse('2026-04-12T09:00:00.000Z') + tick++ * 60_000).toISOString(),
   );
-  return { store, pets: new PetKeeper(store, { enabled: true }, rules(over), () => BUILD) };
+  return { store, pets: new PetKeeper(store, { enabled: true, visible: true }, rules(over), () => BUILD) };
 }
 
 function timedKeeper(over: RuleOverrides = {}): { store: Store; pets: PetKeeper } {
@@ -701,7 +717,7 @@ test('a vivarium from before eggs is not turned back into a crate of shells', ()
 
     // And the backfill is a one-off, not a boot chore: an egg laid after the
     // upgrade is still an egg on the next restart.
-    const pets = new PetKeeper(store, { enabled: true }, rules({ dropChance: 1 }), () => BUILD);
+    const pets = new PetKeeper(store, { enabled: true, visible: true }, rules({ dropChance: 1 }), () => BUILD);
     pets.scan(); // The boot, which stamps the vivarium's start before the operator acts.
     answer(store, 'a question after the upgrade');
     const [fresh] = pets.scan();
@@ -777,7 +793,7 @@ test('a clearance is skipped entirely while pets are turned off', () => {
   answer(store, 'hatch me something');
   pets.scan();
 
-  const off = new PetKeeper(store, { enabled: false });
+  const off = new PetKeeper(store, { enabled: false, visible: true });
   assert.equal(off.resetOnce(), null);
   assert.equal(store.listPets().length, 1, 'off has never deleted anything, and this is not the change that does');
   // Turned on later, the deployment still gets its clearance.
@@ -794,7 +810,11 @@ test('no configuration key can reach the roll', () => {
   // rates are constants and this test is structural rather than behavioural.
   const fields = readFileSync('src/configFields.ts', 'utf8');
   const paths = [...fields.matchAll(/path: '(pets\.[a-zA-Z]+)'/g)].map((m) => m[1]);
-  assert.deepEqual(paths, ['pets.enabled'], 'the only pets key an operator may set is the switch');
+  assert.deepEqual(
+    paths,
+    ['pets.enabled', 'pets.visible'],
+    'the only pets keys an operator may set are the two switches',
+  );
 
   // And the type says so too, so a key added to the page has nowhere to land.
   const policy = readFileSync('src/pets/keeper.ts', 'utf8');
@@ -804,8 +824,8 @@ test('no configuration key can reach the roll', () => {
       .split('\n')
       .map((line) => line.trim())
       .filter((line) => line.length > 0),
-    ['enabled: boolean;'],
-    'PetPolicy holds the switch and nothing that is a number',
+    ['enabled: boolean;', 'visible: boolean;'],
+    'PetPolicy holds the two switches and nothing that is a number',
   );
 });
 
@@ -1285,7 +1305,7 @@ test('a source row that has gone leaves no label, and is not an accusation', () 
   const path = join(dir, 'labels.sqlite');
   try {
     const store = new Store(path);
-    const pets = new PetKeeper(store, { enabled: true }, rules({ dropChance: 1 }), () => BUILD);
+    const pets = new PetKeeper(store, { enabled: true, visible: true }, rules({ dropChance: 1 }), () => BUILD);
     const id = answer(store, 'a question somebody later pruned');
     pets.scan();
     assert.equal(pets.state()?.pets[0]?.originLabel, 'a question somebody later pruned');
@@ -1298,7 +1318,7 @@ test('a source row that has gone leaves no label, and is not an accusation', () 
     raw.close();
 
     const after = new Store(path);
-    const reopened = new PetKeeper(after, { enabled: true }, rules({ dropChance: 1 }), () => BUILD);
+    const reopened = new PetKeeper(after, { enabled: true, visible: true }, rules({ dropChance: 1 }), () => BUILD);
     const pet = reopened.state()?.pets[0];
     assert.equal(pet?.originLabel, null, 'a missing row is no label');
     assert.equal(pet?.originRef, id, 'and the card still has the ref it always drew');

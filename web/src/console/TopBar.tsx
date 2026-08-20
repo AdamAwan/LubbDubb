@@ -11,9 +11,9 @@ import { productionReading } from '../view/production.js';
 /**
  * The nav's destinations, in reading order — the order the tabs are drawn in.
  *
- * `pets` is absent when the feature is off, exactly as the rail's vivarium is: a
- * tab that opens on a page explaining a subsystem this deployment does not run is
- * worse than no tab.
+ * `pets` is absent when the snapshot ships no vivarium — the feature off, or on
+ * and hidden — exactly as the rail's vivarium is: a tab that opens on a page
+ * explaining a subsystem this cockpit does not draw is worse than no tab.
  */
 const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets'];
 
@@ -80,7 +80,7 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
   };
 
   // Appended rather than listed, so the nav is the same three tabs on a deployment
-  // that has the feature off and the fourth cannot be reached by a stale URL either
+  // drawing no vivarium and the fourth cannot be reached by a stale URL either
   // — `tabBody` refuses it for the same reason.
   const tabs = view.state.pets === null ? TABS : [...TABS, 'pets' as const];
 

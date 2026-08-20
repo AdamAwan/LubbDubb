@@ -209,7 +209,8 @@ export interface Config {
    *
    * **On by default and inert**: it spends no agent, gates nothing, dispatches
    * nothing and is invisible to every agent. Off hides it and stops the scan
-   * without deleting a thing.
+   * without deleting a thing; `visible: false` hides it and stops nothing, so the
+   * collection goes on growing behind a cockpit that never mentions it.
    *
    * One switch and nothing else, on purpose: the rates a pet costs are constants
    * in `src/pets/rules.ts`, because a deployment that can set its own drop chance
@@ -601,7 +602,7 @@ const DEFAULTS: Config = {
   // One switch and no rates. Everything a pet costs lives in `src/pets/rules.ts`
   // as a constant, because each of those numbers was also a way of writing a pet
   // into existence without doing anything.
-  pets: { enabled: true },
+  pets: { enabled: true, visible: true },
   selfUpdate: { enabled: true, remote: 'origin', branch: 'main', checkIntervalMs: 60 * 60 * 1000 },
   validation: DEFAULT_VALIDATION,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
