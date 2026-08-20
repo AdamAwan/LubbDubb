@@ -63,6 +63,19 @@ export interface IssuePickupPolicy {
    */
   inReviewState?: string;
   /**
+   * The state a work item is moved to once an agent is actually working it (e.g.
+   * Azure "Doing"). When set *and* `pickupStates` is non-empty, rule
+   * `work-item-in-progress` emits a `set_work_item_state` for an item in a pickup
+   * state with a live work agent and no open PR. Unset = no transition (the
+   * default).
+   *
+   * It is **not** the operator's job to list it in `pickupStates` as well:
+   * {@link effectivePickupStates} folds it in, which is what keeps an item the
+   * harness put there pickup-eligible and still able to advance to the review
+   * state. See that function for why the fold is required rather than tidy.
+   */
+  inProgressState?: string;
+  /**
    * Provider-native item types that hold other work rather than being work — e.g.
    * `["Feature", "Epic"]` for Azure DevOps. An item of one of these types is never
    * picked up: its children are the work. Issues with no `issueType` (GitHub, the
@@ -70,6 +83,35 @@ export interface IssuePickupPolicy {
    * back to `DEFAULT_CONTAINER_TYPES`; an explicit `[]` turns the gate off.
    */
   containerTypes?: string[];
+}
+
+/**
+ * The pickup states as every gate must actually read them: the operator's list,
+ * plus the in-progress state the harness writes itself.
+ *
+ * The fold is load-bearing, not tidiness. Two readers key on the pickup list —
+ * {@link isIssuePickupEligible}'s state gate and rule `work-item-in-review`, whose
+ * first guard is "the item is still in a pickup state" — so an item the harness
+ * moved to a state outside the list falls into a hole: never picked up again,
+ * never advanced to the review state when its PR opens, and nothing red. Folding
+ * the state in one place makes forgetting it impossible, and makes the useful
+ * behaviour fall out: an item left in the in-progress state by an agent that died
+ * without a PR is picked up again rather than lost.
+ *
+ * One caller must **not** use this: `deliveryHold` asks whether the item is in a
+ * pickup state to mean "a human moved it back, they want it worked", and a state
+ * the harness wrote is not that. It keeps the configured list.
+ *
+ * Returns the list unchanged (identity, not a copy) when there is nothing to fold,
+ * and `undefined`/empty stays `undefined`/empty — an empty gate is the gate off,
+ * and an in-progress state must not switch it on.
+ */
+export function effectivePickupStates(policy: IssuePickupPolicy): string[] | undefined {
+  const states = policy.pickupStates;
+  if (!states || states.length === 0) return states;
+  const inProgress = policy.inProgressState;
+  if (!inProgress || states.includes(inProgress)) return states;
+  return [...states, inProgress];
 }
 
 /** The branch rule `issue-pickup` puts an issue's agent on — and how a PR is matched back to its issue. */
@@ -129,8 +171,9 @@ export function isIssuePickupEligible(issue: Issue, policy: IssuePickupPolicy): 
   // State gate (Azure work items): only pick up items in an allowed workflow state
   // — e.g. "Ready"/"Doing", not "In Review". Items with no tracked state (GitHub,
   // fake) bypass this entirely, so it's a no-op unless the provider populates it.
-  if (policy.pickupStates && policy.pickupStates.length > 0 && issue.workItemState !== undefined) {
-    if (!policy.pickupStates.includes(issue.workItemState)) {
+  const pickupStates = effectivePickupStates(policy);
+  if (pickupStates && pickupStates.length > 0 && issue.workItemState !== undefined) {
+    if (!pickupStates.includes(issue.workItemState)) {
       // The review back-off state is the expected parking spot — name it as such.
       if (policy.inReviewState && issue.workItemState === policy.inReviewState) reasons.push('in review');
       else reasons.push(`state "${issue.workItemState}" not in pickup states`);

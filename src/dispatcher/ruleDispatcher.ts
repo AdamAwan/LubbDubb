@@ -2,7 +2,13 @@ import type { Dispatcher, DispatchContext, DispatchResult, QueueItem } from './d
 import type { ValidatedAction } from './actions.js';
 import { parseActions } from './actions.js';
 import type { Decision, Issue, ValidationCheck } from '../types.js';
-import { isIssuePickupEligible, issuePriority, openPrForIssue, type IssuePickupPolicy } from './issuePickup.js';
+import {
+  effectivePickupStates,
+  isIssuePickupEligible,
+  issuePriority,
+  openPrForIssue,
+  type IssuePickupPolicy,
+} from './issuePickup.js';
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
 import { type CiPolicy } from '../ci/ciPolicy.js';
 import { DISPATCH_PIPELINE, type RuleConditions, type StageRuleId } from './rules.js';
@@ -29,6 +35,7 @@ import { manualJob } from './rules/manualJob.js';
 import { prCiFailing } from './rules/prCiFailing.js';
 import { workItemInReview } from './rules/workItemInReview.js';
 import { workItemBackToPickup } from './rules/workItemBackToPickup.js';
+import { workItemInProgress } from './rules/workItemInProgress.js';
 import { issueAssay } from './rules/issueAssay.js';
 import { issuePlan } from './rules/issuePlan.js';
 import { issueAssess } from './rules/issueAssess.js';
@@ -61,6 +68,7 @@ import { validateCheck } from './rules/validateCheck.js';
 const STAGES: Partial<Record<StageRuleId, (s: StageContext) => void>> = {
   'manual-job': manualJob,
   'pr-ci-failing': prCiFailing,
+  'work-item-in-progress': workItemInProgress,
   'work-item-in-review': workItemInReview,
   'work-item-back-to-pickup': workItemBackToPickup,
   'issue-assay': issueAssay,
@@ -208,7 +216,10 @@ export class RuleDispatcher implements Dispatcher {
     // One condition remains, and it is about the *provider* rather than about a
     // policy: a work-item state rule has nothing to read where the tracker has no
     // state model to read it from.
-    const conditions: RuleConditions = { workItemStates: s.workItemStates !== null };
+    const conditions: RuleConditions = {
+      workItemStates: s.workItemStates !== null,
+      workItemInProgress: s.workItemInProgress !== null,
+    };
     for (const rule of DISPATCH_PIPELINE) {
       if (rule.enabled && !rule.enabled(conditions)) continue;
       STAGES[rule.id]?.(s);
@@ -301,6 +312,12 @@ export class RuleDispatcher implements Dispatcher {
     // so none of them can hold a different opinion about an issue. Empty with the
     // funnel off.
     const plansByOrigin = new Map((ctx.plans ?? []).map((p) => [p.originRef, p]));
+
+    // The operator's pickup list with the state the harness writes itself folded
+    // in — see `effectivePickupStates`. Every state gate below reads this; the one
+    // that must not is `deliveryHold`, whose whole meaning is "a human moved it
+    // back", which a harness write is not.
+    const pickupStates = effectivePickupStates(this.pickup);
 
     // Every open PR the world knows about: the dispatch view plus the unwatched
     // ones hidden from it. Nothing acts on an unwatched PR — they are here only so
@@ -493,10 +510,18 @@ export class RuleDispatcher implements Dispatcher {
       // `workItemStates` narrows both work-item rules' config to non-null. Narrowed
       // once, here, so each stage reads it off a value the type system already
       // knows is present — and the same predicate is what the registry's `enabled`
-      // condition switches those two rules in on.
+      // condition switches those two rules in on. The states are the *effective*
+      // ones, so an item parked in the in-progress state is still one these rules
+      // can move on.
       workItemStates:
-        this.pickup.inReviewState && this.pickup.pickupStates?.length
-          ? { inReviewState: this.pickup.inReviewState, pickupStates: this.pickup.pickupStates }
+        this.pickup.inReviewState && pickupStates?.length
+          ? { inReviewState: this.pickup.inReviewState, pickupStates }
+          : null,
+      // The same fold, and the reason `work-item-in-progress` can move an item
+      // somewhere `work-item-in-review` will still find it.
+      workItemInProgress:
+        this.pickup.inProgressState && pickupStates?.length
+          ? { inProgressState: this.pickup.inProgressState, pickupStates }
           : null,
     };
   }

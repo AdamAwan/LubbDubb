@@ -94,6 +94,7 @@ Assembled once in `src/system.ts` from config and handed to whichever dispatcher
 | `pickupStates`    | `issuePickupStates`        | Allowed provider-native workflow states.                                             |
 | `containerTypes`  | `issueContainerTypes`      | Item types that are never worked. Unset falls back to the default pair; `[]` is off. |
 | `inReviewState`   | `issueInReviewState`       | The state rule `work-item-in-review` parks an item in.                               |
+| `inProgressState` | `issueInProgressState`     | The state rule `work-item-in-progress` moves an item to. Folded into `pickupStates`. |
 
 A bare `new RuleDispatcher()` takes an empty policy, which means no gate and flat priority — the
 act-on-everything behaviour unit tests rely on.
@@ -106,6 +107,26 @@ policy straight from `src/system.ts` — and the dispatcher come to disagree abo
 nothing red. That is exactly what happened to `containerTypes`, where `issueContainerTypes: []` left
 the Feature/Epic gate fully on for dispatch while the cockpit showed it off.
 
+### The effective pickup states
+
+`effectivePickupStates(policy)` is the pickup list as every gate must actually read it: the
+operator's `pickupStates`, plus `inProgressState` appended when one is set and not already listed. An
+unset or empty list stays unset or empty — an in-progress state alone never switches the state gate
+on — and the fold appends, so the first entry (where rule `work-item-back-to-pickup` returns an item)
+stays the operator's own "start here".
+
+The fold is load-bearing, not tidiness. Two readers key on the pickup list: the state gate below, and
+rule `work-item-in-review`, whose first guard is "the item is still in a pickup state". An item moved
+to a state outside the list therefore falls into a hole — never picked up again, never advanced to
+the review state when its PR opens, never returned — put there by the harness's own write, with
+nothing red. Folding it in one place makes forgetting it impossible, and makes the useful behaviour
+fall out: an item left in the in-progress state by an agent that died without a PR is picked up
+again.
+
+One caller must **not** read it, and does not: `deliveryHold` asks whether the item is in a pickup
+state to mean _the operator moved it back, they want it worked_, and a state the harness wrote is not
+that. It keeps the configured list. → [02](02-configuration.md#the-in-progress-state)
+
 ## Intrinsic eligibility
 
 `isIssuePickupEligible(issue, policy)` returns `{eligible, reasons}` — pure over the issue and the
@@ -116,9 +137,11 @@ explain an untouched item:
    `<Type> is a container — work its N child items`. Asked before the state gate because it is the
    more fundamental refusal: a container in a pickup state is still a container, and no tag or state
    makes one workable. Items with no `issueType` bypass it entirely.
-2. **State gate** — only when `pickupStates` is non-empty **and** the issue carries a
-   `workItemState`. Items with no native state bypass it entirely. A state matching `inReviewState`
-   reports `in review`; any other non-listed state reports `state "<x>" not in pickup states`.
+2. **State gate** — only when the [effective pickup states](#the-effective-pickup-states) are
+   non-empty **and** the issue carries a `workItemState`. Items with no native state bypass it
+   entirely. `effectivePickupStates` is the only list this reads, so an item in `inProgressState` is
+   eligible without the operator having listed it. A state matching `inReviewState` reports
+   `in review`; any other non-listed state reports `state "<x>" not in pickup states`.
 3. **Watch gate** — the issue must carry `watchLabel`. With `requireOwnLabel` on, the check reads
    `labelsAddedByViewer`, and an item tagged by someone else reports
    `watch label "<x>" not added by you` rather than `no watch label "<x>"`, so the operator knows

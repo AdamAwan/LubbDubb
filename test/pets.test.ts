@@ -1190,10 +1190,14 @@ function oneOfEachKind(store: Store): Map<PetActionKind, string> {
   });
   store.resolveFinding(finding.id, 'dismissed', null);
   refs.set('finding', finding.id);
+  // Stamped now, not at a fixed date. Every other action here takes its timestamp
+  // from the store's clock, and `requestedAt` is the one a caller supplies — so a
+  // literal puts this action before the vivarium's start, where it is recorded
+  // inert and hatches nothing.
   store.writeUpgradeIntent({
     state: 'applying',
     targetSha: '9c1d4a2f6b3e',
-    requestedAt: '2026-04-12T14:00:00.000Z',
+    requestedAt: new Date().toISOString(),
     pausedByDrain: false,
   });
   refs.set('upgrade', '9c1d4a2f6b3e');

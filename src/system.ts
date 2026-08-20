@@ -633,6 +633,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     defaultPriority: config.issueDefaultPriority,
     pickupStates: config.issuePickupStates,
     inReviewState: config.issueInReviewState,
+    inProgressState: config.issueInProgressState,
     containerTypes: config.issueContainerTypes,
   };
   // Hoisted out of the RuleDispatcher's construction because the template book is

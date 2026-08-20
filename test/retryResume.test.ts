@@ -257,11 +257,16 @@ test('a non-resumable runtime re-dispatches cold, and the audit does not claim o
   const agents = system.store.listAgents();
   assert.equal(agents.length, 2);
   for (const agent of agents) assert.equal(agent.sessionId, null, 'raw pins nothing to resume');
-  assert.match(
-    system.store.listDecisions().filter((d) => d.outcome === 'executed')[0]!.detail,
-    /^Spawned code agent/,
-    'the audit reports the cold spawn that actually happened',
-  );
+  // Selected by action type rather than by position: `listDecisions` orders on a
+  // millisecond timestamp, and the operator's `complete` writes an `executed`
+  // decision of its own between the two dispatches — three rows that land inside
+  // one millisecond here, so which one is "first" is SQLite's tie-break to pick.
+  const spawns = system.store
+    .listDecisions()
+    .filter((d) => d.outcome === 'executed' && d.action.type === 'dispatch_code_agent');
+  assert.equal(spawns.length, 2, 'both dispatches are audited');
+  for (const spawn of spawns)
+    assert.match(spawn.detail, /^Spawned code agent/, 'the audit reports the cold spawn that actually happened');
 
   system.store.close();
 });
