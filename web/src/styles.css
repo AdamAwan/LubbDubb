@@ -5656,6 +5656,25 @@ body {
   color: var(--muted);
   word-break: break-word;
 }
+/* The sentence now carries a label somebody typed. The server clamps it to one
+   line of ninety characters, which is still four lines in a card this narrow — so
+   two lines here, then an ellipsis, with the whole of it on the hover title. A
+   card that grew to fit its wordiest escalation would take its whole row of the
+   grid with it. */
+.pet-origin-said {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+/* The row id, once the sentence stopped being it: mono and dimmer than the
+   timestamp it sits beside, because it is there to be quoted rather than read. */
+.pet-origin-ref {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  opacity: 0.8;
+}
 .pet-meter {
   height: 4px;
   background: var(--border);

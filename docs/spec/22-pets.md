@@ -481,7 +481,7 @@ token layer rather than a `cn-` class.
 
 **What pins it is one `auto` margin, not the flex column.** The rail is a full-height flex column,
 but nothing in it grows: the list and the vivarium both size to their content, so a short or empty
-queue used to leave the free height *below* the enclosure and it rode up under the last ask row.
+queue used to leave the free height _below_ the enclosure and it rode up under the last ask row.
 `margin-top: auto` on `.cn-viv` absorbs that free height above it instead, which puts the enclosure
 on the rail's floor at every queue length and is inert when the list already fills the rail. The
 list carries `min-height: 0` so it is still allowed to shrink below its content and scroll when the
@@ -529,6 +529,35 @@ hatched from with its timestamp, a fed meter, and controls to feed, rename and p
 The origin line is the point of the panel. A grid of creatures is a toy; a grid of creatures each
 labelled with the night you answered the thing that produced it is a record, and it is the only part
 of this subsystem that gets better the longer a deployment runs.
+
+### What the origin line says
+
+`originLine` draws **the label as the sentence**: _Found when you answered “Should I rebase or
+merge?”_ rather than _Found when you answered esc_Jdt9l826iQ_. One phrase per origin kind, each
+naming what the operator did — answered, settled, accepted the plan, landed the stack for, launched,
+triaged, and, for an `upgrade`, _updated itself to_ its short sha. The label is quoted where it is
+something a person wrote and bare where it is a ref the harness minted, since quoting a ref reads as
+a title it is not.
+
+**A null [label](#the-label) draws the line the panel drew before there was one** — the phrase and
+the raw `originRef`. That is the case a pruned or restored source row lands in, and a pet outlives
+what it came from by design, so the fallback is a shorter sentence rather than a blank line, an
+apology or a [flaw](#what-is-not-checked).
+
+**The ref stays on the card, in mono, beside the timestamp** — it is what an operator quotes back at
+a database, and it is the one thing about a pet that a label cannot be searched by. It is drawn only
+where there _is_ a label; where there is not, the sentence is already the ref, and printing it twice
+would say nothing.
+
+**The sentence is clamped to two lines by `.pet-origin-said`, with the whole of it on the hover
+title.** The server clamps a label to one line of ninety characters, which is still four lines in a
+216px card, and a card that grew to fit its wordiest escalation would take its whole row of the grid
+with it. Clamping in CSS rather than shortening in the component is deliberate: only the layout knows
+how wide the card came out.
+
+Neither the sentence nor the ref is a [`<Ref>`](17-cockpit.md#links). None of the seven is an issue
+or a pull request that component can resolve — they are row ids in this harness's own tables — so the
+card names them rather than pretending to a destination it has not got.
 
 ## The Pets page
 
@@ -1026,7 +1055,7 @@ or restored source into an accusation. `pet_actions` is append-only and is taken
 instead.
 
 The label lookup is not that check wearing a different hat, and must never become it. It asks six
-tables for a handful of ids and its only possible answers are *a line of words* or *nothing*: a ref
+tables for a handful of ids and its only possible answers are _a line of words_ or _nothing_: a ref
 with no row yields `originLabel: null`, the card falls back to the ref it drew before, and the
 attestation never sees it. **A missing source row is no label and never a flaw** — an operator who
 pruned a finding or restored an older database has not forged anything.
