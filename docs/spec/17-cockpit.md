@@ -2034,8 +2034,14 @@ the five codes `renderBlocks` emits and threads the active style across streamed
 
 The pane is read to follow an agent's **reasoning**, and tool output drowned it — one `grep` filled the
 view and pushed the thinking into fragments. So a tool call renders as a **collapsed block**: one dim
-line carrying the tool name, its one-line input summary, and the result's `· N lines` suffix
-([10](10-agent-runtimes.md)). Clicking it reveals the output. Prose reads continuously between them.
+line carrying the time it started, the tool name, its one-line input summary, and — folded off the
+result line — the time it returned and the `· N lines` suffix ([10](10-agent-runtimes.md)). Clicking
+it reveals the output. Prose reads continuously between them.
+
+The two times on that one line are the answer to "is this still going": a call with no result under
+it has been running since the time it names, and the pane no longer looks the same whether an agent
+is thinking or died an hour ago. Nothing derives a verdict from them — they are read, not judged,
+for the same reason `Agent.notedAt` is (the longest quiet stretches are the long test runs).
 
 - **An error result is never collapsed.** It opens expanded and red, because a failure that hides is
   worse than one that takes up space.
@@ -2045,8 +2051,12 @@ line carrying the tool name, its one-line input summary, and the result's `· N 
   result between them means the agent fired them in parallel, and the stream carries no ids to pair
   them by; each result then renders as its own standalone collapsed block rather than being attributed
   to the wrong call.
-- **A PTY transcript carries no markers**, so it renders as plain prose with nothing to collapse. That
-  is a property of the runtime, not a gap.
+- **The stamp is part of the marker the parser matches.** `TOOL` accepts an optional leading
+  `[HH:MM:SS]`; a mismatch there does not misrender, it silently stops folding, which is why the
+  round-trip tests below feed stamped output too.
+- **Text carrying no markers renders as plain prose** with nothing to collapse — an older transcript,
+  or a settled session whose records the tail could not label. Both runtimes write the same markers
+  ([10](10-agent-runtimes.md)), so this is the degraded case rather than a mode.
 
 The structure is found, not shipped: the transcript is still a flat text stream, and
 `web/src/components/transcriptBlocks.ts` (`feedBlocks`, pure, tested in `test/transcriptBlocks.test.ts`)

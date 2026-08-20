@@ -338,8 +338,27 @@ The raw event stream is never dumped. Each message's content blocks go through t
   — and truncated to `MAX_RESULT_LINES` (200) with a `+N more lines` marker;
 - a `human` block renders injected/human messages.
 
-A result's label is `↳ result` (or `↳ error`) followed by a dim `· N lines` suffix giving the
-**pre-truncation** total, omitted when the result is a single line. The cockpit folds that suffix into
+**Every labelled line is stamped** with a dim local `[HH:MM:SS]`: a tool call and a sent message
+carry it in front of the label, a result carries it *after* the label and before the count. That
+asymmetry is deliberate — the cockpit matches a result by `^  ↳` and folds everything past the label
+into the collapsed summary, so a stamp in front would break the match and be thrown away, while one
+behind it puts the moment a call was made and the moment it returned on the one line an operator
+reads collapsed. The question it answers is the only one the pane could not answer before: whether a
+run is working or stopped an hour ago. Prose is never stamped — the pane is read for the reasoning,
+and a time down its left edge turns it into a log file.
+
+**A stamp is a time the block came with, never a reading of the clock at render.** `renderBlocks`
+takes the time as an argument and stays pure; the stream runtime passes one reading per message,
+because on that transport an event is read as it happens, and the PTY runtime instead dates each
+block from the session file record's own `timestamp` (`ContentBlock.at`, which wins over the
+argument). That split is load-bearing: `SessionTranscriptTail` replays the file from the top on every
+attach, so a clock read here would date a whole finished session to the second it was reopened —
+making an agent idle since lunch and one still working read identically, which is the exact failure
+these stamps exist to end. A record with no `timestamp` renders unstamped rather than stamped
+`now`.
+
+A result's label is `↳ result` (or `↳ error`) followed by the stamp and a dim `· N lines` suffix
+giving the **pre-truncation** total, the count omitted when the result is a single line. The cockpit folds that suffix into
 the collapsed summary of the tool call ([17](17-cockpit.md)), and the server is the only side that
 still knows what was cut. The cap can be this high because the drawer hides result bodies by default:
 a collapsed block is only worth opening if the whole result is inside it.

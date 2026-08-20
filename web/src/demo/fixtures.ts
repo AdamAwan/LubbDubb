@@ -2298,22 +2298,23 @@ export function buildDemoState(): DemoSeed {
   };
 
   const transcripts: Record<string, string> = {
-    // Real `renderBlocks` output, markers intact, so the demo exercises the drawer's
-    // collapsed tool blocks rather than only plain prose.
+    // Real `renderBlocks` output, markers intact — stamps included — so the demo
+    // exercises the drawer's collapsed tool blocks rather than only plain prose. The
+    // times are literals like every other demo value: nothing here reads a clock.
     'agent-a1': [
       'Reading feature/context-budget — the failing case is a question that matches every section.\n',
-      '\x1b[36m⚙ Bash\x1b[0m \x1b[2mnpm test -w packages/retrieval\x1b[0m\n',
+      '\x1b[2m[10:14:02]\x1b[0m \x1b[36m⚙ Bash\x1b[0m \x1b[2mnpm test -w packages/retrieval\x1b[0m\n',
       '\n',
-      '\x1b[31m  ↳ error\x1b[0m\x1b[2m · 5 lines\x1b[0m\n',
+      '\x1b[31m  ↳ error\x1b[0m\x1b[2m [10:14:51]\x1b[0m\x1b[2m · 5 lines\x1b[0m\n',
       '  ✗ retrieval › the context fits the budget\n',
       '    Expected 8000, got 21440\n',
       '    at index.test.ts:118\n',
       '  \n',
       '  1 failing, 82 passing\n',
       'So the cut is applied after the prompt is assembled, not before. Let me read the fold.\n',
-      '\x1b[36m⚙ Read\x1b[0m \x1b[2mpackages/retrieval/src/index.ts\x1b[0m\n',
+      '\x1b[2m[10:15:07]\x1b[0m \x1b[36m⚙ Read\x1b[0m \x1b[2mpackages/retrieval/src/index.ts\x1b[0m\n',
       '\n',
-      '\x1b[90m  ↳ result\x1b[0m\x1b[2m · 18 lines\x1b[0m\n',
+      '\x1b[90m  ↳ result\x1b[0m\x1b[2m [10:15:08]\x1b[0m\x1b[2m · 18 lines\x1b[0m\n',
       '  30	  const chosen = ranked.slice(0, topK);\n',
       '  31	  const chosen = ranked.slice(0, topK);\n',
       '  32	  const chosen = ranked.slice(0, topK);\n',

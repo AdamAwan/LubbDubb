@@ -110,10 +110,32 @@ test('an unterminated trailing line is reported as tail, not swallowed', () => {
   assert.equal(tail, 'thinking about it');
 });
 
-test('a settled PTY transcript, which carries no markers, is plain text', () => {
+test('text carrying no markers renders as plain prose', () => {
   const { ops } = all('> npm run check\nall six passed\n');
   assert.deepEqual(
     ops.map((o) => o.kind),
     ['text', 'text'],
   );
+});
+
+test('a stamped call and its stamped result still fold into one block', () => {
+  // The stamp changes the shape of the very lines this parser matches on, so the
+  // round trip is what keeps the drawer folding after the server started writing it.
+  const rendered =
+    renderBlocks([{ type: 'tool_use', name: 'Bash', input: { command: 'ls' } }], '2026-08-20T09:14:02.000Z') +
+    renderBlocks([{ type: 'tool_result', content: 'a\nb\nc' }], '2026-08-20T09:14:09.000Z');
+  const opens = all(rendered).ops.filter((o) => o.kind === 'open');
+  assert.equal(opens.length, 1, 'the stamp did not stop the call being recognised');
+  const summary = opens[0]?.text ?? '';
+  assert.match(summary, /^\[\d{2}:\d{2}:\d{2}\] ⚙ Bash ls/, 'the call is dated where it starts');
+  assert.match(summary, /\[\d{2}:\d{2}:\d{2}\] · 3 lines/, 'and where it finished, folded in');
+});
+
+test('a stamped error result still opens its own expanded block', () => {
+  const rendered =
+    renderBlocks([{ type: 'tool_use', name: 'Bash', input: { command: 'nope' } }], '2026-08-20T09:14:02.000Z') +
+    renderBlocks([{ type: 'tool_result', is_error: true, content: 'command not found' }], '2026-08-20T09:14:03.000Z');
+  const opens = all(rendered).ops.filter((o) => o.kind === 'open');
+  assert.equal(opens.length, 2);
+  assert.equal(opens[1]?.error, true);
 });

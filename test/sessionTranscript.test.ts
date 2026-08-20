@@ -174,3 +174,23 @@ test('tail waits for a session file that does not exist yet', async () => {
   assert.equal(updates.length, 1);
   assert.equal(updates[0]!.assistantText, 'late start');
 });
+
+test('each record dates its own blocks, so a replay is not stamped with now', () => {
+  // The tail reads the file from the top on every attach. Dating the blocks from the
+  // clock here would stamp a whole finished session to the second it was reopened.
+  const stamped = (ts: string, ...blocks: unknown[]): string =>
+    line({ type: 'assistant', timestamp: ts, message: { role: 'assistant', content: blocks } });
+  const batch = parseSessionEntries([
+    stamped('2026-08-20T09:14:02.000Z', { type: 'tool_use', name: 'Read', input: { file_path: 'a.ts' } }),
+    stamped('2026-08-20T09:16:31.000Z', { type: 'tool_use', name: 'Read', input: { file_path: 'b.ts' } }),
+  ]);
+  assert.deepEqual(
+    batch.blocks.map((b) => b.at),
+    ['2026-08-20T09:14:02.000Z', '2026-08-20T09:16:31.000Z'],
+  );
+});
+
+test('a record with no timestamp yields blocks with no time, not the current one', () => {
+  const batch = parseSessionEntries([assistant({ type: 'text', text: 'On it.' })]);
+  assert.equal(batch.blocks[0]?.at, undefined);
+});

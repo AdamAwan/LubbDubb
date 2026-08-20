@@ -103,3 +103,56 @@ test('an error result is labelled and counted the same way', () => {
   const out = plain(renderBlocks([{ type: 'tool_result', is_error: true, content: 'boom\ntrace' }]));
   assert.match(out, /↳ error · 2 lines/);
 });
+
+// -- timestamps ------------------------------------------------------------
+
+/** What the renderer should print for an instant: local time, seconds included. */
+const at = (iso: string): string => `[${new Date(iso).toTimeString().slice(0, 8)}]`;
+
+const T1 = '2026-08-20T09:14:02.000Z';
+const T2 = '2026-08-20T09:15:40.000Z';
+
+test('a tool call is stamped with when it was made', () => {
+  const out = plain(renderBlocks([{ type: 'tool_use', name: 'Bash', input: { command: 'npm test' } }], T1));
+  assert.ok(out.includes(`${at(T1)} ⚙ Bash npm test`), 'the stamp leads the label');
+});
+
+test('a result is stamped after its label, so the fold keeps it', () => {
+  const out = plain(renderBlocks([{ type: 'tool_result', content: 'a\nb\nc' }], T2));
+  assert.ok(out.includes(`\n  ↳ result ${at(T2)} · 3 lines\n`), 'stamp between the label and the count');
+});
+
+test('a single-line result is still stamped, though it has no count', () => {
+  const out = plain(renderBlocks([{ type: 'tool_result', content: 'just one' }], T2));
+  assert.ok(out.includes(`↳ result ${at(T2)}\n`));
+  assert.ok(!out.includes('· 1 line'));
+});
+
+test('a sent message is stamped', () => {
+  const out = plain(renderBlocks([{ type: 'human', text: 'carry on' }], T1));
+  assert.ok(out.includes(`${at(T1)} ▸ sent`));
+});
+
+test("a block's own time wins over the batch's", () => {
+  // The PTY runtime replays a whole session file in one pass, so the batch time is
+  // never the truth there — each record dates itself.
+  const out = plain(renderBlocks([{ type: 'tool_use', name: 'Bash', input: { command: 'ls' }, at: T1 }], T2));
+  assert.ok(out.includes(at(T1)), 'the record dates the line');
+  assert.ok(!out.includes(at(T2)), 'the batch time does not override it');
+});
+
+test('an unstamped render is byte-for-byte what it was before stamps', () => {
+  const blocks = [
+    { type: 'tool_use', name: 'Bash', input: { command: 'ls' } },
+    { type: 'tool_result', content: 'a\nb' },
+    { type: 'human', text: 'carry on' },
+  ];
+  // No time is a supported state — an older session file carries no `timestamp` —
+  // and it must degrade to the plain line rather than to `[]` or `[Invalid Date]`.
+  assert.equal(renderBlocks(blocks), renderBlocks(blocks, undefined));
+  assert.equal(renderBlocks(blocks, 'not a date'), renderBlocks(blocks));
+});
+
+test('prose is never stamped', () => {
+  assert.equal(renderBlocks([{ type: 'text', text: 'Hello there' }], T1), 'Hello there');
+});

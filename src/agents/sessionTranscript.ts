@@ -90,6 +90,12 @@ export function parseSessionEntries(lines: string[]): ParsedBatch {
     if (entry.isMeta === true || entry.isSidechain === true) continue;
     const type = entry.type;
     if (type !== 'user' && type !== 'assistant') continue;
+    // The record's own time, carried onto every block it produces. The file is
+    // replayed from the top on every attach — a restore, a crash re-attach — so
+    // reading the clock here instead would date a whole finished session to the
+    // second it was reopened, which is precisely the reading these stamps exist to
+    // give honestly. Absent (an older CLI, a torn record) means no stamp, not now.
+    const at = typeof entry.timestamp === 'string' ? entry.timestamp : undefined;
     const message = entry.message as { content?: unknown } | undefined;
     if (!message) continue;
     const content = message.content;
@@ -97,7 +103,7 @@ export function parseSessionEntries(lines: string[]): ParsedBatch {
     if (type === 'assistant') {
       if (!Array.isArray(content)) continue;
       for (const block of content as ContentBlock[]) {
-        blocks.push(block);
+        blocks.push({ ...block, at });
         if (block.type === 'text' && typeof block.text === 'string') assistantText += block.text;
         if (block.type === 'tool_use') toolUses += 1;
       }
@@ -109,9 +115,9 @@ export function parseSessionEntries(lines: string[]): ParsedBatch {
     if (typeof content === 'string') {
       if (isLocalCommandEnvelope(content)) continue;
       userEntries += 1;
-      if (content.trim()) blocks.push({ type: HUMAN_BLOCK, text: content });
+      if (content.trim()) blocks.push({ type: HUMAN_BLOCK, text: content, at });
     } else if (Array.isArray(content)) {
-      for (const block of content as ContentBlock[]) blocks.push(block);
+      for (const block of content as ContentBlock[]) blocks.push({ ...block, at });
     }
   }
 

@@ -199,7 +199,11 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
       // the one signal that distinguishes "carried on with the work" from "wrote a
       // closing sentence and stopped". See `activity` in AgentSession.
       if (blocks.some((b) => b.type === 'tool_use')) this.emit('activity');
-      const display = renderBlocks(blocks);
+      // Stamped at the moment the event lands, which on this transport is the moment
+      // it happened: the protocol carries no time of its own, and stream events are
+      // read live rather than replayed. (The PTY runtime, which *does* replay, dates
+      // each block from the session file instead.)
+      const display = renderBlocks(blocks, new Date().toISOString());
       if (display) this.emit('output', display);
       return;
     }
@@ -208,7 +212,7 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
       // Incoming user events on stdout are tool results the CLI produced. Render
       // only those blocks — plain-text user content is our own echoed input.
       const results = contentBlocks(ev).filter((b) => b.type === 'tool_result');
-      const display = renderBlocks(results);
+      const display = renderBlocks(results, new Date().toISOString());
       if (display) this.emit('output', display);
       return;
     }

@@ -1631,7 +1631,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     // A dead process cannot be asked anything — the stop is all there is, so park it.
     if (spent < budget && !this.exited.has(agentId)) {
       this.nudges.set(agentId, spent + 1);
-      const note = renderBlocks([{ type: HUMAN_BLOCK, text: STALL_NUDGE }]);
+      const note = renderBlocks([{ type: HUMAN_BLOCK, text: STALL_NUDGE }], new Date().toISOString());
       this.store.appendTranscript(agentId, note);
       this.emit('output', { agentId, delta: note });
       debugLog('agent', `stall nudge agent=${agentId} attempt=${spent + 1}/${budget}`);
