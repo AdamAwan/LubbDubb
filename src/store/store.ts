@@ -53,7 +53,9 @@ import type {
   AgentUsage,
   Decision,
   EnvironmentReachStatus,
+  EnvironmentGateRelease,
   EnvironmentReading,
+  GoalArrival,
   GoalLanding,
   IssueAssay,
   ErrorLogEntry,
@@ -865,6 +867,24 @@ export class Store {
   }
   listEnvironmentReach(): EnvironmentReading[] {
     return this.environments.listEnvironmentReach();
+  }
+  recordGoalArrival(input: { goalRef: string; environment: string; arrivedAt: string }): void {
+    this.environments.recordGoalArrival(input);
+  }
+  listGoalArrivals(): GoalArrival[] {
+    return this.environments.listGoalArrivals();
+  }
+  markArrivalAnnounced(goalRef: string, environment: string): void {
+    this.environments.markArrivalAnnounced(goalRef, environment);
+  }
+  releaseEnvironmentGate(goalRef: string, note: string): EnvironmentGateRelease {
+    return this.environments.releaseEnvironmentGate(goalRef, note);
+  }
+  clearEnvironmentGateRelease(goalRef: string): void {
+    this.environments.clearEnvironmentGateRelease(goalRef);
+  }
+  listEnvironmentGateReleases(): EnvironmentGateRelease[] {
+    return this.environments.listEnvironmentGateReleases();
   }
 
   // -- The local run (the machine's one dev environment) --------------------

@@ -293,23 +293,29 @@ export class Harness extends EventEmitter {
       // items; it decides no dispatch, and it deliberately does not rebuild the
       // stack model to do it (see `src/stacks/landing.ts`).
       this.deps.landings?.settle(world);
+      // What a delivered goal owes a person: the fixtures and accounts its
+      // validation plan says it needs and could not produce. Beside the close-out
+      // below and against the same gate — a check runs against the delivered goal,
+      // so this is the first pulse on which the ask is one anybody can act on. It
+      // writes `human_tasks` rows and nothing else.
+      this.deps.validationAsks?.run();
+      // And the obligation those resources are for: a delivered goal with checks a
+      // person still has to run says so on the bench, where the rest of their work
+      // is, rather than only on a sheet somebody has to think to open. It writes
+      // `human_tasks` rows, blocks nothing, and settles itself as the results are
+      // recorded.
+      this.deps.validationReady?.run(world);
       // The step after the launch: a delivered goal whose ticket is still open owes
       // a person one close, and the tracker is where that is observed. Beside the
       // other bookkeeping rather than in the dispatcher, because it is not a
       // dispatch — nothing here staffs anything, and no rule reads what it writes.
+      //
+      // **Below the validation desk, and that ordering is load-bearing.** The
+      // close-out waits on the goal's `validate` row being settled, so run above
+      // this line it would read a bench that has not been filed yet and ask for the
+      // close on the very pulse the delivery landed — the two rows arriving
+      // together, which is the thing the sequence exists to stop.
       this.deps.closeOuts?.run(world);
-      // The other thing a delivered goal owes a person: the fixtures and accounts
-      // its validation plan says it needs and could not produce. Beside the
-      // close-out for the same reason and against the same gate — a check runs
-      // against the delivered goal, so this is the first pulse on which the ask is
-      // one anybody can act on. It writes `human_tasks` rows and nothing else.
-      this.deps.validationAsks?.run();
-      // And the obligation those resources are for: a delivered goal with checks a
-      // person still has to run says so on the bench, where the rest of their work
-      // is, rather than only on a sheet somebody has to think to open. Same gate,
-      // same register — it writes `human_tasks` rows, blocks nothing, and settles
-      // itself as the results are recorded.
-      this.deps.validationReady?.run(world);
       // The operator's standing "every weekday at 09:00": a recurrence that has
       // come due queues its job here, a few lines above the `listQueuedJobs` the
       // dispatcher decides from — so a firing is dispatched on the pulse it fires

@@ -37,6 +37,24 @@ export interface GitObserver {
    * branch existing is not enough, it has to carry work.
    */
   hasCommitsBeyond(branch: string, base: string): Promise<boolean>;
+  /**
+   * Which of `commits` every one of `heads` already holds — the question "has this
+   * landing got to an environment sitting at these commits".
+   *
+   * **Every**, not any: an environment answering with several commits is several
+   * services at several versions, and the laggard governs. A landing one of them
+   * has and another does not is *not* there.
+   *
+   * Three answers per commit, for {@link EnvironmentReachStatus}'s reason: `true`
+   * it is in, `false` it is not, and **`null` the clone cannot say** — an object
+   * this checkout has not fetched, a head that resolves to nothing, or a git that
+   * failed. Never `false` for a question that was not answered.
+   *
+   * Batched because the alternative is a process spawn per landing per environment
+   * per pulse: the cost of the whole subsystem lands here.
+   * → `docs/spec/24-environments.md#asking-the-clone`
+   */
+  contains(commits: string[], heads: string[]): Promise<Map<string, boolean | null>>;
 }
 
 /** The real observer: `git` in the repo root, the same way {@link WorktreeManager} runs it. */
@@ -73,6 +91,82 @@ export class GitCliObserver implements GitObserver {
   async hasCommitsBeyond(branch: string, base: string): Promise<boolean> {
     const d = await this.divergence(branch, base);
     return d !== null && d.ahead > 0;
+  }
+
+  async contains(commits: string[], heads: string[]): Promise<Map<string, boolean | null>> {
+    const out = new Map<string, boolean | null>(commits.map((c) => [c, null]));
+    // An environment that named no commit is one nothing is known about. Reading
+    // an empty head list as "contains everything" is the one way this can be
+    // wrong at scale, and it reports the whole fleet as shipped.
+    if (commits.length === 0 || heads.length === 0) return out;
+
+    // The objects this clone actually holds. A landing merged while the harness
+    // was down and never fetched since is not `absent` — it is unanswered.
+    const present = await this.presentCommits(commits);
+    if (present.size === 0) return out;
+    const asking = [...present.values()];
+    for (const key of present.keys()) out.set(key, true);
+
+    for (const head of heads) {
+      const missing = await this.notReachableFrom(asking, head);
+      // A head that would not resolve takes the whole environment down to
+      // unknown rather than leaving the answers half-made from the heads that did.
+      if (missing === null) return new Map(commits.map((c) => [c, null]));
+      for (const [key, sha] of present) if (missing.has(sha)) out.set(key, false);
+    }
+    return out;
+  }
+
+  /**
+   * The subset of these commits the clone holds, as `given -> resolved sha`.
+   *
+   * `--no-walk` prints the arguments themselves rather than their history, and
+   * `--ignore-missing` drops the ones this checkout never fetched instead of
+   * failing the whole call over one of them. The pair is only sound *without*
+   * an exclusion — git drops `--no-walk` the moment a range is present, which is
+   * why the reachability question below is a second call rather than one clever one.
+   */
+  private async presentCommits(commits: string[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    try {
+      const { stdout } = await runGit(this.repoRoot, ['rev-list', '--ignore-missing', '--no-walk', ...commits]);
+      const held = new Set(
+        stdout
+          .split('\n')
+          .map((l) => l.trim().toLowerCase())
+          .filter((l) => l !== ''),
+      );
+      for (const commit of commits) if (held.has(commit.toLowerCase())) out.set(commit, commit.toLowerCase());
+    } catch {
+      /* a git that would not run answers about nothing — every commit stays unknown */
+    }
+    return out;
+  }
+
+  /**
+   * Which of these commits are **not** in the head's history, or null when the
+   * question could not be put.
+   *
+   * `rev-list <commits> --not <head>` walks from each commit back to its merge
+   * base with the head, so it returns instantly for the commits the head already
+   * has — the steady state — and pays only for how far ahead of the environment
+   * the branch has run. The walk emits ancestors as well as the commits asked
+   * about, hence the intersection at the call site.
+   */
+  private async notReachableFrom(commits: string[], head: string): Promise<Set<string> | null> {
+    const sha = await resolveCommit(this.repoRoot, head);
+    if (sha === null) return null;
+    try {
+      const { stdout } = await runGit(this.repoRoot, ['rev-list', '--ignore-missing', ...commits, '--not', sha]);
+      return new Set(
+        stdout
+          .split('\n')
+          .map((l) => l.trim().toLowerCase())
+          .filter((l) => l !== ''),
+      );
+    } catch {
+      return null;
+    }
   }
 
   private async refExists(ref: string): Promise<boolean> {

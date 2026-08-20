@@ -3004,6 +3004,69 @@ export interface GoalEnvironmentReach {
    * ever as precise as the probe interval.
    */
   at: string | null;
+  /**
+   * Which delivered-goal obligations arriving here opens, from the operator's own
+   * list. Shipped on the row rather than looked up beside it so the cockpit can
+   * say *why* a goal's bench rows are waiting on this environment without holding
+   * a second copy of the configuration.
+   */
+  opens: EnvironmentGate[];
+}
+
+/**
+ * The obligations an arrival at an environment opens. Both name a
+ * {@link HumanTaskKind} the harness already files on a delivered goal — what a
+ * gate changes is *when*: at the delivery, or once the work is somewhere a person
+ * can act on it. → `docs/spec/24-environments.md#what-an-arrival-means`
+ */
+export type EnvironmentGate = 'validate' | 'close_out';
+
+/**
+ * A whole goal's work confirmed in one environment, the first time it was.
+ *
+ * Stored rather than folded on demand, and that is the only reason the table
+ * exists: {@link goalReach} can say a goal *is* somewhere on every pulse, but not
+ * that it has just **got** there — and an arrival is a moment. Something has to
+ * be written down for the comment to go out once rather than every five minutes,
+ * and for the signal to read as an event rather than as a status.
+ *
+ * `OR IGNORE` on the write, for {@link GoalLanding}'s reason: the goal arriving is
+ * a settled fact, and a goal that grows another pull request and arrives again is
+ * the same arrival, not a second one.
+ */
+export interface GoalArrival {
+  /** The goal, `issue:<n>`. */
+  goalRef: string;
+  /** The environment's name as the operator configured it. */
+  environment: string;
+  /** The reading that confirmed the goal's last landing — as precise as the probe interval. */
+  arrivedAt: string;
+  /**
+   * When the arrival went through the announce pass, or null while it has not.
+   *
+   * Stamped whether or not there was anything to say, which is what keeps an
+   * environment that grows `arrival.comment` later from commenting on its whole
+   * history on the boot after. → `docs/spec/24-environments.md#announcing-an-arrival`
+   */
+  announcedAt: string | null;
+}
+
+/**
+ * The operator's answer to a goal that is never going to reach the environment
+ * its obligations are gated on — a docs change, a config change, work whose
+ * deployment nothing here can see.
+ *
+ * A row rather than a per-goal config key, and cleared by deletion, for
+ * `IssueDelivery`'s reason: "not released" then keeps exactly one representation.
+ * It lifts every gate on that goal at once — the case it exists for is work that
+ * does not ship at all, not work that ships to three environments out of four.
+ */
+export interface EnvironmentGateRelease {
+  /** The goal, `issue:<n>`. */
+  goalRef: string;
+  /** Why it is not waiting. Required — a release with no account of itself is the thing being avoided. */
+  note: string;
+  releasedAt: string;
 }
 
 /**

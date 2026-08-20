@@ -775,6 +775,28 @@ that nothing has run — "not reached yet" is a fact about the goal worth seeing
 The write-up and the notepad carry a way in, each keyed on the document **existing** and on nothing the
 page is doing.
 
+### Environments
+
+Under the pull requests, one row per configured environment: what it holds of this goal, the count on
+every row that is not whole (`0/3` and `2/3` are the difference between work that has not started
+moving and work that is halfway there), and the verdict as a chip. `partial` takes the _attention_
+tone rather than a success one, because half a feature in production is the state most likely to want
+somebody. The card is absent entirely when nothing is configured — a row of question marks on every
+deployment that never set one up would be a feature announcing itself as broken.
+
+A row that **opens** something says so, on the row that would do the opening: an operator reading a
+held goal asks "waiting for what" exactly once, and the answer is configuration they may not remember
+writing.
+
+**A held goal says it is held**, in `gateHold`'s own sentence, with the release control beside it.
+This is the one place it is said: nothing is filed while a gate holds, so without the line a delivered
+goal with an empty bench is indistinguishable from a finished one. It is deliberately **not** a
+"Needs you" row — with a gate on the first environment every delivered goal is held for as long as a
+deploy takes, and a rail carrying all of them would bury the asks somebody can answer. The release
+takes a required note through a modal, on `InstructionModal`'s reason: it is prose the operator has to
+compose, and every other control on this page is a verdict.
+→ [24](24-environments.md#what-an-arrival-means)
+
 ### What the goal page deliberately does not draw
 
 **This goal's slice of the decision log.** `buildGoalPage` computes `decisions` — the rows whose
@@ -795,6 +817,10 @@ Two rules run through all five. **Nothing here re-decides what the server decide
 goal's state is its `pickup.status`. And **an empty card still draws**, muted, because a surface that
 vanishes when quiet is indistinguishable from one that broke.
 
+- **Goals in flight** carries the **furthest environment** holding a goal whole, where any is —
+  last-declared in the operator's list, since that list is the order the work travels in. `partial`
+  gets no chip: a row reading `liveUs` for half a feature is the boolean rollup the reach fold refuses
+  to make, one layer up. → [24](24-environments.md#in-the-cockpit)
 - **Fleet** — who is out, what they are on, and what it has cost. The lamp reads red off
   `escalationByAgent`, not off `status === 'waiting'`: an agent can be parked with nothing asked of the
   operator, the two disagree in exactly that case, and the ask wins. **Ended shifts are behind a
@@ -854,12 +880,18 @@ vanishes when quiet is indistinguishable from one that broke.
   itself and naming it as the fallback would promise that clearing the control changes nothing. The
   control draws nothing at all on a deployment with no `agentModels` — `ProfilePicker`'s own rule,
   not a second one here.
-- **World signals** — `worldEvents` grouped by `(kind, ref)` with a count, ten rows. Three review
-  comments on one pull request are one signal, not three unrelated rows. **The server's order (newest
-  first) is kept**: re-sorting by count would move the row an operator is watching the moment it moves
-  again. The row draws **the goal behind the signal** beside the sentence and never the pull request:
-  the summary's own `#412` already links out, so repeating it would be one ref twice, and what a signal
-  never offers is the way onto a goal's page.
+- **World signals** — `worldEvents` grouped by `(kind, ref)` with a count, ten rows, **plus the
+  environment arrivals** of the last week. Three review comments on one pull request are one signal,
+  not three unrelated rows; two environments reaching one goal are two things that happened, so
+  arrivals are one row each. The row draws **the goal behind the signal** beside the sentence and
+  never the pull request: the summary's own `#412` already links out, so repeating it would be one ref
+  twice, and what a signal never offers is the way onto a goal's page.
+
+  The arrivals are merged **here**, at render time, rather than carried in `worldEvents`. A world
+  event is derived by diffing consecutive snapshots, and a standing delivery verdict is expired by any
+  world event on its issue ref — so an arrival written as one would lift the delivery park on the goal
+  it announced and hand the work straight back to the fleet.
+  → [24](24-environments.md#in-the-cockpit)
 
 ### The keyboard entry
 

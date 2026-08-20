@@ -320,15 +320,29 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
 
 ### Environments
 
-- **A probe verdict is three-valued, and a new reader must not fold `unknown` into `absent`.** An
-  expired credential, a missing binary and a commit that genuinely has not shipped all exit non-zero,
-  and only the last is about deployment — read as `absent` they are indistinguishable on the glass,
-  and the cockpit states in the operator's words that the work has not shipped for a reason that has
-  nothing to do with shipping. `classify` in `src/environments/prober.ts` is the one place the exit
-  code is read: a bare `1` is `absent` **only with nothing on stderr**, because `cmd.exe` exits `1`
-  for a command it cannot find, exactly as a clean no does. Widening that arm compiles, passes, and
-  turns every typo'd probe on Windows into a permanent "not shipped".
-  → [24](docs/spec/24-environments.md#the-three-verdicts)
+- **A reach verdict is three-valued, and a new reader must not fold `unknown` into `absent`.** An
+  expired credential, a missing binary, a commit this clone never fetched and one that genuinely has
+  not shipped all fail the same way, and only the last is about deployment — read as `absent` they
+  are indistinguishable on the glass, and the cockpit states in the operator's words that the work
+  has not shipped for a reason that has nothing to do with shipping. `GitObserver.contains` answers
+  `boolean | null` for that reason, and a probe that could not say makes **every** landing of that
+  environment `unknown`. → [24](docs/spec/24-environments.md#the-three-verdicts)
+- **An arrival must never be written as a `WorldEvent`.** It is the obvious way to get it into the
+  activity feed, and `deliveryHold` expires a standing delivery verdict on **any** world event
+  matching the goal's issue ref — so an arrival written as one un-parks the goal it just announced
+  and hands delivered work back to the fleet to do again. Nothing errors; a re-dispatch of finished
+  work looks like the harness deciding there is more to do. Arrivals have their own table and their
+  own wire list, and the cockpit merges them at the feed's door.
+  → [24](docs/spec/24-environments.md#in-the-cockpit)
+- **An arrival is announced only if its reading is fresh, and stamped either way.** The freshness
+  window is what separates an arrival this harness watched from one it discovered on the first pulse
+  after a build; the stamp is what stops an environment that grows `arrival.comment` later from
+  commenting on its whole history. Drop either and the deployment that takes the build puts a comment
+  on every ticket that ever shipped. → [24](docs/spec/24-environments.md#announcing-an-arrival)
+- **`DeliveryCloseOutDesk` runs below `ValidationReadyDesk` in the pulse**, because it holds the
+  close while the goal's `validate` row is open. Above it, it reads a bench that row has not been
+  filed onto yet and both arrive together — which is the sequence gone, with nothing red.
+  → [24](docs/spec/24-environments.md#the-bench-asks-for-one-thing-at-a-time)
 - **A landing is recorded by sweeping for unattributed merges, never on the merge itself.** The merge
   SHA is a provider fact with a `closedPrWindowMs` shelf life and no way to recover it — a squash
   leaves no ancestry link — so a hook on the transition loses the landing to any restart that

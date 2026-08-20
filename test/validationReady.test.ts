@@ -102,7 +102,15 @@ function task(over: Partial<HumanTask> = {}): HumanTask {
 }
 
 const pass = (over: Partial<Parameters<typeof validationReadyPass>[0]> = {}) =>
-  validationReadyPass({ issues: [], deliveries: [], shortfalls: [], existing: [], checks: new Map(), ...over });
+  validationReadyPass({
+    issues: [],
+    deliveries: [],
+    shortfalls: [],
+    existing: [],
+    checks: new Map(),
+    opened: null,
+    ...over,
+  });
 
 const checksOn = (...checks: ValidationCheck[]) => new Map([['issue:12', checks]]);
 
@@ -346,4 +354,31 @@ test('a pulse files the validate row, and the next one settles it once the resul
   const settled = system.store.getHumanTask(filed[0]!.id)!;
   assert.equal(settled.status, 'done');
   assert.match(settled.resolution ?? '', /nothing is left for you to run/);
+});
+
+// -- the environment gate -----------------------------------------------------
+
+test('a gated goal is not asked to validate until its work has arrived somewhere', () => {
+  const checks = checksOn(check({ state: 'unrun' }));
+  const held = pass({ issues: [issue(12)], deliveries: [delivery(12)], checks, opened: new Set() });
+  // The delivery is when a check becomes meaningful; with a gate configured it is
+  // not yet when one becomes runnable, and a check against a build nobody can open
+  // is the row-asking-for-impossible-work this file exists to end.
+  assert.deepEqual(held, []);
+
+  const opened = pass({ issues: [issue(12)], deliveries: [delivery(12)], checks, opened: new Set(['issue:12']) });
+  assert.equal(opened.length, 1);
+  assert.equal(opened[0]?.kind, 'file');
+});
+
+test('a gate never holds a row already filed, so results still settle it', () => {
+  const steps = pass({
+    issues: [issue(12)],
+    deliveries: [delivery(12)],
+    checks: checksOn(check({ state: 'passed' })),
+    existing: [task({ originRef: 'issue:12' })],
+    opened: new Set(),
+  });
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0]?.kind, 'settle');
 });

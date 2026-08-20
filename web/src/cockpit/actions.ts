@@ -102,6 +102,15 @@ export interface CockpitActions {
    * with a stale card, rather than a settled card with the loop still running.
    */
   overruleShortfall(issueNumber: number, proposalId: string, text: string): Promise<void>;
+  /**
+   * Stop this goal waiting on an environment, or put it back to waiting.
+   *
+   * The escape an environment gate has to have: a goal whose work is never going
+   * to reach the environment its obligations are gated on — a docs change, a
+   * config change — would otherwise sit delivered with an empty bench for good.
+   * Refetches, because what it changes is which rows the bench holds.
+   */
+  releaseEnvironmentGate(issueNumber: number, released: boolean, note?: string): Promise<void>;
   decidePermission(id: string, allow: boolean, note?: string): Promise<void>;
   /** Keyed on the task: orphaned work may never have had an agent. */
   decideRecovery(taskId: string, verdict: RecoveryVerdict): Promise<void>;

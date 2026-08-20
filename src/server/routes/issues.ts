@@ -7,6 +7,7 @@ import { dedupeCandidates, renderCandidates } from '../../tickets/candidates.js'
 import { MAX_INSTRUCTION } from '../../goalInstructions.js';
 import { goalFingerprint } from '../../intake/assay.js';
 import { ShortfallBody } from '../../delivery/shortfall.js';
+import { GateReleaseBody } from '../../environments/arrival.js';
 import { validationHeadline } from '../../delivery/closeOut.js';
 import { goalValidation } from '../../validation/goal.js';
 import { watchLabelFor } from '../../watchLabels.js';
@@ -459,6 +460,40 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       });
       hub.broadcast({ type: 'world:changed' });
       return { ok: true, delivery };
+    }),
+  );
+
+  // Say that this goal is not waiting on an environment, or put it back to
+  // waiting.
+  //
+  // The escape hatch an environment gate has to have. With `arrival.opens`
+  // configured, a delivered goal's `validate` and `close_out` rows are withheld
+  // until its work reaches the environment that opens them — and a goal that is
+  // never going to reach one (a docs change, a config change, work whose
+  // deployment nothing here can see) would otherwise sit delivered with an empty
+  // bench for good, which is the harness losing an obligation rather than holding
+  // it.
+  //
+  // The note is required by {@link GateReleaseBody}, unlike every other operator
+  // verdict's summary — the rule and its reasoning live beside the release itself.
+  // Clearing is a delete, for `clearIssueConclusion`'s reason.
+  app.post(
+    '/api/issues/:number/environment-gate',
+    checked({ params: IssueNumberParams, body: GateReleaseBody }, async ({ params, body }) => {
+      const goalRef = issueConclusionOrigin(params.number);
+      if (!body.released) {
+        store.clearEnvironmentGateRelease(goalRef);
+        hub.broadcast({ type: 'world:changed' });
+        return { ok: true, released: null };
+      }
+      // `note` is required alongside `released` by the schema's own refine, so
+      // this is a narrowing rather than a check.
+      const release = store.releaseEnvironmentGate(goalRef, body.note ?? '');
+      hub.broadcast({ type: 'world:changed' });
+      // The obligations it opens are filed by desks on the pulse, so the row an
+      // operator just asked for arrives now rather than on the next beat.
+      await harness.runCycle('manual');
+      return { ok: true, released: release };
     }),
   );
 

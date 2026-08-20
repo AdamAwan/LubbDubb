@@ -72,7 +72,18 @@ function task(over: Partial<HumanTask> = {}): HumanTask {
 }
 
 const pass = (over: Partial<Parameters<typeof closeOutPass>[0]> = {}) =>
-  closeOutPass({ issues: [], deliveries: [], shortfalls: [], existing: [], validation: new Map(), ...over });
+  closeOutPass({
+    issues: [],
+    deliveries: [],
+    shortfalls: [],
+    existing: [],
+    validation: new Map(),
+    // Null is "no environment gates the close", which is every deployment that
+    // has not configured one — an empty set would withhold every row instead.
+    opened: null,
+    validating: new Set(),
+    ...over,
+  });
 
 // -- filing -------------------------------------------------------------------
 
@@ -257,4 +268,52 @@ test('a database written before the sweep existed reads its rows as asks', () =>
   assert.deepEqual(store.listHumanTasksOfKind('close_out'), []);
   new DeliveryCloseOutDesk(store).run({ issues: [] });
   assert.equal(store.getHumanTask(ask.id)!.status, 'open');
+});
+
+// -- the sequence -------------------------------------------------------------
+
+test('the close is not asked for while validation is still somebody’s', () => {
+  const held = pass({
+    issues: [issue(12)],
+    deliveries: [delivery(12)],
+    validating: new Set(['issue:12']),
+  });
+  // The bench asks for one thing at a time. Filed together, the two rows say "run
+  // these checks" and "close this ticket" in the same breath, and the second is an
+  // invitation to skip the first.
+  assert.deepEqual(held, [], 'the close is the step after validation, not beside it');
+
+  const after = pass({ issues: [issue(12)], deliveries: [delivery(12)], validating: new Set() });
+  assert.equal(after.length, 1);
+  assert.equal(after[0]?.kind, 'file');
+});
+
+test('a validate row settled by hand releases the close, whatever the checks say', () => {
+  // Read from the bench rather than from the verdict: a `flagged` verdict would
+  // hold the close for good on a goal with one failing check, and the operator's
+  // way of saying "I am done with this" is the row.
+  const steps = pass({ issues: [issue(12)], deliveries: [delivery(12)], validating: new Set(['issue:99']) });
+  assert.equal(steps.length, 1, 'another goal’s open validate row holds nothing here');
+});
+
+// -- the environment gate -----------------------------------------------------
+
+test('a gated goal owes no close until its work has arrived somewhere', () => {
+  const held = pass({ issues: [issue(12)], deliveries: [delivery(12)], opened: new Set() });
+  assert.deepEqual(held, [], 'asking for the close before the work is checkable is asking too early');
+
+  const opened = pass({ issues: [issue(12)], deliveries: [delivery(12)], opened: new Set(['issue:12']) });
+  assert.equal(opened.length, 1);
+  assert.equal(opened[0]?.kind, 'file');
+});
+
+test('a gate never holds a row already filed, so a ticket closed by hand still settles', () => {
+  const steps = pass({
+    issues: [issue(12, { state: 'closed' })],
+    deliveries: [delivery(12)],
+    existing: [task({ originRef: 'issue:12' })],
+    opened: new Set(),
+  });
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0]?.kind, 'settle');
 });

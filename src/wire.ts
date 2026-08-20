@@ -69,9 +69,11 @@ import type {
   ConclusionAuthor,
   Decision,
   DeliveryAuthor,
+  EnvironmentGateRelease,
   ErrorLogEntry,
   Escalation,
   Finding,
+  GoalArrival,
   GoalAssayVerdict,
   GoalEnvironmentReach,
   HumanTask,
@@ -638,6 +640,19 @@ export interface CockpitState {
    */
   environmentReach: GoalReachView[];
   /**
+   * The goals whose whole work has arrived somewhere, newest first — the
+   * environments half of the Activity feed, capped like every other feed on this
+   * surface.
+   *
+   * **Not a {@link WorldEvent}, deliberately.** Those are derived by diffing
+   * consecutive world snapshots, and a delivered goal's standing hold is expired
+   * by *any* world event on its issue ref (`deliveryHold`) — so an arrival written
+   * as one would lift the delivery park on the goal it announced and hand the work
+   * straight back to the fleet to do again. Its own list has no such reader.
+   * → `docs/spec/24-environments.md#in-the-cockpit`
+   */
+  environmentArrivals: GoalArrival[];
+  /**
    * One entry per chain in {@link stacks}: whether "land the stack" may be
    * offered, and the operator's standing intent over it if there is one.
    *
@@ -797,6 +812,20 @@ export interface GoalReachView {
   /** The goal, as `issue:<n>`. */
   goalRef: string;
   environments: GoalEnvironmentReach[];
+  /**
+   * Why this goal's `validate` and `close_out` rows are being withheld, or null
+   * when nothing is withholding them.
+   *
+   * Non-null **only for a goal that is delivered and gated right now**, so the
+   * cockpit can read it as "the harness is waiting, and here is what for" without
+   * re-deriving a verdict the server already made. A hold is otherwise the
+   * quietest thing here: nothing is filed, so a delivered goal with an empty
+   * bench looks exactly like a finished one.
+   * → `docs/spec/24-environments.md#what-an-arrival-means`
+   */
+  gateHold: string | null;
+  /** The operator's "this one is not waiting on an environment", when they have said so. */
+  released: EnvironmentGateRelease | null;
 }
 
 export interface WorkRootsPayload {
@@ -1167,9 +1196,12 @@ export type {
   AgentFlag,
   BugFiling,
   Decision,
+  EnvironmentGate,
+  EnvironmentGateRelease,
   ErrorLogEntry,
   Escalation,
   Finding,
+  GoalArrival,
   GoalEnvironmentReach,
   GoalReachStatus,
   HumanTask,

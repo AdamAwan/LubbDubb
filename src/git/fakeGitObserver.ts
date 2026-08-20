@@ -11,6 +11,8 @@ export class FakeGitObserver implements GitObserver {
   readonly calls: string[] = [];
   private readonly presences = new Map<string, BranchPresence>();
   private readonly divergences = new Map<string, BranchDivergence>();
+  /** `<head> <commit>` -> what the clone says. Unscripted reads as "the clone cannot say". */
+  private readonly containment = new Map<string, boolean>();
 
   /** Declare where a branch exists. Unspecified sides default to absent. */
   setPresence(branch: string, presence: Partial<BranchPresence>): this {
@@ -22,6 +24,33 @@ export class FakeGitObserver implements GitObserver {
   setDivergence(branch: string, base: string, divergence: BranchDivergence): this {
     this.divergences.set(key(branch, base), divergence);
     return this;
+  }
+
+  /**
+   * Declare that a head holds (or does not hold) a commit. Undeclared pairs
+   * answer `null` — the honest default, since a clone that was never told about
+   * an object has not been asked about it.
+   */
+  setContains(head: string, commit: string, held: boolean): this {
+    this.containment.set(`${head} ${commit}`, held);
+    return this;
+  }
+
+  async contains(commits: string[], heads: string[]): Promise<Map<string, boolean | null>> {
+    this.calls.push(`contains:${heads.join(',')}:${commits.join(',')}`);
+    const out = new Map<string, boolean | null>();
+    for (const commit of commits) {
+      const said = heads.map((head) => this.containment.get(`${head} ${commit}`));
+      // Every head, as the real one folds it: one that has not heard of the
+      // commit takes the answer to unknown, and one saying no settles it.
+      if (heads.length === 0 || said.some((v) => v === undefined)) out.set(commit, null);
+      else
+        out.set(
+          commit,
+          said.every((v) => v === true),
+        );
+    }
+    return out;
   }
 
   async presence(branch: string): Promise<BranchPresence> {

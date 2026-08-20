@@ -1,3 +1,5 @@
+import { openedGoals } from '../environments/arrival.js';
+import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
 import type { Issue } from '../types.js';
 import { goalValidation, type GoalValidation } from '../validation/goal.js';
@@ -17,7 +19,16 @@ interface CloseOutWorld {
  * nobody, touches no sink, and the dispatcher does not read what it writes.
  */
 export class DeliveryCloseOutDesk {
-  constructor(private readonly store: Store) {}
+  /**
+   * `environments` is read for one thing only: which of them declare that
+   * arriving there is what opens the close-out. Passed rather than looked up so
+   * this desk and {@link ValidationReadyDesk} cannot form different opinions
+   * about a gate the operator wrote once.
+   */
+  constructor(
+    private readonly store: Store,
+    private readonly environments: EnvironmentConfig[] = [],
+  ) {}
 
   /** @public called by `Harness.runCycle`, beside the other bookkeeping passes. */
   run(world: CloseOutWorld): void {
@@ -31,6 +42,20 @@ export class DeliveryCloseOutDesk {
       shortfalls: this.store.listShortfalls(),
       existing: this.store.listHumanTasksOfKind('close_out'),
       validation: this.validationByOrigin(),
+      // The bench's own state, not the verdict's: an operator who marked the
+      // validate row done is finished with it whatever the checks say.
+      validating: new Set(
+        this.store
+          .listHumanTasksOfKind('validate')
+          .filter((t) => t.status === 'open' && t.originRef !== null)
+          .map((t) => t.originRef!),
+      ),
+      opened: openedGoals(
+        'close_out',
+        this.environments,
+        this.store.listGoalArrivals(),
+        this.store.listEnvironmentGateReleases(),
+      ),
     });
     for (const step of steps) {
       if (step.kind === 'file')

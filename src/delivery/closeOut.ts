@@ -68,6 +68,36 @@ interface CloseOutInput {
    * about to close a goal and move on.
    */
   validation: ReadonlyMap<string, { verdict: ValidationVerdict; outstanding: readonly string[] }>;
+  /**
+   * The goals an environment gate has opened, or **null when no environment
+   * declares one** — which is every deployment that has not configured a
+   * post-merge state, and is why this is not a plain set.
+   *
+   * With a gate configured, a delivery is no longer the moment: the ticket is
+   * closed once the work is somewhere a person can check it, and asking for the
+   * close before then is asking for a decision nobody can make yet. Folding null
+   * into an empty set would withhold this obligation on every deployment on
+   * earth, and would look exactly like the feature working.
+   * → `docs/spec/24-environments.md#what-an-arrival-means`
+   */
+  opened: ReadonlySet<string> | null;
+  /**
+   * The goals whose `validate` row is still open — the checks a person has not
+   * finished with.
+   *
+   * **The bench asks for one thing at a time.** Filed together, the two rows say
+   * "run these checks" and "close this ticket" in the same breath, and the second
+   * is an invitation to skip the first: whoever is looking has the close in front
+   * of them and no reason to believe the order matters. So the close is not asked
+   * for until validation has had its turn — settled by the results coming in, or
+   * settled by hand, which is the escape for a check that failed or will never be
+   * run.
+   *
+   * Read from the bench rather than from the verdict deliberately. A `flagged`
+   * verdict would hold the close for good on a goal with one failing check, and
+   * the operator's way of saying "I am done with this" is the row, not the checks.
+   */
+  validating: ReadonlySet<string>;
 }
 
 /**
@@ -96,6 +126,14 @@ export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
       // Nothing to close: the tracker already stopped listing it open, which is
       // what a GitHub issue a merged "Closes #n" took with it looks like.
       if (!issue || issue.state === 'closed') continue;
+      // Held, not dropped: the goal is delivered and its ticket is open, but the
+      // work has not reached the environment whose arrival opens this. The
+      // settle arms above still run, so a ticket closed by hand in the meantime
+      // still discharges a row that was already filed.
+      if (input.opened !== null && !input.opened.has(originRef)) continue;
+      // Held for the same reason one step earlier: validation is still somebody's,
+      // and the close is the step after it.
+      if (input.validating.has(originRef)) continue;
       steps.push({
         kind: 'file',
         originRef,

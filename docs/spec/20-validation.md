@@ -217,6 +217,17 @@ every pulse, so the bench row and the obligation beneath it cannot disagree abou
 dispatch, no merge, no conclusion and no close, and no rule reads it. What changes is that running
 the checks is an obligation with a place to sit rather than a thing somebody remembers.
 
+What can hold the row is an **environment gate**, where a deployment configured one: with
+`arrival.opens` naming `validate`, the row waits until the goal's work has reached the environment
+that opens it. The delivery is when a check becomes _meaningful_; with a gate it is not yet when one
+becomes **runnable**, and a check against a build nobody can open is the row-asking-for-impossible-work
+this desk exists to end, one step earlier. Nothing gates it on a deployment that configured no
+environment, which is the default — and the gate holds the file arm only, so results recorded against
+an already-filed row still settle it. → [24](24-environments.md#what-an-arrival-means)
+
+The close-out is the step **after** this one: the `close_out` row is not filed while this one is open.
+→ [24](24-environments.md#the-bench-asks-for-one-thing-at-a-time)
+
 A check handed to the fleet is **not** on it — rule `validate-check` is about to dispatch that one —
 and a hand-back puts it straight back, carrying the agent's reason. The row settles itself the moment
 nothing is left for a person, on the close-out's asymmetry: these are rows the harness reads every

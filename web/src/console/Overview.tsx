@@ -1,8 +1,8 @@
 import { useState, type JSX } from 'react';
 import type { CockpitView, DeskRun } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { Agent, Issue, QueueItem, WorldEvent } from '../types.js';
-import { buildGoalPage, buildGoalTrack, goalOfPr, type GoalTrack } from '../view/goalPage.js';
+import type { Agent, GoalArrival, Issue, QueueItem, WorldEvent } from '../types.js';
+import { buildGoalPage, buildGoalTrack, furthestEnvironment, goalOfPr, type GoalTrack } from '../view/goalPage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
@@ -275,6 +275,7 @@ function GoalRow({ issue, view, actions }: { issue: Issue; view: CockpitView; ac
   const page = buildGoalPage(view.state, ref, view.needsYou);
   const track = page === null ? null : buildGoalTrack(page.parts);
   const asks = view.needsYou.filter((n) => n.goalRef === ref).length;
+  const furthest = furthestEnvironment(view.state, ref);
 
   return (
     <button type="button" className="cn-row cn-goal-row" onClick={() => actions.selectGoal(ref)}>
@@ -289,6 +290,11 @@ function GoalRow({ issue, view, actions }: { issue: Issue; view: CockpitView; ac
         </span>
       </span>
       {track !== null && <Track track={track} />}
+      {/* Where the work actually got to, on the row rather than a page deeper.
+          Only ever drawn for an environment holding the goal *whole* — `partial`
+          has no furthest anything, and a chip claiming one would be the boolean
+          rollup the reach fold exists to refuse. */}
+      {furthest !== null && <i className="cn-chip cn-ok">{furthest}</i>}
       <i className={`cn-chip ${asks > 0 ? 'cn-you' : 'cn-harness'}`}>{asks > 0 ? 'You' : 'Harness'}</i>
     </button>
   );
@@ -479,7 +485,14 @@ function QueueRow({
  * an operator is watching the moment it moves again.
  */
 function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
-  const rows = groupSignals(view.state.worldEvents).slice(0, 10);
+  // Both halves of "what has happened", newest first: the world's own transitions
+  // and the environments the work has arrived in.
+  const rows = [
+    ...groupSignals(view.state.worldEvents),
+    ...arrivalSignals(view.state.environmentArrivals ?? [], view.now),
+  ]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 10);
   return (
     <section className="cn-card">
       <h3>
@@ -487,14 +500,14 @@ function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
       </h3>
       <div className="cn-rows">
         {rows.length === 0 && <p className="cn-empty">The world has not moved.</p>}
-        {rows.map(({ key, event, count }) => (
-          <div className="cn-row" key={key}>
+        {rows.map((row) => (
+          <div className="cn-row" key={row.key}>
             <span className="cn-grow">
               <b className="cn-name">
-                <RefText text={event.summary} />
+                <RefText text={row.summary} />
               </b>
               <span className="cn-sub">
-                {event.kind} · {relTime(event.createdAt, view.now)}
+                {row.kind} · {relTime(row.createdAt, view.now)}
               </span>
             </span>
             {/* The goal behind the signal, beside the sentence rather than inside
@@ -502,9 +515,9 @@ function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
                 repeating the pull request here would be one ref twice — what a
                 signal never offers is the way onto the goal page. */}
             <span className="cn-refs">
-              <Ref to={goalBehind(view, event.ref)} />
+              <Ref to={goalBehind(view, row.ref)} />
             </span>
-            {count > 1 && <span className="cn-num">×{count}</span>}
+            {row.count > 1 && <span className="cn-num">×{row.count}</span>}
           </div>
         ))}
       </div>
@@ -524,10 +537,23 @@ function goalBehind(view: CockpitView, ref: string | null): string | null {
   return pr ? goalOfPr(view.state, Number(pr[1])) : null;
 }
 
+/**
+ * One row of the feed, flattened off whatever produced it.
+ *
+ * Flat rather than "a `WorldEvent` and a count" because the card draws two
+ * different things now — the world's own transitions, and the environments a
+ * goal's work has arrived in — and an arrival is deliberately not a world event
+ * ({@link arrivalSignals}). Carrying one as the other would need a `kind` the
+ * union does not have, cast into it at the one place the row then prints it.
+ */
 interface Signal {
   key: string;
-  /** The newest event of its group — the server sends newest first, so it is the first seen. */
-  event: WorldEvent;
+  /** What kind of thing happened, as the row prints it. */
+  kind: string;
+  /** The world object it concerns, for the goal link beside the sentence. */
+  ref: string | null;
+  summary: string;
+  createdAt: string;
   count: number;
 }
 
@@ -536,8 +562,54 @@ function groupSignals(events: readonly WorldEvent[]): Signal[] {
   for (const event of events) {
     const key = `${event.kind}|${event.ref ?? ''}`;
     const seen = rows.get(key);
+    // The newest of its group — the server sends newest first, so it is the first seen.
     if (seen) seen.count += 1;
-    else rows.set(key, { key, event, count: 1 });
+    else
+      rows.set(key, {
+        key,
+        kind: event.kind,
+        ref: event.ref,
+        summary: event.summary,
+        createdAt: event.createdAt,
+        count: 1,
+      });
   }
   return [...rows.values()];
 }
+
+/**
+ * The environment arrivals, as signals — merged into the feed here rather than
+ * carried in `worldEvents` from the server.
+ *
+ * **An arrival is deliberately not a `WorldEvent`.** Those are derived by diffing
+ * consecutive world snapshots, and a standing delivery verdict is expired by
+ * *any* world event on its issue ref (`deliveryHold`) — so an arrival written as
+ * one would lift the delivery park on the very goal it announced and hand the
+ * work back to the fleet to do again. Adapting it at the feed's own door costs
+ * one function and has no such reader.
+ *
+ * One row per arrival rather than one per `(kind, ref)`: two environments
+ * reaching one goal is two things that happened, and rolling them together would
+ * hide the second under a count of the first.
+ */
+function arrivalSignals(arrivals: readonly GoalArrival[], now: number): Signal[] {
+  const cutoff = now - SIGNAL_WINDOW_MS;
+  return arrivals
+    .filter((a) => Date.parse(a.arrivedAt) >= cutoff)
+    .map((a) => ({
+      key: `arrival|${a.goalRef}|${a.environment}`,
+      kind: 'environment',
+      ref: a.goalRef,
+      summary: `${refLabel(a.goalRef)} reached ${a.environment}`,
+      createdAt: a.arrivedAt,
+      count: 1,
+    }));
+}
+
+/**
+ * How far back an arrival stays in the feed. The world events beside it are
+ * capped at 100 rows by the server and thin out on their own; arrivals are rare
+ * enough that a deployment with four environments would otherwise keep last
+ * spring's on the card.
+ */
+const SIGNAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;

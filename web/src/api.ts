@@ -306,6 +306,11 @@ const realApi = {
   // gets them onto the ticket. 409 when nothing is standing to overrule.
   overruleShortfall: (issueNumber: number, text: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/shortfall/overrule`, { text }),
+  // Stop waiting on an environment for this goal, or put it back to waiting. The
+  // note is required on the release and refused without one: it is the only
+  // account of why a goal was closed out with no environment ever confirming it.
+  releaseEnvironmentGate: (issueNumber: number, released: boolean, note?: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/environment-gate`, { released, note }),
   // Take one back. Withdrawing the last one clears the `more_work` it wrote with
   // it, so the goal is not bounced back to pickup for words nobody will read.
   withdrawInstruction: (issueNumber: number, id: string) =>

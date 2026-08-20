@@ -425,6 +425,23 @@ class DemoServer {
    * demo that deleted it separately would draw a control whose effects do not come
    * from where the real one's come from.
    */
+  /**
+   * Stop a goal waiting on an environment, or put it back — the demo's own arm of
+   * the escape hatch. It rewrites the reach row rather than a table of its own,
+   * because the row *is* what the card draws: a release that left `gateHold`
+   * standing would draw a control that changes nothing.
+   */
+  async releaseEnvironmentGate(issueNumber: number, released: boolean, note?: string): Promise<{ ok: true }> {
+    const reach = (this.state.environmentReach ?? []).find((r) => r.goalRef === `issue:${issueNumber}`);
+    if (reach) {
+      reach.released = released
+        ? { goalRef: reach.goalRef, note: note ?? '', releasedAt: new Date().toISOString() }
+        : null;
+      if (released) reach.gateHold = null;
+    }
+    return { ok: true };
+  }
+
   async overruleShortfall(issueNumber: number, text: string): Promise<{ ok: true }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue?.shortfall) {
@@ -2569,6 +2586,8 @@ export const demoApi = {
     getServer().setIssueAssay(issueNumber, verdict),
   addInstruction: (issueNumber: number, text: string) => getServer().addInstruction(issueNumber, text),
   overruleShortfall: (issueNumber: number, text: string) => getServer().overruleShortfall(issueNumber, text),
+  releaseEnvironmentGate: (issueNumber: number, released: boolean, note?: string) =>
+    getServer().releaseEnvironmentGate(issueNumber, released, note),
   withdrawInstruction: (issueNumber: number, id: string) => getServer().withdrawInstruction(issueNumber, id),
   dismissRun: (issueNumber: number) => getServer().dismissRun(issueNumber),
   replan: (planId: string) => getServer().replan(planId),

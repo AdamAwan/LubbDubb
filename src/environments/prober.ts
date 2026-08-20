@@ -1,60 +1,60 @@
 import { exec } from 'node:child_process';
-import type { EnvironmentReachStatus } from '../types.js';
 
-/** A probe's answer, and why when it could not give one. */
-export interface EnvironmentVerdict {
-  status: EnvironmentReachStatus;
+/**
+ * What an environment answered when asked where it is: the commits it named, or
+ * null when it could not say.
+ *
+ * The two-valued shape is deliberate, and it is the whole simplification this
+ * probe bought. The old contract asked "do you have this commit" and had to read
+ * a *third* answer out of an exit code — which is where the Windows `cmd.exe`
+ * problem lived, because a missing binary and a clean no both exit 1. An
+ * environment naming its own commit has nothing to say no *about*: either it
+ * answered or it did not, and whether a landing is in it is a question for the
+ * clone. → `docs/spec/24-environments.md#the-probe`
+ */
+export interface EnvironmentHead {
+  /** The commits this environment is at, or null when the probe could not answer. */
+  commits: string[] | null;
+  /** Why, for a null — the exit code, the signal, or the stderr's first line. */
   detail: string | null;
 }
 
 /**
- * Asks one environment whether it has one commit.
+ * Asks one environment where it is.
  *
- * A seam because the answer has no generic form: an environment is a git ref on one
- * deployment, an HTTP endpoint reporting its own build on another, and on a third a
- * question about several services at once that no single SHA describes. So the
- * harness ships no opinion and runs the operator's command.
- * → `docs/spec/24-environments.md#the-probe`
+ * A seam because the answer has no generic form: an environment is a git ref on
+ * one deployment, a pipeline's last successful `sourceVersion` on another, and on
+ * a third a question about several services at once. So the harness ships no
+ * opinion and runs the operator's command.
  */
 export interface EnvironmentProber {
-  reached(environment: string, command: string, sha: string): Promise<EnvironmentVerdict>;
+  at(environment: string, command: string): Promise<EnvironmentHead>;
 }
 
-/** How long a probe may run before it is killed and reported `unknown`. */
+/** How long a probe may run before it is killed and reported unanswered. */
 const DEFAULT_TIMEOUT_MS = 30_000;
 
 /**
  * The real prober: the operator's command, in a shell, in the repo root.
  *
- * **The commit is passed in the environment, never interpolated into the command.**
- * A `{commit}` placeholder is the prompt-template mistake in another costume — an
- * operator's command that never learned about the token silently probes nothing and
- * answers about whatever the bare command means, which is a confident wrong answer
- * rather than an error. `LUBBDUBB_COMMIT` has no fallback to get wrong: a command
- * that ignores it is a command the operator wrote to ignore it.
+ * **Nothing about a commit is passed in.** The command is asked where the
+ * environment is, not whether it holds something — so there is no `LUBBDUBB_COMMIT`
+ * to be ignored and no `{commit}` placeholder for an override to have never
+ * learned about. That whole class of silently-answering-the-wrong-question is
+ * gone with the parameter.
  *
- * The exit code is the contract, and it has three answers, not two:
+ * **Exit 0 with at least one token is the only answer there is.** Anything else —
+ * a non-zero exit, a signal, a timeout, or a command that printed nothing — is the
+ * probe failing to answer, which every landing then reads as `unknown` rather than
+ * as not-deployed. An expired credential, a missing binary and an environment
+ * holding nothing are all indistinguishable here, and only the last is about
+ * deployment: reported as `absent` they would state, in the operator's own words,
+ * that the work has not shipped for a reason that has nothing to do with shipping.
  *
- * - `0` — the commit is there. Unambiguous on every platform: a shell that could
- *   not start the command never exits 0.
- * - `1` **with nothing on stderr** — it is not there.
- * - anything else, a signal, a timeout, or a `1` that came with a complaint —
- *   **`unknown`**, with the reason kept.
- *
- * Folding the third case into "not there" is the failure this whole type is shaped
- * around: an expired credential, a missing binary and a genuine not-yet-deployed all
- * exit non-zero, and only one of them is about deployment. Read as `absent` they are
- * indistinguishable on the glass, and the cockpit states, in the operator's words,
- * that the work has not shipped — for a reason that has nothing to do with shipping.
- *
- * **The stderr clause is why `1` alone is not enough.** `cmd.exe` exits **1** for a
- * command it cannot find — the same code `git merge-base --is-ancestor` uses for a
- * clean no — so on Windows the exit code by itself cannot tell a missing binary from
- * a commit that has not shipped. What separates them is that the failure explains
- * itself and the answer does not. A probe that legitimately answers "no" while
- * warning about something is read as `unknown` and asked again, which is the safe
- * direction and is fixed by redirecting the warning.
- * → `docs/spec/24-environments.md#the-three-verdicts`
+ * Output is split on whitespace and every token has to resolve to a commit later,
+ * so a command that prints a sentence answers nothing rather than answering
+ * loosely. Several tokens is several services, and the laggard governs
+ * ({@link GitObserver.contains}).
  */
 export class CommandEnvironmentProber implements EnvironmentProber {
   constructor(
@@ -62,7 +62,7 @@ export class CommandEnvironmentProber implements EnvironmentProber {
     private readonly timeoutMs: number = DEFAULT_TIMEOUT_MS,
   ) {}
 
-  reached(environment: string, command: string, sha: string): Promise<EnvironmentVerdict> {
+  at(environment: string, command: string): Promise<EnvironmentHead> {
     return new Promise((resolve) => {
       exec(
         command,
@@ -70,11 +70,17 @@ export class CommandEnvironmentProber implements EnvironmentProber {
           cwd: this.repoRoot,
           timeout: this.timeoutMs,
           windowsHide: true,
-          env: { ...process.env, LUBBDUBB_COMMIT: sha, LUBBDUBB_ENVIRONMENT: environment },
+          env: { ...process.env, LUBBDUBB_ENVIRONMENT: environment },
         },
-        (err, _stdout, stderr) => {
-          if (err === null) return resolve({ status: 'reached', detail: null });
-          resolve(classify(err as ExecFailure, stderr));
+        (err, stdout, stderr) => {
+          if (err !== null) return resolve(failure(err as ExecFailure, stderr));
+          const commits = stdout.split(/\s+/).filter((t) => t !== '');
+          // A silent success is the case worth naming: a pipeline query with no
+          // successful run prints nothing and exits 0, which is the same output a
+          // broken query gives. Unanswered is the direction that gets asked again.
+          if (commits.length === 0)
+            return resolve({ commits: null, detail: 'the probe named no commit — it exited 0 and printed nothing' });
+          resolve({ commits, detail: null });
         },
       );
     });
@@ -88,18 +94,14 @@ interface ExecFailure extends Error {
   signal?: NodeJS.Signals | null;
 }
 
-function classify(err: ExecFailure, stderr: string): EnvironmentVerdict {
-  // A timeout kills the child, so it arrives as a signal rather than an exit code —
-  // and it is the case most likely to be mistaken for "no": a probe that hung is a
-  // probe that said nothing.
+function failure(err: ExecFailure, stderr: string): EnvironmentHead {
+  // A timeout kills the child, so it arrives as a signal rather than an exit code
+  // — and it is the case most likely to be mistaken for an answer: a probe that
+  // hung is a probe that said nothing.
   if (err.killed === true || (err.signal !== null && err.signal !== undefined))
-    return { status: 'unknown', detail: `probe killed after ${err.signal ?? 'timeout'}` };
+    return { commits: null, detail: `probe killed after ${err.signal ?? 'timeout'}` };
   const why = firstLine(stderr);
-  // A bare 1 is the only "no" there is, and only when the command had nothing to
-  // say. See the class comment: on Windows a missing binary exits 1 too, and the
-  // complaint it prints is the whole of what distinguishes the two.
-  if (err.code === 1 && why === null) return { status: 'absent', detail: null };
-  return { status: 'unknown', detail: `exit ${String(err.code ?? 'unknown')}: ${why ?? err.message}` };
+  return { commits: null, detail: `exit ${String(err.code ?? 'unknown')}: ${why ?? err.message}` };
 }
 
 function firstLine(text: string): string | null {
