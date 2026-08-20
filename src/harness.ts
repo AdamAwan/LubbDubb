@@ -26,6 +26,7 @@ import type { ValidationAskDesk } from './validation/askDesk.js';
 import type { ValidationReadyDesk } from './validation/readyDesk.js';
 import type { SpendBurnDesk } from './spendBurnDesk.js';
 import type { BranchReapDesk } from './branchReapDesk.js';
+import type { EnvironmentDesk } from './environments/environmentDesk.js';
 import type { ScheduleDesk } from './schedules/scheduleDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import type { Action, WorldEvent, WorldSnapshot } from './types.js';
@@ -110,6 +111,12 @@ interface HarnessDeps {
   burn?: SpendBurnDesk;
   /** Deletes the branch behind a merged pull request. Absent = `reapMergedBranches` is off. */
   branchReaps?: BranchReapDesk;
+  /**
+   * Attributes each merge to the goal it was for, and asks the configured
+   * environments where those commits have got to. Absent = tests that do not care;
+   * with no `environments` configured it records landings and probes nothing.
+   */
+  environments?: EnvironmentDesk;
   /**
    * Queues the job behind every recurrence that has come due. Absent = no
    * schedules (tests that do not care). It writes `jobs` rows through the same
@@ -323,6 +330,18 @@ export class Harness extends EventEmitter {
       // it. Never deleting is the point: `closedPullRequests` forgets a merge after
       // `closedPrWindowMs` and the graph must not.
       this.deps.graph?.record(world);
+      // Where that work has actually got to: the commit each merged pull request
+      // landed as, attributed to the goal it was for, and what the operator's
+      // environment probes say about those commits.
+      //
+      // **Immediately below the graph record, and that ordering is load-bearing.**
+      // Attribution walks `parentRef` from a PR node up to its goal, so run above
+      // this line it would read a graph one pulse stale and fall back to the
+      // world's own `issueForPr` for every merge on the pulse it happened —
+      // which resolves nothing for a pull request whose issue the tracker has
+      // already closed. Beside the other bookkeeping and not in the dispatcher for
+      // `closeOuts`' reason: it staffs nothing and no rule reads what it writes.
+      await this.deps.environments?.run(world);
       // An agent parked because the *account* ran out is resumed once the window
       // `claude` named has turned over — the one park with a known end, so the
       // ordinary case needs no operator (issue #318). Beside the other bookkeeping

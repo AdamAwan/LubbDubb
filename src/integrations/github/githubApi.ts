@@ -170,6 +170,12 @@ export interface GhClosedPull {
   merged: boolean;
   /** closed_at — when it left the open set. */
   closedAt: string;
+  /**
+   * `merge_commit_sha` — the commit the merge produced on the base branch, and the
+   * only report of it anything gets. Null on a PR closed without merging, and on
+   * one GitHub has not finished computing it for.
+   */
+  mergeCommitSha: string | null;
 }
 
 export interface GhPullDetail {

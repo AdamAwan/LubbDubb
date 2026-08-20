@@ -148,6 +148,7 @@ interface RawClosedPull {
   /** ISO instant the PR was completed or abandoned. Absent while still active. */
   closedDate?: string;
   createdBy?: { uniqueName?: string };
+  lastMergeCommit?: { commitId?: string };
 }
 
 interface RawThread {
@@ -468,6 +469,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
         url: `${this.projectUrl}/_git/${encodeURIComponent(this.repository)}/pullrequest/${p.pullRequestId}`,
         merged: p.status === 'completed',
         closedAt,
+        mergeCommitSha: p.status === 'completed' ? (p.lastMergeCommit?.commitId ?? null) : null,
       });
     }
     return out;

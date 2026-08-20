@@ -171,6 +171,16 @@ export interface PullRequest {
   /** When the PR left the open set (ISO). Only set on a closed/merged PR. */
   closedAt?: string;
   /**
+   * The commit the merge produced on the base branch. Only ever set on a *merged*
+   * PR, and only by a provider that reports it.
+   *
+   * Read once, into a {@link GoalLanding}, because git cannot recover it: a squash
+   * merge leaves the branch with no ancestry link to its base, so every later
+   * question about where this work has got to is asked of this SHA rather than of
+   * the branch. → `docs/spec/23-environments.md#recording-a-landing`
+   */
+  mergeCommitSha?: string;
+  /**
    * Labels/tags on the PR. Drives the provider-agnostic exclusion gate: a PR
    * carrying `config.prExclusionLabel` is left alone by the dispatcher. Absent when
    * the PR carries no labels (or the provider/persisted row predates this field) —
@@ -2920,4 +2930,78 @@ export interface PetReset {
   at: string;
   /** How many pets it released. Nothing reads it; it is the record of what went. */
   cleared: number;
+}
+
+// ---------------------------------------------------------------------------
+// Environments — where a goal's landed work has actually got to
+// ---------------------------------------------------------------------------
+
+/**
+ * A goal's work arriving on the integration branch: the commit one of its pull
+ * requests landed as, recorded against the goal it belonged to.
+ *
+ * **The SHA is a provider fact and cannot be recovered later.** `merge_pr` squashes,
+ * and a squash-merged branch has no ancestry link to its base — so the branch tip
+ * answers "is this in production" with a permanent no. What a downstream check has
+ * to be handed is the commit the merge *created*, which only the provider reports
+ * ({@link PullRequest.mergeCommitSha}).
+ *
+ * Keyed on the pull request, for {@link BranchReapStore}'s reason: a branch name is
+ * reusable, and a goal can land more than once.
+ */
+export interface GoalLanding {
+  /** The pull request that landed. */
+  prNumber: number;
+  /** The goal it was work for, `issue:<n>` — the key every verdict on a goal is written against. */
+  goalRef: string;
+  /** The commit the merge produced on the base branch. */
+  sha: string;
+  recordedAt: string;
+}
+
+/**
+ * Whether a commit has got to an environment.
+ *
+ * Three values and not two. A probe that cannot answer — the command is missing, it
+ * timed out, the cluster credentials expired — must not be readable as "not
+ * deployed": that is the same word the true answer uses, and the operator has no
+ * way to tell which one they are looking at. `unknown` is asked again; `absent` is
+ * asked again too, and only `reached` is ever final.
+ * → `docs/spec/23-environments.md#the-three-verdicts`
+ */
+export type EnvironmentReachStatus = 'reached' | 'absent' | 'unknown';
+
+/** One probe's answer about one commit, kept so the next pulse need not re-ask it. */
+export interface EnvironmentReading {
+  sha: string;
+  /** The environment's name as the operator configured it. */
+  environment: string;
+  status: EnvironmentReachStatus;
+  /** Why, for an `unknown` — the exit code, the signal, or the stderr's first line. */
+  detail: string | null;
+  observedAt: string;
+}
+
+/**
+ * A whole goal's standing in one environment, folded from its landings.
+ *
+ * `partial` is the reading this exists for: a goal is several pull requests, they
+ * land separately, and a release cut between two of them puts half a feature in
+ * production. Folded to a boolean that reads as "shipped", which is the wrong
+ * answer in the expensive direction.
+ */
+export type GoalReachStatus = 'reached' | 'partial' | 'absent' | 'unknown';
+
+export interface GoalEnvironmentReach {
+  environment: string;
+  status: GoalReachStatus;
+  /** How many of the goal's landings this environment has, and how many it has in total. */
+  landed: number;
+  total: number;
+  /**
+   * When the environment was first seen holding the goal's *last* landing — the
+   * moment the whole goal was there. Null unless `status` is `reached`, and only
+   * ever as precise as the probe interval.
+   */
+  at: string | null;
 }

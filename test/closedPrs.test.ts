@@ -170,6 +170,7 @@ function ghClosed(over: Partial<GhClosedPull> = {}): GhClosedPull {
     url: 'https://github.com/o/r/pull/42',
     merged: true,
     closedAt: '2026-07-25T11:00:00.000Z',
+    mergeCommitSha: 'deadbee',
     ...over,
   };
 }
@@ -285,6 +286,7 @@ function azClosed(over: Partial<AzClosedPull> = {}): AzClosedPull {
     url: 'https://dev.azure.com/o/p/_git/r/pullrequest/42',
     merged: true,
     closedAt: '2026-07-25T11:00:00.000Z',
+    mergeCommitSha: 'deadbee',
     ...over,
   };
 }

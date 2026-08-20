@@ -7,6 +7,7 @@ import type {
   Plan,
   PlanPart,
   PullRequest,
+  GoalEnvironmentReach,
   ValidationCheck,
   ValidationResourceView,
 } from '../types.js';
@@ -71,6 +72,13 @@ export interface GoalPageView {
   checks: ValidationCheck[];
   /** The checks' declared resources, each already resolved to a path and a present/missing fact. */
   checkResources: ValidationResourceView[];
+  /**
+   * Where this goal's landed work has got to, one entry per configured
+   * environment. **Empty means "no environments configured"**, and the page draws
+   * nothing at all for it — a goal that has landed nothing yet still gets a row per
+   * environment, saying so.
+   */
+  environments: GoalEnvironmentReach[];
 }
 
 /**
@@ -215,6 +223,7 @@ export function buildGoalPage(state: AppState, ref: string, needs: readonly Need
     // matching descendants would pull a part's ref in as though it were one.
     checks: (state.validationChecks ?? []).filter((c) => c.originRef === ref),
     checkResources: (state.validationResources ?? []).filter((r) => r.originRef === ref),
+    environments: (state.environmentReach ?? []).find((e) => e.goalRef === ref)?.environments ?? [],
   };
 }
 

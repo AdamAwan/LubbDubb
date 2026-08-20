@@ -922,6 +922,23 @@ export function buildDemoState(): DemoSeed {
     // Withheld, because rung #414 is red — the state worth having in the demo, since
     // "why can't I click it" is the question the control has to answer on its own.
     stackLandings: [{ ref: 'stack:413', offer: false, blockedBy: '#414 CI failing', landing: null, landed: 0 }],
+    // One goal in each of the readings worth drawing: whole, half, and unanswerable.
+    environmentReach: [
+      {
+        goalRef: 'issue:390',
+        environments: [
+          { environment: 'staging', status: 'reached', landed: 2, total: 2, at: '2026-08-19T09:12:00.000Z' },
+          { environment: 'prod', status: 'partial', landed: 1, total: 2, at: null },
+        ],
+      },
+      {
+        goalRef: 'issue:376',
+        environments: [
+          { environment: 'staging', status: 'reached', landed: 1, total: 1, at: '2026-08-12T16:04:00.000Z' },
+          { environment: 'prod', status: 'unknown', landed: 0, total: 1, at: null },
+        ],
+      },
+    ],
     // A vivarium with something in it, because an empty one is indistinguishable
     // from the feature being broken — and the demo is where somebody decides
     // whether they want it at all. Four species, four stages, one of each rarity.

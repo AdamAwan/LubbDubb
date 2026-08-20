@@ -120,6 +120,12 @@ export class FakeGitHubIntegration
             merged,
             state: merged ? 'merged' : 'closed',
             closedAt: new Date().toISOString(),
+            // A real provider reports the merge commit here and nowhere else, and
+            // it is the only thing that can: the squash leaves the branch with no
+            // ancestry link to its base. A fake that omitted it would let the
+            // landing sweep pass every test while recording nothing in production.
+            // Derived from the number rather than random so a test can name it.
+            ...(merged ? { mergeCommitSha: event.mergeCommitSha ?? mergeShaFor(event.prNumber) } : {}),
           });
           break;
         }
@@ -267,4 +273,12 @@ export class FakeGitHubIntegration
 function mutatePr(world: FakeWorld, prNumber: number, fn: (pr: PullRequest) => void): void {
   const pr = world.pullRequests.find((p) => p.number === prNumber);
   if (pr) fn(pr);
+}
+
+/**
+ * The commit the fake says a pull request merged as. Deterministic, so a test can
+ * assert on a landing without having to read one back out first.
+ */
+export function mergeShaFor(prNumber: number): string {
+  return `merge${String(prNumber).padStart(7, '0')}`;
 }

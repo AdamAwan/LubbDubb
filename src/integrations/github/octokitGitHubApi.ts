@@ -221,6 +221,7 @@ export class OctokitGitHubApi implements GitHubApi {
           url: p.html_url,
           merged: p.merged_at !== null,
           closedAt: p.closed_at,
+          mergeCommitSha: p.merged_at !== null ? (p.merge_commit_sha ?? null) : null,
         });
       }
     }

@@ -11,7 +11,7 @@ spec does not say, that is a bug in one of them. The [README](README.md) covers 
 and how to run it.
 
 **When you change behaviour, update the spec document that owns it in the same change.** That is the
-repo's one documentation rule; [`docs/README.md`](docs/README.md) indexes the nineteen documents and
+repo's one documentation rule; [`docs/README.md`](docs/README.md) indexes the twenty-three documents and
 says which owns what.
 
 ## Making a change
@@ -313,6 +313,25 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
   harness's clone never checks the integration branch out. New `GitObserver` methods stay read-only
   and fetch-free.
 
+### Environments
+
+- **A probe verdict is three-valued, and a new reader must not fold `unknown` into `absent`.** An
+  expired credential, a missing binary and a commit that genuinely has not shipped all exit non-zero,
+  and only the last is about deployment — read as `absent` they are indistinguishable on the glass,
+  and the cockpit states in the operator's words that the work has not shipped for a reason that has
+  nothing to do with shipping. `classify` in `src/environments/prober.ts` is the one place the exit
+  code is read: a bare `1` is `absent` **only with nothing on stderr**, because `cmd.exe` exits `1`
+  for a command it cannot find, exactly as a clean no does. Widening that arm compiles, passes, and
+  turns every typo'd probe on Windows into a permanent "not shipped".
+  → [23](docs/spec/23-environments.md#the-three-verdicts)
+- **A landing is recorded by sweeping for unattributed merges, never on the merge itself.** The merge
+  SHA is a provider fact with a `closedPrWindowMs` shelf life and no way to recover it — a squash
+  leaves no ancestry link — so a hook on the transition loses the landing to any restart that
+  straddles it, or to a person merging in the web UI between two pulses. Nothing errors, and a goal
+  whose commit was never caught looks exactly like one that never shipped. The desk also runs
+  **immediately below `graph.record`** in the pulse, because attribution walks the graph's
+  `parentRef` chain. → [23](docs/spec/23-environments.md#recording-a-landing)
+
 ### Errors and config
 
 - **Do not add swallowed `catch`es.** Route every caught failure through `errors.record(...)`
@@ -336,7 +355,7 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
 
 ## Where to read further
 
-[`docs/README.md`](docs/README.md) is the index: nineteen specs, one per subsystem, numbered by the
+[`docs/README.md`](docs/README.md) is the index: twenty-three specs, one per subsystem, numbered by the
 order they build on each other. Start there rather than grepping — each document states the
 invariants of its area and the reasoning behind them, which is what stops a change re-litigating a
 settled decision badly.

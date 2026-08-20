@@ -10,7 +10,7 @@ import type {
   ScratchPadSummary,
   WorldSnapshot,
 } from '../types.js';
-import type { CockpitState, PlanPartView, ValidationResourceView } from '../wire.js';
+import type { CockpitState, GoalReachView, PlanPartView, ValidationResourceView } from '../wire.js';
 import { buildRefUrls, decisionSubjectRef, issueCommentRef } from './refUrls.js';
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
@@ -36,6 +36,9 @@ import { validationVerdict } from '../validation/verdict.js';
 import { validationResourcePath } from '../validation/resources.js';
 import { withLiveClaim } from '../validation/desktop.js';
 import { watchLabelFor } from '../watchLabels.js';
+import { goalReach } from '../environments/reach.js';
+import { unattributedMerges } from '../environments/landings.js';
+import type { EnvironmentConfig } from '../environments/policy.js';
 import { resolveModelTag } from '../modelLabels.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
 
@@ -548,6 +551,12 @@ export function buildStateSnapshot(
     // same terms as one a plan produced. The unfiltered open list, for the reason
     // `inheritedCiFailure` takes it — an -ignore'd rung would hole the chain.
     stacks,
+    // Where each goal's landed work has got to. Built from the store and not the
+    // world, deliberately: a goal whose ticket closed weeks ago is still travelling
+    // to production, and it is exactly then that somebody asks. Empty with no
+    // environment configured, which the cockpit draws as no row rather than as a
+    // row of unknowns.
+    environmentReach: buildEnvironmentReach(store, config.environments),
     // The "land the stack" control, one entry per chain above: whether the click
     // may be offered, and the operator's standing intent over it. Joined to a
     // stack by rung membership rather than by ref — see `landingFor`.
@@ -793,4 +802,37 @@ function buildUsage(system: System, unattributedCostUsd: number) {
     rateLimits: system.rateLimits?.readLatest() ?? null,
     unattributedCostUsd,
   };
+}
+
+
+/**
+ * Every goal anything is known about, and where each has got to.
+ *
+ * The goal set comes from the **landings and the work graph**, never from the
+ * world: a goal is at its most interesting to this panel once its ticket has
+ * closed, which is precisely when the world stops listing it. It is also why a
+ * goal with only unattributable merges appears here at all — it has an answer,
+ * and the answer is that nobody can say.
+ *
+ * Empty when nothing is configured, so the cockpit draws no row rather than a row
+ * of unknowns on a deployment that never asked for one.
+ */
+function buildEnvironmentReach(store: System['store'], environments: EnvironmentConfig[]): GoalReachView[] {
+  if (environments.length === 0) return [];
+  const landings = store.listGoalLandings();
+  const readings = store.listEnvironmentReach();
+  const nodes = store.listWorkNodes();
+  const landed = store.landedPrs();
+  const names = environments.map((e) => e.name);
+  const goalRefs = new Set(landings.map((l) => l.goalRef));
+  for (const node of nodes) if (node.kind === 'issue') goalRefs.add(node.ref);
+  const out: GoalReachView[] = [];
+  for (const goalRef of goalRefs) {
+    const unattributed = unattributedMerges(goalRef, nodes, landed);
+    // A goal with nothing merged has not been anywhere, and a row saying so on
+    // every issue the graph has ever held would bury the ones that have.
+    if (unattributed === 0 && !landings.some((l) => l.goalRef === goalRef)) continue;
+    out.push({ goalRef, environments: goalReach({ goalRef, landings, readings, environments: names, unattributed }) });
+  }
+  return out;
 }
