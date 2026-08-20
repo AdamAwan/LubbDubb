@@ -22,13 +22,60 @@ import type { ErrorRecorder } from '../errorLog.js';
  * It is deliberately short. Everything about *how* to run a check comes back from
  * `validation_read` and `validation_claim`, which read the live plan; a skill that
  * restated any of it would be a second copy of the procedure, drifting.
+ *
+ * It carries the plan discussion for the same reason it carries the checks: the
+ * cockpit deep-links `/lubbdubb discuss <n>` into this session, and the whole
+ * point of Discuss being a link rather than a text box is that the operator lands
+ * somewhere that already knows what to do. What the plan *says* still comes back
+ * from `plan_read`.
  */
 export const DESKTOP_SKILL = `---
 name: lubbdubb
-description: Run a LubbDubb validation check on this machine and report the reading back. Use when asked to validate, check or verify a goal — e.g. "/lubbdubb 284:C", "/lubbdubb 284", "run check C on 284".
+description: Run a LubbDubb validation check on this machine and report the reading back, or discuss a goal's delivery plan with the operator and amend it. Use when asked to validate, check or verify a goal — e.g. "/lubbdubb 284:C", "/lubbdubb 284", "run check C on 284" — or to talk a plan through: "/lubbdubb discuss 284".
 ---
 
-# Run a LubbDubb validation check
+# LubbDubb at your keyboard
+
+Two jobs, told apart by the argument. \`discuss 284\` is
+[a conversation about a plan](#discuss-a-plan); anything else is
+[a validation check](#run-a-validation-check).
+
+<!-- Managed by LubbDubb: the desktop channel is unconditional, so this file is
+     rewritten from scratch every time the harness starts. There is no setting
+     that keeps a local version — edit it and the next start overwrites you. -->
+
+## Discuss a plan
+
+A plan is a planner agent's decomposition of a goal into separately reviewable
+pull requests, and it is sitting in the operator's cockpit waiting to be approved
+or sent back. They opened this conversation from that sheet because they want to
+argue with it before they decide — with you, here, where the repository is open
+and there is room to actually talk, rather than through a one-line box.
+
+1. **Read it.** \`plan_read\` with the goal number. It comes back with the
+   diagnosis, the approach, the parts and their slugs, what the planner left out,
+   and \`openQuestions\` — the thing it is least sure about, which is the agenda
+   unless the operator has one of their own.
+2. **Argue with it.** Check the diagnosis against the actual code. Say where you
+   think the split is wrong, what a part is missing, what is going to be painful
+   to review. **Do not agree with a plan you have not tested against the
+   repository** — an agreeable second opinion is worth nothing to the person who
+   has to approve it.
+3. **Amend it.** Once you have both settled on a change, \`plan_amend\` once, with
+   the **whole document**: every part you are keeping, under its existing slug.
+   The slug is what the amendment merges on, so a part you re-declare under a new
+   name is a different part and the old one is retired.
+4. **Send them back.** Say the plan is amended and that they approve it in the
+   cockpit. That is where this ends.
+
+**Do not do the work.** You were asked about the shape of the plan, not to
+deliver it. Nothing here writes code, opens a branch or a pull request, and a
+session that starts implementing has answered a question nobody asked.
+
+If they decide the plan was right after all, amend nothing — say so and stop. A
+plan left alone is still approvable exactly as it was.
+
+## Run a validation check
 
 A validation check is a procedure somebody has to actually carry out before a
 goal can be called done — open the page, click the thing, look at what happened.
@@ -38,17 +85,13 @@ neither of those is the same as the goal working.
 This machine can reach environments the harness's own fleet cannot. That is why
 the check came here.
 
-<!-- Managed by LubbDubb: the desktop channel is unconditional, so this file is
-     rewritten from scratch every time the harness starts. There is no setting
-     that keeps a local version — edit it and the next start overwrites you. -->
-
-## The argument
+### The argument
 
 \`284:C\` is goal 284, check C. \`284\` on its own means "show me what 284 needs".
 A bare description ("validate the login fix") means find the goal first and ask
 which check if more than one is outstanding.
 
-## What to do
+### What to do
 
 1. **Read it.** \`validation_read\` with the issue, and the check letter if you
    were given one. It comes back with the procedure, what the check expects to
@@ -63,7 +106,7 @@ which check if more than one is outstanding.
    browser, use the login, do the steps.
 4. **Report it.** \`validation_report\` once, with what you saw.
 
-## The three answers
+### The three answers
 
 - **passed** — you followed the procedure and saw what it expects.
 - **failed** — you followed it and did not. A real finding about the goal, and
@@ -75,7 +118,7 @@ which check if more than one is outstanding.
   agent that could not reach the environment has learned nothing about the goal,
   and \`failed\` would flag it for a reason that has nothing to do with the code.
 
-## What not to do
+### What not to do
 
 - **Do not report \`passed\` from evidence you did not gather.** A green build, a
   merged PR and code that reads correctly are none of them this check. A pass

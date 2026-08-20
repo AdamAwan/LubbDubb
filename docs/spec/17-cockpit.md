@@ -626,14 +626,15 @@ of handle, and it is the one that stays put across an amendment. **A row is coll
 letter, title, state, and who is on it — because six checks at full height is most of a screen and
 the card sits above the plan. Opening one reveals the `do` and `expect` side by side, the resources it
 names with a present/missing fact resolved server-side, and the controls: Passed / Failed / Defer /
-Waive, each opening a one-line note the server also requires, the hand-over, **Copy desktop prompt**,
-and one way back to `unrun` from any settled state.
+Waive, each opening a one-line note the server also requires, the hand-over, **Run it in Claude
+Code**, and one way back to `unrun` from any settled state.
 
-**Copy desktop prompt** is the odd one out and is the reason it exists: it writes nothing. A desktop
-session is started from the operator's own Claude Code, not from here, so the button copies the line
-that starts one — `/lubbdubb <issue>:<letter>` — and the cockpit's part in that run ends there.
-Without it the third runner is the only one with no trace on the surface managing the other two.
-→ [20](20-validation.md#starting-a-run-from-the-cockpit)
+**Run it in Claude Code** is the odd one out and is the reason it exists: it writes nothing. A desktop
+session is started from the operator's own Claude Code, not from here, so the control is an `<a>`
+carrying a `claude://code/new` deep link that opens that client on the goal's checkout with
+`/lubbdubb <issue>:<letter>` prefilled — the same builder the plan sheet's **Discuss…** uses — and the
+cockpit's part in that run ends there. Without it the third runner is the only one with no trace on
+the surface managing the other two. → [20](20-validation.md#starting-a-run-from-the-cockpit)
 
 **Two things stay on a closed row.** The bands — an amendment, and a hand-back — because they are
 what a reader must not be able to scroll past without seeing, and a collapsed row that hid them would
@@ -2176,9 +2177,20 @@ Approve / Reject appear only while the plan is `awaiting_approval`, and route th
 whichever surface you decided from. Replan sits apart, because it settles nothing about the proposal in
 front of you. **Abandon** sat beside it and is gone: it retired the unstarted parts and worked the goal
 as one pull request, which was a distinct act only while a plan with no parts was a different kind of
-plan ([08](08-planning.md#a-plan-is-a-list-of-parts)). Replan is the way out now. While a plan is being discussed the sheet shows the conversation instead —
-the agent's status and last note, and a reply box posting through `POST /api/agents/:id/respond` — and
-offers **End discussion** instead of a verdict.
+plan ([08](08-planning.md#a-plan-is-a-list-of-parts)). Replan is the way out now.
+
+**Discuss…** is an `<a>`, not a button — the only control on the sheet that is. It carries
+`desktopDeepLink(config.desktopFolder, discussPrompt(n))` (`web/src/cockpit/desktopLink.ts`), which
+opens the operator's own Claude Code on the goal's checkout with `/lubbdubb discuss <n>` prefilled.
+A destination belongs on an anchor rather than behind a click handler, and `a.btn` in the stylesheet
+is only the three things an `<a>` does not inherit from `.btn` — no colour of its own, because it is
+the same control. It is drawn only while the plan is `awaiting_approval`, which is exactly what
+`plan_amend` refuses outside of, and only when the plan's origin names a goal number, which is what
+the tool resolves a plan by.
+
+The sheet used to show a conversation instead: a fleet planner's status and last note, a reply box
+posting through `POST /api/agents/:id/respond`, and an **End discussion** control. That surface is
+what the deep link replaced — a conversation conducted one line at a time, holding a fleet slot.
 
 ### What changed
 

@@ -449,6 +449,10 @@ export function buildStateSnapshot(
       // Which profile an unpinned dispatch falls back to, so a pin can be drawn
       // as the departure from it that it is. Null when nothing is configured.
       defaultProfile: config.agentModels?.default ?? null,
+      // The checkout a desktop deep link opens on. Shipped rather than looked up:
+      // `repoRoot` is otherwise only reachable through the running-config route,
+      // which is a settings page the plan sheet does not read.
+      desktopFolder: config.repoRoot,
       // The container policy itself, because the backlog draws a container as a
       // heading over its children rather than as a row beside them — a question
       // about the item's type that no per-item verdict answers.

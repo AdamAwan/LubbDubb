@@ -1010,7 +1010,7 @@ expiry from re-asking on a PR that has merely been commented on.
 dispatcher emits, each under a stable `PromptId`, each with a built-in default, a declared placeholder
 list, and a doc string.
 
-Ids: `issue-plan`, `issue-replan`, `discuss-plan`, `plan-part`, `plan-approval`, `issue-shortfall`,
+Ids: `issue-plan`, `issue-replan`, `discuss-plan` (retired), `plan-part`, `plan-approval`, `issue-shortfall`,
 `plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-assay`,
 `issue-retro`, `validation-check`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
 `pr-review-comment`, `pr-concern-escalation`, `pr-title`, `finding-ticket`, `raise-bug`,

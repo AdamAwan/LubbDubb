@@ -1,7 +1,6 @@
 import { supersededReason } from '../admission.js';
 import { PLAN_FILE } from '../../plans/planDocument.js';
 import { issueOrigin, planBranch, planOrigin } from '../../plans/planning.js';
-import { isPlanInDiscussion } from '../../plans/planDiscussion.js';
 import { currentPlanSummary } from '../../plans/parts.js';
 import { relatedWorkNote } from '../../issueRelations.js';
 import type { RawAction, StageContext } from './context.js';
@@ -38,20 +37,16 @@ export function issuePlan(s: StageContext): void {
     // what would strand the in-flight ones.
     const existing = s.plansByOrigin.get(issueOrigin(issue.number)) ?? null;
     const replan = existing !== null && existing.status === 'planning';
-    // A discussion is a replan whose planner talks first. Same status, same
-    // origin, same branch — only the prompt differs, which is why it needs no
-    // gate of its own (see `isPlanInDiscussion`).
-    const discussing = isPlanInDiscussion(existing);
-    const title = discussing
-      ? `Discuss the plan for issue #${issue.number}`
-      : replan
-        ? `Replan issue #${issue.number}`
-        : `Plan issue #${issue.number}`;
-    const reason = discussing
-      ? `An operator is discussing the plan for issue #${issue.number} before approving it.`
-      : replan
-        ? `Issue #${issue.number} was sent back for replanning; plan it again from its current state.`
-        : `Open issue #${issue.number} has no plan yet; plan it before dispatching work.`;
+    // There is no third arm here any more. Discussing a plan used to be a replan
+    // whose planner talked first, dispatched from this same status with only the
+    // prompt to tell the two apart; it is now a deep link into the operator's own
+    // Claude Code, which amends the plan through `plan_amend` and dispatches
+    // nothing. What is left is the distinction that was always load-bearing:
+    // whether there is an existing decomposition to plan *from*.
+    const title = replan ? `Replan issue #${issue.number}` : `Plan issue #${issue.number}`;
+    const reason = replan
+      ? `Issue #${issue.number} was sent back for replanning; plan it again from its current state.`
+      : `Open issue #${issue.number} has no plan yet; plan it before dispatching work.`;
     s.candidates.push({
       origin,
       rule: 'issue-plan',
@@ -72,8 +67,8 @@ export function issuePlan(s: StageContext): void {
         // stories beside it — is what a decomposition has to fit inside, and a
         // planner that can't see it re-decomposes work someone already has.
         prompt:
-          (discussing || replan
-            ? s.templates.render(discussing ? 'discuss-plan' : 'issue-replan', {
+          (replan
+            ? s.templates.render('issue-replan', {
                 number: issue.number,
                 title: issue.title,
                 body: issue.body,

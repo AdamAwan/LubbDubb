@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { mkdtempSync, readFileSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -26,7 +27,7 @@ import type { Issue, IssueDelivery, Plan, ValidationCheck } from '../src/types.j
  * Four properties carry the whole design, and each is asserted in both
  * directions because each has a plausible twin that would be wrong:
  *
- * 1. **The tool set is three tools.** Not a filtered view of the fleet's — this
+ * 1. **The tool set is its own list.** Not a filtered view of the fleet's — this
  *    credential is long-lived and lives in a home directory, so the assertion is
  *    that no fleet tool is reachable at all.
  * 2. **One claim at a time, harness-wide.** The operator's own constraint: one
@@ -76,18 +77,39 @@ function build(overrides: Record<string, unknown> = {}): System {
 async function desk(
   system: System,
   over: Partial<{ claimMinutes: number; now: () => string; socketPath: string }> = {},
-): Promise<{ server: McpDesktopServer; dir: string }> {
+): Promise<{ server: McpDesktopServer; dir: string; socketPath: string }> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-cred-'));
+  const socketPath = over.socketPath ?? throwawaySocketPath();
   const server = new McpDesktopServer({
     store: system.store,
     claimMinutes: over.claimMinutes ?? 60,
     validationRoot: '/srv/validation',
     now: over.now ?? ((): string => new Date().toISOString()),
-    socketPath: over.socketPath ?? join(dir, 'desktop.sock'),
+    socketPath,
     credentialPath: join(dir, 'desktop.json'),
+    requirePlanApproval: true,
+    proposals: () => system.proposals,
+    runCycle: () => system.harness.runCycle('manual').then(() => undefined),
   });
   assert.ok(await server.listen(), 'the desktop channel starts on a throwaway path');
-  return { server, dir };
+  return { server, dir, socketPath };
+}
+
+/**
+ * A socket path nothing else on this machine owns.
+ *
+ * A named pipe on Windows, where a filesystem path is not bindable at all — the
+ * channel short-circuits on `\\` and everything else refuses with EACCES.
+ * Unique either way, so a test can never take the socket of a harness the
+ * operator is actually running: `exclusive` is on, and that would be a refusal
+ * rather than a theft, but it would also be a test that failed for a reason
+ * outside itself.
+ */
+function throwawaySocketPath(): string {
+  const unique = randomUUID();
+  return process.platform === 'win32'
+    ? `\\\\.\\pipe\\lubbdubb-test-${unique}`
+    : join(mkdtempSync(join(tmpdir(), 'lubbdubb-sock-')), `${unique}.sock`);
 }
 
 const CHECKS = [
@@ -140,7 +162,7 @@ function byId(system: System, goal: string, id: string): ValidationCheck {
 
 // -- the tool surface --------------------------------------------------------
 
-test('a desktop session gets three tools and none of the fleet’s', async () => {
+test('a desktop session gets its own tools and none of the fleet’s', async () => {
   const system = build();
   const { server } = await desk(system);
   try {
@@ -192,8 +214,7 @@ test('the credential is 0600, carries no configured secret, and dies with the ch
 
 test('two harnesses do not fight over the stable socket', async () => {
   const system = build();
-  const { server, dir } = await desk(system);
-  const socketPath = join(dir, 'desktop.sock');
+  const { server, dir, socketPath } = await desk(system);
   const second = new McpDesktopServer({
     store: system.store,
     claimMinutes: 60,
@@ -201,6 +222,8 @@ test('two harnesses do not fight over the stable socket', async () => {
     now: () => NOW,
     socketPath,
     credentialPath: join(dir, 'second.json'),
+    proposals: () => system.proposals,
+    runCycle: () => system.harness.runCycle('manual').then(() => undefined),
   });
   try {
     // The fleet socket carries a pid and unlinks whatever it finds. This one is
@@ -469,7 +492,6 @@ function plan(): Plan {
     verification: null,
     evidence: [],
     document: null,
-    discussing: false,
     statusCommentRef: null,
     createdAt: NOW,
     updatedAt: NOW,

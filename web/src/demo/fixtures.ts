@@ -215,6 +215,10 @@ export function buildDemoState(): DemoSeed {
       maxConcurrentAgents: 3,
       watchLabel: 'lubbdubb-watch',
       containerTypes: ['Feature', 'Epic'],
+      // A plausible checkout, so the demo's Discuss link is a real `claude://code/new`
+      // rather than one pointing at nothing. It opens whatever the visitor has —
+      // which is the honest demonstration: the control hands off to their machine.
+      desktopFolder: '/Users/you/code/demo-shop',
       // The demo tracker's own vocabulary, coloured — the setting is invisible
       // until a deployment has used it, and the demo is where it is looked at.
       stateColours: { New: '#8a93a0', Ready: '#7fb3ff', Active: '#63d297', Closed: '#666b73' },
@@ -1054,7 +1058,6 @@ export function buildDemoState(): DemoSeed {
           '## Why three PRs\n\n' +
           'Each part is independently reviewable and each one leaves the queue working — the schema move alone ' +
           'is a no-op re-export; the enqueue part alone tightens what may be written without changing what is read.',
-        discussing: false,
         // An active plan whose parts have moved: the reconciler has news to
         // report, so its one living comment exists. Canonical (`issue:<n>:comment:<id>`)
         // exactly as the server ships it — the store's provider id never reaches here.
@@ -1121,7 +1124,6 @@ export function buildDemoState(): DemoSeed {
           '## The one thing I am unsure about\n\n' +
           'With `AUTH_ENABLED` off there is no signing key, so the route must serve with no capability at all. ' +
           'That means two modes and only one of them is covered by the tests.',
-        discussing: false,
         // An unapproved decomposition announces nothing, so the reconciler has
         // deliberately written no comment for this one.
         statusCommentRef: null,

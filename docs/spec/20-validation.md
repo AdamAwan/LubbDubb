@@ -591,19 +591,26 @@ to begin one. Left at that, the third runner is the only one with no trace on th
 manages the other two, and an operator reads a validation plan that offers a hand-over to the fleet
 and says nothing about the machine in front of them.
 
-So an unrun check draws **Copy desktop prompt** beside the fleet hand-over, which copies
-`/lubbdubb <issue>:<letter>` — `desktopPrompt` in `web/src/components/ValidationSection.tsx`. It
-records nothing, claims nothing and reaches no socket; it is one string on a clipboard, and the run
-begins when that string is pasted. Two properties, both asserted in
-`test/validationDesktopPrompt.test.ts`:
+So an unrun check draws **Run it in Claude Code** beside the fleet hand-over: an `<a>` carrying
+`claude://code/new?q=/lubbdubb <issue>:<letter>&folder=<config.desktopFolder>`, built by
+`desktopDeepLink` (`web/src/cockpit/desktopLink.ts`) over `desktopPrompt`
+(`web/src/components/ValidationSection.tsx`). It records nothing, claims nothing and reaches no
+socket of the cockpit's own; it opens that client on the goal's checkout with the command already in
+the box, and the run begins when the operator sends it. It copied the string to the clipboard before,
+which left them holding a line to paste somewhere they still had to go and find.
+
+Three properties, all asserted in `test/validationDesktopPrompt.test.ts`:
 
 - **The address is the goal's number and the check's stored letter**, which is the pair the skill
   resolves a check by. Derived from a row's position it would render correctly and address a
   different check after the next amendment — the failure [the letter](#the-letter-is-assigned-never-positional)
   exists to prevent, one layer up.
-- **The command is in the button's title as well as on the clipboard.** A clipboard write can be
-  refused, and a command living only in a click handler leaves an operator with a button that did
-  nothing and nothing to type instead.
+- **The link carries the folder.** Without it the session opens wherever that client was last, which
+  is a Claude with no sight of the goal it was sent to check.
+- **The command is in the control's title as well as in the link.** A deep link reaches only the
+  machine the browser is on, and a client that is not installed answers nothing at all — so a command
+  living only in the `href` leaves an operator with a control that did nothing and nothing to type
+  instead.
 
 It is offered on every unrun check rather than only a nominated one, the hand-over's rule for the
 hand-over's reason: `fleetCandidate` is an argument about the fleet and says nothing about the

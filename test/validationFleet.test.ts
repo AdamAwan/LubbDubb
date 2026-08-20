@@ -156,7 +156,6 @@ function plan(): Plan {
     verification: null,
     evidence: [],
     document: null,
-    discussing: false,
     statusCommentRef: null,
     createdAt: NOW,
     updatedAt: NOW,

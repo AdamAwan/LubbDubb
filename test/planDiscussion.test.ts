@@ -1,238 +1,173 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { buildSystem, type System } from '../src/system.js';
-import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { McpDesktopServer } from '../src/mcp/desktop.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { parsePlanDocument } from '../src/plans/planDocument.js';
-import { isPlanInDiscussion } from '../src/plans/planDiscussion.js';
 import type { Plan } from '../src/types.js';
-import type { FastifyInstance } from 'fastify';
-import { gitRepo } from './support/gitRepo.js';
 
-test('discuss parks the plan for a planner and withdraws the pending approval', async () => {
-  const { system, app } = await buildTestApp();
+/**
+ * Discussing a plan, which is now a conversation at the operator's own keyboard
+ * rather than a dispatch.
+ *
+ * The cockpit's half is a `claude://code/new` link and writes nothing, so there is
+ * nothing here to drive it with: everything that *happens* happens through the
+ * desktop channel's two plan tools, and this drives them through
+ * `McpDesktopServer.session()` — the in-process caller that converges on the same
+ * `dispatch` the operator's bridge reaches. There is no test-only tool path.
+ */
+
+test('plan_read hands the session the verdict, the parts and the agenda', async () => {
+  const { system, session, close } = await buildDesk();
+  seedAwaitingApprovalPlan(system);
+
+  const read = await session.call('plan_read', { issue: 231 });
+  assert.ok(!read.isError, read.content[0]?.text);
+  const body = JSON.parse(read.content[0]!.text) as Record<string, unknown>;
+  assert.equal(body.status, 'awaiting_approval');
+  assert.equal(body.reason, 'Schema first.');
+  // The planner's own nomination of what to argue about — the agenda a discussion
+  // opens on when the operator has not brought one of their own.
+  assert.equal(body.openQuestions, 'Whether the API part can start before the schema lands.');
+  // The parts carry their slugs, because the slug is what an amendment merges on
+  // and a session shown only prose would re-declare them under new names.
+  assert.match(body.parts as string, /"schema"/);
+  assert.match(body.parts as string, /"api"/);
+  await close();
+});
+
+test('plan_read says so rather than inventing one when a goal has no plan', async () => {
+  const { system, session, close } = await buildDesk();
+  system.connector.inject({ kind: 'new_issue', number: 404, title: 'Unplanned', body: 'Nothing yet.' });
+
+  const read = await session.call('plan_read', { issue: 404 });
+  assert.ok(read.isError);
+  assert.match(read.content[0]!.text, /no plan/i);
+  await close();
+});
+
+test('plan_amend records the amendment and withdraws the card it supersedes', async () => {
+  const { system, session, close } = await buildDesk();
   const plan = seedAwaitingApprovalPlan(system);
   await system.harness.runCycle('manual'); // rule `plan-approval` writes the proposal
-  const before = system.store.listProposals().find((p) => p.kind === 'plan')!;
-  assert.equal(before.status, 'pending');
+  const stale = system.store.listProposals().find((p) => p.kind === 'plan')!;
+  assert.equal(stale.status, 'pending');
 
-  const res = await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss` });
-  assert.equal(res.statusCode, 200);
-
-  const after = system.store.getPlan(plan.id)!;
-  // `planning`, so rule `issue-plan` dispatches and rule `plan-part` schedules no parts.
-  assert.equal(after.status, 'planning');
-  assert.equal(after.discussing, true);
-  assert.equal(isPlanInDiscussion(after), true);
-  // The withdrawal is not optional: a pending proposal holds rule `plan-approval`, so the
-  // amended decomposition would never be put to anyone — and the stale card, if
-  // accepted, would release a plan its reader never saw.
-  assert.equal(system.store.listProposals().find((p) => p.id === before.id)!.status, 'rejected');
-  // ...and withdrawing must not retire anything: `refusePlan` no-ops because the
-  // status write above already moved the plan out of `awaiting_approval`.
-  assert.ok(system.store.listPlanParts(plan.id).every((p) => p.status !== 'retired'));
-  await app.close();
-  system.store.close();
-});
-
-test('ending a discussion puts the plan back to awaiting approval', async () => {
-  const { system, app } = await buildTestApp();
-  const plan = seedAwaitingApprovalPlan(system);
-  await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss` });
-
-  const res = await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss/end` });
-  assert.equal(res.statusCode, 200);
-  const after = system.store.getPlan(plan.id)!;
-  // Without restoring the status the plan sits in `planning` and rule `issue-plan` simply
-  // starts another discussion — the flag alone is not the whole of ending one.
-  assert.equal(after.status, 'awaiting_approval');
-  assert.equal(after.discussing, false);
-  assert.equal(isPlanInDiscussion(after), false);
-  await app.close();
-  system.store.close();
-});
-
-test('a missing plan is a 404 on both discussion routes', async () => {
-  const { system, app } = await buildTestApp();
-  assert.equal((await app.inject({ method: 'POST', url: '/api/plans/nope/discuss' })).statusCode, 404);
-  assert.equal((await app.inject({ method: 'POST', url: '/api/plans/nope/discuss/end' })).statusCode, 404);
-  await app.close();
-  system.store.close();
-});
-
-test('/discuss/end refuses a plan that is not being discussed, and leaves it untouched', async () => {
-  const { system, app } = await buildTestApp();
-  const plan = seedAwaitingApprovalPlan(system);
-  // `active`, not `awaiting_approval`: this is the state where an unguarded
-  // restore actually costs something — parts already dispatched, agents already
-  // on branches — and where forcing it back to `awaiting_approval` would reopen
-  // an approval gate nobody asked to reopen and stop rule `plan-part` scheduling its parts.
-  system.store.setPlanStatus(plan.id, 'active');
-
-  const res = await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss/end` });
-  assert.equal(res.statusCode, 409);
-
-  const after = system.store.getPlan(plan.id)!;
-  assert.equal(after.status, 'active', 'a refused call must not move the plan at all');
-  assert.equal(after.discussing, false);
-  await app.close();
-  system.store.close();
-});
-
-test('/discuss refuses a plan that is not awaiting approval, and leaves it untouched', async () => {
-  const { system, app } = await buildTestApp();
-  const plan = seedAwaitingApprovalPlan(system);
-  // A released plan is the trace that actually parks an issue: an unguarded
-  // discussion ending on it writes `awaiting_approval` over zero parts, an
-  // operator approves an empty plan, and the issue is left with no ready part and
-  // no agent.
-  system.store.setPlanStatus(plan.id, 'active');
-
-  const res = await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss` });
-  assert.equal(res.statusCode, 409);
-
-  const after = system.store.getPlan(plan.id)!;
-  assert.equal(after.status, 'active', 'a refused call must not move the plan at all');
-  assert.equal(after.discussing, false);
-  await app.close();
-  system.store.close();
-});
-
-test('a discussed plan gets a conversational planner, not a fresh one', async () => {
-  const { system, app } = await buildTestApp();
-  const plan = seedAwaitingApprovalPlan(system);
-  await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss` });
-
-  const task = system.store.listTasks().find((t) => t.originRef === 'issue:231:plan');
-  assert.ok(task, 'rule `issue-plan` dispatched on the planner origin');
-  // Same origin and branch as any planner — that is what makes the origin gate,
-  // the cooldown and the attempt cap apply without a line of new code.
-  assert.equal(task!.branch, 'plan/issue/231');
-  // ...but the conversation prompt, not the replan one.
-  assert.match(task!.prompt, /conversation/i);
-  assert.match(task!.prompt, /escalate/);
-  assert.doesNotMatch(task!.prompt, /an operator has asked for it to be replanned/);
-  await app.close();
-  system.store.close();
-});
-
-test('an ordinary replan is untouched by the discussion arm', async () => {
-  const { system, app } = await buildTestApp();
-  const plan = seedAwaitingApprovalPlan(system);
-  await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/replan` });
-  const task = system.store.listTasks().find((t) => t.originRef === 'issue:231:plan');
-  assert.ok(task);
-  assert.match(task!.prompt, /an operator has asked for it to be replanned/);
-  await app.close();
-  system.store.close();
-});
-
-test('replan during a discussion clears the discussing flag', async () => {
-  const { system, app } = await buildTestApp();
-  const plan = seedAwaitingApprovalPlan(system);
-  await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss` });
-  assert.equal(system.store.getPlan(plan.id)!.discussing, true);
-
-  const res = await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/replan` });
-  assert.equal(res.statusCode, 200);
-  const after = system.store.getPlan(plan.id)!;
-  assert.equal(after.status, 'planning');
-  assert.equal(after.discussing, false, 'a replan requested mid-discussion must not leave the flag set');
-  assert.equal((res.json() as { plan: Plan }).plan.discussing, false, 'the response body agrees with the store');
-
-  // The discussion agent still holds the origin (rule `issue-plan` dispatches no second
-  // planner while it does), so end it and prove the *next* dispatch reads the
-  // cleared flag: `discuss-plan` would render again if the clear were lost.
-  const discussionTask = system.store.listTasks().find((t) => t.originRef === 'issue:231:plan');
-  assert.ok(discussionTask?.agentId);
-  system.agents.kill(discussionTask!.agentId!);
-  await system.harness.runCycle('manual');
-  const replanTask = system.store
-    .listTasks()
-    .find((t) => t.originRef === 'issue:231:plan' && t.id !== discussionTask!.id);
-  assert.ok(replanTask, 'rule `issue-plan` dispatched a fresh planner once the origin freed up');
-  assert.match(replanTask!.prompt, /an operator has asked for it to be replanned/);
-  assert.doesNotMatch(replanTask!.prompt, /conversation/i);
-  await app.close();
-  system.store.close();
-});
-
-test('an amended plan ends the discussion and comes back as a fresh proposal', async () => {
-  const { system, app } = await buildTestApp();
-  const plan = seedAwaitingApprovalPlan(system);
-  await system.harness.runCycle('manual');
-  const first = system.store.listProposals().find((p) => p.kind === 'plan')!;
-
-  await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss` });
-  assert.equal(system.store.listProposals().find((p) => p.id === first.id)!.status, 'rejected');
-
-  // The discussion agent submits an amended decomposition — the same ingestion
-  // both transports share.
-  const parsed = parsePlanDocument(
-    JSON.stringify({
-      version: 1,
-      reason: 'amended after discussion',
-      document: '# Amended\n\nmint no longer stacks on route.',
-      parts: [
-        { slug: 'signer', title: 'Signer', scope: 'src/', dependsOn: [] },
-        { slug: 'mint', title: 'Mint', scope: 'web/', dependsOn: ['signer'] },
-      ],
-    }),
-  );
-  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
-  ingestPlanDocument(system.store, {
-    doc: parsed.document,
-    originRef: 'issue:231',
-    title: 'Serve artifacts outside /api',
-    requireApproval: true,
+  const res = await session.call('plan_amend', {
+    issue: 231,
+    reason: 'The API part does not need the schema first after all.',
+    document: '# Amended\n\napi no longer stacks on schema.',
+    parts: [
+      { slug: 'schema', title: 'Schema', scope: 'src/store', dependsOn: [] },
+      { slug: 'api', title: 'API', scope: 'src/api', dependsOn: [] },
+    ],
   });
+  assert.ok(!res.isError, res.content[0]?.text);
+  const body = JSON.parse(res.content[0]!.text) as Record<string, unknown>;
+  assert.equal(body.amended, true);
+  assert.equal(body.status, 'awaiting_approval');
+  // The hand-back wording is the whole of what the session tells the operator, so
+  // it has to name the cockpit rather than leaving the reply a bare ok.
+  assert.match(body.next as string, /cockpit/i);
 
-  const amended = system.store.getPlan(plan.id)!;
-  assert.equal(amended.discussing, false, 'submitting is what ends the discussion');
-  assert.equal(amended.status, 'awaiting_approval');
+  const after = system.store.getPlan(plan.id)!;
+  assert.equal(after.status, 'awaiting_approval');
+  assert.equal(after.reason, 'The API part does not need the schema first after all.');
+  assert.equal(system.store.listPlanRevisions(plan.id).length, 2, 'the amendment is a second revision, not a rewrite');
 
-  // A *fresh* proposal, not the withdrawn one: the withdrawal at discuss time is
-  // what unblocks rule `plan-approval`, which would otherwise be held by a pending verdict.
-  await system.harness.runCycle('manual');
+  // The withdrawal is not optional: a pending proposal holds rule `plan-approval`
+  // off this plan, so without it the operator walks back to a card describing the
+  // decomposition from *before* the conversation.
+  assert.equal(system.store.listProposals().find((p) => p.id === stale.id)!.status, 'rejected');
+  // ...and withdrawing must retire nothing. `refusePlan` settles a plan that is
+  // still `awaiting_approval` — the status write before the rejection is what
+  // makes it a no-op, and this is the assertion that catches its removal.
+  assert.ok(system.store.listPlanParts(plan.id).every((p) => p.status !== 'retired'));
+
+  // A *fresh* card, put up by the cycle `plan_amend` runs, so it is there when
+  // they look rather than at the next heartbeat.
   const pending = system.store.listProposals().filter((p) => p.kind === 'plan' && p.status === 'pending');
   assert.equal(pending.length, 1);
-  assert.notEqual(pending[0]!.id, first.id);
-  await app.close();
-  system.store.close();
+  assert.notEqual(pending[0]!.id, stale.id);
+  await close();
 });
 
-test('nothing is scheduled from a plan while it is being discussed', async () => {
-  const { system, app } = await buildTestApp();
+test('plan_amend refuses a released plan and leaves it untouched', async () => {
+  const { system, session, close } = await buildDesk();
   const plan = seedAwaitingApprovalPlan(system);
-  await app.inject({ method: 'POST', url: `/api/plans/${plan.id}/discuss` });
-  // Run several pulses — "exactly one planner, however many pulses run" is only
-  // a meaningful assertion once more than one pulse has actually happened.
+  // Released, with its parts scheduling off that decision. Amending writes
+  // `awaiting_approval` back over it, which reopens a gate rule `plan-part` had
+  // cleared and stops the rest of the work — for a conversation nobody asked to
+  // be a hold.
+  system.store.setPlanStatus(plan.id, 'active');
+
+  const res = await session.call('plan_amend', {
+    issue: 231,
+    reason: 'no',
+    parts: [{ slug: 'schema', title: 'Schema', scope: 'src/store', dependsOn: [] }],
+  });
+  assert.ok(res.isError);
+  assert.match(res.content[0]!.text, /not awaiting approval/i);
+
+  const after = system.store.getPlan(plan.id)!;
+  assert.equal(after.status, 'active', 'a refused call must not move the plan at all');
+  assert.equal(system.store.listPlanRevisions(plan.id).length, 1);
+  await close();
+});
+
+test('a rejected document writes nothing, so the retry is against an unchanged plan', async () => {
+  const { system, session, close } = await buildDesk();
+  const plan = seedAwaitingApprovalPlan(system);
+
+  const res = await session.call('plan_amend', { issue: 231, reason: 'no parts at all', parts: [] });
+  assert.ok(res.isError);
+  assert.match(res.content[0]!.text, /Plan rejected/);
+
+  const after = system.store.getPlan(plan.id)!;
+  assert.equal(after.reason, 'Schema first.', 'the plan is exactly as it was');
+  assert.equal(system.store.listPlanRevisions(plan.id).length, 1);
+  // Nothing is half-applied — including the proposal withdrawal, which happens
+  // after validation for exactly this reason.
+  assert.ok(system.store.listPlanParts(plan.id).every((p) => p.status !== 'retired'));
+  await close();
+});
+
+test('discussing a plan dispatches nothing', async () => {
+  const { system, close } = await buildDesk();
+  seedAwaitingApprovalPlan(system);
+  // Several pulses: "no planner, however many pulses run" is only a meaningful
+  // assertion once more than one has actually happened. There is no status write
+  // any more — the plan simply stays `awaiting_approval` while they talk, which is
+  // a status rule `issue-plan` does not dispatch from and rule `plan-part` queues
+  // as `unapproved`.
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
 
-  // Rule `plan-part` schedules parts for `active`/`awaiting_approval` only, so a plan in
-  // `planning` yields no part dispatch — and rule `issue-plan` cannot start a second
-  // planner because the discussion agent holds `issue:231:plan`.
-  const partTasks = system.store.listTasks().filter((t) => (t.originRef ?? '').includes(':part:'));
-  assert.deepEqual(partTasks, []);
   const planners = system.store.listTasks().filter((t) => t.originRef === 'issue:231:plan');
-  assert.equal(planners.length, 1, 'exactly one planner, however many pulses run');
-  await app.close();
-  system.store.close();
+  assert.deepEqual(planners, [], 'Discuss is a link now; nothing is put on the planner origin');
+  const partTasks = system.store.listTasks().filter((t) => (t.originRef ?? '').includes(':part:'));
+  assert.deepEqual(partTasks, [], 'and an unapproved plan still schedules no parts');
+  await close();
 });
 
 // -- fixtures ----------------------------------------------------------------
 
-/** A `System` + Fastify app wired the way route-driving tests need: no auth, a
- * fake PTY backend and git observer, and an in-memory store. */
-async function buildTestApp(): Promise<{ system: System; app: FastifyInstance }> {
+type Session = NonNullable<ReturnType<McpDesktopServer['session']>>;
+
+/**
+ * A `System` and a live desktop channel on throwaway paths — never the operator's
+ * real socket or home directory, which is what `system.desktop` would bind.
+ */
+async function buildDesk(): Promise<{ system: System; session: Session; close: () => Promise<void> }> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
     auth: { enabled: false } as never,
@@ -241,23 +176,44 @@ async function buildTestApp(): Promise<{ system: System; app: FastifyInstance }>
     agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
-    // A throwaway repo, not the ambient `cwd` default: rule `issue-plan` dispatches a *code*
-    // agent, so `WorktreeManager.ensure` really cuts `plan/issue/231` from
-    // `defaultBranch`. Against the checkout the suite runs in that both pollutes it
-    // with a branch and a worktree, and fails outright wherever `main` is not
-    // resolvable — a CI checkout is detached and shallow, so `resolveCommit` throws,
-    // the dispatch is audited as rejected, and the planner task never gets an agent.
-    repoRoot: gitRepo(),
     planning: { requireApproval: true } as never,
     heartbeatIntervalMs: 999_999,
   });
   const system = buildSystem(config, {
     backend: new FakePtyBackend(),
     gitObserver: new FakeGitObserver(),
+    // Without this a rule that dispatches a code agent cuts a real branch in
+    // whatever checkout the suite is running in — see CLAUDE.md. Nothing here is
+    // about git behaviour, and the point of most of these tests is that nothing
+    // is dispatched at all.
+    worktrees: new FakeWorktreeManager(),
     errorMirror: () => {},
   });
-  const { app } = await buildApp(system);
-  return { system, app };
+  const server = new McpDesktopServer({
+    store: system.store,
+    claimMinutes: 60,
+    validationRoot: join(dir, 'validation'),
+    requirePlanApproval: true,
+    proposals: () => system.proposals,
+    runCycle: () => system.harness.runCycle('manual').then(() => undefined),
+    now: () => new Date().toISOString(),
+    // A named pipe on Windows, where a filesystem path is not bindable at all —
+    // the channel itself short-circuits on `\\`. Unique per test either way, so
+    // nothing here can collide with a harness the operator is actually running.
+    socketPath: process.platform === 'win32' ? `\\\\.\\pipe\\lubbdubb-test-${randomUUID()}` : join(dir, 'desktop.sock'),
+    credentialPath: join(dir, 'desktop.json'),
+  });
+  assert.ok(await server.listen(), 'the desktop channel starts on a throwaway path');
+  const session = server.session();
+  assert.ok(session, 'the channel is up, so it hands out a session');
+  return {
+    system,
+    session,
+    close: async () => {
+      await server.close();
+      system.store.close();
+    },
+  };
 }
 
 /** An issue already decomposed into two parts, parked `awaiting_approval`. */
@@ -267,6 +223,7 @@ function seedAwaitingApprovalPlan(system: System): Plan {
     JSON.stringify({
       version: 1,
       reason: 'Schema first.',
+      openQuestions: 'Whether the API part can start before the schema lands.',
       parts: [
         { slug: 'schema', title: 'Schema', scope: 'src/store', dependsOn: [] },
         { slug: 'api', title: 'API', scope: 'src/api', dependsOn: ['schema'] },

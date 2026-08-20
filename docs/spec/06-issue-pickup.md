@@ -188,7 +188,7 @@ tracker's hierarchy and never writes it, so nothing here links, re-parents or ed
 ### What the agents are told
 
 `relatedWorkNote(issue, containerTypes, candidates)` is **appended** to the rendered prompt of rules
-`issue-assay`, `issue-plan` (and its replan/discuss arms) and `issue-pickup` — never interpolated.
+`issue-assay`, `issue-plan` (and its replan arm) and `issue-pickup` — never interpolated.
 Appending is the rule every added instruction follows (see
 [05](05-dispatcher.md#prompt-templates)): templates are operator-overridable and `loadPromptTemplates`
 rejects only _unknown_ placeholders, so a `{related}` token would be dropped silently by exactly the

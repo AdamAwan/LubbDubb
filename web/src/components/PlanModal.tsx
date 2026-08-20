@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type {
   AcceptanceCriterion,
-  Agent,
   IssueSpend,
   Plan,
   PlanDiff,
@@ -14,7 +13,8 @@ import type {
   ValidationCheck,
 } from '../types.js';
 import { api } from '../api.js';
-import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
+import { desktopDeepLink, discussPrompt } from '../cockpit/desktopLink.js';
+import { AsyncButton } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 import { PlanMap } from './PlanMap.js';
 import { ProfilePicker } from './ProfilePicker.js';
@@ -53,23 +53,19 @@ export function PlanModal({
   checks,
   upcoming,
   proposal,
-  agent,
   spend,
   planning,
   now,
   refUrls,
   onClose,
   onReplan,
-  onDiscuss,
-  onEndDiscussion,
   onDecide,
-  onOpenAgent,
   onOpenGoal,
-  onRespond,
   onAcceptance,
   onPartProfile,
   profiles,
   defaultProfile,
+  desktopFolder,
 }: {
   plan: Plan;
   parts: PlanPartView[];
@@ -79,8 +75,6 @@ export function PlanModal({
   upcoming: QueueItem[];
   /** The pending approval this plan is waiting on, when it is waiting on one. */
   proposal?: Proposal;
-  /** The discussion agent, when one is live on this plan's planner origin. */
-  agent?: Agent;
   /** What this goal has cost so far. Null is "nothing was ever measured", not zero. */
   spend: IssueSpend | null;
   /** The funnel's policy — what the approval bar states about rate. */
@@ -89,26 +83,22 @@ export function PlanModal({
   refUrls: Record<string, string>;
   onClose: () => void;
   onReplan: (planId: string) => Promise<unknown> | unknown;
-  onDiscuss: (planId: string) => Promise<unknown> | unknown;
-  onEndDiscussion: (planId: string) => Promise<unknown> | unknown;
   onDecide: (id: string, verdict: 'accept' | 'reject', note?: string) => Promise<unknown> | unknown;
-  onOpenAgent: (agentId: string) => void;
   /** Open the goal this plan hangs off — where its checks are now recorded. */
   onOpenGoal: (issueRef: string) => void;
-  onRespond: (agentId: string, text: string) => Promise<unknown> | unknown;
   onAcceptance: (planId: string, slug: string, criterion: string, met: boolean) => Promise<unknown> | unknown;
   /** Override which profile one part runs on, or clear it back to inheriting the goal's pin (#342). */
   onPartProfile: (planId: string, slug: string, profile: string | null) => Promise<unknown> | unknown;
   /** The profiles a part may be pinned to, cheapest first, and what an unpinned one falls back to. */
   profiles: { name: string; description: string }[];
   defaultProfile: string | null;
+  /** `config.desktopFolder` — the checkout Discuss opens the operator's own Claude Code on. */
+  desktopFolder: string;
 }) {
   const [view, setView] = useState<'plan' | 'history'>('plan');
   const [note, setNote] = useState('');
-  const [say, setSay] = useState('');
   const [pins, setPins] = useState<Record<string, Pin>>({});
   const [focused, setFocused] = useState<string | null>(null);
-  const send = useAsyncAction();
   const history = usePlanHistory(plan.id, plan.updatedAt);
   const body = useRef<HTMLDivElement>(null);
   const sections = useRef<Record<string, HTMLElement | null>>({});
@@ -122,9 +112,10 @@ export function PlanModal({
   const issueNumber = planIssueOf(plan.originRef);
   const queued = new Map(upcoming.map((q) => [q.origin, q]));
   // A verdict is only on offer while the plan is still the thing that was
-  // proposed; during a discussion there is nothing to approve, because the
-  // amended plan comes back as a fresh proposal.
-  const decidable = proposal?.status === 'pending' && !plan.discussing ? proposal : null;
+  // proposed. A discussion at the operator's own keyboard does not change that:
+  // it settles by *amending*, and the amendment withdraws this card and puts a
+  // fresh one up, so the one drawn here is always about the plan on screen.
+  const decidable = proposal?.status === 'pending' ? proposal : null;
   // `approach` is the summary once a planner writes one; `reason` stands in for it
   // on every plan stored before the field existed, which is why the fallback is
   // here rather than in the store.
@@ -137,6 +128,18 @@ export function PlanModal({
     return q !== undefined && q.status !== 'dispatching';
   });
   const originOf = (slug: string): string => partOriginOf(issueNumber, slug);
+  // Discuss is a link, not a dispatch. It opens the operator's own Claude Code on
+  // this repository with the `/lubbdubb` skill's own argument already in the box;
+  // the session reads the plan through `plan_read`, argues about it with the code
+  // in front of it, and ends by calling `plan_amend` — which withdraws the card
+  // below and puts a fresh one up. Nothing is written here, so there is nothing to
+  // undo if they close the window and change their mind.
+  //
+  // Null on a plan whose origin names no goal number: `plan_amend` resolves a plan
+  // *by* that number, so there is no conversation to link to — and a control that
+  // opened a session which could not find what it was sent for is worse than no
+  // control.
+  const discussHref = issueNumber === null ? null : desktopDeepLink(desktopFolder, discussPrompt(issueNumber));
 
   const jump = (key: string): void => {
     setView('plan');
@@ -160,7 +163,7 @@ export function PlanModal({
           <Ref to={plan.originRef} />
           <span className="pm-title">{plan.title}</span>
           <span className={`chip small${plan.status === 'complete' ? ' ok' : decidable ? ' warn' : ''}`}>
-            {plan.discussing ? 'discussing' : plan.status.replace(/_/g, ' ')}
+            {plan.status.replace(/_/g, ' ')}
           </span>
           {live.length > 0 && (
             <span className="chip small">
@@ -176,36 +179,6 @@ export function PlanModal({
             close
           </button>
         </div>
-
-        {plan.discussing && agent && (
-          <div className="pm-discussion">
-            <div className="pm-head">
-              <span className="pm-section-label">Discussion</span>
-              <span className="chip small ok">{agent.status}</span>
-              <button className="btn ghost small pm-close" onClick={() => onOpenAgent(agent.id)}>
-                Open full transcript →
-              </button>
-            </div>
-            {agent.note && <div className="pm-note-line">{agent.note}</div>}
-            <form
-              className="pm-say"
-              onSubmit={(e) => {
-                e.preventDefault();
-                const value = say.trim();
-                if (!value) return;
-                void send.run(async () => {
-                  await onRespond(agent.id, value);
-                  setSay('');
-                });
-              }}
-            >
-              <input placeholder="Say something to the planner…" value={say} onChange={(e) => setSay(e.target.value)} />
-              <SubmitButton phase={send.phase} className="primary">
-                Send
-              </SubmitButton>
-            </form>
-          </div>
-        )}
 
         <div className="pm-rail">
           <button className="pm-jump" onClick={() => jump('verdict')}>
@@ -434,104 +407,87 @@ export function PlanModal({
         </div>
 
         <div className="pm-foot">
-          {plan.discussing ? (
-            <div className="pm-row">
-              <span className="muted small">
-                While a discussion is running nothing is scheduled, and there is no approval to give — the amended plan
-                comes back as a fresh proposal.
-              </span>
-              <span className="spacer" />
-              <AsyncButton
-                className="ghost"
-                title="Stop the conversation and put the plan back up for approval unchanged"
-                onClick={() => onEndDiscussion(plan.id)}
-              >
-                End discussion
-              </AsyncButton>
-            </div>
-          ) : (
-            <>
-              {decidable && (
-                <Decision
-                  parts={live}
-                  planning={planning}
-                  spend={spend}
-                  queued={queued}
-                  originOf={originOf}
-                  issueNumber={issueNumber}
-                />
-              )}
-              <PinList pins={pins} parts={live} onClear={(slug) => setPins(without(pins, slug))} />
-              <div className="pm-row">
-                {decidable && (
-                  <input
-                    className="pm-note"
-                    placeholder={
-                      Object.keys(pins).length > 0
-                        ? 'Anything to add — your pinned parts are sent with this'
-                        : 'Why (optional) — recorded either way'
-                    }
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                  />
-                )}
-                {decidable && (
-                  <>
-                    <AsyncButton
-                      className="ghost"
-                      title="Sends it back to the planner with your note. Parts nothing has started for are retired."
-                      onClick={() => onDecide(decidable.id, 'reject', composeNote(pins, live, note))}
-                    >
-                      Reject — send it back to the planner
-                    </AsyncButton>
-                    <AsyncButton
-                      className="ghost"
-                      title="Talk it through with an agent, which can amend the plan — nothing is scheduled while you do"
-                      onClick={() => onDiscuss(plan.id)}
-                    >
-                      Discuss…
-                    </AsyncButton>
-                    <AsyncButton
-                      className="primary"
-                      title="Release the plan — each part gets its own agent, branch and pull request"
-                      onClick={() => onDecide(decidable.id, 'accept', composeNote(pins, live, note))}
-                    >
-                      {approveLabel(live, queued, originOf)}
-                    </AsyncButton>
-                  </>
-                )}
-                {!decidable && (
-                  <span className="muted small">
-                    {spend === null
-                      ? 'Nothing measured for this goal yet'
-                      : `This goal has cost $${spend.costUsd.toFixed(2)} so far`}
-                    {' · updated '}
-                    {relTime(plan.updatedAt, now)}
-                  </span>
-                )}
-                <span className="spacer" />
-                {/* The route 409s outside `awaiting_approval` (discussing a released
-                    plan reopens an approval gate it has already been through), so the
-                    button must not offer what the route refuses. */}
-                {plan.status === 'awaiting_approval' && !decidable && (
-                  <AsyncButton
-                    className="ghost"
-                    title="Talk it through with an agent, which can amend the plan — nothing is scheduled while you do"
-                    onClick={() => onDiscuss(plan.id)}
-                  >
-                    Discuss…
-                  </AsyncButton>
-                )}
+          {decidable && (
+            <Decision
+              parts={live}
+              planning={planning}
+              spend={spend}
+              queued={queued}
+              originOf={originOf}
+              issueNumber={issueNumber}
+            />
+          )}
+          <PinList pins={pins} parts={live} onClear={(slug) => setPins(without(pins, slug))} />
+          <div className="pm-row">
+            {decidable && (
+              <input
+                className="pm-note"
+                placeholder={
+                  Object.keys(pins).length > 0
+                    ? 'Anything to add — your pinned parts are sent with this'
+                    : 'Why (optional) — recorded either way'
+                }
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+            )}
+            {decidable && (
+              <>
                 <AsyncButton
                   className="ghost"
-                  title="Ask the planner again from the plan's current state. Nothing is torn down."
-                  onClick={() => onReplan(plan.id)}
+                  title="Sends it back to the planner with your note. Parts nothing has started for are retired."
+                  onClick={() => onDecide(decidable.id, 'reject', composeNote(pins, live, note))}
                 >
-                  Replan
+                  Reject — send it back to the planner
                 </AsyncButton>
-              </div>
-            </>
-          )}
+                {discussHref !== null && (
+                  <a
+                    className="btn ghost"
+                    href={discussHref}
+                    title="Talk it through in your own Claude Code, which can amend the plan — nothing is scheduled, and nothing changes until it does"
+                  >
+                    Discuss…
+                  </a>
+                )}
+                <AsyncButton
+                  className="primary"
+                  title="Release the plan — each part gets its own agent, branch and pull request"
+                  onClick={() => onDecide(decidable.id, 'accept', composeNote(pins, live, note))}
+                >
+                  {approveLabel(live, queued, originOf)}
+                </AsyncButton>
+              </>
+            )}
+            {!decidable && (
+              <span className="muted small">
+                {spend === null
+                  ? 'Nothing measured for this goal yet'
+                  : `This goal has cost $${spend.costUsd.toFixed(2)} so far`}
+                {' · updated '}
+                {relTime(plan.updatedAt, now)}
+              </span>
+            )}
+            <span className="spacer" />
+            {/* `plan_amend` refuses outside `awaiting_approval` (amending a released
+                plan reopens an approval gate it has already been through), so the
+                control must not offer what the tool refuses. */}
+            {plan.status === 'awaiting_approval' && !decidable && discussHref !== null && (
+              <a
+                className="btn ghost"
+                href={discussHref}
+                title="Talk it through in your own Claude Code, which can amend the plan — nothing is scheduled, and nothing changes until it does"
+              >
+                Discuss…
+              </a>
+            )}
+            <AsyncButton
+              className="ghost"
+              title="Ask the planner again from the plan's current state. Nothing is torn down."
+              onClick={() => onReplan(plan.id)}
+            >
+              Replan
+            </AsyncButton>
+          </div>
         </div>
       </div>
     </div>

@@ -202,6 +202,11 @@ body {
   border-radius: 7px;
   cursor: pointer;
   font-size: 13px;
+  /* A <button> does not inherit the page's font, so without this every control
+     wearing `.btn` renders in the UA's Arial while the text beside it does not.
+     It only became visible when `a.btn` arrived: an anchor *does* inherit, so the
+     two sat in one row two fonts and two heights apart. */
+  font-family: inherit;
 }
 .btn:hover {
   border-color: var(--blue);
@@ -240,6 +245,15 @@ body {
 }
 .btn.ghost {
   background: transparent;
+}
+/* A control that is a link. Discuss and the desktop validation hand-off both open
+   the operator's own Claude Code, and a destination belongs on an anchor rather
+   than behind a click handler — so these are only the three things an <a> does not
+   already inherit from `.btn`. No colour of its own: it is the same control. */
+a.btn {
+  display: inline-block;
+  line-height: normal;
+  text-decoration: none;
 }
 .btn:disabled {
   opacity: 0.5;

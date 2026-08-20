@@ -491,9 +491,6 @@ export class Store {
   setPlanStatus(id: string, status: PlanStatus, reason?: string): Plan | null {
     return this.plans.setPlanStatus(id, status, reason);
   }
-  setPlanDiscussing(id: string, discussing: boolean): Plan | null {
-    return this.plans.setPlanDiscussing(id, discussing);
-  }
   setPlanStatusComment(id: string, ref: string): Plan | null {
     return this.plans.setPlanStatusComment(id, ref);
   }

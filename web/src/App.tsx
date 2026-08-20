@@ -91,11 +91,6 @@ export function App() {
       checks={(state.validationChecks ?? []).filter((c) => c.originRef === viewedPlan.originRef)}
       upcoming={state.upcoming?.items ?? []}
       proposal={(state.proposals ?? []).find((p) => p.kind === 'plan' && p.ref === `${viewedPlan.originRef}:plan`)}
-      agent={state.agents.find(
-        (a) =>
-          status.view.taskFor(a)?.originRef === `${viewedPlan.originRef}:plan` &&
-          (a.status === 'running' || a.status === 'waiting'),
-      )}
       // What the goal has cost so far, for the approval bar. Read off the enriched
       // issue rather than summed here: it is `rollUpIssueSpend`'s own figure, and a
       // second sum could print a total that disagreed with the goal page's.
@@ -105,16 +100,13 @@ export function App() {
       refUrls={state.refUrls}
       onClose={() => status.actions.viewPlan(null)}
       onReplan={(id) => status.actions.replan(id)}
-      onDiscuss={(id) => status.actions.discussPlan(id)}
-      onEndDiscussion={(id) => status.actions.endPlanDiscussion(id)}
       onDecide={(id, verdict, note) => status.actions.decideProposal(id, verdict, note)}
-      onOpenAgent={(id) => status.actions.select(id)}
       onOpenGoal={(ref) => status.actions.selectGoal(ref)}
-      onRespond={(id, text) => status.actions.respondAgent(id, text)}
       onAcceptance={(id, slug, criterion, met) => status.actions.setAcceptance(id, slug, criterion, met)}
       onPartProfile={(id, slug, profile) => status.actions.setPartProfile(id, slug, profile)}
       profiles={state.config.profiles}
       defaultProfile={state.config.defaultProfile}
+      desktopFolder={state.config.desktopFolder}
     />
   ) : null;
 

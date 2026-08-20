@@ -105,9 +105,6 @@ export class PlanStore {
       // list it actually parsed either way.
       evidence: input.evidence ?? existing?.evidence ?? [],
       document: input.document ?? existing?.document ?? null,
-      // Not settable here: discussion is its own one-way transition (`setPlanDiscussing`),
-      // so an ingestion cannot accidentally re-open one it is meant to be closing.
-      discussing: existing?.discussing ?? false,
       // Preserve a comment ref an earlier write established unless one is given —
       // the plan's status comment is edited in place, so losing the id orphans it.
       statusCommentRef: input.statusCommentRef ?? existing?.statusCommentRef ?? null,
@@ -117,10 +114,10 @@ export class PlanStore {
     this.ctx.db
       .prepare(
         `INSERT INTO plans (id, origin_ref, title, status, diagnosis, approach, reason, risks, out_of_scope,
-           alternatives, open_questions, verification, evidence, document, discussing, status_comment_ref,
+           alternatives, open_questions, verification, evidence, document, status_comment_ref,
            created_at, updated_at)
          VALUES (@id, @originRef, @title, @status, @diagnosis, @approach, @reason, @risks, @outOfScope,
-           @alternatives, @openQuestions, @verification, @evidence, @document, @discussing, @statusCommentRef,
+           @alternatives, @openQuestions, @verification, @evidence, @document, @statusCommentRef,
            @createdAt, @updatedAt)
          ON CONFLICT(origin_ref) DO UPDATE SET title=excluded.title, status=excluded.status,
            diagnosis=excluded.diagnosis, approach=excluded.approach,
@@ -129,7 +126,7 @@ export class PlanStore {
            verification=excluded.verification, evidence=excluded.evidence,
            document=excluded.document, status_comment_ref=excluded.status_comment_ref, updated_at=excluded.updated_at`,
       )
-      .run({ ...plan, discussing: plan.discussing ? 1 : 0, evidence: JSON.stringify(plan.evidence) });
+      .run({ ...plan, evidence: JSON.stringify(plan.evidence) });
     return plan;
   }
 
@@ -462,21 +459,6 @@ export class PlanStore {
     return { ...rowToPlan(row), status, reason: next, updatedAt };
   }
 
-  /**
-   * Mark a plan as being discussed with an agent, or not. Its own transition
-   * rather than a field on {@link upsertPlan}, because ingestion is what *ends* a
-   * discussion — folding it in would let an amendment silently re-open one.
-   */
-  setPlanDiscussing(id: string, discussing: boolean): Plan | null {
-    const row = this.ctx.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
-    if (!row) return null;
-    const updatedAt = this.ctx.now();
-    this.ctx.db
-      .prepare(`UPDATE plans SET discussing=?, updated_at=? WHERE id=?`)
-      .run(discussing ? 1 : 0, updatedAt, id);
-    return { ...rowToPlan(row), discussing, updatedAt };
-  }
-
   /** Remember the provider comment id so the plan's status comment is edited, never re-posted. */
   setPlanStatusComment(id: string, ref: string): Plan | null {
     const row = this.ctx.db.prepare(`SELECT * FROM plans WHERE id=?`).get(id) as PlanRow | undefined;
@@ -628,7 +610,6 @@ interface PlanRow {
   verification: string | null | undefined;
   evidence: string | null | undefined;
   document: string | null | undefined;
-  discussing: number;
   status_comment_ref: string | null;
   created_at: string;
   updated_at: string;
@@ -689,7 +670,6 @@ function rowToPlan(r: PlanRow): Plan {
     verification: r.verification ?? null,
     evidence: parseEvidence(r.evidence),
     document: r.document ?? null,
-    discussing: r.discussing === 1,
     statusCommentRef: r.status_comment_ref,
     createdAt: r.created_at,
     updatedAt: r.updated_at,

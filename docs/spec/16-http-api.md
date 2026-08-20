@@ -27,7 +27,7 @@ is about.
 | `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                            |
 | `routes/issues.ts`      | Watch, priority, conclusion, assay, delivered, shortfall, dismiss-run                         |
 | `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`                                      |
-| `routes/plans.ts`       | Replan, abandon, discuss, discuss/end                                                         |
+| `routes/plans.ts`       | Plan history, replan, acceptance ticks, part model pins                                       |
 | `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it        |
 | `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                            |
 | `routes/spend.ts`       | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend |
@@ -1193,22 +1193,11 @@ beside it that retired the unstarted parts and worked the issue as one pull requ
 distinct act only while a plan with no parts was a different kind of plan, and it is gone with the
 shape. → [08](08-planning.md#when-the-collision-arrives-after-approval)
 
-### `POST /api/plans/:id/discuss`
-
-No body. 404 when the plan is unknown. **Discuss is a replan with a conversational planner** — same
-mechanism as `/replan` (flips the plan to `planning`, withdraws any pending plan proposal for the same
-reason), plus sets `plans.discussing`, which is the one thing that tells rule `issue-plan` to render the
-`discuss-plan` template instead of `issue-replan`. Broadcasts, runs a cycle. See
-[08](08-planning.md#discussing-a-plan). Returns `{ ok: true, plan }`.
-
-### `POST /api/plans/:id/discuss/end`
-
-No body. 404 when the plan is unknown. **409 when the plan is not currently being discussed**
-(`plan.discussing` is false) — the same compare-and-set discipline `accept`/`reject` apply to
-`awaiting_approval`, since an unguarded call would force any plan back to `awaiting_approval` on a
-stale or duplicate request. Otherwise restores the plan to `awaiting_approval`, clears `discussing`,
-broadcasts, runs a cycle — so the pending question is re-asked rather than left open on a
-conversation that stopped. Does not touch the discussion agent itself. Returns `{ ok: true, plan }`.
+There were two routes here for discussing a plan, `POST /api/plans/:id/discuss` and `/discuss/end`.
+**Both are gone, and nothing replaced them.** Discuss is a `claude://code/new` deep link into the
+operator's own Claude Code, which reads the plan and amends it over the desktop MCP channel — so the
+click writes nothing at all, and there is no state to restore afterwards. →
+[08](08-planning.md#discussing-a-plan), [11](11-mcp-tools.md#the-desktop-channel)
 
 ### `POST /api/escalations/:id/answer`
 

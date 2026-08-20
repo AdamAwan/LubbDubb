@@ -1,5 +1,11 @@
+import { validatePlanDocument } from '../plans/planDocument.js';
+import { ingestPlanDocument } from '../plans/planIngest.js';
 import { issueOrigin } from '../plans/planning.js';
+import { acceptanceCriteria, currentPlanSummary } from '../plans/parts.js';
+import { planProposalRef } from '../proposals/proposals.js';
+import type { ProposalDesk } from '../proposals/proposalDesk.js';
 import type { Store } from '../store/store.js';
+import type { Plan } from '../types.js';
 import {
   claimStaleBefore,
   desktopCheckRef,
@@ -12,20 +18,31 @@ import { handbackReason, validateReport } from '../validation/report.js';
 import { validationGoalDir } from '../validation/resources.js';
 import { liveChecks } from '../validation/verdict.js';
 import { DESKTOP_TOOL_NAMES, type DesktopToolName } from './names.js';
+import { PLAN_DOCUMENT_SCHEMA } from './planDocumentSchema.js';
 import { toolError, toolJson, type McpTool } from './protocol.js';
 
 /**
- * The three tools the operator's own Claude Code gets, and **only** these three.
+ * The five tools the operator's own Claude Code gets, and **only** these five.
  *
  * Narrowed by construction rather than by a filter over the fleet's set: there is
- * no code path from a desktop connection to `conclude_work`, `plan_submit`,
- * `open_pr` or any of the rest, because this module never reaches `buildTools`
- * and the desktop server never reaches anything else. That matters more here than
- * it does for the fleet, because this credential is long-lived, sits in the
- * operator's home directory, and is held by a session nobody dispatched — the
- * blast radius of a filter that stopped filtering would be the whole harness.
+ * no code path from a desktop connection to `conclude_work`, `open_pr` or any of
+ * the rest, because this module never reaches `buildTools` and the desktop server
+ * never reaches anything else. That matters more here than it does for the fleet,
+ * because this credential is long-lived, sits in the operator's home directory,
+ * and is held by a session nobody dispatched — the blast radius of a filter that
+ * stopped filtering would be the whole harness.
  *
- * Read a plan, take one check, report what you saw. That is the entire surface.
+ * Read a plan, argue with it, amend it; take one check, report what you saw. That
+ * is the entire surface.
+ *
+ * **`plan_amend` is not `plan_submit`.** They write the same document through the
+ * same `ingestPlanDocument`, and they share the schema as one export rather than
+ * two literals — but the names differ on purpose, because `validation_report`
+ * living on both channels is the trap this repo has already been caught by once:
+ * an edit to "the plan tool" that silently reaches only one side. What differs
+ * here is who may write and what settles afterwards — the fleet's is fenced by
+ * the origin it was dispatched on, and this one by the plan's own status plus the
+ * proposal it has to withdraw.
  */
 export interface DesktopToolDeps {
   store: Store;
@@ -33,6 +50,16 @@ export interface DesktopToolDeps {
   claimMinutes: number;
   /** `config.validationRoot` — where a goal's fixtures live, which the session has to be told. */
   validationRoot: string;
+  /** `planning.requireApproval`, passed to ingestion exactly as `plan_submit` passes it. */
+  requirePlanApproval?: boolean;
+  /**
+   * The proposal desk, lazily — an amendment has to withdraw the card the
+   * operator would otherwise approve, and the desk is constructed after this
+   * server in `system.ts`. Same thunk the fleet deps use for `filing`.
+   */
+  proposals(): ProposalDesk;
+  /** A manual cycle, lazily and for the same reason: it is what puts the fresh card up. */
+  runCycle(): Promise<void>;
   now(): string;
 }
 
@@ -293,6 +320,194 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
   },
 });
 
+/** The plan for a goal, or the reason there is not one to talk about. */
+function decompositionFor(
+  deps: DesktopToolDeps,
+  issue: number,
+): { ok: true; originRef: string; plan: Plan } | { ok: false; error: string } {
+  const originRef = issueOrigin(issue);
+  const plan = deps.store.getPlanByOrigin(originRef);
+  if (!plan) {
+    return {
+      ok: false,
+      error:
+        `Issue #${issue} has no plan. Nothing has been decomposed for it yet, so there is no verdict to ` +
+        `discuss — say so rather than writing one, because a plan the harness never asked for is not a plan ` +
+        `anybody is waiting to approve.`,
+    };
+  }
+  return { ok: true, originRef, plan };
+}
+
+const planRead: DesktopToolFactory = (deps) => ({
+  description:
+    "Read a goal's delivery plan: the planner's diagnosis and approach, the parts it splits the work into, " +
+    'what it deliberately left out, what it is least sure about, and the validation checks it declared. Call ' +
+    'this first when you are asked to discuss a plan — everything you need to argue with is in here, and the ' +
+    'repository is open beside you to check it against.',
+  inputSchema: {
+    type: 'object',
+    properties: { issue: { type: 'number', description: 'The goal number, e.g. 284.' } },
+    required: ['issue'],
+  },
+  handler: (args) => {
+    const ref = desktopIssueRef(args);
+    if (!ref.ok) return toolError(ref.error);
+    const found = decompositionFor(deps, ref.issue);
+    if (!found.ok) return toolError(found.error);
+    const { plan, originRef } = found;
+
+    const parts = deps.store.listPlanParts(plan.id);
+    const checks = liveChecks(deps.store.listValidationChecks(originRef));
+    return toolJson({
+      issue: ref.issue,
+      title: plan.title,
+      status: plan.status,
+      // The count rather than the revisions themselves: a plan replanned three
+      // times carries three write-ups, and a session that has to read all of them
+      // before it can say anything is the friction this whole surface removes.
+      revisions: deps.store.listPlanRevisions(plan.id).length,
+      reason: plan.reason,
+      diagnosis: plan.diagnosis,
+      approach: plan.approach,
+      risks: plan.risks,
+      outOfScope: plan.outOfScope,
+      alternatives: plan.alternatives,
+      // The planner's own nomination of what to argue about. Named as such in the
+      // reply because it is the agenda the operator opened this conversation on.
+      openQuestions: plan.openQuestions,
+      verification: plan.verification,
+      document: plan.document,
+      // The same rendering a replanning agent is given, rather than a second one:
+      // it carries each part's slug, which is the merge key an amendment turns on.
+      parts: currentPlanSummary(plan, parts),
+      acceptance: parts.map((p) => ({ slug: p.slug, criteria: acceptanceCriteria(p).map((c) => c.text) })),
+      validation: checks.map((c) => ({ letter: c.letter, id: c.id, title: c.title, state: c.state })),
+      next: PLAN_READ_NEXT,
+    });
+  },
+});
+
+const planAmend: DesktopToolFactory = (deps) => ({
+  description:
+    'Rewrite the delivery plan for a goal after talking it through with the operator, as the whole document ' +
+    'rather than a patch — keep every part slug you are not deliberately changing, since the slug is what an ' +
+    'amendment merges on. Validated immediately: on rejection you get the reason back and can fix and ' +
+    'resubmit in the same turn. This schedules nothing; it puts the amended plan back in front of the ' +
+    'operator to approve.',
+  inputSchema: {
+    ...PLAN_DOCUMENT_SCHEMA,
+    properties: {
+      issue: { type: 'number', description: 'The goal number whose plan you are amending, e.g. 284.' },
+      ...((PLAN_DOCUMENT_SCHEMA.properties ?? {}) as Record<string, unknown>),
+    },
+    required: ['issue', ...((PLAN_DOCUMENT_SCHEMA.required ?? []) as string[])],
+  },
+  handler: async (args) => {
+    const ref = desktopIssueRef(args);
+    if (!ref.ok) return toolError(ref.error);
+    const found = decompositionFor(deps, ref.issue);
+    if (!found.ok) return toolError(found.error);
+    const { plan, originRef } = found;
+
+    // The gate the `/discuss` route used to make, kept where the write is. A
+    // *released* plan has been through approval and its parts are scheduling;
+    // writing `awaiting_approval` back over it reopens a gate `plan-part` had
+    // cleared, and stops the rest of the work for a conversation nobody asked to
+    // be a hold. The cockpit only offers Discuss on an awaiting plan, so this
+    // agrees with the button rather than surprising it.
+    if (plan.status !== 'awaiting_approval') {
+      return toolError(
+        `The plan for issue #${ref.issue} is "${plan.status}", not awaiting approval, so it is not yours to ` +
+          `amend: an operator has already decided about it and its parts schedule off that decision. If it ` +
+          `needs to change, they replan it from the cockpit — say that rather than writing over it.`,
+      );
+    }
+
+    // Validated before anything is written, so a rejection leaves the plan graph
+    // exactly as it was and the retry is against an unchanged plan.
+    const parsed = validatePlanDocument({
+      version: 1,
+      reason: args.reason,
+      diagnosis: args.diagnosis,
+      approach: args.approach,
+      risks: args.risks,
+      outOfScope: args.outOfScope,
+      alternatives: args.alternatives,
+      openQuestions: args.openQuestions,
+      verification: args.verification,
+      evidence: args.evidence ?? [],
+      document: args.document,
+      parts: args.parts ?? [],
+      // Absent means "leave the existing checks alone"; `{checks: []}` would read
+      // as withdrawing every one somebody is halfway through running.
+      validation: args.validation,
+    });
+    if (!parsed.ok) return toolError(`Plan rejected: ${parsed.error}`);
+
+    // The card the operator would otherwise walk back to is now about a plan that
+    // no longer exists, and `plan-approval` is held off this plan for as long as a
+    // pending one sits there — so an amendment that left it up would send them to
+    // approve the *pre-discussion* decomposition, and release parts its reader
+    // never saw.
+    //
+    // **The status write comes first, exactly as it does in the replan route.**
+    // `refusePlan` settles a plan that is still `awaiting_approval`: it would
+    // retire every unstarted part and send the plan back to a planner, which is
+    // the opposite of what withdrawing a superseded card means. Out of that
+    // status it is a no-op, and the rejection is only the inbox item closing.
+    // Ingestion writes `awaiting_approval` back a few lines below, and store
+    // writes are synchronous, so no pulse can observe the gap.
+    const pending = deps.store
+      .listProposals()
+      .find((p) => p.kind === 'plan' && p.ref === planProposalRef(originRef) && p.status === 'pending');
+    if (pending) {
+      deps.store.setPlanStatus(plan.id, 'planning');
+      deps.proposals().reject(pending.id, 'superseded by a discussion at the operator’s own keyboard');
+    }
+
+    const result = ingestPlanDocument(deps.store, {
+      doc: parsed.document,
+      originRef,
+      title: plan.title,
+      requireApproval: deps.requirePlanApproval,
+    });
+    // The card goes back up on a pulse, and an operator told to go and approve
+    // something wants it there when they look rather than at the next heartbeat.
+    await deps.runCycle();
+
+    return toolJson({
+      amended: true,
+      issue: ref.issue,
+      status: result.status,
+      retired: result.retired,
+      // Stated rather than left to be read off the status, for `validation_report`'s
+      // reason: a session told only that the call succeeded would reasonably
+      // believe it had finished the job.
+      means:
+        result.status === 'awaiting_approval'
+          ? 'the amended plan is recorded and the superseded approval card has been withdrawn. Nothing is ' +
+            'scheduled and nothing more is yours to do here.'
+          : 'the amended plan is recorded and released — this deployment does not require approval, so its ' +
+            'parts schedule from the next pulse.',
+      next:
+        result.status === 'awaiting_approval'
+          ? 'Tell the operator, in your own words, that the plan is amended and waiting for them: they ' +
+            'approve it in the LubbDubb cockpit, on the goal’s plan sheet, where "What changed" now shows ' +
+            'this amendment against the version they were reading. Do not carry any of the work out — you ' +
+            'were asked to argue about the plan, not to deliver it.'
+          : 'Tell the operator the plan is amended and already released. Do not carry any of the work out ' +
+            'yourself — the fleet schedules it from here.',
+    });
+  },
+});
+
+const PLAN_READ_NEXT =
+  'Argue with it. Check the diagnosis against the code, and say plainly where you think the split is wrong ' +
+  'rather than agreeing with a plan you have not tested. When you and the operator have settled on a change, ' +
+  'call plan_amend once with the whole document — every part you are keeping included, under its existing ' +
+  'slug — and then stop and send them back to the cockpit to approve it.';
+
 const READ_NEXT =
   'Claim the one you are going to run with validation_claim before you start, then report it with ' +
   'validation_report. Checks marked actor "fleet" were handed to the harness\'s own agents — claiming one is ' +
@@ -307,6 +522,8 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   validation_read: validationRead,
   validation_claim: validationClaim,
   validation_report: validationReport,
+  plan_read: planRead,
+  plan_amend: planAmend,
 };
 
 export function buildDesktopTools(deps: DesktopToolDeps, session: DesktopSession): McpTool[] {

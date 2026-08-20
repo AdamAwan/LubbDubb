@@ -61,7 +61,12 @@ export function GoalPage({
       {page.needs.map((row) => (
         <NeedsBand key={row.id} row={row} view={view} actions={actions} />
       ))}
-      <Validation page={page} actions={actions} refUrls={view.state.refUrls} />
+      <Validation
+        page={page}
+        actions={actions}
+        refUrls={view.state.refUrls}
+        desktopFolder={view.state.config.desktopFolder}
+      />
       <div className="cn-gcols">
         <div className="cn-stack">
           <PlanWaves page={page} actions={actions} />
@@ -332,10 +337,13 @@ function Validation({
   page,
   actions,
   refUrls,
+  desktopFolder,
 }: {
   page: GoalPageView;
   actions: CockpitActions;
   refUrls: Record<string, string>;
+  /** `config.desktopFolder` — the checkout the desktop hand-off opens Claude Code on. */
+  desktopFolder: string;
 }): JSX.Element {
   const { issue, plan, checks } = page;
   const live = checks.filter((c) => c.supersededReason === null);
@@ -368,6 +376,7 @@ function Validation({
           issueNumber={issue.number}
           resources={page.checkResources}
           refUrls={refUrls}
+          desktopFolder={desktopFolder}
           buttonClass="cn-btn"
           onResult={(checkId, result, note) =>
             actions.setValidation(issue.number, checkId, { kind: 'result', result, note })

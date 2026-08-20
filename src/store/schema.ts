@@ -426,7 +426,12 @@ CREATE TABLE IF NOT EXISTS plans (
   verification TEXT,                  -- how anyone knows the whole thing worked
   evidence    TEXT,                   -- JSON array of {path, line, note}: where the diagnosis comes from
   document    TEXT,                   -- the full narrative, markdown
-  discussing  INTEGER NOT NULL DEFAULT 0,  -- an operator is arguing with a planner about it
+  -- Nothing reads this. Discuss stopped being a dispatch (it deep-links the
+  -- operator's own Claude Code, which amends through the plan_amend tool), and
+  -- the field went with it — but the column stays: dropping one is not an
+  -- additive migration, and a NOT NULL DEFAULT costs an existing database
+  -- nothing.
+  discussing  INTEGER NOT NULL DEFAULT 0,
   status_comment_ref TEXT,            -- provider comment id, edited in place
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL
@@ -466,7 +471,7 @@ CREATE TABLE IF NOT EXISTS plan_parts (
 
 -- Every verdict a planner has submitted for one plan, oldest first. The plan row
 -- is overwritten by each amendment, which is exactly why these exist: without
--- them an operator who discussed a plan for ten minutes is handed the amended
+-- them an operator who talked a plan through for ten minutes is handed the amended
 -- decomposition whole, with nothing anywhere saying which two parts moved.
 --
 -- The record is of what was *proposed*, not of what the store made of it: a part

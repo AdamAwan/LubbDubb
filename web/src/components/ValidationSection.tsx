@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { ValidationCheck, ValidationCheckState, ValidationResourceView } from '../types.js';
+import { desktopDeepLink } from '../cockpit/desktopLink.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 
@@ -28,6 +29,7 @@ export function ValidationSection({
   issueNumber,
   resources,
   refUrls,
+  desktopFolder,
   buttonClass = 'ghost small',
   onResult,
   onDefer,
@@ -41,6 +43,8 @@ export function ValidationSection({
   issueNumber: number;
   resources: ValidationResourceView[];
   refUrls: Record<string, string>;
+  /** `config.desktopFolder` — the checkout the desktop hand-off opens Claude Code on. */
+  desktopFolder: string;
   /**
    * The station's own button chrome, the seam `HumanTaskActions` and
    * `EscalationCard` already take. One component, two faces — the alternative is a
@@ -123,6 +127,7 @@ export function ValidationSection({
           refUrls={refUrls}
           buttonClass={buttonClass}
           issueNumber={issueNumber}
+          desktopFolder={desktopFolder}
           onResult={(result, note) => onResult(check.id, result, note)}
           onDefer={(reason) => onDefer(check.id, reason)}
           onWaive={(reason) => onWaive(check.id, reason)}
@@ -277,6 +282,7 @@ function CheckBlock({
   refUrls,
   buttonClass,
   issueNumber,
+  desktopFolder,
   onResult,
   onDefer,
   onWaive,
@@ -288,6 +294,7 @@ function CheckBlock({
   refUrls: Record<string, string>;
   buttonClass: string;
   issueNumber: number;
+  desktopFolder: string;
   onResult: (result: 'passed' | 'failed', note: string) => Promise<unknown> | unknown;
   onDefer: (reason: string) => Promise<unknown> | unknown;
   onWaive: (reason: string) => Promise<unknown> | unknown;
@@ -299,6 +306,7 @@ function CheckBlock({
   const [note, setNote] = useState('');
   const send = useAsyncAction();
   const promptText = desktopPrompt(issueNumber, check.letter);
+  const desktopHref = desktopDeepLink(desktopFolder, promptText);
 
   const submit = (): void => {
     const text = note.trim();
@@ -459,19 +467,22 @@ function CheckBlock({
                       Hand to the fleet
                     </AsyncButton>
                   )}
-                  {/* The third runner, and the only one with no control of its own:
-                      a desktop session claims a check from the operator's own
-                      Claude Code, so the cockpit cannot start one — it can only
-                      hand over the line that does. The command is in the title as
-                      well as on the clipboard, because a copy that silently did
-                      nothing and a command nobody can read are the same dead end. */}
-                  <AsyncButton
-                    className={buttonClass}
-                    title={`Copies "${promptText}". Paste it into your own Claude Code to run this check at the keyboard — with the browser and the logins the fleet has not — and it reports the reading back here.`}
-                    onClick={() => navigator.clipboard.writeText(promptText)}
+                  {/* The third runner, and the only one the cockpit cannot start
+                      itself: a desktop session claims a check from the operator's
+                      own Claude Code. So this hands the check *over* — the deep
+                      link opens that client on this repository with the command
+                      already typed, which is a destination and therefore an
+                      anchor. The command stays in the title, because a link that
+                      silently did nothing and a command nobody can read are the
+                      same dead end — and only the machine running this browser
+                      has a client to answer it. */}
+                  <a
+                    className={`btn ${buttonClass}`}
+                    href={desktopHref}
+                    title={`Opens your own Claude Code with "${promptText}" ready to send, so this check runs at the keyboard — with the browser and the logins the fleet has not — and reports the reading back here.`}
                   >
-                    Copy desktop prompt
-                  </AsyncButton>
+                    Run it in Claude Code
+                  </a>
                 </>
               ) : (
                 // One way back from every settled state, and it takes no note for a

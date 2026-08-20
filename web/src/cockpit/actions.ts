@@ -198,8 +198,6 @@ export interface CockpitActions {
    * and a toggle read from stale props would fight a fold restored from the URL.
    */
   collapseFeature(issueNumber: number, collapsed: boolean): void;
-  discussPlan(planId: string): Promise<void>;
-  endPlanDiscussion(planId: string): Promise<void>;
   reorderUpNext(origins: string[]): Promise<void>;
 
   /**

@@ -210,8 +210,6 @@ export function useCockpit(): CockpitStatus {
             ? [...current.collapsed, issueNumber]
             : current.collapsed.filter((n) => n !== issueNumber),
         })),
-      discussPlan: (planId) => then(api.discussPlan(planId)),
-      endPlanDiscussion: (planId) => then(api.endPlanDiscussion(planId)),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
 
       upgrade: (action, opts) => then(api.upgrade(action, opts)),

@@ -290,7 +290,13 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'conversation and puts the plan back in front of them for approval.\n\n' +
       'Do not implement anything and do not open a pull request. You are on branch {branch} only so you have the ' +
       'repository to read.',
-    doc: 'Sent to a code agent when an operator hits Discuss on a plan (rule `issue-plan`, with the plan row in `planning` and `discussing` set). Unlike {issue-replan} it is a dialogue: the agent escalates to talk, and submitting the amended plan is what ends it. Placeholders: {number} {title} {body} {branch} {planFile} {current}.',
+    retired: true,
+    doc:
+      '**Retired — no longer rendered.** Discuss no longer dispatches anything: the cockpit deep-links the ' +
+      'operator into their own Claude Code (`claude://code/new`), which reads the plan through `plan_read`, ' +
+      'argues about it with the repository open, and amends it through `plan_amend`. What this prompt ' +
+      'described was a dialogue conducted one line at a time through a text box in the plan sheet, which is ' +
+      'the friction that replaced it. An override left here still loads — it is simply not sent.',
   },
   'plan-part': {
     placeholders: ['number', 'title', 'part', 'scope', 'branch', 'base', 'plan', 'done', 'remaining'],
