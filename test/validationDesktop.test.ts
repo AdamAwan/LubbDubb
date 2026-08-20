@@ -16,6 +16,7 @@ import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { McpDesktopServer } from '../src/mcp/desktop.js';
 import { DESKTOP_TOOL_NAMES, MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
+import { PromptTemplates, defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { validatePlanDocument } from '../src/plans/planDocument.js';
@@ -82,7 +83,12 @@ function build(overrides: Record<string, unknown> = {}): System {
 /** A live desktop server on throwaway paths — never the operator's real home directory. */
 async function desk(
   system: System,
-  over: Partial<{ claimMinutes: number; now: () => string; socketPath: string }> = {},
+  over: Partial<{
+    claimMinutes: number;
+    now: () => string;
+    socketPath: string;
+    templates: PromptTemplates;
+  }> = {},
 ): Promise<{ server: McpDesktopServer; dir: string; socketPath: string }> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-cred-'));
   const socketPath = over.socketPath ?? throwawaySocketPath();
@@ -90,6 +96,9 @@ async function desk(
     store: system.store,
     claimMinutes: over.claimMinutes ?? 60,
     validationRoot: '/srv/validation',
+    templates: over.templates ?? defaultPromptTemplates(),
+    defaultBranch: 'main',
+    worktreeRoot: '/srv/worktrees',
     now: over.now ?? ((): string => new Date().toISOString()),
     socketPath,
     credentialPath: join(dir, 'desktop.json'),
@@ -228,6 +237,9 @@ test('two harnesses do not fight over the stable socket', async () => {
     store: system.store,
     claimMinutes: 60,
     validationRoot: '/srv/validation',
+    templates: defaultPromptTemplates(),
+    defaultBranch: 'main',
+    worktreeRoot: '/srv/worktrees',
     now: () => NOW,
     socketPath,
     credentialPath: join(dir, 'second.json'),
@@ -280,6 +292,88 @@ test('validation_read hands back the whole plan, or one check’s full procedure
     assert.ok(missing.isError);
     assert.match(missing.text, /no live check "Z"/);
     assert.equal(byId(system, planId, 'csv-opens').state, 'unrun', 'reading records nothing');
+  } finally {
+    await server.close();
+    system.store.close();
+  }
+});
+
+// -- getting the application up ---------------------------------------------
+
+test('local_run answers with the deployment’s own instruction, and the goal’s branches', async () => {
+  const system = build();
+  planWith(system);
+  const { server } = await desk(system);
+  try {
+    const reply = await call(server, 'c1', 'local_run', { issue: 12 });
+    assert.ok(!reply.isError, reply.text);
+
+    // The built-in body, which is the "work it out from the repository" answer. A
+    // deployment that has not written its command down still gets a session that
+    // tries, which is why the control is drawn unconditionally.
+    assert.match(reply.json().howToRun as string, /work it out from the/);
+    assert.equal(reply.json().integrationBranch, 'main');
+
+    // The caution names the directory rather than describing it, and carries both
+    // ways a session at this keyboard breaks the fleet in silence: a process left
+    // holding a leased slot open (which on Windows fails every later dispatch onto
+    // that branch), and a branch checked out in the clone the pool cuts its
+    // worktrees from, which `findExisting` then answers with the operator's own
+    // checkout. Neither is the operator's to override, so neither is in the body.
+    assert.match(reply.json().caution as string, /\/srv\/worktrees/);
+    assert.match(reply.json().caution as string, /do not check a branch out in the checkout you are/);
+
+    const parts = reply.json().parts as { slug: string; branch: string | null }[];
+    assert.deepEqual(
+      parts.map((p) => p.slug),
+      ['whole'],
+    );
+    assert.ok('branch' in parts[0]!, 'the branch is shipped as data, not left for the body to interpolate');
+    assert.equal(reply.json().goal, 12);
+  } finally {
+    await server.close();
+    system.store.close();
+  }
+});
+
+test('an operator’s local-run override is what the session is told', async () => {
+  const system = build();
+  planWith(system);
+  const { server } = await desk(system, {
+    templates: new PromptTemplates({ 'local-run': 'Run /dev-environment start. It lands on http://localhost:5173.' }),
+  });
+  try {
+    const reply = await call(server, 'c1', 'local_run', { issue: 12 });
+    assert.ok(!reply.isError, reply.text);
+    assert.match(reply.json().howToRun as string, /\/dev-environment start/);
+    // The caution survives the override, because it is not in the body.
+    assert.match(reply.json().caution as string, /\/srv\/worktrees/);
+  } finally {
+    await server.close();
+    system.store.close();
+  }
+});
+
+test('local_run answers for a goal with no plan, where validation_read refuses', async () => {
+  const system = build();
+  const { server } = await desk(system);
+  try {
+    // The whole reason this is its own tool rather than a field on
+    // `validation_read`: a goal nobody has planned, or one whose plan declared no
+    // checks, is exactly the goal somebody hits *run it locally* on.
+    const refused = await call(server, 'c1', 'validation_read', { issue: 12 });
+    assert.ok(refused.isError, refused.text);
+
+    const reply = await call(server, 'c1', 'local_run', { issue: 12 });
+    assert.ok(!reply.isError, reply.text);
+    assert.match(reply.json().howToRun as string, /work it out from the/);
+    assert.equal(reply.json().parts, undefined, 'no plan means no parts, not an empty list');
+
+    // And with no goal at all: "how does this project start" has no goal in it.
+    const bare = await call(server, 'c1', 'local_run', {});
+    assert.ok(!bare.isError, bare.text);
+    assert.equal(bare.json().goal, undefined);
+    assert.match(bare.json().howToRun as string, /work it out from the/);
   } finally {
     await server.close();
     system.store.close();

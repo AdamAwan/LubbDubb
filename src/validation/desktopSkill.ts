@@ -28,16 +28,23 @@ import type { ErrorRecorder } from '../errorLog.js';
  * point of Discuss being a link rather than a text box is that the operator lands
  * somewhere that already knows what to do. What the plan *says* still comes back
  * from `plan_read`.
+ *
+ * `run <n>` is the third of those links, and the same division holds: this file
+ * says the run comes before the checks and that nothing is claimed until the
+ * operator picks one, while *how* to start the application comes back from
+ * `local_run` — the `local-run` prompt, which each deployment overrides with its
+ * own command.
  */
 export const DESKTOP_SKILL = `---
 name: lubbdubb
-description: Run a LubbDubb validation check on this machine and report the reading back, or discuss a goal's delivery plan with the operator and amend it. Use when asked to validate, check or verify a goal — e.g. "/lubbdubb 284:C", "/lubbdubb 284", "run check C on 284" — or to talk a plan through: "/lubbdubb discuss 284".
+description: Run a LubbDubb validation check on this machine and report the reading back, get a goal's work running locally so somebody can look at it, or discuss a goal's delivery plan with the operator and amend it. Use when asked to validate, check or verify a goal — e.g. "/lubbdubb 284:C", "/lubbdubb 284", "run check C on 284" — to start it up: "/lubbdubb run 284" — or to talk a plan through: "/lubbdubb discuss 284".
 ---
 
 # LubbDubb at your keyboard
 
-Two jobs, told apart by the argument. \`discuss 284\` is
-[a conversation about a plan](#discuss-a-plan); anything else is
+Three jobs, told apart by the argument. \`discuss 284\` is
+[a conversation about a plan](#discuss-a-plan), \`run 284\` is
+[getting it up on this machine](#run-it-locally), and anything else is
 [a validation check](#run-a-validation-check).
 
 <!-- Managed by LubbDubb: the desktop channel is unconditional, so this file is
@@ -75,6 +82,34 @@ session that starts implementing has answered a question nobody asked.
 If they decide the plan was right after all, amend nothing — say so and stop. A
 plan left alone is still approvable exactly as it was.
 
+## Run it locally
+
+The operator wants to see this goal's work running on the machine you are on.
+They pressed a button on the goal page; you are what happens next.
+
+1. **Ask how.** \`local_run\` with the goal number. Back comes how this project is
+   started — the deployment's own words, often a single command — the branches its
+   parts sit on, and one directory to keep out of.
+2. **Get it up.** Follow what it said. A goal whose parts have merged is already
+   on the integration branch \`local_run\` names, so there is usually nothing to
+   check out — and **do not check a branch out in this checkout** even when there
+   is. It is the clone the harness cuts its agents' worktrees from, and a branch
+   checked out here is one it can no longer hand to an agent. If the work you
+   want is not on the branch you are on, say so and ask where they keep a
+   checkout for looking at things.
+3. **Say where it landed.** The URL and the port. Mention anything you had to do
+   that the instructions did not cover — that sentence is how the instructions
+   get better, and the operator is the person who can fix them.
+4. **Then offer the checks.** \`validation_read\` the goal and say what is
+   outstanding. **Claim nothing yet.** They opened this to look at the thing, and
+   claiming a check locks it away from the fleet while they do. Wait for them to
+   pick one, then carry on at
+   [run a validation check](#run-a-validation-check).
+
+**Do not fix what will not start.** If it does not come up, say what stopped you
+and stop there. Editing code, configuration or dependencies to get it running
+changes the thing they were about to look at, on a branch somebody is reviewing.
+
 ## Run a validation check
 
 A validation check is a procedure somebody has to actually carry out before a
@@ -103,7 +138,9 @@ which check if more than one is outstanding.
    copy, and only one check can be claimed at a time. If something else holds a
    claim, the refusal names it; say so and stop rather than working around it.
 3. **Run it.** Follow the procedure as written, on this machine. Drive the
-   browser, use the login, do the steps.
+   browser, use the login, do the steps. If it needs the application up and you
+   do not know how this project starts, \`local_run\` says — that is what it is
+   for, and guessing at a start command wastes more time than asking.
 4. **Report it.** \`validation_report\` once, with what you saw.
 
 ### The three answers

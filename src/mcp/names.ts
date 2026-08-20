@@ -79,7 +79,8 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  *
  * The operator's own Claude Code connects to a *different* socket with a
  * long-lived credential and no dispatch behind it, so it gets read a plan, argue
- * with it, take one check, report what you saw, and nothing else. Writing that as
+ * with it, get the application up, take one check, report what you saw, and
+ * nothing else. Writing that as
  * its own list rather than as a filter over {@link MCP_TOOL_NAMES} is what makes
  * the narrowing structural: `src/mcp/desktopTools.ts` is a `Record` over exactly
  * this, and there is no code path from a desktop connection to `buildTools`.
@@ -96,6 +97,12 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  * document schema they genuinely do share is one export
  * (`src/mcp/planDocumentSchema.ts`) rather than two literals.
  *
+ * `local_run` is the one tool here with no goal in it and nothing to write. It
+ * answers "how does this project start on this machine", which is the question a
+ * session has to settle before it can carry out most checks — and the reason it
+ * is not a field on `validation_read` is that `validation_read` refuses a goal
+ * with no checks, which is exactly the goal somebody most often wants to look at.
+ *
  * No `ALLOWED_MCP_TOOLS` equivalent: the fleet's grants exist because nobody is
  * at the prompt to approve a call. Here somebody is, and it is their own machine.
  */
@@ -105,6 +112,7 @@ export const DESKTOP_TOOL_NAMES = [
   'validation_report',
   'plan_read',
   'plan_amend',
+  'local_run',
 ] as const;
 
 export type DesktopToolName = (typeof DESKTOP_TOOL_NAMES)[number];

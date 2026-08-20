@@ -612,13 +612,15 @@ load-bearing both ways:
 ## The desktop channel
 
 `src/mcp/desktop.ts`. A second socket, for the operator's **own** Claude Code rather than for a
-spawned agent. Two jobs go there: a validation check needing a browser and a login the fleet does not
-have, run at their keyboard and reported onto the same row; and a conversation about a plan, held
-where there is room to have one. **Unconditional** — every start binds the stable socket, mints the
+spawned agent. Three jobs go there: a validation check needing a browser and a login the fleet does
+not have, run at their keyboard and reported onto the same row; a conversation about a plan, held
+where there is room to have one; and getting the application itself up, which most checks need before
+their first step is possible. **Unconditional** — every start binds the stable socket, mints the
 credential at `validation.desktopCredentialPath` (`0600`) and rewrites the skill at
 `validation.desktopSkillPath`, on a deployment that configured none of it. That footprint is the whole
-of what the channel costs a deployment that never uses it, and it is the price of the cockpit's two
-deep links reaching something. [20](20-validation.md#the-desktop-channel) owns the check behaviour;
+of what the channel costs a deployment that never uses it, and it is the price of the cockpit's three
+deep links reaching something. [20](20-validation.md#the-desktop-channel) owns the check behaviour
+and [the run](20-validation.md#getting-the-application-up);
 [08](08-planning.md#discussing-a-plan) owns the plan one.
 
 | Tool                | Purpose                                                                                               |
@@ -628,6 +630,7 @@ deep links reaching something. [20](20-validation.md#the-desktop-channel) owns t
 | `validation_report` | Record what was seen: `passed`, `failed`, or `handback`. Reported against the claim, not an argument. |
 | `plan_read`         | Read a goal's delivery plan: the verdict, the parts and their slugs, the agenda. Records nothing.     |
 | `plan_amend`        | Rewrite it after talking it through. Refuses outside `awaiting_approval`; withdraws the stale card.   |
+| `local_run`         | How this project starts here: the `local-run` prompt rendered, the goal's branches, and the caution.  |
 
 **`plan_amend` is deliberately not a second `plan_submit`.** They write the same document through the
 same `ingestPlanDocument`, and they share the schema as one export (`src/mcp/planDocumentSchema.ts`)

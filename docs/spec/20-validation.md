@@ -517,10 +517,12 @@ exclusive, so the one that boots second refuses it, records the conflict and pri
 `unavailable` boot line rather than stealing a running harness's registration. Point it at a
 different `validation.desktopSocketPath` (and credential path) to run both.
 
-### The three tools
+### The tools
 
 `validation_read` a goal's plan, `validation_claim` the one check you are going to run,
-`validation_report` what you saw. Three and no more, and narrowed by construction rather than by a
+`validation_report` what you saw — plus `plan_read` and `plan_amend` for a discussion
+([08](08-planning.md)), and `local_run` for [getting the application up](#getting-the-application-up).
+Six and no more, and narrowed by construction rather than by a
 filter over the fleet's set — this credential is long-lived and lives in a home directory, so the
 guarantee has to be that there is no code path from a desktop connection to `conclude_work` at all,
 not that a list is currently short.
@@ -563,7 +565,8 @@ deciding whether to re-run a check before closing a goal is deciding on exactly 
 
 ### The skill
 
-`/lubbdubb 284:C`. Installed to `validation.desktopSkillPath` when the channel starts, from
+`/lubbdubb 284:C`, `/lubbdubb discuss 284`, `/lubbdubb run 284` — three jobs told apart by the
+argument, one file. Installed to `validation.desktopSkillPath` when the channel starts, from
 `DESKTOP_SKILL` in `src/validation/desktopSkill.ts` — a string in a `.ts` module rather than a `.md`
 asset, the prompt templates' reason: the build emits `.ts` and nothing copies a stray `.md` into
 `dist`, so an asset works in development and is missing in a deployment. There is no second copy
@@ -615,6 +618,51 @@ Three properties, all asserted in `test/validationDesktopPrompt.test.ts`:
 It is offered on every unrun check rather than only a nominated one, the hand-over's rule for the
 hand-over's reason: `fleetCandidate` is an argument about the fleet and says nothing about the
 machine the operator is sitting at.
+
+### Getting the application up
+
+A check that says "open the page and click the thing" is unrunnable until somebody knows how to get
+the page up, and nothing in this document told them. The procedure is written by a planner reading
+the repository, which is the one thing in the deployment that cannot know the answer — so the check
+arrived at the machine that has the browser and the login, and stalled on the one fact nobody had
+written down.
+
+`local_run` is that fact. It answers with the **`local-run` prompt, rendered** — a prompt id like any
+other ([05](05-dispatcher.md#prompt-templates)), whose built-in body says "work it out from the
+repository: the README, the scripts, a compose file" and which a deployment **overrides with its own
+command**. That is the whole of why it is a template rather than a config key: how a project starts is
+the operator's opinion, not the harness's, which is the same argument that puts `finding-ticket` and
+`docs-change` in the prompt book. The cost is the prompt book's cost — an override is a file drop and
+takes effect at the next restart, where a config key would have been editable in the cockpit.
+
+Three properties, asserted in `test/validationDesktop.test.ts`:
+
+- **It is not a field on `validation_read`.** That tool refuses a goal with no checks, deliberately
+  and with a reason worth keeping — and a goal with no checks is exactly the goal somebody wants to
+  look at. `local_run` answers for a goal with no plan, and for no goal at all.
+- **The goal's parts come back as data, not as placeholders.** Each part's slug, branch, pull request
+  and status ride beside the rendered body, and the template declares **no placeholders**. A `{branch}`
+  token would be dropped in silence by exactly the overrides that customised most — the sharp edge
+  appending exists to avoid ([09](09-execution.md)) — and a branch nobody can see is a session
+  looking at the wrong code.
+- **The caution comes from the harness, not the body**, because it is not the operator's to override:
+  they are writing down a start command, not reasoning about the worktree pool. It carries the two
+  ways a session at this keyboard breaks the fleet silently. Nothing may be left running inside
+  `worktreeRoot` — a process holding a leased slot open stops it ever being cleaned or handed on, and
+  on Windows every later dispatch onto that branch fails `EBUSY`
+  ([09](09-execution.md#handing-a-slot-over)). And **no branch is checked out in `repoRoot`**: that is
+  the clone the pool cuts its worktrees from, `WorktreeManager.findExisting` reads
+  `git worktree list`, which includes the main working tree — so a branch checked out there is a
+  branch the pool answers for with the operator's own checkout. A goal whose parts have merged needs
+  no checkout at all, which is the common case; anything else is a question for the operator.
+
+The cockpit's half is **run it locally** in the validation card's header, `/lubbdubb run <n>` through
+the same deep link — `localRunPrompt` in `web/src/cockpit/desktopLink.ts`. It is drawn on every goal
+with nothing checked first, because the prompt always has a body: a control offered only where
+somebody had already configured one is the dead end you find by walking into it, which is the
+argument that made this whole channel unconditional. The skill then puts the run **before** the
+checks and claims nothing until the operator picks one — they opened it to look at the thing, and a
+claim taken on their behalf locks a check away from the fleet while they do.
 
 ## Deferral and waiving
 
@@ -790,7 +838,9 @@ the pipeline, who may report, what a hand-back does not write, and what withdraw
 a hand-back does, that a settled row is never written over, and that the results settle it), and
 `test/validationDesktop.test.ts` (the desktop channel: that no fleet tool is reachable from it, the
 credential's mode, that a second harness cannot take the stable socket, one claim at a time, the
-three ways a claim is released, and that a reading is attributed to `desktop`).
+three ways a claim is released, that a reading is attributed to `desktop`, and `local_run` — the
+rendered instruction, an operator's override reaching the session, the caution surviving that
+override, and an answer for a goal with no plan where `validation_read` refuses).
 
 The verdict tests assert **both** directions, `planApproval.test.ts`'s discipline: a verdict that
 counts `deferred` as clear and one that does not are one edit apart, and only one of them is honest.

@@ -2,11 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { desktopPrompt } from '../web/src/components/ValidationSection.js';
-import { desktopDeepLink, discussPrompt } from '../web/src/cockpit/desktopLink.js';
+import { desktopDeepLink, discussPrompt, localRunPrompt } from '../web/src/cockpit/desktopLink.js';
 
 /**
- * The cockpit's two affordances for the desktop channel: run a check there, and
- * discuss a plan there.
+ * The cockpit's three affordances for the desktop channel: run a check there,
+ * discuss a plan there, and get the application up there.
  *
  * Both hand off work the cockpit cannot start itself — a browser has no reach into
  * the socket the operator's own Claude Code connects over. So the surfaces' whole
@@ -17,6 +17,7 @@ import { desktopDeepLink, discussPrompt } from '../web/src/cockpit/desktopLink.j
  */
 
 const SOURCE = readFileSync(new URL('../web/src/components/ValidationSection.tsx', import.meta.url), 'utf8');
+const GOAL_PAGE = readFileSync(new URL('../web/src/console/GoalPage.tsx', import.meta.url), 'utf8');
 
 test('the prompt addresses a check by its goal and its stored letter', () => {
   assert.equal(desktopPrompt(249, 'A'), '/lubbdubb 249:A');
@@ -32,6 +33,26 @@ test('a discussion addresses a plan by its goal number', () => {
   // resolve a plan by the goal it hangs off. The number is also the only half of
   // the pair the operator is looking at.
   assert.equal(discussPrompt(284), '/lubbdubb discuss 284');
+});
+
+test('running it locally addresses the goal by number, and is offered on every goal', () => {
+  // The goal's number for the other two prompts' reason: it is what `local_run`
+  // resolves the parts and their branches by, and what the operator is looking at.
+  assert.equal(localRunPrompt(284), '/lubbdubb run 284');
+
+  // Drawn with no condition in front of it. The `local-run` prompt always has a
+  // body — the default says "work it out from the repository" — so there is no
+  // configured state a button could fall out of step with, and a control offered
+  // only where somebody had already configured one would be a dead end found by
+  // walking into it. That argument is why the whole channel is unconditional.
+  assert.ok(
+    GOAL_PAGE.includes('desktopDeepLink(desktopFolder, localRunPrompt(issue.number))'),
+    'the goal page links to the run prompt on its own number',
+  );
+  assert.ok(
+    /title=\{`Opens your own Claude Code with "\$\{localRunPrompt\(issue\.number\)\}"/.test(GOAL_PAGE),
+    'and names the command in the title, for the machine with no client to answer the link',
+  );
 });
 
 test('the deep link opens Claude Code on the goal’s own checkout', () => {
