@@ -748,6 +748,15 @@ changes five readings:
 - **`POST /api/issues/:number/dismiss-run` refuses without a note**, kept on the run as
   `dismissNote`. The sharper of the two, because this is the button that ends the harness's run at a
   goal and it is one-way.
+- **Both controls ask for the sentence before they post**, which is what makes the two refusals above
+  something other than a control that does nothing. Neither used to: Done sent no note and had
+  nowhere to type one, End the run sent none either, and the 400 reached a `catch` that dropped it
+  and an unhandled rejection — so a rule stated as "it costs a sentence" arrived as a button that
+  swallowed clicks. The bench's Done reads `Done…` and opens the same box Decline uses; End the run
+  opens `EndRunModal`. Both mirror the route in its **condition only** — `close_out` on a goal whose
+  `validation` is `flagged` — and never in its counts, which stay the server's fold; and the route
+  stays the authority, so a plan flagged between the draw and the click refuses there and the refusal
+  is drawn where it lands. → [17](17-cockpit.md#saying-the-sentence-a-refusal-asks-for)
 - **The bench row** that says the goal is ready to be validated lists the same outstanding checks,
   from the moment of the delivery rather than at the point of closing —
   [above](#saying-so-on-the-bench).
@@ -864,7 +873,10 @@ should not be the one reading that goes nowhere.
 `test/validation.test.ts` (the schema's refusals, letters, what an amendment may do to a check
 somebody has run, and the resource ask: that it waits for the delivery, that a replan which stops
 needing the resource withdraws it, and that a withdrawal never overwrites the operator's own answer), `test/validationFlag.test.ts` (the verdict, the close-out obligation, the two
-notes, and that a flagged goal still blocks nothing), `test/validationAmend.test.ts` (the
+notes, and that a flagged goal still blocks nothing), `test/validationNote.test.ts` (the cockpit's
+half of those two notes: that both controls ask for the sentence on a flagged goal and neither does
+on a clear one, that the note reaches each route as the route reads it, and that a refusal arrives at
+the caller in the server's own words), `test/validationAmend.test.ts` (the
 tool: who may amend, that an amendment withdraws nothing by omission, what a rewording costs, and
 the band), `test/validationFleet.test.ts` (the hand-over: the rule's gates and its position in
 the pipeline, who may report, what a hand-back does not write, and what withdraws a hand-over),

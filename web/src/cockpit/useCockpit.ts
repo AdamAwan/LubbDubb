@@ -235,7 +235,7 @@ export function useCockpit(): CockpitStatus {
       proposeLesson: (text, originRef) => then(api.proposeLesson(text, originRef)),
       promoteLesson: (id) => then(api.promoteLesson(id)),
       retireLesson: (id) => then(api.retireLesson(id)),
-      completeHumanTask: (id) => then(api.completeHumanTask(id)),
+      completeHumanTask: (id, note) => then(api.completeHumanTask(id, note)),
       declineHumanTask: (id, note) => then(api.declineHumanTask(id, note)),
       dismissHumanTask: (id) => then(api.dismissHumanTask(id)),
 
@@ -264,7 +264,7 @@ export function useCockpit(): CockpitStatus {
         await refresh();
         return filed;
       },
-      dismissRun: (n) => then(api.dismissRun(n)),
+      dismissRun: (n, note) => then(api.dismissRun(n, note)),
 
       // A read, so no refetch: the work graph rides its own route precisely
       // because it must not be pulled along by the state poll.

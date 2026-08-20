@@ -346,7 +346,11 @@ const realApi = {
   // End the harness's run at a goal (issues #203, #234). A run is retained so its
   // report stays reachable; this is the one thing that ends it, it
   // persists across a restart, and it stops the dispatcher acting on the goal.
-  dismissRun: (issueNumber: number) => post<{ ok: true }>(`/api/issues/${issueNumber}/dismiss-run`),
+  // The note rides along for the same reason it does on a close-out: this refuses
+  // without one while the goal's validation plan is flagged, and it is kept on the
+  // run, so what the goal owed and what was said about it survive together.
+  dismissRun: (issueNumber: number, note?: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/dismiss-run`, note === undefined ? undefined : { note }),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
   // A plan's revisions and the last amendment as a diff, fetched when the sheet is
   // opened. Not polled, for the retrospective's reason: every revision carries a
@@ -438,7 +442,11 @@ const realApi = {
   // Work only a person can do. `done` settles it and concludes any plan step it
   // backs, which releases whatever was waiting; `decline` settles it the other way
   // and deliberately does not conclude the step, so nothing downstream starts.
-  completeHumanTask: (id: string) => post<{ ok: true }>(`/api/human-tasks/${id}/done`),
+  // `note` where the route asks for one: a `close_out` on a goal whose validation
+  // is flagged is refused without it. Omitted rather than sent empty — the route
+  // reads absence, and `''` would be the same absence spelled a second way.
+  completeHumanTask: (id: string, note?: string) =>
+    post<{ ok: true }>(`/api/human-tasks/${id}/done`, note === undefined ? undefined : { note }),
   declineHumanTask: (id: string, note: string) => post<{ ok: true }>(`/api/human-tasks/${id}/decline`, { note }),
   // Off the bench. Settled rows only — it says nothing about the work, so it is
   // not a third verdict and settles nothing.

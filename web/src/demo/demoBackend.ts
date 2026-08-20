@@ -532,8 +532,12 @@ class DemoServer {
    * End a run — the demo mirror of the one way a goal leaves the console (#203,
    * #234). Marks the run dismissed wherever it rides (a still-present issue, or a
    * forgotten-issue entry in `retainedRuns`), which is what the console filters on.
+   *
+   * The note the route requires while the goal's validation plan is flagged goes
+   * into the decision line, which is the demo's only record of what happened —
+   * dropping it would show a run ended with no account of what was said.
    */
-  async dismissRun(issueNumber: number): Promise<{ ok: true }> {
+  async dismissRun(issueNumber: number, note?: string): Promise<{ ok: true }> {
     const present = this.state.world.issues.find((i) => i.number === issueNumber);
     const forgotten = (this.state.retainedRuns ?? []).find((i) => i.number === issueNumber);
     const target = present ?? forgotten;
@@ -542,7 +546,7 @@ class DemoServer {
       this.addDecision(
         'no_op',
         'executed',
-        `issue #${issueNumber} run dismissed`,
+        `issue #${issueNumber} run dismissed${note === undefined ? '' : ` — ${note}`}`,
         undefined,
         undefined,
         undefined,
@@ -903,9 +907,14 @@ class DemoServer {
     return { ok: true };
   }
 
-  /** Settle a human task (demo mirror of POST /api/human-tasks/:id/done). */
-  async completeHumanTask(id: string): Promise<{ ok: true }> {
-    return this.settleHumanTask(id, 'done', null);
+  /**
+   * Settle a human task (demo mirror of POST /api/human-tasks/:id/done). The note
+   * is what the route requires on a close-out whose goal's validation is flagged,
+   * and it is kept for the same reason the route keeps it: the settled row is the
+   * only account of what was decided about the checks nobody ran.
+   */
+  async completeHumanTask(id: string, note?: string): Promise<{ ok: true }> {
+    return this.settleHumanTask(id, 'done', note ?? null);
   }
 
   /** Decline one, with the note the route requires (POST /api/human-tasks/:id/decline). */
@@ -2589,7 +2598,7 @@ export const demoApi = {
   releaseEnvironmentGate: (issueNumber: number, released: boolean, note?: string) =>
     getServer().releaseEnvironmentGate(issueNumber, released, note),
   withdrawInstruction: (issueNumber: number, id: string) => getServer().withdrawInstruction(issueNumber, id),
-  dismissRun: (issueNumber: number) => getServer().dismissRun(issueNumber),
+  dismissRun: (issueNumber: number, note?: string) => getServer().dismissRun(issueNumber, note),
   replan: (planId: string) => getServer().replan(planId),
   // The demo's plans have one revision each — no replan has landed in a browser
   // session — so the history is that single revision and a null diff, which is
@@ -2623,7 +2632,7 @@ export const demoApi = {
   proposeLesson: (text: string, originRef: string | null) => getServer().proposeLesson(text, originRef),
   promoteLesson: (id: string) => getServer().promoteLesson(id),
   retireLesson: (id: string) => getServer().retireLesson(id),
-  completeHumanTask: (id: string) => getServer().completeHumanTask(id),
+  completeHumanTask: (id: string, note?: string) => getServer().completeHumanTask(id, note),
   declineHumanTask: (id: string, note: string) => getServer().declineHumanTask(id, note),
   dismissHumanTask: (id: string) => getServer().dismissHumanTask(id),
   acceptProposal: (id: string, note?: string) => getServer().acceptProposal(id, note),
