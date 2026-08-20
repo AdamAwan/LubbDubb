@@ -573,6 +573,30 @@ CREATE TABLE IF NOT EXISTS branch_reaps (
   at        TEXT NOT NULL
 );
 
+-- The commit each of a goal's pull requests landed as (see EnvironmentStore). Stored
+-- because it cannot be recovered: a squash merge leaves the branch with no ancestry
+-- link to its base, and the provider only offers the merge SHA for as long as the PR
+-- stays inside the closed-PR window. Keyed on the pull request, for branch_reaps'
+-- reason -- a branch name is reusable, and a goal can land more than once.
+CREATE TABLE IF NOT EXISTS goal_landings (
+  pr_number   INTEGER PRIMARY KEY,
+  goal_ref    TEXT NOT NULL,      -- issue:<n>
+  sha         TEXT NOT NULL,
+  recorded_at TEXT NOT NULL
+);
+
+-- What an environment probe said about one landed commit (see EnvironmentStore).
+-- Stored so the cost of the feature is not a process spawn per landing per
+-- environment per pulse: a reached verdict is never re-asked, and the rest are.
+CREATE TABLE IF NOT EXISTS environment_reach (
+  sha         TEXT NOT NULL,
+  environment TEXT NOT NULL,
+  status      TEXT NOT NULL,      -- reached | absent | unknown
+  detail      TEXT,               -- why, for an unknown
+  observed_at TEXT NOT NULL,
+  PRIMARY KEY (sha, environment)
+);
+
 -- Pull requests the harness has already tagged with the watch label because it
 -- opened them (see PrWatchSeedStore). Stored because the live labels cannot answer
 -- it: a pull request an operator has un-watched looks exactly like one never

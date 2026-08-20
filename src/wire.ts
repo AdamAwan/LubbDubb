@@ -73,6 +73,7 @@ import type {
   Escalation,
   Finding,
   GoalAssayVerdict,
+  GoalEnvironmentReach,
   HumanTask,
   IssueConclusionVerdict,
   IssueInstruction,
@@ -629,6 +630,14 @@ export interface CockpitState {
    */
   stacks: Stack[];
   /**
+   * Where each goal's landed work has got to, one entry per goal that has landed
+   * anything or has a merge nothing could attribute. Empty whenever no environment
+   * is configured, which is what the cockpit reads to draw no environment row at
+   * all — rather than a row of question marks on a deployment that never asked for
+   * one. → `docs/spec/24-environments.md#the-lens`
+   */
+  environmentReach: GoalReachView[];
+  /**
    * One entry per chain in {@link stacks}: whether "land the stack" may be
    * offered, and the operator's standing intent over it if there is one.
    *
@@ -774,6 +783,22 @@ export interface CockpitState {
  * shipping the forest on every poll would be the wrong shape: the roots are read
  * once on mount and a subtree when one is opened.
  */
+/**
+ * One goal's standing across every configured environment, in the order the
+ * operator declared them.
+ *
+ * Keyed on the goal ref rather than joined onto {@link Issue}, because the goals
+ * with landings and the goals in the world are different sets: work lands, its
+ * ticket closes, and the tracker stops listing it long before the release carrying
+ * it reaches production. Folded into the issue, a goal's environment row would
+ * vanish at exactly the point somebody wants to know where it went.
+ */
+export interface GoalReachView {
+  /** The goal, as `issue:<n>`. */
+  goalRef: string;
+  environments: GoalEnvironmentReach[];
+}
+
 export interface WorkRootsPayload {
   roots: WorkNode[];
   unrecorded: UnrecordedWork[];
@@ -1145,6 +1170,8 @@ export type {
   ErrorLogEntry,
   Escalation,
   Finding,
+  GoalEnvironmentReach,
+  GoalReachStatus,
   HumanTask,
   IssueRelative,
   IssueSpend,

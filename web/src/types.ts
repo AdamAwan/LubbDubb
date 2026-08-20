@@ -39,6 +39,8 @@ export type {
   FileOverlap,
   FilingTargetProbe,
   Finding,
+  GoalEnvironmentReach,
+  GoalReachStatus,
   HumanTask,
   Issue,
   IssueFiled,

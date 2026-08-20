@@ -96,6 +96,23 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How far back a provider looks for pull requests that have left the open set.',
   },
   {
+    path: 'environments',
+    type: 'json',
+    // `fileOnly` for `whitelistedApprovals`' reason and not because the shape is
+    // awkward: each entry is a shell command the harness runs on a schedule, which
+    // is a thing to write deliberately in a file rather than to fill in beside
+    // twenty other rows.
+    access: 'fileOnly',
+    why: 'Where landed work travels, and the command that says whether a commit has got there.',
+  },
+  {
+    path: 'environmentProbeIntervalMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How often an unconfirmed landing is asked about again — and the precision of every “arrived at”.',
+  },
+  {
     path: 'upNextOverrideTtlMs',
     type: 'number',
     ms: true,

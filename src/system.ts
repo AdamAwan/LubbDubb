@@ -45,6 +45,8 @@ import { ValidationAskDesk } from './validation/askDesk.js';
 import { ValidationReadyDesk } from './validation/readyDesk.js';
 import { SpendBurnDesk } from './spendBurnDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
+import { EnvironmentDesk } from './environments/environmentDesk.js';
+import { CommandEnvironmentProber, type EnvironmentProber } from './environments/prober.js';
 import { PrWatchDesk } from './prWatchDesk.js';
 import { PrWorkItemDesk } from './prWorkItemDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
@@ -258,6 +260,13 @@ interface BuildOptions {
    * dispatch is rejected instead.
    */
   worktrees?: Worktrees;
+  /**
+   * Override how an environment is asked whether it holds a commit (tests inject
+   * `FakeEnvironmentProber`). Without it the real prober runs the operator's
+   * configured shell command — which a test has none of, and which would spawn a
+   * shell on the developer's machine if it did.
+   */
+  environmentProber?: EnvironmentProber;
   /** Override where recorded errors are mirrored (tests silence the default stderr echo). */
   errorMirror?: (entry: ErrorLogEntry) => void;
   /**
@@ -764,6 +773,20 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
+  // Where a goal's landed work has got to. The prober is the operator's own
+  // command, so the desk is built whether or not any environment is configured:
+  // the attribution half has to run regardless, because a merge SHA is only on
+  // offer while its pull request is inside `closedPrWindowMs` and is unrecoverable
+  // afterwards — a deployment that configures its first environment later still
+  // wants today's landings on record when it does.
+  const environments = new EnvironmentDesk({
+    store,
+    environments: config.environments,
+    prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
+    probeIntervalMs: config.environmentProbeIntervalMs,
+    errors,
+  });
+
   // The step after the launch, and the one station on the floor a person staffs:
   // a delivered goal whose ticket is still open owes a close. Store-only — it
   // files and settles a `human_tasks` row and touches no sink, because closing
@@ -832,6 +855,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     validationReady,
     burn,
     branchReaps,
+    environments,
     prWatch,
     prWorkItems,
     schedules,

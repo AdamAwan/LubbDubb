@@ -246,6 +246,13 @@ export interface AzClosedPull {
   merged: boolean;
   /** closedDate — when it left the active set. */
   closedAt: string;
+  /**
+   * `lastMergeCommit.commitId` — on a *completed* PR this is the commit Azure
+   * created on the target branch, and the only report of it anything gets. Null on
+   * an abandoned PR, whose `lastMergeCommit` is the trial merge and belongs to no
+   * branch.
+   */
+  mergeCommitSha: string | null;
 }
 
 export interface AzThread {

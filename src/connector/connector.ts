@@ -26,7 +26,7 @@ export type InjectableEvent =
   | { kind: 'pr_mergeable'; prNumber: number; mergeable?: boolean; mergeableState?: MergeableState }
   // A PR leaving the open set. `merged` distinguishes a merge from an abandonment —
   // the distinction a real provider now reports and the fake has to be able to model.
-  | { kind: 'pr_closed'; prNumber: number; merged?: boolean }
+  | { kind: 'pr_closed'; prNumber: number; merged?: boolean; mergeCommitSha?: string }
   // GitHub-issue signals.
   | { kind: 'new_issue'; number: number; title: string; body?: string; labels?: string[] }
   | { kind: 'issue_state'; number: number; state: 'open' | 'closed' }

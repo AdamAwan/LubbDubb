@@ -12,6 +12,7 @@ import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/
 import { validateAgentModels, type AgentModels } from './agents/modelPolicy.js';
 import { DEFAULT_FILING_TYPES } from './ticketTypes.js';
 import type { PetPolicy } from './pets/keeper.js';
+import { validateEnvironments, type EnvironmentConfig } from './environments/policy.js';
 
 /**
  * Central configuration. Everything the operator can tune lives here.
@@ -265,6 +266,30 @@ export interface Config {
    * every consumer falls back to the older "absence means merged" reading.
    */
   closedPrWindowMs: number;
+  /**
+   * The environments a goal's landed work travels to after it merges, and how to
+   * ask each one whether it has a given commit.
+   *
+   * **Empty by default, and empty turns the whole feature off** — no probes run and
+   * the cockpit draws no environment row at all, rather than a row of question marks
+   * on every deployment that never configured one.
+   *
+   * `fileOnly` in {@link CONFIG_FIELDS}, for `whitelistedApprovals`' reason: each
+   * entry is a shell command the harness runs on a schedule, which is a thing to
+   * write deliberately in a file rather than to fill in beside twenty other rows.
+   * → `docs/spec/24-environments.md#configuring-an-environment`
+   */
+  environments: EnvironmentConfig[];
+  /**
+   * How often a landing that has not been confirmed in an environment is asked
+   * about again. Every probe is a process spawn, so this is what keeps the cost of
+   * the feature off the heartbeat; a confirmed landing is never re-asked at all.
+   *
+   * It is also the precision of every "arrived at" the cockpit shows, which is why
+   * it defaults to five minutes rather than something larger: an interval nobody
+   * would call fresh makes a timestamp nobody should quote.
+   */
+  environmentProbeIntervalMs: number;
   /**
    * Per-check CI policy: what the harness does about *which* check went red
    * (`src/ci/ciPolicy.ts`). Rules are ordered and matched by glob against the
@@ -629,6 +654,9 @@ const DEFAULTS: Config = {
   validation: DEFAULT_VALIDATION,
   localRun: DEFAULT_LOCAL_RUN,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
+  // Empty is the off switch, not an empty list of something switched on.
+  environments: [],
+  environmentProbeIntervalMs: 5 * 60 * 1000,
   ci: { checks: [] },
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
   agentMode: 'stream',
@@ -969,6 +997,14 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // minimum of no runs, leaves a watch that is on, files constantly and teaches
   // the operator to stop reading it.
   validateBurnPolicy(merged.spendBurn);
+
+  // A list, so it replaces rather than merges, for `ci.checks`' reason. The
+  // fallback is not defensive: an override naming the key with nothing under it
+  // means "no environments", and `validateEnvironments` may not be handed undefined.
+  merged.environments = overrides.environments ?? DEFAULTS.environments;
+  // A nameless entry, a duplicate name or an empty command each turn the feature
+  // into a confident wrong answer rather than an error.
+  validateEnvironments(merged.environments);
 
   // The one configuration that is never what anyone means. Turning auth off is a
   // supported local choice (it is how the test suite runs); binding a routable

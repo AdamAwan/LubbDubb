@@ -2,7 +2,7 @@ import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView, PartGroup } from '../view/goalPage.js';
-import type { Issue, OpenPullRequest, PlanPart, PullRequest } from '../types.js';
+import type { GoalReachStatus, Issue, OpenPullRequest, PlanPart, PullRequest } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
@@ -74,6 +74,7 @@ export function GoalPage({
           <Instructions issue={page.issue} actions={actions} />
           <Ticket issue={page.issue} refUrls={view.state.refUrls} />
           <PullRequests page={page} view={view} />
+          <Environments page={page} />
         </div>
         <div className="cn-stack">
           <OnThisGoal page={page} view={view} actions={actions} />
@@ -675,6 +676,66 @@ function PullRequests({ page, view }: { page: GoalPageView; view: CockpitView })
     </section>
   );
 }
+
+/**
+ * Where this goal's landed work has got to, one chip per configured environment.
+ *
+ * Drawn under the pull requests because it is the sentence after them: these
+ * merged, and this is where they went. Absent entirely when no environment is
+ * configured — a row of question marks on every deployment that never set one up
+ * would be a feature announcing itself as broken.
+ *
+ * The counts are on every chip that is not whole, including `absent`, because
+ * "0/3" and "2/3" are the difference between work that has not started moving and
+ * work that is halfway there — and the word alone says neither.
+ */
+function Environments({ page }: { page: GoalPageView }): JSX.Element | null {
+  if (page.environments.length === 0) return null;
+  return (
+    <section className="cn-card">
+      <h3>Environments</h3>
+      <div className="cn-rows">
+        {page.environments.map((env) => (
+          <div className="cn-row" key={env.environment}>
+            <span className="cn-grow">
+              <b className="cn-name">{env.environment}</b>
+              <span className="cn-sub">{REACH_SAID[env.status]}</span>
+            </span>
+            {env.status !== 'reached' && (
+              <i className="cn-n">
+                {env.landed}/{env.total}
+              </i>
+            )}
+            <i className={`cn-chip ${REACH_TONE[env.status]}`}>{env.status}</i>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * No new colours: every tone here is one the cockpit already draws, so the strip
+ * follows a theme switch without the token layer having to learn about it.
+ *
+ * `partial` takes the attention tone rather than a success one deliberately — half
+ * a feature in production is the state on this panel most likely to want somebody,
+ * and drawing it green is the mistake the whole tri-state exists to avoid.
+ */
+const REACH_TONE: Record<GoalReachStatus, string> = {
+  reached: 'cn-ok',
+  partial: 'cn-you',
+  unknown: 'cn-stall',
+  absent: '',
+};
+
+/** What each verdict means, in the words an operator would use asking about it. */
+const REACH_SAID: Record<GoalReachStatus, string> = {
+  reached: 'all of this goal’s merges are here',
+  partial: 'some of this goal’s merges are here',
+  absent: 'none of this goal’s merges are here yet',
+  unknown: 'nothing here could be confirmed — check the probe, not the deploy',
+};
 
 const COURT_TONE: Record<string, string> = {
   you: 'cn-you',

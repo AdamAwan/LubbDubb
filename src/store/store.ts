@@ -24,6 +24,7 @@ import { TranscriptStore } from './transcripts.js';
 import { EscalationStore } from './escalations.js';
 import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
+import { EnvironmentStore } from './environments.js';
 import { LocalRunStore } from './localRuns.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
@@ -51,6 +52,9 @@ import type {
   AgentFlagInput,
   AgentUsage,
   Decision,
+  EnvironmentReachStatus,
+  EnvironmentReading,
+  GoalLanding,
   IssueAssay,
   ErrorLogEntry,
   ErrorLogInput,
@@ -155,6 +159,7 @@ export class Store {
   private readonly escalations: EscalationStore;
   private readonly landings: StackLandingStore;
   private readonly branchReaps: BranchReapStore;
+  private readonly environments: EnvironmentStore;
   private readonly localRuns: LocalRunStore;
   private readonly prWatchSeeds: PrWatchSeedStore;
   private readonly workItemLinks: WorkItemLinkStore;
@@ -238,6 +243,7 @@ export class Store {
     this.escalations = new EscalationStore(ctx);
     this.landings = new StackLandingStore(ctx);
     this.branchReaps = new BranchReapStore(ctx);
+    this.environments = new EnvironmentStore(ctx);
     this.localRuns = new LocalRunStore(ctx);
     this.prWatchSeeds = new PrWatchSeedStore(ctx);
     this.workItemLinks = new WorkItemLinkStore(ctx);
@@ -836,6 +842,29 @@ export class Store {
   }
   reapedPrs(): ReadonlySet<number> {
     return this.branchReaps.reapedPrs();
+  }
+
+  // -- Environments (where a goal's landed work has got to) -----------------
+
+  recordGoalLanding(input: { prNumber: number; goalRef: string; sha: string }): void {
+    this.environments.recordGoalLanding(input);
+  }
+  listGoalLandings(): GoalLanding[] {
+    return this.environments.listGoalLandings();
+  }
+  landedPrs(): ReadonlySet<number> {
+    return this.environments.landedPrs();
+  }
+  recordEnvironmentReach(input: {
+    sha: string;
+    environment: string;
+    status: EnvironmentReachStatus;
+    detail: string | null;
+  }): void {
+    this.environments.recordEnvironmentReach(input);
+  }
+  listEnvironmentReach(): EnvironmentReading[] {
+    return this.environments.listEnvironmentReach();
   }
 
   // -- The local run (the machine's one dev environment) --------------------
