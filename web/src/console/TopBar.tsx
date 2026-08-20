@@ -31,11 +31,13 @@ const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets'];
  * point is the number of clicks between noticing something and having written it
  * down (#404).
  *
- * Since #413 it is the **fallback** rather than the only path: a deployment that can
- * file gets a compose modal that creates the issue directly, in the tracker the
- * fleet is pointed at. The constant survives because the modal's every refusal ends
- * here, and because the one state this control most has to work in — a dropped
- * socket — is the one the harness cannot be posted to.
+ * Since #413 it is the **fallback** rather than the only path: a connected cockpit
+ * gets a compose modal that creates the issue directly. Since #449 the modal files
+ * *here* too, through the operator's own `gh` login, so the two faces of this
+ * control are one destination reached two ways rather than two destinations. The
+ * constant survives because the modal's every refusal ends here, and because the one
+ * state this control most has to work in — a dropped socket — is the one the harness
+ * cannot be posted to.
  */
 const NEW_ISSUE_URL = 'https://github.com/AdamAwan/LubbDubb/issues/new';
 
@@ -129,14 +131,16 @@ function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }):
 function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const [composing, setComposing] = useState(false);
 
-  // Two cuts, and both are made before a round trip is spent. `canFileTickets` is
-  // the static half — it is false wherever no real tracker is configured, and it
-  // already hides "File ticket" on a finding — and `connected` is the half that
-  // matters most here: a modal that posts to this harness's own server has nothing
-  // to post to with the socket down, which is exactly when an operator has
-  // something to report. Either one failing leaves the link that was always here.
-  // The live half of the gate is the probe, and it runs inside the modal.
-  const canCompose = view.connected && view.state.config.canFileTickets;
+  // One cut, made before a round trip is spent, and it is deliberately **not**
+  // `config.canFileTickets` any more (issue #449). That flag says whether the
+  // tracker *the fleet is pointed at* accepts new items, which since #449 has
+  // nothing to do with this control: the report goes to LubbDubb's own repository
+  // through the operator's `gh` login, so an Azure deployment and a read-only
+  // tracker can both compose one. What is left is the half that always mattered
+  // most — a modal that posts to this harness's own server has nothing to post to
+  // with the socket down, which is exactly when an operator has something to
+  // report. The live half of the gate is the probe, and it runs inside the modal.
+  const canCompose = view.connected;
 
   return (
     <div className="cn-ident">
@@ -150,7 +154,7 @@ function Ident({ view, actions }: { view: CockpitView; actions: CockpitActions }
           <button
             type="button"
             className="cn-issue-btn"
-            title="Write an issue and file it into the tracker, without leaving the cockpit"
+            title="Write an issue about LubbDubb and file it on its own tracker, without leaving the cockpit"
             onClick={() => setComposing(true)}
           >
             Raise an issue

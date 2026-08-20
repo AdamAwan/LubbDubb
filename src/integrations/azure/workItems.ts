@@ -1,6 +1,5 @@
 import type { ErrorRecorder } from '../../errorLog.js';
 import type {
-  FilingTarget,
   IssueCommentInput,
   IssueCreateInput,
   IssueLabelInput,
@@ -301,24 +300,6 @@ export class AzureDevOpsWorkItemsIntegration
       }
     }
     return { ok: true, ref };
-  }
-
-  /**
-   * Where a work item would land and as whom (issue #413) — GitHub's probe in
-   * Azure's vocabulary.
-   *
-   * `viewerUniqueName()` is the round trip that a dead PAT (or an `az` login that
-   * has lapsed, since auth here resolves lazily) fails on, and the project rather
-   * than the repository is the destination: work items belong to the project, and
-   * naming the repo would point an operator at the wrong half of the target.
-   */
-  async describeFilingTarget(): Promise<FilingTarget> {
-    const identity = await this.opts.api.viewerUniqueName();
-    const { organization, project } = this.opts;
-    return {
-      target: organization && project ? `${organization}/${project}` : 'an unnamed Azure DevOps project',
-      identity,
-    };
   }
 
   /** The outbound side of the watch/ignore toggle: add/remove a `System.Tags` entry. */

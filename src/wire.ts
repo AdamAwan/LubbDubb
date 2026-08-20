@@ -836,8 +836,8 @@ export interface TicketRow {
 }
 
 /**
- * `GET /api/issues/filing-target` — whether the harness can file an issue right
- * now, where it would land, and as whom (issue #413).
+ * `GET /api/issues/filing-target` — whether a report about LubbDubb can be filed
+ * right now, where it would land, and as whom (issues #413, #449).
  *
  * A **union rather than four independent fields**, because the two readings are
  * not the same row with blanks in it: an available target always names itself and
@@ -845,39 +845,52 @@ export interface TicketRow {
  * `{available: true, target: null}` would leave the compose modal free to draw a
  * head naming nowhere.
  *
- * Never on `/api/state`: it costs a provider round trip, and the only reader is a
- * modal that opens rarely. The static half of the gate — whether a real tracker is
- * configured at all — is already on the snapshot as
- * {@link CockpitConfig.canFileTickets}, and is the cheaper cut to make first.
+ * Never on `/api/state`: it costs a round trip to the `gh` CLI, and the only reader
+ * is a modal that opens rarely.
  *
- * `available: false` is an ordinary **200**, not a 5xx: "the token is dead" is an
- * answer to the question that was asked, and a status code would make it look like
- * the probe itself broke.
+ * `available: false` is an ordinary **200**, not a 5xx: "the CLI is logged out" is
+ * an answer to the question that was asked, and a status code would make it look
+ * like the probe itself broke.
  */
 export type FilingTargetProbe =
-  | ({ available: true; reason: null } & FilingTarget)
+  | ({
+      available: true;
+      reason: null;
+      /**
+       * Whether offering the watch label would mean anything — true only where this
+       * fleet works LubbDubb's own repo (issue #449).
+       *
+       * The label is what makes a fleet pick an issue up, and a fleet only sweeps
+       * the tracker it is configured for. On every other deployment the report lands
+       * somewhere its own agents never look, so the checkbox is not drawn rather
+       * than drawn and inert.
+       */
+      watchable: boolean;
+    } & FilingTarget)
   | {
       available: false;
       target: null;
       identity: null;
-      /** Plain prose for the modal to show — the provider's own message, or the gate that refused. */
+      /** Plain prose for the modal to show — the CLI's own message, or the gate that refused. */
       reason: string;
     };
 
 /**
- * `POST /api/issues` — what the harness created, in the harness's own vocabulary
- * (issue #413).
+ * `POST /api/issues` — the report that was just filed on LubbDubb's own tracker
+ * (issues #413, #449).
  *
- * `url` is resolved rather than composed: the connector knows the repository
- * identity and the cockpit does not, and it is what lets the modal's success state
- * be a link to the thing that was just filed rather than a number to go and find.
- * Null where no provider can resolve a ref — the fake world has no web address.
+ * A **URL and not a `ref`**, unlike every other filing on this wire. `issue:314`
+ * is the harness's vocabulary for an item in the tracker *the fleet is pointed at*,
+ * and the cockpit resolves it against that tracker — so a ref here would draw a
+ * link to whichever issue of the customer's repo happened to share the number. The
+ * one destination the cockpit cannot name from config is the one this route files
+ * into, so the route hands over the address itself.
  */
 export interface IssueFiled {
   ok: true;
-  /** The new item as `issue:<n>` — what a filing row stores and `link_ticket` speaks. */
-  ref: string;
-  url: string | null;
+  /** The new issue's number in LubbDubb's repo — what the modal shows as `#449`. */
+  number: number;
+  url: string;
 }
 
 /**

@@ -1190,43 +1190,48 @@ The strip carries the ident, the nav, the pulse, the fleet cap, and nine reading
 a plain label-and-number face. None reaches `api.js`: every one is a method on `CockpitActions`, and
 the fleet cap is the shared `FleetControl`, which is already on that seam.
 
-**The ident carries the one way off this bar to a tracker**, and it has two faces. Where the harness can
-file, `Raise an issue` is a button opening a compose modal and the issue is created directly; where it
-cannot, it is `↗ Raise an issue`, the external link it has always been. It sits in the ident rather than
-among the readings for the reason the readings are a group at all — each is a gauge on the fleet or on
-this build, read left to right as one sentence about what is happening, and "raise an issue" answers
-nothing in it. `.cn-issue` sizes it out of the wordmark's weight through a console-owned wrapper, and
-`.cn-issue-btn` gives the button the link's colours through the token layer, since `console.css` styling
-`.ext-ref` directly is what this stylesheet is tested not to do.
+**The ident carries the one way off this bar to a tracker**, and it has two faces onto _one_
+destination. Connected, `Raise an issue` is a button opening a compose modal and the issue is created
+directly; offline it is `↗ Raise an issue`, the external link it has always been. It sits in the ident
+rather than among the readings for the reason the readings are a group at all — each is a gauge on the
+fleet or on this build, read left to right as one sentence about what is happening, and "raise an issue"
+answers nothing in it. `.cn-issue` sizes it out of the wordmark's weight through a console-owned wrapper,
+and `.cn-issue-btn` gives the button the link's colours through the token layer, since `console.css`
+styling `.ext-ref` directly is what this stylesheet is tested not to do.
 
-**The fallback URL is a constant in `TopBar.tsx`** — not `github.owner`/`github.repo`, which name the
-repo the fleet _works on_ and are LubbDubb's only while it is dogfooding itself. A fault in the cockpit
-belongs on the cockpit's tracker whatever repo the deployment is pointed at, so a fork or a customer's
-repo is sent to the same place; nothing on the wire has to carry it. It lands on the form rather than the
-repo or the issue list because the feature is the number of clicks between noticing something and having
-written it down.
+**Both faces go to LubbDubb's own repository, and neither follows `github.owner`/`github.repo`** (issue
+#449). Those name the repo the fleet _works on_, which is LubbDubb's only while it is dogfooding itself.
+A fault in the cockpit belongs on the cockpit's tracker whatever repo the deployment is pointed at — the
+bug #449 reported was this control filing a cockpit complaint into a customer's backlog. The fallback URL
+is a constant in `TopBar.tsx` and lands on the _form_ rather than the repo or the issue list, because the
+feature is the number of clicks between noticing something and having written it down; the modal reaches
+the same repository through `POST /api/issues`, which files with the operator's own `gh` login
+([15](15-integrations.md)).
 
-**The compose modal is gated three times, and every refusal lands on that link** (issue #413). Two cuts
-are made before the modal opens: `config.canFileTickets`, the static flag that is false wherever no real
-tracker is configured, and `view.connected` — a modal that posts to this harness's own server has nothing
-to post to with the socket down, which is precisely when an operator has something to report. Either one
-failing draws the external link instead. The third cut is live: the modal fires
+**The compose modal is gated twice, and every refusal lands on that link** (issues #413, #449). One cut
+is made before it opens, and it is `view.connected` alone: a modal that posts to this harness's own
+server has nothing to post to with the socket down, which is precisely when an operator has something to
+report. `config.canFileTickets` is deliberately _not_ in this gate any more — it says whether the tracker
+the fleet is pointed at accepts new items, which since #449 has nothing to do with where this goes, so an
+Azure deployment and a read-only tracker both compose. The second cut is live: the modal fires
 `GET /api/issues/filing-target` on mount and **holds the title and body disabled until it answers**,
-because the two destinations are not the same place. The link goes to LubbDubb's own tracker; the modal
-files into the tracker _the fleet is pointed at_, through `POST /api/issues` and the same
-`IssueCreateCapable` seam every other filing uses. So the head names the target and the authenticated
-identity — `octo/demo as octocat` — before a word can be typed, and a probe that answers `available:
-false`, or that cannot be reached at all, shows the provider's own reason and offers the external form.
-→ [15](15-integrations.md), [16](16-http-api.md)
+because the byline is not the harness's credential but whichever account `gh` is signed in as. So the
+head names the target and that identity — `AdamAwan/LubbDubb as octocat` — before a word can be typed,
+and a probe that answers `available: false`, or that cannot be reached at all, shows the CLI's own reason
+and offers the external form. → [15](15-integrations.md), [16](16-http-api.md)
 
 Three rules the modal keeps. The submit is dead until **both** fields are non-empty, trimmed, which is
 the rule `RaiseIssueBody` enforces rather than a second opinion about it. A failed post keeps the modal
 open with the text intact and quotes the server's refusal — losing what the operator just typed is the
 one outcome here worth writing code to prevent. And the watch label is an **opt-in checkbox, off by
-default**: it is what makes the fleet pick an issue up, so a checked box would mean agents are working a
-thought before its author has finished reading it back. The open state is local `useState` and not
-`Place`, for `GoalPage`'s reason — a half-typed report is not somewhere you can come back to, so it is
-not somewhere the URL should be able to send you.
+default, drawn only where the probe says `watchable`**: it is what makes the fleet pick an issue up, so a
+checked box would mean agents are working a thought before its author has finished reading it back — and
+on any deployment but the dogfooding one the report lands in a tracker these agents never sweep, where
+the box would be a promise nothing keeps. The done state is an external link to the new issue rather than
+a `<Ref>`, for the same reason the wire carries a URL: `issue:<n>` resolves against the fleet's tracker,
+which is the one place this did not go. The open state is local `useState` and not `Place`, for
+`GoalPage`'s reason — a half-typed report is not somewhere you can come back to, so it is not somewhere
+the URL should be able to send you.
 
 Four rules hold them:
 

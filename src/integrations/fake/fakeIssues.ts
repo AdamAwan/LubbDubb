@@ -1,7 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { InjectableEvent } from '../../connector/connector.js';
 import type {
-  FilingTarget,
   IssueCommentInput,
   IssueCreateInput,
   IssueLabelInput,
@@ -216,19 +215,6 @@ export class FakeIssuesIntegration
       });
     });
     return { ok: true, ref: `issue:${number}` };
-  }
-
-  /**
-   * The fake's answer to "where would this land, and as whom" (issue #413).
-   *
-   * It says the fake world out loud rather than borrowing a plausible repository
-   * name: the whole value of the probe is that an operator reads the destination
-   * before typing, and a fake that named `octo/demo` would be the one arrangement
-   * where that reading is a lie. `identity` is null because nobody is
-   * authenticated here — the honest answer, and the reason the field is nullable.
-   */
-  async describeFilingTarget(): Promise<FilingTarget> {
-    return { target: 'the fake tracker', identity: null };
   }
 
   /**

@@ -5,7 +5,6 @@ import type { InjectableEvent } from '../connector/connector.js';
 import type {
   BranchDeleteInput,
   CiCheckRequeueInput,
-  FilingTarget,
   IssueCommentInput,
   IssueCreateInput,
   IssueLabelInput,
@@ -308,21 +307,6 @@ export function isWorkItemLinkCapable(x: Integration): x is Integration & WorkIt
  */
 export interface IssueCreateCapable {
   createIssue(input: IssueCreateInput): Promise<SendResult>;
-  /**
-   * Where a filing would land and as whom — the live half of "can I file here"
-   * (issue #413).
-   *
-   * On the same interface as {@link createIssue} rather than a capability of its
-   * own, because it is not a second thing a provider might support: it is the
-   * question "would `createIssue` work", and a provider that can create but cannot
-   * say where would leave the operator filing blind into a tracker the cockpit
-   * cannot name. Every implementer answers it.
-   *
-   * It **throws** rather than reporting a failure, exactly as `createIssue` does:
-   * a credential that no longer works is a fault, and the caller — one route, for
-   * one cockpit control — is the right place to decide what to show for it.
-   */
-  describeFilingTarget(): Promise<FilingTarget>;
 }
 
 export function isIssueCreateCapable(x: Integration): x is Integration & IssueCreateCapable {

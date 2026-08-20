@@ -6,6 +6,7 @@ import { CompositeConnector } from './integrations/compositeConnector.js';
 import { buildIntegrations } from './integrations/registry.js';
 import type { ActionSink } from './sink/actionSink.js';
 import { ticketFiler, type TicketFiler } from './tickets/filing.js';
+import { ghCliUpstreamIssues, type UpstreamIssues } from './tickets/upstream.js';
 import type { CiEvidenceReader } from './ci/ciEvidence.js';
 import { ticketAmendCommands } from './goalInstructions.js';
 import { NodePtyBackend, type PtyBackend } from './pty/backend.js';
@@ -117,6 +118,12 @@ export interface System {
    * here.
    */
   filing: TicketFiler;
+  /**
+   * Files a report about **LubbDubb itself** into LubbDubb's own tracker, past the
+   * connector entirely (issue #449). Route-driven for {@link filing}'s reason: the
+   * operator clicks, waits, and is told what was created.
+   */
+  upstream: UpstreamIssues;
   /**
    * Where the harness watches its **own** build and drives a deliberate upgrade of
    * it. Always constructed and always exposed — the route and the snapshot need a
@@ -248,6 +255,13 @@ interface BuildOptions {
    * of whatever checkout the suite is running in — see {@link System.configFile}.
    */
   configFile?: string;
+  /**
+   * Override how a report about LubbDubb itself is filed (tests inject
+   * `FakeUpstreamIssues`). Without it the two collection-level issue routes spawn
+   * the real `gh` against the real repository, which for a test is either a filed
+   * issue somebody has to close or a failure that depends on whose machine ran it.
+   */
+  upstream?: UpstreamIssues;
   /**
    * Override when crash recovery considers this process to have started (tests).
    * Everything older is a previous run's orphan; everything newer is a dispatch
@@ -778,6 +792,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // straight from their route, and `link_ticket` calls it for the two that still
   // have an agent writing the words (issue #394).
   const filing = ticketFiler(config, opts.sink ?? connector);
+  // Not `opts.sink`, and not the connector at all: a fault in the cockpit belongs on
+  // the cockpit's tracker whatever the fleet is pointed at (issue #449).
+  const upstream = opts.upstream ?? ghCliUpstreamIssues();
   const graph = new WorkGraphRecorder({ store, errors });
 
   // The ticket mirror's keeper: one month of backfill on a fresh database, then an
@@ -935,6 +952,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     graph,
     tickets,
     filing,
+    upstream,
     updates,
     runtimeControl,
     pets,
