@@ -33,7 +33,7 @@ export type ValidationAct =
  * tickets query's reason: a section is a thing you send someone a link to, and one
  * held in a `useState` works right up until the back button steps over it.
  */
-export type ConfigTab = 'values' | 'raw' | 'ci' | 'prompts' | 'notifications' | 'theme';
+export type ConfigTab = 'values' | 'raw' | 'ci' | 'prompts' | 'mcp' | 'notifications' | 'theme';
 
 export type ConsolePanel =
   | 'findings'

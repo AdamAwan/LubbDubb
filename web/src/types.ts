@@ -51,6 +51,7 @@ export type {
   Lesson,
   LessonStatus,
   LessonView,
+  McpChannelPayload,
   OpenPullRequest,
   OrphanedWork,
   AcceptanceCriterion,

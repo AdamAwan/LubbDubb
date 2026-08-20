@@ -1289,3 +1289,32 @@ export interface PetState {
    */
   startedAt: string | null;
 }
+
+/**
+ * `/api/mcp` — how to point the operator's own Claude Code at this harness, and
+ * what it gets when they do.
+ *
+ * Every field is read off the running channel rather than written down in the
+ * cockpit: the bridge path is resolved from the server's own module URL, the
+ * paths come from `validation.*`, and the tools are the ones `tools/list` would
+ * answer with. A tab that restated any of it would be a second copy of the
+ * install instructions, correct on the day it was written.
+ */
+export interface McpChannelPayload {
+  /**
+   * Whether the channel bound its socket at boot. False is a real state, not an
+   * error — a live socket on the stable path belongs to another harness, and the
+   * registration below is then a command that would connect to that one.
+   */
+  running: boolean;
+  /** The key the server is registered under, and the prefix of every qualified tool name. */
+  serverId: string;
+  /** The one-off registration, as an argv the cockpit renders into a paste-able command. */
+  registration: { command: string; args: string[] };
+  /** Where the bearer credential is written (`0600`), reminted at every start. */
+  credentialPath: string;
+  /** The `/lubbdubb` skill the harness rewrites on every start. */
+  skillPath: string;
+  /** The three tools the desktop channel advertises, in the order `tools/list` gives them. */
+  tools: { name: string; description: string }[];
+}

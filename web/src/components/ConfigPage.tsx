@@ -5,6 +5,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { ConfigChange, RunningConfigPayload } from '../types.js';
 import { CiPolicyTab } from './CiPolicyTab.js';
 import { ConfigValues, type Staged } from './ConfigValues.js';
+import { McpTab } from './McpTab.js';
 import { NotificationSettings } from './NotificationSettings.js';
 import { PromptsTab } from './PromptsTab.js';
 import { RawConfigTab } from './RawConfigTab.js';
@@ -37,6 +38,7 @@ const TABS: readonly { id: ConfigTab; label: string }[] = [
   { id: 'raw', label: 'Raw file' },
   { id: 'ci', label: 'CI policy' },
   { id: 'prompts', label: 'Prompts' },
+  { id: 'mcp', label: 'MCP' },
   { id: 'notifications', label: 'Notifications' },
   { id: 'theme', label: 'Theme' },
 ];
@@ -153,6 +155,7 @@ export function ConfigPage({ view, actions }: { view: CockpitView; actions: Cock
           {tab === 'raw' && <RawConfigTab payload={payload} onWrote={load} />}
           {tab === 'ci' && <CiPolicyTab />}
           {tab === 'prompts' && <PromptsTab />}
+          {tab === 'mcp' && <McpTab />}
           {tab === 'notifications' && <NotificationSettings />}
           {tab === 'theme' && <ThemeSettings />}
         </>

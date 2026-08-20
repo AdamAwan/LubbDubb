@@ -18,7 +18,7 @@ is about.
 
 | Module                  | Holds                                                                                         |
 | ----------------------- | --------------------------------------------------------------------------------------------- |
-| `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/health`                  |
+| `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/mcp`, `/api/health`      |
 | `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt                             |
 | `routes/artifacts.ts`   | `/artifacts/:id` and `/attachments/:id`, their capability signers, and the path confinement   |
 | `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/watch`                   |
@@ -957,6 +957,31 @@ inherited `ignore`, a partial `policyChecks` map merging over the defaults, and 
 Fetched on open and **read-only**, both for `GET /api/prompts`' reasons. `POST /api/config` can save
 `ci.checks` whole, which is a different thing from a rule editor: the list is ordered and the order is
 the semantics, so editing it rule-by-rule is its own shape and its own decision.
+
+### `GET /api/mcp`
+
+How the operator points their **own** Claude Code at this harness, for the config page's MCP tab
+([17](17-cockpit.md#the-mcp-tab)): `{ running, serverId, registration: {command, args}, credentialPath,
+skillPath, tools }`, read off the live desktop channel ([11](11-mcp-tools.md#the-desktop-channel)).
+
+Fetched on open and read-only, both for `GET /api/prompts`' reasons — the bridge path, the two file
+paths and the tool descriptions are all fixed for the life of the process.
+
+**Every field is asked of the channel rather than composed here**, and that is the whole of the route.
+`registration` is `McpDesktopServer.registration()`, whose bridge path is resolved from the server
+module's own URL, so it is right in a checkout and in a `dist` install without either being a case
+anybody has to think about; `tools` is `advertised()`, which is what `tools/list` would answer. A
+cockpit that wrote either down would be a second copy of the install instructions, correct on the day
+it was written and silently wrong after the next rename — and the failure is a _connected_ server whose
+every call is refused, or a command that registers a server pointing at nothing.
+
+`running` is the channel's own `token !== null`. It is a real state and not an error: the stable socket
+is refused when another harness holds it, and the tab says so rather than handing over a command that
+would reach the other one.
+
+The payload **carries no secret**. The credential is a file the bridge reads at spawn, and this route
+names its path only — which is the same property that lets the registration be pasted into a chat, a
+runbook or a ticket.
 
 ### Launching a blueprint
 
