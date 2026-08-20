@@ -441,11 +441,36 @@ a.btn {
   line-height: 1;
 }
 /* The server's refusal, in its own words. Sized like body text rather than a
-   toast: it names a file and a bound, which is a sentence to read, not a flash. */
+   toast: it names a file and a bound, which is a sentence to read, not a flash.
+   Shared by every station that draws one — the composer, the modals, the bench
+   verdict — because a refusal is one thing wherever it lands. */
 .launch-error {
   margin: 0;
   color: var(--red);
   font-size: 12px;
+}
+
+/* The shared bench verdict (`HumanTaskActions`). No colour of its own — the
+   station's `buttonClass` carries that, which is the whole seam — only the
+   placement both its stations need: the note it asks for and the refusal it
+   reports take a line of their own under the buttons rather than a column
+   squeezed beside them, which is what they get as bare children of the console's
+   flex row of actions. */
+.human-task-decline,
+.human-task-refusal {
+  flex-basis: 100%;
+  width: 100%;
+}
+.human-task-note {
+  width: 100%;
+  box-sizing: border-box;
+}
+/* The reason the note is being asked for, above the box that answers it. */
+.human-task-owed {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 /* The picker itself is never drawn — the visible control is a cockpit button that
    clicks it, so the composer keeps one button vocabulary. */

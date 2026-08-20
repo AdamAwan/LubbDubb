@@ -269,7 +269,8 @@ export interface CockpitActions {
   /** Prune one, from either live status. Terminal: there is no un-retire. */
   retireLesson(id: string): Promise<void>;
 
-  completeHumanTask(id: string): Promise<void>;
+  /** `note` is required by the route on a close-out whose goal's validation is flagged. */
+  completeHumanTask(id: string, note?: string): Promise<void>;
   declineHumanTask(id: string, note: string): Promise<void>;
   /** Clear a settled task off the bench. Settled only — it answers nothing. */
   dismissHumanTask(id: string): Promise<void>;
@@ -390,7 +391,7 @@ export interface CockpitActions {
    * #234 it also stops the dispatcher. On the seam for every mutation's reason:
    * `console/` may not reach `api.js`.
    */
-  dismissRun(issueNumber: number): Promise<void>;
+  dismissRun(issueNumber: number, note?: string): Promise<void>;
 
   /**
    * One work item's durable subtree (`GET /api/work/:ref`), fetched on demand.

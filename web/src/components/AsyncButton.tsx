@@ -6,6 +6,17 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
  * runs through these so the user sees a request in flight (spinner + disabled,
  * which also blocks a double-fire) and a brief ✓ / ✕ flash on settle — otherwise
  * a fast server round-trip looks like nothing happened.
+ *
+ * **A refused click is kept, in the server's own words.** The flash alone said
+ * only that something went wrong, and it faded in two seconds — so a route that
+ * refuses for a reason the operator can *act on* ("note is required — validation
+ * is not clear on this goal") reached them as a button that did nothing when
+ * clicked. Every refusal already arrives here as an `Error` carrying the route's
+ * `{error}` string (`api.ts`'s `json`), and it is thrown away at exactly one
+ * place: the `catch` below. {@link useAsyncAction} keeps it until the next run,
+ * and {@link AsyncButton} both hangs it off the button's own `title` — which
+ * costs no layout anywhere, so every call site gains it — and hands it to
+ * `onRefused` for the stations that draw it.
  */
 
 type AsyncPhase = 'idle' | 'pending' | 'done' | 'error';
@@ -17,15 +28,34 @@ function flashClass(phase: AsyncPhase): string {
 }
 
 /**
+ * What a rejection says, for the operator rather than for a log.
+ *
+ * Every route refuses with `{error}` and `api.ts` rethrows that as the `Error`'s
+ * message, so the message *is* the refusal. The fallback is for the rejection
+ * that is not one — a dropped socket, a bug in the handler — where a blank line
+ * would be worse than an admission.
+ */
+function refusalText(err: unknown): string {
+  const message = err instanceof Error ? err.message.trim() : '';
+  return message.length > 0 ? message : 'That was refused, and nothing said why. Check the Errors panel.';
+}
+
+/**
  * Drives one async action's lifecycle for button feedback: `pending` while it's in
  * flight, then a transient `done`/`error` before settling back to `idle`. Ignores
  * re-entrant calls while pending; reset timers are cleared on unmount.
+ *
+ * `refusal` outlives the flash on purpose: the ring says *that* it failed and is
+ * gone in two seconds, and the sentence is the half worth reading. It is cleared
+ * when the next run starts, so what is on screen always describes the last click.
  */
 export function useAsyncAction(): {
   phase: AsyncPhase;
+  refusal: string | null;
   run: (fn: () => Promise<unknown> | unknown) => Promise<void>;
 } {
   const [phase, setPhase] = useState<AsyncPhase>('idle');
+  const [refusal, setRefusal] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inFlight = useRef(false);
   const mounted = useRef(true);
@@ -57,10 +87,12 @@ export function useAsyncAction(): {
         timer.current = null;
       }
       if (mounted.current) setPhase('pending');
+      if (mounted.current) setRefusal(null);
       try {
         await fn();
         settle('done', 1200);
-      } catch {
+      } catch (err) {
+        if (mounted.current) setRefusal(refusalText(err));
         settle('error', 2200);
       } finally {
         inFlight.current = false;
@@ -69,7 +101,7 @@ export function useAsyncAction(): {
     [settle],
   );
 
-  return { phase, run };
+  return { phase, refusal, run };
 }
 
 /**
@@ -77,9 +109,14 @@ export function useAsyncAction(): {
  * is the set of `.btn` modifiers (e.g. `primary`, `ghost`) — the base `btn` class
  * is applied here. `pendingLabel` replaces the whole label while in flight (pass a
  * bare spinner for icon-only buttons); otherwise a spinner is prepended.
+ *
+ * A refusal replaces the button's `title` while it stands, so the reason is one
+ * hover away from *any* of these; `onRefused` is for the stations with room to
+ * draw it, which is the only way an operator who cannot hover reads it.
  */
 export function AsyncButton({
   onClick,
+  onRefused,
   children,
   className = '',
   disabled,
@@ -87,21 +124,36 @@ export function AsyncButton({
   ...rest
 }: {
   onClick: () => Promise<unknown> | unknown;
+  /** The route's own words when this click was refused. Called on every rejection. */
+  onRefused?: (message: string) => void;
   children: ReactNode;
   className?: string;
   disabled?: boolean;
   pendingLabel?: ReactNode;
 } & Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'onClick' | 'className' | 'disabled' | 'children'>) {
-  const { phase, run } = useAsyncAction();
+  const { phase, refusal, run } = useAsyncAction();
   const cls = ['btn', className, flashClass(phase)].filter(Boolean).join(' ');
   return (
     <button
       type="button"
       {...rest}
       className={cls}
+      title={refusal ?? rest.title}
       disabled={disabled || phase === 'pending'}
       aria-busy={phase === 'pending'}
-      onClick={() => void run(onClick)}
+      onClick={() =>
+        void run(async () => {
+          try {
+            return await onClick();
+          } catch (err) {
+            // Reported *and* rethrown: the hook settles the flash off the same
+            // rejection, and a station that swallowed it here would leave the
+            // ring saying the click went through.
+            onRefused?.(refusalText(err));
+            throw err;
+          }
+        })
+      }
     >
       {phase === 'pending' ? (
         (pendingLabel ?? (

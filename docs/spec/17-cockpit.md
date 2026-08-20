@@ -584,7 +584,9 @@ run.
 - **End the run** is keyed on the run **existing and not yet ended**, never on anything else the page
   is showing — the lesson `planId` and `retroRef` learned. It is how a retained run is ended, so it
   has to be reachable for exactly as long as the harness still holds one
-  ([16](16-http-api.md#post-apiissuesnumberdismiss-run)).
+  ([16](16-http-api.md#post-apiissuesnumberdismiss-run)). On a goal whose validation plan is flagged
+  it reads `End the run…` and opens `EndRunModal`, because the route refuses a dismissal with no note
+  while it is — [below](#saying-the-sentence-a-refusal-asks-for).
 
 ### The bands
 
@@ -596,6 +598,25 @@ the goal page for the same reason the others are: the page and the rail's panel 
 the write between them. Embedded, never redrawn: a second wiring is a second way to answer a proposal with free text on one surface only.
 `buttonClass` is the one seam the console passes, so the shared buttons wear the console's face without
 the console reaching into their class.
+
+#### Saying the sentence a refusal asks for
+
+A route that refuses for a reason the operator can act on needs two things on the glass, and for a
+while had neither. **The reason** — every route refuses with `{error}` and `api.ts` rethrows it as
+the `Error`'s message, and `useAsyncAction` used to drop it in a bare `catch`, leaving a red ring
+that faded in two seconds as the whole account of what happened. It is now kept until the next run,
+hung off the button's own `title` (which costs no layout, so every `AsyncButton` in the cockpit gains
+it) and handed to `onRefused` for the stations with room to draw it — `HumanTaskActions` and the goal
+header both draw it as a `.launch-error` line, the same one the composer uses, because a refusal is
+one thing wherever it lands.
+
+**And somewhere to answer it.** The two controls a flagged validation plan refuses
+([20](20-validation.md#where-it-lands)) posted no note and offered no box to type one in, so the
+refusal was not merely invisible — it was unsatisfiable, and the control could not work at all. The
+bench verdict's Done reads `Done…` on a `close_out` whose goal is flagged and opens the note box
+Decline already had; `End the run` opens `EndRunModal` on the same condition and stays one click on
+every other goal. The condition is mirrored, the counts are not: they are `issue.validation`, folded
+once on the server, and the row's own detail already lists what is outstanding.
 
 **A band whose source has left the snapshot draws nothing at all.** A header over an empty box would
 claim something is waiting while offering no way to answer it.

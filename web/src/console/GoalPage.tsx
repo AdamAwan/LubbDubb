@@ -2,12 +2,21 @@ import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView, PartGroup } from '../view/goalPage.js';
-import type { EnvironmentGate, GoalReachStatus, Issue, OpenPullRequest, PlanPart, PullRequest } from '../types.js';
+import type {
+  EnvironmentGate,
+  GoalReachStatus,
+  Issue,
+  OpenPullRequest,
+  PlanPart,
+  PullRequest,
+  ValidationVerdict,
+} from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { InstructionModal } from '../components/InstructionModal.js';
 import { GateReleaseModal } from '../components/GateReleaseModal.js';
+import { EndRunModal } from '../components/EndRunModal.js';
 import { renderRichText } from '../components/richText.js';
 import { issueTypeTone } from '../issueGroups.js';
 import { fmtUsd, relTime } from '../components/util.js';
@@ -116,6 +125,14 @@ function Header({
   // verdict is what makes there be an agent to read it.
   const moreWork = issue.conclusion.verdict === 'more_work';
   const [instructing, setInstructing] = useState(false);
+  const [endingRun, setEndingRun] = useState(false);
+  const [runRefusal, setRunRefusal] = useState<string | null>(null);
+  // What ending the run costs, or null when it costs nothing: the route refuses a
+  // dismissal with no note while the plan is flagged
+  // ([20](../../../docs/spec/20-validation.md#where-it-lands)), and the button
+  // posting none was a control that could not work — the 400 went to an unhandled
+  // rejection, so the click did nothing and said nothing.
+  const owed = issue.validation !== null && issue.validation.state === 'flagged' ? issue.validation : null;
   const standing = issue.instructions.length;
   const merged = page.parts.filter((p) => p.group === 'merged').length;
   const url = issue.url ?? refUrls[`#${issue.number}`];
@@ -269,16 +286,35 @@ function Header({
             Open ticket ↗
           </a>
         )}
-        {retained && (
-          <button
-            type="button"
-            className="cn-tgl"
-            onClick={() => void actions.dismissRun(issue.number)}
-            title="End the harness's run at this goal. One way, and terminal for the dispatcher — the report stays readable."
-          >
-            End the run
-          </button>
-        )}
+        {/* A flagged plan asks for the sentence first, so that arm opens a modal
+            rather than posting; a clear one is left the one click the route leaves
+            it, through the button that can at least say when it is refused. */}
+        {retained &&
+          (owed !== null ? (
+            <button
+              type="button"
+              className="cn-tgl"
+              onClick={() => {
+                setRunRefusal(null);
+                setEndingRun(true);
+              }}
+              title="End the harness's run at this goal. One way, and terminal for the dispatcher — and this goal's validation plan is not clear, so it asks what you are doing about that."
+            >
+              End the run…
+            </button>
+          ) : (
+            <AsyncButton
+              className="cn-tgl"
+              onClick={() => {
+                setRunRefusal(null);
+                return actions.dismissRun(issue.number);
+              }}
+              onRefused={setRunRefusal}
+              title="End the harness's run at this goal. One way, and terminal for the dispatcher — the report stays readable."
+            >
+              End the run
+            </AsyncButton>
+          ))}
       </div>
       {instructing && (
         <InstructionModal
@@ -286,6 +322,23 @@ function Header({
           issueTitle={issue.title}
           onSubmit={(text) => actions.addInstruction(issue.number, text)}
           onClose={() => setInstructing(false)}
+        />
+      )}
+      {/* Whatever the route said about the last click in this row, verbatim and
+          under it. The header's controls are one-click verdicts, so a refused one
+          has nowhere else to appear — and appeared nowhere. */}
+      {runRefusal !== null && (
+        <p className="launch-error" role="alert">
+          {runRefusal}
+        </p>
+      )}
+      {endingRun && owed !== null && (
+        <EndRunModal
+          issueNumber={issue.number}
+          issueTitle={issue.title}
+          outstanding={outstanding(owed)}
+          onSubmit={(note) => actions.dismissRun(issue.number, note)}
+          onClose={() => setEndingRun(false)}
         />
       )}
       {raisingBug && (
@@ -321,6 +374,16 @@ function Header({
  * this passes `cn-btn` so they wear the console's chrome, the seam
  * `HumanTaskActions` already takes.
  */
+/**
+ * What the plan still owes, in the header chip's own words rather than a second
+ * wording of them — the counts are the server's fold (`issue.validation`), and
+ * two surfaces reading one verdict two ways is the thing that fold exists to
+ * prevent.
+ */
+function outstanding(verdict: ValidationVerdict): string {
+  return `Its validation plan is not clear — ${verdict.failed} failed, ${verdict.unrun} never run, ${verdict.deferred} deferred, of ${verdict.total}.`;
+}
+
 /**
  * The goal's tracker state, in the colour the operator gave it.
  *
