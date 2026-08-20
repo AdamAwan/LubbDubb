@@ -1,4 +1,6 @@
-import type { EnvironmentReading, GoalEnvironmentReach, GoalLanding } from '../types.js';
+import type { EnvironmentReading, GoalEnvironmentReach, GoalLanding, WorkNode } from '../types.js';
+import { unattributedMerges } from './landings.js';
+import type { EnvironmentConfig } from './policy.js';
 
 /** Everything the fold reads, for one goal. */
 interface GoalReachInput {
@@ -7,7 +9,7 @@ interface GoalReachInput {
   landings: GoalLanding[];
   readings: EnvironmentReading[];
   /** The configured environments, in the order the operator declared them. */
-  environments: string[];
+  environments: EnvironmentConfig[];
   /**
    * This goal's merged pull requests with no landing recorded — from
    * {@link unattributedMerges}. Non-zero is what turns an otherwise clean `absent`
@@ -37,7 +39,7 @@ interface GoalReachInput {
 export function goalReach(input: GoalReachInput): GoalEnvironmentReach[] {
   const landings = input.landings.filter((l) => l.goalRef === input.goalRef);
   const total = landings.length + input.unattributed;
-  return input.environments.map((environment) => {
+  return input.environments.map(({ name: environment, arrival }) => {
     const verdicts = readingsFor(input.readings, environment);
     let reached = 0;
     let absent = 0;
@@ -58,8 +60,44 @@ export function goalReach(input: GoalReachInput): GoalEnvironmentReach[] {
       landed: reached,
       total,
       at: reached === total && total > 0 ? latest : null,
+      // Carried onto the row rather than looked up beside it, so the cockpit can
+      // say why a goal's bench rows are waiting without a second copy of the
+      // operator's configuration to disagree with this one.
+      opens: arrival?.opens ?? [],
     };
   });
+}
+
+/**
+ * Every goal worth a row, folded — the landings' goals plus the work graph's, and
+ * the one place that set is decided.
+ *
+ * Shared by the cockpit's panel and by the desk that records arrivals, because
+ * two folds of "which goals has this been anywhere" would be two answers to the
+ * question the comment on a ticket is posted off. The goal set comes from the
+ * landings and the graph and **never from the world**: a goal is at its most
+ * interesting here once its ticket has closed, which is precisely when the world
+ * stops listing it.
+ *
+ * A goal with nothing merged is dropped rather than drawn as `absent` everywhere:
+ * a row on every issue the graph has ever held would bury the ones that moved.
+ */
+export function allGoalReach(input: {
+  landings: GoalLanding[];
+  readings: EnvironmentReading[];
+  nodes: WorkNode[];
+  landed: ReadonlySet<number>;
+  environments: EnvironmentConfig[];
+}): { goalRef: string; environments: GoalEnvironmentReach[] }[] {
+  const goalRefs = new Set(input.landings.map((l) => l.goalRef));
+  for (const node of input.nodes) if (node.kind === 'issue') goalRefs.add(node.ref);
+  const out: { goalRef: string; environments: GoalEnvironmentReach[] }[] = [];
+  for (const goalRef of goalRefs) {
+    const unattributed = unattributedMerges(goalRef, input.nodes, input.landed);
+    if (unattributed === 0 && !input.landings.some((l) => l.goalRef === goalRef)) continue;
+    out.push({ goalRef, environments: goalReach({ ...input, goalRef, unattributed }) });
+  }
+  return out;
 }
 
 function rollUp(counts: { total: number; reached: number; unresolved: number }): GoalEnvironmentReach['status'] {

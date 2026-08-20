@@ -7,6 +7,7 @@ import type {
   Plan,
   PlanPart,
   PullRequest,
+  EnvironmentGateRelease,
   GoalEnvironmentReach,
   ValidationCheck,
   ValidationResourceView,
@@ -79,6 +80,14 @@ export interface GoalPageView {
    * environment, saying so.
    */
   environments: GoalEnvironmentReach[];
+  /**
+   * Why this goal's validation and close-out rows are being withheld, or null
+   * when nothing is withholding them. Server-made, so the sentence the page draws
+   * and the decision the desks took are the same one.
+   */
+  gateHold: string | null;
+  /** The operator's standing "this one is not waiting on an environment". */
+  gateRelease: EnvironmentGateRelease | null;
 }
 
 /**
@@ -209,6 +218,10 @@ export function buildGoalPage(state: AppState, ref: string, needs: readonly Need
     [...parts.map((p) => p.part), ...retiredParts].flatMap((p) => (p.prNumber === null ? [] : [p.prNumber])),
   );
 
+  // One lookup for the three environment fields: the row, why its obligations are
+  // held, and the operator's answer if they lifted it.
+  const reach = (state.environmentReach ?? []).find((e) => e.goalRef === ref);
+
   return {
     issue,
     needs: needs.filter((n) => n.goalRef === ref),
@@ -223,8 +236,30 @@ export function buildGoalPage(state: AppState, ref: string, needs: readonly Need
     // matching descendants would pull a part's ref in as though it were one.
     checks: (state.validationChecks ?? []).filter((c) => c.originRef === ref),
     checkResources: (state.validationResources ?? []).filter((r) => r.originRef === ref),
-    environments: (state.environmentReach ?? []).find((e) => e.goalRef === ref)?.environments ?? [],
+    environments: reach?.environments ?? [],
+    gateHold: reach?.gateHold ?? null,
+    gateRelease: reach?.released ?? null,
   };
+}
+
+/**
+ * The furthest environment this goal's whole work has reached, or null when it
+ * has not been confirmed anywhere.
+ *
+ * **Furthest is last-declared, not best.** The operator's list is the order the
+ * work travels in — `testUk`, `liveUk`, `liveEu`, `liveUs` — so the last one
+ * confirmed is the one worth a word on a row that has space for one. Sorting by
+ * anything else would need the harness to have an opinion about which environment
+ * matters most, which is exactly the opinion it does not have.
+ *
+ * `partial` and `unknown` are not furthest anything: half a goal in production is
+ * the state that most wants somebody, and a row saying "liveUs" for it would be
+ * the boolean rollup `goalReach` refuses to make, one layer up.
+ */
+export function furthestEnvironment(state: AppState, goalRef: string): string | null {
+  const reach = (state.environmentReach ?? []).find((e) => e.goalRef === goalRef);
+  const reached = (reach?.environments ?? []).filter((e) => e.status === 'reached');
+  return reached.length === 0 ? null : (reached[reached.length - 1]?.environment ?? null);
 }
 
 /**

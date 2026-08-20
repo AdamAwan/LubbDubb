@@ -1,8 +1,14 @@
-import type { EnvironmentReachStatus, EnvironmentReading, GoalLanding } from '../types.js';
+import type {
+  EnvironmentGateRelease,
+  EnvironmentReachStatus,
+  EnvironmentReading,
+  GoalArrival,
+  GoalLanding,
+} from '../types.js';
 import type { StoreContext } from './context.js';
 
 /**
- * Two tables, one question: `goal_landings` — the commit each of a goal's pull
+ * Four tables, one question: `goal_landings` — the commit each of a goal's pull
  * requests landed as — and `environment_reach`, what a probe said about each of
  * those commits in each environment.
  *
@@ -15,6 +21,11 @@ import type { StoreContext } from './context.js';
  * shelf life and has to be caught while it is on offer; and a probe is a process
  * spawn, so re-asking it every pulse for every landing would put the cost of the
  * feature on the heartbeat.
+ *
+ * `goal_arrivals` and `environment_gate_releases` sit beside them because they are
+ * the same subject read as *events* rather than as status: when a goal's work
+ * first arrived somewhere, and the operator's answer for a goal that is never
+ * going to.
  *
  * The tables are new, so they need no `ColumnMigrations` entry — but a table being
  * new *once* does not keep it exempt, and a column added later will.
@@ -77,6 +88,78 @@ export class EnvironmentStore {
       .run({ ...input, observedAt: this.ctx.now() });
   }
 
+  /**
+   * Record that a goal's whole work was first seen in an environment.
+   *
+   * `OR IGNORE`, not `OR REPLACE`: a goal that grows another pull request, lands
+   * it and is confirmed again has not arrived twice. Replacing would move
+   * `arrived_at` forward and — worse — clear the announcement stamp, so the
+   * ticket would collect a comment per later merge.
+   */
+  recordGoalArrival(input: { goalRef: string; environment: string; arrivedAt: string }): void {
+    this.ctx.db
+      .prepare(
+        `INSERT OR IGNORE INTO goal_arrivals (goal_ref, environment, arrived_at, recorded_at, announced_at)
+         VALUES (@goalRef, @environment, @arrivedAt, @recordedAt, NULL)`,
+      )
+      .run({ ...input, recordedAt: this.ctx.now() });
+  }
+
+  /** Every arrival, newest first — the order the cockpit's signals read them in. */
+  listGoalArrivals(): GoalArrival[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM goal_arrivals ORDER BY arrived_at DESC, environment ASC`)
+      .all() as ArrivalRow[];
+    return rows.map((r) => ({
+      goalRef: r.goal_ref,
+      environment: r.environment,
+      arrivedAt: r.arrived_at,
+      announcedAt: r.announced_at,
+    }));
+  }
+
+  /**
+   * Stamp an arrival as announced.
+   *
+   * Called whether or not anything went out, which is the whole of how an
+   * environment that grows `arrival.comment` next month comments on its next
+   * arrival rather than on every one already in the table.
+   */
+  markArrivalAnnounced(goalRef: string, environment: string): void {
+    this.ctx.db
+      .prepare(`UPDATE goal_arrivals SET announced_at=? WHERE goal_ref=? AND environment=?`)
+      .run(this.ctx.now(), goalRef, environment);
+  }
+
+  /**
+   * The operator's "this one is not waiting on an environment", replacing any
+   * standing release on the same goal — a second click is them looking again, and
+   * the newer note is the live account of why.
+   */
+  releaseEnvironmentGate(goalRef: string, note: string): EnvironmentGateRelease {
+    const release: EnvironmentGateRelease = { goalRef, note, releasedAt: this.ctx.now() };
+    this.ctx.db
+      .prepare(
+        `INSERT OR REPLACE INTO environment_gate_releases (goal_ref, note, released_at)
+         VALUES (@goalRef, @note, @releasedAt)`,
+      )
+      .run(release);
+    return release;
+  }
+
+  /** Put the goal back to waiting. A delete, so "not released" has exactly one shape. */
+  clearEnvironmentGateRelease(goalRef: string): void {
+    this.ctx.db.prepare(`DELETE FROM environment_gate_releases WHERE goal_ref=?`).run(goalRef);
+  }
+
+  /** Every standing release. Bounded by the goals an operator has said do not ship. */
+  listEnvironmentGateReleases(): EnvironmentGateRelease[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM environment_gate_releases ORDER BY released_at DESC`)
+      .all() as ReleaseRow[];
+    return rows.map((r) => ({ goalRef: r.goal_ref, note: r.note, releasedAt: r.released_at }));
+  }
+
   /** Every verdict held. One row per landing per environment, so it is bounded by the two. */
   listEnvironmentReach(): EnvironmentReading[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM environment_reach`).all() as ReachRow[];
@@ -95,6 +178,20 @@ interface LandingRow {
   goal_ref: string;
   sha: string;
   recorded_at: string;
+}
+
+interface ArrivalRow {
+  goal_ref: string;
+  environment: string;
+  arrived_at: string;
+  recorded_at: string;
+  announced_at: string | null;
+}
+
+interface ReleaseRow {
+  goal_ref: string;
+  note: string;
+  released_at: string;
 }
 
 interface ReachRow {

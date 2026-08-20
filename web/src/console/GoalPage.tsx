@@ -2,11 +2,12 @@ import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView, PartGroup } from '../view/goalPage.js';
-import type { GoalReachStatus, Issue, OpenPullRequest, PlanPart, PullRequest } from '../types.js';
+import type { EnvironmentGate, GoalReachStatus, Issue, OpenPullRequest, PlanPart, PullRequest } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { InstructionModal } from '../components/InstructionModal.js';
+import { GateReleaseModal } from '../components/GateReleaseModal.js';
 import { renderRichText } from '../components/richText.js';
 import { issueTypeTone } from '../issueGroups.js';
 import { fmtUsd, relTime } from '../components/util.js';
@@ -74,7 +75,7 @@ export function GoalPage({
           <Instructions issue={page.issue} actions={actions} />
           <Ticket issue={page.issue} refUrls={view.state.refUrls} />
           <PullRequests page={page} view={view} />
-          <Environments page={page} />
+          <Environments page={page} actions={actions} now={view.now} />
         </div>
         <div className="cn-stack">
           <OnThisGoal page={page} view={view} actions={actions} />
@@ -689,8 +690,18 @@ function PullRequests({ page, view }: { page: GoalPageView; view: CockpitView })
  * "0/3" and "2/3" are the difference between work that has not started moving and
  * work that is halfway there — and the word alone says neither.
  */
-function Environments({ page }: { page: GoalPageView }): JSX.Element | null {
+function Environments({
+  page,
+  actions,
+  now,
+}: {
+  page: GoalPageView;
+  actions: CockpitActions;
+  now: number;
+}): JSX.Element | null {
+  const [releasing, setReleasing] = useState(false);
   if (page.environments.length === 0) return null;
+  const number = page.issue.number;
   return (
     <section className="cn-card">
       <h3>Environments</h3>
@@ -699,7 +710,13 @@ function Environments({ page }: { page: GoalPageView }): JSX.Element | null {
           <div className="cn-row" key={env.environment}>
             <span className="cn-grow">
               <b className="cn-name">{env.environment}</b>
-              <span className="cn-sub">{REACH_SAID[env.status]}</span>
+              <span className="cn-sub">
+                {REACH_SAID[env.status]}
+                {/* What arriving here does, on the row that would do it. An
+                    operator reading a held goal asks "waiting for what" exactly
+                    once, and the answer is configuration they wrote weeks ago. */}
+                {env.opens.length > 0 && ` · opens ${env.opens.map((g) => GATE_SAID[g]).join(' and ')}`}
+              </span>
             </span>
             {env.status !== 'reached' && (
               <i className="cn-n">
@@ -710,9 +727,48 @@ function Environments({ page }: { page: GoalPageView }): JSX.Element | null {
           </div>
         ))}
       </div>
+      {/* The hold, said out loud. Nothing is filed while a gate holds, so without
+          this line a delivered goal with an empty bench is indistinguishable from
+          a finished one — and the harness would be waiting where nobody could see
+          it. The control beside it is the escape for work that is never going to
+          reach an environment at all. */}
+      {page.gateHold !== null && (
+        <div className="cn-criteria">
+          <p>{page.gateHold}</p>
+          <button className="btn ghost" onClick={() => setReleasing(true)}>
+            not waiting on an environment
+          </button>
+        </div>
+      )}
+      {page.gateRelease !== null && (
+        <div className="cn-criteria">
+          <p>
+            Not waiting on an environment — “{page.gateRelease.note}”
+            <span className="cn-sub"> · {relTime(page.gateRelease.releasedAt, now)}</span>
+          </p>
+          <button className="btn ghost" onClick={() => void actions.releaseEnvironmentGate(number, false)}>
+            wait for one after all
+          </button>
+        </div>
+      )}
+      {releasing && page.gateHold !== null && (
+        <GateReleaseModal
+          issueNumber={number}
+          issueTitle={page.issue.title}
+          hold={page.gateHold}
+          onSubmit={(note) => actions.releaseEnvironmentGate(number, true, note)}
+          onClose={() => setReleasing(false)}
+        />
+      )}
     </section>
   );
 }
+
+/** What each gate holds, in the words the card's own rows use for it. */
+const GATE_SAID: Record<EnvironmentGate, string> = {
+  validate: 'the validation checks',
+  close_out: 'the close-out',
+};
 
 /**
  * No new colours: every tone here is one the cockpit already draws, so the strip

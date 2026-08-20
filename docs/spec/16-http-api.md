@@ -462,6 +462,25 @@ harness's own park, which gates pickup and nothing else (see
 exactly one representation. Like the conclusion route it writes the harness's own record and **never
 touches the tracker**: `closed` stays the human's.
 
+### `POST /api/issues/:number/environment-gate`
+
+Body `{released: boolean, note?: string}`. The operator saying this goal is **not waiting on an
+environment** — a docs change, a config change, work whose deployment nothing here can see — or
+putting it back to waiting. It lifts every gate on that goal at once, so its `validate` and
+`close_out` rows are filed on the next pulse, which the route runs itself rather than leaving to the
+next beat. `false` **clears** the row, a delete so that "not released" has one representation.
+
+`note` is **required** when `released` is true, and that is the schema's own `.refine` — `GateReleaseBody`
+in **`src/environments/arrival.ts`**, beside the rule it encodes rather than in the route, for
+`ShortfallBody`'s reason. Every other operator verdict's summary is optional because it records a
+judgement about the work; this one records a decision to stop waiting for evidence, on a goal that
+will then read as closed-out with nothing on the glass to say no environment ever confirmed it. 400
+on a release with no note, or a non-integer issue number.
+
+The escape hatch has to exist wherever a gate does: without it a goal that is never going to reach an
+environment sits delivered with an empty bench for good, which is the harness losing an obligation
+rather than holding one. → [24](24-environments.md#lifting-the-hold)
+
 ### `POST /api/issues/:number/shortfall`
 
 Body `{cause: 'plan'|'part'|'goal'|null, part?: string, summary?: string}`. The operator's arm of the

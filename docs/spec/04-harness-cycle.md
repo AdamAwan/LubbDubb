@@ -65,10 +65,10 @@ flowchart TD
         DIFF --> REC["reconcile plans — before decide, so a part moved to ready<br/>is dispatchable this same cycle"]
         REC --> SEED["tag the harness's own pull requests — once each, so an un-watch sticks"]
         SEED --> NAME["rename PRs onto the convention — idempotent bookkeeping"]
-        NAME --> CLOSE["file and settle close-outs — a delivered goal's ticket<br/>is still open, and only a person can close it"]
-        CLOSE --> VASK["file the validation resource asks — the fixtures and accounts<br/>a delivered goal's checks need and the planner could not produce"]
+        NAME --> VASK["file the validation resource asks — the fixtures and accounts<br/>a delivered goal's checks need and the planner could not produce"]
         VASK --> VREADY["file and settle the validate rows — a delivered goal's checks<br/>are now somebody's to run, and the bench is where they say so"]
-        VREADY --> SCHED["fire due schedules — a recurrence queues an ordinary job,<br/>above the read below so it dispatches this same pulse"]
+        VREADY --> CLOSE["file and settle close-outs — the step after the validation:<br/>the ticket is still open, and only a person can close it"]
+        CLOSE --> SCHED["fire due schedules — a recurrence queues an ordinary job,<br/>above the read below so it dispatches this same pulse"]
         SCHED --> GRAPH["record the work graph — after the reconciler, before decide"]
         GRAPH --> LIMIT["end the usage-limit parks whose window has turned over,<br/>above the read below so a woken agent reads as running this pulse"]
         LIMIT --> TIDY["tidy the inbox — dismiss the questions whose agent has died,<br/>immediately above the read that ships them"]
@@ -101,25 +101,32 @@ flowchart TD
    at creation.
 5. **Reconcile plans** — `plans.reconcile(world)`. This runs **before** `decide`, so a part it moves
    to `ready` is dispatchable in the same cycle. Safe because every fold is idempotent.
-6. **File and settle close-outs** — `closeOuts.run(world)`. A goal with a standing delivery whose
-   tracker item is still open owes a person one close, and that obligation is a `close_out` human
-   task ([13](13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)). The pass files one,
-   and settles a standing one the moment the tracker stops listing the item open. It writes
-   `human_tasks` rows and nothing else — no dispatch, no sink, and no rule reads what it writes.
+6. **File what a delivered goal owes a person**, in the order the person does it.
 
-   Immediately after it, and against the same gate, `validationAsks.run()` files the other thing a
-   delivered goal owes a person: the fixtures, reference material and accounts its validation plan
-   says it needs and the planner could not produce ([20](20-validation.md#resources)). A check is
-   executed against the delivered goal, so this is the first pulse on which that ask is one anybody
-   can act on. Same shape as the close-out — `human_tasks` rows and nothing else — and idempotent by
-   `recordHumanTask`'s refresh, so a pulse over a goal it has already asked about writes nothing new.
+   `validationAsks.run()` files the fixtures, reference material and accounts its validation plan says
+   it needs and the planner could not produce ([20](20-validation.md#resources)). A check is executed
+   against the delivered goal, so this is the first pulse on which that ask is one anybody can act on.
+   It writes `human_tasks` rows and nothing else — no dispatch, no sink, and no rule reads what it
+   writes — and is idempotent by `recordHumanTask`'s refresh, so a pulse over a goal it has already
+   asked about writes nothing new.
 
-   And immediately after **that**, against the same gate again, `validationReady.run(world)` files the
-   obligation those resources are _for_: a delivered goal with checks a person still has to run says so
-   on the bench ([13](13-jobs-and-findings.md#the-other-step-after-the-launch-the-validation)). It
-   settles itself as the results are recorded, the close-out's asymmetry — the check rows are ones the
-   harness reads every pulse. Re-filed on every pulse it is still owed rather than only when absent,
-   which is what keeps the row's detail stating what is outstanding _now_.
+   Immediately after it, `validationReady.run(world)` files the obligation those resources are _for_:
+   a delivered goal with checks a person still has to run says so on the bench
+   ([13](13-jobs-and-findings.md#the-other-step-after-the-launch-the-validation)). It settles itself as
+   the results are recorded, the close-out's asymmetry — the check rows are ones the harness reads
+   every pulse. Re-filed on every pulse it is still owed rather than only when absent, which is what
+   keeps the row's detail stating what is outstanding _now_.
+
+   And then `closeOuts.run(world)`: a goal with a standing delivery whose tracker item is still open
+   owes a person one close, and that obligation is a `close_out` human task
+   ([13](13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)). The pass files one, and
+   settles a standing one the moment the tracker stops listing the item open.
+
+   **The close-out is last, and that ordering is load-bearing.** It is not filed while the goal's
+   `validate` row is still open, so run above the validation desk it would read a bench that row had
+   not been filed onto yet and ask for the close on the very pulse the delivery landed — the two rows
+   arriving together, which is what the sequence exists to stop.
+   → [24](24-environments.md#the-bench-asks-for-one-thing-at-a-time)
 
 7. **Fire due schedules** — `schedules.run()`. A recurrence whose slot has come round queues a `jobs`
    row ([13](13-jobs-and-findings.md#schedules)). Positioned **above** step 8's `listQueuedJobs`, which

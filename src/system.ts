@@ -783,6 +783,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     store,
     environments: config.environments,
     prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
+    // The clone answers "is this landing in what the environment named", which is
+    // what keeps the probe to one spawn per environment however many goals are in
+    // flight. The same observer the plan reconciler fetches for, so the objects
+    // this asks about are as fresh as `planning.gitFetchIntervalMs`.
+    git: gitObserver,
+    sink: opts.sink ?? connector,
     probeIntervalMs: config.environmentProbeIntervalMs,
     errors,
   });
@@ -791,7 +797,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // a delivered goal whose ticket is still open owes a close. Store-only — it
   // files and settles a `human_tasks` row and touches no sink, because closing
   // the item is precisely the part the harness is not doing.
-  const closeOuts = new DeliveryCloseOutDesk(store);
+  const closeOuts = new DeliveryCloseOutDesk(store, config.environments);
 
   // The other ask a delivered goal owes: the fixtures and accounts its validation
   // plan could not produce. Store-only on the close-out desk's terms, and gated on
@@ -803,7 +809,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // desk's terms and gated on the same delivery — and beside it deliberately: a
   // goal is delivered, and the two things it then owes a person are a close and a
   // validation.
-  const validationReady = new ValidationReadyDesk(store);
+  const validationReady = new ValidationReadyDesk(store, config.environments);
 
   // The one cost reading taken while the money is still being spent. Store-only
   // for the close-out desk's reason and one more: an expensive run is not a wrong

@@ -915,6 +915,24 @@ every goal with a standing delivery whose tracker item is still open. It is **st
 `part_id` — so it blocks nothing, and the rule above holds: only a plan-declared part ever holds work
 off the fleet.
 
+**Two things hold the filing back, and neither holds the settling.**
+
+The first is the goal's own validation. The close is not asked for while the goal's `validate` row is
+still open, because the bench asks for one thing at a time: filed together, the two rows say "run
+these checks" and "close this ticket" in the same breath, and the second is an invitation to skip the
+first. It is read off the **bench** rather than off the verdict — a `flagged` verdict would hold the
+close for good on a goal with one failing check, and the operator's way of saying "I am done with
+this" is the row, marked done or declined. That is also why `ValidationReadyDesk` runs above this desk
+in the pulse. → [24](24-environments.md#the-bench-asks-for-one-thing-at-a-time)
+
+The second is an environment gate, where one is configured: with `arrival.opens` naming `close_out`,
+the row waits until the goal's work has actually reached somewhere a person can look at it. Nothing
+gates it on a deployment that configured no environment, which is the default.
+→ [24](24-environments.md#what-an-arrival-means)
+
+Both hold the **file** arm only. Everything that settles a row still runs, so a ticket closed by hand
+while a goal is held still discharges an obligation filed before the hold began.
+
 **Why this one may settle itself.** Every other human task is settled by a person clicking Done,
 because the harness cannot observe a console switch being flipped. This one names an item the harness
 already refetches every pulse, so leaving it to a click would ask the operator to tell the harness

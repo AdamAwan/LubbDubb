@@ -926,21 +926,51 @@ export function buildDemoState(): DemoSeed {
     // Withheld, because rung #414 is red — the state worth having in the demo, since
     // "why can't I click it" is the question the control has to answer on its own.
     stackLandings: [{ ref: 'stack:413', offer: false, blockedBy: '#414 CI failing', landing: null, landed: 0 }],
+    // The two arrivals behind the reach rows below — what the signals list draws
+    // for an environment, and what the ticket comments were posted off.
+    environmentArrivals: [
+      {
+        goalRef: 'issue:390',
+        environment: 'staging',
+        arrivedAt: '2026-08-19T09:12:00.000Z',
+        announcedAt: '2026-08-19T09:12:04.000Z',
+      },
+    ],
     // One goal in each of the readings worth drawing: whole, half, and unanswerable.
+    // `staging` opens both obligations, so the second goal also draws the hold —
+    // delivered, and its bench rows waiting on an environment it has not reached.
     environmentReach: [
       {
         goalRef: 'issue:390',
         environments: [
-          { environment: 'staging', status: 'reached', landed: 2, total: 2, at: '2026-08-19T09:12:00.000Z' },
-          { environment: 'prod', status: 'partial', landed: 1, total: 2, at: null },
+          {
+            environment: 'staging',
+            status: 'reached',
+            landed: 2,
+            total: 2,
+            at: '2026-08-19T09:12:00.000Z',
+            opens: ['validate', 'close_out'],
+          },
+          { environment: 'prod', status: 'partial', landed: 1, total: 2, at: null, opens: [] },
         ],
+        gateHold: null,
+        released: null,
       },
       {
         goalRef: 'issue:376',
         environments: [
-          { environment: 'staging', status: 'reached', landed: 1, total: 1, at: '2026-08-12T16:04:00.000Z' },
-          { environment: 'prod', status: 'unknown', landed: 0, total: 1, at: null },
+          {
+            environment: 'staging',
+            status: 'unknown',
+            landed: 0,
+            total: 1,
+            at: null,
+            opens: ['validate', 'close_out'],
+          },
+          { environment: 'prod', status: 'unknown', landed: 0, total: 1, at: null, opens: [] },
         ],
+        gateHold: 'the validation checks and the close-out are waiting for this work to reach staging.',
+        released: null,
       },
     ],
     // An environment that is up, on the goal whose plan is waiting for approval —

@@ -1,3 +1,5 @@
+import { openedGoals } from '../environments/arrival.js';
+import type { EnvironmentConfig } from '../environments/policy.js';
 import type { Store } from '../store/store.js';
 import type { Issue, ValidationCheck } from '../types.js';
 import { validationReadyPass } from './ready.js';
@@ -24,7 +26,16 @@ interface ValidationReadyWorld {
  * can read for itself.
  */
 export class ValidationReadyDesk {
-  constructor(private readonly store: Store) {}
+  /**
+   * `environments` is read for one thing only: which of them declare that
+   * arriving there is what opens the checks. Passed rather than looked up so this
+   * desk and {@link DeliveryCloseOutDesk} cannot form different opinions about a
+   * gate the operator wrote once.
+   */
+  constructor(
+    private readonly store: Store,
+    private readonly environments: EnvironmentConfig[] = [],
+  ) {}
 
   /** @public called by `Harness.runCycle`, beside the other bookkeeping passes. */
   run(world: ValidationReadyWorld): void {
@@ -38,6 +49,12 @@ export class ValidationReadyDesk {
       shortfalls: this.store.listShortfalls(),
       existing: this.store.listHumanTasksOfKind('validate'),
       checks: this.checksByOrigin(deliveries.map((d) => d.originRef)),
+      opened: openedGoals(
+        'validate',
+        this.environments,
+        this.store.listGoalArrivals(),
+        this.store.listEnvironmentGateReleases(),
+      ),
     });
     for (const step of steps) {
       if (step.kind === 'file')

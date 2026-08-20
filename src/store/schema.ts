@@ -597,6 +597,28 @@ CREATE TABLE IF NOT EXISTS environment_reach (
   PRIMARY KEY (sha, environment)
 );
 
+-- A whole goal's work confirmed in one environment, the first time it was (see
+-- EnvironmentStore). Stored because an arrival is a *moment* and reach is a
+-- status: without a row, the comment goes out every pulse and the signal reads as
+-- a state rather than as something that happened.
+CREATE TABLE IF NOT EXISTS goal_arrivals (
+  goal_ref     TEXT NOT NULL,      -- issue:<n>
+  environment  TEXT NOT NULL,
+  arrived_at   TEXT NOT NULL,      -- the reading that confirmed the goal's last landing
+  recorded_at  TEXT NOT NULL,
+  announced_at TEXT,               -- NULL while the announce pass has not seen it
+  PRIMARY KEY (goal_ref, environment)
+);
+
+-- Goals the operator has said are not waiting on an environment: a docs change, a
+-- config change, work whose deployment nothing here can see. Lifts every gate on
+-- that goal, and is cleared by deleting the row so "not released" has one shape.
+CREATE TABLE IF NOT EXISTS environment_gate_releases (
+  goal_ref    TEXT PRIMARY KEY,    -- issue:<n>
+  note        TEXT NOT NULL,
+  released_at TEXT NOT NULL
+);
+
 -- Pull requests the harness has already tagged with the watch label because it
 -- opened them (see PrWatchSeedStore). Stored because the live labels cannot answer
 -- it: a pull request an operator has un-watched looks exactly like one never

@@ -1,23 +1,23 @@
-import type { EnvironmentProber, EnvironmentVerdict } from './prober.js';
+import type { EnvironmentHead, EnvironmentProber } from './prober.js';
 
 /**
- * A scripted prober: answers from a map keyed `"<environment> <sha>"`, and
- * `unknown` for anything unscripted — the honest default, since a probe that has
- * not been told about a commit has not answered about it.
+ * A scripted prober: answers from a map keyed on the environment's name, and
+ * "could not say" for anything unscripted — the honest default, since a probe
+ * nobody has told where it is has not answered.
  *
  * The seam exists so no test spawns a shell. A test that let the real prober run
  * would be asserting on the machine's `sh`, its `git`, and whatever `LUBBDUBB_*`
  * the developer happened to export.
  */
 export class FakeEnvironmentProber implements EnvironmentProber {
-  /** Every `(environment, sha)` asked about, in order — what a test asserts the cap and the interval with. */
+  /** Every environment asked, in order — what a test asserts the per-pulse cost with. */
   readonly asked: string[] = [];
 
-  constructor(private readonly answers: Record<string, EnvironmentVerdict> = {}) {}
+  constructor(private readonly heads: Record<string, string[]> = {}) {}
 
-  reached(environment: string, _command: string, sha: string): Promise<EnvironmentVerdict> {
-    const key = `${environment} ${sha}`;
-    this.asked.push(key);
-    return Promise.resolve(this.answers[key] ?? { status: 'unknown', detail: 'unscripted' });
+  at(environment: string, _command: string): Promise<EnvironmentHead> {
+    this.asked.push(environment);
+    const commits = this.heads[environment];
+    return Promise.resolve(commits === undefined ? { commits: null, detail: 'unscripted' } : { commits, detail: null });
   }
 }

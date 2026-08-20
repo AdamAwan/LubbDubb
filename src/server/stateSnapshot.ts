@@ -38,8 +38,8 @@ import { localRunIsLive } from '../store/localRuns.js';
 import { validationResourcePath } from '../validation/resources.js';
 import { withLiveClaim } from '../validation/desktop.js';
 import { watchLabelFor } from '../watchLabels.js';
-import { goalReach } from '../environments/reach.js';
-import { unattributedMerges } from '../environments/landings.js';
+import { allGoalReach } from '../environments/reach.js';
+import { environmentGateHold } from '../environments/arrival.js';
 import type { EnvironmentConfig } from '../environments/policy.js';
 import { resolveModelTag } from '../modelLabels.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
@@ -567,6 +567,10 @@ export function buildStateSnapshot(
     // environment configured, which the cockpit draws as no row rather than as a
     // row of unknowns.
     environmentReach: buildEnvironmentReach(store, config.environments),
+    // Off the same table the comments are posted from, capped like every other
+    // feed here. Empty with nothing configured, so the cockpit's signals list is
+    // untouched on a deployment that never set an environment up.
+    environmentArrivals: config.environments.length === 0 ? [] : store.listGoalArrivals().slice(0, 50),
     // The "land the stack" control, one entry per chain above: whether the click
     // may be offered, and the operator's standing intent over it. Joined to a
     // stack by rung membership rather than by ref — see `landingFor`.
@@ -828,22 +832,28 @@ function buildUsage(system: System, unattributedCostUsd: number) {
  */
 function buildEnvironmentReach(store: System['store'], environments: EnvironmentConfig[]): GoalReachView[] {
   if (environments.length === 0) return [];
-  const landings = store.listGoalLandings();
-  const readings = store.listEnvironmentReach();
-  const nodes = store.listWorkNodes();
-  const landed = store.landedPrs();
-  const names = environments.map((e) => e.name);
-  const goalRefs = new Set(landings.map((l) => l.goalRef));
-  for (const node of nodes) if (node.kind === 'issue') goalRefs.add(node.ref);
-  const out: GoalReachView[] = [];
-  for (const goalRef of goalRefs) {
-    const unattributed = unattributedMerges(goalRef, nodes, landed);
-    // A goal with nothing merged has not been anywhere, and a row saying so on
-    // every issue the graph has ever held would bury the ones that have.
-    if (unattributed === 0 && !landings.some((l) => l.goalRef === goalRef)) continue;
-    out.push({ goalRef, environments: goalReach({ goalRef, landings, readings, environments: names, unattributed }) });
-  }
-  return out;
+  const arrivals = store.listGoalArrivals();
+  const releases = store.listEnvironmentGateReleases();
+  const released = new Map(releases.map((r) => [r.goalRef, r]));
+  // A hold is only a hold on a goal that is *delivered*: everything else is
+  // simply work in progress, and a sentence saying its close-out is waiting on
+  // testUk would be the harness announcing a queue it is not in yet.
+  const delivered = new Set(store.listDeliveries().map((d) => d.originRef));
+  const shortfalls = new Set(store.listShortfalls().map((sf) => sf.originRef));
+  return allGoalReach({
+    landings: store.listGoalLandings(),
+    readings: store.listEnvironmentReach(),
+    nodes: store.listWorkNodes(),
+    landed: store.landedPrs(),
+    environments,
+  }).map((goal) => ({
+    ...goal,
+    gateHold:
+      delivered.has(goal.goalRef) && !shortfalls.has(goal.goalRef)
+        ? environmentGateHold({ goalRef: goal.goalRef, environments, arrivals, releases })
+        : null,
+    released: released.get(goal.goalRef) ?? null,
+  }));
 }
 
 /**
