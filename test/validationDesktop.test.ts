@@ -187,7 +187,7 @@ test('a desktop session gets its own tools and none of the fleet’s', async () 
 
 test('the credential is 0600, carries no configured secret, and dies with the channel', async () => {
   const system = build();
-  const { server, dir } = await desk(system);
+  const { server, dir, socketPath } = await desk(system);
   const path = join(dir, 'desktop.json');
   try {
     const stat = statSync(path);
@@ -197,7 +197,10 @@ test('the credential is 0600, carries no configured secret, and dies with the ch
     const credential = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>;
     assert.equal(credential.lubbdubb, 1);
     assert.equal(typeof credential.token, 'string');
-    assert.equal(credential.socket, join(dir, 'desktop.sock'));
+    // Read back from the helper rather than rebuilt here: the path is chosen per
+    // platform (a named pipe on Windows), and a second guess at it would assert
+    // the test's arithmetic instead of what the channel actually wrote.
+    assert.equal(credential.socket, socketPath);
 
     // Minted, never configured — the registration is a fixed command line with
     // the bridge on it and nothing else.
