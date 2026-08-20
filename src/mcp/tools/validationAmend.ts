@@ -17,7 +17,9 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
     'check you merely failed. A check you add answers to the bar the plan does: it is something that can only ' +
     'be found out by *running* the delivered goal — a real environment, the state it wrote, the logs, the ' +
     'screen. Anything the diff, the test suite, the type checker or a green build already settles is not a ' +
-    'check, and adding one sends a person out to redo work that is done.',
+    'check, and adding one sends a person out to redo work that is done. One run of the thing is one check: ' +
+    'if what you are adding would be run in the same sitting as a check that already exists, widen that ' +
+    'check instead of adding a second one beside it.',
   inputSchema: {
     type: 'object',
     properties: {
@@ -84,9 +86,11 @@ export const validationAmend: ToolFactory = ({ deps, task, ok }) => ({
       resources: {
         type: 'array',
         description:
-          'Things a check needs that are not in the repository: a seeded fixture, a reference screenshot, an ' +
-          'account. Merged by name; nothing here removes one. Set "provided": false for something you cannot ' +
-          'produce yourself and the harness asks a person for it once the goal is delivered.',
+          'Files a check needs that the repository does not have: a seeded fixture, a reference screenshot, a ' +
+          'dump of real data. Merged by name; nothing here removes one. Not the place for a login, an account ' +
+          'or an environment — what a check needs to be runnable goes in its "do", where the person running it ' +
+          'reads it. Set "provided": false for a file you cannot produce yourself, and the harness asks a ' +
+          'person to put it on disk once the goal is delivered.',
         items: {
           type: 'object',
           properties: {

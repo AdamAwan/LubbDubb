@@ -150,8 +150,8 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'never dispatched, and anything naming it in "dependsOn" waits for a person to mark it done.\n\n' +
       '## How anyone checks it worked\n\n' +
       'Beside "verification", and different from it: `verification` is the sentence, `validation` is the ' +
-      'steps. One bar decides what belongs in the block, and it is the only thing in this section worth ' +
-      'getting right:\n\n' +
+      'steps. Two rules decide the block. The first is what a check is. The second is how many of them one ' +
+      'goal gets, and it is the one plans get wrong.\n\n' +
       '**A check is something that can only be found out by running the delivered goal.** If the diff, the ' +
       'test suite, the type checker or a green build settles it, it is not a check — all four have already ' +
       'happened, on every branch, before anybody opens this sheet. "The unit tests pass", "the build is ' +
@@ -174,31 +174,52 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'gone, a real credential, real volume, a cold start.\n' +
       '- The judgement call: whether the wording reads right, whether the number is believable beside the ' +
       'source it came from.\n\n' +
-      'The shape, with one check that clears the bar — it runs the thing and looks at what it left:\n\n' +
+      '**One run of the thing is one check.** Those are six ways of looking, not six checks — everything a ' +
+      'single run settles belongs to the one check that performs it: the screen it drew, the rows it wrote, ' +
+      'the line in the log, the file it left behind. "Check the new page renders" and "check the row is ' +
+      'written" are one check, because the setup is the expensive part and splitting them writes it twice ' +
+      'and makes somebody perform it twice to look at the same run from two angles. Write the "do" once, ' +
+      'end to end, and let "expect" carry every observation that run has to satisfy — a short list is a ' +
+      'good "expect". Split only when the second look genuinely needs a *different* run: another ' +
+      'environment, a fresh database, a restart, a second person.\n\n' +
+      '**So most goals get one check, two is ordinary, and three wants a reason.** A sheet of six is ' +
+      'almost always one journey cut into six looks at it. Nothing counts checks and nothing rewards a ' +
+      'longer list; a filler check costs somebody an afternoon and buries the one that mattered. ' +
+      '**Declaring none is a legitimate answer**: a refactor whose whole claim is that behaviour did not ' +
+      'change, or a documentation change, has nothing left for a person to run once the suite is green, ' +
+      'and an empty block says so honestly.\n\n' +
+      '**What running it needs is stated on the check, never asked for as a separate errand.** A login on ' +
+      'the test environment, a database you can query, a customer account, a flag that has to be on, a ' +
+      'second device — put it in the opening line of "do", in the words that let the reader go and get it: ' +
+      '"you need read access to the staging database (connection string in the team vault)". There it is ' +
+      'read by the person running the check, at the moment they need it. Filed as anything else it becomes ' +
+      'a row in somebody else’s queue, and a delivered goal that opens by asking four people for four ' +
+      'things is a goal nobody validates.\n\n' +
+      'The shape, with one check that clears the bar — it runs the thing once and looks at everything that ' +
+      'run touched:\n\n' +
       '  "validation": {\n' +
-      '    "resources": [{"name": "fixture-repo.tar.gz", "kind": "fixture", "note": "seeded repo, one PR by another author"},\n' +
-      '                  {"name": "test-env login", "kind": "access", "provided": false}],\n' +
-      '    "checks": [{"id": "merged-branch-gone", "title": "A squash-merged part branch is gone on both sides",\n' +
-      '                "do": "Run the harness against the fixture repo and merge the seeded PR…",\n' +
-      '                "expect": "No issue/284/reap ref, locally or on the remote.",\n' +
-      '                "uses": ["fixture-repo.tar.gz"], "covers": ["reap-writer"],\n' +
+      '    "resources": [{"name": "fixture-repo.tar.gz", "kind": "fixture", "note": "seeded repo, one PR by another author"}],\n' +
+      '    "checks": [{"id": "reap-merged-branch", "title": "A squash-merged part branch is reaped, everywhere it shows",\n' +
+      '                "do": "Needs git and a checkout — no login and no browser. Unpack the fixture repo, point a local harness at it, merge the seeded PR, and let one pulse run.",\n' +
+      '                "expect": "No issue/284/reap ref locally or on the remote; the part reads merged on the goal page; one \\"reaped\\" line in the log and no error record.",\n' +
+      '                "uses": ["fixture-repo.tar.gz"], "covers": ["reap-writer", "reap-desk"],\n' +
       '                "fleetCandidate": true, "why": "reads the repo and runs git; no login, no browser"}]}\n\n' +
       '- **"id"** is kebab-case, unique and *stable* — an amended plan merges on it, like a part slug.\n' +
-      '- **"do"** is the procedure — the commands, the URL, the clicks, in enough detail that somebody who ' +
-      'has not read your plan can follow it. **"expect"** is what they would *see*, and where: the row, the ' +
-      'log line, the ref that is gone, the screen. A check that cannot say what a pass looks like is not a ' +
-      'check.\n' +
-      '- **How many.** Write the ones this goal actually has and stop — most have one to three. **Declaring ' +
-      'none is a legitimate answer**: a refactor whose whole claim is that behaviour did not change, or a ' +
-      'documentation change, has nothing left for a person to run once the suite is green, and an empty ' +
-      'block says so honestly. Nothing counts checks, and a filler one costs somebody an afternoon.\n' +
+      '- **"do"** is the procedure — what it needs, then the commands, the URL, the clicks, in enough ' +
+      'detail that somebody who has not read your plan can follow it. **"expect"** is what they would ' +
+      '*see*, and where: the row, the log line, the ref that is gone, the screen. A check that cannot say ' +
+      'what a pass looks like is not a check.\n' +
       '- **"covers"** names the part slugs a check exercises, so the sheet can show which parts nothing ' +
-      'checks. Validation is per *goal*, so a check spanning several parts is normal.\n' +
-      '- **"resources"** are what a check needs that is not in the repository. Name them; never write paths. ' +
-      '`"provided": false` says you need something you cannot produce, and files an ask for it.\n' +
+      'checks. Validation is per *goal*, so one check covering every part is the normal shape, not a ' +
+      'sign you have merged too much.\n' +
+      '- **"resources"** are **files** a check needs that the repository does not have: a seeded fixture, ' +
+      'a reference screenshot, a dump of real data. Name them; never write paths, and never name a login, ' +
+      'an account or an environment — those are preconditions and belong in "do" with everything else the ' +
+      'reader needs. `"provided": false` says you need a file you cannot produce, and asks a person to put ' +
+      'it on disk, so it is worth writing only when the check truly cannot run without one.\n' +
       '- **"fleetCandidate"** is a *suggestion* that an agent could run this one, with "why". Every check is ' +
-      'a person\u2019s until they say otherwise, and you cannot say otherwise: you do not know whether this ' +
-      'deployment\u2019s fleet has a browser, a login or an environment. **There is no "actor" field and a ' +
+      'a person’s until they say otherwise, and you cannot say otherwise: you do not know whether this ' +
+      'deployment’s fleet has a browser, a login or an environment. **There is no "actor" field and a ' +
       'document carrying one is refused.**\n\n' +
       '## The write-up\n\n' +
       '"document" is not optional in practice: a human reads it and decides whether this work happens. The ' +
@@ -207,7 +228,7 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'work should check. Markdown, and written for the person deciding.\n\n' +
       'Do not implement anything and do not open a pull request. Writing the plan is the whole job — you are ' +
       'on branch {branch} only so you have the repository to read.',
-    doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule `issue-plan`). The agent writes its plan to the plan file; nothing else it does is read. Every plan is a list of parts and at least one is required — work that is one pull request is a one-part plan, not a separate shape. Most of its length is spent on *what a good plan says* rather than on JSON shape, since `plan_submit` validates and returns its own reasons: the headline four (`diagnosis`, `approach`, `alternatives`, `openQuestions`), the four that make them checkable (`evidence`, `verification`, `reason`, `risks`/`outOfScope`), and per-part `touches`/`size`/`acceptance`/`rationale`. All optional, so an older override that omits them still validates. The `validation` block gets a section of its own stating the bar — a check is what only running the delivered goal can answer, never the suite, the diff or a green build, and declaring none is a legitimate answer. Placeholders: {number} {title} {body} {branch} {planFile}.',
+    doc: 'Sent to a code agent when the planning funnel is enabled and a watched open issue has no plan yet (rule `issue-plan`). The agent writes its plan to the plan file; nothing else it does is read. Every plan is a list of parts and at least one is required — work that is one pull request is a one-part plan, not a separate shape. Most of its length is spent on *what a good plan says* rather than on JSON shape, since `plan_submit` validates and returns its own reasons: the headline four (`diagnosis`, `approach`, `alternatives`, `openQuestions`), the four that make them checkable (`evidence`, `verification`, `reason`, `risks`/`outOfScope`), and per-part `touches`/`size`/`acceptance`/`rationale`. All optional, so an older override that omits them still validates. The `validation` block gets a section of its own stating the bar and the grouping rule — a check is what only running the delivered goal can answer, never the suite, the diff or a green build; one run of the thing is one check, so what that run settles is listed in a single `expect` rather than split into a check per place you look; what the check needs to be runnable is a line in its `do` rather than a resource, since a resource is a file and an unprovided one becomes somebody’s errand; and declaring none is a legitimate answer. Placeholders: {number} {title} {body} {branch} {planFile}.',
   },
   'issue-replan': {
     placeholders: ['number', 'title', 'body', 'branch', 'planFile', 'current'],
@@ -243,10 +264,14 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '- **Validation checks answer to the same bar as a cold plan.** A check is something that can only be ' +
       'found out by running the delivered goal — a real environment, the state it wrote, the logs, the ' +
       'screen. Anything the diff, the suite, the type checker or a green build settles is not one, and a ' +
-      'replan is the moment to drop the checks that turned out to be that. **Ids are a merge key too.** ' +
+      'replan is the moment to drop the checks that turned out to be that. **One run of the thing is one ' +
+      'check**, so a replan is also the moment to fold a sheet of them back together: two checks that begin ' +
+      'with the same setup are one check with a longer "expect". Fold by keeping one id, widening it, and ' +
+      'leaving the others out. What a check needs to be runnable — a login, a database, an account — is ' +
+      'stated in its "do", never declared as a resource: "resources" are files. **Ids are a merge key too.** ' +
       'Re-use the exact "id" of every check you are keeping. A ' +
       'check you leave out is *superseded*, not deleted — it stays on the record, greyed, with its letter ' +
-      'retired. Rewording a check\u2019s "title", "do" or "expect" withdraws whatever result it had, which is ' +
+      'retired. Rewording a check’s "title", "do" or "expect" withdraws whatever result it had, which is ' +
       'correct: you have changed what a pass means. Re-state the whole "validation" block, and omitting it ' +
       'entirely leaves the existing checks exactly as they are.\n' +
       '- **Re-state the whole narrative.** `diagnosis`, `approach`, `alternatives`, `openQuestions`, ' +

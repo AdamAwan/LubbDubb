@@ -146,12 +146,12 @@ test('a nomination keeps its reason, and a check without one keeps none', () => 
   assert.equal(checks.find((c) => c.id === 'b')!.candidateWhy, null);
 });
 
-/** The document that declares one resource the planner cannot produce, and one it can. */
+/** The document that declares one file the planner cannot produce, and one it can. */
 function withResources(): PlanDocument {
   return doc({
     validation: {
       resources: [
-        { name: 'test-env login', kind: 'access', provided: false, note: 'a read-only account on staging' },
+        { name: 'orders-dump.sql', kind: 'data', provided: false, note: 'a week of real orders, scrubbed' },
         { name: 'fixture.tar.gz', kind: 'fixture' },
       ],
       checks: [check()],
@@ -175,8 +175,8 @@ test('a resource the planner cannot provide is not an ask until the goal is deli
   asks.run();
   const filed = store.listHumanTasks();
   assert.equal(filed.length, 1, 'only the unprovided one is an ask');
-  assert.match(filed[0]!.title, /test-env login/);
-  assert.match(filed[0]!.detail ?? '', /read-only account on staging/);
+  assert.match(filed[0]!.title, /orders-dump\.sql/);
+  assert.match(filed[0]!.detail ?? '', /week of real orders/);
   assert.equal(store.listValidationResources(goal).find((r) => !r.provided)!.humanTaskId, filed[0]!.id);
 
   // The sweep runs every pulse, and a replan re-declaring the same resource must
@@ -185,6 +185,32 @@ test('a resource the planner cannot provide is not an ask until the goal is deli
   ingest(store, withResources());
   asks.run();
   assert.equal(store.listHumanTasks().length, 1);
+});
+
+test('a resource naming access rather than a file is never an ask', () => {
+  const store = new Store(':memory:');
+  const goal = ingest(
+    store,
+    doc({
+      validation: {
+        resources: [
+          { name: 'staging-login', kind: 'access', provided: false, note: 'a read-only account on staging' },
+          { name: 'orders-dump.sql', kind: 'data', provided: false },
+        ],
+        checks: [check()],
+      },
+    }),
+  );
+  store.recordDelivery({ originRef: goal, summary: 'delivered', by: 'assessor' });
+  new ValidationAskDesk(store).run();
+
+  // The ask tells its reader to put the thing in the goal's validation
+  // directory, which nobody can do with an account. Access a check needs is a
+  // precondition, stated in the check's own `do` — so only the file is asked for.
+  const filed = store.listHumanTasks();
+  assert.equal(filed.length, 1);
+  assert.match(filed[0]!.title, /orders-dump\.sql/);
+  assert.equal(store.listValidationResources(goal).find((r) => r.kind === 'access')!.humanTaskId, null);
 });
 
 test('an assessor that sends the goal back stops it being asked about', () => {
@@ -232,7 +258,7 @@ test('a planner that can produce the resource after all withdraws the ask too', 
     store,
     doc({
       validation: {
-        resources: [{ name: 'test-env login', kind: 'access', provided: true }],
+        resources: [{ name: 'orders-dump.sql', kind: 'data', provided: true }],
         checks: [check()],
       },
     }),
