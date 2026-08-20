@@ -658,25 +658,6 @@ test('sourceControl resolves refs to canonical URLs using its owner/repo', () =>
   store.close();
 });
 
-test('the filing-target probe names the repository and the authenticated login', async () => {
-  const { api } = fakeApi({ viewer: 'adamawan' });
-  const issues = new GitHubIssuesIntegration({ api, owner: 'octo', repo: 'demo' });
-
-  // `viewerLogin` rather than a call invented for this: it is the one authenticated
-  // round trip a revoked token fails outright, which is the only thing about filing
-  // that boot cannot already prove (issue #413).
-  assert.deepEqual(await issues.describeFilingTarget(), { target: 'octo/demo', identity: 'adamawan' });
-});
-
-test('a filing-target probe on a dead credential throws rather than reporting a target', async () => {
-  const { api } = fakeApi({ throwOn: 'viewerLogin' });
-  const issues = new GitHubIssuesIntegration({ api, owner: 'octo', repo: 'demo' });
-
-  // The route turns this into `available: false` with the reason; the provider's
-  // job is to fail loudly rather than answer a target it cannot write to.
-  await assert.rejects(issues.describeFilingTarget(), /Bad credentials/);
-});
-
 test('issues provider is also a ref resolver', () => {
   const { api } = fakeApi();
   const store = new Store(':memory:');

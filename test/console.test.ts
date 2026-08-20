@@ -111,10 +111,10 @@ test('a dropped socket draws no gauge, no rail and no situation area', () => {
 });
 
 /**
- * The tracker link is on the bar whether the harness is talking to us or not
- * (#404). Both arms are asserted because they are two returns in `TopBar` and the
- * offline one is the one a change would forget — and it is the state an operator is
- * most likely to have something to file about.
+ * The way to report a fault in LubbDubb is on the bar whether the harness is
+ * talking to us or not (#404), and the offline arm is a whole second return in
+ * `TopBar` — the one a change would forget, and the state an operator is most
+ * likely to have something to file about.
  *
  * The href is pinned to the new-issue *form*, not the repo or the issue list: the
  * feature is the click count, and a link that lands one page short of writing
@@ -124,40 +124,39 @@ test('the bar offers LubbDubb’s own tracker, online and off', () => {
   // One anchor carrying both, rather than two `includes` — the console draws other
   // external refs, so a loose `rel` assertion would pass on somebody else's link.
   const link = /<a[^>]*href="https:\/\/github\.com\/AdamAwan\/LubbDubb\/issues\/new"[^>]*rel="noopener noreferrer"/;
-  for (const connected of [true, false]) {
-    const html = render(view({ connected }));
-    assert.ok(link.test(html), `no new-issue link that keeps the opener, while connected=${connected}`);
-  }
+  assert.ok(link.test(render(view({ connected: false }))), 'no new-issue link that keeps the opener while offline');
+  // Connected, the same destination is reached through the compose modal instead —
+  // which is the point of #449: two faces, one repository.
+  assert.ok(render(view({ connected: true })).includes('cn-issue-btn'), 'no compose button while connected');
 });
 
 /**
- * Issue #413. The bar's control has two faces and the fallback is the load-bearing
- * one: the compose modal posts to this harness's own server, so on a dropped socket
- * — the state an operator is most likely to have something to file about — there is
- * nothing behind it. The demo fixtures carry `canFileTickets: false`, which is why
- * the test above still finds the external link on both arms; this one raises the
- * flag and asserts the other face, then puts the socket down under it.
+ * Issues #413 and #449. The bar's control has two faces and the fallback is the
+ * load-bearing one: the compose modal posts to this harness's own server, so on a
+ * dropped socket — the state an operator is most likely to have something to file
+ * about — there is nothing behind it.
+ *
+ * `canFileTickets` is deliberately **not** in this gate. It says whether the
+ * tracker the fleet is pointed at accepts new items, and since #449 the report goes
+ * somewhere else entirely: the demo fixtures carry `false`, and a connected cockpit
+ * composes anyway.
  */
-test('the bar composes where the harness can file, and links out where it cannot', () => {
+test('the bar composes whenever it is connected, and links out when it is not', () => {
   const filing = (canFileTickets: boolean, connected: boolean): CockpitView => {
     const v = view({ connected });
     return { ...v, state: { ...v.state, config: { ...v.state.config, canFileTickets } } };
   };
   const link = /<a[^>]*href="https:\/\/github\.com\/AdamAwan\/LubbDubb\/issues\/new"/;
 
-  const composing = render(filing(true, true));
-  assert.ok(composing.includes('cn-issue-btn'), 'no compose button where the harness can file');
-  assert.ok(!link.test(composing), 'the external link is drawn beside the compose button');
+  for (const canFileTickets of [true, false]) {
+    const composing = render(filing(canFileTickets, true));
+    assert.ok(composing.includes('cn-issue-btn'), `no compose button with canFileTickets=${canFileTickets}`);
+    assert.ok(!link.test(composing), 'the external link is drawn beside the compose button');
 
-  for (const [canFileTickets, connected] of [
-    [false, true],
-    [true, false],
-    [false, false],
-  ] as const) {
-    const html = render(filing(canFileTickets, connected));
+    const offline = render(filing(canFileTickets, false));
     assert.ok(
-      link.test(html) && !html.includes('cn-issue-btn'),
-      `no way out to the tracker with canFileTickets=${canFileTickets}, connected=${connected}`,
+      link.test(offline) && !offline.includes('cn-issue-btn'),
+      `no way out to LubbDubb’s tracker with the socket down and canFileTickets=${canFileTickets}`,
     );
   }
 });
@@ -178,7 +177,9 @@ test('the compose modal is unusable until the probe has answered', () => {
       onClose: () => undefined,
     }),
   );
-  assert.equal(html.match(/<(?:input|textarea)[^>]*disabled/g)?.length, 3, 'title, body and the watch opt-in');
+  // Two, not three: the watch opt-in is not drawn at all until the probe says this
+  // fleet is one that could act on the label (issue #449).
+  assert.equal(html.match(/<(?:input|textarea)[^>]*disabled/g)?.length, 2, 'title and body');
   assert.ok(/<button[^>]*disabled[^>]*>raise issue<\/button>/.test(html), 'the submit must start dead');
   assert.ok(decode(html).includes('checking where this would go'), 'and must say why it is waiting');
 });
@@ -190,9 +191,12 @@ test('the compose modal is unusable until the probe has answered', () => {
  */
 test('the probe decides three readings, and only one of them can file', () => {
   assert.equal(composeGate(null), 'checking');
-  assert.equal(composeGate({ available: true, reason: null, target: 'octo/demo', identity: 'octocat' }), 'ready');
   assert.equal(
-    composeGate({ available: false, target: null, identity: null, reason: 'the token is dead' }),
+    composeGate({ available: true, reason: null, watchable: false, target: 'AdamAwan/LubbDubb', identity: 'octocat' }),
+    'ready',
+  );
+  assert.equal(
+    composeGate({ available: false, target: null, identity: null, reason: 'gh is logged out' }),
     'unavailable',
   );
 

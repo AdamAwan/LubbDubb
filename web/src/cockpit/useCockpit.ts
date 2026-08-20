@@ -246,8 +246,10 @@ export function useCockpit(): CockpitStatus {
       probeFilingTarget: () => api.probeFilingTarget(),
       // Refetched like every other mutation, but the filed issue is handed back
       // rather than swallowed: the modal's done state links to it. The refresh is
-      // awaited so the new issue is in the world the cockpit draws before the modal
-      // says it exists.
+      // awaited because on the deployment that works LubbDubb's own repo the report
+      // is in the world the cockpit draws, and it should be there before the modal
+      // says it exists; anywhere else it is one cheap read that finds nothing new,
+      // which is a smaller cost than a second code path (issue #449).
       raiseIssue: async (title, body, watch) => {
         const filed = await api.raiseIssue(title, body, watch);
         await refresh();

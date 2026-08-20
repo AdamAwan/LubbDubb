@@ -98,25 +98,24 @@ it — so the throw carries the id of what was created.
 what a filing row stores, what `link_ticket` speaks and what the cockpit resolves to a URL, so the one
 translation happens in the provider instead of at each call site.
 
-`IssueCreateCapable` carries a second method, `describeFilingTarget()`, which answers **where a
-filing would land and as whom** — a `FilingTarget` of `{target, identity}` (issue #413). It is on the
-same interface rather than a capability of its own because it is not a second thing a provider might
-support: it is the question "would `createIssue` work", and a provider that could create but not say
-where would have the cockpit invite an operator to file blind into a tracker it cannot name.
+**A report about LubbDubb itself does not come through here at all** (issue #449). The cockpit's
+"Raise an issue" control is about the tool rather than about the work, and `UpstreamIssues`
+(`src/tickets/upstream.ts`) is its own seam past the connector for that reason: it always files into
+`AdamAwan/LubbDubb`, whatever provider this deployment selected. Routing it through the composite
+would mean an Azure deployment creating a GitHub issue through a work-item API, which nothing can do.
 
-It is resolved by a **live provider call**, and that is the whole point of it. Config already says
-which tracker is selected; what it cannot say is whether the credential behind it still works. On
-GitHub the probe is `viewerLogin()` — the same authenticated round trip review authorship uses, and
-the one call a revoked or expired `GITHUB_TOKEN` fails outright — and the target is
-`owner/repo`. On Azure it is `viewerUniqueName()`, which also catches an `az` login that has lapsed
-(auth there resolves lazily rather than at boot), and the target is `organization/project`: work
-items belong to the **project**, and naming the repository would point an operator at the wrong half
-of it. The fake answers `the fake tracker` with a null `identity` — nobody is authenticated against a
-fake, and inventing a plausible login would make the one reading the probe exists to give a lie.
+Its transport is the **`gh` CLI**, and that is a choice. The harness's `GITHUB_TOKEN` is scoped to the
+repo the fleet works on and may not reach this one; `gh` is already on the machine (the agents use it),
+is authenticated as the operator, and files as _them_ — the right byline for a bug report about the
+tool, and the reason an Azure-only deployment with no GitHub credential anywhere in its config can
+still send one. `describeTarget()` is `gh api user`, one authenticated round trip that a missing or
+logged-out CLI fails outright; `create()` is `gh issue create --repo`, whose stdout is the new issue's
+URL. Neither is spawned through a shell: the arguments carry a title and a body the operator typed, and
+a shell between them and the CLI would make that text executable.
 
-Like `createIssue` it **throws** rather than reporting a failure. A dead credential is a fault, and
-which of "no tracker here", "the token is dead" and "the tracker did not answer" an operator should
-be shown is the caller's decision — made once, in `GET /api/issues/filing-target`
+Both **throw** rather than reporting a failure, exactly as `createIssue` does. Which of "gh is not
+installed", "gh is logged out" and "the CLI did not answer" an operator should be shown is the caller's
+decision — made once, in `GET /api/issues/filing-target`
 ([16](16-http-api.md#get-apiissuesfiling-target)).
 
 `PrBaseUpdateCapable` merges a pull request's **base into it** — the arm of rule `pr-base-update` that

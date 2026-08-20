@@ -585,51 +585,63 @@ it survive together. A clear goal, or one with no checks at all, is dismissed wi
 
 ### `GET /api/issues/filing-target`
 
-Whether the harness can file an issue right now, where it would land and as whom — the live half of
-the gate on the top bar's compose modal (issue #413). Answers a `FilingTargetProbe`:
-`{available: true, target, identity, reason: null}`, or
-`{available: false, target: null, identity: null, reason}`. A **union, not four independent fields**:
+Whether a report **about LubbDubb** can be filed right now, where it would land and as whom — the live
+half of the gate on the top bar's compose modal (issues #413, #449). Answers a `FilingTargetProbe`:
+`{available: true, target, identity, watchable, reason: null}`, or
+`{available: false, target: null, identity: null, reason}`. A **union, not five independent fields**:
 an available target always names itself and an unavailable one always says why, so there is no way to
 draw a modal head naming nowhere.
 
-Every failure arm is a **200**, never a 5xx. A dead credential is an answer to the question that was
-asked, and the caller is a modal that wants to say why it is falling back to the external new-issue
-form rather than one that wants an exception. Three arms reach it: nothing is `IssueCreateCapable`
-(the fake or an unconfigured provider), the provider call threw, or it did not answer inside eight
-seconds — the last one because the whole point of a live probe is to catch a rate-limited tracker, and
-a request that never returns leaves the modal that fired it spinning, which is worse than the fault it
-was checking for. The two failing arms are **recorded** to the error log; the "nothing can file" arm is
-not, because a deployment shape is not a fault
-([15](15-integrations.md#outbound-is-many-small-interfaces-not-one-fat-one)).
+The target is always `AdamAwan/LubbDubb` and never the tracker the fleet is pointed at, which is the
+whole of issue #449 — a fault in the cockpit belongs on the cockpit's tracker. The identity is the
+operator's own `gh` login, and it is asked live because that is the one thing about filing here that
+config cannot state. `watchable` is the exception that still depends on config: the watch label is what
+makes a fleet pick an issue up and a fleet only sweeps its own tracker, so it is true only where this
+deployment's issues provider is GitHub pointed at that same repository — the dogfooding case. Elsewhere
+the modal draws no watch box rather than an inert one.
 
-Not on `/api/state`: it costs a provider round trip and the only reader is a modal that opens rarely.
-The static half of the gate — whether a real tracker is configured at all — is already on the snapshot
-as `canFileTickets`, and is the cheaper cut to make first.
+Every failure arm is a **200**, never a 5xx. A logged-out CLI is an answer to the question that was
+asked, and the caller is a modal that wants to say why it is falling back to the external new-issue
+form rather than one that wants an exception. Two arms reach it: the CLI threw (absent, logged out, or
+refused), or it did not answer inside eight seconds — the last one because a request that never returns
+leaves the modal that fired it spinning, which is worse than the fault it was checking for. Both are
+**recorded** to the error log: an operator whose `gh` login has lapsed should find that in the Errors
+panel and not only in a modal they closed.
+
+Not on `/api/state`: it costs a round trip to the CLI and the only reader is a modal that opens
+rarely.
 
 ### `POST /api/issues`
 
-File the operator's own issue, directly (issue #413). Body `{title, body, watch?}`; answers
-`{ok: true, ref, url}` where `ref` is `issue:<n>` in the harness's own vocabulary and `url` is the
-connector's resolution of it, or null where no provider can resolve one.
+File the operator's own report about LubbDubb, directly (issues #413, #449). Body
+`{title, body, watch?}`; answers `{ok: true, number, url}` — the new issue's number in LubbDubb's repo
+and its address. A **URL and not a `ref`**, unlike every other filing on this wire: `issue:<n>` is the
+harness's vocabulary for an item in the tracker the fleet is pointed at, and the cockpit resolves it
+against that tracker, so a ref here would draw a link to whichever issue of the customer's repo shared
+the number.
 
 The one filing route with **no desk agent between the click and the create**. `/api/issues/:number/bug`
 dispatches one because the dedupe and the write-up are the judgement being delegated; here the operator
 has already written the thing up, and spending a model call to re-type it would add nothing.
 
-It files through `ticketFiler` rather than calling `connector.createIssue` itself, so the type and the
-assignee a filed item must carry are resolved in the one place that knows them
-([13](13-jobs-and-findings.md#filing-a-ticket)). **`watch` defaults to false**: the watch label is what
-makes the fleet pick an issue up, so defaulting it on would mean a half-formed thought is being worked
-before the operator has finished reading it back — an unwatched issue is the right resting state, and
-the operator who wants otherwise says so.
+It files through `system.upstream` and **not** `ticketFiler`: `ticketFiler` files into the tracker the
+fleet is pointed at, and this is a bug report about the cockpit ([15](15-integrations.md)). The
+type/assignee resolution the other filing arms need does not arise — one repository, no work item
+types, and the byline is the operator's own `gh` login. **`watch` defaults to false**, and is honoured
+only where the probe says `watchable`: the label is what makes the fleet pick an issue up, so
+defaulting it on would mean a half-formed thought is being worked before the operator has finished
+reading it back, and applying it on a deployment whose fleet sweeps some other repo would tag an issue
+nothing here ever looks at.
 
 Refusals: **400** for a missing or blank `title`/`body` or a non-boolean `watch`, through
-`checked({body})` like every other route here; **409** with a plain reason when nothing is
-`IssueCreateCapable`, which the cockpit's own gate means is only reachable by a direct call; **502**
-carrying the provider's own words when the tracker refuses the create, so the modal can keep what was
-typed. The cycle runs before the response — a watched issue should be considered for dispatch now, not
-on the next heartbeat — but its report is deliberately not returned: what the modal shows is the issue
-it just filed.
+`checked({body})` like every other route here; **502** carrying the CLI's own words when it refuses the
+create, so the modal can keep what was typed. There is no 409 arm — no configured tracker gates this
+route, which is why the top bar's compose button is no longer behind `canFileTickets`.
+
+**No cycle and no `world:changed`**, unlike every other filing route. What was created is in LubbDubb's
+tracker, which on all but the dogfooding deployment this harness does not sweep at all — and on that one
+the next pulse finds it. The modal's success state is the address of the thing, not a row in the world
+the cockpit draws.
 
 ### `GET /api/work`
 

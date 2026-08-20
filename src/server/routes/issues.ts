@@ -10,6 +10,7 @@ import { ShortfallBody } from '../../delivery/shortfall.js';
 import { validationHeadline } from '../../delivery/closeOut.js';
 import { goalValidation } from '../../validation/goal.js';
 import { watchLabelFor } from '../../watchLabels.js';
+import { fleetWorksUpstream, UPSTREAM_REPO } from '../../tickets/upstream.js';
 import { modelLabelsFor } from '../../modelLabels.js';
 import { watchCascadeTargets } from '../../issueRelations.js';
 import { checked, IssueNumberParams, optionalText, requiredBoolean } from '../validation.js';
@@ -32,7 +33,9 @@ import type { FilingTargetProbe, IssueFiled } from '../../wire.js';
  * and `POST /api/issues` — are the same exception without the agent (issue #413):
  * they are about no issue in particular, which is why they carry no `:number`, and
  * they file what the operator already typed rather than dispatching somebody to
- * write it.
+ * write it. They are also the only two on this surface that do not go near the
+ * configured tracker at all: what they file is a report about **LubbDubb**, and it
+ * belongs on LubbDubb's tracker whatever repo the fleet is pointed at (issue #449).
  */
 
 /** Long enough for a repro with steps; short of pasting a log file in. */
@@ -669,42 +672,34 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   );
 
   // -------------------------------------------------------------------------
-  // Raising an issue from the cockpit (issue #413)
+  // Raising an issue about LubbDubb from the cockpit (issues #413, #449)
   //
-  // Two collection-level routes, and neither is about an issue that exists. The
-  // probe answers "can I file, where, and as whom" from a **live** provider call,
-  // and the create files what the operator typed — no `gh`, no agent, no model.
+  // Two collection-level routes, and neither is about an issue that exists — nor
+  // about the tracker the rest of this file writes to. Both go through
+  // `system.upstream`, which files into LubbDubb's own repository through the `gh`
+  // CLI: the probe answers "can I file, where, and as whom" from a live call, and
+  // the create files what the operator typed. No agent and no model, either way.
   // -------------------------------------------------------------------------
 
-  // The live half of the filing gate. `canFileTickets` on the state snapshot is the
-  // static half and is what hides the control on a deployment with no real tracker;
-  // this one asks the provider itself, because the thing config cannot say is
-  // whether the credential still works. A running server already proves
-  // `GITHUB_TOKEN` was *set* — it is a boot error otherwise — so the only question
-  // left is whether it is still honoured, and one authenticated round trip is what
-  // answers it.
+  // The live half of the gate on the top bar's compose modal. `gh` is asked
+  // whether it can answer at all, and as whom, because that is the one thing about
+  // filing here that nothing else can prove: the harness's own `GITHUB_TOKEN` is
+  // scoped to the repo the fleet works on and has no bearing on this destination.
   //
   // Every failure arm is a 200 carrying `available: false` and a reason, never a
-  // 5xx: a dead token is an answer to the question that was asked, and the caller
-  // is a modal that wants to say why it is falling back rather than one that wants
-  // an exception. The provider's failure is still *recorded* — an operator whose
-  // filing credential has expired should find that in the Errors panel and not only
-  // in a modal they closed.
+  // 5xx: a logged-out CLI is an answer to the question that was asked, and the
+  // caller is a modal that wants to say why it is falling back rather than one that
+  // wants an exception. The failure is still *recorded* — an operator whose `gh`
+  // login has lapsed should find that in the Errors panel and not only in a modal
+  // they closed.
   app.get('/api/issues/filing-target', async (): Promise<FilingTargetProbe> => {
-    if (!connector.canCreateIssues())
-      return {
-        available: false,
-        target: null,
-        identity: null,
-        reason: 'no issue tracker is configured to file into (the issues provider is fake or unconfigured)',
-      };
     try {
       const target = await withDeadline(
-        connector.describeFilingTarget(),
+        system.upstream.describeTarget(),
         PROBE_TIMEOUT_MS,
-        `the tracker did not answer within ${PROBE_TIMEOUT_MS / 1000}s`,
+        `the GitHub CLI did not answer within ${PROBE_TIMEOUT_MS / 1000}s`,
       );
-      return { available: true, reason: null, ...target };
+      return { available: true, reason: null, watchable: fleetWorksUpstream(config), ...target };
     } catch (err) {
       const message = (err as Error).message;
       errors.record({ source: 'provider', message: `the filing-target probe failed: ${message}` });
@@ -712,21 +707,25 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }
   });
 
-  // File the operator's own issue, directly. The one route on this surface that
-  // creates a tracker item without a desk agent between the click and the create:
-  // the operator has already written the thing up, and dispatching somebody to
-  // re-type it would cost a model call to add nothing (see `/bug` above, where the
-  // dedupe and the write-up are the point).
+  // File the operator's own report about LubbDubb, directly. The one route on this
+  // surface that creates a tracker item without a desk agent between the click and
+  // the create: the operator has already written the thing up, and dispatching
+  // somebody to re-type it would cost a model call to add nothing (see `/bug`
+  // above, where the dedupe and the write-up are the point).
   //
-  // It goes through `system.filing` rather than `connector.createIssue`, so the
-  // type and the assignee a filed item must carry are resolved once, in
-  // `ticketFiler`, exactly as the other three filing arms resolve them.
+  // It goes through `system.upstream` and **not** `system.filing`, which is the
+  // whole of issue #449: `ticketFiler` files into the tracker the fleet is pointed
+  // at, and this is a bug report about the cockpit. The type/assignee resolution
+  // the other filing arms need does not arise — one repository, no work item types,
+  // and the byline is the operator's own `gh` login rather than the harness's
+  // credential.
   //
-  // **`watch` is opt-in and defaults off.** The watch label is what makes the fleet
-  // pick an issue up, so defaulting it on would mean an operator's half-formed
-  // thought is being worked before they have finished reading it back. Asked as a
-  // field rather than inherited: an unwatched issue is the right resting state, and
-  // the operator who wants otherwise says so.
+  // **`watch` is opt-in, defaults off, and is only honoured where it can mean
+  // anything.** The label is what makes the fleet pick an issue up, so defaulting
+  // it on would mean an operator's half-formed thought is being worked before they
+  // have finished reading it back — and on a deployment whose fleet works some
+  // other repo it is dropped, because the report lands where those agents never
+  // look. The probe says which, so the modal does not draw a box that does nothing.
   const RaiseIssueBody = z.object({
     title: z
       .string({ required_error: 'title is required', invalid_type_error: 'title must be a string' })
@@ -743,39 +742,31 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/issues',
     checked({ body: RaiseIssueBody }, async ({ body, reply }) => {
-      // The gate the probe reports, asked again here: the cockpit hides the control
-      // when it cannot file, so reaching this is a direct call — and a create that
-      // nothing can serve should refuse in prose rather than throw into the error
-      // handler.
-      if (!connector.canCreateIssues())
-        return reply
-          .code(409)
-          .send({ error: 'no issue tracker is configured to file into (the issues provider is fake or unconfigured)' });
-
-      let ref: string;
+      // Only where the fleet works this repo itself: elsewhere the label would tag
+      // an issue no agent of this deployment ever sweeps.
+      const watchable = fleetWorksUpstream(config);
+      let filed: { number: number; url: string };
       try {
-        ref = await system.filing({
+        filed = await system.upstream.create({
           title: body.title,
           body: body.body,
-          labels: body.watch ? [watchLabel] : [],
+          labels: body.watch && watchable ? [watchLabel] : [],
         });
       } catch (err) {
-        // `/api/work/:ref/file`'s arm: the tracker refusing is the tracker's answer,
-        // not an unanticipated fault, so it is a 502 with the provider's own words
-        // and the modal keeps what the operator typed.
+        // `/api/work/:ref/file`'s arm: the CLI refusing is an answer, not an
+        // unanticipated fault, so it is a 502 with its own words and the modal keeps
+        // what the operator typed.
         const message = (err as Error).message;
         errors.record({ source: 'provider', message: `filing an issue from the cockpit failed: ${message}` });
-        return reply.code(502).send({ error: `the tracker refused the issue: ${message}` });
+        return reply.code(502).send({ error: `${UPSTREAM_REPO} refused the issue: ${message}` });
       }
-      // The new issue should be in the world the cockpit draws, not waiting on the
-      // next heartbeat — and a watched one should be considered for dispatch now.
-      // The cycle's report is deliberately *not* returned: what the modal shows is
-      // the issue it just filed, and a dispatch report beside it would be an answer
-      // to a question the operator did not ask.
-      await harness.runCycle('manual');
-      hub.broadcast({ type: 'world:changed' });
-      const filed: IssueFiled = { ok: true, ref, url: connector.resolveRefUrl(ref) };
-      return filed;
+      // No cycle and no broadcast, unlike every other filing route. What was created
+      // is in LubbDubb's tracker, which on all but the dogfooding deployment this
+      // harness does not sweep at all — and on that one the next pulse finds it. The
+      // modal's success state is the address of the thing, not a row in the world
+      // the cockpit draws, so there is nothing here for a refresh to reveal.
+      const answer: IssueFiled = { ok: true, number: filed.number, url: filed.url };
+      return answer;
     }),
   );
 }

@@ -320,22 +320,23 @@ export interface CockpitActions {
 
   /**
    * Where an issue raised from the top bar would land, and as whom — asked of the
-   * provider on the compose modal opening (issue #413).
+   * `gh` CLI on the compose modal opening (issues #413, #449).
    *
    * A **read** on this seam, like {@link fetchWorkSubtree}, and for the same
    * reason: `console/` may not import `api.js`, and the modal is opened from the
    * bar. Not a snapshot key either — it costs a round trip to the tracker, and the
    * only reader opens rarely.
    *
-   * It resolves for both readings. `available: false` is the provider's answer to
-   * the question, not a fault, and the modal shows the reason and offers the
-   * tracker's own form instead; a **rejection** means the probe route itself could
-   * not be reached, which the modal treats the same way.
+   * It resolves for both readings. `available: false` is the CLI's answer to the
+   * question, not a fault, and the modal shows the reason and offers LubbDubb's own
+   * form instead; a **rejection** means the probe route itself could not be reached,
+   * which the modal treats the same way.
    */
   probeFilingTarget(): Promise<FilingTargetProbe>;
 
   /**
-   * File the operator's own issue into the configured tracker, directly.
+   * File the operator's own report about LubbDubb onto **LubbDubb's** tracker,
+   * directly — never the tracker the fleet is pointed at (issue #449).
    *
    * The one mutation here that resolves with something rather than `void`: the
    * modal's done state is a link to the issue that was just filed, and a number to
@@ -344,7 +345,8 @@ export interface CockpitActions {
    * Unlike {@link raiseBug} no agent stands between the click and the create — the
    * operator wrote it, so there is no write-up to delegate. `watch` decides whether
    * the fleet picks it up and is passed explicitly: an unwatched issue is the right
-   * resting state for a half-formed thought.
+   * resting state for a half-formed thought. It is honoured only where this fleet
+   * works LubbDubb's own repo, which is what the probe's `watchable` says.
    */
   raiseIssue(title: string, body: string, watch: boolean): Promise<IssueFiled>;
 

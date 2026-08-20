@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import type { FilingTargetProbe, IssueFiled } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ExtLink } from './util.js';
-import { Ref } from './refs.js';
 
 /**
  * Which of the three readings the modal is showing, from the one piece of state
@@ -32,7 +31,8 @@ export function canFile(gate: ReturnType<typeof composeGate>, title: string, bod
 }
 
 /**
- * Where the operator writes an issue without leaving the cockpit (issue #413).
+ * Where the operator writes a report about **LubbDubb** without leaving the cockpit
+ * (issues #413, #449).
  *
  * The chrome is {@link RaiseBugModal}'s — `plan-modal` for the frame, `.rb-*` for
  * the prose fields, `.launch-error` for a refusal — because this asks for the same
@@ -41,20 +41,21 @@ export function canFile(gate: ReturnType<typeof composeGate>, title: string, bod
  * the ticket; here the operator has already written it, so the create is direct and
  * no model reads a word of it.
  *
- * **The head names where this is going before the fields are typeable.** That is
- * what the probe is for, and it is the whole reason the inputs start disabled: the
- * top bar's link has always gone to LubbDubb's own tracker, and this button goes to
- * the tracker *the fleet is pointed at* — the same repo only while the deployment
- * is dogfooding itself. Inviting somebody to type a paragraph and telling them
- * afterwards which repo it landed in would be the one version of this feature worth
- * not shipping.
+ * **It goes where the link beside it goes**, and that is the whole of issue #449.
+ * This control is the one thing on the top bar about the *tool* rather than about
+ * the work, so it files into LubbDubb's own repository whatever tracker the fleet
+ * is pointed at — a cockpit fault landing in a customer's backlog was the bug. The
+ * head still names the destination and the identity before the fields are typeable,
+ * because the byline is the operator's own `gh` login, and which of their accounts
+ * is signed in is worth reading before typing rather than after.
  *
  * **Every arm that cannot file offers the tracker's own form instead.** A probe
  * that answers `available: false`, and a probe that could not be reached at all,
- * both land on {@link fallbackUrl} — the link this modal replaced. The bar draws
- * the report path when the socket is down precisely because that is a moment an
- * operator has something to report, and a modal that took that away on the harness
- * being unwell would be the failure it was built to avoid.
+ * both land on {@link fallbackUrl} — the link this modal replaced, on the same
+ * repository. The bar draws the report path when the socket is down precisely
+ * because that is a moment an operator has something to report, and a modal that
+ * took that away on the harness being unwell would be the failure it was built to
+ * avoid.
  *
  * A failed post keeps the modal open with the text intact, which is the one outcome
  * here worth writing code to prevent — everything else they can simply do again.
@@ -66,7 +67,7 @@ export function RaiseIssueModal({
   onClose,
 }: {
   probe: () => Promise<FilingTargetProbe>;
-  /** The tracker's own new-issue form — where every arm that cannot file sends the operator. */
+  /** LubbDubb's own new-issue form — where every arm that cannot file sends the operator. */
   fallbackUrl: string;
   onSubmit: (title: string, body: string, watch: boolean) => Promise<IssueFiled>;
   onClose: () => void;
@@ -86,7 +87,7 @@ export function RaiseIssueModal({
       (answer) => {
         if (live) setTarget(answer);
       },
-      // The route answers a dead credential with a 200, so a rejection is the probe
+      // The route answers a logged-out CLI with a 200, so a rejection is the probe
       // itself being unreachable — a different cause and the same consequence, which
       // is why it is folded into the one unavailable reading rather than a fourth
       // state nobody could act on differently.
@@ -140,22 +141,25 @@ export function RaiseIssueModal({
 
         {filed !== null ? (
           <p className="ri-done">
-            Filed <Ref to={filed.ref} />. It is in the tracker now — and in the world the cockpit draws.
+            {/* An `ExtLink` and never a `<Ref>`: `issue:<n>` resolves against the
+                tracker the fleet is pointed at, which is the one place this did not
+                go. The route hands back the address for that reason. */}
+            Filed <ExtLink href={filed.url}>#{filed.number}</ExtLink> on LubbDubb’s own tracker.
           </p>
         ) : (
           <>
             {target?.available === false ? (
               <p className="rb-intro">
                 {target.reason}. Nothing is lost — LubbDubb’s own new-issue form is still one click away, and it needs
-                no credential from this harness.{' '}
+                nothing from this harness.{' '}
                 <ExtLink href={fallbackUrl} title="Raise an issue on the LubbDubb repo">
                   Raise it there instead
                 </ExtLink>
               </p>
             ) : (
               <p className="rb-intro">
-                Creates the issue in the tracker directly — no agent writes it up, and nothing is dispatched for it
-                unless you say so below.
+                Creates the issue on LubbDubb’s own tracker directly — this is where a fault in the cockpit goes,
+                whatever repo the fleet is pointed at. No agent writes it up.
               </p>
             )}
 
@@ -192,11 +196,16 @@ export function RaiseIssueModal({
             />
             {/* Opt-in, and off by default. The watch label is what makes the fleet
                 pick an issue up, so a checked box here would mean agents are working
-                a thought before its author has finished reading it back. */}
-            <label className="ri-watch">
-              <input type="checkbox" disabled={!ready} checked={watch} onChange={(e) => setWatch(e.target.checked)} />
-              Let the fleet pick this up — otherwise it sits in the tracker until you watch it
-            </label>
+                a thought before its author has finished reading it back.
+                Drawn only where this fleet works LubbDubb's own repo: anywhere else
+                the report lands in a tracker these agents never sweep, so the box
+                would be a promise nothing keeps (issue #449). */}
+            {target?.available === true && target.watchable && (
+              <label className="ri-watch">
+                <input type="checkbox" disabled={!ready} checked={watch} onChange={(e) => setWatch(e.target.checked)} />
+                Let the fleet pick this up — otherwise it sits in the tracker until you watch it
+              </label>
+            )}
             {failed !== null && (
               <p className="launch-error" role="alert">
                 That didn’t go through: {failed}. Your text is still here — try again.

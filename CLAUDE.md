@@ -107,6 +107,10 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   checkout the suite is running in** — yours — and nothing deletes it. Use the real manager only
   when git behaviour _is_ the subject, pointed at a throwaway repo from `test/support/gitRepo.ts`.
   → [19](docs/spec/19-development.md#why-a-test-must-not-dispatch-through-the-real-worktree-manager)
+- **A test that touches `GET /api/issues/filing-target` or `POST /api/issues` must inject
+  `upstream`.** Both routes go through `system.upstream`, which defaults to the real `gh` CLI against
+  **AdamAwan/LubbDubb** — so a test without `FakeUpstreamIssues` files a live issue on the project's
+  own tracker, as whoever is logged in, and passes while doing it. → [15](docs/spec/15-integrations.md)
 - **A test builds its config with `loadConfig`, never `loadDeploymentConfig`.** Only the latter reads
   `lubbdubb.config.json` and the env overrides — which is the whole distinction: the suite runs in a
   working copy of this repo, so a test on the deployment loader picks up whatever config the

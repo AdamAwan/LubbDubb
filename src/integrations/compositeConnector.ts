@@ -3,7 +3,6 @@ import type {
   ActionSink,
   BranchDeleteInput,
   CiCheckRequeueInput,
-  FilingTarget,
   IssueCommentInput,
   IssueCreateInput,
   IssueLabelInput,
@@ -215,35 +214,6 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     const handler = this.integrations.find(isIssueCreateCapable);
     if (!handler) throw new Error('no integration can create issues (no issues provider is IssueCreateCapable)');
     return handler.createIssue(input);
-  }
-
-  /**
-   * Whether anything here can create a tracker item at all — the cheap half of
-   * "can I file", asked before the network one (issue #413).
-   *
-   * A predicate rather than letting {@link describeFilingTarget} throw for it,
-   * because the two answers are different things to show an operator: a provider
-   * that cannot file is a deployment shape, and a provider that could not be
-   * reached is a fault. Collapsing them would put "no tracker is configured" in
-   * the Errors panel on every fake deployment, every time a modal opened.
-   *
-   * @public — the filing route's first gate (`src/server/routes/issues.ts`).
-   */
-  canCreateIssues(): boolean {
-    return this.integrations.some(isIssueCreateCapable);
-  }
-
-  /**
-   * Where a filing would land and as whom, from a live provider call.
-   *
-   * Throws when nothing can create issues, exactly as {@link createIssue} does —
-   * a caller asks {@link canCreateIssues} first, and reaching here without one is
-   * the same wiring fault.
-   */
-  async describeFilingTarget(): Promise<FilingTarget> {
-    const handler = this.integrations.find(isIssueCreateCapable);
-    if (!handler) throw new Error('no integration can create issues (no issues provider is IssueCreateCapable)');
-    return handler.describeFilingTarget();
   }
 
   async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
