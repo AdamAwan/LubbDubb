@@ -1784,8 +1784,6 @@ export interface Plan {
   evidence: PlanEvidence[];
   /** The full narrative, markdown — the read-in-depth version of this plan. */
   document: string | null;
-  /** True while an operator is discussing this plan with an agent (see rule `issue-plan`). */
-  discussing: boolean;
   /** Provider comment id for the plan's status comment, edited in place (stage 3). */
   statusCommentRef: string | null;
   createdAt: string;

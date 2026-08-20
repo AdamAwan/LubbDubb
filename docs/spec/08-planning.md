@@ -122,12 +122,15 @@ second concurrent planner.
 
 Dispatches a **code** agent (it needs a worktree to read the repo) on `plan/issue/<n>`, origin
 `issue:<n>:plan`, from the `issue-plan` template — or `issue-replan`, carrying `currentPlanSummary`,
-when the plan row is back in `planning` — or `discuss-plan`, same origin and branch, when
-`isPlanInDiscussion` says the plan is being discussed rather than merely replanned (below). Skipped
-when an active task already holds the origin, which is what stops a discussion ever getting a second
-planner. There is **no escalation arm**.
+when the plan row is back in `planning`. Skipped when an active task already holds the origin, which
+is what stops one goal ever getting a second planner. There is **no escalation arm**.
 
-Whichever of the three templates it renders, `relatedWorkNote` is **appended** to it: the parent
+There used to be a third arm, `discuss-plan`, on the same origin and branch. Discussing a plan is a
+deep link into the operator's own Claude Code now and dispatches nothing at all (below), so what is
+left here is the distinction that was always load-bearing: whether there is an existing decomposition
+to plan _from_.
+
+Whichever of the two templates it renders, `relatedWorkNote` is **appended** to it: the parent
 feature's description, the sibling stories with their states, and the orphan flag with its candidate
 features (see [06](06-issue-pickup.md#hierarchy)). Reading the related items is the planning step
 that stops a decomposition re-cutting scope a sibling story already holds — a planner that cannot see
@@ -221,8 +224,8 @@ lifetime the chip mechanism does not own: `GET /artifacts/:id` serves out of the
 write-up 404s at exactly the moment the plan is ready to approve. Storing it on the plan row makes it
 outlive the planner, outlive a restart, and stay joined to the row it describes.
 
-**`document` is expected, not merely permitted.** The `issue-plan` / `issue-replan` (and `discuss-plan`
-— below) templates ask for it, and a plan without one renders "no write-up" in the plan sheet rather
+**`document` is expected, not merely permitted.** The `issue-plan` and `issue-replan` templates ask
+for it, and a plan without one renders "no write-up" in the plan sheet rather
 than hiding the tab — a hidden tab would read as "this planner had nothing to add", indistinguishable
 from "this planner ignored the instruction". An over-long `document` is **trimmed and stored, with the
 trim reported**, never refused: refusing would reject the whole plan submission over its prose, the
@@ -860,15 +863,8 @@ not made.
 
 ## Replan
 
-`POST /api/plans/:id/replan` flips the plan row to `planning`, clears `discussing` if it was set,
-withdraws any pending plan proposal, and kicks a cycle. That is all it does.
-
-Clearing `discussing` is not optional when a replan is requested mid-conversation: the flag is what
-picks the template rule `issue-plan` renders from `planning`, so leaving it set would render `discuss-plan` on
-the next dispatch instead of the `issue-replan` this call actually asked for — the two routes would
-disagree about what plain `planning` means. The route is **not** gated on `discussing` — it is
-callable throughout, and the cockpit's plan sheet gives a running discussion its own footer — so
-clearing the flag has to be the route's own job rather than a caller's.
+`POST /api/plans/:id/replan` flips the plan row to `planning`, withdraws any pending plan proposal,
+and kicks a cycle. That is all it does.
 
 The withdrawal is not optional under `requireApproval`: a pending verdict holds rule `plan-approval` off the plan,
 so the amended plan would never be put to anyone — and the stale card, if accepted, would
@@ -891,84 +887,84 @@ Three things make replan work rather than merely fire:
 
 ## Discussing a plan
 
-**Discuss is a replan with a conversational planner**, not a new mechanism — framing it that way is
-what lets it inherit every safety property already argued for above rather than earning parallel ones.
+**Discuss is a link, not a dispatch.** It opens the operator's own Claude Code on the goal's checkout
+with a prompt already in the box, and the conversation happens there — with the repository open, in a
+client built for talking. It was a replan with a conversational planner, dispatched from the same
+`planning` status with only the prompt telling the two apart, and the operator answered it a line at a
+time through a text box in the plan sheet. That surface was the whole problem: a conversation
+conducted through a single-line input, costing a fleet slot and a worktree for as long as you took to
+reply.
 
-`isPlanInDiscussion(plan)` (`src/plans/planDiscussion.ts`, pure) is the one predicate that tells a
-discussion apart from an ordinary replan: both put the plan row in `planning`, which is the whole
-mechanism rule `issue-plan` already dispatches a planner from. `discussing` (new `plans` column) only picks the
-prompt.
+Nothing on the harness side happens when you click it. **No status write, no flag, no agent.** The
+plan stays `awaiting_approval`, which is a status rule `issue-plan` does not dispatch from, rule
+`plan-part` queues as `unapproved` and rule `plan-approval` has already proposed for — so nothing is
+scheduled while you talk without anything having to be parked to achieve it. Closing the window
+changes nothing and needs no escape hatch, which is what the old `POST /api/plans/:id/discuss/end`
+was.
 
-`POST /api/plans/:id/discuss`:
+### The link
 
-1. 404 when the plan is unknown.
-2. **409 unless `plan.status === 'awaiting_approval'`.** Every framing of Discuss — the design, this
-   section, the `discuss-plan` prompt itself ("before approving it") — only ever contemplates talking
-   through a plan that is still a pending question. Discussing an already-`active` one manufactures a
-   gate it has been through: the discussion's own end writes `awaiting_approval` back over a plan an
-   operator already authorised, reopening the gate rule `plan-part` had cleared and stopping the
-   remaining parts being scheduled — which is exactly the harm `/discuss/end`'s own 409 (below) exists
-   to prevent on the way back out. `PlanModal.tsx` hides the Discuss button outside
-   `awaiting_approval` so the UI cannot offer what the route refuses.
-3. `store.setPlanStatus(id, 'planning')` — exactly what `/replan` does.
-4. `store.setPlanDiscussing(id, true)`.
-5. Withdraw any pending plan proposal (`ProposalDesk.reject`, "superseded by a discussion"). Safe for
-   the reason the replan withdrawal is safe: the status write lands first, so `refusePlan` finds the
-   plan no longer `awaiting_approval` and no-ops — the withdrawal only closes the inbox item. And
-   **necessary**: a pending proposal holds rule `plan-approval` (`planProposalHold`), so the amended plan
-   would never be put to anyone, and the stale card, if accepted, would release a plan its reader never
-   saw.
-6. Broadcast, run a cycle.
+`desktopDeepLink(folder, prompt)` (`web/src/cockpit/desktopLink.ts`) builds
 
-Returns `{ ok: true, plan }`.
+```
+claude://code/new?q=/lubbdubb%20discuss%20284&folder=<config.desktopFolder>
+```
 
-Rule `issue-plan` renders the `discuss-plan` template instead of `issue-replan` when `discussing` is set — same
-origin (`issue:<n>:plan`), same branch (`plan/issue/<n>`), same cooldown window, same attempt cap, same
-fail-open. `discuss-plan` is an ordinary overridable entry in the template book and tells the agent:
-this is a conversation, not a fresh plan; here is the current plan and its part states; use
-`escalate` to ask and answer; call `plan_submit` with the amended document once the operator is
-satisfied; then finish.
+`q` is prefilled rather than sent, so the operator reads the command before it goes; the client caps
+it at 14336 characters, which nothing here approaches. `folder` is `config.repoRoot`, shipped on the
+state snapshot as `config.desktopFolder` — without it the session opens wherever that client was last,
+which is a Claude that cannot read the plan it was sent to argue about.
 
-**Nothing is scheduled while you talk**, and each property is an existing gate rather than a new one:
+**The host is `code`, not `claude.ai`.** The client routes the two differently, and only this one
+lands on its Claude Code surface, which has the repository, the `/lubbdubb` skill and the harness's
+MCP registration. A plain chat has none of the three. (`claude-cli://open` reaches the same engine and
+spawns a _terminal_, which is not what a cockpit button should do to somebody.)
 
-- rule `plan-part` schedules parts only for `active` / `awaiting_approval` plans — `planning` schedules none;
-- rule `issue-plan` cannot dispatch a second planner while the discussion agent holds `issue:<n>:plan`
-  (`findActiveTaskByOrigin`);
-- rule `plan-approval` proposes only for `awaiting_approval`, so no fresh approval card appears mid-conversation.
+A deep link only fires on the machine the browser is on. That is the same limit the desktop
+validation control has always had, and there is no reading of it the cockpit could act on — so the
+command is in the `title` as well, for an operator who has to type it.
 
-**The conversation needs no new transport.** The agent parks with `escalate`; replies go through
-`POST /api/agents/:id/respond`, which works on any live agent and drives another turn on the default
-stream runtime; the transcript comes from `GET /api/agents/:id/transcript`. The plan sheet's discussion
-pane is those two calls plus a link to the real drawer for tool calls.
+### What the session does
 
-**Three endings:**
+The `/lubbdubb` skill (`src/validation/desktopSkill.ts`, rewritten into the operator's Claude Code on
+every boot) carries a `discuss <n>` arm beside its `<n>:<letter>` one. It says: read the plan, argue
+with it against the code, amend it, then stop and send them back to the cockpit. It explicitly does
+**not** do the work — a session that starts implementing has answered a question nobody asked.
 
-- **It amends.** `plan_submit` → `ingestPlanDocument` clears `discussing` as part of ingestion (not
-  `upsertPlan` — folding the clear into ingestion is what stops an amendment silently re-opening a
-  discussion it did not ask to close) and lands `awaiting_approval`, so the next pulse's rule `plan-approval` puts a
-  **fresh** proposal up. The stale card was withdrawn at step 4 above, so nothing holds it.
-- **You end it.** `POST /api/plans/:id/discuss/end` — 404 when the plan is unknown, **409 when
-  `plan.discussing` is false** (the same compare-and-set discipline `releasePlan`/`refusePlan` apply to
-  `awaiting_approval`: an unguarded restore would force _any_ plan back to `awaiting_approval` on a
-  stale or duplicate call, reopening the approval gate on a plan whose parts are already dispatched).
-  Otherwise it sets the plan back to `awaiting_approval`, clears `discussing`, broadcasts and runs a
-  cycle — restoring the status is not an afterthought: clearing the flag alone would leave the plan in
-  `planning`, which is exactly what rule `issue-plan` dispatches a fresh planner from. It **does** end the
-  discussion agent — the live task on `planOrigin(planIssueNumber(plan.originRef))`, completed through
-  the same `AgentManager.complete` the cockpit's own agent-complete button uses, the clean `done`
-  terminal that reclaims the worktree rather than `kill`'s abandonment. Left alive, the planner holds a
-  fleet slot and a worktree with nothing to talk to — the modal's discussion pane is gated on
-  `plan.discussing`, so the reply box is already gone — and a late `plan_submit` from that stale agent
-  would revert this very approval back to `awaiting_approval` through ingestion's unconditional
-  `requireApproval` re-check. A missing agent (already gone) or a completion that fails is a no-op, not
-  a route failure: the plan restore is the important half and must land regardless. Returns
-  `{ ok: true, plan }`.
-- **It dies.** The plan stays `planning` with `discussing` set, so rule `issue-plan` re-dispatches, bounded by the
-  existing `dispatchVerdict` attempt cap on `issue:<n>:plan`; a spent cap fails the plan back to `parts`
-  exactly as a spent replan does. Deliberately the same failure envelope as replan, not a new one.
+Two tools on the desktop channel do the rest (→ [11](11-mcp-tools.md#the-desktop-channel)):
 
-**The cost, stated:** a discussion holds a fleet slot and a worktree for as long as you take to reply.
-Nothing reclaims it on a timer, and adding one would end a conversation mid-thought.
+- **`plan_read(issue)`** — the verdict fields, `openQuestions` (the planner's own nomination of what to
+  argue about, which is the agenda unless the operator brings one), the parts through
+  `currentPlanSummary` so every slug is in front of the session, the acceptance criteria, the live
+  validation checks and the revision count.
+- **`plan_amend(issue, …plan document)`** — the same document as `plan_submit`, validated by
+  `validatePlanDocument` and written by `ingestPlanDocument`. The schema is one export
+  (`src/mcp/planDocumentSchema.ts`) shared by both tools rather than two literals.
+
+`plan_amend` gets three things right, and each of them is silent when wrong:
+
+1. **It refuses unless the plan is `awaiting_approval`** — the gate the old `/discuss` route made, kept
+   next to the write. A released plan's parts schedule off a decision an operator already took;
+   writing `awaiting_approval` back over it reopens a gate rule `plan-part` had cleared and stops the
+   rest of the work. `PlanModal.tsx` offers Discuss only on `awaiting_approval`, so the control agrees
+   with the tool rather than surprising it.
+2. **It withdraws the superseded proposal**, and **writes the status first**. A pending proposal holds
+   rule `plan-approval` off the plan (`planProposalHold`), so an amendment that left the card up would
+   send the operator back to approve the _pre-discussion_ decomposition. The order matters exactly as
+   it does in `/replan`: `refusePlan` settles a plan that is still `awaiting_approval` — retiring every
+   unstarted part and sending it back to a planner — so the plan is moved to `planning` first, which
+   makes the rejection a no-op that only closes the inbox item. Ingestion writes `awaiting_approval`
+   back a moment later, and store writes are synchronous, so no pulse observes the gap.
+3. **It says where to go next.** The reply carries the hand-back wording rather than a bare ok, the way
+   `validation_report` states what it recorded: the plan is amended, nothing is scheduled, approve it
+   in the cockpit — where "What changed" now draws the amendment against the version they were
+   reading.
+
+Validation happens before any of that, so a rejected document leaves the plan graph exactly as it was
+and the retry is against an unchanged plan.
+
+**If they decide the plan was right after all**, the session amends nothing and the plan is approvable
+exactly as it was — there is no state to unwind, because none was written.
 
 ## What the prompts spend their words on
 
@@ -979,8 +975,8 @@ is room for the part that actually moves plan quality — a worked example of a 
 restated ticket, what makes an `alternatives` worth reading, and the instruction to cite what was
 read.
 
-The same rebalance applies to `issue-replan` and `discuss-plan`, which copied the schema block. Two
-things are said only in the amendment prompts: that the whole narrative is **replaced rather than
+The same rebalance applies to `issue-replan`, which copied the schema block. Two things are said only
+in the amendment prompt: that the whole narrative is **replaced rather than
 merged** (an amendment that omits `alternatives` leaves the previous one standing, reading as though
 the old reasoning still applies), and that the amendment is shown to the operator **as a diff** — so
 the write-up should open with what changed the planner's mind, which is the one thing the diff cannot

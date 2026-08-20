@@ -52,7 +52,6 @@ function plan(overrides: Partial<Plan> = {}): Plan {
     verification: null,
     evidence: [],
     document: null,
-    discussing: false,
     statusCommentRef: null,
     createdAt: '2026-07-25T00:00:00.000Z',
     updatedAt: '2026-07-25T00:00:00.000Z',

@@ -45,7 +45,6 @@ function plan(status: Plan['status']): Plan {
     verification: null,
     evidence: [],
     document: null,
-    discussing: false,
     statusCommentRef: null,
     createdAt: 'then',
     updatedAt: 'now',

@@ -375,8 +375,6 @@ const realApi = {
   },
   // Talk it through with an agent instead of accepting or rejecting. Server-side
   // this is a replan whose planner converses first — see the route.
-  discussPlan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/discuss`),
-  endPlanDiscussion: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/discuss/end`),
   // Re-order the "Up next" queue (issue #128): the operator's desired priority
   // order of candidate origins, which the dispatcher reads back into its ranking.
   reorderUpNext: (origins: string[]) => post<{ ok: true }>('/api/upnext/order', { origins }),

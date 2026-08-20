@@ -78,21 +78,34 @@ export const ALLOWED_MCP_TOOLS: string[] = MCP_TOOL_NAMES.map((name) => `mcp__${
  * purpose.
  *
  * The operator's own Claude Code connects to a *different* socket with a
- * long-lived credential and no dispatch behind it, so it gets read a plan, take
- * one check, report what you saw, and nothing else. Writing that as its own list
- * rather than as a filter over {@link MCP_TOOL_NAMES} is what makes the narrowing
- * structural: `src/mcp/desktopTools.ts` is a `Record` over exactly this, and
- * there is no code path from a desktop connection to `buildTools`.
+ * long-lived credential and no dispatch behind it, so it gets read a plan, argue
+ * with it, take one check, report what you saw, and nothing else. Writing that as
+ * its own list rather than as a filter over {@link MCP_TOOL_NAMES} is what makes
+ * the narrowing structural: `src/mcp/desktopTools.ts` is a `Record` over exactly
+ * this, and there is no code path from a desktop connection to `buildTools`.
  *
  * `validation_report` appears in both lists and is two different tools. They
  * share the schema and the store writes; what differs is where the check comes
  * from — the fleet's from the origin it was dispatched on, this one from what the
  * session claimed — and neither can be reached from the other's transport.
  *
+ * `plan_amend` is deliberately **not** a second `plan_submit`. It writes the same
+ * document through the same ingestion, but a shared name would make it the trap
+ * above without the warning: an edit to "the plan tool" that silently reaches one
+ * channel. A different name on each side is the whole of the defence, and the
+ * document schema they genuinely do share is one export
+ * (`src/mcp/planDocumentSchema.ts`) rather than two literals.
+ *
  * No `ALLOWED_MCP_TOOLS` equivalent: the fleet's grants exist because nobody is
  * at the prompt to approve a call. Here somebody is, and it is their own machine.
  */
-export const DESKTOP_TOOL_NAMES = ['validation_read', 'validation_claim', 'validation_report'] as const;
+export const DESKTOP_TOOL_NAMES = [
+  'validation_read',
+  'validation_claim',
+  'validation_report',
+  'plan_read',
+  'plan_amend',
+] as const;
 
 export type DesktopToolName = (typeof DESKTOP_TOOL_NAMES)[number];
 

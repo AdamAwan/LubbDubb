@@ -460,6 +460,16 @@ interface CockpitConfig {
    */
   defaultProfile: string | null;
   /**
+   * `repoRoot` — the checkout a `claude://code/new` deep link opens the operator's
+   * own Claude Code on, so Discuss and the desktop validation control land in the
+   * repository the goal is about rather than wherever that client was last.
+   *
+   * A path on the wire and deliberately so: the browser builds the link, and the
+   * server building the whole URL instead would put a fact about Claude Code's
+   * deep-link shape in the harness, which is not where it belongs.
+   */
+  desktopFolder: string;
+  /**
    * `issueContainerTypes` — the work-item types that hold work rather than being
    * it. Shipped because the backlog draws a container as a *heading* over its
    * children rather than as a row beside them, and that is a decision about the

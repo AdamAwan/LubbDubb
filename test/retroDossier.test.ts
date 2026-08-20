@@ -62,7 +62,6 @@ test('the dossier reports the plan, its parts, the decisions and what was spent'
       verification: null,
       evidence: [],
       document: null,
-      discussing: false,
       statusCommentRef: null,
       createdAt: '2026-07-30T08:00:00Z',
       updatedAt: '2026-07-30T09:00:00Z',

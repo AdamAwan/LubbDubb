@@ -520,6 +520,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     store,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,
+    requirePlanApproval: config.planning.requireApproval,
+    // Lazy for the fleet deps' reason a few lines above: `plan_amend` withdraws
+    // the superseded approval card and puts the fresh one up, and both the desk
+    // and the harness are built below this.
+    proposals: () => proposals,
+    runCycle: () => harness.runCycle('manual').then(() => undefined),
     now: () => new Date().toISOString(),
     socketPath: config.validation.desktopSocketPath,
     credentialPath: config.validation.desktopCredentialPath,
