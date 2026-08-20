@@ -42,7 +42,11 @@ limit invented here — the same one the validation claim is built on
 `localRun.instruction` — free text, what the session bringing the environment up is told — and
 `localRun.url`, where the application lands. Both are **live fields**
 ([02](02-configuration.md#liveness)): an edit on the Config page applies to the next start with no
-restart.
+restart. They sit under **Features** there, beside the other policy objects, and `localRunRoot` under
+**Paths** — which is a thing `GROUPS` in `src/server/runningConfig.ts` has to be told: a declared key
+in no group is drawn nowhere, because the group loop never reaches it and the "Other" fallback skips
+it precisely *because* it is declared. `test/configFields.test.ts` asserts every declared key is
+claimed by a group, since the symptom is a field that validates, applies, and is invisible.
 
 It began as a prompt id (`local-run`), on the argument that _how a project starts_ is the operator's
 opinion and the prompt book is where this repo keeps those — the same argument that puts

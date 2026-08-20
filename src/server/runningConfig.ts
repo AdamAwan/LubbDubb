@@ -119,7 +119,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
   },
   {
     title: 'Features',
-    keys: ['planning', 'validation', 'spendBurn', 'selfUpdate', 'ci', 'pets'],
+    keys: ['planning', 'validation', 'spendBurn', 'selfUpdate', 'ci', 'pets', 'localRun'],
   },
   {
     title: 'Paths',
@@ -131,6 +131,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'deskRoot',
       'attachmentRoot',
       'validationRoot',
+      'localRunRoot',
       'promptTemplatesDir',
       'docsFolderPrefix',
       'dbPath',
@@ -138,6 +139,19 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
   },
   { title: 'Server', keys: ['port', 'host', 'auth'] },
 ];
+
+/**
+ * The top-level keys some group claims.
+ *
+ * Exported for the one assertion {@link GROUPS} cannot make about itself: a
+ * declared key in no group is drawn **nowhere**. The group loop never reaches it,
+ * and the "Other" fallback skips it precisely *because* it is declared — so it
+ * validates, applies, and is invisible on the page it was declared for, with
+ * nothing red. `test/configFields.test.ts` closes that.
+ */
+export function groupedTopLevelKeys(): ReadonlySet<string> {
+  return new Set(GROUPS.flatMap((group) => group.keys as readonly string[]));
+}
 
 /** A value worth recursing into: a plain object, so arrays and null stay leaves. */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
