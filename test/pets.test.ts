@@ -1306,6 +1306,11 @@ test('a source row that has gone leaves no label, and is not an accusation', () 
   try {
     const store = new Store(path);
     const pets = new PetKeeper(store, { enabled: true, visible: true }, rules({ dropChance: 1 }), () => BUILD);
+    // The boot scan first, exactly as `keeper()` does it: it stamps the vivarium's
+    // start, so the action below falls *after* the boundary rather than racing it.
+    // Without it the escalation only hatches while `answer` and `scan` land in the
+    // same millisecond, which a loaded runner does not grant.
+    pets.scan();
     const id = answer(store, 'a question somebody later pruned');
     pets.scan();
     assert.equal(pets.state()?.pets[0]?.originLabel, 'a question somebody later pruned');
