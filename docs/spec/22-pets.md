@@ -590,18 +590,48 @@ enabled scan stamps one, and both surfaces draw nothing rather than a placeholde
 ### What it withholds
 
 A species you have not hatched keeps its **rate, its cost and the actions that draw it**, and gives
-up its **name, its two grown forms and its colours** — the name is drawn `???` and the juvenile and
-adult are drawn as flat grey silhouettes. The masking reaches the source matrix too: a table that
-spelled out `Ouroboros` in a cell would undo the card grid above it.
+up its **name, its forms and its colours** — the name is drawn `???` and every age is drawn as a flat
+grey silhouette. The masking reaches the source matrix too: a table that spelled out `Ouroboros` in a
+cell would undo the card grid above it.
 
 The split is the whole design. A page that showed everything would spend the reveal the sprites are
 built around — every tier shares one hatchling precisely so that finding out _what you got_ is worth
 waiting for ([the sprites](#the-sprites)) — and a page that showed nothing would answer none of the
 questions an operator actually has. **What is withheld is identity; what is published is price.**
 
-The egg and the hatchling are the exception, and it follows from the art rather than from a rule:
-both forms are shared by every species of a tier, so finding any one of them is finding both.
-Withholding them after that would be a lie about what the operator has already seen.
+### What counts as having seen one
+
+Two questions, answered by `speciesSeen` in `web/src/pets/reveal.ts` and by nothing else: **which
+species you have met**, and **which of its forms you have been shown**.
+
+An **unopened egg counts for neither**. The animal inside it was decided the instant the scan reached
+the action, but the shell has shown the operator none of it — so a page that read the species off a
+row still in its shell would answer the question the ceremony exists to ask, and it would do it in a
+list, silently, while the egg sat unclicked in the vivarium. A shell is a pet you own and a species
+you have not met.
+
+**The name is the juvenile's to give**, exactly as [`speciesKnown`](#what-the-shell-gives-away) has it
+for a single pet: the hatchling is the tier's own form and says nothing about which animal is inside
+it. That the two agree is not a coincidence to be maintained by care — the page derives `found` from
+the same map, so a surface cannot come to disagree with the panel about whether an animal has been
+identified.
+
+**Each age is drawn once a pet of yours has reached it**, with every rung below it — a pet at adult
+was a hatchling and a juvenile on the way, and greying the forms its owner watched it grow out of
+would withhold a memory rather than a secret. So the adult of a species you own only as a juvenile
+stays a silhouette: raising one is the second half of the collection, and a page that drew the grown
+form of an animal nobody has grown makes the beats it costs pay for nothing.
+
+The tier's shared hatchling used to be revealed by **any** sibling of its tier, on the reasoning that
+one shared drawing is one sighting. It reads as generosity and is not: it lights a form on one card
+of the band and greys it on the next, which is a per-species answer given from tier-wide evidence —
+so a collection with a single common in it drew a hatchling on all nine of them. The ages are gated
+on the species' own record now, and on `known` as well as `seen`, so an opened hatchling of a species
+the operator is not yet allowed to name cannot light its card alone and give the name away by
+elimination.
+
+A blended pet still counts, in both answers. Having seen the animal is not undone by having dissolved
+a spare of it later.
 
 A silhouette rather than a blur, because blurred pixel art reads as a rendering fault rather than
 as a state — and a silhouette stays recognisable enough to be worth going and finding. It is drawn
