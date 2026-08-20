@@ -253,13 +253,11 @@ about must not erase a narrative some other write put there.
 
 ## Ingestion
 
-`ingestPlanDocument(store, {doc, originRef, title, requireApproval})` in
-`src/plans/planIngest.ts` is
+`ingestPlanDocument(store, {doc, originRef, title})` in `src/plans/planIngest.ts` is
 the **one** place a plan document becomes plan rows, so the file path and the tool path cannot drift
-into two subtly different writes. `requireApproval` is `planning.requireApproval`, passed in by each
-transport (`AgentManager` for the file path, `McpToolDeps` for the tool path) rather than read from a
-config here, so ingestion stays store-only and neither transport can persist a verdict the other
-would not.
+into two subtly different writes. It writes `awaiting_approval` unconditionally, and takes no policy
+at all: ingestion stays store-only, and neither transport (`AgentManager` for the file path,
+`McpToolDeps` for the tool path) can persist a verdict the other would not.
 
 The plan is persisted whatever its size — a one-part plan is an ordinary row with one part. Without a
 row the planner would re-run on the same issue every cycle.
@@ -271,11 +269,11 @@ For an amendment:
    agent, a branch or a PR is left exactly as it is. Retiring it would strand a PR the reconciler
    still folds reality onto, and a reviewer would have no idea the harness had written it off.
    Un-declaring in-flight work is a request to _stop_, which is a kill, not a plan edit.
-2. `ingestedPlanStatus(requireApproval)` — `active`, or `awaiting_approval` when approval is
-   required, and **nothing else is consulted**. This took the verdict and the surviving parts while a
-   `single` verdict could be _overruled_ by a part already carrying a branch: shape arithmetic on the
-   write path, for a plan that is one pull request. An amendment now lands the same way whatever it
-   does to the part count.
+2. The status is `awaiting_approval`, and **nothing is consulted** to arrive at it. This was a
+   function once — `ingestedPlanStatus`, taking the verdict and the surviving parts while a `single`
+   verdict could be _overruled_ by a part already carrying a branch, and later a `requireApproval`
+   flag: shape arithmetic and a policy read on the write path, for a decision that is the same one
+   every time. An amendment lands the same way whatever it does to the part count.
 3. `store.upsertPlan`, then retire, then `store.upsertPlanParts` (which merges on slug and never
    deletes).
 4. `store.ingestValidation`, on the same terms one layer down: merged on the check id, letters
@@ -303,7 +301,6 @@ For an amendment:
 | `partDeclarationNote(part)`                              | The part's `touches` and `acceptance`, appended to its prompt — an agent judged on a criterion is shown it. |
 | `acceptanceCriteria(part)`                               | `acceptance` as the checklist the sheet draws, each criterion's tick folded in.                             |
 | `partsToRetire(existing, declared)`                      | Which parts an amendment retires.                                                                           |
-| `amendedPlanStatus(verdict, surviving, requireApproval)` | The status an ingested or amended plan resolves to.                                                         |
 | `currentPlanSummary(plan, parts)`                        | The current plan rendered for a replanning agent — slug, status, PR/branch, dependency, scope.              |
 | `siblingContext(parts, current)`                         | `{done, remaining}` for the part prompt.                                                                    |
 | `observePartPr(part, branch, openPrs, closedPrs)`        | The pure core of PR observation (below).                                                                    |
@@ -475,10 +472,11 @@ actually spawns, so a held dispatch leaves the part `ready`.
 
 ## The approval gate
 
-`planning.requireApproval`, **on by default** (`src/config.ts` and `DEFAULT_PLANNING` in
-`src/plans/planning.ts` agree). On, a plan is a **proposal** before it is work (issue #109 phase 3).
-Off, the funnel behaves byte-for-byte as it did before phase 3 existed: the plan commits the moment
-the planner writes it, and no proposal row is written for anyone.
+A plan is a **proposal** before it is work (issue #109 phase 3), on every deployment. It was
+`planning.requireApproval` — on by default, and switchable — until the switch was removed: what it
+turned off was the acceptance step on the one decision in the funnel that is a human's, and a
+deployment reaching for it was asking for N branches and N agents to start themselves off a verdict
+nobody read. The undo for a plan is a replan, which is strictly worse than not starting.
 
 **Every plan, whatever its size.** The gate started on the `parts` arm alone, on the reasoning that a
 `single` verdict proposes nothing — it was the path the funnel already fell open to. That was wrong in
@@ -493,12 +491,11 @@ There is also no longer an ungated arm. A `single` verdict the harness had _over
 carrying branches, so the collapse was refused — was released without asking, because there was no
 decision left in it. Nothing overrules a plan any more, so nothing bypasses the gate.
 
-**What is being defaulted is only how a plan lands**, not whether the funnel runs: whether N branches
-and N agents start themselves the moment a planner writes them, or wait for somebody to say yes.
-Both polarities are asserted, and separately: `test/planApproval.test.ts` asserts the default **does**
-write a proposal and that accepting it releases the plan, while `test/planPart.test.ts` pins
-`requireApproval: false` and asserts that path writes none. So the two default sites (`config.ts`,
-`DEFAULT_PLANNING`) cannot drift apart unnoticed.
+**There is one landing.** `test/planApproval.test.ts` asserts that ingestion writes a proposal, that
+one part is asked about on an eight-part plan's terms, and that accepting releases the plan. A test
+downstream of the gate starts from a released plan — `active` written straight to the store, or an
+accepted proposal — rather than from a config that turned the gate off, because there is no longer
+such a config and an operator has no such route either.
 
 **The gate is the plan's status.** Ingestion persists the plan as `awaiting_approval` instead of
 `active`; releasing writes `active`, and that is the whole effect, because `awaiting_approval` is the
@@ -540,7 +537,7 @@ the first writes (`src/store/store.ts`):
 
 | Step                 | What happens                                                                                                                                                                                                                                       |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The plan lands       | `ingestedPlanStatus(requireApproval)` → `awaiting_approval`. Parts are written normally: the gate holds scheduling, not the record of the plan.                                                                                                    |
+| The plan lands       | Ingestion writes `awaiting_approval`. Parts are written normally: the gate holds scheduling, not the record of the plan.                                                                                                                                                                  |
 | Rule `plan-approval` | Emits `propose_plan` for an `awaiting_approval` plan whose issue is open and watched, unless `planProposalHold` finds a pending one. Read off `ctx.plans`, not `eligibleIssues` — a replan of a live plan is re-approved while its parts have PRs. |
 | The executor         | Creates an `approve_change` escalation plus a `plan` proposal with ref `issue:<n>:plan`, and re-asks the same hold (every path that reaches the executor is covered, not just the one that checks first).                                          |
 | Accept               | `ProposalDesk.accept` → `ActionExecutor.runAuthorized` → `releasePlan`: the plan becomes `active`, audited under `human:<proposal id>` as `authorized by you`.                                                                                     |
@@ -866,7 +863,7 @@ not made.
 `POST /api/plans/:id/replan` flips the plan row to `planning`, withdraws any pending plan proposal,
 and kicks a cycle. That is all it does.
 
-The withdrawal is not optional under `requireApproval`: a pending verdict holds rule `plan-approval` off the plan,
+The withdrawal is not optional: a pending verdict holds rule `plan-approval` off the plan,
 so the amended plan would never be put to anyone — and the stale card, if accepted, would
 release a plan its reader never saw. It routes through the ordinary `ProposalDesk.reject`,
 which is safe precisely because the status write above already moved the plan, so `refusePlan` finds
@@ -881,8 +878,7 @@ Three things make replan work rather than merely fire:
 
 1. `plannerVerdict` narrows the cooldown window to decisions since `plan.updatedAt`.
 2. `resolvePlanRoute` fails a spent replan back to `parts`, not open to unplanned pickup.
-3. Ingestion does the amendment (and, under `requireApproval`, asks again — an amended plan is a new
-   proposal): `partsToRetire` respects started work, so an amendment cannot withdraw a part that has
+3. Ingestion does the amendment, and asks again — an amended plan is a new proposal: `partsToRetire` respects started work, so an amendment cannot withdraw a part that has
    a branch or a PR behind it.
 
 ## Discussing a plan

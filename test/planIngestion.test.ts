@@ -218,10 +218,6 @@ function planningConfig() {
     worktreeRoot: join(dir, 'wt'),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
-    // Pinned off: `requireApproval` now defaults on, and this test is about
-    // ingestion (the plan.json transport persisting a verdict), not the
-    // approval gate — covered separately in `planApproval.test.ts`.
-    planning: { requireApproval: false } as never,
   });
 }
 
@@ -278,10 +274,11 @@ test('a planner writing plan.json persists the plan at drain time, one part or m
   );
   const plan = system.store.getPlanByOrigin('issue:12');
   assert.ok(plan, 'the plan was ingested from the worktree');
-  // `active`, not `awaiting_approval`: `planning.requireApproval` is pinned off
-  // above, so the file transport commits a decomposition exactly as it always
-  // has (issue #109 phase 3 changes only where an *opted-in* verdict lands).
-  assert.equal(plan!.status, 'active');
+  // `awaiting_approval`, because every plan lands as a proposal — the file
+  // transport persists a verdict on exactly the terms `plan_submit` does, which is
+  // the property one shared ingestion exists to keep. The gate itself is
+  // `planApproval.test.ts`'s subject.
+  assert.equal(plan!.status, 'awaiting_approval');
   assert.equal(plan!.reason, 'Schema first.');
   assert.equal(plan!.title, 'Big thing', 'the issue title, not the task title');
   assert.deepEqual(
@@ -305,7 +302,7 @@ test('a planner writing plan.json persists the plan at drain time, one part or m
     }),
   );
   const one = system.store.getPlanByOrigin('issue:13')!;
-  assert.equal(one.status, 'active');
+  assert.equal(one.status, 'awaiting_approval', 'one part or eight, a plan is asked about on the same terms');
   assert.deepEqual(
     system.store.listPlanParts(one.id).map((p) => p.slug),
     ['whole'],

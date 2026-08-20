@@ -242,10 +242,8 @@ export function buildDemoState(): DemoSeed {
       canFileTickets: false,
     },
     control: { cap: 3, paused: false },
-    // What the plan sheet's approval bar states: verdicts are proposals, and two
-    // of a plan's parts run at once.
+    // What the plan sheet's approval bar states: two of a plan's parts run at once.
     planning: {
-      requireApproval: true,
       maxConcurrentPartsPerIssue: 2,
       gitFetchIntervalMs: 60_000,
     },

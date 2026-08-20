@@ -1778,8 +1778,8 @@ export interface IssueShortfall {
  * comment.
  *
  * - `planning` — a verdict is still being worked out (a replan in flight).
- * - `awaiting_approval` — the planner has spoken and `planning.requireApproval` is
- *   on, so a human has been asked to authorize the verdict (issue #109 phase 3) —
+ * - `awaiting_approval` — the planner has spoken, so a human has been asked to
+ *   authorize the verdict (issue #109 phase 3) —
  *   a decomposition, or the decision to work the issue as one PR. Nothing is
  *   scheduled from it: this status *is* the gate, which is why release is a
  *   one-way move rather than a verdict re-read every pulse. It releases to

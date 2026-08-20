@@ -62,8 +62,6 @@ export interface DesktopToolDeps {
    * what it had told somebody to start.
    */
   localRun(): LocalRunner;
-  /** `planning.requireApproval`, passed to ingestion exactly as `plan_submit` passes it. */
-  requirePlanApproval?: boolean;
   /**
    * The proposal desk, lazily — an amendment has to withdraw the card the
    * operator would otherwise approve, and the desk is constructed after this
@@ -482,7 +480,6 @@ const planAmend: DesktopToolFactory = (deps) => ({
       doc: parsed.document,
       originRef,
       title: plan.title,
-      requireApproval: deps.requirePlanApproval,
     });
     // The card goes back up on a pulse, and an operator told to go and approve
     // something wants it there when they look rather than at the next heartbeat.
@@ -497,19 +494,13 @@ const planAmend: DesktopToolFactory = (deps) => ({
       // reason: a session told only that the call succeeded would reasonably
       // believe it had finished the job.
       means:
-        result.status === 'awaiting_approval'
-          ? 'the amended plan is recorded and the superseded approval card has been withdrawn. Nothing is ' +
-            'scheduled and nothing more is yours to do here.'
-          : 'the amended plan is recorded and released — this deployment does not require approval, so its ' +
-            'parts schedule from the next pulse.',
+        'the amended plan is recorded and the superseded approval card has been withdrawn. Nothing is ' +
+        'scheduled and nothing more is yours to do here.',
       next:
-        result.status === 'awaiting_approval'
-          ? 'Tell the operator, in your own words, that the plan is amended and waiting for them: they ' +
-            'approve it in the LubbDubb cockpit, on the goal’s plan sheet, where "What changed" now shows ' +
-            'this amendment against the version they were reading. Do not carry any of the work out — you ' +
-            'were asked to argue about the plan, not to deliver it.'
-          : 'Tell the operator the plan is amended and already released. Do not carry any of the work out ' +
-            'yourself — the fleet schedules it from here.',
+        'Tell the operator, in your own words, that the plan is amended and waiting for them: they ' +
+        'approve it in the LubbDubb cockpit, on the goal’s plan sheet, where "What changed" now shows ' +
+        'this amendment against the version they were reading. Do not carry any of the work out — you ' +
+        'were asked to argue about the plan, not to deliver it.',
     });
   },
 });

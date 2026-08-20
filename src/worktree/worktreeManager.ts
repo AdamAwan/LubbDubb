@@ -150,7 +150,6 @@ export class WorktreeManager implements Worktrees {
        * lower of them wins: a cap raised in the cockpit past a bound frozen at boot
        * turns every dispatch above the old number into a rejection, forever, and
        * that presents as a full queue and an idle fleet with nothing red anywhere.
-       * `worktreePoolSize` still pins it, for a disk that cannot hold more.
        */
       readonly size: number;
       /**
@@ -785,8 +784,8 @@ export class WorktreeManager implements Worktrees {
       (salvage.notes.length > 0 ? `Reclaim: ${salvage.notes.join('; ')}. ` : '') +
       'A slot is held while the harness has work in flight on the branch checked out in it, and a slot carrying ' +
       'uncommitted changes is stashed onto a salvage ref and reclaimed — so one still named above is one the ' +
-      'stash itself refused. The bound follows the live agent cap, so raising the cap raises it too, unless ' +
-      '`worktreePoolSize` pins the number of checkouts; the dispatch is retried next cycle either way.' +
+      'stash itself refused. The bound follows the live agent cap, so raising the cap raises it too; the ' +
+      'dispatch is retried next cycle either way.' +
       (strays.length === 0
         ? ''
         : ` Costing disk but not slots: ${strays.length} ${strays.length === 1 ? 'directory' : 'directories'} ` +
@@ -903,17 +902,18 @@ export function slotDirName(index: number): string {
  * The cap bounds how many agents are *running*, and slots are held slightly longer
  * than that: from `ensure` until the agent's process is actually reaped, and for as
  * long as a slot a failed run left dirty takes to be salvaged. Sized to absorb that
- * rather than to hide a leak — a pool that needs more than this is a deployment that
- * should say so through `worktreePoolSize`.
+ * rather than to hide a leak — a pool that needed more than this would be a fleet
+ * leaking slots, which is a bug to fix rather than a number to raise.
  */
 const POOL_SLACK = 2;
 
 /**
- * The pool bound a deployment that does not configure one runs on, derived from the
- * **live** cap rather than the configured one: the two are limits over one fleet and
- * the lower wins, so a bound frozen at boot turns every dispatch above it into a
- * permanent rejection the moment an operator raises the cap. Called on every acquire
- * (see the constructor's `pool.size`), so it stays a pure function of the cap.
+ * The pool bound, derived from the **live** cap — the fleet's one size knob. There
+ * is no separate setting: a pool below the cap starves the fleet it exists to serve
+ * (every dispatch above the lower number rejected for want of a directory, which
+ * presents as a full queue and an idle fleet with nothing red), and a pool above it
+ * is disk nothing can lease. Called on every acquire (see the constructor's
+ * `pool.size`), so it stays a pure function of the cap.
  */
 export function defaultPoolSize(cap: number): number {
   return Math.max(1, cap) + POOL_SLACK;

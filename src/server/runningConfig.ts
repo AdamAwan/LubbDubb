@@ -37,7 +37,7 @@ import {
  * it: the form offers a field for a credential nowhere.
  */
 export interface RunningConfigEntry {
-  /** Dotted path into the config object, e.g. `planning.requireApproval`. */
+  /** Dotted path into the config object, e.g. `planning.maxConcurrentPartsPerIssue`. */
   path: string;
   /** The running value. Arrays and leaf objects are shipped whole. */
   value: unknown;
@@ -137,7 +137,6 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'repoRoot',
       'defaultBranch',
       'worktreeRoot',
-      'worktreePoolSize',
       'deskRoot',
       'attachmentRoot',
       'validationRoot',

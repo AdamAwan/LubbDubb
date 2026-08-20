@@ -176,7 +176,6 @@ async function buildDesk(): Promise<{ system: System; session: Session; close: (
     agentMode: 'raw',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
-    planning: { requireApproval: true } as never,
     heartbeatIntervalMs: 999_999,
   });
   const system = buildSystem(config, {
@@ -194,7 +193,6 @@ async function buildDesk(): Promise<{ system: System; session: Session; close: (
     claimMinutes: 60,
     validationRoot: join(dir, 'validation'),
     localRun: () => system.localRun,
-    requirePlanApproval: true,
     proposals: () => system.proposals,
     runCycle: () => system.harness.runCycle('manual').then(() => undefined),
     now: () => new Date().toISOString(),
@@ -232,11 +230,6 @@ function seedAwaitingApprovalPlan(system: System): Plan {
     }),
   );
   assert.ok(doc.ok);
-  const result = ingestPlanDocument(system.store, {
-    doc: doc.document,
-    originRef: 'issue:231',
-    title: 'Big thing',
-    requireApproval: true,
-  });
+  const result = ingestPlanDocument(system.store, { doc: doc.document, originRef: 'issue:231', title: 'Big thing' });
   return result.plan;
 }

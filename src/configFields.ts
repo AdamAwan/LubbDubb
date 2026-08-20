@@ -40,7 +40,7 @@ export type ConfigFieldType = 'number' | 'boolean' | 'string' | 'text' | 'enum' 
 export type ConfigFieldAccess = 'plain' | 'advanced' | 'fileOnly';
 
 interface ConfigField {
-  /** Dotted path into the config object, e.g. `planning.requireApproval`. */
+  /** Dotted path into the config object, e.g. `planning.maxConcurrentPartsPerIssue`. */
   path: string;
   type: ConfigFieldType;
   /** The members, for an `enum`. */
@@ -333,12 +333,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How many parts of one plan may have agents at once.',
   },
   {
-    path: 'planning.requireApproval',
-    type: 'boolean',
-    access: 'plain',
-    why: 'Put a planner’s verdict to you before anything is scheduled from it.',
-  },
-  {
     path: 'planning.gitFetchIntervalMs',
     type: 'number',
     ms: true,
@@ -448,12 +442,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'The integration branch. Not auto-detected.',
   },
   { path: 'worktreeRoot', type: 'string', access: 'advanced', why: 'Root for the pool of worktree slot directories.' },
-  {
-    path: 'worktreePoolSize',
-    type: 'number',
-    access: 'advanced',
-    why: 'How many worktree slots the pool grows to. Unset, it follows the live agent cap.',
-  },
   { path: 'deskRoot', type: 'string', access: 'advanced', why: 'Scratch root for desk agents.' },
   { path: 'attachmentRoot', type: 'string', access: 'advanced', why: 'Where blueprint attachments are written.' },
   { path: 'validationRoot', type: 'string', access: 'advanced', why: 'Where validation resources are written.' },

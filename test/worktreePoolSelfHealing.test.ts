@@ -105,7 +105,7 @@ test('the pool bound follows the live cap, not the cap the harness booted with',
   );
 });
 
-test('the bound is the live cap through the composition root, and worktreePoolSize pins it', async () => {
+test('the bound is the live cap through the composition root', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const base = {
     labelPrefix: '',
@@ -125,15 +125,14 @@ test('the bound is the live cap through the composition root, and worktreePoolSi
   derived.runtimeControl.apply({ cap: 5 });
   assert.ok(await derived.worktrees.ensure('issue/4', 'main'), 'the cap the cockpit raised raised the pool too');
 
-  // The other half: a small disk must still be able to pin the number of checkouts,
-  // and pinning it below the cap is then a real limit rather than an oversight.
-  const pinned = buildSystem(
-    loadConfig({ ...base, repoRoot: initRepo(), worktreeRoot: join(dir, 'b'), worktreePoolSize: 2 }),
-    { backend: new FakePtyBackend() },
-  );
-  pinned.runtimeControl.apply({ cap: 5 });
-  for (const n of [1, 2]) await pinned.worktrees.ensure(`issue/${n}`, 'main');
-  await assert.rejects(() => pinned.worktrees.ensure('issue/3', 'main'), /all 2 slots/);
+  // The other direction, and the reason there is no second key: lowering the cap is
+  // how a deployment that cannot hold that many checkouts says so, and it lands the
+  // same live way — the bound comes back down with it, and the refusal counts the
+  // slots the *cap* allows rather than the directories already standing. A separate
+  // bound could only ever sit above the cap (disk nothing can lease) or below it
+  // (the fleet's real limit, and nothing says so).
+  derived.runtimeControl.apply({ cap: 1 });
+  await assert.rejects(() => derived.worktrees.ensure('issue/5', 'main'), /all 3 slots/);
 });
 
 // ---------------------------------------------------------------------------

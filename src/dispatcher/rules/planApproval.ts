@@ -6,7 +6,7 @@ import { liveParts, planIssueNumber } from '../../plans/parts.js';
 import type { RawAction, StageContext } from './context.js';
 
 /**
- * With `planning.requireApproval` on, a plan is a proposal before it is work.
+ * A plan is a proposal before it is work, on every deployment.
  * Ingestion parks it as `awaiting_approval` and this puts it to the operator —
  * once: the executor writes the proposal, and a pending one holds this rule off
  * the plan (`planProposalHold`, asked here *and* there for the same reason

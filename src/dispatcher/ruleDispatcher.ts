@@ -136,8 +136,8 @@ export class RuleDispatcher implements Dispatcher {
    * built-in defaults (the composition root loads operator overrides).
    * `defaultBranch` names the base a PR is assumed to target when the provider
    * doesn't report one, and only phrases the base-update prompt. `planning` carries
-   * the funnel's two knobs — the part-concurrency cap and `requireApproval`;
-   * omitted means their defaults, never an absent funnel. `ci` decides
+   * the funnel's pacing — the part-concurrency cap and the reconciliation fetch
+   * floor; omitted means their defaults, never an absent funnel. `ci` decides
    * `pr-ci-failing` per failing check; omitted/empty means every failure is acted
    * on generically, which is what the rule did before per-check policy existed.
    *
@@ -166,7 +166,6 @@ export class RuleDispatcher implements Dispatcher {
     this.ci = { checks: ci.checks ?? [] };
     this.planning = {
       maxConcurrentPartsPerIssue: planning.maxConcurrentPartsPerIssue ?? DEFAULT_PLANNING.maxConcurrentPartsPerIssue,
-      requireApproval: planning.requireApproval ?? DEFAULT_PLANNING.requireApproval,
       // Reconciliation's knob, not the dispatcher's; carried so the policy stays one object.
       gitFetchIntervalMs: planning.gitFetchIntervalMs ?? DEFAULT_PLANNING.gitFetchIntervalMs,
     };

@@ -881,8 +881,7 @@ on `part_id`; and from there the existing graph does the work:
 
 **A standalone human task blocks nothing.** It is a visible obligation, not a gate. That line is what
 keeps the capability an agent gains to "ask a person" rather than "stop the fleet": the blocking half
-only ever arrives through a plan, and a plan is already gated by `planning.requireApproval`, on by
-default.
+only ever arrives through a plan, and a plan is already gated by an operator's approval.
 
 ### Declining is a settlement, not a failure
 
