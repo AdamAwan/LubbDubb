@@ -8,6 +8,7 @@ import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { gitRepo } from './support/gitRepo.js';
 import { failPlanningOpen } from './support/plans.js';
+import { pinnedPool } from './support/worktrees.js';
 
 const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
@@ -22,10 +23,6 @@ function build() {
     repoRoot: gitRepo(),
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
-    // A pool of one, so "is the slot free again" is observable: with room to grow,
-    // a second branch is handed a *new* slot rather than the released one, because
-    // reuse is scoped to the branch and a hand-over wipes the tree.
-    worktreePoolSize: 1,
     // The assessor and the assay are pinned off: they default **on**, and this
     // file is about something else — leaving them on would put an extra agent in
     // front of every issue these assertions dispatch. Each has its own tests.
@@ -33,7 +30,15 @@ function build() {
     // funnel having failed open on it — `failPlanningOpen`.)
   });
   const backend = new FakePtyBackend();
-  return { system: buildSystem(config, { backend }), backend };
+  // A pool of one, so "is the slot free again" is observable: with room to grow, a
+  // second branch is handed a *new* slot rather than the released one, because
+  // reuse is scoped to the branch and a hand-over wipes the tree. The pool the
+  // composition root builds follows the agent cap, so the bound is pinned by
+  // injecting the manager rather than by a config key.
+  const pool = pinnedPool(config, 1);
+  const system = buildSystem(config, { backend, worktrees: pool.worktrees });
+  pool.attach(system);
+  return { system, backend };
 }
 
 /** Dispatch a code agent for an injected issue; returns its task (whose worktree now exists). */

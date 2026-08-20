@@ -71,15 +71,15 @@ export const planSubmit: ToolFactory = ({ deps, task, ok }) => ({
       doc: parsed.document,
       originRef: issueOrigin(planner.number),
       title: task.originTitle ?? task.title,
-      requireApproval: deps.requirePlanApproval,
     });
     // Said out loud rather than left to be read off the status string: a
     // planner that thinks its parts are being worked would otherwise sit
     // waiting for siblings that will not start until a human clicks accept.
-    const awaiting =
-      result.status === 'awaiting_approval'
-        ? { awaitingApproval: 'The plan is recorded, but nothing is scheduled until an operator approves it.' }
-        : {};
-    return ok({ accepted: true, status: result.status, retired: result.retired, ...awaiting });
+    return ok({
+      accepted: true,
+      status: result.status,
+      retired: result.retired,
+      awaitingApproval: 'The plan is recorded, but nothing is scheduled until an operator approves it.',
+    });
   },
 });

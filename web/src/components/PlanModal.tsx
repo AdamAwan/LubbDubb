@@ -764,9 +764,9 @@ function PartBlock({
           <span className="pm-part-title">{part.title}</span>
           <span className="chip small mono">{part.slug}</span>
           <span className="chip small">{part.status.replace('_', ' ')}</span>
-          {/* This is the surface `planning.requireApproval` exists for: seeing that
-              step 3 is "write it up" rather than "build it" is what an operator is
-              approving. Shown only when the kind is not code, which is the default. */}
+          {/* This is the surface plan approval exists for: seeing that step 3 is
+              "write it up" rather than "build it" is what an operator is approving.
+              Shown only when the kind is not code, which is the default. */}
           {kindOf(part) && (
             <span
               className="chip small"

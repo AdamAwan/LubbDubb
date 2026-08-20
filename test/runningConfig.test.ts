@@ -43,12 +43,11 @@ test('an overridden value is marked, and only it', () => {
  * an operator must be able to tell those apart from their own choice.
  */
 test('a nested override marks the leaf, not the block', () => {
-  // `requireApproval: false` is the override — the test is about which row is
-  // marked, so it needs a value that differs from the default.
-  const config = loadConfig({ planning: { requireApproval: false } as Config['planning'] });
-  assert.equal(entry(config, 'planning.requireApproval')?.isDefault, false);
+  // `maxConcurrentPartsPerIssue: 4` is the override — the test is about which row
+  // is marked, so it needs a value that differs from the default.
+  const config = loadConfig({ planning: { maxConcurrentPartsPerIssue: 4 } as Config['planning'] });
+  assert.equal(entry(config, 'planning.maxConcurrentPartsPerIssue')?.isDefault, false);
   assert.equal(entry(config, 'planning.gitFetchIntervalMs')?.isDefault, true);
-  assert.equal(entry(config, 'planning.maxConcurrentPartsPerIssue')?.isDefault, true);
   assert.equal(entry(config, 'planning')?.value, undefined, 'the block itself must not also be listed');
 });
 

@@ -172,7 +172,7 @@ differently; the right column is how that answer is expressed.
 | Intake                   | which tickets are in scope at all               | the watch tag, tracker workflow states                          |
 | Enough information       | how strict the bar is, and who sets it          | on/off, plus an operator verdict that overrides it              |
 | Plan                     | whether work is decomposed before it starts     | on/off                                                          |
-| Plan accepted            | whether a human sees it first                   | on/off; approval is the default when planning is on             |
+| Plan accepted            | whether a human sees it first                   | a proposal a human settles — in LubbDubb, always, with no switch |
 | Work kind                | what a deliverable may be                       | the terminal an agent declares when it finishes                 |
 | Quality gates            | which checks exist and what each failure means  | a per-check rule set, as in the table above                     |
 | Human review             | whether a reply goes out unattended             | a confidence threshold plus an allow-list, else a human accepts |

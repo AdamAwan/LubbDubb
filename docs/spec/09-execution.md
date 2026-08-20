@@ -598,8 +598,8 @@ write side is the half that mutates a repository.
 handed to another branch is wiped either way, so taking one that still carries a live branch burns
 that branch's tree and buys nothing a fresh slot would not have given — and that tree is exactly what
 a CI fix or a review comment on the branch comes back to. The consequence is that a quiet deployment
-grows to its full pool size over time instead of churning one directory: disk is still bounded by
-`worktreePoolSize`, and what the extra slots hold is the warm state of the last few branches worked.
+grows to its full pool size over time instead of churning one directory: disk is still bounded by the
+pool, and what the extra slots hold is the warm state of the last few branches worked.
 
 A branch that does not exist yet starts at a commit: `base` resolved through `resolveCommit`, or the
 repo root's HEAD when there is no `base`. The start point is named **explicitly** even in the HEAD
@@ -688,8 +688,8 @@ reads, and what `remove` is called with when the agent is reaped — and it neve
   commits arriving.
 - **Not a separate pool.** A read-only dispatch is an agent like any other and is bounded by
   `maxConcurrentAgents` before it ever reaches a slot; a second pool would double the disk and need a
-  second number nobody can size. What it costs is one slot while it runs, and `worktreePoolSize` is
-  the knob for that.
+  second number nobody can size. What it costs is one slot while it runs, and `maxConcurrentAgents`
+  is the knob for that, as it is for every other slot.
 - Rules never arrange this themselves: they compose the dispatch through `readOnlyDispatch`
   (`src/dispatcher/rules/readOnlyDispatch.ts`), the executor reads `action.readOnly` at the single
   `ensure` call site, and `readOnly` defaults to false — so a dispatch that writes code cannot lose
@@ -749,9 +749,17 @@ fall back to a fresh directory — which would put two agents in one tree.
 
 ### Exhaustion
 
-Pool size is `worktreePoolSize` when it is set, and otherwise the **live** agent cap plus a slack of
-two ([02](02-configuration.md#repository)). Disk is bounded either way, which it never was: twenty
-concurrent agents meant twenty full checkouts and no ceiling at all.
+Pool size is the **live** agent cap plus a slack of two, and there is no setting for it: the fleet has
+one size knob, `maxConcurrentAgents` ([02](02-configuration.md#repository)). Disk is bounded by it,
+which it never was: twenty concurrent agents meant twenty full checkouts and no ceiling at all.
+
+The pool used to take its own `worktreePoolSize`, which could only ever be wrong in one of two ways.
+Below the cap it silently became the fleet's real limit — the failure the next paragraph describes,
+arrived at deliberately. Above it, it was disk nothing could lease: a slot is only ever handed to an
+agent, and the cap decides how many of those there are. The slack absorbs the gap between the two
+(a slot is held from `ensure` until the agent's process is reaped, and for as long as salvaging a
+dirty tree takes), and a pool that needed more than the slack would be a fleet leaking slots — a bug
+to fix rather than a number to raise.
 
 **The bound is read on every acquire, not once at boot, and it must stay that way.** The bound and
 the cap are two limits over one fleet and **the lower one wins**, so a bound frozen at boot silently
@@ -760,9 +768,9 @@ every dispatch above the old number is refused for want of a directory, audited 
 retried on the next cycle forever. What that presents as is a full "Up next" queue, one running
 agent, a cap of five, nothing paused and nothing red — which is what it did, for over an hour, before
 this was written. So the pool's `size` is a **live view of `RuntimeControl.cap`**, the same
-by-reference read the harness's headroom does, and `worktreePoolSize` is the explicit pin over it —
-a deployment on a small disk must still be able to fix the number of checkouts, and pinning it below
-the cap is then a real limit deliberately chosen rather than one nobody noticed.
+by-reference read the harness's headroom does. A deployment that cannot hold that many checkouts
+lowers the cap, which is the same statement made where the fleet can act on it: fewer agents rather
+than the same agents queueing for a directory that is never coming.
 
 **Growing the ceiling mints nothing.** A slot is created only when a dispatch needs one and the pool
 is below its bound, so raising the cap costs no disk until the fleet actually runs that wide — which

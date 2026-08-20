@@ -4,7 +4,7 @@ import type { PlanDocument } from './planDocument.js';
 import { planNarrative, planPartInputs } from './planDocument.js';
 import { validationCheckInputs, validationResourceInputs } from '../validation/checkDocument.js';
 import { withdrawResourceAsks } from '../validation/ask.js';
-import { ingestedPlanStatus, partIsHuman, partOrigin, partsToRetire, planIssueNumber } from './parts.js';
+import { partIsHuman, partOrigin, partsToRetire, planIssueNumber } from './parts.js';
 
 /** What a human task says when the plan that asked for it stopped asking. */
 const RETIRED_PART_RESOLUTION = 'An amended plan no longer includes this step.';
@@ -54,14 +54,6 @@ export function ingestPlanDocument(
     doc: PlanDocument;
     originRef: string;
     title: string;
-    /**
-     * `planning.requireApproval` — whether the plan lands as a proposal
-     * (`awaiting_approval`) rather than as work (`active`). Carried in rather than
-     * read from a config here because ingestion is deliberately store-only: both
-     * transports (the `plan.json` drain and the `plan_submit` tool) pass their own
-     * operator's policy, so neither can persist a verdict the other wouldn't.
-     */
-    requireApproval?: boolean;
   },
 ): PlanIngestResult {
   const { doc, originRef, title } = input;
@@ -76,7 +68,12 @@ export function ingestPlanDocument(
     existing,
     declared.map((p) => p.slug),
   );
-  const status = ingestedPlanStatus(input.requireApproval ?? false);
+  // Every plan lands as a proposal, whatever its size and whichever transport
+  // wrote it: the status *is* the gate, so releasing it is a one-way transition on
+  // this row rather than a policy re-read every pulse. Both transports (the
+  // `plan.json` drain and `plan_submit`) reach this one function precisely so
+  // neither can persist a verdict the other wouldn't.
+  const status: PlanStatus = 'awaiting_approval';
 
   const narrative = planNarrative(doc);
   const plan = store.upsertPlan({ originRef, title, status, ...narrative });

@@ -16,7 +16,7 @@ import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import { issuePickupStatus, type IssuePickupContext } from '../src/dispatcher/issuePickup.js';
 import { basePrOf, inheritedCiFailure, prHealth } from '../src/prHealth.js';
 import { DEFAULT_PLANNING, resolvePlanRoute, plannerVerdict } from '../src/plans/planning.js';
-import { currentPlanSummary, ingestedPlanStatus, partsToRetire, planProgress } from '../src/plans/parts.js';
+import { currentPlanSummary, partsToRetire, planProgress } from '../src/plans/parts.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Decision, Issue, Plan, PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
@@ -311,15 +311,6 @@ test('an amended plan retires what it dropped, but never what has work in the wo
   );
   // Already-retired rows are not retired twice, and a re-declared part comes back.
   assert.deepEqual(partsToRetire([part('e', 5, { status: 'retired' })], []), []);
-});
-
-test('an amendment lands on the same status whatever it does to the part count', () => {
-  // What an amendment does to work already in flight is `partsToRetire`'s job
-  // (above), and it is a question about *work*, not about shape. The status write
-  // asks nothing else — there is no arm here for a plan collapsing to one part,
-  // because a plan of one part is a plan.
-  assert.equal(ingestedPlanStatus(), 'active');
-  assert.equal(ingestedPlanStatus(true), 'awaiting_approval');
 });
 
 test('retired parts drop out of the progress count but stay in the graph', () => {

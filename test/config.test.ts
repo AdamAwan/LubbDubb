@@ -59,16 +59,12 @@ test('an unset userId leaves every identity gate off rather than guessing one', 
 test('the planning funnel is deep-merged when overridden', () => {
   assert.deepEqual(loadConfig().planning, {
     maxConcurrentPartsPerIssue: 2,
-    // On by default (issue #109 phase 3): a decomposition is put to a human
-    // before anything is scheduled from it.
-    requireApproval: true,
     gitFetchIntervalMs: 60_000,
   });
   const cfg = loadConfig({ planning: { maxConcurrentPartsPerIssue: 4 } as never });
   assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 4);
-  // Setting one field must not also change how a verdict lands: this default is
-  // carried over unmerged, the same as the other untouched fields above.
-  assert.equal(cfg.planning.requireApproval, true);
+  // Setting one field must not blank the others: this default is carried over
+  // unmerged, which is the whole of what deep-merging the key buys.
   assert.equal(cfg.planning.gitFetchIntervalMs, 60_000);
 });
 
@@ -248,6 +244,49 @@ test('a config file setting a retired switch warns and boots rather than refusin
 });
 
 /**
+ * The two switches this cleanup retired, together because they fail the same way
+ * and in opposite directions. A file turning plan approval off is getting the gate
+ * back — N branches and N agents now wait for a click that deployment was not
+ * expecting to have to give. A file pinning the worktree pool below its cap is
+ * getting a *bigger* pool: more checkouts on a disk somebody sized deliberately.
+ * Neither is visible from the fleet's behaviour in time to be understood, so both
+ * are named on the boot log.
+ */
+test('the retired approval gate and pool bound are dropped by name, and the harness boots', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  const warnings: string[] = [];
+  const realWarn = console.warn;
+  console.warn = (msg: string): void => void warnings.push(msg);
+  t.after(() => {
+    console.warn = realWarn;
+    process.chdir(cwd);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  writeFileSync(
+    join(dir, 'lubbdubb.config.json'),
+    JSON.stringify({
+      planning: { requireApproval: false, maxConcurrentPartsPerIssue: 4 },
+      worktreePoolSize: 1,
+      maxConcurrentAgents: 9,
+    }),
+    'utf8',
+  );
+
+  const cfg = loadDeploymentConfig();
+  assert.equal(cfg.maxConcurrentAgents, 9, 'the rest of the file is still honoured');
+  assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 4, 'and the rest of the block');
+  // Dropped rather than merged into nothing: a value left on the policy object is
+  // one something later can read, and both of these read as a decision.
+  assert.ok(!Object.hasOwn(cfg.planning, 'requireApproval'));
+  assert.ok(!Object.hasOwn(cfg, 'worktreePoolSize'));
+  assert.ok(warnings.some((w) => w.includes('planning.requireApproval')));
+  assert.ok(warnings.some((w) => w.includes('worktreePoolSize')));
+});
+
+/**
  * The desktop channel's own retirement, kept separate because its shape is the
  * one the list is for: the deployment on the other end of this warning switched
  * the channel *off*, and is getting it back — a socket bound, a credential and a
@@ -375,11 +414,11 @@ test('an explicit nested override deep-merges over the config file, not replacin
 
   writeFileSync(
     join(dir, 'lubbdubb.config.json'),
-    JSON.stringify({ planning: { requireApproval: false, maxConcurrentPartsPerIssue: 7 } }),
+    JSON.stringify({ planning: { gitFetchIntervalMs: 5_000, maxConcurrentPartsPerIssue: 7 } }),
     'utf8',
   );
 
-  const cfg = loadDeploymentConfig({ planning: { requireApproval: true } as never });
-  assert.equal(cfg.planning.requireApproval, true, 'the explicit layer wins the field it sets');
+  const cfg = loadDeploymentConfig({ planning: { gitFetchIntervalMs: 0 } as never });
+  assert.equal(cfg.planning.gitFetchIntervalMs, 0, 'the explicit layer wins the field it sets');
   assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 7, "the file's other fields survive");
 });

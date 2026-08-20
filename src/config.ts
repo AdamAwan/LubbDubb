@@ -189,12 +189,12 @@ export interface Config {
    */
   issueBugType?: string;
   /**
-   * The planning funnel for multi-PR issues. **On by default**: every watched open
-   * issue gets a planning agent before any implementation work, and its verdict —
-   * one PR or several — is put to you before any agent is spent (`requireApproval`). Off
-   * leaves it out entirely — rule `issue-pickup` un-narrowed, no planner ever dispatched,
-   * behaviour exactly what it is without plans. Deep-merged, so one field can be
-   * set alone. Only the `rule` dispatcher implements the funnel.
+   * The planning funnel for multi-PR issues. Every watched open issue gets a
+   * planning agent before any implementation work, and its verdict — one PR or
+   * several — is put to you before any agent is spent. Neither of those is a
+   * choice: what is left here is how fast the funnel runs, not whether it does.
+   * Deep-merged, so one field can be set alone. Only the `rule` dispatcher
+   * implements the funnel.
    */
   planning: PlanningPolicy;
   /**
@@ -472,21 +472,6 @@ export interface Config {
   promptTemplatesDir: string;
   /** Root under which the pool of worktree slot directories lives. */
   worktreeRoot: string;
-  /**
-   * How many worktree directories the pool may hold at once (issue #352).
-   *
-   * Unset — the default — derives it from the **live** agent cap plus slack, so the
-   * cap raised through `POST /api/control` raises the pool's ceiling with it. Set it
-   * only to pin that: a deployment on a small disk wanting fewer full checkouts.
-   * Pinning it *below* the cap is a real choice with a real cost — the bound and the
-   * cap are two limits over one fleet and the lower one wins.
-   *
-   * It is a **hard bound**, and exhaustion rejects the dispatch rather than blocking
-   * it — the executor already settles a rejected dispatch and the next cycle tries
-   * again, whereas waiting on a directory would hold the pulse. Growing the ceiling
-   * mints nothing: a slot is created only when a dispatch needs one.
-   */
-  worktreePoolSize?: number;
   /** Root under which desk (no-code) scratch dirs are created. */
   deskRoot: string;
   /**
@@ -795,6 +780,10 @@ const REMOVED_KEYS: Readonly<Record<string, string>> = {
  */
 const RETIRED_KEYS: Readonly<Record<string, string>> = {
   'planning.enabled': 'the planning funnel is always on — every goal is planned',
+  'planning.requireApproval':
+    'a plan is always put to you before anything is scheduled from it — the undo for a plan that started itself is a replan, which is strictly worse than not starting',
+  worktreePoolSize:
+    'the worktree pool is the live agent cap plus slack, so "maxConcurrentAgents" is the fleet\'s one size knob — a second bound could only sit above the cap (disk nothing can lease) or below it (the fleet\'s real limit, with nothing saying so)',
   'validation.enabled': 'validation plans are always on',
   'validation.desktop':
     'the desktop channel is always on — the cockpit offers a desktop prompt on every unrun check, so a harness that was not listening was a dead end with nothing to say so',
@@ -961,7 +950,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // defaults for the others.
   merged.integrations = { ...DEFAULTS.integrations, ...overrides.integrations };
 
-  // planning is nested too — deep-merge so `{"requireApproval": true}` alone keeps
+  // planning is nested too — deep-merge so `{"gitFetchIntervalMs": 0}` alone keeps
   // the default part-concurrency cap instead of leaving it undefined.
   merged.planning = { ...DEFAULTS.planning, ...overrides.planning };
   // And the burn watch, so `{"spendBurn": {"multiple": 6}}` keeps the default

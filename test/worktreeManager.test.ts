@@ -428,7 +428,7 @@ test('the pool never exceeds its bound, and exhaustion is a refusal that names t
     (err: Error) => {
       assert.match(err.message, /No free worktree slot for branch issue\/2/);
       assert.match(err.message, /work in flight on issue\/1/, 'saying what is holding the one slot there is');
-      assert.match(err.message, /worktreePoolSize/, 'and which knob raises the bound');
+      assert.match(err.message, /live agent cap/, 'and which knob raises the bound');
       return true;
     },
   );

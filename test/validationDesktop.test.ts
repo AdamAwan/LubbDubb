@@ -98,7 +98,6 @@ async function desk(
     now: over.now ?? ((): string => new Date().toISOString()),
     socketPath,
     credentialPath: join(dir, 'desktop.json'),
-    requirePlanApproval: true,
     proposals: () => system.proposals,
     runCycle: () => system.harness.runCycle('manual').then(() => undefined),
   });

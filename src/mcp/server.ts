@@ -33,12 +33,6 @@ interface McpBridgeServerOptions {
   /** The socket (POSIX) or named pipe (Windows) agents' bridges connect back on. */
   socketPath: string;
   /**
-   * `planning.requireApproval`, passed through to `plan_submit`'s ingestion so
-   * the tool transport and the `plan.json` one persist a verdict identically —
-   * the property the shared `ingestPlanDocument` exists to keep.
-   */
-  requirePlanApproval?: boolean;
-  /**
    * This deployment's model profiles, cheapest first, for `assay_issue` to offer
    * an assayer (issue #342). Absent/empty = no `agentModels`, and then no
    * profile is asked for and none is stored.
@@ -244,7 +238,6 @@ export class McpBridgeServer {
       {
         store: this.opts.store,
         agents: this.opts.agents(),
-        requirePlanApproval: this.opts.requirePlanApproval,
         profiles: this.opts.profiles,
         permissions: this.opts.permissions?.(),
         openPr: this.opts.openPr?.(),

@@ -597,10 +597,7 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
 }
 
 test('plan_submit persists the verdict and hands the agent its status back', async () => {
-  // Pinned off: this test is about the tool's persistence mechanics, not the
-  // approval gate (which now defaults on and would land the verdict
-  // `awaiting_approval` instead — covered by `planApproval.test.ts`).
-  const system = build({ planning: { requireApproval: false } });
+  const system = build();
   const agent = spawnAgent(system, 'issue:12:plan');
 
   const res = await callTool(system, agent, 'plan_submit', {
@@ -614,7 +611,7 @@ test('plan_submit persists the verdict and hands the agent its status back', asy
 
   const plan = system.store.getPlanByOrigin('issue:12');
   assert.ok(plan, 'the plan landed against the issue origin, not the planner origin');
-  assert.equal(plan!.status, 'active');
+  assert.equal(plan!.status, 'awaiting_approval');
   assert.equal(plan!.title, 'Big thing');
   assert.deepEqual(
     system.store.listPlanParts(plan!.id).map((p) => p.slug),
@@ -628,7 +625,7 @@ test('plan_submit persists the verdict and hands the agent its status back', asy
   // Freshly written parts are `pending`; the reconciler is what readies them, and
   // the envelope reports what is, not what will be.
   assert.deepEqual(payload._status.plan, {
-    status: 'active',
+    status: 'awaiting_approval',
     parts: [
       { slug: 'schema', status: 'pending' },
       { slug: 'reader', status: 'pending' },
@@ -662,17 +659,15 @@ test('a malformed plan_submit returns the reason and leaves no partial rows', as
     reason: 'Small after all.',
   });
   assert.equal(fixed.isError, false);
-  // `awaiting_approval`, not `single`: this system takes the default
-  // `requireApproval`, and the gate is on **both** arms — a single verdict is a
-  // verdict about shape too, and the planner is told so rather than left assuming
-  // its issue is being worked.
+  // `awaiting_approval`: every plan is put to an operator, whatever its size, and
+  // the planner is told so rather than left assuming its issue is being worked.
   assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'awaiting_approval');
   assert.match(fixed.text, /nothing is scheduled until an operator approves it/);
   system.store.close();
 });
 
 test('plan_submit accepts and persists the widened document', async () => {
-  const system = build({ planning: { requireApproval: false } });
+  const system = build();
   const agent = spawnAgent(system, 'issue:231:plan');
 
   const res = await callTool(system, agent, 'plan_submit', {
@@ -702,7 +697,7 @@ test('plan_submit accepts and persists the widened document', async () => {
 });
 
 test('plan_submit carries the validation block, on the verdict as well as the parts', async () => {
-  const system = build({ planning: { requireApproval: false } });
+  const system = build();
   const agent = spawnAgent(system, 'issue:284:plan');
 
   // The prompt teaches the block and the file path has always accepted it, but the
@@ -762,7 +757,7 @@ test('plan_submit carries the validation block, on the verdict as well as the pa
 });
 
 test('plan_submit hands back the reason for a malformed check, and writes nothing', async () => {
-  const system = build({ planning: { requireApproval: false } });
+  const system = build();
   const agent = spawnAgent(system, 'issue:285:plan');
 
   // `actor` is refused rather than ignored: whether an agent can run a check is a
@@ -966,10 +961,7 @@ test('world_read answers out of the harness view, with the status envelope on it
 });
 
 test('reading an issue carries the plan graph, which lives only in the store', async () => {
-  // Pinned off: this test is about `world_read` exposing the plan graph, not
-  // the approval gate (which now defaults on and would leave the plan
-  // `awaiting_approval` instead — covered by `planApproval.test.ts`).
-  const system = build({ planning: { requireApproval: false } });
+  const system = build();
   system.store.setWorldBaseline(fakeWorld({ issues: [fakeIssue(12, { body: 'Split me.' })] }));
   const planner = spawnAgent(system, 'issue:12:plan');
   await callTool(system, planner, 'plan_submit', {
@@ -988,7 +980,7 @@ test('reading an issue carries the plan graph, which lives only in the store', a
   const item = (JSON.parse(res.text) as { item: Record<string, unknown> }).item;
   assert.equal(item.body, 'Split me.');
   const plan = item.plan as { status: string; parts: { slug: string; dependsOn: string[] }[] };
-  assert.equal(plan.status, 'active');
+  assert.equal(plan.status, 'awaiting_approval');
   assert.deepEqual(
     plan.parts.map((p) => p.slug),
     ['schema', 'reader'],
@@ -1610,7 +1602,7 @@ test('a bridge connection handshakes, lists tools and calls one over a real sock
     [...MCP_TOOL_NAMES].sort(),
   );
   assert.equal((replies[2]!.result as ToolResultText).isError, undefined);
-  assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'active');
+  assert.equal(system.store.getPlanByOrigin('issue:12')?.status, 'awaiting_approval');
 
   // Revoking removes the launch config with the credential.
   server.release(credential.token);

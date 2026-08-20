@@ -115,8 +115,6 @@ export interface McpToolDeps {
    * offered, none is required, and every dispatch resolves on its rule alone.
    */
   profiles?: { name: string; description: string }[];
-  /** `planning.requireApproval` — see `ingestPlanDocument`. */
-  requirePlanApproval?: boolean;
   /**
    * The permission backstop (issue #130 phase B). Present when
    * `mcp.permissionEscalation` is on; the `request_permission` tool blocks on it.

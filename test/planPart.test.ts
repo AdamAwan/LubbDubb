@@ -465,9 +465,6 @@ function systemWithParts(): { system: System; repoRoot: string } {
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     repoRoot,
-    // Pinned off: `requireApproval` now defaults on, and this test asserts the
-    // ungated path (an `active` plan releases work with no proposal written).
-    planning: { requireApproval: false } as never,
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
   });
@@ -535,11 +532,9 @@ test('a persisted plan turns into real part branches, and the rows record it', a
   const branches = execFileSync('git', ['branch', '--format=%(refname:short)'], { cwd: repoRoot, encoding: 'utf8' });
   assert.match(branches, /issue\/12\/schema/);
   assert.match(branches, /issue\/12\/api/);
-  // `requireApproval` is pinned off above, which is *not* the default any more:
-  // this is the ungated path, where an `active` plan is released work and the
-  // approval gate writes nothing at all (issue #109 phase 3). The default's
-  // behaviour is asserted in `planApproval.test.ts`; asserted here on the
-  // existing path so the two arms are covered separately.
+  // The plan above is written `active` — already approved — so the gate has
+  // nothing left to ask about and writes nothing at all. What it does to a plan
+  // that lands is `planApproval.test.ts`'s subject; this file is the scheduler's.
   assert.deepEqual(system.store.listProposals(), []);
   assert.deepEqual(system.store.listOpenEscalations(), []);
   system.store.close();

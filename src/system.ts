@@ -331,9 +331,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         // and the lower wins: read once at boot, a cap raised in the cockpit would
         // dispatch past the pool and be rejected for want of a directory forever,
         // which presents as a full queue and an idle fleet with nothing red.
-        // Explicit `worktreePoolSize` still wins, for a disk that cannot hold more.
+        // The cap is the fleet's one size knob: the pool is sized off it and there
+        // is nothing else to set.
         get size() {
-          return config.worktreePoolSize ?? defaultPoolSize(runtimeControl.cap);
+          return defaultPoolSize(runtimeControl.cap);
         },
         held: (branch) => store.findActiveTaskByBranch(branch) !== null,
       },
@@ -521,7 +522,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     agents: (): AgentManager => agents,
     configDir: defaultConfigDir(),
     socketPath: defaultSocketPath(),
-    requirePlanApproval: config.planning.requireApproval,
     // What the assayer is offered when it proposes a profile for a goal.
     profiles: orderedProfiles(config.agentModels),
     // Lazy for the same reason as `agents`: the desk is built after this server
@@ -564,7 +564,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // Lazily, for `proposals`' reason: the runner is built further down, and both
     // this channel and the cockpit's panel must start *the same* run.
     localRun: (): LocalRunner => localRun,
-    requirePlanApproval: config.planning.requireApproval,
     // Lazy for the fleet deps' reason a few lines above: `plan_amend` withdraws
     // the superseded approval card and puts the fresh one up, and both the desk
     // and the harness are built below this.
@@ -612,7 +611,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     mcp,
     // The `plan.json` transport's half of the approval gate — the tool transport
     // gets the same flag above, so a verdict lands identically either way.
-    requirePlanApproval: config.planning.requireApproval,
     errors,
   });
   const escalations = new EscalationInbox(store, agents);

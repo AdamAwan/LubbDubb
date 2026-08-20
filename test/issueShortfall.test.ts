@@ -700,7 +700,7 @@ function systemWith(planning: boolean): { system: System } {
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     repoRoot: gitRepo(),
-    planning: { enabled: planning, requireApproval: false } as never,
+    planning: { enabled: planning } as never,
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
   });
@@ -726,12 +726,14 @@ function plannedSystem(): { system: System } {
     }),
   );
   assert.ok(doc.ok);
-  ingestPlanDocument(system.store, {
+  const { plan } = ingestPlanDocument(system.store, {
     doc: doc.document,
     originRef: 'issue:12',
     title: 'Add the thing',
-    requireApproval: false,
   });
+  // Ingestion parks every plan `awaiting_approval`; these tests are downstream of
+  // the gate, so release it the way an accepted proposal does.
+  system.store.setPlanStatus(plan.id, 'active');
   return { system };
 }
 
