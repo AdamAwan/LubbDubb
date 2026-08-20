@@ -251,7 +251,6 @@ test('the pickup verdict explains an issue parked in the funnel', () => {
         id: 'task_1',
         kind: 'code',
         title: 'Plan issue #12',
-        prompt: 'p',
         branch: planBranch(12),
         originRef: planOrigin(12),
         originTitle: null,
@@ -304,7 +303,7 @@ test('an injected issue routes through the planner, and its verdict hands the is
   // The assay runs in front of the planner and would take this cycle otherwise.
   failAssayOpen(on.store, 1);
   await on.harness.runCycle('manual');
-  const planTask = on.store.listTasks()[0];
+  const planTask = on.store.getTask(on.store.listTasks()[0]!.id);
   assert.equal(planTask?.branch, planBranch(1));
   assert.equal(planTask?.originRef, planOrigin(1));
 

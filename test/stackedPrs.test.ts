@@ -20,6 +20,7 @@ import { currentPlanSummary, ingestedPlanStatus, partsToRetire, planProgress } f
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import type { Decision, Issue, Plan, PlanPart, PullRequest, WorldSnapshot } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
+import { findTask } from './support/tasks.js';
 
 const enabled = { ...DEFAULT_PLANNING, enabled: true };
 
@@ -444,7 +445,6 @@ function task(id: string, branch: string, originRef: string): DispatchContext['t
     id,
     kind: 'code',
     title: 't',
-    prompt: 'p',
     branch,
     originRef,
     originTitle: null,
@@ -539,7 +539,7 @@ test('the plan graph reaches the cockpit, and replan sends it back to a planner'
     ['schema', 'api'],
   );
   // And the cycle the endpoint kicked put a planner on the plan branch.
-  const planner = system.store.listTasks().find((t) => t.originRef === 'issue:12:plan');
+  const planner = findTask(system.store, (t) => t.originRef === 'issue:12:plan');
   assert.equal(planner?.branch, 'plan/issue/12');
   assert.match(planner!.prompt, /Amend the existing plan/);
   assert.match(planner!.prompt, /"schema": Schema/);

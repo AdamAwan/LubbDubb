@@ -19,6 +19,7 @@ import type {
 } from '../src/integrations/azure/azureDevOpsApi.js';
 import type { ErrorRecorder } from '../src/errorLog.js';
 import type { PullRequest, WorldSnapshot } from '../src/types.js';
+import { findTask } from './support/tasks.js';
 
 /**
  * Evidence on a CI-fix dispatch (issue #334): the agent is handed what broke,
@@ -258,7 +259,7 @@ async function build(
 
 /** The CI-fix task the pulse dispatched for PR 42, or undefined. */
 function ciTask(system: System) {
-  return system.store.listTasks().find((t) => t.originRef === 'pr:42:ci');
+  return findTask(system.store, (t) => t.originRef === 'pr:42:ci');
 }
 
 // ---------------------------------------------------------------------------

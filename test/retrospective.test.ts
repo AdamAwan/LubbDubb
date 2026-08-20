@@ -14,6 +14,7 @@ import { loadConfig } from '../src/config.js';
 import { buildApp } from '../src/server/app.js';
 import type { Agent, Issue, IssueDelivery } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { findTask } from './support/tasks.js';
 
 /** The MCP tool-result shape, as a caller reads it off the wire. */
 interface ToolResultText {
@@ -348,7 +349,6 @@ test('nothing is written up while anything is still live under the goal', async 
           id: 't9',
           kind: 'code',
           title: 'Part',
-          prompt: 'do it',
           branch: 'issue/12/schema',
           originRef: 'issue:12:part:schema',
           originTitle: null,
@@ -400,7 +400,7 @@ test('the retro agent’s prompt carries the pad and the harness record, appende
 
   await system.harness.runCycle('manual');
 
-  const retroTask = store.listTasks().find((t) => t.originRef === 'issue:12:retro');
+  const retroTask = findTask(store, (t) => t.originRef === 'issue:12:retro');
   assert.ok(retroTask, 'rule `issue-retro` dispatched a retrospective agent');
   // The pad, attributed and quoted...
   assert.match(retroTask.prompt, /issue:12:part:schema/);
@@ -448,7 +448,7 @@ test('the dossier’s proposals stop at the goal’s ref boundary, not its prefi
 
   await system.harness.runCycle('manual');
 
-  const retroTask = store.listTasks().find((t) => t.originRef === 'issue:1:retro');
+  const retroTask = findTask(store, (t) => t.originRef === 'issue:1:retro');
   assert.ok(retroTask, 'rule `issue-retro` dispatched a retrospective agent');
   assert.match(retroTask.prompt, /Proposal \(plan, pending\) on issue:1:plan:plan/);
   assert.doesNotMatch(retroTask.prompt, /issue:19/);

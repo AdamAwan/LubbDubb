@@ -57,7 +57,7 @@ import {
 } from './prHealth.js';
 import { mergeProposalRef, proposalHold } from './proposals/proposals.js';
 import { isActiveTask } from './tasks.js';
-import type { Decision, Proposal, PullRequest, Task, WorldEvent } from './types.js';
+import type { Decision, Proposal, PullRequest, TaskSummary, WorldEvent } from './types.js';
 
 /**
  * Whose court the PR is in. Seven arms, and each names a *different party* rather
@@ -103,7 +103,7 @@ export interface PrAttentionContext {
   /** The `${labelPrefix}-watch` tag. Empty = the gate is off, everything is watched. */
   watchLabel: string;
   /** Live and finished tasks; the branch's active one is what staffs a PR. */
-  tasks: Task[];
+  tasks: TaskSummary[];
   /** Acts put to a human, newest-first — the store's order, which `proposalHold` assumes. */
   proposals: Proposal[];
   /**

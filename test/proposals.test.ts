@@ -325,7 +325,7 @@ test("a rejection reaches the next agent on that ref, in the operator's own word
   system.proposals.reject(second!.id, '   ');
 
   await system.harness.runCycle('manual');
-  const tasks = new Map(system.store.listTasks().map((t) => [t.originRef, t]));
+  const tasks = new Map(system.store.listTasks().map((t) => [t.originRef, system.store.getTask(t.id)!]));
 
   // The reason a human typed reaches the agent that goes to work on that exact
   // comment — attributed to them, never as the harness's own instruction. The

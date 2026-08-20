@@ -25,6 +25,7 @@ import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
 import type { AzPolicyEvaluation, AzPull, AzureDevOpsApi } from '../src/integrations/azure/azureDevOpsApi.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { PullRequest, WorldSnapshot } from '../src/types.js';
+import { findTask } from './support/tasks.js';
 
 /**
  * An **expired** Azure build-validation policy, from the evaluation to the agent.
@@ -365,7 +366,7 @@ test('a requeue the provider will not perform falls back to the dispatch it alwa
   // The next pulse reads that row back out of the audit log and sends the agent,
   // with the prompt and the expiry note it carried before the direct path existed.
   await system.harness.runCycle('manual');
-  const task = system.store.listTasks().find((t) => t.originRef === 'pr:31702:ci-gate');
+  const task = findTask(system.store, (t) => t.originRef === 'pr:31702:ci-gate');
   assert.ok(task, 'the gate is never left waiting because the cheap path was unavailable');
   assert.equal(task.branch, 'feature/expiry');
   assert.match(task.prompt, /waiting, not failing/);
@@ -399,7 +400,7 @@ test('an expired evaluation with nothing to address keeps its agent', async () =
   const system = build(await azurePullRequests([UNADDRESSABLE]), { checks: [] }, azureSink([UNADDRESSABLE], requeue));
   await system.harness.runCycle('manual');
 
-  const task = system.store.listTasks().find((t) => t.originRef === 'pr:31702:ci-gate');
+  const task = findTask(system.store, (t) => t.originRef === 'pr:31702:ci-gate');
   assert.ok(task, 'the expired build should be claimed on the gate origin');
   assert.equal(task.branch, 'feature/expiry');
   assert.match(task.prompt, /expired, not running — Example-CI/);
@@ -418,7 +419,7 @@ test('a check that is both expired and guided keeps its agent — the operator o
   const system = build(await azurePullRequests([EXPIRED]), guided, azureSink([EXPIRED], requeue));
   await system.harness.runCycle('manual');
 
-  const task = system.store.listTasks().find((t) => t.originRef === 'pr:31702:ci-gate');
+  const task = findTask(system.store, (t) => t.originRef === 'pr:31702:ci-gate');
   assert.ok(task, 'guidance keeps the gate on an agent');
   assert.match(task.prompt, /Ask #build-eng to run it\./);
   assert.deepEqual(requeue.asked, [], 'and nothing is queued behind the operator’s back');

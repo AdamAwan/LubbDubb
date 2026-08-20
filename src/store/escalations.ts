@@ -89,8 +89,22 @@ export class EscalationStore {
     return rows.map(rowToEscalation);
   }
 
+  /**
+   * The escalations still waiting on a person, newest first.
+   *
+   * A `WHERE` rather than a filter over {@link listEscalations}, because this is
+   * what `/api/state` ships and that read is all-time: a deployment with 373
+   * escalations sent every settled one — with its `recentOutput` transcript tail
+   * — on every cockpit refresh, to be filtered back to the handful that are open
+   * by every surface that reads them. The settled ones are still readable one at
+   * a time through {@link getEscalation}, and whole through
+   * {@link listEscalations}, which the retro dossier and the pet scan need.
+   */
   listOpenEscalations(): Escalation[] {
-    return this.listEscalations().filter((e) => e.status === 'open');
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM escalations WHERE status='open' ORDER BY created_at DESC`)
+      .all() as EscalationRow[];
+    return rows.map(rowToEscalation);
   }
 
   // -- Proposals (human decisions) -----------------------------------------

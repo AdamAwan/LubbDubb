@@ -1,4 +1,4 @@
-import type { Agent, IssueSpend, Task, WorkNode } from './types.js';
+import type { Agent, IssueSpend, TaskSummary, WorkNode } from './types.js';
 import { issueOrigin } from './plans/planning.js';
 
 /**
@@ -43,7 +43,7 @@ import { issueOrigin } from './plans/planning.js';
 /** Everything the roll-up reads — all three lists the snapshot already holds. */
 interface SpendInput {
   agents: readonly Agent[];
-  tasks: readonly Task[];
+  tasks: readonly TaskSummary[];
   /** The durable work graph: how a pull request's or a job's spend finds its goal. */
   nodes: readonly WorkNode[];
 }

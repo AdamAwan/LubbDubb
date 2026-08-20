@@ -294,6 +294,12 @@ permission requests, unanswered goal-profile proposals, usage-limit parks, bench
 validate rows and the recovery hold. `buildNeedsYou`
 (`web/src/view/needsYou.ts`) is the merge, and it is pure.
 
+**The snapshot carries only the escalations that are still open** — the rail's own
+`status === 'open'` filter is belt-and-braces over a list that already holds nothing else
+([16](16-http-api.md#bulk-text)). Nothing in the cockpit draws a settled escalation, and each carries a
+transcript tail, so the all-time list was half a megabyte a refresh spent on rows that were filtered
+straight back out. A surface that wanted the settled ones would need a route of its own.
+
 **Nine kinds, and the split is about what answers them.** `permission` and `proposal` are escalations
 underneath, named apart because the verdict differs — a permission goes to `/permission`, a proposal
 carries accept/reject, a plain question takes free text. Drawing them as one kind is how a surface ends

@@ -7,7 +7,7 @@ import type {
   Plan,
   PlanPart,
   PullRequest,
-  Task,
+  TaskSummary,
   WorldEvent,
 } from '../types.js';
 import { deliveryHold } from '../delivery/delivery.js';
@@ -242,7 +242,7 @@ export interface IssuePickupContext {
   cooldown: CooldownPolicy;
   /** "Now" for cooldown arithmetic — the world snapshot's `takenAt`. */
   now: string;
-  tasks: Task[];
+  tasks: TaskSummary[];
   recentDecisions: Decision[];
   /**
    * Every open PR the world knows about, for {@link openPrForIssue}. The cockpit

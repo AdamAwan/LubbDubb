@@ -6,7 +6,7 @@ import type {
   IssueShortfall,
   Plan,
   PlanPart,
-  Task,
+  TaskSummary,
 } from '../types.js';
 import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusion.js';
 import { hasPriorWork } from '../delivery/assessment.js';
@@ -112,7 +112,7 @@ interface RunRecord {
  * retaining. Everything is captured while the issue is live, because a retained
  * run is *dispatched from* once the tracker forgets the issue — see {@link IssueRun}.
  */
-export function runsToRecord(issues: readonly Issue[], tasks: Task[], signals: CompletionSignals): RunRecord[] {
+export function runsToRecord(issues: readonly Issue[], tasks: TaskSummary[], signals: CompletionSignals): RunRecord[] {
   const records: RunRecord[] = [];
   for (const issue of issues) {
     const complete = isGoalComplete(issue.number, signals);

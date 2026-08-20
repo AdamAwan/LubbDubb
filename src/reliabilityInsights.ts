@@ -1,4 +1,4 @@
-import type { Agent, AgentStatus, Task, UsageEvent, WorldEvent } from './types.js';
+import type { Agent, AgentStatus, TaskSummary, UsageEvent, WorldEvent } from './types.js';
 import { prNodeRefOf, roundUsd } from './issueSpend.js';
 import { phaseLabel, phaseOf, type SpendPhase } from './spendInsights.js';
 import { ciStatusOf } from './world/worldDiff.js';
@@ -273,7 +273,7 @@ export interface ReliabilityInsights {
 interface ReliabilityInput {
   /** Every agent the harness has ever run — the run half is all-time. */
   agents: readonly Agent[];
-  tasks: readonly Task[];
+  tasks: readonly TaskSummary[];
   /** `pr_ci` rows inside the window, oldest first (`listWorldEventsOfKindsSince`). */
   ciEvents: readonly WorldEvent[];
   /** Dated cost deltas inside the same window, for the landing figure. */

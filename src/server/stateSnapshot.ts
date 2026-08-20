@@ -627,7 +627,12 @@ export function buildStateSnapshot(
     // and it was declined" is information, and a row that vanished on being
     // settled would take the operator's own note with it.
     humanTasks,
-    escalations: store.listEscalations(),
+    // **Open ones only.** Every cockpit surface that reads this filters to
+    // `status === 'open'` — the needs-you queue, the console band, the view
+    // model — and nothing draws a settled one, while each carries a transcript
+    // tail in `context.recentOutput`. Shipping the all-time list was half a
+    // megabyte per refresh spent on rows that were filtered straight back out.
+    escalations: store.listOpenEscalations(),
     // Acts a human was asked to authorize (issue #109). The cockpit joins these
     // to their escalation so a decision-bearing item gets accept/reject rather
     // than a text box, and the decision log reads the settled ones as the human

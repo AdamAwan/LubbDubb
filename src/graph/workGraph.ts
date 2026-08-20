@@ -2,7 +2,7 @@ import type {
   Job,
   Plan,
   PlanPart,
-  Task,
+  TaskSummary,
   WorkItemFiling,
   WorkNode,
   WorkNodeObservation,
@@ -21,7 +21,7 @@ import { jobBranch } from '../jobs.js';
  */
 export interface WorkGraphInput {
   world: WorldSnapshot;
-  tasks: Task[];
+  tasks: TaskSummary[];
   plans: Plan[];
   parts: PlanPart[];
   jobs: Job[];
@@ -215,7 +215,7 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
   // verdict it produces lives in `issue_deliveries`, which the tracker's `closed`
   // still outranks. Terminality on this node would be the graph starting to hold
   // an opinion about completion, which is exactly what it must not do.
-  const assessTasks = new Map<string, Task[]>();
+  const assessTasks = new Map<string, TaskSummary[]>();
   for (const task of input.tasks) {
     if (task.originRef === null) continue;
     if (!/^issue:\d+:assess$/.test(task.originRef)) continue;
@@ -243,7 +243,7 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
   // A concern is never terminal. It is a step on the way to a merge, not a leaf —
   // while one is live its PR simply is not terminal yet, and a PR that sits red
   // forever correctly keeps its issue unfinished.
-  const concernTasks = new Map<string, Task[]>();
+  const concernTasks = new Map<string, TaskSummary[]>();
   for (const task of input.tasks) {
     if (task.originRef === null) continue;
     if (!/^pr:\d+:.+$/.test(task.originRef)) continue;

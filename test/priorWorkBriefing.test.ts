@@ -11,6 +11,7 @@ import { Store } from '../src/store/store.js';
 import { gitRepo } from './support/gitRepo.js';
 import { planWithOnePart } from './support/plans.js';
 import type { GoalFile, GoalNeighbour, Plan, ScratchEntry } from '../src/types.js';
+import { findTask } from './support/tasks.js';
 
 // -- the pure briefing -------------------------------------------------------
 
@@ -492,7 +493,7 @@ test("a part's agent is handed what the earlier agents on its issue wrote down",
     system.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
     await system.harness.runCycle('manual');
 
-    const task = system.store.listTasks().find((t) => t.originRef === 'issue:1:part:whole');
+    const task = findTask(system.store, (t) => t.originRef === 'issue:1:part:whole');
     assert.ok(task, "the plan's part was dispatched");
     assert.match(task.prompt, /Ship the thing/, 'the rendered template is still first');
     assert.match(task.prompt, /the registry is the only place/i, "the planner's write-up came with it");
@@ -527,7 +528,7 @@ test('an agent on a different goal is handed none of it', async () => {
     system.connector.inject({ kind: 'ci_failed', prNumber: 7 });
     await system.harness.runCycle('manual');
 
-    const prTask = system.store.listTasks().find((t) => t.originRef?.startsWith('pr:7'));
+    const prTask = findTask(system.store, (t) => t.originRef?.startsWith('pr:7') === true);
     assert.ok(prTask, 'the CI concern dispatched');
     assert.doesNotMatch(prTask.prompt, /a note about issue one/);
   } finally {

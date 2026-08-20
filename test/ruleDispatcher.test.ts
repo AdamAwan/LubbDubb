@@ -970,7 +970,6 @@ test('does not duplicate work already in flight for the same origin', async () =
             id: 't1',
             kind: 'code',
             title: 'x',
-            prompt: 'x',
             branch: 'a',
             originRef: 'pr:1:ci',
             originTitle: null,

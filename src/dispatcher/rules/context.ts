@@ -14,7 +14,7 @@ import type {
   IssueShortfall,
   Plan,
   PullRequest,
-  Task,
+  TaskSummary,
   ValidationCheck,
 } from '../../types.js';
 import type { PlanRouteVerdict } from '../../plans/planning.js';
@@ -242,6 +242,6 @@ export interface Candidate {
   held?: RuleHeld;
 }
 
-export function isActive(t: Task): boolean {
+export function isActive(t: TaskSummary): boolean {
   return t.status === 'queued' || t.status === 'running' || t.status === 'waiting';
 }

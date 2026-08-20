@@ -13,7 +13,7 @@ import type {
   PriorityOverride,
   Proposal,
   PullRequest,
-  Task,
+  TaskSummary,
   ValidationCheck,
   WorldEvent,
   WorldSnapshot,
@@ -57,7 +57,7 @@ export interface DispatchContext {
    */
   modelPins?: { labelPrefix: string; models: AgentModels };
   /** Current fleet: running / waiting / recently-finished tasks and their agents. */
-  tasks: Task[];
+  tasks: TaskSummary[];
   agents: Agent[];
   openEscalations: Escalation[];
   /**

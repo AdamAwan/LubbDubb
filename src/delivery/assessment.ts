@@ -1,4 +1,4 @@
-import type { Task } from '../types.js';
+import type { TaskSummary } from '../types.js';
 import { issueOriginRole } from '../issueOrigins.js';
 
 /**
@@ -69,7 +69,7 @@ export function assessBranch(issueNumber: number): string {
  * would let one agent's own record suppress another's dispatch. The graph is what
  * the assessing *agent* reads, through `world_read`.
  */
-export function hasPriorWork(issueNumber: number, tasks: Task[]): boolean {
+export function hasPriorWork(issueNumber: number, tasks: TaskSummary[]): boolean {
   return tasks.some((t) => {
     const role = issueOriginRole(issueNumber, t.originRef);
     return role === 'work' || role === 'evidence';

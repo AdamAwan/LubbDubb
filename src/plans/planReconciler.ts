@@ -2,7 +2,7 @@ import type { ErrorRecorder } from '../errorLog.js';
 import type { BranchPresence, GitObserver } from '../git/gitObserver.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
-import type { Plan, PlanPart, PullRequest, Task, WorldSnapshot } from '../types.js';
+import type { Plan, PlanPart, PullRequest, TaskSummary, WorldSnapshot } from '../types.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
 import { renderPlanComment } from './planComment.js';
 import {
@@ -101,7 +101,12 @@ export class PlanReconciler {
     }
   }
 
-  private async reconcilePlan(plan: Plan, prs: PullRequest[], closedPrs: PullRequest[], tasks: Task[]): Promise<void> {
+  private async reconcilePlan(
+    plan: Plan,
+    prs: PullRequest[],
+    closedPrs: PullRequest[],
+    tasks: TaskSummary[],
+  ): Promise<void> {
     const { store } = this.deps;
     const issueNumber = planIssueNumber(plan.originRef);
     if (issueNumber === null) return;
@@ -242,7 +247,7 @@ export class PlanReconciler {
    * re-dispatched — through the per-part origin's cooldown and attempt cap, which
    * escalates rather than looping once the attempts are spent.
    */
-  private foldStalled(part: PlanPart, tasks: Task[]): Partial<PlanPart> | null {
+  private foldStalled(part: PlanPart, tasks: TaskSummary[]): Partial<PlanPart> | null {
     if (part.status !== 'dispatched') return null;
     const task = tasks.find((t) => t.id === part.taskId);
     const live = task && (task.status === 'queued' || task.status === 'running' || task.status === 'waiting');

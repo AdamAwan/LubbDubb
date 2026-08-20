@@ -146,7 +146,10 @@ test('every agent dispatched for the goal is handed the images, and only that go
   await system.harness.runCycle('manual');
   await system.harness.runCycle('manual');
 
-  const mine = system.store.listTasks().filter((t) => t.originRef?.startsWith(`${ticketRef}`));
+  const mine = system.store
+    .listTasks()
+    .filter((t) => t.originRef?.startsWith(`${ticketRef}`))
+    .map((t) => system.store.getTask(t.id)!);
   assert.ok(mine.length > 0, 'the funnel picked the goal up');
   for (const task of mine) {
     // The funnel dispatches for `issue:<n>:assay`, `:plan`, `:part:<slug>` — never
@@ -159,7 +162,10 @@ test('every agent dispatched for the goal is handed the images, and only that go
     assert.ok(!task.prompt.startsWith('---'), 'the note is appended to a rendered prompt, not the whole of it');
   }
 
-  const others = system.store.listTasks().filter((t) => t.originRef?.startsWith('issue:315'));
+  const others = system.store
+    .listTasks()
+    .filter((t) => t.originRef?.startsWith('issue:315'))
+    .map((t) => system.store.getTask(t.id)!);
   assert.ok(others.length > 0, 'the other goal was picked up too');
   for (const task of others)
     assert.ok(!task.prompt.includes(attachment.path), `${task.originRef} sees nothing of another goal's images`);

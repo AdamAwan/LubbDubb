@@ -1,4 +1,4 @@
-import type { Task } from './types.js';
+import type { TaskSummary } from './types.js';
 
 /**
  * What "the fleet is still working this" means, in one place.
@@ -25,7 +25,7 @@ import type { Task } from './types.js';
  * renaming a member of the union fails to compile here rather than silently
  * narrowing what counts as active.
  */
-const ACTIVE_TASK_STATUSES: readonly Task['status'][] = ['queued', 'running', 'waiting'];
+const ACTIVE_TASK_STATUSES: readonly TaskSummary['status'][] = ['queued', 'running', 'waiting'];
 
 /**
  * `queued` is deliberately active. The executor writes the task row and *then*
@@ -33,7 +33,7 @@ const ACTIVE_TASK_STATUSES: readonly Task['status'][] = ['queued', 'running', 'w
  * its origin and branch — treating it as inactive is what would let a second
  * dispatch through the window between the two.
  */
-export function isActiveTask(t: Task): boolean {
+export function isActiveTask(t: TaskSummary): boolean {
   return ACTIVE_TASK_STATUSES.includes(t.status);
 }
 

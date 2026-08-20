@@ -1,4 +1,4 @@
-import type { Agent, HumanTask, Task } from './types.js';
+import type { Agent, HumanTask, TaskSummary } from './types.js';
 import { roundUsd } from './issueSpend.js';
 import { DISPATCH_RULES, type DispatchRuleId } from './dispatcher/rules.js';
 
@@ -149,7 +149,7 @@ interface BurnInput {
   /** Every agent the store holds — the live ones are judged, the settled ones are the baseline. */
   agents: readonly Agent[];
   /** The pulse's tasks, for the rule and profile behind each run. */
-  tasks: readonly Task[];
+  tasks: readonly TaskSummary[];
   /** The `burn` tasks already filed, settled ones included. */
   existing: readonly HumanTask[];
 }
@@ -261,7 +261,7 @@ function judge(costUsd: number, baseline: Baseline | null, policy: BurnPolicy): 
  */
 function bucketMedians(
   agents: readonly Agent[],
-  taskOf: ReadonlyMap<string, Task>,
+  taskOf: ReadonlyMap<string, TaskSummary>,
   minimumRuns: number,
 ): Map<string, Baseline> {
   const costs = new Map<string, number[]>();
@@ -288,7 +288,7 @@ function bucketMedians(
  * unruled run on no profile" is a real population, and a fleet where that is most
  * of them still deserves the watch.
  */
-function bucketKey(task: Task | undefined): string {
+function bucketKey(task: TaskSummary | undefined): string {
   return `${task?.rule ?? ''}::${task?.profile ?? ''}`;
 }
 
@@ -336,7 +336,7 @@ function ruleLabel(rule: string | null): string {
  * It says out loud that nothing is held. A row on the bench that looks like a
  * gate gets answered in a hurry, and this one wants a look at the transcript.
  */
-function burnDetail(agent: Agent, task: Task | null, verdict: BurnVerdict, policy: BurnPolicy): string {
+function burnDetail(agent: Agent, task: TaskSummary | null, verdict: BurnVerdict, policy: BurnPolicy): string {
   const lines: string[] = [];
   if (verdict.arm === 'baseline' && verdict.baseline) {
     const { medianUsd, runs } = verdict.baseline;
@@ -362,7 +362,7 @@ function burnDetail(agent: Agent, task: Task | null, verdict: BurnVerdict, polic
 }
 
 /** The bucket in words, on the two axes it is keyed by, for the sentence the notice is built around. */
-function describeBucket(task: Task | null): string {
+function describeBucket(task: TaskSummary | null): string {
   const rule = task?.rule ? `\`${task.rule}\`` : 'unruled';
   return task?.profile ? `${rule} / \`${task.profile}\`` : rule;
 }

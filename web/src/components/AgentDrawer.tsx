@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { Agent, AgentFile, AgentFlag, Task } from '../types.js';
+import type { Agent, AgentFile, AgentFlag, TaskSummary } from '../types.js';
 import { api } from '../api.js';
 import { statusDot, linkify, agentUsageLine } from './util.js';
 import { Ref } from './refs.js';
@@ -122,7 +122,7 @@ export function AgentDrawer({
   onResume,
 }: {
   agent: Agent;
-  task: Task | null;
+  task: TaskSummary | null;
   refUrls: Record<string, string>;
   live: string | undefined;
   flags?: AgentFlag[];

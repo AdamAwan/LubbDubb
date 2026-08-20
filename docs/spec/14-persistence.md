@@ -280,8 +280,27 @@ lacked the index.
 ### Tasks
 
 `createTask`, `updateTask` (status / agentId / branch only), `getTask`, `listTasks`,
-`findActiveTaskByOrigin(originRef)`, `findActiveTaskByBranch(branch)`. "Active" is `queued`, `running`
-or `waiting`.
+`listOutstandingTasks`, `findActiveTaskByOrigin(originRef)`, `findActiveTaskByBranch(branch)`.
+"Active" is `queued`, `running` or `waiting`.
+
+**`listTasks` returns `TaskSummary`, not `Task`: every column except `prompt`.** It is the only
+all-time reading of the table, and it names its columns rather than starring. A rendered agent prompt
+is kilobytes; on a deployment with 1,248 tasks the prompts were 17.4 MB of the 20.2 MB `SELECT *`
+returned, and better-sqlite3 is synchronous, so that read blocked the server — 322 ms against 33 ms
+for the named columns — every time any of its thirteen callers ran, several times a pulse per open
+cockpit. None of them reads a prompt: they read origins, branches, statuses and rules.
+
+The prompt is a **single-row** read. `getTask`, `listOutstandingTasks` (bounded to the active set) and
+`createTask`'s own return value are `Task`, and they are what the three readers of a prompt use — the
+launch, the initial message, and crash recovery's requeue note. `Task extends TaskSummary` rather than
+the two being declared side by side, so a column added to the table lands on both and nothing that
+reads a summary field has to change.
+
+**A column added to `tasks` must be added to `SUMMARY_COLUMNS` in `src/store/tasks.ts` as well as to
+`ColumnMigrations`.** Omitting it is silent in the way this whole file is about: `rowToSummary` maps by
+name, the field is optional on the domain type, so it simply reads back as absent everywhere the
+snapshot is drawn. `test/snapshotShape.test.ts` compares a summary's keys against a whole row's, which
+is what says so.
 
 The two `findActive*` predicates are the dispatch gates. They are mirrors of each other, and the branch
 one exists because origin and branch are not 1:1 on the job path — see [09](09-execution.md) and

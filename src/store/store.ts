@@ -92,6 +92,7 @@ import type {
   Task,
   TrackerItem,
   UpgradeIntent,
+  TaskSummary,
   UsageEvent,
   ValidationAmendment,
   ValidationAmendResult,
@@ -260,7 +261,7 @@ export class Store {
   getTask(id: string): Task | null {
     return this.tasksStore.getTask(id);
   }
-  listTasks(): Task[] {
+  listTasks(): TaskSummary[] {
     return this.tasksStore.listTasks();
   }
   listOutstandingTasks(): Task[] {

@@ -1,7 +1,7 @@
 import type {
   AppState,
   Agent,
-  Task,
+  TaskSummary,
   AgentFlag,
   AgentFile,
   OrphanedWork,
@@ -142,7 +142,7 @@ export interface CockpitView {
   tailByAgent: ReadonlyMap<string, string>;
 
   /** The task an agent is working, or null if the row has outlived it. */
-  taskFor(agent: Agent): Task | null;
+  taskFor(agent: Agent): TaskSummary | null;
 
   /** Which plan's modal is open, or null when none is. */
   viewingPlan: string | null;

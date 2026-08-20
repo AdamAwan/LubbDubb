@@ -443,7 +443,6 @@ function task(id: string, branch: string, originRef: string): DispatchContext['t
     id,
     kind: 'code',
     title: 'part',
-    prompt: 'p',
     branch,
     originRef,
     originTitle: null,
