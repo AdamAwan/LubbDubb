@@ -1,4 +1,3 @@
-import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import { validatePlanDocument } from '../plans/planDocument.js';
 import { ingestPlanDocument } from '../plans/planIngest.js';
 import { issueOrigin } from '../plans/planning.js';
@@ -6,6 +5,7 @@ import { acceptanceCriteria, currentPlanSummary } from '../plans/parts.js';
 import { planProposalRef } from '../proposals/proposals.js';
 import type { ProposalDesk } from '../proposals/proposalDesk.js';
 import type { Store } from '../store/store.js';
+import type { LocalRunner } from '../localRun/runner.js';
 import type { Plan } from '../types.js';
 import {
   claimStaleBefore,
@@ -52,25 +52,16 @@ export interface DesktopToolDeps {
   /** `config.validationRoot` — where a goal's fixtures live, which the session has to be told. */
   validationRoot: string;
   /**
-   * The prompt book, for `local_run`'s one rendered template.
+   * The machine's one dev environment, lazily — the runner is built after this
+   * server in `system.ts`, the same thunk `proposals` uses for the same reason.
    *
-   * The same book the dispatcher renders from, rather than a second copy of the
-   * text: how a project starts is the operator's opinion, and the prompt book is
-   * where this repo already keeps the operator's opinions that are not the
-   * harness's business — `finding-ticket` and `docs-change` are there for exactly
-   * that reason.
+   * A handle on the runner rather than a copy of what to run: this channel and the
+   * cockpit's panel both start a run, and they must be starting *the same thing*.
+   * The tool used to render an instruction and let the session act on it, which
+   * meant two definitions of what running meant and a harness that could not stop
+   * what it had told somebody to start.
    */
-  templates: PromptTemplates;
-  /** `config.defaultBranch` — where a delivered goal's parts have landed. */
-  defaultBranch: string;
-  /**
-   * `config.worktreeRoot`, which the session is told to keep out of.
-   *
-   * Passed so the caution can name the actual directory: a warning about "the
-   * harness's worktrees" is one an operator's own instructions can contradict
-   * without either of them noticing, and a path is checkable.
-   */
-  worktreeRoot: string;
+  localRun(): LocalRunner;
   /** `planning.requireApproval`, passed to ingestion exactly as `plan_submit` passes it. */
   requirePlanApproval?: boolean;
   /**
@@ -558,54 +549,68 @@ const READ_NEXT =
  */
 const localRun: DesktopToolFactory = (deps) => ({
   description:
-    'How to get this project running on this machine, as this deployment describes it, plus the branches a ' +
-    "goal's work sits on. Call it before starting the application — either because somebody wants to look at " +
-    'it, or because a validation check cannot be carried out until it is up.',
+    "The machine's one dev environment: what is running in it, and — given a goal — start it on that " +
+    "goal's code. Only one goal can be running locally at a time, so starting one stops whatever was " +
+    'there. Call it when somebody wants to look at a goal, or when a validation check cannot be carried ' +
+    'out until the application is up.',
   inputSchema: {
     type: 'object',
     properties: {
       issue: {
         type: 'number',
         description:
-          'Optional. The goal you are about to look at, e.g. 284. Given, its parts come back with the branch ' +
-          'and pull request each one sits on.',
+          'Optional. The goal to start, e.g. 284 — **this stops whatever is running now**. Left out, ' +
+          'nothing is started and the reply is just the state of the environment.',
       },
     },
   },
-  handler: (args) => {
-    const body = {
-      howToRun: deps.templates.render('local-run', {}),
-      integrationBranch: deps.defaultBranch,
-      caution:
-        `Two things not to do, both of which break the fleet quietly. Do not start anything long-running inside ` +
-        `${deps.worktreeRoot}: those directories are the harness's worktree pool, leased to agents one branch at ` +
-        'a time, and a process holding one open stops the slot ever being cleaned or handed on — on Windows every ' +
-        'later dispatch onto that branch then fails. And do not check a branch out in the checkout you are ' +
-        'sitting in: it is the clone the pool cuts its worktrees from, so a branch checked out here is a branch ' +
-        'the harness can no longer lease to an agent. If the work you want is not already on the branch you are ' +
-        'on, ask whoever sent you where they keep a checkout for looking at things.',
-    };
-    if (args.issue === undefined) return toolJson(body);
+  handler: async (args) => {
+    const runner = deps.localRun();
+    if (args.issue === undefined) return toolJson(describeRun(runner));
     const ref = desktopIssueRef(args);
     if (!ref.ok) return toolError(ref.error);
-    const found = decompositionFor(deps, ref.issue);
-    // A goal with no plan is not a refusal here, unlike everywhere else on this
-    // channel: the instruction above is most of why anybody called this, and it
-    // is the one tool with nothing to say about a decomposition.
-    if (!found.ok) return toolJson({ goal: ref.issue, ...body });
-    return toolJson({
-      goal: ref.issue,
-      ...body,
-      parts: deps.store.listPlanParts(found.plan.id).map((part) => ({
-        slug: part.slug,
-        title: part.title,
-        branch: part.branch,
-        pr: part.prNumber,
-        status: part.status,
-      })),
-    });
+    const started = await runner.start(issueOrigin(ref.issue));
+    // A refusal is the reason handed back rather than a throw: both are read by a
+    // person, and "nothing is configured to start" is an answer.
+    if (!started.ok) return toolError(started.error);
+    return toolJson(describeRun(runner));
   },
 });
+
+/**
+ * The environment as a session reads it.
+ *
+ * **`running` is presumed, not probed** — and it says so, because the one thing a
+ * session must not do is report a check passed against a page it never saw. The
+ * output tail rides along for the same reason it is in the panel: the case worth
+ * explaining is the start that did not work.
+ */
+function describeRun(runner: LocalRunner): Record<string, unknown> {
+  const run = runner.current();
+  if (run === null)
+    return {
+      running: false,
+      note: 'Nothing has been started locally on this machine.',
+    };
+  return {
+    running: run.status === 'starting' || run.status === 'running',
+    goal: run.originRef,
+    ref: run.ref,
+    dir: run.dir,
+    status: run.status,
+    url: run.url,
+    startedAt: run.startedAt,
+    note: run.note,
+    // Not a reading. Nothing has opened that port — the status means the session
+    // that was told to bring it up finished without failing, which is a different
+    // claim, and reporting a check passed on the strength of it would be the one
+    // outcome the whole validation channel exists to prevent.
+    caveat:
+      'The harness does not poll the application: `running` means the session that brought it up did not ' +
+      'fail. Open the URL and see for yourself before you report anything about it.',
+    output: runner.output().slice(-40),
+  };
+}
 
 /**
  * The registry, a `Record` over {@link DESKTOP_TOOL_NAMES} for the fleet

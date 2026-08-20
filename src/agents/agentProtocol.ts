@@ -428,17 +428,28 @@ export function buildResumeMessage(): string {
  * then `result` — no prior-turn events — so {@link StreamJsonSession} needs no
  * swallow and the drawer's transcript continues instead of repeating.
  */
+/**
+ * The stream transport itself, with nothing about the fleet's protocol in it.
+ *
+ * Exported because the local run (`src/localRun/`) speaks the same transport to the
+ * same {@link StreamJsonSession} and must **not** carry
+ * {@link PROTOCOL_SYSTEM_PROMPT}: it has no MCP tools, no task and nothing to
+ * conclude, so a prompt telling it to print sentinels and conclude work is an
+ * instruction it can only follow wrongly. One definition of the flags either way —
+ * a second copy of them somewhere else would go stale the next time the transport
+ * changed, and the symptom would be a session that connects and says nothing.
+ */
+export const STREAM_TRANSPORT_ARGS: readonly string[] = [
+  '-p',
+  '--input-format',
+  'stream-json',
+  '--output-format',
+  'stream-json',
+  '--verbose', // required for stream-json output
+];
+
 export function buildClaudeStreamArgs(opts: ClaudeArgsOptions = {}): string[] {
-  const args: string[] = [
-    '-p',
-    '--input-format',
-    'stream-json',
-    '--output-format',
-    'stream-json',
-    '--verbose', // required for stream-json output
-    '--append-system-prompt',
-    protocolPrompt(opts),
-  ];
+  const args: string[] = [...STREAM_TRANSPORT_ARGS, '--append-system-prompt', protocolPrompt(opts)];
   appendSessionFlags(args, opts);
   // The status line never renders headless, but PostToolUse hooks and permission
   // rules do apply — so file-events capture and the operator allow-list are wired

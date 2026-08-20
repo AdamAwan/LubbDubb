@@ -451,12 +451,16 @@ function Widget({
       </select>
     );
   }
-  if (entry.type === 'stringList' || entry.type === 'json' || entry.type === 'colourMap') {
+  // `text` joins the textarea cases rather than the input one, and is otherwise a
+  // plain string all the way down: no parse on the way in, no serialise on the way
+  // out. It is here because several sentences in a one-line input is a field an
+  // operator cannot read back what they typed into.
+  if (entry.type === 'stringList' || entry.type === 'json' || entry.type === 'colourMap' || entry.type === 'text') {
     return (
       <textarea
         className="cfg-in cfg-in-tall"
         value={raw}
-        rows={entry.type === 'json' ? 4 : 3}
+        rows={entry.type === 'json' || entry.type === 'text' ? 4 : 3}
         onChange={(e) => onEdit(e.target.value)}
       />
     );

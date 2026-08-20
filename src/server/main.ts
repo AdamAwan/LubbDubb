@@ -119,6 +119,12 @@ async function main(): Promise<void> {
     stopConfigWatch();
     // Interrupt (not kill) so the next boot offers this in-flight work for restore.
     system.agents.interruptAll();
+    // The local run is *stopped*, not interrupted, and that asymmetry is the point:
+    // an agent's work is worth restoring and a dev environment is not — nothing of
+    // it survives this process, because the server is a descendant of the session
+    // going down with us. Left running it would be an orphan holding both a port and
+    // the preview checkout, with a row claiming it is live and nothing to kill.
+    system.localRun.stop('the harness shut down');
     await system.mcp.close();
     await system.desktop.close();
     await app.close();

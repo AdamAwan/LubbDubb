@@ -6,6 +6,7 @@ import { DEFAULT_PLANNING, type PlanningPolicy } from './plans/planning.js';
 import { DEFAULT_BURN, validateBurnPolicy, type BurnPolicy } from './spendBurn.js';
 import type { SelfUpdatePolicy } from './selfUpdate/upgradePlan.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from './validation/policy.js';
+import { DEFAULT_LOCAL_RUN, type LocalRunPolicy } from './localRun/policy.js';
 import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
 import { validateAgentModels, type AgentModels } from './agents/modelPolicy.js';
@@ -244,6 +245,13 @@ export interface Config {
    * outstanding says so. Off leaves the surface out entirely. Deep-merged.
    */
   validation: ValidationPolicy;
+  /**
+   * The local run (`src/localRun/`) — the one dev environment on the operator's
+   * machine, which goal's code is in it, and how it is brought up. Deep-merged.
+   * With `instruction` empty nothing is startable and the cockpit says so, which
+   * is the whole of the off switch.
+   */
+  localRun: LocalRunPolicy;
   /**
    * How far back a provider looks for pull requests that have *left* the open set,
    * so a merged or abandoned PR is observed rather than inferred from its
@@ -486,6 +494,20 @@ export interface Config {
    * attachments already make.
    */
   validationRoot: string;
+  /**
+   * The one checkout the local run's application is started in — a real worktree,
+   * kept warm and **deliberately outside `worktreeRoot`**.
+   *
+   * Outside because the pool's `slots()` counts every *registered* worktree under
+   * its root whatever the directory is called, so a preview checkout in there
+   * would count toward the bound and be handed to an agent, wiped
+   * `git clean -ffdx` on the way. Which is also why this is not a pool slot in the
+   * first place: a slot handed a different ref loses its ignored files, so every
+   * swap between goals would pay a cold dependency install — the opposite of a
+   * checkout that is ready to go.
+   * → [09](docs/spec/09-execution.md#the-checkout-a-local-run-uses)
+   */
+  localRunRoot: string;
   /** The git repo the harness operates on (worktrees are cut from here). */
   repoRoot: string;
   /**
@@ -605,6 +627,7 @@ const DEFAULTS: Config = {
   pets: { enabled: true, visible: true },
   selfUpdate: { enabled: true, remote: 'origin', branch: 'main', checkIntervalMs: 60 * 60 * 1000 },
   validation: DEFAULT_VALIDATION,
+  localRun: DEFAULT_LOCAL_RUN,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
   ci: { checks: [] },
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
@@ -637,6 +660,7 @@ const DEFAULTS: Config = {
   deskRoot: '.lubbdubb/desk',
   attachmentRoot: '.lubbdubb/attachments',
   validationRoot: '.lubbdubb/validation',
+  localRunRoot: '.lubbdubb/local-run',
   repoRoot: process.cwd(),
   defaultBranch: 'main',
   dbPath: '.lubbdubb/lubbdubb.sqlite',
@@ -678,6 +702,10 @@ function resolveRootPaths(merged: Config): void {
   // And validation resources for both of those reasons at once: an agent's prompt
   // names the absolute path, and the launch grants read access to it.
   merged.validationRoot = resolve(merged.repoRoot, merged.validationRoot);
+  // The local run's checkout is cut from `repoRoot`, so it resolves against it for
+  // `worktreeRoot`'s reason exactly — and must land somewhere that is not under
+  // `worktreeRoot`, or the pool counts it as one of its own slots.
+  merged.localRunRoot = resolve(merged.repoRoot, merged.localRunRoot);
 
   // Prompt overrides belong to the repo being operated on, like the worktree
   // roots above — resolve relative to repoRoot, honour an absolute override.
@@ -811,6 +839,8 @@ function mergeLayers(lower: Partial<Config>, upper: Partial<Config>): Partial<Co
     merged.selfUpdate = { ...DEFAULTS.selfUpdate, ...lower.selfUpdate, ...upper.selfUpdate };
   if (lower.validation ?? upper.validation)
     merged.validation = { ...DEFAULTS.validation, ...lower.validation, ...upper.validation };
+  if (lower.localRun ?? upper.localRun)
+    merged.localRun = { ...DEFAULTS.localRun, ...lower.localRun, ...upper.localRun };
   if (lower.auth ?? upper.auth) merged.auth = { ...DEFAULTS.auth, ...lower.auth, ...upper.auth };
   return merged;
 }
@@ -915,6 +945,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // re-enabled must not come back pointed at nothing.
   merged.selfUpdate = { ...DEFAULTS.selfUpdate, ...overrides.selfUpdate };
   merged.validation = { ...DEFAULTS.validation, ...overrides.validation };
+  merged.localRun = { ...DEFAULTS.localRun, ...overrides.localRun };
 
   // And for auth, so `{"auth": {"tokenFile": "..."}}` doesn't silently disable it.
   merged.auth = { ...DEFAULTS.auth, ...overrides.auth };

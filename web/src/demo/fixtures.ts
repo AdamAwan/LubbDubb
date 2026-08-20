@@ -219,6 +219,10 @@ export function buildDemoState(): DemoSeed {
       // rather than one pointing at nothing. It opens whatever the visitor has —
       // which is the honest demonstration: the control hands off to their machine.
       desktopFolder: '/Users/you/code/demo-shop',
+      // Configured, so the demo shows the panel that can start and swap rather than
+      // the one explaining what is missing. Both are worth seeing and only one can
+      // be the default; this is the state an operator who has set it up is in.
+      localRunConfigured: true,
       // The demo tracker's own vocabulary, coloured — the setting is invisible
       // until a deployment has used it, and the demo is where it is looked at.
       stateColours: { New: '#8a93a0', Ready: '#7fb3ff', Active: '#63d297', Closed: '#666b73' },
@@ -922,6 +926,23 @@ export function buildDemoState(): DemoSeed {
     // Withheld, because rung #414 is red — the state worth having in the demo, since
     // "why can't I click it" is the question the control has to answer on its own.
     stackLandings: [{ ref: 'stack:413', offer: false, blockedBy: '#414 CI failing', landing: null, landed: 0 }],
+    // An environment that is up, on the goal whose plan is waiting for approval —
+    // so the indicator reads `running` and the panel has something to swap away
+    // from. A demo with nothing running would show only the empty state, which is
+    // the half that needs no explaining.
+    localRun: {
+      id: 'run-1',
+      originRef: 'issue:395',
+      ref: 'issue/395/route',
+      dir: '/Users/you/code/demo-shop/.lubbdubb/local-run',
+      pid: 48211,
+      status: 'running',
+      url: 'http://localhost:5173',
+      note: 'Up on :5173. Seeded the sample invoices — the instruction did not mention that step.',
+      startedAt: ago(18),
+      endedAt: null,
+      live: true,
+    },
     // A vivarium with something in it, because an empty one is indistinguishable
     // from the feature being broken — and the demo is where somebody decides
     // whether they want it at all. Four species, four stages, one of each rarity.

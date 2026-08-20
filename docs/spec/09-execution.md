@@ -695,6 +695,29 @@ reads, and what `remove` is called with when the agent is reaped — and it neve
   `ensure` call site, and `readOnly` defaults to false — so a dispatch that writes code cannot lose
   its branch by omission. Tests: `test/readOnlyCheckout.test.ts`.
 
+### The checkout a local run uses
+
+`ensurePreview(ref)` — one fixed directory under `localRunRoot`, detached at whatever `ref` resolves
+to, for the machine's one dev environment ([23](23-local-runs.md#the-checkout)).
+
+On `WorktreeManager` because this class is the only thing that hands out a directory, and **not a pool
+slot** for three reasons that each matter. It is outside `worktreeRoot`, because `slots()` counts every
+registered worktree under that root whatever the directory is called — so a preview checkout in there
+would count toward the bound and be handed to an agent. Its ignored files survive a change of ref,
+because the pool's `git clean -ffdx` is right for an agent's branch and wrong for a checkout whose
+whole purpose is to be ready: it would make every swap between goals pay a cold dependency install. And
+it takes no lease, because the lease exists to keep two agents out of one directory and there is
+exactly one local run — the store row is what makes that true.
+
+The sequence is existence check, `checkout --detach`, `reset --hard <commit>`, `clean -fd`, and each
+step is there because a shorter one was wrong. Comparing `git worktree list` paths to decide whether the
+checkout exists breaks where a short-name TEMP resolves to a different string for the same directory:
+the comparison says "not registered", `worktree add` says "already exists", and the run fails on a tree
+that was sitting there ready. `switch` before the tree is clean refuses outright when the last run left
+a tracked file edited. And `reset --hard` on a checkout somehow standing on a branch would rewind *that
+branch* — the damage `git switch -C` is unreachable for. An unresolvable ref throws before anything is
+touched, `ensure`'s rule.
+
 ### Handing a slot over
 
 This runs **only for a branch the slot is not already on** — `ensure`'s reuse arm has taken every

@@ -10,7 +10,6 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { McpDesktopServer } from '../src/mcp/desktop.js';
-import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { parsePlanDocument } from '../src/plans/planDocument.js';
 import type { Plan } from '../src/types.js';
@@ -194,9 +193,7 @@ async function buildDesk(): Promise<{ system: System; session: Session; close: (
     store: system.store,
     claimMinutes: 60,
     validationRoot: join(dir, 'validation'),
-    templates: defaultPromptTemplates(),
-    defaultBranch: 'main',
-    worktreeRoot: join(dir, 'worktrees'),
+    localRun: () => system.localRun,
     requirePlanApproval: true,
     proposals: () => system.proposals,
     runCycle: () => system.harness.runCycle('manual').then(() => undefined),

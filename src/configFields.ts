@@ -17,7 +17,16 @@ import { defaultConfig, type Config } from './config.js';
  * and wrong the day someone hoists `config.heartbeatIntervalMs` into a const,
  * with nothing red. → `docs/spec/02-configuration.md#liveness`
  */
-export type ConfigFieldType = 'number' | 'boolean' | 'string' | 'enum' | 'stringList' | 'json' | 'colourMap';
+/**
+ * `text` is `string` with room to breathe — the same value, drawn as a textarea.
+ *
+ * Its own member rather than a flag on `string` because the form switches on this
+ * union and a widget hint that some string fields ignore is a third state to keep
+ * straight. What earns it: `localRun.instruction` is several sentences an operator
+ * writes while trying to get their environment up, and a single-line input for it
+ * is a field they cannot read back what they typed into.
+ */
+export type ConfigFieldType = 'number' | 'boolean' | 'string' | 'text' | 'enum' | 'stringList' | 'json' | 'colourMap';
 
 /**
  * How far an operator has to reach to edit a field.
@@ -326,6 +335,18 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How long a claimed validation check is held before it is offered again.',
   },
   {
+    path: 'localRun.instruction',
+    type: 'text',
+    access: 'plain',
+    why: 'How this project’s application is started on your machine. Empty means nothing is startable.',
+  },
+  {
+    path: 'localRun.url',
+    type: 'string',
+    access: 'plain',
+    why: 'Where the application lands once it is up, drawn as a link beside the run.',
+  },
+  {
     path: 'validation.desktopSocketPath',
     type: 'string',
     access: 'advanced',
@@ -419,6 +440,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
   { path: 'deskRoot', type: 'string', access: 'advanced', why: 'Scratch root for desk agents.' },
   { path: 'attachmentRoot', type: 'string', access: 'advanced', why: 'Where blueprint attachments are written.' },
   { path: 'validationRoot', type: 'string', access: 'advanced', why: 'Where validation resources are written.' },
+  {
+    path: 'localRunRoot',
+    type: 'string',
+    access: 'advanced',
+    why: 'The local run’s own checkout. Must not be under worktreeRoot — the pool would claim it as a slot.',
+  },
   { path: 'promptTemplatesDir', type: 'string', access: 'advanced', why: 'Where prompt-book overrides are read from.' },
   {
     path: 'docsFolderPrefix',
@@ -507,7 +534,12 @@ export function fieldValueRefusal(field: ConfigField, value: unknown): string | 
       return typeof value === 'number' && Number.isFinite(value) ? null : `${field.path} must be a number`;
     case 'boolean':
       return typeof value === 'boolean' ? null : `${field.path} must be true or false`;
+    // `text` is a string all the way to the file — the union member only tells the
+    // form to draw a textarea, so there is nothing extra to refuse. One arm for
+    // both rather than two identical ones: two would be two places for the same
+    // rule to drift.
     case 'string':
+    case 'text':
       return typeof value === 'string' ? null : `${field.path} must be a string`;
     case 'enum':
       return typeof value === 'string' && field.options?.includes(value)

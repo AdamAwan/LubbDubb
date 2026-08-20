@@ -16,7 +16,6 @@ import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { McpDesktopServer } from '../src/mcp/desktop.js';
 import { DESKTOP_TOOL_NAMES, MCP_TOOL_NAMES } from '../src/mcp/names.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
-import { PromptTemplates, defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { validatePlanDocument } from '../src/plans/planDocument.js';
@@ -87,7 +86,6 @@ async function desk(
     claimMinutes: number;
     now: () => string;
     socketPath: string;
-    templates: PromptTemplates;
   }> = {},
 ): Promise<{ server: McpDesktopServer; dir: string; socketPath: string }> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-cred-'));
@@ -96,9 +94,7 @@ async function desk(
     store: system.store,
     claimMinutes: over.claimMinutes ?? 60,
     validationRoot: '/srv/validation',
-    templates: over.templates ?? defaultPromptTemplates(),
-    defaultBranch: 'main',
-    worktreeRoot: '/srv/worktrees',
+    localRun: () => system.localRun,
     now: over.now ?? ((): string => new Date().toISOString()),
     socketPath,
     credentialPath: join(dir, 'desktop.json'),
@@ -237,9 +233,7 @@ test('two harnesses do not fight over the stable socket', async () => {
     store: system.store,
     claimMinutes: 60,
     validationRoot: '/srv/validation',
-    templates: defaultPromptTemplates(),
-    defaultBranch: 'main',
-    worktreeRoot: '/srv/worktrees',
+    localRun: () => system.localRun,
     now: () => NOW,
     socketPath,
     credentialPath: join(dir, 'second.json'),
@@ -300,80 +294,74 @@ test('validation_read hands back the whole plan, or one check’s full procedure
 
 // -- getting the application up ---------------------------------------------
 
-test('local_run answers with the deployment’s own instruction, and the goal’s branches', async () => {
-  const system = build();
+test('local_run starts the environment on a goal, and reports what it knows', async () => {
+  const system = build({ localRun: { instruction: 'Run the dev server.', url: 'http://localhost:4200' } });
   planWith(system);
   const { server } = await desk(system);
   try {
-    const reply = await call(server, 'c1', 'local_run', { issue: 12 });
-    assert.ok(!reply.isError, reply.text);
+    // Before anything: not running, and saying so rather than staying silent.
+    const idle = await call(server, 'c1', 'local_run', {});
+    assert.ok(!idle.isError, idle.text);
+    assert.equal(idle.json().running, false);
 
-    // The built-in body, which is the "work it out from the repository" answer. A
-    // deployment that has not written its command down still gets a session that
-    // tries, which is why the control is drawn unconditionally.
-    assert.match(reply.json().howToRun as string, /work it out from the/);
-    assert.equal(reply.json().integrationBranch, 'main');
+    const started = await call(server, 'c1', 'local_run', { issue: 12 });
+    assert.ok(!started.isError, started.text);
+    assert.equal(started.json().running, true);
+    assert.equal(started.json().goal, 'issue:12');
+    assert.equal(started.json().url, 'http://localhost:4200');
+    // The reply says the harness has not opened that port. A session that reported
+    // a check passed on the strength of a status is the one outcome the whole
+    // validation channel exists to prevent, so the tool refuses to imply it.
+    assert.match(started.json().caveat as string, /does not poll/);
 
-    // The caution names the directory rather than describing it, and carries both
-    // ways a session at this keyboard breaks the fleet in silence: a process left
-    // holding a leased slot open (which on Windows fails every later dispatch onto
-    // that branch), and a branch checked out in the clone the pool cuts its
-    // worktrees from, which `findExisting` then answers with the operator's own
-    // checkout. Neither is the operator's to override, so neither is in the body.
-    assert.match(reply.json().caution as string, /\/srv\/worktrees/);
-    assert.match(reply.json().caution as string, /do not check a branch out in the checkout you are/);
-
-    const parts = reply.json().parts as { slug: string; branch: string | null }[];
-    assert.deepEqual(
-      parts.map((p) => p.slug),
-      ['whole'],
-    );
-    assert.ok('branch' in parts[0]!, 'the branch is shipped as data, not left for the body to interpolate');
-    assert.equal(reply.json().goal, 12);
+    const live = system.store.liveLocalRun();
+    assert.equal(live?.originRef, 'issue:12');
+    // The checkout came from the manager rather than being picked here — the pool is
+    // the only thing that hands out a directory.
+    assert.ok(live !== null && live.dir !== '');
   } finally {
     await server.close();
     system.store.close();
   }
 });
 
-test('an operator’s local-run override is what the session is told', async () => {
-  const system = build();
+test('starting a second goal locally stops the first — there is one environment', async () => {
+  const system = build({ localRun: { instruction: 'Run the dev server.', url: '' } });
   planWith(system);
-  const { server } = await desk(system, {
-    templates: new PromptTemplates({ 'local-run': 'Run /dev-environment start. It lands on http://localhost:5173.' }),
-  });
+  system.connector.inject({ kind: 'new_issue', number: 13, title: 'The other one' });
+  const { server } = await desk(system);
   try {
-    const reply = await call(server, 'c1', 'local_run', { issue: 12 });
-    assert.ok(!reply.isError, reply.text);
-    assert.match(reply.json().howToRun as string, /\/dev-environment start/);
-    // The caution survives the override, because it is not in the body.
-    assert.match(reply.json().caution as string, /\/srv\/worktrees/);
+    await call(server, 'c1', 'local_run', { issue: 12 });
+    const first = system.store.liveLocalRun();
+    assert.equal(first?.originRef, 'issue:12');
+
+    await call(server, 'c1', 'local_run', { issue: 13 });
+    const second = system.store.liveLocalRun();
+    assert.equal(second?.originRef, 'issue:13');
+    assert.notEqual(second?.id, first?.id);
+    // The superseded row is settled rather than deleted: a start that failed is read
+    // after the fact, so the history is the point.
+    assert.equal(system.store.currentLocalRun()?.originRef, 'issue:13');
+    // One live row, and it is the new one — the store's `beginLocalRun` ends the old
+    // one in the same transaction, so there is no window where both are live.
+    assert.equal(system.store.liveLocalRun()?.id, second?.id);
   } finally {
     await server.close();
     system.store.close();
   }
 });
 
-test('local_run answers for a goal with no plan, where validation_read refuses', async () => {
+test('local_run refuses with the reason when nothing is configured to start', async () => {
   const system = build();
+  planWith(system);
   const { server } = await desk(system);
   try {
-    // The whole reason this is its own tool rather than a field on
-    // `validation_read`: a goal nobody has planned, or one whose plan declared no
-    // checks, is exactly the goal somebody hits *run it locally* on.
-    const refused = await call(server, 'c1', 'validation_read', { issue: 12 });
-    assert.ok(refused.isError, refused.text);
-
-    const reply = await call(server, 'c1', 'local_run', { issue: 12 });
-    assert.ok(!reply.isError, reply.text);
-    assert.match(reply.json().howToRun as string, /work it out from the/);
-    assert.equal(reply.json().parts, undefined, 'no plan means no parts, not an empty list');
-
-    // And with no goal at all: "how does this project start" has no goal in it.
-    const bare = await call(server, 'c1', 'local_run', {});
-    assert.ok(!bare.isError, bare.text);
-    assert.equal(bare.json().goal, undefined);
-    assert.match(bare.json().howToRun as string, /work it out from the/);
+    const refused = await call(server, 'c1', 'local_run', { issue: 12 });
+    assert.ok(refused.isError);
+    // The refusal names the field, because the operator reading it is the one who
+    // can fix it — and it is a config field precisely so they can, without a restart.
+    assert.match(refused.text, /localRun\.instruction/);
+    assert.equal(system.store.liveLocalRun(), null, 'a refusal starts nothing and records nothing');
   } finally {
     await server.close();
     system.store.close();

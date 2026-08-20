@@ -18,6 +18,7 @@ import type {
   Issue,
   IssueFiled,
   Job,
+  LocalRunView,
   JobSchedule,
   LessonStatus,
   McpChannelPayload,
@@ -156,6 +157,8 @@ class DemoServer {
   private chatterTimer: ReturnType<typeof setInterval> | null = null;
   private beatTimer: ReturnType<typeof setInterval> | null = null;
   private chatterIdx = 0;
+  /** What the local run's session has 'printed', for the panel's tail. */
+  private lines: string[] = ['> starting the dev environment for #395', '> up on http://localhost:5173'];
   private deskBeats = 0;
   private seq = 1000;
 
@@ -968,6 +971,49 @@ class DemoServer {
       esc.response = `${status === 'accepted' ? 'Accepted' : 'Rejected'}${proposal.note ? `: ${proposal.note}` : '.'}`;
       esc.answeredAt = proposal.decidedAt;
     }
+  }
+
+  /**
+   * Start the local run on another goal, which is also the swap: one environment, so
+   * the old row ends as the new one begins — the same transaction the real store
+   * does in one write.
+   */
+  startLocalRun(issue: number): Promise<{ ok: true; run: LocalRunView }> {
+    const now = new Date().toISOString();
+    const run: LocalRunView = {
+      id: `run-${String(this.state.localRun === null ? 2 : Number(this.state.localRun.id.split('-')[1] ?? 1) + 1)}`,
+      originRef: `issue:${String(issue)}`,
+      // The demo has no git, so the ref is the shape a part's branch takes rather
+      // than one resolved from a plan. Naming it after the goal is the honest half.
+      ref: `issue/${String(issue)}/local`,
+      dir: '/Users/you/code/demo-shop/.lubbdubb/local-run',
+      pid: 48000 + issue,
+      status: 'running',
+      url: 'http://localhost:5173',
+      note: null,
+      startedAt: now,
+      endedAt: null,
+      live: true,
+    };
+    this.state.localRun = run;
+    this.lines = [`> starting the dev environment for #${String(issue)}`, '> up on http://localhost:5173'];
+    return Promise.resolve({ ok: true as const, run });
+  }
+
+  stopLocalRun(): Promise<{ ok: true }> {
+    if (this.state.localRun !== null)
+      this.state.localRun = {
+        ...this.state.localRun,
+        status: 'stopped',
+        live: false,
+        endedAt: new Date().toISOString(),
+        note: 'stopped from the cockpit',
+      };
+    return Promise.resolve({ ok: true as const });
+  }
+
+  localRunOutput(): string[] {
+    return [...this.lines];
   }
 
   async killAgent(id: string): Promise<{ ok: true }> {
@@ -2573,6 +2619,14 @@ export const demoApi = {
   checkBuild: () => Promise.resolve({ ok: true as const, build: getServer().getBuild() }),
   upgrade: (_action: string, _opts?: { interrupt?: boolean }) =>
     Promise.resolve({ ok: true as const, build: getServer().getBuild() }),
+  // The local run, which the demo can model honestly because the *state* is the
+  // whole feature and the process is not: starting moves the row onto another goal
+  // and stopping ends it, exactly as the panel would see it live. What a visitor
+  // cannot get here is a server on a port, and nothing here pretends otherwise —
+  // the URL is the fixture's, and it will not answer.
+  startLocalRun: (issue: number) => getServer().startLocalRun(issue),
+  stopLocalRun: () => getServer().stopLocalRun(),
+  localRunOutput: () => Promise.resolve({ lines: getServer().localRunOutput() }),
   killAgent: (id: string) => getServer().killAgent(id),
   completeAgent: (id: string) => getServer().completeAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),
