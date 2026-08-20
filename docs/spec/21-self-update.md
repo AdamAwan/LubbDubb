@@ -193,6 +193,18 @@ a decision already taken, not the harness deciding on its own — which is the t
 
 The intent is cleared once this has run, so a second restart restores nothing.
 
+## The local run goes down with the harness
+
+The shutdown path stops the machine's dev environment rather than interrupting it, which is the
+opposite of what it does to an agent — and the asymmetry is deliberate. An agent's conversation is
+worth restoring, and the next boot offers it. A dev environment is not: the server is a descendant of
+a session going down with this process, so nothing of it survives either way. Left running it would be
+an orphan holding a port and the preview checkout, with a row claiming it is live and nothing left to
+kill it. → [23](23-local-runs.md#the-process)
+
+An upgrade takes the same path — it exits through the same `shutdown`, with `UPGRADE_EXIT_CODE` — so
+the environment goes down for an upgrade too, and the operator starts it again on the new build.
+
 ## Where the shutdown handlers are registered
 
 In `main.ts`, **before anything that can start an agent** — before `settleUpgrade`'s restores and

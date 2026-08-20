@@ -2288,6 +2288,23 @@ there are entries, so an empty trail on screen means the fetch and the snapshot 
 plan and retrospective documents, which are written to be read as documents. A pad note is one agent's
 testimony, and rendering it would let a stray backtick or hash change what that testimony looks like.
 
+## Running locally
+
+A **Local** reading in the top bar's `cn-reads` row, quiet when nothing is up and carrying the goal's
+number when something is, opening the running-locally panel
+([23](23-local-runs.md#the-cockpit)).
+
+A reading rather than a nav tab, and the distinction is the one `TABS` is built on: the nav is the
+surfaces work happens on, and this is a state of the operator's own machine. The **number** is the
+value because that is the question — "running" alone leaves somebody opening the panel to find out
+whether it is the goal they are looking at, which is the only thing they wanted to know.
+
+`'localRun'` is a member of `ConsolePanel`, so the panel is a **place**: it survives a reload and the
+back button steps out of it, exactly as every other panel does. It draws one state and a picker rather
+than a table of runs — a list would imply two environments could be up, which is the one thing the
+store refuses — and its start button says, where the control is, that starting stops what is running
+now.
+
 ## Links
 
 A surface that _names_ another thing and gives no way there is the cockpit's most repeated bug. It kept

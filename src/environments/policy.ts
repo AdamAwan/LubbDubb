@@ -1,6 +1,6 @@
 /**
  * One environment a goal's landed work travels to, and how to ask whether it has
- * got there. → `docs/spec/23-environments.md#configuring-an-environment`
+ * got there. → `docs/spec/24-environments.md#configuring-an-environment`
  */
 export interface EnvironmentConfig {
   /**

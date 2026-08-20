@@ -14,7 +14,7 @@ export interface EnvironmentVerdict {
  * deployment, an HTTP endpoint reporting its own build on another, and on a third a
  * question about several services at once that no single SHA describes. So the
  * harness ships no opinion and runs the operator's command.
- * → `docs/spec/23-environments.md#the-probe`
+ * → `docs/spec/24-environments.md#the-probe`
  */
 export interface EnvironmentProber {
   reached(environment: string, command: string, sha: string): Promise<EnvironmentVerdict>;
@@ -54,7 +54,7 @@ const DEFAULT_TIMEOUT_MS = 30_000;
  * itself and the answer does not. A probe that legitimately answers "no" while
  * warning about something is read as `unknown` and asked again, which is the safe
  * direction and is fixed by redirecting the warning.
- * → `docs/spec/23-environments.md#the-three-verdicts`
+ * → `docs/spec/24-environments.md#the-three-verdicts`
  */
 export class CommandEnvironmentProber implements EnvironmentProber {
   constructor(

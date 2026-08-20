@@ -11,7 +11,7 @@ spec does not say, that is a bug in one of them. The [README](README.md) covers 
 and how to run it.
 
 **When you change behaviour, update the spec document that owns it in the same change.** That is the
-repo's one documentation rule; [`docs/README.md`](docs/README.md) indexes the twenty-three documents and
+repo's one documentation rule; [`docs/README.md`](docs/README.md) indexes the twenty-four documents and
 says which owns what.
 
 ## Making a change
@@ -309,6 +309,11 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
   across every checkout in the pool per pulse; anything that wipes instead of stashing destroys the
   one copy of an agent's work, and the slot looks identically clean either way.
   → [09](docs/spec/09-execution.md#exhaustion)
+- **The local run's checkout must stay outside `worktreeRoot`.** The pool's `slots()` counts every
+  _registered_ worktree under that root whatever the directory is called — so a preview checkout in
+  there is a pool slot: counted toward the bound, handed to an agent, and wiped `git clean -ffdx` with
+  the operator's warm dependencies in it. `localRunRoot` is a separate root for that reason, and
+  `ensurePreview` is the only thing that touches it. → [23](docs/spec/23-local-runs.md#the-checkout)
 - **`resolveCommit` prefers `origin/<ref>` over the local ref** and returns a SHA, because the
   harness's clone never checks the integration branch out. New `GitObserver` methods stay read-only
   and fetch-free.
@@ -323,14 +328,14 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
   code is read: a bare `1` is `absent` **only with nothing on stderr**, because `cmd.exe` exits `1`
   for a command it cannot find, exactly as a clean no does. Widening that arm compiles, passes, and
   turns every typo'd probe on Windows into a permanent "not shipped".
-  → [23](docs/spec/23-environments.md#the-three-verdicts)
+  → [24](docs/spec/24-environments.md#the-three-verdicts)
 - **A landing is recorded by sweeping for unattributed merges, never on the merge itself.** The merge
   SHA is a provider fact with a `closedPrWindowMs` shelf life and no way to recover it — a squash
   leaves no ancestry link — so a hook on the transition loses the landing to any restart that
   straddles it, or to a person merging in the web UI between two pulses. Nothing errors, and a goal
   whose commit was never caught looks exactly like one that never shipped. The desk also runs
   **immediately below `graph.record`** in the pulse, because attribution walks the graph's
-  `parentRef` chain. → [23](docs/spec/23-environments.md#recording-a-landing)
+  `parentRef` chain. → [24](docs/spec/24-environments.md#recording-a-landing)
 
 ### Errors and config
 
@@ -355,7 +360,7 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
 
 ## Where to read further
 
-[`docs/README.md`](docs/README.md) is the index: twenty-three specs, one per subsystem, numbered by the
+[`docs/README.md`](docs/README.md) is the index: twenty-four specs, one per subsystem, numbered by the
 order they build on each other. Start there rather than grepping — each document states the
 invariants of its area and the reasoning behind them, which is what stops a change re-litigating a
 settled decision badly.

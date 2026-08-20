@@ -21,7 +21,7 @@ interface GoalReachInput {
  *
  * A read-only lens over stored rows, beside `src/graph/` and `prAttention.ts` and
  * deliberately not in `src/dispatcher/`: a rule consulting it would be a second
- * opinion about a decision made elsewhere. → `docs/spec/23-environments.md#the-lens`
+ * opinion about a decision made elsewhere. → `docs/spec/24-environments.md#the-lens`
  *
  * The fold is a count, and the interesting value is `partial`. A goal is several
  * pull requests, they land separately, and a release cut between two of them puts

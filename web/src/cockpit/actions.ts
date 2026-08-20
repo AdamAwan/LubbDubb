@@ -43,6 +43,7 @@ export type ConsolePanel =
   | 'launch'
   | 'build'
   | 'pets'
+  | 'localRun'
   | { ask: string }
   | null;
 
@@ -175,6 +176,22 @@ export interface CockpitActions {
   upgrade(action: UpgradeAction, opts?: { interrupt?: boolean }): Promise<void>;
   /** Take a fresh reading of the build, rather than waiting for the pulse's. */
   checkBuild(): Promise<void>;
+  /**
+   * Start `issueNumber`'s work in the machine's one dev environment — **and stop
+   * whatever was in it**, because there is only one. One method rather than a start
+   * and a swap: two names for one transition are two things to keep in step, and
+   * the server is where the transition lives either way.
+   */
+  startLocalRun(issueNumber: number): Promise<void>;
+  stopLocalRun(): Promise<void>;
+  /**
+   * The last lines the session holding the environment up has printed.
+   *
+   * Fetched rather than read off the snapshot — two hundred lines on every
+   * heartbeat is a log nobody has open — so unlike every other action this one
+   * *returns* something, and the panel asks again when the run changes.
+   */
+  localRunOutput(): Promise<string[]>;
   /** Move the nav to a destination. A selected goal still outranks it. */
   openTab(tab: ConsoleTab): void;
   /**

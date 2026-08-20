@@ -292,6 +292,48 @@ function Build({ view, actions }: { view: CockpitView; actions: CockpitActions }
 }
 
 /**
+ * Whether anything is running on this machine, and which goal's code it is.
+ *
+ * A reading rather than a nav tab: it is a state of the operator's own machine, not
+ * a surface work happens on, and `TABS` is deliberately the three that are. Quiet
+ * when nothing is up — which is most of the time, and is the reading rather than
+ * the absence of one.
+ *
+ * The **goal number** is the value, because that is the question. "Running" alone
+ * would leave an operator opening the panel to find out whether it is the goal they
+ * are looking at, which is the only thing they wanted to know.
+ */
+function LocalRun({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const run = view.state.localRun;
+  const live = run !== null && run.live;
+  const number = run === null ? null : originIssueNumber(run.originRef);
+  const title = live
+    ? `Goal #${String(number)} is running locally${run.url === null ? '' : ` on ${run.url}`} — open to stop it or swap goals`
+    : run === null
+      ? 'Nothing has been run locally — open to start a goal on this machine'
+      : `Nothing is running locally; the last attempt ${run.status === 'failed' ? 'did not start' : 'was stopped'} — open for the reason`;
+  return (
+    <button
+      type="button"
+      className={`cn-read cn-act ${live ? '' : 'cn-quiet'}`}
+      onClick={() => actions.openPanel('localRun')}
+      title={title}
+      aria-label={title}
+    >
+      <span>Local</span>
+      <b>{live && number !== null ? `#${String(number)}` : 'off'}</b>
+      <i className="cn-chev">›</i>
+    </button>
+  );
+}
+
+/** `issue:284` → 284. The panel and this both address a goal by its number. */
+function originIssueNumber(originRef: string): number | null {
+  const m = /^issue:(\d+)$/.exec(originRef);
+  return m ? Number(m[1]) : null;
+}
+
+/**
  * The control-room strip: ident, the nav, the pulse, the fleet cap, and seven
  * readings. The nav is here because this is the only row of the shell that never
  * scrolls — everything else lives inside `.cn-sit`, which does. The ident carries
@@ -414,6 +456,7 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
           onOpen={() => actions.openPanel('launch')}
           title="Blueprints waiting for a free slot — open the launch desk"
         />
+        <LocalRun view={view} actions={actions} />
         <Build view={view} actions={actions} />
         {/* Config is a destination now, not a modal — but it stays here rather
             than joining the nav: the nav is the three surfaces work happens on,

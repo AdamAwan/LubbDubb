@@ -622,47 +622,22 @@ machine the operator is sitting at.
 ### Getting the application up
 
 A check that says "open the page and click the thing" is unrunnable until somebody knows how to get
-the page up, and nothing in this document told them. The procedure is written by a planner reading
-the repository, which is the one thing in the deployment that cannot know the answer — so the check
-arrived at the machine that has the browser and the login, and stalled on the one fact nobody had
-written down.
+the page up, and nothing in this document told them. The procedure is written by a planner reading the
+repository, which is the one thing in the deployment that cannot know the answer — so the check
+arrived at the machine with the browser and the login and stalled on the one fact nobody had written
+down.
 
-`local_run` is that fact. It answers with the **`local-run` prompt, rendered** — a prompt id like any
-other ([05](05-dispatcher.md#prompt-templates)), whose built-in body says "work it out from the
-repository: the README, the scripts, a compose file" and which a deployment **overrides with its own
-command**. That is the whole of why it is a template rather than a config key: how a project starts is
-the operator's opinion, not the harness's, which is the same argument that puts `finding-ticket` and
-`docs-change` in the prompt book. The cost is the prompt book's cost — an override is a file drop and
-takes effect at the next restart, where a config key would have been editable in the cockpit.
+That is [23 — Local runs](23-local-runs.md), and it is a subsystem rather than a paragraph here
+because the harness **owns the environment**: one dev environment on the machine, one goal's code in
+it at a time, started and stopped from the cockpit or from a session, with a record of which. What
+this document needs from it is two sentences.
 
-Three properties, asserted in `test/validationDesktop.test.ts`:
-
-- **It is not a field on `validation_read`.** That tool refuses a goal with no checks, deliberately
-  and with a reason worth keeping — and a goal with no checks is exactly the goal somebody wants to
-  look at. `local_run` answers for a goal with no plan, and for no goal at all.
-- **The goal's parts come back as data, not as placeholders.** Each part's slug, branch, pull request
-  and status ride beside the rendered body, and the template declares **no placeholders**. A `{branch}`
-  token would be dropped in silence by exactly the overrides that customised most — the sharp edge
-  appending exists to avoid ([09](09-execution.md)) — and a branch nobody can see is a session
-  looking at the wrong code.
-- **The caution comes from the harness, not the body**, because it is not the operator's to override:
-  they are writing down a start command, not reasoning about the worktree pool. It carries the two
-  ways a session at this keyboard breaks the fleet silently. Nothing may be left running inside
-  `worktreeRoot` — a process holding a leased slot open stops it ever being cleaned or handed on, and
-  on Windows every later dispatch onto that branch fails `EBUSY`
-  ([09](09-execution.md#handing-a-slot-over)). And **no branch is checked out in `repoRoot`**: that is
-  the clone the pool cuts its worktrees from, `WorktreeManager.findExisting` reads
-  `git worktree list`, which includes the main working tree — so a branch checked out there is a
-  branch the pool answers for with the operator's own checkout. A goal whose parts have merged needs
-  no checkout at all, which is the common case; anything else is a question for the operator.
-
-The cockpit's half is **run it locally** in the validation card's header, `/lubbdubb run <n>` through
-the same deep link — `localRunPrompt` in `web/src/cockpit/desktopLink.ts`. It is drawn on every goal
-with nothing checked first, because the prompt always has a body: a control offered only where
-somebody had already configured one is the dead end you find by walking into it, which is the
-argument that made this whole channel unconditional. The skill then puts the run **before** the
-checks and claims nothing until the operator picks one — they opened it to look at the thing, and a
-claim taken on their behalf locks a check away from the fleet while they do.
+`local_run` on the desktop channel reports what is running and, given a goal, starts it — so a session
+carrying out a check asks for the application rather than starting one itself, and the thing it asks
+is the same thing the cockpit's own control asks. And **`running` is not a reading**: it means the
+session that brought the environment up did not fail, not that anything answered on the port. The
+tool's reply says so in as many words, because a check reported `passed` on the strength of a status
+is precisely the outcome this whole channel exists to prevent.
 
 ## Deferral and waiving
 

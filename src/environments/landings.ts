@@ -34,7 +34,7 @@ interface LandingSweepInput {
  * pulse saw it — the harness down for longer than `closedPrWindowMs`. That landing
  * is lost rather than wrong: {@link goalReach} counts the goal's merges the sweep
  * could not attribute and reports `unknown`, never `absent`.
- * → `docs/spec/23-environments.md#recording-a-landing`
+ * → `docs/spec/24-environments.md#recording-a-landing`
  */
 export function unrecordedLandings(input: LandingSweepInput): LandingToRecord[] {
   const goals = goalOfPr(input.nodes);

@@ -129,7 +129,29 @@ const TICKET_ORDER: readonly TicketOrder[] = ['added', 'changed', 'cost'];
 // panel missing from here is not merely unshareable: the place round-trips through
 // the query string, so an unlisted name is parsed straight back to null and the
 // panel will not open at all.
-const PANELS = ['findings', 'lessons', 'faults', 'output', 'launch', 'build', 'pets'] as const;
+/**
+ * Every panel name the address bar round-trips, as a `Record` over the union
+ * rather than a hand-written list.
+ *
+ * A list compiles perfectly well while missing a member, and what that costs is
+ * invisible: the panel opens on a click and is simply *not there* after a reload,
+ * because `readPlace` did not recognise its own name and fell through to null. A
+ * `Record` over `ConsolePanel` makes the omission a compile error instead — the
+ * same shape `PANEL_TITLE` in `ConsoleRoot.tsx` already uses, which is what caught
+ * the last panel that forgot one of these.
+ */
+const PANEL_NAMES: Record<Exclude<ConsolePanel, null | { ask: string }>, true> = {
+  findings: true,
+  lessons: true,
+  faults: true,
+  output: true,
+  launch: true,
+  build: true,
+  pets: true,
+  localRun: true,
+};
+
+const PANELS = Object.keys(PANEL_NAMES) as Exclude<ConsolePanel, null | { ask: string }>[];
 
 /** A parameter's value, with an empty one read as absent — `?goal=` names nothing. */
 function param(query: URLSearchParams, key: string): string | null {

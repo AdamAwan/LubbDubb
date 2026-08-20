@@ -25,6 +25,7 @@ import { EscalationStore } from './escalations.js';
 import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
 import { EnvironmentStore } from './environments.js';
+import { LocalRunStore } from './localRuns.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
 import { ReviewWaitStore } from './reviewWaits.js';
@@ -76,6 +77,8 @@ import type {
   JobSchedule,
   Lesson,
   LessonInput,
+  LocalRun,
+  LocalRunStatus,
   Pet,
   PetAction,
   PetActionKind,
@@ -157,6 +160,7 @@ export class Store {
   private readonly landings: StackLandingStore;
   private readonly branchReaps: BranchReapStore;
   private readonly environments: EnvironmentStore;
+  private readonly localRuns: LocalRunStore;
   private readonly prWatchSeeds: PrWatchSeedStore;
   private readonly workItemLinks: WorkItemLinkStore;
   private readonly reviewWaitStore: ReviewWaitStore;
@@ -240,6 +244,7 @@ export class Store {
     this.landings = new StackLandingStore(ctx);
     this.branchReaps = new BranchReapStore(ctx);
     this.environments = new EnvironmentStore(ctx);
+    this.localRuns = new LocalRunStore(ctx);
     this.prWatchSeeds = new PrWatchSeedStore(ctx);
     this.workItemLinks = new WorkItemLinkStore(ctx);
     this.reviewWaitStore = new ReviewWaitStore(ctx);
@@ -860,6 +865,27 @@ export class Store {
   }
   listEnvironmentReach(): EnvironmentReading[] {
     return this.environments.listEnvironmentReach();
+  }
+
+  // -- The local run (the machine's one dev environment) --------------------
+
+  beginLocalRun(input: { originRef: string; ref: string; dir: string; url: string | null }): LocalRun {
+    return this.localRuns.beginLocalRun(input);
+  }
+  markLocalRunPid(id: string, pid: number | null): void {
+    this.localRuns.markLocalRunPid(id, pid);
+  }
+  setLocalRunStatus(id: string, status: LocalRunStatus, note?: string): void {
+    this.localRuns.setLocalRunStatus(id, status, note);
+  }
+  liveLocalRun(): LocalRun | null {
+    return this.localRuns.liveLocalRun();
+  }
+  currentLocalRun(): LocalRun | null {
+    return this.localRuns.currentLocalRun();
+  }
+  endStaleLocalRuns(note: string): number {
+    return this.localRuns.endStaleLocalRuns(note);
   }
 
   // -- PR watch seeds (the harness's own PRs, already tagged) ---------------

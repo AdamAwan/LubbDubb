@@ -1001,6 +1001,26 @@ CREATE TABLE IF NOT EXISTS pet_vivarium (
   started_at TEXT NOT NULL  -- actions stamped before this are recorded and roll nothing
 );
 
+-- The local run (see LocalRunStore): which goal's code is in the machine's one dev
+-- environment. One row per run and the row outlives the run, so a start that failed
+-- has its reason somewhere to read; the *live* one is whichever row is 'starting' or
+-- 'running', and there is only ever one because the writer ends the last before it
+-- writes a new one. The table is new, so it needs no ColumnMigrations entry — but
+-- a table being new once does not keep it exempt, and a column added later will.
+CREATE TABLE IF NOT EXISTS local_runs (
+  id         TEXT PRIMARY KEY,
+  origin_ref TEXT NOT NULL,
+  ref        TEXT NOT NULL,     -- the git ref the checkout was pointed at
+  dir        TEXT NOT NULL,
+  pid        INTEGER,           -- the session whose *subtree* a stop has to reap
+  status     TEXT NOT NULL,
+  url        TEXT,              -- as configured when the run started, not as it reads now
+  note       TEXT,
+  started_at TEXT NOT NULL,
+  ended_at   TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_local_runs_status ON local_runs(status);
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);

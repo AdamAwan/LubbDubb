@@ -400,15 +400,14 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'If you cannot get it up, say what stopped you and stop there. Do not edit code, configuration or ' +
       'dependencies to make it start — you were asked to run what is there, and a change that gets the app ' +
       'running is a change nobody reviewed, on a branch somebody is about to look at.',
+    retired: true,
     doc:
-      'Rendered for the `local_run` tool on the desktop channel: what the operator’s own Claude Code is told ' +
-      'when they hit **run it locally** on a goal, or when a validation check needs the application up before ' +
-      'it can be carried out. Nothing dispatches it — no agent, no branch, no worktree — so instructions that ' +
-      'assume one will mislead. **This is the prompt most worth overriding**: the default says "work out how ' +
-      'this project starts", and a deployment that knows the answer should say it here — the command, how long ' +
-      'it takes, which port it lands on, what has to be running first. Placeholders: none, on purpose. The ' +
-      'goal, its parts, their branches and the caution about the harness’s own worktrees come back as data ' +
-      'beside this text rather than as tokens inside it, so an override cannot drop them.',
+      '**Retired — no longer rendered.** How the application is started moved to the `localRun.instruction` ' +
+      'config field, which is editable on the Config page and applied without a restart ' +
+      '([23](docs/spec/23-local-runs.md)). A prompt override is a file drop that takes effect at the next ' +
+      'boot, and this is the one instruction an operator edits *while* a start is failing in front of them — ' +
+      'bouncing the harness to fix a typo in a command would take the fleet down with it. An override left ' +
+      'here still loads; it is simply not sent.',
   },
   'pr-ci-fix': {
     placeholders: ['number', 'title', 'branch'],

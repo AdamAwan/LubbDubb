@@ -556,7 +556,7 @@ test("a part's stale stored base is harmless, because `ensure` is reuse-first", 
   // so a second dispatch onto a live part cannot move it out from under its agent.
   const repoRoot = gitRepo();
   const worktrees = mkdtempSync(join(tmpdir(), 'lubbdubb-wt-'));
-  const manager = new WorktreeManager(repoRoot, worktrees, { size: 4, held: () => false });
+  const manager = new WorktreeManager(repoRoot, worktrees, { size: 4, held: () => false }, join(repoRoot, '.preview'));
 
   execFileSync('git', ['branch', 'issue/12/schema'], { cwd: repoRoot });
   const first = await manager.ensure('issue/12/api', 'issue/12/schema');

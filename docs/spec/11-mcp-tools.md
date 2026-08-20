@@ -36,7 +36,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `validation_report`  | Record the reading of the one validation check this agent was dispatched to run: `passed`, `failed`, or `handback` — could not run it, which records nothing and returns the check to the operator with the reason. Refused to every caller but that check's own agent, by name. → [20](20-validation.md#the-hand-over) |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`).                                                                               |
 
-There is a **second, much shorter list** for the desktop channel below — five tools, none of them
+There is a **second, much shorter list** for the desktop channel below — six tools, none of them
 the fleet's. See [The desktop channel](#the-desktop-channel).
 
 ### The `_status` envelope
@@ -614,8 +614,9 @@ load-bearing both ways:
 `src/mcp/desktop.ts`. A second socket, for the operator's **own** Claude Code rather than for a
 spawned agent. Three jobs go there: a validation check needing a browser and a login the fleet does
 not have, run at their keyboard and reported onto the same row; a conversation about a plan, held
-where there is room to have one; and getting the application itself up, which most checks need before
-their first step is possible. **Unconditional** — every start binds the stable socket, mints the
+where there is room to have one; and asking for the application itself to be brought up, which most
+checks need before their first step is possible — the harness runs that one, so the tool asks rather
+than instructs ([23](23-local-runs.md#two-triggers-one-owner)). **Unconditional** — every start binds the stable socket, mints the
 credential at `validation.desktopCredentialPath` (`0600`) and rewrites the skill at
 `validation.desktopSkillPath`, on a deployment that configured none of it. That footprint is the whole
 of what the channel costs a deployment that never uses it, and it is the price of the cockpit's three
@@ -630,7 +631,7 @@ and [the run](20-validation.md#getting-the-application-up);
 | `validation_report` | Record what was seen: `passed`, `failed`, or `handback`. Reported against the claim, not an argument. |
 | `plan_read`         | Read a goal's delivery plan: the verdict, the parts and their slugs, the agenda. Records nothing.     |
 | `plan_amend`        | Rewrite it after talking it through. Refuses outside `awaiting_approval`; withdraws the stale card.   |
-| `local_run`         | How this project starts here: the `local-run` prompt rendered, the goal's branches, and the caution.  |
+| `local_run`         | The machine's dev environment: what is running, and — given a goal — start it on that goal's code.     |
 
 **`plan_amend` is deliberately not a second `plan_submit`.** They write the same document through the
 same `ingestPlanDocument`, and they share the schema as one export (`src/mcp/planDocumentSchema.ts`)

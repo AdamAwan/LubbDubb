@@ -177,7 +177,7 @@ export interface PullRequest {
    * Read once, into a {@link GoalLanding}, because git cannot recover it: a squash
    * merge leaves the branch with no ancestry link to its base, so every later
    * question about where this work has got to is asked of this SHA rather than of
-   * the branch. → `docs/spec/23-environments.md#recording-a-landing`
+   * the branch. → `docs/spec/24-environments.md#recording-a-landing`
    */
   mergeCommitSha?: string;
   /**
@@ -2967,7 +2967,7 @@ export interface GoalLanding {
  * deployed": that is the same word the true answer uses, and the operator has no
  * way to tell which one they are looking at. `unknown` is asked again; `absent` is
  * asked again too, and only `reached` is ever final.
- * → `docs/spec/23-environments.md#the-three-verdicts`
+ * → `docs/spec/24-environments.md#the-three-verdicts`
  */
 export type EnvironmentReachStatus = 'reached' | 'absent' | 'unknown';
 
@@ -3004,4 +3004,55 @@ export interface GoalEnvironmentReach {
    * ever as precise as the probe interval.
    */
   at: string | null;
+}
+
+/**
+ * How a local run is going. Four states and no more, because the harness only
+ * knows three things: that it asked, that the session finished asking, and that
+ * something ended.
+ *
+ * `running` is **presumed, not probed** — it means the session that was told to
+ * bring the environment up finished its turn without failing, and its process is
+ * still alive holding whatever it started. Nothing here opens a socket to check,
+ * which is why the panel draws the URL as a link to try rather than as a reading.
+ * A readiness probe is the honest way to close that gap and is a separate change.
+ */
+export type LocalRunStatus = 'starting' | 'running' | 'stopped' | 'failed';
+
+/**
+ * The one local run: which goal's code is in the machine's dev environment right
+ * now, or was last.
+ *
+ * **One row at a time is the whole feature**, and it is the operator's own
+ * constraint rather than a limit invented here — there is one dev environment on
+ * the machine, exactly as there is one working copy behind the validation claim.
+ * A second run started while one is live stops the first; the store write is what
+ * makes that true rather than a check the caller is trusted to make.
+ *
+ * The row **outlives the run**, so a start that failed leaves its reason somewhere
+ * to read. That is the difference between a panel that says `failed` and a panel
+ * that says nothing, which is the case an operator actually hits.
+ */
+export interface LocalRun {
+  id: string;
+  /** The goal whose code this is, as `issue:<n>`. */
+  originRef: string;
+  /** The git ref the checkout was pointed at — a part's branch, or the integration branch. */
+  ref: string;
+  /** The checkout it is running in. `localRunRoot`, and never a pool slot. */
+  dir: string;
+  /**
+   * The session process holding the environment up, or null once it is gone.
+   *
+   * Recorded because stopping the run means reaping *this* pid's whole subtree: the
+   * dev server is its descendant, not the process itself.
+   */
+  pid: number | null;
+  status: LocalRunStatus;
+  /** `localRun.url` as it stood when the run started, so a later config edit does not rewrite history. */
+  url: string | null;
+  /** Why it stopped or failed, or what the session said when it came up. Null while starting. */
+  note: string | null;
+  startedAt: string;
+  endedAt: string | null;
 }

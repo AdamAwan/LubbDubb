@@ -18,7 +18,7 @@ import type { StoreContext } from './context.js';
  *
  * The tables are new, so they need no `ColumnMigrations` entry — but a table being
  * new *once* does not keep it exempt, and a column added later will.
- * → `docs/spec/23-environments.md`
+ * → `docs/spec/24-environments.md`
  */
 export class EnvironmentStore {
   constructor(private readonly ctx: StoreContext) {}

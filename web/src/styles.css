@@ -4623,6 +4623,81 @@ a.btn {
 /* -- The build panel ------------------------------------------------------ */
 /* Tokens only, like every shared component: the console sheet must not reach in
    here, so this reads the same on any theme the console later takes. */
+/* The local run panel. One environment, so one state and a picker — see
+   LocalRunPanel. Every colour is a token: a hex here is a surface that stays dark
+   when somebody switches to Light, which `test/cockpitTheme.test.ts` is the only
+   thing in `check` that would catch. */
+.lrun {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lrun-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lrun-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.lrun-meta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.lrun-meta code {
+  font-family: var(--font-mono);
+  color: var(--link-ink);
+}
+.lrun-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.lrun-swap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  font-size: 12px;
+}
+/* The same chrome `.launch-kind select` gives its picker. A native select against a
+   dark theme keeps the user agent's white box otherwise, which is the one surface on
+   this panel that would not follow a theme. */
+.lrun-swap select {
+  min-width: 0;
+  max-width: 320px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--r-md);
+  padding: 6px 8px;
+  font: inherit;
+}
+.lrun-hint {
+  color: var(--muted);
+}
+/* The session's own words. Scrolls rather than growing the panel: the tail is up
+   to two hundred lines and the interesting end is the bottom. */
+.lrun-log {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .build-panel {
   display: flex;
   flex-direction: column;
