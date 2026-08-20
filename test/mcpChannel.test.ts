@@ -719,7 +719,7 @@ test('plan_submit carries the validation block, on the verdict as well as the pa
     validation: {
       resources: [
         { name: 'fixture-repo.tar.gz', kind: 'fixture', note: 'seeded repo, one PR by another author' },
-        { name: 'test-env login', kind: 'access', provided: false },
+        { name: 'orders-dump.sql', kind: 'data', provided: false },
       ],
       checks: [
         {
@@ -750,13 +750,13 @@ test('plan_submit carries the validation block, on the verdict as well as the pa
   const resources = system.store.listValidationResources('issue:284');
   assert.deepEqual(
     resources.map((r) => r.name),
-    ['fixture-repo.tar.gz', 'test-env login'],
+    ['fixture-repo.tar.gz', 'orders-dump.sql'],
   );
   // The one it cannot produce is declared unprovided and nothing more: the ask for
   // it is filed against the *delivery*, so submitting a plan puts nothing on the
   // operator's bench about work that is not built yet.
-  assert.equal(resources.find((r) => r.name === 'test-env login')!.provided, false);
-  assert.equal(resources.find((r) => r.name === 'test-env login')!.humanTaskId, null);
+  assert.equal(resources.find((r) => r.name === 'orders-dump.sql')!.provided, false);
+  assert.equal(resources.find((r) => r.name === 'orders-dump.sql')!.humanTaskId, null);
   assert.equal(system.store.listHumanTasks().length, 0);
   system.store.close();
 });

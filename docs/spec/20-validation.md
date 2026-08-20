@@ -22,7 +22,7 @@ re-litigated:
 | A test suite        | `npm run check` runs on every branch. This is the layer above: checks needing a running harness, a real environment, a browser, or a person. |
 | Acceptance criteria | Those are per **part**, ticked by a reviewer reading a diff ([08](08-planning.md)). A check is executed against the delivered goal.          |
 | CI                  | Nothing here gates a merge, and **no result is ever inferred from a build**.                                                                 |
-| A credential store  | `validationRoot` holds fixtures and reference material. Which account a check needs is a note; the account stays where it is.                |
+| A credential store  | `validationRoot` holds fixtures and reference material. Which account a check needs is a line in its `do`; the account stays where it is.   |
 | A blocker           | Nothing a check says holds a dispatch, a merge, a conclusion or a close. It changes what closing a goal _looks like_, and nothing else.      |
 
 ## The bar
@@ -58,12 +58,43 @@ refactor whose whole claim is that behaviour did not change has nothing left onc
 Its per-goal reading is null — nothing was declared — which is a third fact and not a synonym for
 clear ([The flag](#the-flag)). Nothing counts checks and nothing rewards a longer list.
 
-**Nothing enforces this.** It is stated where the writing happens — the `issue-plan` and
-`issue-replan` prompts, and the `validation_amend` tool's description — and not in `ValidationSchema`,
-because a schema that recognised a test-suite check by its words would refuse the legitimate one that
-runs a suite _inside a fixture repository_ — the shape of the example in
-[The document block](#the-document-block). The bar is about what is worth writing, and worth is not a
-thing zod can parse.
+### One run is one check
+
+Those six are ways of looking, not six checks. Everything a **single run of the delivered goal**
+settles belongs to the one check that performs it — the screen it drew, the rows it wrote, the line in
+the log, the file it left behind — and `expect` carries the list. "The new page renders" and "the row
+is written" are one check, because the setup is the expensive part of both: split, it is written twice
+and **performed** twice, to look at one run from two angles. A second check earns its place only when
+the second look needs a genuinely different run: another environment, a fresh database, a restart, a
+second person.
+
+This is the same cost the bar is about, arriving by a different route. A check that fails the bar
+wastes a trip; a journey cut into six checks wastes five setups and reads, on the sheet, as six
+obligations — and the sheet is read as the list of what somebody still has to do. So most goals get
+one check, two is ordinary, and three wants a reason.
+
+### A precondition is not an ask
+
+**What a check needs in order to be runnable is stated in its `do`, in the words that let the reader
+go and get it** — "you need read access to the staging database (connection string in the team
+vault)". It is read by the person running the check, at the moment they need it.
+
+The alternative is what a resource declared `provided: false` does: it files a `human_tasks` row
+([Resources](#resources)), which is a different person, a different queue and a different day. That is
+right for a **file** somebody has to produce and hand over, and wrong for everything else — a login,
+an environment, an account, a flag someone has to turn on. Filed as asks, a delivered goal opens by
+asking four people for four things before anybody has looked at it, and none of those rows can be
+settled by putting anything in the goal's validation directory, which is what the ask tells its reader
+to do.
+
+**Nothing enforces any of the three.** They are stated where the writing happens — the `issue-plan`
+and `issue-replan` prompts, and the `validation_amend` tool's description — and not in
+`ValidationSchema`, because a schema that recognised a test-suite check by its words would refuse the
+legitimate one that runs a suite _inside a fixture repository_ — the shape of the example in
+[The document block](#the-document-block). A grouping rule is less parseable still: no schema can see
+that two checks share a setup. The bar is about what is worth writing, and worth is not a thing zod can
+parse. The one half the harness does enforce is the one it can name: an `access` resource files no ask,
+whatever `provided` says.
 
 ## The check
 
@@ -131,17 +162,16 @@ much as a decomposed one.
 {
   "validation": {
     "resources": [
-      { "name": "fixture-repo.tar.gz", "kind": "fixture", "note": "seeded repo, one PR by another author" },
-      { "name": "test-env login", "kind": "access", "provided": false }
+      { "name": "fixture-repo.tar.gz", "kind": "fixture", "note": "seeded repo, one PR by another author" }
     ],
     "checks": [
       {
-        "id": "merged-branch-gone",
-        "title": "A squash-merged part branch is gone on both sides",
-        "do": "Run the harness against the fixture repo, merge the seeded PR…",
-        "expect": "No issue/284/reap ref, locally or on the remote.",
+        "id": "reap-merged-branch",
+        "title": "A squash-merged part branch is reaped, everywhere it shows",
+        "do": "Needs git and a checkout — no login and no browser. Unpack the fixture repo, point a local harness at it, merge the seeded PR, and let one pulse run.",
+        "expect": "No issue/284/reap ref locally or on the remote; the part reads merged on the goal page; one \"reaped\" line in the log and no error record.",
         "uses": ["fixture-repo.tar.gz"],
-        "covers": ["reap-writer"],
+        "covers": ["reap-writer", "reap-desk"],
         "fleetCandidate": true,
         "why": "reads the repo and runs git; needs no login and no browser"
       }
@@ -149,6 +179,11 @@ much as a decomposed one.
   }
 }
 ```
+
+One run, and `expect` lists everything that run has to satisfy — the ref, the screen and the log, which
+were three checks before the rule in [One run is one check](#one-run-is-one-check). What the check needs
+in order to be runnable opens `do`, rather than being declared as an `access` resource that would file an
+ask against it.
 
 `ValidationSchema` is reached by **both** transports exactly as `PlanDocumentSchema` is — the
 `plan.json` drain and the `plan_submit` tool must accept and reject the same documents.
@@ -259,10 +294,23 @@ for the life of the launch, because a grant that came and went with a policy fla
 agent's readable set depend on config it cannot see. That is a real widening, and it is the same one
 attachments already make.
 
-A resource declared `"provided": false` is the planner saying it needs something it cannot produce: a
-reference screenshot, an account, a sample file from a colleague. A `human_tasks` row asks for it
-([13](13-jobs-and-findings.md)), so a missing resource is an ask rather than a check that mysteriously
+**A resource is a file**, which is what makes the rest of this section coherent: a name resolved under
+a directory, present or missing, servable to the cockpit and readable by an agent. A resource declared
+`"provided": false` is the planner saying it needs a file it cannot produce — a reference screenshot,
+a dump of real data, a sample from a colleague. A `human_tasks` row asks for it
+([13](13-jobs-and-findings.md)), so a missing fixture is an ask rather than a check that mysteriously
 never runs.
+
+**`kind: 'access'` is the exception, and files nothing.** It names a login or an environment, which is
+a precondition and belongs in the check's `do` ([A precondition is not an ask](#a-precondition-is-not-an-ask));
+`fileResourceAsks` skips it whatever `provided` says. The ask it used to file told its reader to "put
+it where the harness keeps validation resources for this goal" about an account — a row nobody could
+settle by handing anything over, and one the operator could not get rid of. The word stays **parseable**
+rather than being dropped from the enum, on the rule every post-v1 field follows: an older plan, and an
+operator override that never learned the new wording, must keep validating rather than having the whole
+document refused over one chip. The cockpit draws it as a plain chip too — `present` is a file fact, and
+warning "missing" about a file that was never going to exist is a warning that means nothing on every
+draw for the life of the goal.
 
 **The ask is filed against the delivery, not against the plan.** `ValidationAskDesk`
 (`src/validation/askDesk.ts`) files it once a pulse for every goal parked as delivered, beside the

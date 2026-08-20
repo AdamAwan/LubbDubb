@@ -44,6 +44,13 @@ export const ValidationResourceSchema = z.object({
    * Refused rather than widened when it is a word this does not know, the same
    * treatment `size` and `expectedKind` get: the value is rendered as a label, so
    * an unrecognised one is a chip nobody can read. Absent is always allowed.
+   *
+   * `access` is kept parseable and means something narrower than the rest: a
+   * precondition rather than a file, drawn on the sheet and **never filed as an
+   * ask** (`fileResourceAsks`). Both writers are told to put what a check
+   * needs to be runnable in its `do` instead — but an older plan, and an operator
+   * override that never learned that, must keep validating, so the word stays
+   * known rather than sinking the document it appears in.
    */
   kind: z.enum(['fixture', 'access', 'reference', 'data']).optional(),
   note: z.string().min(1).optional(),
