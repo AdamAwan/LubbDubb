@@ -132,8 +132,15 @@ interface ResolvedProfile {
   source: ProfileSource;
 }
 
-/** Which level of the precedence chain named the profile a run launched on. */
-type ProfileSource = 'pin' | 'rule' | 'default';
+/**
+ * Which level of the precedence chain named the profile a run launched on.
+ *
+ * `pin` covers all three things that can pin one dispatch — the goal's tag, the
+ * plan's part profile, and the operator's queue override — because
+ * what it tells a reader is that this run is *not* priced by its rule, and which
+ * of the three wrote it is a question the object that carries it answers.
+ */
+export type ProfileSource = 'pin' | 'rule' | 'default';
 
 /** The rule ids that can actually appear on a dispatched action's `rule`. */
 const STAGE_RULE_IDS: ReadonlySet<string> = new Set(DISPATCH_PIPELINE.map((r) => r.id));

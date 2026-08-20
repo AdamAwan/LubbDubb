@@ -7,6 +7,7 @@ import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
 import { CiLadder, CourtChip } from './GoalPage.js';
+import { ProfilePicker } from '../components/ProfilePicker.js';
 
 /**
  * What is shown when no goal is selected: five cards, rows rather than pictures.
@@ -29,7 +30,7 @@ export function Overview({ view, actions }: { view: CockpitView; actions: Cockpi
       <Fleet view={view} actions={actions} />
       <GoalsInFlight view={view} actions={actions} />
       <Rack view={view} actions={actions} />
-      <UpNext view={view} />
+      <UpNext view={view} actions={actions} />
       <WorldSignals view={view} />
     </div>
   );
@@ -398,7 +399,7 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
  * line, and nothing here re-words it. A held item is toned amber off `status`,
  * which is a fact the same sentence already states in words.
  */
-function UpNext({ view }: { view: CockpitView }): JSX.Element {
+function UpNext({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const items = view.state.upcoming?.items ?? [];
   return (
     <section className="cn-card">
@@ -408,7 +409,7 @@ function UpNext({ view }: { view: CockpitView }): JSX.Element {
       <div className="cn-rows">
         {items.length === 0 && <p className="cn-empty">Nothing is queued.</p>}
         {items.map((item) => (
-          <QueueRow key={`${item.origin}|${item.rule}`} item={item} />
+          <QueueRow key={`${item.origin}|${item.rule}`} item={item} view={view} actions={actions} />
         ))}
       </div>
     </section>
@@ -421,7 +422,16 @@ function UpNext({ view }: { view: CockpitView }): JSX.Element {
  * provider unconditionally, and the reason it quotes carries `#n` mentions of its
  * own.
  */
-function QueueRow({ item }: { item: QueueItem }): JSX.Element {
+function QueueRow({
+  item,
+  view,
+  actions,
+}: {
+  item: QueueItem;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const config = view.state.config;
   return (
     <div className="cn-row">
       <span className="cn-grow">
@@ -440,6 +450,24 @@ function QueueRow({ item }: { item: QueueItem }): JSX.Element {
           <RefText text={item.reason} />
         </span>
       </span>
+      {/* What this row will run on, and the one place it can be changed before it
+          runs. The queue is where the judgement is available — an operator
+          reading "resolve the conflict on issue/390/watcher" knows it is
+          mechanical work, and the row is in front of them; the goal's ticket is
+          two clicks away and says nothing about which of its origins is the cheap
+          one. The empty option names what the row resolves to without an
+          override, so the panel answers "which profile" whether or not anyone has
+          touched it. */}
+      <ProfilePicker
+        profiles={config.profiles}
+        value={item.override ?? null}
+        // Only meaningful while nothing is overridden: with an override standing,
+        // `item.profile` *is* the override, and naming it as the fallback would
+        // promise that clearing the control changes nothing.
+        defaultProfile={item.override === undefined ? (item.profile ?? null) : null}
+        inheritLabel={item.profileSource === 'pin' && item.override === undefined ? 'Pinned' : 'Auto'}
+        onPick={(profile) => void actions.setUpNextProfile(item.origin, profile)}
+      />
     </div>
   );
 }

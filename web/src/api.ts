@@ -377,6 +377,11 @@ const realApi = {
   // Re-order the "Up next" queue (issue #128): the operator's desired priority
   // order of candidate origins, which the dispatcher reads back into its ranking.
   reorderUpNext: (origins: string[]) => post<{ ok: true }>('/api/upnext/order', { origins }),
+  // Price one queued row: which profile the next dispatch on this
+  // origin runs on. `null` clears the override and the row goes back to its
+  // goal's pin, or its rule's own entry.
+  setUpNextProfile: (origin: string, profile: string | null) =>
+    post<{ ok: true }>('/api/upnext/profile', { origin, profile: profile ?? '' }),
   // `attachments` carry base64 image bytes (issue #249), which is why this one
   // route may send megabytes: the server's per-route bodyLimit is what bounds it,
   // and the size/format bounds are the server's alone — the composer refuses early

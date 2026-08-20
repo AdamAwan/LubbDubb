@@ -463,6 +463,11 @@ export class Harness extends EventEmitter {
       // reconciled with the tracked origins below — a flagged goal waiting on a
       // human is queueing nothing, and that is exactly when the flag must survive.
       const goalPriorities = store.listGoalPriorities();
+      // What the operator has said one queued row should *run on*, keyed on the
+      // same origin. Read here rather than in the dispatcher so the pin chain has
+      // one input per level and the cycle stays the only thing that touches the
+      // store.
+      const profileOverrides = store.listProfileOverrides();
       // While paused, advertise zero headroom so the dispatcher plans no new
       // dispatches; the executor also hard-defers them (belt and braces).
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - store.countLiveAgents());
@@ -534,6 +539,7 @@ export class Harness extends EventEmitter {
         rejectionSignals,
         priorityOverrides,
         goalPriorities,
+        profileOverrides,
         // The goal tags and the profiles they may name, so a dispatch on a pinned
         // issue is priced by the pin rather than by its rule.
         modelPins: this.deps.modelPins,
@@ -550,6 +556,10 @@ export class Harness extends EventEmitter {
       const trackedOrigins = new Set<string>((plan.upcoming ?? []).map((i) => i.origin));
       for (const t of tasks) if (isActiveTask(t) && t.originRef) trackedOrigins.add(t.originRef);
       store.reconcilePriorityOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
+      // The same sweep, for the same reason and off the same set: an override
+      // naming an origin nothing tracks any more prices no dispatch, and a
+      // profile pin that outlives its row is one nobody can see to take off.
+      store.reconcileProfileOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
 
       // The dispatcher's reasoning is itself an audit record — prefixed, when any
       // provider served a fallback slice, with the fact that it was reasoning about

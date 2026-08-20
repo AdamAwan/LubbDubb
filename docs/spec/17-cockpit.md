@@ -844,6 +844,16 @@ vanishes when quiet is indistinguishable from one that broke.
   `QueueItem.expedited`: the flag is set on a goal and the row names an origin, so without it a
   flagged goal's parts sit at the top of the panel with nothing anywhere connecting the order to the
   click that caused it.
+  Each row ends in the **`ProfilePicker`**, drawn from `QueueItem.profile` / `profileSource` /
+  `override`: the queue is the one surface that says what a dispatch will run on _before_ it
+  runs, and the one place the judgement is available — an operator who reads "resolve the conflict on
+  `issue/390/watcher`" knows it is mechanical work, and the row is in front of them. The empty option
+  names what the row resolves to unpriced ("Auto (standard)", or "Pinned (deep)" where a goal tag or
+  a part profile already answered), so the panel states the profile whether or not anybody has
+  touched it; with an override standing it reads plain "Auto", because `profile` is then the override
+  itself and naming it as the fallback would promise that clearing the control changes nothing. The
+  control draws nothing at all on a deployment with no `agentModels` — `ProfilePicker`'s own rule,
+  not a second one here.
 - **World signals** — `worldEvents` grouped by `(kind, ref)` with a count, ten rows. Three review
   comments on one pull request are one signal, not three unrelated rows. **The server's order (newest
   first) is kept**: re-sorting by count would move the row an operator is watching the moment it moves
@@ -2546,8 +2556,8 @@ from a reader that broke, and because each of these is a decision rather than an
   acts on. The fold is pure and tested (`test/issueGroups.test.ts`) and is what a hierarchy view would
   be built from.
 - **`reorderUpNext`, `dismissHumanTask` and `fetchWorkSubtree` have no caller either.** The overview's
-  Up next is a reading rather than a control; the rail carries only `open` human tasks, so there is no
-  settled tail to dismiss from; and the work tab embeds the shared panel, which reaches its own route
+  Up next carries one control — the profile picker — and no drag handle; the rail carries only
+  `open` human tasks, so there is no settled tail to dismiss from; and the work tab embeds the shared panel, which reaches its own route
   directly — the seam keeps the method for the reason it keeps `setStackLanding`.
 - **`tailByAgent` is folded and drawn nowhere.** `agent:tail` frames still arrive and still cost
   nothing to keep — they are one line per agent — but the fleet row draws the agent's `note`

@@ -2118,6 +2118,11 @@ export function buildDemoState(): DemoSeed {
           branch: 'issue/341',
           status: 'dispatching',
           reason: 'Open issue #341 has no linked PR and no agent is on it.',
+          // What the row will launch on, resolved from `agentModels.byRule` — the
+          // ordinary case, and the one the panel has to state for the queue to
+          // answer "which profile" at all.
+          profile: 'standard',
+          profileSource: 'rule',
         },
         {
           // Held by the plan's own concurrency cap rather than by fleet headroom —
@@ -2131,6 +2136,12 @@ export function buildDemoState(): DemoSeed {
           status: 'capped',
           reason:
             'Part "watcher" of issue #390 is ready and stacks on issue/390/validate. Held: issue #390 is already at its 2-part concurrency cap.',
+          // Priced by the operator from this very panel: mechanical work they
+          // could see was mechanical. A held row is priced too — "what will it
+          // cost when it runs" is exactly the question being asked of it.
+          profile: 'fast',
+          profileSource: 'pin',
+          override: 'fast',
         },
         {
           // Queued but held, same as `watcher` above — this time by the plan's own
@@ -2143,6 +2154,10 @@ export function buildDemoState(): DemoSeed {
           status: 'unapproved',
           reason:
             'Part "signer" of issue #395 is ready and has no agent. Held: the plan for issue #395 is awaiting your approval — nothing is scheduled until you accept it.',
+          // The plan named this part deep, and nothing has overridden it: the
+          // picker reads "Pinned (deep)" rather than offering the fleet default.
+          profile: 'deep',
+          profileSource: 'pin',
         },
         {
           origin: 'issue:395:part:route',
@@ -2153,6 +2168,8 @@ export function buildDemoState(): DemoSeed {
           status: 'unapproved',
           reason:
             'Part "route" of issue #395 is ready and stacks on issue/395/signer. Held: the plan for issue #395 is awaiting your approval — nothing is scheduled until you accept it.',
+          profile: 'standard',
+          profileSource: 'default',
         },
       ],
     },

@@ -199,6 +199,13 @@ export interface CockpitActions {
    */
   collapseFeature(issueNumber: number, collapsed: boolean): void;
   reorderUpNext(origins: string[]): Promise<void>;
+  /**
+   * Override which model profile the next dispatch on one queued origin runs on,
+   * or clear it with `null`. Standing until cleared, so a retry of
+   * the run it priced is priced the same way — and pruned once the harness stops
+   * tracking that origin.
+   */
+  setUpNextProfile(origin: string, profile: string | null): Promise<void>;
 
   /**
    * The vivarium (`docs/spec/22-pets.md`). Opening a shell, and then three acts:

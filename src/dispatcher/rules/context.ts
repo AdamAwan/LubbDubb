@@ -120,13 +120,23 @@ export interface StageContext {
    * The profile a dispatch on this origin is pinned to, or null to leave it to
    * the rule (issue #342).
    *
-   * Built once from the world's tags and the plans' parts, and applied in exactly
+   * Three levels, narrowest first: the operator's own override on this queue row
+   * the profile the plan named for this part, and the goal's tag.
+   *
+   * Built once from the world's tags, the plans' parts and the overrides, and applied in exactly
    * one place — where a candidate becomes a dispatched action — rather than by
    * each rule that composes one. A rule that had to remember to stamp it would be
    * a rule that could forget, and a forgotten pin is invisible: the agent runs,
    * does the work, and only the bill says which profile it was.
    */
   pinFor: (originRef: string | null) => string | null;
+  /**
+   * The operator's own profile overrides, keyed on origin — the narrowest level
+   * {@link StageContext.pinFor} consults, kept beside it because the queue has to
+   * show which pin is *theirs* to be able to offer taking it off.
+   * Empty on every deployment until one is set.
+   */
+  profileOverrides: ReadonlyMap<string, string>;
   /**
    * Open, watched, un-parked issues with no open PR, in label-encoded priority
    * order. Derived once and shared by every issue-side rule that wants the

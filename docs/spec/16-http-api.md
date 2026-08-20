@@ -26,7 +26,7 @@ is about.
 | `routes/findings.ts`    | Promote / file / dismiss                                                                      |
 | `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                            |
 | `routes/issues.ts`      | Watch, priority, conclusion, assay, delivered, shortfall, dismiss-run                         |
-| `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`                                      |
+| `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`               |
 | `routes/plans.ts`       | Plan history, replan, acceptance ticks, part model pins                                       |
 | `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it        |
 | `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                            |
@@ -1043,6 +1043,26 @@ duplicate. Replaces the whole override set (ranked `0..n-1`), broadcasts `world:
 cycle so the new order takes effect immediately. It only re-orders — it never un-holds a held item,
 and `manual-job` items stay first regardless — so this is safe to run inline. Returns `{ ok: true, report }`.
 
+### `POST /api/upnext/profile`
+
+Price one queued row. Body `{origin: string, profile?: string}` — which `agentModels`
+profile the next dispatch on that origin runs on. Absent or empty **clears** the override, which is
+the state a row starts in rather than a third value; the row goes back to its plan's part profile,
+its goal's tag, or its rule's own entry.
+
+**400** when `origin` is missing or empty, and when `profile` names one this deployment does not
+configure — refused by name at the boundary exactly as the goal pin is, because a control that can
+only send what the server sent it is reachable with a bad name only from a stale tab or a hand-rolled
+request, and either way a profile that resolves to nothing would price nothing while reading as a
+decision taken.
+
+It prices and nothing else: the override never un-holds a held row and never lifts one over the
+headroom cut, so like `/api/upnext/order` it is safe to broadcast `world:changed` and run a cycle
+inline — which it does, so the queue redraws with the new price and a row that was about to dispatch
+takes it. The override is standing rather than one-shot, and is pruned by the same
+`upNextOverrideTtlMs` sweep once its origin stops being tracked
+([05](05-dispatcher.md#pricing-one-queued-row)). Returns `{ok: true, profile, report}`.
+
 #### `POST /api/jobs/:id/cancel`
 
 409 when the job is absent or no longer queued. Returns `{ ok: true, job }`. Any attachments are
@@ -1398,7 +1418,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay`, `completion` and `spend` per issue.                                                                    |
 | `retainedRuns`                  | Runs whose issue the world has forgotten (#203, #234), rebuilt from their stored snapshots by the same `retainedRunIssues` the dispatcher unions into its issue list, through the same per-issue enrichment a live one takes. |
 | `plans`, `planParts`            | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                                                                          |
-| `tasks`                         | Every task, **without prompts** — `TaskSummary`, not `Task`. See _Bulk text_ below.                                                                                                                                                                                                                   |
+| `tasks`                         | Every task, **without prompts** — `TaskSummary`, not `Task`. See _Bulk text_ below.                                                                                                                                           |
 | `jobs`                          | Operator jobs, newest first.                                                                                                                                                                                                  |
 | `schedules`                     | Recurring blueprints, oldest first — **every** one, paused included, since this is the only surface anywhere that says a paused one exists. What a firing produces is an ordinary entry in `jobs`.                            |
 | `agents`                        | Every agent row, including usage and the progress note.                                                                                                                                                                       |
@@ -1408,7 +1428,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `overlaps`                      | Paths two concurrently-live code agents wrote.                                                                                                                                                                                |
 | `humanTasks`                    | Work only a person can do — open ones and a settled tail, newest first. Beside `findings` rather than inside `escalations`: nobody is parked on one.                                                                          |
 | `findings`                      | Every finding.                                                                                                                                                                                                                |
-| `escalations`                   | The escalations still waiting on a person — **open only**. See _Bulk text_ below.                                                                                                                                                                                                             |
+| `escalations`                   | The escalations still waiting on a person — **open only**. See _Bulk text_ below.                                                                                                                                             |
 | `recovery`                      | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**.                                                   |
 | `decisions`                     | The last 100 decisions, each with `subjectRef` — the one external thing the act is about (`issue:13`, `pr:42`), or null.                                                                                                      |
 | `upcoming`                      | The last cycle's ranked queue with the headroom cut. Null until a cycle has run.                                                                                                                                              |

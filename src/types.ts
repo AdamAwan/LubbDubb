@@ -787,6 +787,38 @@ export interface PriorityOverride {
 }
 
 /**
+ * An operator override of which model profile one queued dispatch runs on
+ * Keyed on the same stable `origin` {@link PriorityOverride} uses,
+ * and for the same reason: the queue is a per-pulse projection with nothing in it
+ * to mutate, so a statement about a queued row has to be written against what the
+ * row *names*.
+ *
+ * The two are separate statements about one row because they answer different
+ * questions — one is "do this sooner", the other "do this cheaper" — and an
+ * operator who says one has said nothing about the other.
+ *
+ * **Standing, not one-shot.** It is not consumed by the dispatch it changes: the
+ * pin chain is a pure function of the origin, so a retry of the run it priced
+ * runs the same profile it did. It is cleared by the operator, or pruned once its
+ * origin stops being tracked — the same `upNextOverrideTtlMs` that prunes a
+ * priority override, and the same reasoning.
+ *
+ * It wins over the goal's tag and the plan's part profile. Those are standing
+ * statements about work; this is a person looking at the queue as it is now, and
+ * the later, narrower reading is the one to act on.
+ */
+export interface ProfileOverride {
+  origin: string;
+  /**
+   * The profile's name. A plain string on {@link PlanPart.profile}'s terms — the
+   * route refuses a name this deployment does not configure, but config moves
+   * under a stored row, and `resolveAgentProfile` falls through to the rule for a
+   * name it cannot resolve rather than launching on nothing.
+   */
+  profile: string;
+}
+
+/**
  * A goal the operator has marked a priority: everything the harness dispatches
  * under `issue:<n>` — and against the pull requests that goal's branches opened —
  * is ranked ahead of the natural cross-rule order until the flag is cleared.
