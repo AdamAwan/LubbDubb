@@ -19,6 +19,16 @@ export interface ContentBlock {
   /** tool_result payload: a string, an array of text blocks, or a nested object. */
   content?: unknown;
   is_error?: boolean;
+  /**
+   * When this block was written, ISO-8601. Display only — it dates the labelled
+   * lines so a reader can tell a run that is working from one that stopped an hour
+   * ago. The PTY path fills it from the session file's own `timestamp`, which is
+   * the whole reason it is per-block: a restored agent re-renders its entire
+   * history in one pass, and stamping that with the clock would date an hour of
+   * finished work to this second — an agent that has been idle since lunch and one
+   * still working would then read identically.
+   */
+  at?: string;
 }
 
 /**
@@ -43,6 +53,18 @@ const GREEN = '\x1b[32m';
 const DIM = '\x1b[2m';
 const RESET = '\x1b[0m';
 
+/**
+ * `[HH:MM:SS]` for a block's time, or '' when it has none. Local time, because the
+ * reader is the operator watching the fleet on this machine; seconds because the
+ * gap that matters between two tool calls is often smaller than a minute.
+ */
+function stamp(at: string | undefined): string {
+  if (!at) return '';
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) return '';
+  return `[${d.toTimeString().slice(0, 8)}]`;
+}
+
 /** Raw concatenation of assistant text blocks (sentinels intact) for status detection. */
 export function assistantText(blocks: ContentBlock[]): string {
   return blocks
@@ -51,10 +73,19 @@ export function assistantText(blocks: ContentBlock[]): string {
     .join('');
 }
 
-/** Format a message's content blocks into display text. Returns '' when nothing is renderable. */
-export function renderBlocks(blocks: ContentBlock[]): string {
+/**
+ * Format a message's content blocks into display text. Returns '' when nothing is
+ * renderable.
+ *
+ * `at` dates every block that does not date itself — the stream runtime's blocks
+ * arrive as they happen, so one reading of the clock covers the message; the PTY
+ * runtime stamps each block from the session file instead (see {@link ContentBlock.at}).
+ * Omitted, nothing is stamped, which is what keeps the function pure and testable.
+ */
+export function renderBlocks(blocks: ContentBlock[], at?: string): string {
   let out = '';
   for (const b of blocks) {
+    const when = stamp(b.at ?? at);
     if (b.type === 'text') {
       const text = stripSentinels(b.text ?? '');
       // Tool blocks close with a single newline, so prose following one would sit
@@ -62,42 +93,56 @@ export function renderBlocks(blocks: ContentBlock[]): string {
       if (text && out && !out.endsWith('\n\n')) out += '\n';
       out += text;
     } else if (b.type === 'tool_use') {
-      out += renderToolUse(b);
+      out += renderToolUse(b, when);
     } else if (b.type === 'tool_result') {
-      out += renderToolResult(b);
+      out += renderToolResult(b, when);
     } else if (b.type === HUMAN_BLOCK) {
-      out += renderHuman(b);
+      out += renderHuman(b, when);
     }
   }
   return out;
 }
 
 /** A message sent *to* the agent, labelled so it reads as a turn rather than agent output. */
-function renderHuman(b: ContentBlock): string {
+function renderHuman(b: ContentBlock, when: string): string {
   const text = sanitise(stripSentinels(b.text ?? '')).trim();
   if (!text) return '';
   const indented = text
     .split('\n')
     .map((l) => `  ${l}`)
     .join('\n');
-  return `\n${GREEN}▸ sent${RESET}\n${indented}\n`;
+  return `\n${prefix(when)}${GREEN}▸ sent${RESET}\n${indented}\n`;
 }
 
-function renderToolUse(b: ContentBlock): string {
+function renderToolUse(b: ContentBlock, when: string): string {
   const name = b.name ?? 'tool';
   const summary = summariseInput(b.input);
-  const label = `${CYAN}⚙ ${name}${RESET}`;
+  const label = `${prefix(when)}${CYAN}⚙ ${name}${RESET}`;
   return `\n${label}${summary ? ` ${DIM}${summary}${RESET}` : ''}\n`;
 }
 
-function renderToolResult(b: ContentBlock): string {
+/**
+ * A stamp ahead of a label, or nothing. The trailing space is part of it, so an
+ * unstamped line is byte-for-byte what it was before stamps existed.
+ */
+function prefix(when: string): string {
+  return when ? `${DIM}${when}${RESET} ` : '';
+}
+
+function renderToolResult(b: ContentBlock, when: string): string {
   const body = sanitise(extractResultText(b.content));
   const { text, hidden } = truncateLines(body, MAX_RESULT_LINES);
   // Pre-truncation total: the cockpit folds this into the collapsed summary, and the
   // server is the only side that still knows what was cut.
   const total = body === '' ? 0 : body.split('\n').length;
   const count = total > 1 ? `${DIM} · ${total} lines${RESET}` : '';
-  const label = b.is_error ? `${RED}  ↳ error${RESET}${count}` : `${GRAY}  ↳ result${RESET}${count}`;
+  // The finish time goes *after* the label rather than in front of it, and that is
+  // load-bearing twice over: the cockpit finds a result by `^  ↳`, and it folds
+  // everything past the label into the collapsed summary — so a call and the moment
+  // it returned end up on one line, which is the reading that answers "is this still
+  // going". In front, it would break the match and be dropped by the fold.
+  const done = when ? `${DIM} ${when}${RESET}` : '';
+  const label = b.is_error ? `${RED}  ↳ error${RESET}${done}${count}` : `${GRAY}  ↳ result${RESET}${done}${count}`;
   const indented = text
     .split('\n')
     .map((l) => `  ${l}`)

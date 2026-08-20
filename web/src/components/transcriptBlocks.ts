@@ -43,7 +43,12 @@ export const emptyBlockState: BlockState = { pending: '', inBlock: false, unreso
 // eslint-disable-next-line no-control-regex
 const SGR = /\x1b\[[0-9;]*m/g;
 
-const TOOL = /^⚙ /;
+/**
+ * A tool line, with or without the `[HH:MM:SS]` the server prefixes it with. The stamp
+ * is optional because it is only written when the block came with a time — and a call
+ * that failed to match here does not misparse visibly, it silently stops folding.
+ */
+const TOOL = /^(?:\[\d{2}:\d{2}:\d{2}\] )?⚙ /;
 const RESULT = /^ {2}↳ (result|error)\b/;
 /** A result body line is indented by two spaces — the renderer indents even blank ones. */
 const BODY = /^ {2}/;
