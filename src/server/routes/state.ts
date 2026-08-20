@@ -4,6 +4,7 @@ import type {
   CiPolicyPayload,
   ConfigPreviewPayload,
   ConfigSavePayload,
+  McpChannelPayload,
   PromptsPayload,
   RunningConfigPayload,
 } from '../../wire.js';
@@ -12,6 +13,7 @@ import { loadConfigFromText, type Config } from '../../config.js';
 import { diffConfig } from '../../configApply.js';
 import { configField, envOverride, fieldValueRefusal } from '../../configFields.js';
 import { configRevision, editConfigText, readConfigText, writeConfigText } from '../../configFile.js';
+import { MCP_SERVER_ID } from '../../mcp/names.js';
 import { describeRunningConfig } from '../runningConfig.js';
 import { buildStateSnapshot } from '../stateSnapshot.js';
 import { checked } from '../validation.js';
@@ -79,6 +81,30 @@ export function register(app: FastifyInstance, { system, artifactSigner, attachm
         // restart that would only stop the harness.
         canRestart: updates.onHandoff !== null,
       }) satisfies RunningConfigPayload,
+  );
+
+  // How the operator points their **own** Claude Code at this harness, for the
+  // config page's MCP tab. Fetched on open for the prompt book's reason: the
+  // bridge path, the two file paths and the tool descriptions are all fixed for
+  // the life of the process.
+  //
+  // The registration is asked of the channel rather than composed here. It is one
+  // command an operator pastes exactly once, and the only thing worse than not
+  // offering it is offering a path that was right in development — the bridge is
+  // resolved from the server module's own URL, so it is correct in a checkout and
+  // in a `dist` install without either of them being a case anyone has to think
+  // about.
+  app.get(
+    '/api/mcp',
+    async () =>
+      ({
+        running: system.desktop.running(),
+        serverId: MCP_SERVER_ID,
+        registration: system.desktop.registration(),
+        credentialPath: system.desktop.credentialPath(),
+        skillPath: config.validation.desktopSkillPath,
+        tools: system.desktop.advertised(),
+      }) satisfies McpChannelPayload,
   );
 
   /**

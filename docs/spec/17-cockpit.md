@@ -1441,7 +1441,7 @@ showing (`?keys=`). `keys` rather than `group` because the tickets tab already o
 surfaces reading one parameter is a page that opens showing whatever the other one was set to, which
 `test/cockpitPlace.test.ts`'s round-trip caught on the day it was written.
 
-Six sections: **Values**, **Raw file**, **CI policy**, **Prompts**, **Notifications**, **Theme**. Fetched on
+Seven sections: **Values**, **Raw file**, **CI policy**, **Prompts**, **MCP**, **Notifications**, **Theme**. Fetched on
 open for the prompt book's reason — the config is read once at boot, so polling would be paying for a
 constant; the page re-reads after a write and when the socket says the file moved. Values are grouped,
 and each one that differs from the built-in default is marked: the question an operator opens this to
@@ -1769,6 +1769,32 @@ Every effective value is computed by `describeCiPolicy` on the server
 it cannot claim a routing the dispatcher would not take. Read-only, and deliberately: `ci.checks` is an
 **ordered** rule list where the order is the semantics, so a rule editor is its own shape and its own
 decision. The config tab saves the list _whole_, which is the part #401 covers.
+
+### The MCP tab
+
+`web/src/components/McpTab.tsx`, reading `GET /api/mcp` ([16](16-http-api.md#get-apimcp)). How the
+operator points their **own** Claude Code at this harness, in the three steps it actually takes:
+register the bridge once, ask for a check with `/lubbdubb 284:C`, and what the channel can do when it
+answers.
+
+**The tab exists because the one manual step in an otherwise unconditional channel had nowhere to be
+read.** Every start binds the socket, mints the credential and rewrites the skill; the operator's half
+is a single `claude mcp add`, and it was written down in two places, neither of which is where anybody
+looks: a boot line that has scrolled away, and [11](11-mcp-tools.md#the-desktop-channel). A channel
+nobody registered fails the way this repo's sharp edges do — the **Copy desktop prompt** button on a
+goal's validation section reaches nothing, and a harness that never asks for a check to be run here
+looks exactly like one that has no checks needing it.
+
+**Nothing on the tab is written down in the cockpit.** The command line comes from the channel's own
+`registration()`, the paths from `validation.*`, the tools from what `tools/list` would answer — see
+[16](16-http-api.md#get-apimcp) for why each is asked rather than composed. What the tab adds is the
+one thing a payload cannot carry: the argv **quoted as a shell needs it back**. `process.execPath` is
+routinely `C:\Program Files\nodejs\node.exe`, and unquoted that line registers a server
+called `C:\Program` — which succeeds, and fails later as a channel that will not connect.
+
+A channel that is not listening is said so, above a command that is otherwise correct: the stable
+socket is refused when another harness already holds it, and the honest answer is what the tab draws
+rather than a registration that would connect to the other one.
 
 ## Spend
 

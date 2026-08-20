@@ -19,6 +19,7 @@ import type {
   Job,
   JobSchedule,
   LessonStatus,
+  McpChannelPayload,
   OpenPullRequest,
   PetCatalogue,
   CiPolicyDescription,
@@ -2401,6 +2402,20 @@ export const demoApi = {
   // to fill the demo panel would be a duplicate free to drift from the originals
   // with nothing to catch it, so the demo shows an empty book and says so.
   getPrompts: () => Promise.resolve({ dir: null, templates: [] as PromptTemplateView[] }),
+  // There is no harness behind the demo, so there is no socket to register and no
+  // credential minted anywhere. Answered as a channel that is *down* rather than
+  // with a plausible-looking command line: a registration that pointed at nothing
+  // is the one thing this tab must never hand somebody, and the tab already draws
+  // the not-running case honestly.
+  getMcp: (): Promise<McpChannelPayload> =>
+    Promise.resolve({
+      running: false,
+      serverId: 'lubbdubb',
+      registration: { command: 'node', args: [] },
+      credentialPath: '',
+      skillPath: '',
+      tools: [],
+    }),
   // And the pet catalogue, for the third time and the same reason: what exists and
   // what it costs is decided by tables in `src/pets/`, which the web bundle
   // deliberately does not import. A hand-written demo copy of twenty species would

@@ -5316,6 +5316,82 @@ body {
   color: var(--cn-red-ink);
 }
 
+/* ---------- MCP section ---------- */
+/* The MCP tab: three numbered cards and two paste-able lines. Every colour here
+   is a token for the reason the sheet states once — a hex at a use site is a
+   surface that stays dark when somebody switches to Light. */
+.mcp {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 92ch;
+}
+.mcp-down {
+  border-color: var(--cn-amber);
+}
+.mcp-step > h3 {
+  gap: 10px;
+}
+/* The step number, sized off the card heading rather than set in a circle: the
+   cards are already a sequence, and the digit only has to say which. */
+.mcp-n {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--cn-panel-2);
+  border: 1px solid var(--cn-line);
+  color: var(--cn-fg-dim);
+  font: 600 10.5px var(--cn-mono);
+}
+/* The command and the copy button on one line. `overflow-wrap: anywhere` rather
+   than a scroller: a Windows bridge path is long, and a line an operator has to
+   scroll sideways to read is one they cannot check before they run it. */
+.mcp-cmd {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin: 0 13px 12px;
+  padding: 9px 11px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  background: var(--cn-panel-2);
+}
+.mcp-cmd code {
+  flex: 1;
+  min-width: 0;
+  font: 11.5px var(--cn-mono);
+  line-height: 1.6;
+  color: var(--cn-fg);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+.mcp-foot {
+  border-bottom: 0;
+  padding-top: 0;
+}
+.mcp-tools {
+  list-style: none;
+  margin: 0;
+  padding: 0 13px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.mcp-tools li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+.mcp-tool {
+  font: 600 11.5px var(--cn-mono);
+  color: var(--cn-accent);
+}
+
 /* ---------- theme section ---------- */
 /* The Theme section of the config page. A shared component, so it styles itself
    only through the tokens — which here is also a demonstration: the surface that

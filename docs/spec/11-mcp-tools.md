@@ -24,7 +24,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `report_finding`     | File a claim for an operator: something noticed outside the agent's own task, or a fact about the repository its docs do not state.                                                                                                                                                                                     |
 | `request_human_task` | Ask for work only a person can do. Files a durable work item, parks nobody, dispatches nobody.                                                                                                                                                                                                                          |
 | `note_progress`      | Say in one line what the agent is working on right now.                                                                                                                                                                                                                                                                 |
-| `link_ticket`        | File the tracker item for a filed finding or a bug an operator raised: the agent hands over the title and body, or names an existing item it duplicates.                                                                                                                                                                 |
+| `link_ticket`        | File the tracker item for a filed finding or a bug an operator raised: the agent hands over the title and body, or names an existing item it duplicates.                                                                                                                                                                |
 | `conclude_work`      | Say whether the **issue** the agent was dispatched for is finished. The only thing that concludes a ticket in the harness's view.                                                                                                                                                                                       |
 | `assay_issue`        | The gate in front of the work: say whether the issue an assayer was dispatched to judge has a goal that can be worked from. Fenced to `issue:<n>:assay` origins.                                                                                                                                                        |
 | `assess_issue`       | The second look: say whether the issue an assessor was dispatched to judge is actually delivered. Fenced to `issue:<n>:assess` origins.                                                                                                                                                                                 |
@@ -262,7 +262,7 @@ a story from the cockpit (see [13](13-jobs-and-findings.md#filing-a-ticket)).
   calls it leaves a visible unfinished filing rather than a silent one, which is the point of the two
   statuses.
 - **The target comes from the credential, never an argument.** `agent → task → its job:<id> origin →
-  the finding or the bug filing that job was created for`. A job is created for at most one of the
+the finding or the bug filing that job was created for`. A job is created for at most one of the
   two, so there is nothing to disambiguate; and there is no id to point at somebody else's, so an agent
   on any other kind of task resolves to neither and is told so. Same discipline as `report_finding`,
   and here it is the whole access check. `AgentManager.filingTarget` answers it **before** the create,
@@ -451,7 +451,7 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
   class the branch gate and the reconciler already avoid by sharing one.
 - **The plan behind the origin is found with `originIssueNumber`, never `planOriginIssue`.** The part
   arm is the only one that needs the plan and a part origin is the only shape `planOriginIssue`
-  refuses — it is named after the *planner's* ref, and confines plan ingestion to it. Reached for
+  refuses — it is named after the _planner's_ ref, and confines plan ingestion to it. Reached for
   here it resolved every part agent's plan to `null`, so every one of them was refused "issue #N has
   no plan" and opened its pull request by hand: on the default branch rather than the rung beneath
   it, un-stacked, unseeded and unlinked.
@@ -642,6 +642,12 @@ agent's:
   fixed command line, added once, that survives every restart and every reminted token.
 - **No `ALLOWED_MCP_TOOLS` equivalent.** The fleet's grants exist because nobody is at the prompt to
   approve a call ([Launch flags](#launch-flags)). Here somebody is, on their own machine.
+
+The registration is the operator's **only** manual step, and the cockpit's **MCP tab** is where it is
+read: `GET /api/mcp` ([16](16-http-api.md#get-apimcp)) answers the argv, the two paths and the tool
+list off the running channel, and `web/src/components/McpTab.tsx` draws them as three steps with the
+command quoted for a shell ([17](17-cockpit.md#the-mcp-tab)). It is still printed at boot as well —
+the two are one call to `registration()`, so neither can describe a bridge the other does not.
 
 Per-connection state is the reason `SocketChannel` mints a connection id: a claim belongs to one
 connection, so closing that terminal releases it and a second terminal sharing the same token cannot

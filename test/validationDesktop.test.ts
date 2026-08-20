@@ -5,6 +5,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildSystem, type System } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
+import { buildApp } from '../src/server/app.js';
+import type { McpChannelPayload } from '../src/wire.js';
+import { shellArgv } from '../web/src/components/McpTab.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -41,6 +44,9 @@ import type { Issue, IssueDelivery, Plan, ValidationCheck } from '../src/types.j
  */
 
 const NOW = '2025-01-01T00:00:00.000Z';
+
+/** The Windows path separator, spelled once — a literal backslash in a test string is a reading hazard. */
+const BS = String.fromCharCode(92);
 
 interface ToolResultText {
   content: { type: 'text'; text: string }[];
@@ -640,4 +646,74 @@ test('the snapshot ships a live claim, and `withLiveClaim` drops an expired one'
   assert.equal(expired.claimedBy, null, 'and an expired one is not drawn at all');
   assert.equal(expired.claimedAt, null, 'neither half, so nothing can read a claim back out of it');
   system.store.close();
+});
+
+/**
+ * What the cockpit's MCP tab hands an operator.
+ *
+ * The tab is the only place the one manual step in this whole channel is written
+ * down where somebody looks for it, and every way of getting it wrong is silent:
+ * a registration naming the fleet bridge connects and refuses every call, a
+ * hand-written tool list describes a channel that has since changed, and an
+ * unquoted Windows path registers a server called `C:\Program`. So the payload is
+ * asserted against the channel it describes rather than against a fixture.
+ */
+test('/api/mcp describes the desktop channel it is read from', async () => {
+  const system = build();
+  const { app } = await buildApp(system);
+  const payload = (await (await app.inject({ method: 'GET', url: '/api/mcp' })).json()) as McpChannelPayload;
+
+  // Exactly the desktop three, in the order `tools/list` gives them, each with the
+  // description an operator reads. A fleet tool here would mean the tab was
+  // describing `buildTools` — the one thing this channel is narrowed against.
+  assert.deepEqual(
+    payload.tools.map((t) => t.name),
+    [...DESKTOP_TOOL_NAMES],
+  );
+  for (const tool of payload.tools) assert.ok(tool.description.length > 0, `${tool.name} says what it is for`);
+
+  // The `--desktop` flag is what makes the bridge read the credential file rather
+  // than a launch config, so a registration without it is a command that connects
+  // to nothing.
+  assert.equal(payload.serverId, 'lubbdubb');
+  assert.equal(payload.registration.args.at(-1), '--desktop');
+  assert.match(payload.registration.args[0] ?? '', /bridge\.mjs$/);
+  assert.equal(payload.credentialPath, system.desktop.credentialPath());
+
+  // Nothing called `listen()` on this system's channel, and the tab says so
+  // instead of handing over a command that would reach nothing.
+  assert.equal(payload.running, false);
+
+  await app.close();
+  system.store.close();
+});
+
+test('the channel reports itself running only while it is listening', async () => {
+  const system = build();
+  assert.equal(system.desktop.running(), false, 'a constructed channel is inert until it binds');
+  const { server } = await desk(system);
+  assert.equal(server.running(), true);
+  await server.close();
+  assert.equal(server.running(), false, 'a closed channel stops advertising a credential it has removed');
+  system.store.close();
+});
+
+/**
+ * Windows is the case this exists for and it is not hypothetical: `process.execPath`
+ * is routinely `C:\Program Files\nodejs\node.exe`, and unquoted that line registers
+ * a server called `C:\Program` — which succeeds, and fails later as a channel that
+ * will not connect.
+ */
+test('the registration command quotes a path with spaces', () => {
+  const windows = shellArgv([
+    'C:' + BS + 'Program Files' + BS + 'nodejs' + BS + 'node.exe',
+    'C:' + BS + 'lubbdubb' + BS + 'bridge.mjs',
+    '--desktop',
+  ]);
+  assert.ok(windows.startsWith('"C:' + BS + 'Program Files'), 'the interpreter path is quoted whole');
+  assert.ok(windows.endsWith('bridge.mjs --desktop'), 'nothing without a space is quoted');
+  assert.equal(
+    shellArgv(['/usr/bin/node', '/srv/lubbdubb/bridge.mjs', '--desktop']),
+    '/usr/bin/node /srv/lubbdubb/bridge.mjs --desktop',
+  );
 });

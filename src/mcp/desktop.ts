@@ -160,6 +160,35 @@ export class McpDesktopServer {
   }
 
   /**
+   * Whether the channel is up. The cockpit's MCP tab says so rather than handing
+   * over a registration that would connect to nothing — or, on the one failure
+   * this channel has, to the *other* harness holding the stable socket.
+   *
+   * @public read by the `/api/mcp` route.
+   */
+  running(): boolean {
+    return this.token !== null;
+  }
+
+  /**
+   * What `tools/list` would answer, for the operator-facing note. Built from the
+   * live registry rather than listed again in the cockpit: a fourth tool, or a
+   * reworded description, would otherwise be advertised in one place and
+   * described in another.
+   *
+   * The session handed in is a throwaway — nothing here reads a claim, and a real
+   * one would put this call in the per-connection map for no reason.
+   *
+   * @public read by the `/api/mcp` route.
+   */
+  advertised(): { name: string; description: string }[] {
+    return buildDesktopTools(this.opts, { label: '', held: null }).map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+    }));
+  }
+
+  /**
    * The credential the bridge reads. 0600 for the fleet launch config's reason:
    * the token is a bearer credential, and a file is why it never has to appear in
    * argv where `ps` would show it.

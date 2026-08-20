@@ -16,6 +16,7 @@ import type {
   IssueFiled,
   PetCatalogue,
   PlanHistory,
+  McpChannelPayload,
   PromptsPayload,
   RetrospectivePayload,
   RunningConfigPayload,
@@ -219,6 +220,9 @@ const realApi = {
   // server from the same defaults `classifyCiFailures` reads, so the tab cannot
   // claim a routing the dispatcher would not take.
   getCiPolicy: () => authFetch('/api/ci-policy').then((r) => json<CiPolicyPayload>(r)),
+  // How to register this harness with the operator's own Claude Code, read off
+  // the running desktop channel rather than written down in the tab that draws it.
+  getMcp: () => authFetch('/api/mcp').then((r) => json<McpChannelPayload>(r)),
   // Ask an agent to create a tracker item for work nothing external accounts for.
   // An operator's click, never a rule: see src/graph/unrecorded.ts.
   fileWorkItem: (ref: string) => post(`/api/work/${encodeURIComponent(ref)}/file`),
