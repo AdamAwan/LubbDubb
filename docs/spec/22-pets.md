@@ -1,7 +1,8 @@
 # 22 — Pets
 
 `src/pets/`. On by default; `pets.enabled: false` stops the scan and hides the vivarium without
-deleting anything.
+deleting anything, and `pets.visible: false` hides it while the scan goes on filling it up.
+→ [Configuration](#configuration)
 
 An **egg** drops when you do something in the cockpit, and a **pet** comes out of it when you click
 it. **Beats** accrue from what the fleet spends,
@@ -568,8 +569,9 @@ reached from the nav.
 
 `web/src/components/PetsPage.tsx` draws four things — the two constants and the **rate per action**,
 the tier weights as a bar, every species banded by rarity, and the matrix of every action against
-every tier it can roll. The tab is absent from the nav when `pets.enabled` is off, and `tabBody`
-refuses a stale `?tab=pets` URL for the same reason.
+every tier it can roll. The tab is absent from the nav whenever the snapshot ships no vivarium —
+`pets.enabled` off, or `pets.visible` off — and `tabBody` refuses a stale `?tab=pets` URL for the
+same reason.
 
 The rate is drawn per action rather than as one figure because that is what it is: since the drop
 was priced against how often each kind comes up, a single number would make whichever button the
@@ -836,8 +838,8 @@ refuses by returning a 400, never by throwing ([16](16-http-api.md#request-valid
 
 The **collection** has no read route. `PetState` rides on the state snapshot with everything else
 the cockpit draws, so the vivarium updates on the same socket as the rail above it — and it is
-**null** rather than empty when `pets.enabled` is off, so the cockpit draws nothing at all instead
-of an enclosure that reads as a deployment nobody has used.
+**null** rather than empty when `pets.enabled` is off or `pets.visible` is, so the cockpit draws
+nothing at all instead of an enclosure that reads as a deployment nobody has used.
 
 The **catalogue** is the opposite case and so is fetched: it is the same bytes on every request of
 a build, and a constant riding a snapshot that ships every heartbeat is paid for forever. It takes
@@ -890,9 +892,33 @@ transaction, so there is no window in which a pet has been paid for and not grow
 
 ## Configuration
 
-| Key            | Default | Does                                                        |
-| -------------- | ------- | ----------------------------------------------------------- |
-| `pets.enabled` | `true`  | Off stops the scan and hides the vivarium. Nothing is lost. |
+| Key            | Default | Does                                                                         |
+| -------------- | ------- | ---------------------------------------------------------------------------- |
+| `pets.enabled` | `true`  | Off stops the scan and hides the vivarium. Nothing is lost.                  |
+| `pets.visible` | `true`  | Off hides the vivarium and its tab, and stops nothing. The collection grows. |
+
+**Two switches, and the difference between them is what the second one is for.** `enabled: false` is
+the whole feature not running: no scan, no rolls, no vivarium, and — because off has never deleted
+anything — a collection sitting exactly where it was. `visible: false` is the same cockpit and a
+running vivarium behind it: the scan still runs on every cycle, actions still roll, and pets still
+hatch into a page nobody is looking at. It is the setting for an operator who wants the harness
+without the animals on their screen, and it is deliberately not `enabled` — turning the feature off
+for a quarter and back on decides, months in advance, that a quarter of real work was worth nothing,
+because an action stamped before the vivarium's start rolls nothing forever after. Hidden costs
+nothing and hands the whole accrual back the moment it is turned on.
+
+Both are gated in exactly one place each. `visible` is read by `PetKeeper.state()` and nowhere else,
+so there is no path by which hiding the enclosure can reach the roll; everything that hatches, feeds,
+blends or clears asks `enabled`. What `state()` returns when hidden is the same `null` that off
+returns, and the cockpit is not told which it was: the tab is absent, the rail's enclosure is absent,
+and a stale `?tab=pets` URL reads "Pets are hidden on this deployment." A second flavour of null
+would be a second case every surface has to handle for a distinction none of them would draw
+differently.
+
+`pets.visible` is **live** — it has an arm in `configApply.ts`, which assigns onto the policy object
+the keeper closed over, so the enclosure goes on the next heartbeat rather than the next restart.
+`pets.enabled` is not: it gates the scan and the clearance, and those are decisions worth taking at a
+boot. → [02](02-configuration.md#liveness)
 
 **That is the whole of it, and the shortness is the point.** `beatsPerDollar`, `rates`,
 `rarity` and `blendYield` were all keys here once. Each of them was a way of writing a pet into
@@ -922,11 +948,13 @@ roll keeps the decision; setting pity near the expected gap is what takes it awa
 watching for, and the answer to one is now a change in this table, in a release everybody gets,
 rather than a dial one deployment turns and the rest do not.
 
-`enabled` survives because off is the one direction that cannot mint anything.
+`enabled` survives because off is the one direction that cannot mint anything, and `visible` because
+it cannot reach the roll at all.
 
 `PetKeeper` takes the rates as a third constructor argument, defaulted to `PET_RULES`. That is a
 **test seam and nothing else** — `src/system.ts` passes two arguments, and `test/pets.test.ts`
-asserts that `configFields.ts` exposes `pets.enabled` alone and that `PetPolicy` holds no number.
+asserts that `configFields.ts` exposes `pets.enabled` and `pets.visible` alone and that `PetPolicy`
+holds no number.
 
 ## Authenticity
 
@@ -1068,9 +1096,9 @@ pruned a finding or restored an older database has not forged anything.
   and not in the table is a source that pays out only while that route is the one that settles it.
 - **A rate is never a config key again.** Every number in `PET_RULES` is one an operator setting it
   could use to hatch a vivarium that looks exactly like an earned one, from inside the cockpit, with
-  nothing anywhere able to tell. `test/pets.test.ts` asserts that `pets.enabled` is the only `pets.`
-  path in `configFields.ts` and that `PetPolicy` holds no number — the assertion is the fix, not the
-  thing to loosen.
+  nothing anywhere able to tell. `test/pets.test.ts` asserts that `pets.enabled` and `pets.visible`
+  are the only `pets.` paths in `configFields.ts` and that `PetPolicy` holds no number — the
+  assertion is the fix, not the thing to loosen. A third key is a switch or it is a rate.
 - **A check that could accuse a pet must decline on a database it cannot judge.** Three of the six
   already do: `broken-chain` skips a null link, `unearned` skips anything not stamped by this same
   clean build, and `impossible` checks every tier's candidate rather than the rolled one. All three

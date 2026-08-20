@@ -83,6 +83,14 @@ const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
   issueStateColours: (next, deps) => {
     deps.running.issueStateColours = next.issueStateColours;
   },
+  // `PetKeeper` closed over `config.pets` at construction and reads
+  // `policy.visible` on every `state()`, so the field is assigned onto the object
+  // it holds — replacing `running.pets` wholesale would leave the keeper on the
+  // old policy while the config page said the change had applied. Live because
+  // this one is pure presentation: nothing it can reach hatches, feeds or clears.
+  'pets.visible': (next, deps) => {
+    deps.running.pets.visible = next.pets.visible;
+  },
   // The dispatcher took `{checks: ci.checks ?? []}` at construction, so this one
   // has to hand it a new policy rather than assign and hope.
   'ci.checks': (next, deps) => {

@@ -21,9 +21,18 @@ import { collectActions } from './scan.js';
  *
  * `enabled` is safe to keep because off is the one direction that cannot mint
  * anything: it hides the vivarium and stops the scan, and deletes nothing.
+ *
+ * `visible` is the same safety in the other direction: it hides the vivarium and
+ * changes nothing else. The scan still runs, the rolls still land and the
+ * collection still grows behind it — so an operator who does not want animals on
+ * their cockpit is not also deciding, months in advance, that the work they did
+ * meanwhile was worth nothing. Turning it back on shows what accrued. Neither
+ * switch is a number, which is what keeps a collection meaning the same thing on
+ * every deployment. → `docs/spec/22-pets.md#configuration`
  */
 export interface PetPolicy {
   enabled: boolean;
+  visible: boolean;
 }
 
 /** A refusal the route returns as a 400, or the pet the act produced. */
@@ -166,9 +175,18 @@ export class PetKeeper {
     return this.store.clearVivarium(VIVARIUM_RESET);
   }
 
-  /** What the cockpit draws, or null when the feature is off. */
+  /**
+   * What the cockpit draws, or null when the feature is off — **or merely
+   * hidden**, which the cockpit is not told apart from off and must not be: a
+   * second flavour of null is a second thing every surface reading it has to
+   * handle, for a distinction it would draw nothing different for.
+   *
+   * Hidden is the only gate in this class that is not `enabled`. Everything that
+   * hatches, feeds or clears stays on `enabled` alone, so a vivarium nobody is
+   * looking at goes on filling up. → `docs/spec/22-pets.md#configuration`
+   */
   state(): PetState | null {
-    if (!this.policy.enabled) return null;
+    if (!this.policy.enabled || !this.policy.visible) return null;
     // One ledger for the whole grid rather than two queries per card: the snapshot
     // is what the socket redraws, and a per-pet read here is a per-pet read on
     // every pulse.

@@ -550,8 +550,10 @@ export interface CockpitState {
   plans: Plan[];
   /**
    * The vivarium (`docs/spec/22-pets.md`), or **null** when `pets.enabled` is off
-   * — which is what the cockpit reads to draw nothing at all, rather than an
-   * empty enclosure that looks like a deployment nobody has used.
+   * or `pets.visible` is — which is what the cockpit reads to draw nothing at all,
+   * rather than an empty enclosure that looks like a deployment nobody has used.
+   * The two spell one null on purpose: nothing the cockpit draws differs between
+   * a feature that is off and one that is merely out of sight.
    *
    * Rides on the snapshot rather than a route of its own so the corner of the rail
    * updates on the same socket as the queue above it.
