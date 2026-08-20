@@ -211,6 +211,7 @@ export function useCockpit(): CockpitStatus {
             : current.collapsed.filter((n) => n !== issueNumber),
         })),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
+      setUpNextProfile: (origin, profile) => then(api.setUpNextProfile(origin, profile)),
 
       upgrade: (action, opts) => then(api.upgrade(action, opts)),
       checkBuild: () => then(api.checkBuild()),

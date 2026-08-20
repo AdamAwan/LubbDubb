@@ -8,6 +8,7 @@ import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
 import { PriorityStore } from './priority.js';
+import { ProfileOverrideStore } from './profileOverrides.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { LessonStore } from './lessons.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
@@ -86,6 +87,7 @@ import type {
   GoalPriority,
   PlanStatus,
   PriorityOverride,
+  ProfileOverride,
   Proposal,
   StackLanding,
   StackLandingStatus,
@@ -136,6 +138,7 @@ export class Store {
   private readonly jobs: JobStore;
   private readonly schedules: JobScheduleStore;
   private readonly priority: PriorityStore;
+  private readonly profileOverrides: ProfileOverrideStore;
   private readonly findings: FindingStore;
   private readonly lessons: LessonStore;
   private readonly humanTasks: HumanTaskStore;
@@ -217,6 +220,7 @@ export class Store {
     this.jobs = new JobStore(ctx);
     this.schedules = new JobScheduleStore(ctx);
     this.priority = new PriorityStore(ctx);
+    this.profileOverrides = new ProfileOverrideStore(ctx);
     this.findings = new FindingStore(ctx);
     this.lessons = new LessonStore(ctx);
     this.humanTasks = new HumanTaskStore(ctx);
@@ -350,6 +354,18 @@ export class Store {
   }
   reconcilePriorityOverrides(trackedOrigins: readonly string[], ttlMs: number): void {
     this.priority.reconcilePriorityOverrides(trackedOrigins, ttlMs);
+  }
+
+  // -- Profile overrides (operator "run this queued row on X") --
+
+  setProfileOverride(origin: string, profile: string | null): void {
+    this.profileOverrides.setProfileOverride(origin, profile);
+  }
+  listProfileOverrides(): ProfileOverride[] {
+    return this.profileOverrides.listProfileOverrides();
+  }
+  reconcileProfileOverrides(trackedOrigins: readonly string[], ttlMs: number): void {
+    this.profileOverrides.reconcileProfileOverrides(trackedOrigins, ttlMs);
   }
 
   // -- Goal priority (the operator's "this goal first, and everything under it") --

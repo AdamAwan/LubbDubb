@@ -428,6 +428,40 @@ independently of position. Overriding a hold _into_ dispatch is a different feat
 An override is written by `POST /api/upnext/order` (replace-all) and pruned once its origin stops
 being tracked — see [16](16-http-api.md) and [14](14-persistence.md).
 
+### Pricing one queued row
+
+Every queued row carries the profile it would launch on: `QueueItem.profile`, the name resolved by
+`resolveAgentProfile` from the same two inputs the dispatch itself is stamped from, with
+`profileSource` saying which level of the chain answered (`pin`, `rule`, `default`). It is resolved
+in the cut walk, so a `held` or `waiting` row is priced as well as a dispatching one — "what will
+this cost when it finally runs" is precisely the question being asked of a row nobody has started.
+It is `null` where a run would carry no `--model` flag at all: no `agentModels`, or a rule with no
+entry and no `default`.
+
+The operator can change it from the row. That writes a **profile override keyed on the candidate's
+origin** — the same key and the same lifecycle a priority override has: stored in
+`profile_overrides`, reaching the dispatcher as `DispatchContext.profileOverrides`, pruned by the
+same `upNextOverrideTtlMs` sweep once the harness stops tracking the origin. Two tables rather than
+two columns on one, because "do this sooner" and "do this cheaper" are independent statements and an
+operator who makes one has made nothing of the other.
+
+It is the **narrowest and highest-precedence level of the pin chain**, ahead of the plan's part
+profile and the goal's tag ([02](02-configuration.md#pinning-one-goal-to-a-profile)): those are
+standing statements about work, this is a person reading the queue as it stands now. The chain is
+applied in one place — `StageContext.pinFor`, where a candidate becomes a dispatched action — and
+the override is consulted _outside_ `pinnedProfileFor` because it is keyed on the whole origin
+rather than on the `issue:<n>` subtree. That is what makes the lever reach a `pr:<n>:ci` or a
+`pr:<n>:comments` row, which has no goal tag and no part to carry one, and which is the row an
+operator most often recognises as mechanical.
+
+It is **standing, not one-shot**: nothing consumes it at dispatch, so the pin chain stays a pure
+function of the origin and a retry of the run it priced runs on the same profile. And it **prices
+only** — an override never un-holds a held candidate and never lifts one over the headroom cut, the
+same way a priority override only orders.
+
+Written by `POST /api/upnext/profile` — see [16](16-http-api.md#post-apiupnextprofile) — and drawn
+as the `ProfilePicker` on each Up next row ([17](17-cockpit.md)).
+
 ### Marking a goal a priority
 
 The override above arranges **one pulse's queue, origin by origin**, and that is the wrong grain for

@@ -5,6 +5,7 @@ import { blueprintTicketFields } from '../../blueprintTicket.js';
 import { watchLabelFor } from '../../watchLabels.js';
 import { ATTACHMENT_BODY_LIMIT, AttachmentsField, prepareAttachments } from '../../jobs/attachments.js';
 import { deriveJobTitle } from '../../jobs.js';
+import { orderedProfiles } from '../../agents/modelPolicy.js';
 import { checked, IdParams, optionalText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -191,6 +192,48 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       hub.broadcast({ type: 'world:changed' });
       const report = await harness.runCycle('manual');
       return { ok: true, report };
+    }),
+  );
+
+  // Price one queued row: which model profile the next dispatch on this origin
+  // runs on. An empty `profile` clears the override, on the same
+  // terms `/api/issues/:number/profile` uses — "no override" is the state a row
+  // starts in, not a third value.
+  //
+  // Refused by name against the configured profiles, exactly as the goal pin is:
+  // the operator's own config is refused at boot, a hand-typed label is tolerated
+  // because a human wrote it on a ticket the harness cannot police, and a cockpit
+  // control that can only send what the server sent it is refused at the boundary
+  // — it can only be reached by a stale tab or a hand-rolled request, and either
+  // way naming a profile that resolves to nothing would price nothing while
+  // reading as a decision taken.
+  //
+  // Ordering is untouched, and so is every hold: the override says what a row runs
+  // on, never when. A cycle runs immediately so the queue redraws with the new
+  // price — and so a row that was about to dispatch takes it.
+  const UpNextProfileBody = z.object({
+    origin: z
+      .string({ required_error: 'origin required', invalid_type_error: 'origin required' })
+      .trim()
+      .min(1, 'origin required'),
+    profile: optionalText('profile'),
+  });
+  app.post(
+    '/api/upnext/profile',
+    checked({ body: UpNextProfileBody }, async ({ body, reply }) => {
+      const wanted = body.profile ?? null;
+      const known = orderedProfiles(config.agentModels).map((p) => p.name);
+      if (wanted !== null && !known.includes(wanted))
+        return reply.code(400).send({
+          error:
+            known.length === 0
+              ? 'This deployment configures no agentModels.profiles, so there is nothing to pick.'
+              : `"${wanted}" is not one of this deployment's profiles: ${known.join(', ')}.`,
+        });
+      store.setProfileOverride(body.origin, wanted);
+      hub.broadcast({ type: 'world:changed' });
+      const report = await harness.runCycle('manual');
+      return { ok: true, profile: wanted, report };
     }),
   );
 

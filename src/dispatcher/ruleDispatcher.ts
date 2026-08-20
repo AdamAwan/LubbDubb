@@ -11,7 +11,7 @@ import {
 } from './issuePickup.js';
 import { dispatchVerdict, DEFAULT_COOLDOWN, type CooldownPolicy } from './dispatchCooldown.js';
 import { type CiPolicy } from '../ci/ciPolicy.js';
-import { DISPATCH_PIPELINE, type RuleConditions, type StageRuleId } from './rules.js';
+import { DISPATCH_PIPELINE, type DispatchRuleId, type RuleConditions, type StageRuleId } from './rules.js';
 import { rankByPriorityOverride } from './priorityOverride.js';
 import { expeditedOrigins } from './goalPriority.js';
 import { deliveryHold } from '../delivery/delivery.js';
@@ -19,6 +19,7 @@ import { candidateParents } from '../issueRelations.js';
 import { assayHold } from '../intake/assay.js';
 import { resolveModelTag } from '../modelLabels.js';
 import { pinnedProfileFor } from '../profilePin.js';
+import { resolveAgentProfile } from '../agents/modelPolicy.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from '../validation/policy.js';
 import { PromptTemplates, defaultPromptTemplates } from './promptTemplates.js';
 import {
@@ -247,14 +248,35 @@ export class RuleDispatcher implements Dispatcher {
     // keep everything ranked as the visible queue. A cooling-down candidate is
     // shown but never dispatched, whatever the headroom.
     let headroom = ctx.agentHeadroom;
+    // What one row says about its own price. A closure rather than three inline
+    // copies because the three arms below differ in status and in nothing else,
+    // and the arm that got a different answer would be the one nobody reads.
+    const priceOf = (
+      origin: string,
+      rule: DispatchRuleId,
+    ): Pick<QueueItem, 'profile' | 'profileSource' | 'override'> => {
+      const override = s.profileOverrides.get(origin);
+      const resolved = resolveAgentProfile(ctx.modelPins?.models, rule, s.pinFor(origin));
+      return {
+        profile: resolved?.name ?? null,
+        ...(resolved ? { profileSource: resolved.source } : {}),
+        ...(override === undefined ? {} : { override }),
+      };
+    };
     const upcoming: QueueItem[] = [];
     for (const c of ranked) {
       if (s.activeOrigins.has(c.origin)) continue; // staffed — not "up next"
       const { origin, rule, title, kind, branch, reason } = c;
       // Absent unless it is true, so an unflagged row keeps the shape it had.
       const flag = expedited(origin) ? { expedited: true } : {};
+      // What this row would launch on, answered by the same two inputs and the
+      // same function the dispatch itself resolves through — never a second
+      // reading of the policy. A held or waiting row is priced too: "what will it
+      // cost when it finally runs" is the whole question the operator is asking of
+      // the row they are about to make cheaper.
+      const priced = priceOf(origin, rule);
       if (c.held) {
-        upcoming.push({ origin, rule, title, kind, branch, status: c.held, reason, ...flag });
+        upcoming.push({ origin, rule, title, kind, branch, status: c.held, reason, ...flag, ...priced });
       } else if (headroom > 0) {
         // The one place a pin is stamped onto a dispatch. Every agent dispatch
         // routes through the candidate list — an inline `raw.push` of a
@@ -264,9 +286,9 @@ export class RuleDispatcher implements Dispatcher {
         s.raw.push(pinAction(c.action, s.pinFor(c.origin)));
         s.activeOrigins.add(origin);
         headroom -= 1;
-        upcoming.push({ origin, rule, title, kind, branch, status: 'dispatching', reason, ...flag });
+        upcoming.push({ origin, rule, title, kind, branch, status: 'dispatching', reason, ...flag, ...priced });
       } else {
-        upcoming.push({ origin, rule, title, kind, branch, status: 'waiting', reason, ...flag });
+        upcoming.push({ origin, rule, title, kind, branch, status: 'waiting', reason, ...flag, ...priced });
       }
     }
 
@@ -312,6 +334,12 @@ export class RuleDispatcher implements Dispatcher {
     // so none of them can hold a different opinion about an issue. Empty with the
     // funnel off.
     const plansByOrigin = new Map((ctx.plans ?? []).map((p) => [p.originRef, p]));
+
+    // The operator's per-origin profile overrides, as a lookup. Read once for the
+    // same reason the plans are: `pinFor` is called per candidate, and per-cycle
+    // work that is per-candidate work is how a queue of thirty rows becomes thirty
+    // linear scans.
+    const profileOverrides = new Map((ctx.profileOverrides ?? []).map((o) => [o.origin, o.profile]));
 
     // The operator's pickup list with the state the harness writes itself folded
     // in — see `effectivePickupStates`. Every state gate below reads this; the one
@@ -470,10 +498,19 @@ export class RuleDispatcher implements Dispatcher {
       },
       deliveryParked,
       assayParked,
-      // The pins, resolved from the world's own tags and the plans' own parts.
-      // Both lookups are total and both answer null when this deployment has no
-      // `agentModels` — see `pinnedProfileFor`.
+      // The pins, resolved from the operator's overrides, the world's own tags and
+      // the plans' own parts. Every lookup is total and all of them answer null
+      // when this deployment has no `agentModels` — see `pinnedProfileFor`.
+      //
+      // The override is consulted *outside* `pinnedProfileFor` rather than as a
+      // fourth level inside it, because it is keyed on the whole origin and not on
+      // the `issue:<n>` subtree: a queue row against `pr:<n>` — the conflict fix
+      // this lever was asked for — has no goal and no part, and a level that only
+      // answered for issues would leave exactly the rows an operator most wants to
+      // price cheaply with a control that does nothing.
+      profileOverrides,
       pinFor: (originRef: string | null) =>
+        (originRef === null ? undefined : profileOverrides.get(originRef)) ??
         pinnedProfileFor(originRef, {
           goal: (issueNumber) =>
             resolveModelTag(

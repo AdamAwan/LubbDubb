@@ -297,7 +297,7 @@ export function AgentDrawer({
                     className={`chip small${task.profileSource === 'pin' ? ' warn' : ''}`}
                     title={
                       task.profileSource === 'pin'
-                        ? 'Pinned — this goal, or its plan, named this profile rather than taking its rule’s'
+                        ? 'Pinned — this goal, its plan, or the Up next row it was priced on named this profile rather than taking its rule’s'
                         : task.profileSource === 'rule'
                           ? 'This dispatch rule’s own profile'
                           : 'The fleet default, for a rule with no profile of its own'

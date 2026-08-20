@@ -8,6 +8,7 @@
 // `VITE_DEMO` branch in api.ts is statically false there, so Rollup drops it.
 import type {
   TicketRow,
+  QueueItem,
   TicketsPayload,
   AppState,
   BuildReading,
@@ -1339,6 +1340,50 @@ class DemoServer {
     return { ok: true };
   }
 
+  /**
+   * Price one queued row (demo mirror of POST /api/upnext/profile). The real
+   * dispatcher re-resolves the whole pin chain on the next pulse; here the row
+   * carries the answer, so the override and the profile it resolves to are set
+   * together — which is the same two facts, and the demo has no rule table to
+   * fall back through when the override is cleared.
+   */
+  async setUpNextProfile(origin: string, profile: string | null): Promise<{ ok: true }> {
+    const item = this.state.upcoming?.items.find((i) => i.origin === origin);
+    if (item) {
+      if (profile === null) {
+        // Both halves go back, not just the name: a row restored to its rule's
+        // own profile while still reading `pin` would draw "Pinned (standard)"
+        // over a row nothing pins — the price would be right and the sentence
+        // beside it wrong.
+        const inherited = this.inheritedProfile.get(origin);
+        delete item.override;
+        item.profile = inherited?.profile ?? null;
+        item.profileSource = inherited?.source;
+      } else {
+        if (item.override === undefined)
+          this.inheritedProfile.set(origin, { profile: item.profile ?? null, source: item.profileSource });
+        item.override = profile;
+        item.profile = profile;
+        item.profileSource = 'pin';
+      }
+      this.addDecision(
+        'no_op',
+        'executed',
+        profile === null ? `cleared the profile override on ${origin}` : `${origin} will run on "${profile}"`,
+      );
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /**
+   * What each overridden row resolved to before the operator priced it, so
+   * clearing the override puts the row back rather than blanking it. The real
+   * harness needs no such memory — it re-derives the answer from the world every
+   * pulse.
+   */
+  private readonly inheritedProfile = new Map<string, { profile: string | null; source: QueueItem['profileSource'] }>();
+
   private applyInjection(ev: Record<string, unknown>): void {
     const kind = String(ev.kind ?? '');
     const world = this.state.world;
@@ -2490,6 +2535,7 @@ export const demoApi = {
   setValidation: (issueNumber: number, checkId: string, act: ValidationAct) =>
     getServer().setValidation(issueNumber, checkId, act),
   reorderUpNext: (origins: string[]) => getServer().reorderUpNext(origins),
+  setUpNextProfile: (origin: string, profile: string | null) => getServer().setUpNextProfile(origin, profile),
   launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
     getServer().launchJob(job),
   cancelJob: (id: string) => getServer().cancelJob(id),
