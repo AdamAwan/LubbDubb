@@ -5,12 +5,13 @@ import type {
   IssueAssay,
   IssueDelivery,
   IssueInstruction,
+  LocalRun,
   PlanPart,
   Retrospective,
   ScratchPadSummary,
   WorldSnapshot,
 } from '../types.js';
-import type { CockpitState, PlanPartView, ValidationResourceView } from '../wire.js';
+import type { CockpitState, LocalRunView, PlanPartView, ValidationResourceView } from '../wire.js';
 import { buildRefUrls, decisionSubjectRef, issueCommentRef } from './refUrls.js';
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
@@ -33,6 +34,7 @@ import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
 import { assaySignalQuery } from '../intake/assay.js';
 import { classifyCiFailures } from '../ci/ciPolicy.js';
 import { validationVerdict } from '../validation/verdict.js';
+import { localRunIsLive } from '../store/localRuns.js';
 import { validationResourcePath } from '../validation/resources.js';
 import { withLiveClaim } from '../validation/desktop.js';
 import { watchLabelFor } from '../watchLabels.js';
@@ -453,6 +455,9 @@ export function buildStateSnapshot(
       // `repoRoot` is otherwise only reachable through the running-config route,
       // which is a settings page the plan sheet does not read.
       desktopFolder: config.repoRoot,
+      // The fact rather than the text: the instruction is prose only the session
+      // needs, and the cockpit's question is whether it can offer a start at all.
+      localRunConfigured: config.localRun.instruction.trim() !== '',
       // The container policy itself, because the backlog draws a container as a
       // heading over its children rather than as a row beside them — a question
       // about the item's type that no per-item verdict answers.
@@ -534,6 +539,11 @@ export function buildStateSnapshot(
     // Null when the feature is off, so the cockpit draws nothing at all rather
     // than an empty enclosure that reads as a deployment nobody has used.
     pets: system.pets.state(),
+    // The live run, or the last one that ended — the panel asks one question and
+    // "nothing is up, the last attempt failed like this" is an answer to it. `live`
+    // is derived here rather than in the cockpit so which statuses count is decided
+    // once, by the thing that sets them.
+    localRun: localRunView(system.localRun.current()),
     // The validation plan beside the plan graph it hangs off — the checks whole,
     // superseded ones included, because "this check was withdrawn" is a thing the
     // sheet has to be able to say.
@@ -793,4 +803,16 @@ function buildUsage(system: System, unattributedCostUsd: number) {
     rateLimits: system.rateLimits?.readLatest() ?? null,
     unattributedCostUsd,
   };
+}
+
+/**
+ * The run as the cockpit reads it, or null when nothing has ever been started.
+ *
+ * `live` is the only thing added, and adding it here is the point: which statuses
+ * count as a running environment is one rule, and it belongs beside the writer that
+ * sets them rather than in a component deciding whether to draw a Stop button.
+ */
+function localRunView(run: LocalRun | null): LocalRunView | null {
+  if (run === null) return null;
+  return { ...run, live: localRunIsLive(run) };
 }

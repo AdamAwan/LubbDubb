@@ -52,6 +52,8 @@ export class FakeWorktreeManager implements Worktrees {
   readonly removed: string[] = [];
   /** Every branch `deleteBranch` was called for, in order — the local half of a reap. */
   readonly deleted: string[] = [];
+  /** Every ref `ensurePreview` was asked for, in order. */
+  readonly previewed: string[] = [];
 
   private readonly root: string;
   private readonly size: number;
@@ -82,6 +84,21 @@ export class FakeWorktreeManager implements Worktrees {
   ensureReadOnly(key: string, of: string): Promise<string> {
     this.ensured.push({ branch: key, base: of, readOnly: true });
     return this.slotFor(key);
+  }
+
+  /**
+   * The local run's checkout — **one directory, outside the pool**, which is the
+   * property worth modelling and the one a test would otherwise get wrong. It never
+   * takes a slot, never rejects for exhaustion, and comes back the same path for
+   * every ref: what the real manager does to the tree between refs is `git reset`
+   * and `git clean`, and there is no repository here for either to be observable
+   * against. Every call is recorded so a test can assert which ref was asked for.
+   */
+  ensurePreview(ref: string): Promise<string> {
+    this.previewed.push(ref);
+    const dir = resolve(this.root, 'preview');
+    mkdirSync(dir, { recursive: true });
+    return Promise.resolve(dir);
   }
 
   private slotFor(branch: string): Promise<string> {

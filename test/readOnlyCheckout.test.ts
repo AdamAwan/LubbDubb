@@ -259,7 +259,7 @@ function git(dir: string, args: string[]): string {
 }
 
 function manager(repo: string, size = 4, held: (name: string) => boolean = () => false): WorktreeManager {
-  return new WorktreeManager(repo, join(repo, '.wt'), { size, held });
+  return new WorktreeManager(repo, join(repo, '.wt'), { size, held }, join(repo, '.preview'));
 }
 
 /** A repo that ignores `deps/` — the dependency tree in miniature. */

@@ -1360,6 +1360,25 @@ are different situations with different next steps.
 `POST /api/agents/:id/kill` stays available on a park — it is the only other verdict — and settles it
 the way it settles any other agent.
 
+### `POST /api/local-run`
+
+`{issue}` — start the machine's one dev environment on that goal's code, stopping whatever was running.
+**Start is also swap**: one environment, so there is no separate route and no second name for one
+transition. Refuses with a 400 and the reason when nothing is configured to start or the checkout will
+not prepare. → [23](23-local-runs.md#routes)
+
+### `POST /api/local-run/stop`
+
+No body and no id. There is one run, and "stop whatever is running" is the whole request — an id would
+let a stale panel stop a run that had already been swapped out from under it, and would mean the same
+thing whenever it was right.
+
+### `GET /api/local-run/output`
+
+The session's last lines. Fetched rather than shipped on the snapshot: the tail is up to two hundred
+lines and the snapshot goes out on every heartbeat and every `dirty`, so putting it there would pay for
+a log nobody has open — the argument that keeps the work graph and the prompt book off it too.
+
 ### Static SPA
 
 When `web/dist` exists it is served statically, with a not-found handler that returns `index.html` for

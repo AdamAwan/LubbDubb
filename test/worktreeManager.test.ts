@@ -41,7 +41,7 @@ function commitOn(dir: string, branch: string, file: string): void {
 
 /** A manager over `repo` with nothing in flight anywhere — the plain test posture. */
 function manager(repo: string, size = 4, held: (branch: string) => boolean = () => false): WorktreeManager {
-  return new WorktreeManager(repo, join(repo, '.wt'), { size, held });
+  return new WorktreeManager(repo, join(repo, '.wt'), { size, held }, join(repo, '.preview'));
 }
 
 /**
@@ -446,20 +446,20 @@ test('the pool bound defaults to the concurrency cap plus slack', () => {
 test('a restart holds the slot of work still outstanding, and releases it once recovery settles', async () => {
   const repo = initRepo();
   const root = join(repo, '.wt');
-  const before = new WorktreeManager(repo, root, { size: 2, held: () => false });
+  const before = new WorktreeManager(repo, root, { size: 2, held: () => false }, join(repo, '.preview'));
   const restored = await before.ensure('issue/1');
 
   // The restart. A fresh manager's in-memory leases are empty by construction, so
   // what is left is the branch the slot is checked out on and whether the harness
   // still has work in flight on it — which a restored orphan does.
   const outstanding = new Set(['issue/1']);
-  const after = new WorktreeManager(repo, root, { size: 2, held: (b) => outstanding.has(b) });
+  const after = new WorktreeManager(repo, root, { size: 2, held: (b) => outstanding.has(b) }, join(repo, '.preview'));
   assert.notEqual(await after.ensure('issue/2'), restored, "a restored agent's slot is not reissued under it");
 
   // `requeue` and `remove` settle the task, and that is the boot release: nothing
   // in the manager had to remember anything for it to happen.
   outstanding.clear();
-  const later = new WorktreeManager(repo, root, { size: 2, held: () => false });
+  const later = new WorktreeManager(repo, root, { size: 2, held: () => false }, join(repo, '.preview'));
   assert.equal(await later.ensure('issue/3'), restored);
 });
 

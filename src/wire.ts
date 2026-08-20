@@ -92,6 +92,7 @@ import type {
   PetWallet,
   JobSchedule,
   Lesson,
+  LocalRun,
   Plan,
   PlanPart,
   PlanRevision,
@@ -327,6 +328,22 @@ export interface LessonView extends Lesson {
   rendered: boolean;
 }
 
+/**
+ * The local run as the cockpit reads it.
+ *
+ * `LocalRun` plus the one derived fact, and the derivation is here rather than in
+ * the cockpit for the reason every reading is: "is this going" is a rule about which
+ * statuses count as live, and a cockpit re-deriving it would be a second opinion
+ * able to disagree with the runner about whether to draw a Stop button.
+ *
+ * **The output is not here.** The tail is up to two hundred lines and the snapshot
+ * is polled; it has its own route, fetched when the panel opens, on the same
+ * argument that keeps the work graph and the prompt book off the snapshot.
+ */
+export interface LocalRunView extends LocalRun {
+  live: boolean;
+}
+
 export interface PlanPartView extends PlanPart {
   /**
    * How deep in the stack this part sits — `partDepth`, the longest path to a part
@@ -470,6 +487,16 @@ interface CockpitConfig {
    */
   desktopFolder: string;
   /**
+   * `localRun.instruction` is set to something, so a start has something to run.
+   *
+   * The **fact**, not the text: the instruction is several sentences of operator
+   * prose that only the session needs, and the cockpit's whole question is whether
+   * to offer a start or to say what is missing. It is here rather than on
+   * {@link LocalRunView} because a deployment that has never started anything has no
+   * run to hang it off, and that is exactly when it matters.
+   */
+  localRunConfigured: boolean;
+  /**
    * `issueContainerTypes` — the work-item types that hold work rather than being
    * it. Shipped because the backlog draws a container as a *heading* over its
    * children rather than as a row beside them, and that is a decision about the
@@ -559,6 +586,20 @@ export interface CockpitState {
    * updates on the same socket as the queue above it.
    */
   pets: PetState | null;
+  /**
+   * The machine's one dev environment (`docs/spec/23-local-runs.md`), or **null**
+   * when nothing has ever been started — which the cockpit draws as a quiet
+   * indicator rather than as nothing, because "no environment is up" is the reading
+   * an operator opens this to get.
+   *
+   * The **last** run rides here once it has ended, not only a live one: a start that
+   * failed is the case somebody actually hits, and its reason has to be somewhere to
+   * read after the process is gone.
+   *
+   * On the snapshot rather than a route of its own for `pets`' reason — the
+   * indicator sits in the same reads row as the rest and updates on the same socket.
+   */
+  localRun: LocalRunView | null;
   planParts: PlanPartView[];
   /**
    * Every plan's validation checks and the resources they name, keyed to a plan

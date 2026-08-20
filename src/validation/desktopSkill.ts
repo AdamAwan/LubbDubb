@@ -29,11 +29,12 @@ import type { ErrorRecorder } from '../errorLog.js';
  * somewhere that already knows what to do. What the plan *says* still comes back
  * from `plan_read`.
  *
- * `run <n>` is the third of those links, and the same division holds: this file
- * says the run comes before the checks and that nothing is claimed until the
- * operator picks one, while *how* to start the application comes back from
- * `local_run` — the `local-run` prompt, which each deployment overrides with its
- * own command.
+ * `run <n>` is the third of those links, and the division is sharper still: the
+ * **harness** starts the application, in a checkout it keeps for the purpose, so
+ * this file says only how to ask and what the answer means. *How* this deployment
+ * starts is `localRun.instruction`, which the session the harness spawns is handed
+ * directly — a session reading it here would be a second copy of an operator's
+ * config, and one that could not be stopped from the cockpit.
  */
 export const DESKTOP_SKILL = `---
 name: lubbdubb
@@ -84,31 +85,35 @@ plan left alone is still approvable exactly as it was.
 
 ## Run it locally
 
-The operator wants to see this goal's work running on the machine you are on.
-They pressed a button on the goal page; you are what happens next.
+The operator wants to see this goal's work running on this machine. **You do not
+start it — the harness does.** It keeps one checkout for this, brings the
+application up in it, and holds the process; your job is to ask, then say what
+happened.
 
-1. **Ask how.** \`local_run\` with the goal number. Back comes how this project is
-   started — the deployment's own words, often a single command — the branches its
-   parts sit on, and one directory to keep out of.
-2. **Get it up.** Follow what it said. A goal whose parts have merged is already
-   on the integration branch \`local_run\` names, so there is usually nothing to
-   check out — and **do not check a branch out in this checkout** even when there
-   is. It is the clone the harness cuts its agents' worktrees from, and a branch
-   checked out here is one it can no longer hand to an agent. If the work you
-   want is not on the branch you are on, say so and ask where they keep a
-   checkout for looking at things.
-3. **Say where it landed.** The URL and the port. Mention anything you had to do
-   that the instructions did not cover — that sentence is how the instructions
-   get better, and the operator is the person who can fix them.
-4. **Then offer the checks.** \`validation_read\` the goal and say what is
+1. **Ask for it.** \`local_run\` with the goal number. The harness stops whatever
+   was running, points its checkout at that goal's code, and starts the
+   application. Called with no goal it starts nothing and just reports the state.
+2. **Say what came back.** Whether it is running, on what URL, and — if it is not
+   — what the reply says went wrong. The output tail comes back with it, and that
+   is where the reason for a failed start actually is.
+3. **Then offer the checks.** \`validation_read\` the goal and say what is
    outstanding. **Claim nothing yet.** They opened this to look at the thing, and
    claiming a check locks it away from the fleet while they do. Wait for them to
    pick one, then carry on at
    [run a validation check](#run-a-validation-check).
 
-**Do not fix what will not start.** If it does not come up, say what stopped you
-and stop there. Editing code, configuration or dependencies to get it running
-changes the thing they were about to look at, on a branch somebody is reviewing.
+**Only one goal runs locally at a time**, because there is one dev environment on
+this machine. So asking for a second one is asking to stop the first, and it is
+worth saying that out loud before you do it if they did not.
+
+**\`running\` is not a reading.** It means the session the harness spawned finished
+without failing — nothing has opened that port. Open the URL and look before you
+say anything about whether the goal works.
+
+**Do not start it yourself, and do not check a branch out here.** This session is
+in the clone the harness cuts its agents' worktrees from: a branch checked out
+here is one it can no longer hand to an agent, and a server you start yourself is
+one nothing can stop from the cockpit.
 
 ## Run a validation check
 
@@ -138,9 +143,9 @@ which check if more than one is outstanding.
    copy, and only one check can be claimed at a time. If something else holds a
    claim, the refusal names it; say so and stop rather than working around it.
 3. **Run it.** Follow the procedure as written, on this machine. Drive the
-   browser, use the login, do the steps. If it needs the application up and you
-   do not know how this project starts, \`local_run\` says — that is what it is
-   for, and guessing at a start command wastes more time than asking.
+   browser, use the login, do the steps. If it needs the application up, \`local_run\`
+   with this goal's number brings it up — the harness owns that, so do not start
+   anything yourself and do not guess at a start command.
 4. **Report it.** \`validation_report\` once, with what you saw.
 
 ### The three answers

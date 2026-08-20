@@ -64,6 +64,8 @@ import { orderedProfiles } from './agents/modelPolicy.js';
 import { Harness } from './harness.js';
 import { RuntimeControl } from './runtimeControl.js';
 import { PetKeeper } from './pets/keeper.js';
+import { LocalRunner } from './localRun/runner.js';
+import { localRunRef } from './localRun/ref.js';
 import { LiveConfig } from './configApply.js';
 import { ErrorLog } from './errorLog.js';
 import type { ErrorLogEntry } from './types.js';
@@ -141,6 +143,15 @@ export interface System {
    * caller has to remember to check twice.
    */
   pets: PetKeeper;
+  /**
+   * The machine's one dev environment (`src/localRun/`): which goal's code is in it,
+   * and the process holding it up. Always constructed, `pets`' reason — with no
+   * `localRun.instruction` every start refuses with that as the reason, which is a
+   * surface that says why rather than one that is quietly missing. Exposed because
+   * it is route- and tool-driven rather than a pass on the pulse: an operator
+   * clicks, or their own Claude asks, and nothing about it happens on a cycle.
+   */
+  localRun: LocalRunner;
   /**
    * Applies a reloaded config to this running process, and holds what is waiting
    * for a restart. The one apply path a cockpit save and a hand edit to
@@ -317,6 +328,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         },
         held: (branch) => store.findActiveTaskByBranch(branch) !== null,
       },
+      config.localRunRoot,
       errors,
     );
   // Branch reality for plan reconciliation — read-only, and the seam a test swaps
@@ -540,9 +552,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     store,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,
-    templates: prompts,
-    defaultBranch: config.defaultBranch,
-    worktreeRoot: config.worktreeRoot,
+    // Lazily, for `proposals`' reason: the runner is built further down, and both
+    // this channel and the cockpit's panel must start *the same* run.
+    localRun: (): LocalRunner => localRun,
     requirePlanApproval: config.planning.requireApproval,
     // Lazy for the fleet deps' reason a few lines above: `plan_amend` withdraws
     // the superseded approval card and puts the fresh one up, and both the desk
@@ -941,6 +953,41 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     }
   });
 
+  // The machine's one dev environment. Constructed unconditionally — with no
+  // `localRun.instruction` every start refuses with that as its reason, which is a
+  // surface that says why rather than one that is quietly absent.
+  const localRun = new LocalRunner({
+    store,
+    worktrees,
+    // The same factory the fleet's agents come from, already narrowed by
+    // `agentMode` — so a test's fake runtime holds the environment up too, and this
+    // module never learns that a real `claude` exists.
+    sessions: agentSetup.factory,
+    // By reference, so an instruction corrected in the cockpit reaches the next
+    // start: `LIVE_ARMS` assigns a new object onto the running config.
+    policy: () => config.localRun,
+    claudeCommand: config.claudeCommand,
+    claudeArgs: config.claudeArgs,
+    permissionMode: config.agentPermissionMode,
+    defaultBranch: config.defaultBranch,
+    refFor: (originRef) => {
+      const plan = store.getPlanByOrigin(originRef);
+      return plan ? localRunRef(store.listPlanParts(plan.id)) : null;
+    },
+    reap: reapTree,
+    errors,
+  });
+  // A row saying `running` after a restart describes a process this harness never
+  // spawned — the pid belongs to something dead, or to whatever has since been
+  // given that number. Settled at boot rather than trusted, the same refusal a
+  // stale desktop claim gets.
+  const stale = store.endStaleLocalRuns('the harness restarted; this run did not survive it');
+  if (stale > 0)
+    errors.record({
+      source: 'cycle',
+      message: `Marked ${stale} local run(s) stopped: a restart does not carry a dev environment with it.`,
+    });
+
   return {
     config,
     store,
@@ -961,6 +1008,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     updates,
     runtimeControl,
     pets,
+    localRun,
     liveConfig,
     configFile: opts.configFile ?? configFilePath(),
     issuePickup,

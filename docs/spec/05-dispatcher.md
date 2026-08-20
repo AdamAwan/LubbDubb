@@ -1061,7 +1061,9 @@ Not every entry is a prompt. `pr-title` is rendered straight onto a pull request
 rather than an instruction to an agent.
 
 **Retired ids stay in the book.** `work-item-ticket` and `blueprint-ticket` are no longer rendered —
-[#394](13-jobs-and-findings.md#filing-a-ticket) replaced the desk agents they were sent to — but
+[#394](13-jobs-and-findings.md#filing-a-ticket) replaced the desk agents they were sent to — and
+neither is `local-run`, whose instruction moved to the `localRun.instruction` config field so an
+operator could edit it in the cockpit without a restart ([23](23-local-runs.md#the-instruction-is-config-not-a-prompt)). But
 deleting them would make `loadPromptTemplates` throw on a deployment that had overridden one, which is
 a harness that will not boot over a file it no longer reads. They carry `retired: true` instead, which
 `describe()` ships to the Prompts panel, so an override that is no longer sent says so rather than

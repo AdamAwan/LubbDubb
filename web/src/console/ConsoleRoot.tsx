@@ -19,6 +19,7 @@ import { PetsPanel } from '../components/PetsPanel.js';
 import { PetsPage } from '../components/PetsPage.js';
 import { Vivarium } from './Vivarium.js';
 import { BuildPanel } from '../components/BuildPanel.js';
+import { LocalRunPanel } from '../components/LocalRunPanel.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
 import { InjectPanel } from '../components/InjectPanel.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
@@ -213,6 +214,7 @@ const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string>
   launch: 'Launch',
   build: 'Build',
   pets: 'Vivarium',
+  localRun: 'Running locally',
 };
 
 /**
@@ -348,6 +350,21 @@ function panelBody(
             fiveHourCostUsd: state.usage.windows.fiveHourCostUsd,
             now: view.now,
           })}
+        />
+      );
+    case 'localRun':
+      return (
+        <LocalRunPanel
+          run={state.localRun}
+          configured={state.config.localRunConfigured}
+          // The goals the cockpit already has, watched ones first: what is startable
+          // is what is being worked on, and a list of every issue the tracker has
+          // ever held would bury it.
+          goals={state.world.issues}
+          now={view.now}
+          onStart={(issueNumber) => actions.startLocalRun(issueNumber)}
+          onStop={() => actions.stopLocalRun()}
+          fetchOutput={() => actions.localRunOutput()}
         />
       );
     case 'build':

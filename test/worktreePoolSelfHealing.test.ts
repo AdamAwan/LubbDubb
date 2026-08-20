@@ -64,7 +64,7 @@ function strand(dir: string): void {
 
 /** A manager whose bound is fixed, for the tests whose subject is the reclaim. */
 function manager(repo: string, size: number, errors?: ReturnType<typeof recorder>): WorktreeManager {
-  return new WorktreeManager(repo, join(repo, '.wt'), { size, held: () => false }, errors);
+  return new WorktreeManager(repo, join(repo, '.wt'), { size, held: () => false }, join(repo, '.preview'), errors);
 }
 
 // ---------------------------------------------------------------------------
@@ -85,6 +85,7 @@ test('the pool bound follows the live cap, not the cap the harness booted with',
       },
       held: () => false,
     },
+    join(repo, '.preview'),
     recorder(),
   );
 

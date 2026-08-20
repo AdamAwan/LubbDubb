@@ -61,6 +61,10 @@ class WedgedWorktrees implements Worktrees {
       );
     return this.inner.ensureReadOnly(key, of);
   }
+  /** Nothing here dispatches a local run; the seam still has to be whole. */
+  ensurePreview(ref: string): Promise<string> {
+    return this.inner.ensurePreview(ref);
+  }
   remove(branch: string): Promise<void> {
     return this.inner.remove(branch);
   }
