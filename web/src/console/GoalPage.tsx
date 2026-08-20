@@ -11,6 +11,7 @@ import { renderRichText } from '../components/richText.js';
 import { issueTypeTone } from '../issueGroups.js';
 import { fmtUsd, relTime } from '../components/util.js';
 import { Ref } from '../components/refs.js';
+import { desktopDeepLink, localRunPrompt } from '../cockpit/desktopLink.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { watchBucket } from '../worldBuckets.js';
 import { stateColour } from '../stateColour.js';
@@ -369,6 +370,21 @@ function Validation({
             </button>
           )}
         </span>
+        {/* The one control on this card that is not about a particular check, and
+            it sits here because most checks cannot begin until it has been used:
+            it opens the operator's own Claude Code and asks it to get the
+            application up. An anchor rather than a button — a deep link is a
+            destination — and outside `cn-more` so it reads as an action beside
+            that sentence rather than as part of it. Drawn unconditionally: the
+            `local-run` prompt always has a body, so there is nothing to check
+            first and no configuration state to fall out of step with. */}
+        <a
+          className="cn-linkish"
+          href={desktopDeepLink(desktopFolder, localRunPrompt(issue.number))}
+          title={`Opens your own Claude Code with "${localRunPrompt(issue.number)}" ready to send, so this goal’s work is running on the machine in front of you — then it offers you the checks.`}
+        >
+          run it locally ↗
+        </a>
       </h3>
       <div className="cn-vin">
         <ValidationSection

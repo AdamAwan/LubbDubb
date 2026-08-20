@@ -1012,12 +1012,14 @@ list, and a doc string.
 
 Ids: `issue-plan`, `issue-replan`, `discuss-plan` (retired), `plan-part`, `plan-approval`, `issue-shortfall`,
 `plan-part-escalation`, `issue-pickup`, `issue-pickup-escalation`, `issue-assess`, `issue-assay`,
-`issue-retro`, `validation-check`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
+`issue-retro`, `validation-check`, `local-run`, `pr-ci-fix`, `pr-base-update-behind`, `pr-base-update-conflict`,
 `pr-review-comment`, `pr-concern-escalation`, `pr-title`, `finding-ticket`, `raise-bug`,
 `work-item-ticket-body`, `blueprint-ticket-body`, and the retired `work-item-ticket` and
 `blueprint-ticket`. The filing ids are route-driven rather than dispatcher-driven — they are here
 because _how a ticket should be worded_ is the operator's opinion, which is what the book exists to
-make overridable.
+make overridable. `local-run` is here for the same reason and reaches nothing the dispatcher does:
+_how this project starts on a developer's machine_ is the operator's opinion too, and the tool that
+renders it is on the desktop channel ([20](20-validation.md#getting-the-application-up)).
 
 Not every entry is a prompt. `pr-title` is rendered straight onto a pull request, and the two
 `*-ticket-body` ids are written straight into the tracker: the harness files those two items itself

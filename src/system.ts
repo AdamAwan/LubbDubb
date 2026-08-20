@@ -510,6 +510,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
+  // Hoisted out of the RuleDispatcher's construction because the template book is
+  // no longer only the dispatcher's: `POST /api/findings/:id/file` renders
+  // `finding-ticket` from it, and the desktop channel below renders `local-run`,
+  // both of which must work whether or not a cycle is running.
+  const prompts = loadPromptTemplates(config.promptTemplatesDir);
+
   // The desktop channel (the operator's own Claude Code). Constructed
   // unconditionally so `system.desktop` is addressable, and inert until
   // `listen()` — which is the only thing that binds the stable socket or writes
@@ -520,6 +526,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     store,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,
+    templates: prompts,
+    defaultBranch: config.defaultBranch,
+    worktreeRoot: config.worktreeRoot,
     requirePlanApproval: config.planning.requireApproval,
     // Lazy for the fleet deps' reason a few lines above: `plan_amend` withdraws
     // the superseded approval card and puts the fresh one up, and both the desk
@@ -642,10 +651,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     inProgressState: config.issueInProgressState,
     containerTypes: config.issueContainerTypes,
   };
-  // Hoisted out of the RuleDispatcher's construction because the template book is
-  // no longer only the dispatcher's: `POST /api/findings/:id/file` renders
-  // `finding-ticket` from it, and that must work whether or not a cycle is running.
-  const prompts = loadPromptTemplates(config.promptTemplatesDir);
   const rules = new RuleDispatcher(
     issuePickup,
     {},

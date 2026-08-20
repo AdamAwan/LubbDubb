@@ -33,6 +33,7 @@ type PromptId =
   | 'issue-assay'
   | 'issue-retro'
   | 'validation-check'
+  | 'local-run'
   | 'pr-ci-fix'
   | 'pr-ci-gate'
   | 'pr-base-update-behind'
@@ -387,6 +388,27 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '**Do not report "passed" from evidence you did not gather.** A green build, a merged pull request, code that looks correct and a test suite that already covers it are none of them this check: it exists precisely because those had all happened and somebody still wanted the thing exercised. If you did not carry out the procedure, the answer is "handback".\n\n' +
       'If the check describes something that no longer exists — a screen that moved, a command that was renamed — call validation_amend to correct its wording rather than failing it, and then report against what you did.',
     doc: "Sent to a code agent when an operator has handed a validation check to the fleet and the goal is parked as delivered (rule `validate-check`). The check's own procedure, expectation and resources are *appended* to the rendered prompt rather than interpolated, so an override that never learned about them cannot silently drop the half the agent cannot act without. Placeholders: {number} {title} {letter} {root}.",
+  },
+  'local-run': {
+    placeholders: [],
+    template:
+      'Get this project running on this machine, so somebody can look at it.\n\n' +
+      'Nobody has told you how — this deployment has not replaced this prompt — so work it out from the ' +
+      'repository: the README, the scripts in `package.json` or whatever this stack uses instead, a ' +
+      'CONTRIBUTING or CLAUDE.md, a compose file. Then start it, wait until it is actually serving rather ' +
+      'than merely launched, and say where it landed: the URL and the port.\n\n' +
+      'If you cannot get it up, say what stopped you and stop there. Do not edit code, configuration or ' +
+      'dependencies to make it start — you were asked to run what is there, and a change that gets the app ' +
+      'running is a change nobody reviewed, on a branch somebody is about to look at.',
+    doc:
+      'Rendered for the `local_run` tool on the desktop channel: what the operator’s own Claude Code is told ' +
+      'when they hit **run it locally** on a goal, or when a validation check needs the application up before ' +
+      'it can be carried out. Nothing dispatches it — no agent, no branch, no worktree — so instructions that ' +
+      'assume one will mislead. **This is the prompt most worth overriding**: the default says "work out how ' +
+      'this project starts", and a deployment that knows the answer should say it here — the command, how long ' +
+      'it takes, which port it lands on, what has to be running first. Placeholders: none, on purpose. The ' +
+      'goal, its parts, their branches and the caution about the harness’s own worktrees come back as data ' +
+      'beside this text rather than as tokens inside it, so an override cannot drop them.',
   },
   'pr-ci-fix': {
     placeholders: ['number', 'title', 'branch'],

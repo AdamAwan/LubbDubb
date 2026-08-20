@@ -43,3 +43,19 @@ export function desktopDeepLink(folder: string, prompt: string): string {
 export function discussPrompt(issueNumber: number): string {
   return `/lubbdubb discuss ${issueNumber}`;
 }
+
+/**
+ * What the operator's Claude is asked when they hit *run it locally* on a goal —
+ * the skill's third argument form, and the same rule as the other two: the goal's
+ * number, because that is what `local_run` resolves parts and branches by.
+ *
+ * Unconditional, unlike the other two controls. There is no configuration to
+ * check first: the `local-run` prompt has a built-in default that says "work it
+ * out from the repository", so a deployment that has written nothing down still
+ * gets a session that tries — and a button drawn only where somebody had already
+ * configured it would be a dead end found by walking into it, which is the
+ * argument that made this whole channel unconditional.
+ */
+export function localRunPrompt(issueNumber: number): string {
+  return `/lubbdubb run ${issueNumber}`;
+}

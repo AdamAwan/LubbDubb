@@ -1,3 +1,4 @@
+import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
 import { validatePlanDocument } from '../plans/planDocument.js';
 import { ingestPlanDocument } from '../plans/planIngest.js';
 import { issueOrigin } from '../plans/planning.js';
@@ -22,7 +23,7 @@ import { PLAN_DOCUMENT_SCHEMA } from './planDocumentSchema.js';
 import { toolError, toolJson, type McpTool } from './protocol.js';
 
 /**
- * The five tools the operator's own Claude Code gets, and **only** these five.
+ * The six tools the operator's own Claude Code gets, and **only** these six.
  *
  * Narrowed by construction rather than by a filter over the fleet's set: there is
  * no code path from a desktop connection to `conclude_work`, `open_pr` or any of
@@ -32,8 +33,8 @@ import { toolError, toolJson, type McpTool } from './protocol.js';
  * and is held by a session nobody dispatched — the blast radius of a filter that
  * stopped filtering would be the whole harness.
  *
- * Read a plan, argue with it, amend it; take one check, report what you saw. That
- * is the entire surface.
+ * Read a plan, argue with it, amend it; get the application up, take one check,
+ * report what you saw. That is the entire surface.
  *
  * **`plan_amend` is not `plan_submit`.** They write the same document through the
  * same `ingestPlanDocument`, and they share the schema as one export rather than
@@ -50,6 +51,26 @@ export interface DesktopToolDeps {
   claimMinutes: number;
   /** `config.validationRoot` — where a goal's fixtures live, which the session has to be told. */
   validationRoot: string;
+  /**
+   * The prompt book, for `local_run`'s one rendered template.
+   *
+   * The same book the dispatcher renders from, rather than a second copy of the
+   * text: how a project starts is the operator's opinion, and the prompt book is
+   * where this repo already keeps the operator's opinions that are not the
+   * harness's business — `finding-ticket` and `docs-change` are there for exactly
+   * that reason.
+   */
+  templates: PromptTemplates;
+  /** `config.defaultBranch` — where a delivered goal's parts have landed. */
+  defaultBranch: string;
+  /**
+   * `config.worktreeRoot`, which the session is told to keep out of.
+   *
+   * Passed so the caution can name the actual directory: a warning about "the
+   * harness's worktrees" is one an operator's own instructions can contradict
+   * without either of them noticing, and a path is checkable.
+   */
+  worktreeRoot: string;
   /** `planning.requireApproval`, passed to ingestion exactly as `plan_submit` passes it. */
   requirePlanApproval?: boolean;
   /**
@@ -514,6 +535,79 @@ const READ_NEXT =
   'still fine and takes it off them for as long as you hold it.';
 
 /**
+ * How this project starts on this machine.
+ *
+ * The instruction is the `local-run` prompt, rendered — so a deployment that has
+ * written its own command down answers with it, and one that has not answers with
+ * "work it out from the repository". Either way the session is told something
+ * rather than left to guess in silence, which is the whole complaint this tool
+ * exists for: a check that says "open the page and click the thing" is unrunnable
+ * until somebody knows how to get the page up.
+ *
+ * **Not a field on `validation_read`.** That tool refuses a goal with no checks,
+ * deliberately and with a reason worth keeping — and a goal with no checks is
+ * exactly the goal somebody hits *run it locally* on. Two callers, one rendering,
+ * no second copy of the text.
+ *
+ * The caution is *beside* the instruction rather than inside it, because the
+ * template is operator-overridable and an override that never learned about the
+ * worktree pool would drop the one sentence here that prevents a silent and
+ * permanent failure: a process left holding a leased slot open stops that slot
+ * ever being cleaned or handed on, and on Windows every later dispatch onto its
+ * branch then fails `EBUSY` forever.
+ */
+const localRun: DesktopToolFactory = (deps) => ({
+  description:
+    'How to get this project running on this machine, as this deployment describes it, plus the branches a ' +
+    "goal's work sits on. Call it before starting the application — either because somebody wants to look at " +
+    'it, or because a validation check cannot be carried out until it is up.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      issue: {
+        type: 'number',
+        description:
+          'Optional. The goal you are about to look at, e.g. 284. Given, its parts come back with the branch ' +
+          'and pull request each one sits on.',
+      },
+    },
+  },
+  handler: (args) => {
+    const body = {
+      howToRun: deps.templates.render('local-run', {}),
+      integrationBranch: deps.defaultBranch,
+      caution:
+        `Two things not to do, both of which break the fleet quietly. Do not start anything long-running inside ` +
+        `${deps.worktreeRoot}: those directories are the harness's worktree pool, leased to agents one branch at ` +
+        'a time, and a process holding one open stops the slot ever being cleaned or handed on — on Windows every ' +
+        'later dispatch onto that branch then fails. And do not check a branch out in the checkout you are ' +
+        'sitting in: it is the clone the pool cuts its worktrees from, so a branch checked out here is a branch ' +
+        'the harness can no longer lease to an agent. If the work you want is not already on the branch you are ' +
+        'on, ask whoever sent you where they keep a checkout for looking at things.',
+    };
+    if (args.issue === undefined) return toolJson(body);
+    const ref = desktopIssueRef(args);
+    if (!ref.ok) return toolError(ref.error);
+    const found = decompositionFor(deps, ref.issue);
+    // A goal with no plan is not a refusal here, unlike everywhere else on this
+    // channel: the instruction above is most of why anybody called this, and it
+    // is the one tool with nothing to say about a decomposition.
+    if (!found.ok) return toolJson({ goal: ref.issue, ...body });
+    return toolJson({
+      goal: ref.issue,
+      ...body,
+      parts: deps.store.listPlanParts(found.plan.id).map((part) => ({
+        slug: part.slug,
+        title: part.title,
+        branch: part.branch,
+        pr: part.prNumber,
+        status: part.status,
+      })),
+    });
+  },
+});
+
+/**
  * The registry, a `Record` over {@link DESKTOP_TOOL_NAMES} for the fleet
  * registry's reason: a name with no factory fails to build, and a factory cannot
  * name itself something the list never declared.
@@ -524,6 +618,7 @@ const DESKTOP_TOOLS: Record<DesktopToolName, DesktopToolFactory> = {
   validation_report: validationReport,
   plan_read: planRead,
   plan_amend: planAmend,
+  local_run: localRun,
 };
 
 export function buildDesktopTools(deps: DesktopToolDeps, session: DesktopSession): McpTool[] {
