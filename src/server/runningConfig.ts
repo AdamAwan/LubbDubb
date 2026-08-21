@@ -1,4 +1,4 @@
-import { defaultConfig, type Config } from '../config.js';
+import { baselineConfig, type Config } from '../config.js';
 import { isLiveField } from '../configApply.js';
 import {
   CONFIG_FIELDS,
@@ -41,8 +41,28 @@ export interface RunningConfigEntry {
   path: string;
   /** The running value. Arrays and leaf objects are shipped whole. */
   value: unknown;
-  /** Whether this is the built-in default — false means somebody chose it. */
+  /**
+   * Whether the value is the one this operator would have without their own file
+   * — false means *they* chose it.
+   *
+   * The baseline is the built-in default with the targeted project's shared
+   * config folded in, not the default alone, and the two readings differ on every
+   * key a team sets. This one is the answer to both questions a row is asked:
+   * "did I choose this" and "what does clearing it leave", which are the same
+   * question because the form writes the operator's file and nothing else.
+   */
   isDefault: boolean;
+  /**
+   * Set when the baseline came from the project's shared config rather than the
+   * built-in default — so a row can say where an inherited value came from, and a
+   * reset can say what it would fall back to.
+   *
+   * Without it the two layers are indistinguishable on the glass: a value a
+   * teammate committed reads as a built-in default, and the operator who clears
+   * their own override to "get back to the default" gets the team's value with
+   * nothing having said so.
+   */
+  fromProject?: true;
   /** What the value is, so the form can draw a control rather than a text box. */
   type: ConfigFieldType;
   /** The members, for an `enum`. */
@@ -181,12 +201,18 @@ function sameValue(a: unknown, b: unknown): boolean {
  * without a field — and it is shown, unentered, because invisible is how a typo
  * survives.
  */
-function flatten(value: unknown, baseline: unknown, prefix: string, out: RunningConfigEntry[]): void {
+function flatten(
+  value: unknown,
+  baseline: unknown,
+  prefix: string,
+  out: RunningConfigEntry[],
+  project: Partial<Config>,
+): void {
   if (value === undefined) return;
   if (isPlainObject(value)) {
     const base = isPlainObject(baseline) ? baseline : undefined;
     for (const key of Object.keys(value)) {
-      flatten(value[key], base?.[key], prefix ? `${prefix}.${key}` : key, out);
+      flatten(value[key], base?.[key], prefix ? `${prefix}.${key}` : key, out, project);
     }
     return;
   }
@@ -194,6 +220,7 @@ function flatten(value: unknown, baseline: unknown, prefix: string, out: Running
     path: prefix,
     value,
     isDefault: baseline !== undefined && sameValue(value, baseline),
+    ...(readPath(project, prefix) !== undefined ? { fromProject: true as const } : {}),
     type: 'json',
     access: 'fileOnly',
     live: false,
@@ -203,7 +230,7 @@ function flatten(value: unknown, baseline: unknown, prefix: string, out: Running
 }
 
 /** One declared field, read out of the running config. `null` for an unset optional. */
-function entryFor(path: string, config: Config, baseline: Config): RunningConfigEntry | null {
+function entryFor(path: string, config: Config, baseline: Config, project: Partial<Config>): RunningConfigEntry | null {
   const field = configField(path);
   /* istanbul ignore next — callers iterate CONFIG_FIELDS, so the lookup always hits. */
   if (!field) return null;
@@ -216,6 +243,10 @@ function entryFor(path: string, config: Config, baseline: Config): RunningConfig
     // A path with no baseline (`github.owner`) has no default to be, so it is
     // reported as chosen — which it was.
     isDefault: base !== undefined && sameValue(value, base),
+    // Presence in the layer, not a comparison against the built-in default: a
+    // team that sets a key to the value it already had still set it, and a row
+    // that said otherwise would send the operator to the wrong file to change it.
+    ...(readPath(project, path) !== undefined ? { fromProject: true as const } : {}),
     type: field.type,
     ...(field.options ? { options: field.options } : {}),
     access: field.access,
@@ -228,10 +259,16 @@ function entryFor(path: string, config: Config, baseline: Config): RunningConfig
 
 /**
  * Describe a running config: every configured value, grouped, with the ones an
- * operator chose distinguished from the ones they inherited.
+ * operator chose distinguished from the ones they inherited — and, of those,
+ * the ones inherited from the team rather than from the build.
+ *
+ * `project` is the layer the targeted project's shared config contributed, not a
+ * config: the question a row answers is "did this key come from there", and a
+ * resolved config cannot say, since a team value equal to the default is
+ * indistinguishable from no value at all once it is merged.
  */
-export function describeRunningConfig(config: Config): RunningConfigGroup[] {
-  const baseline = defaultConfig();
+export function describeRunningConfig(config: Config, project: Partial<Config> = {}): RunningConfigGroup[] {
+  const baseline = baselineConfig(project);
   const claimed = new Set<string>();
   const groups: RunningConfigGroup[] = [];
 
@@ -241,7 +278,7 @@ export function describeRunningConfig(config: Config): RunningConfigGroup[] {
       claimed.add(key);
       for (const field of CONFIG_FIELDS) {
         if (field.path !== key && !field.path.startsWith(`${key}.`)) continue;
-        const entry = entryFor(field.path, config, baseline);
+        const entry = entryFor(field.path, config, baseline, project);
         if (entry) entries.push(entry);
       }
     }
@@ -252,7 +289,7 @@ export function describeRunningConfig(config: Config): RunningConfigGroup[] {
   const others: RunningConfigEntry[] = [];
   for (const key of Object.keys(config) as (keyof Config)[]) {
     if (claimed.has(key) || declared.has(key)) continue;
-    flatten(config[key], baseline[key], key, others);
+    flatten(config[key], baseline[key], key, others, project);
   }
   if (others.length > 0) groups.push({ title: 'Other', entries: others });
 

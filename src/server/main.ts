@@ -110,6 +110,20 @@ async function main(): Promise<void> {
     onChanged: () => hub.broadcast({ type: 'config:changed' }),
   });
 
+  // And the targeted project's shared config, on the same apply — because that
+  // file arrives by `git pull` rather than by an edit, and a team change that
+  // took effect only at the next restart would be a config the harness reads and
+  // does not run. Two watches rather than one over both paths: each holds the
+  // bytes it last saw, and `reload` folds every layer either way, so the file
+  // that moved is the only thing the two of them differ about.
+  const stopProjectConfigWatch = watchConfigFile({
+    filePath: system.projectConfigFile,
+    liveConfig: system.liveConfig,
+    errors: system.errors,
+    reload: () => loadDeploymentConfig(),
+    onChanged: () => hub.broadcast({ type: 'config:changed' }),
+  });
+
   // Everything that can start an agent is below this line. See the note above.
   const shutdown = (exitCode: number) => async (): Promise<void> => {
     console.log(
@@ -117,6 +131,7 @@ async function main(): Promise<void> {
     );
     system.harness.stop();
     stopConfigWatch();
+    stopProjectConfigWatch();
     // Interrupt (not kill) so the next boot offers this in-flight work for restore.
     system.agents.interruptAll();
     // The local run is *stopped*, not interrupted, and that asymmetry is the point:

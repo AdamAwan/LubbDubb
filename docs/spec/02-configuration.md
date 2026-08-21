@@ -8,9 +8,10 @@ loaders. There is no other configuration mechanism.
 - **`loadConfig(overrides)`** — `DEFAULTS` + the caller's overrides, then path resolution and
   validation. It reads **no file and no environment variable**, so the same arguments give the same
   config on any machine. This is what tests and embedders call.
-- **`loadDeploymentConfig(overrides)`** — the two ambient layers (`lubbdubb.config.json` and the env
-  overrides) folded in underneath the explicit ones, then `loadConfig`. This is what a process entry
-  point calls; `src/server/main.ts` is the only one.
+- **`loadDeploymentConfig(overrides)`** — the three ambient layers (the targeted project's
+  `lubbdubb.project.json`, `lubbdubb.config.json` and the env overrides) folded in underneath the
+  explicit ones, then `loadConfig`. This is what a process entry point calls; `src/server/main.ts` is
+  the only one.
 
 The split exists because the ambient layers make the config a function of the machine it loads on.
 The suite runs in a working copy of this repo, so an operator's own `lubbdubb.config.json` sitting
@@ -24,19 +25,30 @@ environment. `scripts/smoke.ts` builds a hermetic scenario against a throwaway r
 Values are merged in this order, later winning:
 
 1. `DEFAULTS` (in `src/config.ts`)
-2. `lubbdubb.config.json`, read from `process.cwd()` — absent is fine; unparseable throws with the
-   file path and the parse error
-3. Environment overrides: `PORT` → `port`, `LUBBDUBB_HOST` → `host`, `LUBBDUBB_DB` → `dbPath`,
+2. `lubbdubb.project.json`, read from `repoRoot` — the [project layer](#the-project-layer), shared by
+   a team through the repository the harness works on
+3. `lubbdubb.config.json`, read from `process.cwd()` — the operator's own; absent is fine,
+   unparseable throws with the file path and the parse error
+4. Environment overrides: `PORT` → `port`, `LUBBDUBB_HOST` → `host`, `LUBBDUBB_DB` → `dbPath`,
    `LUBBDUBB_REPO_ROOT` → `repoRoot`
-4. Explicit `overrides` passed to the loader (tests, embedding)
+5. Explicit `overrides` passed to the loader (tests, embedding)
 
-Layers 2 and 3 exist only under `loadDeploymentConfig`; `loadConfig` sees 1 and 4.
+Layers 2, 3 and 4 exist only under `loadDeploymentConfig`; `loadConfig` sees 1 and 5.
 
-Six keys are **deep-merged** rather than replaced, so a config file can set one field of them
-without dropping the rest: `integrations`, `planning`, `spendBurn`, `runway`, `selfUpdate`, `validation`, `auth`. The deep merge holds
-_between_ layers as well — an explicit `{planning: {maxConcurrentPartsPerIssue: 4}}` keeps the other
-`planning` fields the operator's file set. Everything else — including `issuePriorityLabels` and
-`ci.checks` — is replaced wholesale.
+Nine keys are **deep-merged** rather than replaced, so a config file can set one field of them
+without dropping the rest: `integrations`, `planning`, `pets`, `spendBurn`, `runway`, `selfUpdate`,
+`validation`, `localRun`, `auth`. The deep merge holds _between_ layers as well — an explicit
+`{planning: {maxConcurrentPartsPerIssue: 4}}` keeps the other `planning` fields the operator's file
+set, and an operator's `planning` block keeps the fields their team's set. Everything else —
+including `issuePriorityLabels` and `ci.checks` — is replaced wholesale.
+
+A layer carries **only what its file said**. The defaults are folded once, at the bottom, by
+`mergeConfig`; `mergeLayers` never folds them in. That is not tidiness — a layer that arrived dense
+(every field of a block present, the ones its file set and the defaults for the rest) does not merge,
+it replaces. With two layers nothing showed, because the only thing underneath a dense layer was the
+defaults it had copied. With three, it is the feature failing silently: an operator's
+`{"planning": {"gitFetchIntervalMs": 0}}` would arrive carrying the default part cap and shadow the
+one their team set, and the harness would run a policy no file on the machine states.
 
 ### Retired keys
 
@@ -89,6 +101,59 @@ network. A warning would scroll past in a boot log, so it is refused instead.
 
 No secret is ever a config key. The GitHub token comes from `GITHUB_TOKEN`, and the cockpit token
 from `LUBBDUBB_TOKEN` or a minted 0600 file, so `lubbdubb.config.json` stays safe to paste.
+
+## The project layer
+
+`lubbdubb.project.json`, at the root of the repository the harness works on, is the layer a **team**
+shares. It is committed. Everything about a project that is the same for everyone working on it —
+which branch is integrated onto, what each CI check means, where landed work travels, which tracker
+states count as pickup — belongs in one file in the repository rather than in each member's copy of a
+config, drifting apart from the day it is pasted.
+
+Each member's `lubbdubb.config.json` sits above it and wins: who they are, which models they
+dispatch on, how many agents their machine runs, where their database lives. Nobody has to choose
+between sharing a config and having their own.
+
+**Any key may appear in it, with one exception: `repoRoot`.** That file was read *because* `repoRoot`
+already resolved, so a value in it could only describe the search that found it — honouring it would
+mean re-reading from somewhere else, and dropping it would leave the fleet pointed at a repository
+the file in front of the operator disagrees with. It is refused by name, like a removed key. Where
+the harness points is settled by `lubbdubb.config.json` or `LUBBDUBB_REPO_ROOT`, from the operator's
+layers alone and *before* the project's file is looked for: a layer cannot be consulted about where to
+find itself.
+
+Two consequences worth stating rather than discovering:
+
+- **The file is read, not trusted less.** It gets exactly the reading an operator's own file gets — a
+  removed key is refused by name, a retired one warns and is dropped — and it may carry
+  `environments` and `localRun`, which are shell commands the harness runs on the operator's machine.
+  That is not a new exposure being opened: a harness pointed at a repository already dispatches agents
+  with write access into worktrees of it and runs its scripts. The file is read from the **checked-out
+  working tree** at `repoRoot`, so a branch — a pull request from anywhere — does not reach it before
+  somebody merges and the operator pulls.
+- **It is watched like the operator's own.** It arrives by `git pull` rather than by an edit, and a
+  team change that took effect only at the next restart would be a config the harness reads and does
+  not run. Two watches on one apply path, for [the watcher](#the-watcher)'s reason.
+
+Not in `.lubbdubb/`, which holds worktrees, the database and attachments and which a team gitignores.
+And not the same *name* in a different place: `repoRoot` defaults to `process.cwd()`, so a harness
+pointed at its own checkout — the most common deployment there is — would have the two files collide.
+
+### In the cockpit
+
+Two files means a new way to be silently confused: a value the operator did not write, in a config
+page that only writes one of them. So the running-config view is handed the project's **layer**
+(not a config — once merged, a team value equal to the default is indistinguishable from no value at
+all) and every row says which of the four it came from: `env`, `file`, `project`, `default`.
+
+`isDefault` therefore means *what the operator would have without their own file* — defaults with the
+project folded in — rather than the built-in default. Those are the same question: the form writes
+`lubbdubb.config.json` and nothing else, so "did I choose this" and "what does clearing it leave" have
+one answer. A row cleared while the project sets it says it will fall back to the project's value,
+because it will.
+
+A save is never written to the project's file. It belongs to the team, and it is changed by committing
+to the project.
 
 ## Fields
 
@@ -186,8 +251,8 @@ and asserts the comments, the key order and every unchanged line survive.
 
 ## The watcher
 
-`lubbdubb.config.json` is watched, and a change on disk lands on the **same** `LiveConfig.apply` a
-cockpit save lands on: live keys through their arms, everything else held as pending and reported to
+`lubbdubb.config.json` is watched — and so is the project's `lubbdubb.project.json` — and a change on
+disk lands on the **same** `LiveConfig.apply` a cockpit save lands on: live keys through their arms, everything else held as pending and reported to
 every open cockpit. That is the whole of keeping the file first-class — one apply path means a hand
 edit and a form save cannot produce different outcomes.
 
@@ -201,10 +266,14 @@ A parse failure or a validation throw is **recorded through `errors.record` and 
 running config is left exactly as it was. A half-typed file is a normal thing to observe — the operator
 is mid-keystroke — and a watcher that applied one would take the fleet down over a missing brace.
 
+Two watches rather than one over both paths: each holds the bytes it last saw, and the reload folds
+every layer either way, so the file that moved is the only thing the two of them differ about.
+
 Wired in `src/server/main.ts` rather than `buildSystem`, for `loadDeploymentConfig`'s reason: only a
-deployment has an ambient file to watch. `System.configFile` is the path, injectable in tests — without
-that a test exercising the save rewrites the `lubbdubb.config.json` of whatever checkout the suite is
-running in.
+deployment has an ambient file to watch. `System.configFile` and `System.projectConfigFile` are the
+paths, injectable in tests — without that a test exercising the save rewrites the
+`lubbdubb.config.json` of whatever checkout the suite is running in, and a test reading the project
+layer picks up whatever `lubbdubb.project.json` that checkout happens to carry.
 
 ## Path resolution at load
 
@@ -237,7 +306,7 @@ resolve them against the wrong directory:
 
 | Key                | Type     | Default                 | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ------------------ | -------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `repoRoot`         | `string` | `process.cwd()`         | The git repository worktrees are cut from. Overridable via `LUBBDUBB_REPO_ROOT`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `repoRoot`         | `string` | `process.cwd()`         | The git repository worktrees are cut from — and where the team's `lubbdubb.project.json` is read from ([the project layer](#the-project-layer)). Overridable via `LUBBDUBB_REPO_ROOT`; never settable from the project's own file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `defaultBranch`    | `string` | `"main"`                | The integration branch. A new agent branch is cut from it, and a PR targeting anything else is treated as stacked. Not auto-detected.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `worktreeRoot`     | `string` | `.lubbdubb/worktrees`   | Root for the pool of worktree slot directories (`slot-0`, `slot-1`, …).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | `deskRoot`         | `string` | `.lubbdubb/desk`        | Root for desk-task scratch directories (one per task id).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
@@ -857,7 +926,10 @@ committed:
 
 ## Example
 
-`lubbdubb.config.example.json` at the repo root is a complete, commented example of every key.
+`lubbdubb.config.example.json` at the repo root is a complete, commented example of every key. The
+same keys are legal in a project's `lubbdubb.project.json` (all but `repoRoot`), so there is one
+example rather than two — what differs between the files is who they belong to, not what they may
+say.
 
 It is laid out in the **same six sections the cockpit's Settings tab draws** — Dispatch, Agents,
 Integrations, Features, Paths, Server, in that order, from the `GROUPS` list in

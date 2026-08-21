@@ -109,6 +109,7 @@ test('a colourMap field draws a swatch per state over the states the tracker rep
       payload: {
         groups: [{ title: 'Integrations', entries: [entry] }],
         file: 'lubbdubb.config.json',
+        projectFile: null,
         text: '{}',
         revision: 'r',
         pending: [],

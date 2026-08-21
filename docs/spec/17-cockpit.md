@@ -1544,6 +1544,15 @@ second copy free to drift:
 | the widget                  | `entry.type` — `configFields.ts` ([02](02-configuration.md#fields))   |
 | applies now / needs restart | `entry.live` — true only where `configApply.ts` holds an arm          |
 | not editable                | `entry.env` (the environment beats the file), or `access: 'fileOnly'` |
+| where the value came from   | `entry.env`, `entry.isDefault` and `entry.fromProject` — one of four words |
+
+**Four words, because there are four layers.** `env`, `file`, `project` and `default`: a harness
+pointed at a repository carrying a `lubbdubb.project.json` is running a config assembled from two
+files, and only one of them is the one this page writes ([02](02-configuration.md#the-project-layer)).
+A team's value drawn as `default` would send an operator looking for a key their own file does not
+have — and a row cleared while the project sets it says it will fall back to the project's value,
+because it will. `isDefault` is therefore *what you would have without your own file*, which is the
+same question as "what does clearing this leave", since the form writes one file and nothing else.
 
 A `colourMap` is the one `entry.type` that draws more than a field: `issueStateColours` becomes a
 swatch per state over a `datalist` of the state words the tracker is currently reporting, read off the
@@ -1560,8 +1569,11 @@ still the caller's: a state colour is `#rrggbb` only, a theme token admits three
 digits. `test/console.test.ts` asserts no second colour input exists anywhere under `components/`,
 because writing one is a one-line temptation and only one of the two would get the next fix.
 
-Saving writes `lubbdubb.config.json` and nothing else; the file stays the source of truth and editing it
-by hand lands on the same apply path ([02](02-configuration.md#the-watcher)). A **reset clears the key**
+Saving writes `lubbdubb.config.json` and nothing else — never the project's file, which belongs to the
+team and changes by a commit — and the files stay the source of truth: editing either by hand lands on
+the same apply path ([02](02-configuration.md#the-watcher)). The project's path is named in the page
+header when there is one, so an operator whose harness is behaving unlike their config says can see
+that a second file is in play at all. A **reset clears the key**
 rather than writing the default back — the browser is never told what a default _is_, only `isDefault`.
 Staged edits are counted in a save bar and nothing reaches the file until the write; a save whose
 baseline has moved is refused with "reload" rather than clobbering whoever moved it.

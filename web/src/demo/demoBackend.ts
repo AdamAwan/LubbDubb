@@ -2532,6 +2532,7 @@ export const demoApi = {
     Promise.resolve({
       groups: [] as RunningConfigGroup[],
       file: 'lubbdubb.config.json',
+      projectFile: null,
       text: '{}\n',
       revision: 'demo',
       pending: [],

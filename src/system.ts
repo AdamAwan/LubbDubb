@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { configFilePath, type Config } from './config.js';
+import { configFilePath, projectConfigFilePath, type Config } from './config.js';
 import { Store } from './store/store.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
 import { buildIntegrations } from './integrations/registry.js';
@@ -225,6 +225,16 @@ export interface System {
    * inject a temp path.
    */
   configFile: string;
+  /**
+   * The **targeted project's** shared config, at `<repoRoot>/lubbdubb.project.json`
+   * — the team's layer, underneath the operator's own file.
+   *
+   * Held here for `configFile`'s reason exactly: `config.repoRoot` defaults to
+   * `process.cwd()`, so a test that read this path off the running config would
+   * read whatever project config the checkout the suite runs in happens to carry
+   * — and pass or fail by machine on a file nobody wrote for it.
+   */
+  projectConfigFile: string;
 }
 
 interface BuildOptions {
@@ -276,6 +286,11 @@ interface BuildOptions {
    * of whatever checkout the suite is running in — see {@link System.configFile}.
    */
   configFile?: string;
+  /**
+   * Override the targeted project's shared config path (tests point it at a temp
+   * file, or at one that does not exist) — see {@link System.projectConfigFile}.
+   */
+  projectConfigFile?: string;
   /**
    * Override how a report about LubbDubb itself is filed (tests inject
    * `FakeUpstreamIssues`). Without it the two collection-level issue routes spawn
@@ -1051,6 +1066,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     localRun,
     liveConfig,
     configFile: opts.configFile ?? configFilePath(),
+    projectConfigFile: opts.projectConfigFile ?? projectConfigFilePath(config.repoRoot),
     issuePickup,
     prompts,
     rateLimits,

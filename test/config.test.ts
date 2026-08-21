@@ -422,3 +422,173 @@ test('an explicit nested override deep-merges over the config file, not replacin
   assert.equal(cfg.planning.gitFetchIntervalMs, 0, 'the explicit layer wins the field it sets');
   assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 7, "the file's other fields survive");
 });
+
+/**
+ * The layer a *team* shares: one file, committed in the repository the harness
+ * works on, that every member's harness reads and any of them can override
+ * locally. Driven through a real temp cwd and a real temp repo for the
+ * removed-key test's reason — the layering is about two files on disk, and an
+ * override object cannot stand in for either of them.
+ */
+test('a project config in repoRoot sits under the operator’s own file', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
+  const repo = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  t.after(() => {
+    process.chdir(cwd);
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  // What a team commits: the branch they integrate on, the CI routing, and the
+  // environments their work travels through.
+  writeFileSync(
+    join(repo, 'lubbdubb.project.json'),
+    JSON.stringify({
+      defaultBranch: 'trunk',
+      ci: { checks: [{ match: 'lint', onFailure: 'dispatch' }] },
+      environments: [{ name: 'staging', at: 'echo abc123' }],
+      userId: 'the-team-bot',
+      planning: { maxConcurrentPartsPerIssue: 5 },
+    }),
+    'utf8',
+  );
+  // What one member keeps to themselves.
+  writeFileSync(
+    join(dir, 'lubbdubb.config.json'),
+    JSON.stringify({ repoRoot: repo, userId: 'adam', planning: { gitFetchIntervalMs: 0 } }),
+    'utf8',
+  );
+
+  const cfg = loadDeploymentConfig();
+  assert.equal(cfg.defaultBranch, 'trunk', 'the team’s value is taken where the operator says nothing');
+  assert.equal(cfg.ci.checks.length, 1);
+  assert.deepEqual(
+    cfg.environments.map((env) => env.name),
+    ['staging'],
+  );
+  assert.equal(cfg.userId, 'adam', 'and beaten where they do');
+  // The deep-merged blocks merge *between* the two files, which is the whole
+  // point of sharing one: a team's planning policy and a member's are one block,
+  // not whichever file was read last.
+  assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 5);
+  assert.equal(cfg.planning.gitFetchIntervalMs, 0);
+
+  // An explicit override still has the last word over both.
+  assert.equal(loadDeploymentConfig({ defaultBranch: 'release' }).defaultBranch, 'release');
+});
+
+test('an env override beats the project config, as it beats the operator’s own file', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
+  const repo = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
+  const cwd = process.cwd();
+  const prev = process.env.PORT;
+  process.chdir(dir);
+  t.after(() => {
+    process.chdir(cwd);
+    if (prev === undefined) delete process.env.PORT;
+    else process.env.PORT = prev;
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  writeFileSync(join(repo, 'lubbdubb.project.json'), JSON.stringify({ port: 5555 }), 'utf8');
+  writeFileSync(join(dir, 'lubbdubb.config.json'), JSON.stringify({ repoRoot: repo }), 'utf8');
+  assert.equal(loadDeploymentConfig().port, 5555, 'with nothing above it, the team’s value stands');
+
+  process.env.PORT = '9999';
+  assert.equal(loadDeploymentConfig().port, 9999);
+});
+
+/**
+ * The one key a project config cannot set. The file was found *because*
+ * `repoRoot` resolved, so a value in it could only describe the search that found
+ * it — honouring it would mean reading the file from somewhere else, and dropping
+ * it would leave the fleet pointed at a repository the file in front of the
+ * operator disagrees with. Refused by name, like a removed key.
+ */
+test('a project config setting repoRoot is refused by name', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
+  const repo = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
+  const cwd = process.cwd();
+  process.chdir(dir);
+  t.after(() => {
+    process.chdir(cwd);
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  writeFileSync(join(repo, 'lubbdubb.project.json'), JSON.stringify({ repoRoot: '/srv/elsewhere' }), 'utf8');
+  writeFileSync(join(dir, 'lubbdubb.config.json'), JSON.stringify({ repoRoot: repo }), 'utf8');
+  assert.throws(
+    () => loadDeploymentConfig(),
+    (err: Error) => err.message.includes('repoRoot') && err.message.includes('lubbdubb.project.json'),
+    'the refusal names the key and the file',
+  );
+});
+
+/** A project config is held to the same standard as an operator's own file. */
+test('a project config naming a removed key is refused, and a retired one warns', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
+  const repo = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
+  const cwd = process.cwd();
+  const realWarn = console.warn;
+  const warnings: string[] = [];
+  console.warn = (msg: string): void => void warnings.push(msg);
+  process.chdir(dir);
+  t.after(() => {
+    console.warn = realWarn;
+    process.chdir(cwd);
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  writeFileSync(join(dir, 'lubbdubb.config.json'), JSON.stringify({ repoRoot: repo }), 'utf8');
+  writeFileSync(join(repo, 'lubbdubb.project.json'), JSON.stringify({ dispatcher: 'claude' }), 'utf8');
+  assert.throws(
+    () => loadDeploymentConfig(),
+    (err: Error) => err.message.includes('dispatcher') && err.message.includes('lubbdubb.project.json'),
+  );
+
+  writeFileSync(
+    join(repo, 'lubbdubb.project.json'),
+    JSON.stringify({ planning: { enabled: false, maxConcurrentPartsPerIssue: 4 } }),
+    'utf8',
+  );
+  const cfg = loadDeploymentConfig();
+  assert.equal(cfg.planning.maxConcurrentPartsPerIssue, 4);
+  assert.ok(!Object.hasOwn(cfg.planning, 'enabled'));
+  assert.ok(
+    warnings.some((line) => line.includes('planning.enabled') && line.includes('lubbdubb.project.json')),
+    'the warning names the file the stale key is in, which is not the one the operator edits',
+  );
+});
+
+/**
+ * `repoRoot` is settled from the operator's layers alone and *before* the project
+ * file is looked for — a layer cannot be consulted about where to find itself.
+ */
+test('the project config is read from the repoRoot the operator’s layers resolve to', async (t) => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-config-'));
+  const repo = mkdtempSync(join(tmpdir(), 'lubbdubb-repo-'));
+  const cwd = process.cwd();
+  const prev = process.env.LUBBDUBB_REPO_ROOT;
+  process.chdir(dir);
+  t.after(() => {
+    process.chdir(cwd);
+    if (prev === undefined) delete process.env.LUBBDUBB_REPO_ROOT;
+    else process.env.LUBBDUBB_REPO_ROOT = prev;
+    rmSync(dir, { recursive: true, force: true });
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  writeFileSync(join(repo, 'lubbdubb.project.json'), JSON.stringify({ defaultBranch: 'trunk' }), 'utf8');
+  assert.equal(loadDeploymentConfig().defaultBranch, 'main', 'no project file at the default repoRoot');
+
+  process.env.LUBBDUBB_REPO_ROOT = repo;
+  assert.equal(loadDeploymentConfig().defaultBranch, 'trunk', 'the env layer moves repoRoot, and the file follows');
+
+  delete process.env.LUBBDUBB_REPO_ROOT;
+  assert.equal(loadDeploymentConfig({ repoRoot: repo }).defaultBranch, 'trunk', 'and so does an explicit override');
+});

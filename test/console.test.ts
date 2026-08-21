@@ -978,6 +978,7 @@ test('the tracker-state colour picker draws the shared field', () => {
       payload: {
         groups: [{ title: 'Features', entries: [entry] }],
         file: 'lubbdubb.config.json',
+        projectFile: null,
         text: '{}',
         revision: 'abc123',
         pending: [],
