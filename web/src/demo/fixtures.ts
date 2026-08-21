@@ -2187,6 +2187,7 @@ export function buildDemoState(): DemoSeed {
       latent: { plans: 0, profiles: 0, escalated: 0, parts: 0 },
       debt: 2,
       medianLeadMinutes: 40,
+      medianHeldMinutes: 95,
       completedRuns: 47,
       idleSlots: 0,
       headline: 'About 3h 7m of work queued',

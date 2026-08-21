@@ -2534,6 +2534,38 @@ interface PermissionRequest {
   summary: string;
 }
 
+/**
+ * When one escalation stood, and the only two handles there are on what it stood
+ * *about* — the projection the runway lens measures a hold from.
+ *
+ * A projection rather than the row because `listEscalations` is all-time and
+ * carries every settled item's `recentOutput` transcript tail with it, and the
+ * runway is re-read on every cockpit refresh. This is four columns and no JSON
+ * body.
+ *
+ * Deliberately raw. There is no `originRef: string` here resolved to a goal,
+ * because {@link EscalationContext} populates a different subset per escalation
+ * type — a merge approval carries `prNumber` and no ref at all — and deciding
+ * which of the two reaches which goal is the lens's judgement to make, not a
+ * caller's. → `docs/spec/25-supply.md#the-lead-time-is-fleet-time`
+ */
+export interface EscalationSpan {
+  createdAt: string;
+  /**
+   * When a person answered, or null. Null covers two different things and the
+   * lens has to tell them apart: an item still open (the hold is running now)
+   * and one dismissed without an answer (`dismissEscalation` stamps no time, so
+   * when that hold ended is not recorded anywhere) — which is what {@link open}
+   * is for.
+   */
+  answeredAt: string | null;
+  /** `context.originRef`, verbatim: `issue:12`, `pr:42:ci`, or absent. */
+  originRef: string | null;
+  /** `context.prNumber`, verbatim — the only handle the merge and reply arms carry. */
+  prNumber: number | null;
+  open: boolean;
+}
+
 export interface Escalation {
   id: string;
   type: EscalationType;

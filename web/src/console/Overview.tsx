@@ -127,7 +127,9 @@ function RunwayBand({ view }: { view: CockpitView }): JSX.Element {
   const total = r.inflight + r.queued + r.reservoir;
   return (
     <div className={`cn-runway cn-t-${tone}`}>
-      <span className="cn-runway-read">{runwayReading(r)}</span>
+      <span className="cn-runway-read" title={runwayTitle(r)}>
+        {runwayReading(r)}
+      </span>
       <span className="cn-tag">{RUNWAY_LABEL[r.state]}</span>
       <span className="cn-runway-say">{view.state.control.paused ? 'Dispatch is paused.' : r.headline}</span>
       {/* The same four buckets whatever the state, so a glance across a week
@@ -151,11 +153,35 @@ function RunwayBand({ view }: { view: CockpitView }): JSX.Element {
  * With nothing queued there is no runway to state — a duration would be a
  * forecast about a queue that does not exist — so the band counts idle slots
  * instead, which is the fact that has replaced it.
+ *
+ * The duration is **fleet time**: the hours a person was the next mover are out
+ * of the median it is built from
+ * ([25](../../../docs/spec/25-supply.md#the-lead-time-is-fleet-time)). The band
+ * is one line and cannot say so, which is what {@link runwayTitle} is for — the
+ * bench row and its notification carry it in the sentence.
  */
 function runwayReading(r: CockpitView['state']['runway']): string {
   if (r.runwayMinutes !== null) return fmtRunway(r.runwayMinutes);
   if (r.state === 'unknown') return '—';
   return `${r.idleSlots} idle`;
+}
+
+/**
+ * What the one-line reading had to leave out, on hover: which quantity it is, and
+ * the calendar span it came from.
+ *
+ * A tooltip rather than a second line because the band's whole placement argument
+ * is that it costs nothing to reach; a figure that dropped by two thirds with no
+ * account of why anywhere on the card reads as a gauge that broke, though.
+ * Composed here from quoted figures only — the sentence itself stays the server's.
+ */
+function runwayTitle(r: CockpitView['state']['runway']): string | undefined {
+  if (r.runwayMinutes === null || r.medianLeadMinutes === null) return undefined;
+  const held = r.medianHeldMinutes ?? 0;
+  const fleet = `Fleet time: a ${fmtRunway(r.medianLeadMinutes)} median goal across ${r.inflight + r.queued} goals.`;
+  return held <= 0
+    ? fleet
+    : `${fleet} Its median calendar span is ${fmtRunway(r.medianLeadMinutes + held)} — the ${fmtRunway(held)} spent waiting on you is not counted.`;
 }
 
 /** `53m`, `3h 07m` — the band is one line, so the reading is as short as it can be and still be a duration. */

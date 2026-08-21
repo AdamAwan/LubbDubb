@@ -682,10 +682,15 @@ export function buildStateSnapshot(
       issues: world.issues,
       pickup: pickupCtx,
       runs: issueRuns,
-      // The open rows, not the panel's capped feed above: the debt clause is a
+      // Every row, not the panel's capped feed above: the debt clause is a
       // count, and a hundred-row cap would report "100" to the deployment
-      // furthest behind and to the one exactly at the cap alike.
-      humanTasks: store.listOpenHumanTasks(),
+      // furthest behind and to the one exactly at the cap alike — and the
+      // settled rows are the human holds the median lead time subtracts.
+      humanTasks: store.listAllHumanTasks(),
+      // The projection, never `listEscalations`: that read is all-time and
+      // carries every settled item's transcript tail, and this one is taken on
+      // every cockpit refresh.
+      escalations: store.listEscalationSpans(),
       cap: control.cap,
       standing: humanTasks.some((t) => t.kind === 'supply' && t.status === 'open'),
     }),

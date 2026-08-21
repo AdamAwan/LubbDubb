@@ -1,5 +1,5 @@
 import { nanoid } from 'nanoid';
-import type { Escalation, EscalationContext, Proposal } from '../types.js';
+import type { Escalation, EscalationContext, EscalationSpan, Proposal } from '../types.js';
 import type { StoreContext } from './context.js';
 
 /**
@@ -107,6 +107,32 @@ export class EscalationStore {
     return rows.map(rowToEscalation);
   }
 
+  /**
+   * When each escalation stood, and what it stood about — {@link EscalationSpan}.
+   *
+   * A projection rather than {@link listEscalations} for that read's own stated
+   * reason: it is all-time and ships every settled item's transcript tail, and
+   * this one is taken on every cockpit refresh. `json_extract` keeps the two
+   * context keys the runway can attribute a hold by without hydrating the body.
+   */
+  listEscalationSpans(): EscalationSpan[] {
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT created_at, answered_at, status,
+                json_extract(context, '$.originRef') AS origin_ref,
+                json_extract(context, '$.prNumber')  AS pr_number
+           FROM escalations`,
+      )
+      .all() as SpanRow[];
+    return rows.map((r) => ({
+      createdAt: r.created_at,
+      answeredAt: r.answered_at,
+      originRef: typeof r.origin_ref === 'string' ? r.origin_ref : null,
+      prNumber: typeof r.pr_number === 'number' ? r.pr_number : null,
+      open: r.status === 'open',
+    }));
+  }
+
   // -- Proposals (human decisions) -----------------------------------------
 
   createProposal(input: Omit<Proposal, 'id' | 'status' | 'note' | 'decidedBy' | 'decidedAt' | 'createdAt'>): Proposal {
@@ -168,6 +194,14 @@ export class EscalationStore {
       .all() as ProposalRow[];
     return rows.map(rowToProposal);
   }
+}
+
+interface SpanRow {
+  created_at: string;
+  answered_at: string | null;
+  status: string;
+  origin_ref: unknown;
+  pr_number: unknown;
 }
 
 interface EscalationRow {

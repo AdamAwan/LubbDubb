@@ -30,6 +30,84 @@ the only span that already contains a goal's whole tail — the CI fixes, the re
 assessment and the write-up that follow its pull request. Agent durations would miss all of it and
 read a goal as twenty minutes of work when it occupies the fleet for three hours.
 
+## The lead time is fleet time
+
+That span is wall-clock, and wall-clock is the wrong quantity. It is padded with every hour the goal
+spent parked on a **person** — a close-out nobody got to, a validation waiting until Tuesday, a
+profile question asked at six on a Friday — plus the nights and weekends around them. A runway
+computed from it tells an operator who does nothing for sixty-four hours that the fleet has
+sixty-four hours of work, when the fleet runs dry long before that _because_ he did nothing. The
+arithmetic is sound; the input is not.
+
+So each completed run's calendar span has its **human holds** subtracted. What is left is how long
+the goal occupied the fleet, which is what the drain is a drain of.
+
+| Hold                | Evidence                                              |
+| ------------------- | ----------------------------------------------------- |
+| Close-out           | `human_tasks` `close_out`, `created_at → resolved_at` |
+| Validation          | `human_tasks` `validate`, same span                   |
+| A step for a person | `human_tasks` `ask` **with a `part_id`**              |
+| The profile gate    | `issue_assays`, `decided_at → profile_answered_at`    |
+| A standing delivery | `issue_deliveries`, `decided_at →` the end of the run |
+| An escalation       | `escalations`, `created_at → answered_at`             |
+
+**The tail stays in.** This subtracts human-wait, never work. A CI fix, a review thread and a
+write-up are all still inside the span, which is exactly why agent durations remain the wrong
+substitute.
+
+**A `burn` row is not a hold**, and it is the one worth stating: a burn notice kills nothing
+([18](18-observability.md)) — the expensive agent carries straight on while the row stands, so the
+fleet is working through every minute of it. **An `ask` without a `part_id` is not a hold** either,
+by `HumanTask`'s own rule ([13](13-jobs-and-findings.md)): a standalone ask blocks nothing, because
+the agent that filed it gets on with what it can. Only a part is a scheduling node the reconciler
+holds work behind. **A `supply` row is never a hold**: this reading must not describe itself, the
+same rule the debt count follows.
+
+**The holds are unioned per goal before they are subtracted.** They overlap routinely — a delivery
+hold and the close-out it caused cover the same afternoon — and adding them up would over-subtract,
+which is the same bug pointed the other way.
+
+**Every hold is clamped to the run it sits in**, so a close-out still standing three weeks after a
+goal finished loses the median the minutes inside the run and not the weeks after it. A run whose
+whole calendar span is covered by holds is **dropped from the median**, exactly as one with an
+unreadable span is: zero minutes of fleet time is not evidence about how long the fleet works, it is
+evidence that the hold rows are coarser than the run, and admitting it would drag the median towards
+zero and leave a deployment permanently `thin` over a queue that is fine.
+
+### Attributing an escalation
+
+`escalations` has no `origin_ref`. Two keys in its context reach a goal and the lens tries both:
+`context.originRef` (what the goal-work arms carry, folded from `issue:12:part:api` onto `issue:12`),
+then `context.prNumber` against the run's own `linkedPrNumber` — which is all the merge and reply
+arms have, and without it the longest waits on a deployment would be the ones that went
+unsubtracted. An escalation **dismissed without an answer** is skipped: `dismissEscalation` stamps no
+time, so when its hold ended is recorded nowhere.
+
+It is read through `Store.listEscalationSpans` — four columns and two `json_extract`s — never
+`listEscalations`, which is all-time and ships every settled item's transcript tail
+([16](16-http-api.md)); the cockpit takes this reading on every refresh.
+
+### What is not subtracted, and knowingly
+
+- **A plan awaiting approval.** `plans` stamps `created_at`/`updated_at` and nothing for entering
+  `awaiting_approval`, and by the time a run is complete its plan is `active` or `complete` — the
+  span is not recoverable from a finished goal at all. The _live_ ones are still counted, as
+  [latent supply](#the-second-direction).
+- **Non-working hours.** Subtracting a calendar would be more accurate and would introduce a
+  timezone and a schedule policy the harness does not have. Evidenced holds only.
+
+Both leave a residual, and the residual is padding: the reading still errs **long**, never short,
+which is the safe direction for a warning.
+
+### Derived, never stored
+
+The subtraction is recomputed from the tables on every read. A `held_ms` on `issue_runs` would be
+faster and would need an additive `ALTER TABLE`, a `ColumnMigrations` entry and a one-time backfill
+([14](14-persistence.md#migrations)) — three things that fail silently if any is omitted — to buy a
+walk over a few hundred rows that the pulse and the snapshot already pay for `issue_runs` itself.
+Worse, it would go stale: a hold answered after the run completed changes the answer, and a stored
+column written once would not know.
+
 **The drain is capacity, never the observed start rate.** The obvious estimator is how fast goals
 have actually been starting, and it is the one estimator that cannot work: a starved fleet starts
 nothing, so the observed rate falls towards zero, so the runway computed from it rises towards
@@ -131,10 +209,15 @@ you, not on work"_ and the detail names what answering would release.
 
 **Debt is never a threshold.** The queue rail already draws all twelve close-outs as twelve rows —
 "you have 12 close-outs" is not news, it is on screen. Debt earns a trailing clause when it explains
-a starved fleet and nothing else. It is counted off `listOpenHumanTasks`, which is deliberately
+a starved fleet and nothing else. It is counted off `listAllHumanTasks`, which is deliberately
 unbounded where the panel's feed takes a limit: this is a count, and a cap would report a hundred to
 the deployment furthest behind and to the one exactly at the cap alike. `supply` rows are excluded —
 the reading must not describe itself.
+
+That read returns **every** row, settled ones included, and one list rather than an open one beside a
+closed one: the open rows are this count, the settled rows are the [human holds](#the-lead-time-is-fleet-time)
+the median lead time subtracts. Two lists of one table, either a subset of the other, would be a
+caller free to report a debt the history beside it does not contain.
 
 ## What it files
 
@@ -218,6 +301,11 @@ seen it before. `paused` wears the grey tone rather than the alarm.
 The reading **changes unit rather than lying**: with nothing queued there is no runway to state, so
 the band counts idle slots instead.
 
+The duration is **fleet time**, and the band is one line — so what it cannot say it carries on hover:
+which quantity it is, the median goal behind it, and the calendar span that median came out of. The
+bench row and its notification say it in the sentence itself, composed once in `say()` so three
+surfaces cannot word one reading differently.
+
 ## Configuration
 
 → [02](02-configuration.md#runway)
@@ -232,3 +320,12 @@ the band counts idle slots instead.
 An hour is roughly one goal's work on a three-wide fleet at this repo's own median, which is the
 point: late enough that a fleet dipping between goals never trips it, early enough that there is
 still time to triage before a slot goes empty.
+
+**The defaults are stated against fleet time and were always meant to be.** Against a calendar
+median they were unreachable: at a twenty-one-hour median and five slots, `thin` needed supply below
+a quarter of a goal, so only the count-based `dry` and `starved` arms could ever fire and the whole
+hysteresis design was dead in practice. The fix restores the sentence above rather than replacing it,
+which is why the numbers have not moved. A deployment whose goals genuinely take several hours of
+_fleet_ time should raise both — the useful shape is `warnHours` at about one median goal, so the
+band opens when every slot has one thing to do and nothing behind it, and `clearHours` at two or
+three.
