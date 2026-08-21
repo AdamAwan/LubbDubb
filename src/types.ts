@@ -2499,6 +2499,20 @@ export interface IssueSpend {
   agents: number;
 }
 
+/**
+ * A park held on an agent that stopped without saying why, and when it settles
+ * itself as done (`agentStallParkMs` from the park, or from the last Extend).
+ *
+ * The pair rather than the id alone — which is all a limit park needs on the wire —
+ * because this park is drawn as a countdown, and a countdown with no end to count
+ * to is a chip that says "soon".
+ */
+export interface StallPark {
+  agentId: string;
+  /** ISO, always present: a park with no deadline is never entered into. */
+  expiresAt: string;
+}
+
 /** One subscriber rate-limit window (5h or weekly) as Claude Code reports it. */
 export interface RateLimitWindow {
   usedPercentage: number;

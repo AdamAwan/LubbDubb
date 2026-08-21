@@ -110,6 +110,24 @@ export function relTime(iso: string, now: number = Date.now()): string {
 }
 
 /**
+ * The other direction: how long until an instant, as "4m 12s" or "38s".
+ *
+ * Seconds all the way up rather than {@link relTime}'s rounding, because this is
+ * read as a clock running out rather than as an age — a countdown that says "5m"
+ * for a minute and a half is one nobody trusts to be counting. Past the deadline
+ * it says so once and stops going negative: the pulse settles it within a beat,
+ * and a card that keeps subtracting reads as a promise that was not kept.
+ */
+export function untilTime(iso: string, now: number = Date.now()): string {
+  const then = new Date(iso).getTime();
+  if (!Number.isFinite(then)) return '';
+  const secs = Math.round((then - now) / 1000);
+  if (secs <= 0) return 'any moment';
+  if (secs < 60) return `${secs}s`;
+  return `${Math.floor(secs / 60)}m ${secs % 60}s`;
+}
+
+/**
  * The same instant on a longer scale: "2h ago", "3d ago", "14 Jul".
  *
  * Beside {@link relTime} rather than replacing it, because the two are read for

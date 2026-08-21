@@ -646,6 +646,10 @@ export function buildStateSnapshot(
     // `waiting` with a reason, and a cockpit that told them apart by reading the
     // sentence would be one wording change away from offering the wrong control.
     parkedOnLimit: fleet.limitedAgentIds(),
+    // And which are parked on an unannounced stop, with the moment each settles
+    // itself as done. Asked of the fleet for `parkedOnLimit`'s reason — three parks
+    // wear one status, and only the fleet knows which is which.
+    stallParks: fleet.stallDeadlines(),
     // Artifacts agents surfaced mid-run (design docs, reports, links). The
     // cockpit groups these by agentId onto the fleet card / drawer.
     flags,

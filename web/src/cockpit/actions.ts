@@ -87,6 +87,15 @@ export interface CockpitActions {
    * gone. Refetches: the row moves back to running and leaves `parkedOnLimit`.
    */
   resumeAgent(agentId: string): Promise<void>;
+  /**
+   * "No, wait" — add `agentStallExtendMs` to the countdown on an agent parked
+   * because it stopped without saying why, before the harness records it done.
+   *
+   * The one control that buys *time* rather than settling anything: the operator is
+   * saying they are looking at this, not what they have decided. Refetches, because
+   * the new deadline is what the card is drawing.
+   */
+  extendStall(agentId: string): Promise<void>;
 
   answerEscalation(id: string, text: string): Promise<void>;
   /** Answer a multi-question ask; positional against the escalation's questions. */

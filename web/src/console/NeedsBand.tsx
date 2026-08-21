@@ -230,6 +230,8 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       onDismiss={(id, note) => actions.dismissEscalation(id, note)}
       onOpenAgent={(id) => actions.select(id)}
       onComplete={(id) => actions.completeAgent(id)}
+      stallExpiresAt={escalation.agentId ? (view.stallExpiryByAgent.get(escalation.agentId) ?? null) : null}
+      onExtend={(id) => actions.extendStall(id)}
       onViewPlan={(id) => actions.viewPlan(id)}
     />
   );

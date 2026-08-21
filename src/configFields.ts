@@ -180,6 +180,20 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Nudges a stalled agent gets before it is given up on.',
   },
   {
+    path: 'agentStallParkMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How long a stalled agent waits on you before the harness marks it done.',
+  },
+  {
+    path: 'agentStallExtendMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How much one press of Extend adds to that countdown.',
+  },
+  {
     path: 'agentResumeAttempts',
     type: 'number',
     access: 'plain',

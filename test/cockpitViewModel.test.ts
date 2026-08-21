@@ -18,6 +18,7 @@ function stateWith(over: Partial<AppState>): AppState {
     control: { cap: 4, paused: false },
     agents: [],
     parkedOnLimit: [],
+    stallParks: [],
     tasks: [],
     escalations: [],
     decisions: [],

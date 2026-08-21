@@ -111,6 +111,7 @@ import type {
   ShortfallAuthor,
   ShortfallCause,
   StackLanding,
+  StallPark,
   TaskSummary,
   ValidationCheck,
   ValidationResource,
@@ -808,6 +809,16 @@ export interface CockpitState {
    * resuming them is its verdict, not this button.
    */
   parkedOnLimit: string[];
+  /**
+   * The agents parked on an *unannounced stop* — they ended a turn saying neither
+   * "done" nor what they needed, were nudged, and did not settle it — each with the
+   * moment its park expires and the harness records it done itself.
+   *
+   * A list of pairs for `parkedOnLimit`'s reason and one more: the park is a fact
+   * about the fleet this process is holding, dropped by a restart, and it is drawn
+   * as a countdown, which needs the end as well as the fact.
+   */
+  stallParks: StallPark[];
   /** Artifacts agents surfaced mid-run, grouped by agentId in the UI. */
   flags: AgentFlag[];
   /**
@@ -1371,6 +1382,7 @@ export type {
   Retrospective,
   ScratchEntry,
   StackLanding,
+  StallPark,
   TaskSummary,
   ValidationCheck,
   ValidationCheckState,

@@ -19,7 +19,7 @@ is about.
 | Module                  | Holds                                                                                         |
 | ----------------------- | --------------------------------------------------------------------------------------------- |
 | `routes/state.ts`       | `/api/state`, `/api/prompts`, `/api/config`, `/api/ci-policy`, `/api/mcp`, `/api/health`      |
-| `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt                             |
+| `routes/agents.ts`      | One agent's transcript, and respond / kill / complete / interrupt / extend a stall park       |
 | `routes/artifacts.ts`   | `/artifacts/:id` and `/attachments/:id`, their capability signers, and the path confinement   |
 | `routes/control.ts`     | `/api/pulse`, `/api/errors/clear`, `/api/control`, `/api/prs/:number/watch`                   |
 | `routes/escalations.ts` | The whole "Needs you" inbox: escalations, proposals, recovery                                 |
@@ -1401,6 +1401,17 @@ resumed on the next boot and its worktree is kept.
 ### `POST /api/agents/:id/interrupt`
 
 409 when the agent is not live. Sends raw `\x03`. Mutates no status.
+
+### `POST /api/agents/:id/extend-stall`
+
+"No, wait" — adds `agentStallExtendMs` to the countdown on an agent parked because it stopped without
+saying why ([10](10-agent-runtimes.md#when-nobody-answers-the-stop)), before the harness records it
+`done` itself. Takes no body and records nothing: pressing it says only "I am looking at this", not
+what the operator has decided. Returns `{ok: true, expiresAt}` and broadcasts `dirty`.
+
+409 when that agent has no countdown running — it was answered, dismissed, killed, or has already
+ended. The refusal is deliberate rather than an idempotent success: an operator told they had bought
+time on a run that is already over is worse off than one told they cannot.
 
 ### `POST /api/agents/:id/resume`
 
