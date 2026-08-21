@@ -194,8 +194,15 @@ export interface CockpitActions {
    * entries for one move. The window is here at all rather than in the page
    * because it is the page's whole subject: a link to "the causes tab over the
    * last 24 hours" has to carry both halves or it is a link to neither.
+   *
+   * **The fields are named for the `Place` fields they set**, as `openConfig`'s
+   * are, because the implementation spreads this object straight into a place
+   * patch — and a spread is exactly where TypeScript stops checking for excess
+   * properties. Named `view` and `window`, both halves landed on the place as
+   * keys nothing reads, so every tab and every window button on the page was a
+   * control that pushed no history entry and changed nothing.
    */
-  openInsights(where: { view?: InsightsView; window?: InsightsWindow }): void;
+  openInsights(where: { insightsView?: InsightsView; insightsWindow?: InsightsWindow }): void;
   /** Open a goal's page, or return to the overview with null. */
   selectGoal(ref: string | null): void;
   /** Bring a full-surface panel in front, or dismiss it with null. */

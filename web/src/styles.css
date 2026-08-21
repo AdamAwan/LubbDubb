@@ -3517,11 +3517,14 @@ a.btn {
   font-size: 13px;
   color: var(--text);
 }
-/* The head's one-line gloss, pushed to the right of the title and away from the
-   close button — the same placement the console's own panels give theirs. */
+/* The caveat under a reading — the denominator said out loud, what a table is a
+   partition of. It was the *modal head's* one-line gloss once and still carried
+   that head's `margin-left: auto`, which in the page's grid shrink-wraps the
+   paragraph and pins it to the right edge: on a wide screen the sentence
+   qualifying a table sat a thousand pixels from the table's own left margin,
+   reading as though it belonged to something else. Left, and to a measure. */
 .sp-note {
-  margin-left: auto;
-  margin-right: 12px;
+  max-width: 96ch;
   font-family: var(--font-mono);
   font-size: 10.5px;
   color: var(--grey);
@@ -3649,9 +3652,12 @@ a.btn {
 
 /* --- the two panels: phases, and the trend --- */
 
+/* The gutter is wide because what meets across it is usually two dense tables,
+   and the right-hand edge of one is a column of figures: at 12px the last number
+   of the left table and the first word of the right one read as one string. */
 .sp-cols {
   display: flex;
-  gap: 12px;
+  gap: 26px;
   align-items: flex-start;
   flex-wrap: wrap;
   margin-top: 4px;
@@ -3680,6 +3686,13 @@ a.btn {
 
 .sp-graph {
   padding: 8px;
+  /* A graph does not get better for being wider, and past about 1.3x its own
+     viewBox it gets worse: the labels are drawn in user units, so a chart given
+     the whole page scales its axis text up with the bars and arrives in a
+     typeface size nothing else on the panel uses. The two-column charts sit
+     under this bound already; the trend's three, which have a section each,
+     would otherwise be drawn at twice their size. */
+  max-width: 800px;
 }
 .sp-graph svg {
   width: 100%;
@@ -3724,6 +3737,30 @@ a.btn {
      while two neighbouring numbers with no gutter between them read as one. */
   padding-left: 18px;
   padding-right: 0;
+}
+/* A table that spans the page rather than sitting in one of the two columns is
+   capped: its leading column is a short label and every column after it is a
+   figure, so all the slack a wide page hands it lands in the middle — the
+   Causes guard table drew four names down one edge and their own numbers down
+   the other, a thousand pixels of nothing between a row and its own reading. The
+   bound is generous against what these tables actually want (the widest, By
+   goal, measures ~870px), so nothing is squeezed; what it removes is only the
+   drift. The `.sp-col` tables are untouched — their column already bounds them. */
+.sp > .sp-tbl,
+.rl > .sp-tbl,
+.sp > .sp-bar,
+.rl > .sp-bar {
+  max-width: 1040px;
+}
+
+/* A left-aligned column that *follows* a right-aligned one has no gutter at the
+   join: `.n` pays its own on the leading edge and nothing on the trailing, which
+   is right between two figures and wrong here — the Causes table met its reddest
+   check with no space at all, drawing `4 of 9format:check` under a header that
+   read `UNDOCUMENTEDREDDEST CHECK`. The cell after pays for the join. */
+.sp-tbl .n + th,
+.sp-tbl .n + td {
+  padding-left: 18px;
 }
 .sp-tbl td.b {
   color: var(--text);
@@ -6531,6 +6568,12 @@ a.btn {
    --------------------------------------------------------------------------- */
 .insights {
   padding: 14px 16px 28px;
+  /* Capped for the tickets tab's reason, and it matters more here: every reading
+     on this page is a table read *across* — a phase against its share, a goal
+     against its runs — and a row stretched to a 2560px monitor puts the two ends
+     of one fact far enough apart that the eye loses the line between them. The
+     graphs would grow to fill it and say nothing more for the width. */
+  max-width: 1400px;
 }
 .insights-head {
   display: flex;
@@ -6634,13 +6677,40 @@ a.btn {
 .insights-body {
   padding-top: 14px;
 }
+/* Prose on this page is a caveat about the table above it, and a caveat set to
+   the full width of the page is a two-hundred-character line. Scoped here rather
+   than on `.empty`, which is a whole-cockpit class and carries one-line notices
+   everywhere else. */
+.insights-body .empty {
+  max-width: 96ch;
+}
 
 /* The Economics headline: `spent ÷ landed = per landed change`, with what never
    landed beside it. The operators are drawn because they *are* the reading — a
    row of four unrelated boxes would leave the division to the reader, which is
    what three separate panels used to do. */
+/* Flex rather than the `sp-tiles` grid it otherwise shares, because the two
+   operators are punctuation and a grid track is not: `auto-fit` gave each of
+   them a full `1fr` column, so on a wide screen the sentence arrived as three
+   figures marooned a couple of hundred pixels apart with a lone glyph adrift in
+   each gap — the division still true and no longer legible as one. Here the
+   tiles take the width and the operators take the space a character needs. */
 .sp-ratio {
+  display: flex;
+  flex-wrap: wrap;
   align-items: stretch;
+  gap: 8px;
+}
+.sp-ratio > .sp-tile {
+  /* The cap is for the *wrapped* row: a tile left alone on the last line grows
+     to the whole width otherwise, and a headline figure set in a box four times
+     the size of its neighbours reads as the important one. Nothing on an unwrapped
+     row reaches it. */
+  flex: 1 1 168px;
+  max-width: 420px;
+}
+.sp-ratio > .sp-op {
+  flex: 0 0 auto;
 }
 .sp-op {
   display: flex;

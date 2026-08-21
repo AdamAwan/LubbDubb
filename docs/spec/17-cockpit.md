@@ -837,30 +837,16 @@ from.
 
 ## The overview
 
-What the situation area shows when no goal is selected: six cards, rows rather than pictures, in
-reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **Rate**, **World
-signals**. The fleet's **runway** is a band along the foot of the first of them rather than a seventh
-card, because "who is out" and "what is behind them" are one thought.
+What the situation area shows when no goal is selected: five cards, rows rather than pictures, in
+reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **World signals**. The
+fleet's **runway** is a band along the foot of the first of them rather than a sixth card, because "who
+is out" and "what is behind them" are one thought.
 
 Two rules run through all five. **Nothing here re-decides what the server decided**: a PR's court is
 `attention.status`, its checks are `ciVerdict`, a queued item's hold is the queue's own sentence, and a
 goal's state is its `pickup.status`. And **an empty card still draws**, muted, because a surface that
 vanishes when quiet is indistinguishable from one that broke.
 
-- **Rate** — is the floor producing, or merely busy? The one reading in the cockpit that is against
-  _time_, drawn from the timestamps already on `decisions` and `worldEvents` (`web/src/view/production.ts`);
-  a held or skipped dispatch is not counted, because it produced no work. **The churn ratio (dispatches
-  per merge) is the point**: dispatches are effort and merges are output, and a rising first figure over
-  a flat second one is a fleet going round. A series with nothing in the first half of its window draws
-  no delta rather than a 0% one — there is nothing to have changed from — and when the decision log does
-  not reach back to the window's start the card **says so**, because a rate that silently under-reports
-  is worse than no rate.
-
-  It was the Output panel. The half of it that was about money is [Insights](#insights)' headline ratio
-  now; this is the half that belongs on the overview. It keeps a **fixed six hours** while everything on
-  that page obeys a control, and deliberately: this card answers "what is happening", and a window an
-  operator has to set before the answer means anything is not that question. It says the span out loud
-  for the same reason, and carries the one way through to the money behind the rates.
 - **Goals in flight** carries the **furthest environment** holding a goal whole, where any is —
   last-declared in the operator's list, since that list is the order the work travels in. `partial`
   gets no chip: a row reading `liveUs` for half a feature is the boolean rollup the reach fold refuses
@@ -944,6 +930,21 @@ vanishes when quiet is indistinguishable from one that broke.
   world event on its issue ref — so an arrival written as one would lift the delivery park on the goal
   it announced and hand the work straight back to the fleet.
   → [24](24-environments.md#in-the-cockpit)
+
+### Rate, removed
+
+There was a sixth card here — **Rate**, the fleet's dispatches, merges and escalations per hour over a
+fixed six hours, with dispatches-per-merge under them as a churn ratio. It is gone, and so is the
+derivation behind it: the production module under the cockpit's view layer is deleted rather than left
+unimported, since knip runs every rule at `error` and an export nothing names fails `check`.
+
+It was the surviving half of the Output panel, kept on the overview on the argument that rates are a
+_now_ question and the money behind them an analytical one. What that argument did not survive is how
+little the card said on a real deployment: three figures a fleet's own pace makes unreadable at this
+resolution — most six-hour stretches have one merge in them or none — under which every series
+routinely drew _nothing in the first half to compare against_, which is a card whose whole content is
+an admission it cannot answer yet. The reading it was pointing at is on [Insights](#insights), over a
+window the operator chooses, and the nav carries the way there.
 
 ### The keyboard entry
 
@@ -1997,6 +1998,29 @@ Every table the three panels drew lands in exactly one of these, and the duplica
 in: there is one phase table rather than two, and one completion rate rather than the reliability fold's
 and the trend's.
 
+### The page is bounded, because a reading is not
+
+Every surface here is read **across** — a phase against its share, a goal against its runs, a cause
+against what would have caught it — so the page is capped at `1400px` like the tickets tab. A row let
+out to the width of the monitor puts the two ends of one fact far enough apart that the eye loses the
+line between them, and none of the graphs say anything more for the space.
+
+Two consequences of that are in the stylesheet rather than left to the grid:
+
+- **The ratio row is flex, not the `sp-tiles` grid.** The two operators are punctuation, and
+  `auto-fit` gave each of them a full `1fr` column — so the sentence arrived as three figures marooned
+  a couple of hundred pixels apart with a lone `÷` adrift in each gap, the division still true and no
+  longer legible as one thing.
+- **A graph is capped at `800px`**, about `1.3x` its own viewBox. Axis labels are drawn in user units,
+  so a chart handed the whole page scales its text up with its bars and arrives in a size nothing else
+  on the panel uses. The two-column charts sit under that bound already; the Trend tab's three, which
+  have a section each, were being drawn at twice their size.
+
+And in a table, **a left-aligned column that follows a right-aligned one pays the gutter at the join**
+(`.sp-tbl .n + td`). A `.n` cell pays its own on the leading edge and nothing on the trailing, which is
+right between two figures and wrong at that boundary: the Causes table met its reddest check with no
+space at all, drawing `4 of 9format:check` under a header reading `UNDOCUMENTEDREDDEST CHECK`.
+
 ### A destination, not a modal
 
 The two modals covered the queue rail, and the rail is where the ask that sends an operator here comes
@@ -2013,6 +2037,16 @@ escaped it by being modals rather than panels.
 **It fetches, so it lives under `components/` rather than `console/`.** The console may not reach
 `api.js`, and the sanctioned route is the one the tickets tab and the work tree already take: a component
 that fetches, rendered from the situation area, with the place it reads handed in as props.
+
+Because it is `Place`, **the tabs and the window buttons are `Place` moves**, and their fields must be
+`Place`'s own — `insightsView` and `insightsWindow`, which is why `openInsights` takes those names
+rather than the shorter `view` / `window`. The action spreads what it is given straight into a place
+patch, and a spread is exactly where TypeScript stops checking for excess properties: named for the
+page rather than for the place, both halves landed on the place as keys nothing read, and **every tab
+and every window button on the page was a control that changed nothing** — no state, no query string,
+not even a history entry to go back from. `useNavigation`'s patch type now makes a key `Place` does not
+have a type error at the call site, since nothing else about that failure was visible: the page
+rendered correctly and simply did not move.
 
 ### The time bar
 
