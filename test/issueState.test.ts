@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
+import { buildSystem } from '../src/system.js';
+import { loadConfig } from '../src/config.js';
+import { buildApp } from '../src/server/app.js';
+import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import type { CockpitState, TicketsPayload } from '../src/wire.js';
 import type { TrackerItem, WorldSnapshot } from '../src/types.js';
 
 /**
@@ -90,4 +96,107 @@ test('a number the mirror does not hold is skipped — the mirror is a record of
     [5],
   );
   store.close();
+});
+
+// ---------------------------------------------------------------------------
+// The route, at the buildSystem seam
+// ---------------------------------------------------------------------------
+
+function boardSystem() {
+  const config = loadConfig({
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    labelPrefix: 'lubbdubb',
+    agentMode: 'raw',
+    heartbeatIntervalMs: 999_999,
+    startPaused: true,
+    issuePickupStates: ['Ready'],
+    issueInReviewState: 'In Review',
+  });
+  return buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
+}
+
+test('POST /api/issues/:number/state writes the tracker and patches both readings', async () => {
+  const system = boardSystem();
+  system.connector.inject({ kind: 'new_issue', number: 30, title: 'Drag me' });
+  await system.connector.setWorkItemState({ number: 30, state: 'Ready' });
+  await system.harness.runCycle('manual');
+
+  const { app } = await buildApp(system);
+  const moved = await app.inject({
+    method: 'POST',
+    url: '/api/issues/30/state',
+    payload: { state: 'In Review' },
+  });
+  assert.equal(moved.statusCode, 200);
+  assert.deepEqual(moved.json(), { ok: true, state: 'In Review' });
+
+  // The baseline, which is what `/api/state` serves and the cockpit redraws from.
+  const state = (await app.inject({ method: 'GET', url: '/api/state' })).json() as CockpitState;
+  assert.equal(state.world.issues.find((i) => i.number === 30)?.workItemState, 'In Review');
+
+  // And the mirror, which is what the board's own columns are built from. Asserted
+  // separately because they are two readings, and patching only one is the bug.
+  const page = (await app.inject({ method: 'GET', url: '/api/tickets?tracking=any' })).json() as TicketsPayload;
+  assert.equal(page.rows.find((r) => r.number === 30)?.workItemState, 'In Review');
+});
+
+test('a provider refusal is quoted back as a 400, and neither reading moves', async () => {
+  const system = boardSystem();
+  system.connector.inject({ kind: 'new_issue', number: 31, title: 'Refused' });
+  await system.connector.setWorkItemState({ number: 31, state: 'Ready' });
+  await system.harness.runCycle('manual');
+
+  // The provider is the authority on its own process template, so the refusal is
+  // the provider's sentence rather than a guess this route made first.
+  system.connector.setWorkItemState = () => Promise.reject(new Error('TF401347: invalid transition'));
+
+  const { app } = await buildApp(system);
+  const refused = await app.inject({
+    method: 'POST',
+    url: '/api/issues/31/state',
+    payload: { state: 'Nonsense' },
+  });
+  assert.equal(refused.statusCode, 400);
+  assert.match((refused.json() as { error: string }).error, /invalid transition/);
+
+  const page = (await app.inject({ method: 'GET', url: '/api/tickets?tracking=any' })).json() as TicketsPayload;
+  assert.equal(page.rows.find((r) => r.number === 31)?.workItemState, 'Ready', 'the mirror is untouched');
+  // A refusal is recorded, never swallowed.
+  assert.ok(system.store.listErrors().some((e) => /invalid transition/.test(e.message)));
+});
+
+test('a provider that cannot write states refuses by saying so, and never reaches the sink', async () => {
+  const system = boardSystem();
+  system.connector.inject({ kind: 'new_issue', number: 32, title: 'No capability' });
+  await system.harness.runCycle('manual');
+
+  let called = false;
+  system.connector.canSetWorkItemState = () => false;
+  system.connector.setWorkItemState = () => {
+    called = true;
+    return Promise.resolve({ ok: true });
+  };
+
+  const { app } = await buildApp(system);
+  const refused = await app.inject({
+    method: 'POST',
+    url: '/api/issues/32/state',
+    payload: { state: 'In Review' },
+  });
+  assert.equal(refused.statusCode, 400);
+  assert.match((refused.json() as { error: string }).error, /cannot write/i);
+  assert.equal(called, false, 'the throwing seam is never reached');
+});
+
+test('an empty state is refused by the schema, not sent to the provider as a blank', async () => {
+  const system = boardSystem();
+  await system.harness.runCycle('manual');
+  const { app } = await buildApp(system);
+  const refused = await app.inject({ method: 'POST', url: '/api/issues/33/state', payload: { state: '' } });
+  assert.equal(refused.statusCode, 400);
 });
