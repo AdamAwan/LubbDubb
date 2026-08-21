@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Config } from '../config.js';
+import type { ConfigChange } from '../configApply.js';
 import type { Store } from '../store/store.js';
 import { isWatched, watchLabelFor } from '../watchLabels.js';
 import { credentialVar } from './remote.js';
@@ -141,20 +142,45 @@ export async function buildSetupReading(deps: {
   store: Store;
   probes: SetupProbes;
   configFile: string;
+  /**
+   * What has reached the file and is waiting for a restart —
+   * `LiveConfig.pending()`, the same list the config page's own card draws.
+   *
+   * Required rather than defaulted to `[]`, because the default is the bug: a
+   * caller that forgot it would produce a reading that goes on asking for work
+   * the operator has already done, which is exactly what this argument exists to
+   * end. → {@link awaitingRestart}
+   */
+  pending: readonly ConfigChange[];
 }): Promise<SetupReading> {
-  const { config, store, probes, configFile } = deps;
+  const { config, store, probes, configFile, pending } = deps;
   const configFileExists = existsSync(configFile);
   const onMock = config.integrations.issues === 'fake' && config.integrations.sourceControl === 'fake';
   const install = probes.installRoot();
 
-  const checks: SetupCheck[] = [
+  // Read against the running config, then restated where the file has already
+  // answered — never suppressed. A fault a restart would clear is still a fault
+  // *now*: the fleet really is inventing its backlog until the process comes back.
+  const checks: SetupCheck[] = [];
+  const restated = new Set<string>();
+  for (const check of [
     pointedCheck(config, onMock, configFileExists, install),
     credentialCheck(config, probes),
     await identityCheck(config, probes),
     ...watchChecks(config, store),
     await agentCheck(config, probes),
     billingCheck(probes),
-  ];
+  ]) {
+    const waiting = awaitingRestart(check, pending);
+    checks.push(waiting ?? check);
+    if (waiting !== null) for (const path of SETTLED_BY[check.id] ?? []) restated.add(path);
+  }
+  // Whatever no check above said in its own words. Computed from what was
+  // actually restated rather than from {@link SETTLED_BY}, so a pending change to
+  // a key whose check is currently `ok` — `userId` edited from one login to
+  // another — is named here instead of falling between the two.
+  const unnamed = pending.filter((change) => !restated.has(change.path));
+  if (unnamed.length > 0) checks.push(restartCheck(unnamed));
 
   return {
     configFile,
@@ -166,6 +192,114 @@ export async function buildSetupReading(deps: {
     },
     checks,
   };
+}
+
+/**
+ * Which config leaves would settle each check, so a fault the operator has
+ * already answered can be told from one they have not.
+ *
+ * **The keys a check itself reads, and nothing that merely rides along with
+ * them.** The confirm sheet writes `repoRoot`, `defaultBranch` and the provider
+ * target in the same save as `integrations`, and it is tempting to hang all of
+ * them off `pointed` — but then a pending `defaultBranch` alone would have
+ * `pointed` announce that the file has already answered it, which is a sentence
+ * about a key the check never looked at. Those land in {@link restartCheck}
+ * instead, which claims nothing about what they fix.
+ *
+ * Keyed by check id and deliberately partial. `credential` and `billing` are not
+ * here and must not be: both read the *environment*, which no edit to
+ * `lubbdubb.config.json` can put into a running process — a row claiming to
+ * settle one would be the reading telling an operator their expired token is
+ * fixed. `wiring` is absent for the same shape of reason: it is settled by
+ * tagging a ticket, not by a key.
+ *
+ * A path that names no configurable leaf simply never matches, since `pending`
+ * only ever carries `CONFIG_FIELDS` paths (`src/configApply.ts`).
+ */
+const SETTLED_BY: Readonly<Record<string, readonly string[]>> = {
+  pointed: ['integrations.issues', 'integrations.sourceControl'],
+  identity: ['userId'],
+  eligibility: ['ownWorkOnly'],
+  watch: ['labelPrefix'],
+  agent: ['agentMode', 'claudeCommand'],
+};
+
+/**
+ * The same fault, restated for an operator who has already fixed it in the file.
+ *
+ * This is the gap the whole argument exists to close. `integrations` and `userId`
+ * have no arm in `src/configApply.ts`, so editing them lands in the file and
+ * leaves the running config exactly as it was (→ `docs/spec/02-configuration.md#liveness`) — and the reading
+ * is built
+ * from the running config, so it went on saying "point it at a project" to
+ * somebody looking at a file that already did. Both surfaces were telling the
+ * truth and the operator had no way to see it: the config page's pending card is
+ * the only thing that said a restart was owed, and it is a page you have to
+ * already suspect something to open.
+ *
+ * **The verdict is kept, never softened.** A `bad` that a restart would clear is
+ * still `bad` now — the fleet is on the fake provider until the process comes
+ * back, inventing a backlog that reads exactly like a real one. What changes is
+ * the words and the offer: `goto` config, where the pending card and its
+ * `Apply and restart` button already live, rather than a fix that would write a
+ * value the file is holding.
+ *
+ * Null when nothing pending bears on this check, which the caller reads as "leave
+ * it alone".
+ */
+function awaitingRestart(check: SetupCheck, pending: readonly ConfigChange[]): SetupCheck | null {
+  if (check.verdict === 'ok' || check.verdict === 'unknown') return null;
+  const paths = SETTLED_BY[check.id] ?? [];
+  const settled = pending.filter((change) => paths.includes(change.path));
+  if (settled.length === 0) return null;
+  return {
+    id: check.id,
+    label: check.label,
+    verdict: check.verdict,
+    detail: `${check.detail} The file already says ${describeChanges(settled)}.`,
+    remedy: 'That change is in the file and this process is still running what it booted with. Restart to take it up.',
+    fix: { kind: 'goto', label: 'Review and restart', to: 'config' },
+  };
+}
+
+/**
+ * Everything else the file says and this process is not running.
+ *
+ * `warn` rather than `bad`, and the split is the one the verdicts already make:
+ * the harness works, it is simply not working on what the operator last wrote.
+ * The checks above are `bad` on their own merits — a fake backlog, an unsigned
+ * ticket — and a restart is what clears them; this one names a discrepancy with
+ * no fault of its own behind it.
+ *
+ * It is a discrepancy and not a quantity, which is what earns it a standing row
+ * under {@link buildSetupReading}'s rule: it cannot fire on a harness whose file
+ * and process agree, and it clears the moment they do. Nothing has to remember it
+ * was shown — `LiveConfig.pending()` is recomputed against the running config on
+ * every apply, so putting a key back to what the harness is running takes the row
+ * away by itself.
+ */
+function restartCheck(pending: readonly ConfigChange[]): SetupCheck {
+  return {
+    id: 'restart',
+    label: 'Waiting for a restart',
+    verdict: 'warn',
+    detail: `${describeChanges(pending)} — in the file, and not in this process.`,
+    remedy: 'Restart the harness to run on what the file says.',
+    fix: { kind: 'goto', label: 'Review and restart', to: 'config' },
+  };
+}
+
+/**
+ * Pending changes as one clause, capped.
+ *
+ * The cap is not tidiness: these become the single line a rail row draws, and a
+ * hand-edited file can change thirty keys at once. An uncapped list would push
+ * the remedy — the only actionable part — off the end of a row nobody can read.
+ */
+function describeChanges(changes: readonly ConfigChange[]): string {
+  const shown = changes.slice(0, 3).map((change) => `${change.path} = ${JSON.stringify(change.to)}`);
+  const rest = changes.length - shown.length;
+  return rest > 0 ? `${shown.join(', ')} and ${rest} more` : shown.join(', ');
 }
 
 /**

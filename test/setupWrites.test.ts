@@ -81,12 +81,14 @@ test('every config fix a check offers is a key the config route accepts', async 
       store: buildSystem(config()).store,
       probes: probes(),
       configFile: '/nowhere/lubbdubb.config.json',
+      pending: [],
     }),
     buildSetupReading({
       config: config({ agentMode: 'raw', labelPrefix: '' }),
       store: buildSystem(config()).store,
       probes: probes({ env: (name) => (name === 'ANTHROPIC_API_KEY' ? 'sk-ant-x' : undefined) }),
       configFile: '/nowhere/lubbdubb.config.json',
+      pending: [],
     }),
   ]);
   const fixes = readings.flatMap((reading) => reading.checks.map((check: SetupCheck) => check.fix));
@@ -112,6 +114,7 @@ test('every outstanding check says what to do about it', async () => {
     store: buildSystem(config()).store,
     probes: probes({ agentVersion: () => Promise.resolve(null), env: () => undefined }),
     configFile: '/nowhere/lubbdubb.config.json',
+    pending: [],
   });
   const outstanding = reading.checks.filter((check) => check.verdict === 'bad' || check.verdict === 'warn');
   assert.ok(outstanding.length > 0);
@@ -136,6 +139,7 @@ test('an identity nothing could confirm is never offered as a one-click fix', as
     store: buildSystem(config()).store,
     probes: probes({ env: () => undefined }),
     configFile: '/nowhere/lubbdubb.config.json',
+    pending: [],
   });
   const identity = github.checks.find((check) => check.id === 'identity');
   assert.equal(identity?.verdict, 'bad');
@@ -146,6 +150,7 @@ test('an identity nothing could confirm is never offered as a one-click fix', as
     store: buildSystem(config()).store,
     probes: probes({ env: (name) => (name === 'GITHUB_TOKEN' ? 'ghp_x' : undefined) }),
     configFile: '/nowhere/lubbdubb.config.json',
+    pending: [],
   });
   const asked = confirmed.checks.find((check) => check.id === 'identity');
   assert.equal(asked?.fix?.kind, 'config');
@@ -170,6 +175,7 @@ test('a repoRoot that is the harness’s own checkout is reported as such', asyn
     store: buildSystem(config()).store,
     probes: probes({ installRoot: () => own }),
     configFile: '/nowhere/lubbdubb.config.json',
+    pending: [],
   });
   assert.equal(reading.prefill.repoRootIsSelf, true);
 
@@ -178,6 +184,7 @@ test('a repoRoot that is the harness’s own checkout is reported as such', asyn
     store: buildSystem(config()).store,
     probes: probes({ installRoot: () => '/srv/lubbdubb' }),
     configFile: '/nowhere/lubbdubb.config.json',
+    pending: [],
   });
   assert.equal(elsewhere.prefill.repoRootIsSelf, false);
 });

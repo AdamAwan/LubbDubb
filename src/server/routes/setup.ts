@@ -39,6 +39,11 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         store: system.store,
         probes,
         configFile: system.configFile,
+        // What the file already answers, so a check stops asking for work the
+        // operator has done. Read per request rather than closed over: the
+        // watcher recomputes it on every apply, and this route is re-fetched the
+        // moment one lands.
+        pending: system.liveConfig.pending(),
       })) satisfies SetupPayload,
   );
 

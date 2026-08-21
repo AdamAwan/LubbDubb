@@ -3,7 +3,8 @@ import test from 'node:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadConfig } from '../src/config.js';
+import { loadConfig, type Config } from '../src/config.js';
+import { diffConfig } from '../src/configApply.js';
 import type { SetupProbes } from '../src/setup/probes.js';
 import { buildSetupReading } from '../src/setup/reading.js';
 import { parseRemote, credentialVar } from '../src/setup/remote.js';
@@ -134,6 +135,7 @@ test('the reading says the harness is on the mock, and stops saying so once it i
     store: buildSystem(config()).store,
     probes: probes(),
     configFile: join(mkdtempSync(join(tmpdir(), 'lubbdubb-setup-')), 'lubbdubb.config.json'),
+    pending: [],
   });
   assert.equal(onMock.checks.find((c) => c.id === 'pointed')?.verdict, 'bad');
   // The fake provider needs no credential, so that check must not go red for it.
@@ -146,6 +148,7 @@ test('a credential the environment does not hold is bad, and the fleet’s own k
     store: buildSystem(config()).store,
     probes: probes({ env: (name) => (name === 'ANTHROPIC_API_KEY' ? 'sk-ant-x' : undefined) }),
     configFile: '/nowhere/lubbdubb.config.json',
+    pending: [],
   });
   assert.equal(reading.checks.find((c) => c.id === 'credential')?.verdict, 'bad');
   // Agents inherit the harness's environment and the CLI prefers a key with no
@@ -162,6 +165,7 @@ test('a world nothing has been read into yet is unknown, never “nothing is wat
     store: buildSystem(config()).store,
     probes: probes(),
     configFile: '/nowhere/lubbdubb.config.json',
+    pending: [],
   });
   assert.equal(reading.checks.find((c) => c.id === 'watch')?.verdict, 'unknown');
 });
@@ -172,7 +176,160 @@ test('the reading prefills both answers, so nothing the machine already knows is
     store: buildSystem(config()).store,
     probes: probes(),
     configFile: '/nowhere/lubbdubb.config.json',
+    pending: [],
   });
   assert.equal(reading.prefill.email, 'adam@acme.com');
   assert.equal(reading.prefill.repoRoot, '/srv/acme-app');
+});
+
+/**
+ * Pending as the harness itself computes it — what a candidate file says against
+ * what the process is running, minus whatever an arm applied on the way.
+ *
+ * Built through `diffConfig` rather than hand-written `ConfigChange` literals, so
+ * these tests exercise the real join: a path in `SETTLED_BY` that is not a
+ * declared config field can never appear in `pending`, and a test that invented
+ * one would assert a restatement the running harness could never produce.
+ */
+function pendingFor(running: Config, file: Partial<Config>) {
+  return diffConfig(running, config(file)).filter((change) => !change.applied);
+}
+
+/**
+ * The failure this whole argument exists to end.
+ *
+ * `integrations` and `userId` have no arm in `configApply.ts`, so an operator who
+ * writes them watches the file say one thing while the process runs another — and
+ * the reading, built from the running config, went on telling them to point the
+ * harness at a project they had already pointed it at. Both surfaces were honest
+ * and the operator had no way to see it: only the config page's pending card said
+ * a restart was owed, and that is a page you have to already suspect something to
+ * open.
+ */
+test('a fault the file already answers says restart, instead of asking for the work again', async () => {
+  const running = config();
+  const reading = await buildSetupReading({
+    config: running,
+    store: buildSystem(config()).store,
+    probes: probes(),
+    configFile: '/nowhere/lubbdubb.config.json',
+    pending: pendingFor(running, {
+      integrations: { sourceControl: 'github', issues: 'github' },
+      github: { owner: 'AdamAwan', repo: 'LubbDubb' },
+      userId: 'AdamAwan',
+    }),
+  });
+
+  const pointed = reading.checks.find((c) => c.id === 'pointed');
+  const identity = reading.checks.find((c) => c.id === 'identity');
+  // Still bad, and deliberately: the fleet is on the fake provider until the
+  // process comes back, inventing a backlog that reads exactly like a real one.
+  // Softening the verdict for a fix that has not taken effect would understate it.
+  assert.equal(pointed?.verdict, 'bad');
+  assert.equal(identity?.verdict, 'bad');
+  assert.match(pointed?.detail ?? '', /integrations\.issues = "github"/);
+  assert.match(identity?.detail ?? '', /userId = "AdamAwan"/);
+  for (const check of [pointed, identity]) {
+    assert.match(check?.remedy ?? '', /[Rr]estart/);
+    // The offer moves to the page that holds the pending card and its restart
+    // button. A `config` fix here would write a value the file is already holding,
+    // and the sheet would re-ask the question the file has answered.
+    assert.equal(check?.fix?.kind, 'goto');
+  }
+});
+
+/**
+ * The keys no check speaks for, which is most of them: a heartbeat, a cap, a
+ * branch name. Nothing about them is a fault — the harness works — so this is the
+ * one row here that names a discrepancy with no fault behind it.
+ */
+test('a pending change no check names gets a row of its own', async () => {
+  const running = config({ integrations: { sourceControl: 'github', issues: 'github' }, userId: 'AdamAwan' });
+  const reading = await buildSetupReading({
+    config: running,
+    store: buildSystem(config()).store,
+    probes: probes({ env: () => 'ghp_x' }),
+    configFile: '/nowhere/lubbdubb.config.json',
+    pending: pendingFor(running, {
+      integrations: { sourceControl: 'github', issues: 'github' },
+      userId: 'AdamAwan',
+      heartbeatIntervalMs: 5000,
+    }),
+  });
+  const restart = reading.checks.find((c) => c.id === 'restart');
+  assert.equal(restart?.verdict, 'warn');
+  assert.match(restart?.detail ?? '', /heartbeatIntervalMs = 5000/);
+});
+
+/**
+ * The case that falls between the two if the remainder is computed from
+ * `SETTLED_BY` rather than from what was actually restated: `userId` is pending,
+ * so `identity` claims it — but `identity` is `ok`, so it says nothing, and the
+ * change would reach no surface at all.
+ */
+test('a pending change to a key whose check is already ok is still named', async () => {
+  const running = config({ integrations: { sourceControl: 'github', issues: 'github' }, userId: 'AdamAwan' });
+  const reading = await buildSetupReading({
+    config: running,
+    store: buildSystem(config()).store,
+    probes: probes({ env: () => 'ghp_x' }),
+    configFile: '/nowhere/lubbdubb.config.json',
+    pending: pendingFor(running, {
+      integrations: { sourceControl: 'github', issues: 'github' },
+      userId: 'someone-else',
+    }),
+  });
+  assert.equal(reading.checks.find((c) => c.id === 'identity')?.verdict, 'ok');
+  assert.match(reading.checks.find((c) => c.id === 'restart')?.detail ?? '', /userId = "someone-else"/);
+});
+
+/**
+ * A file and a process that agree draw nothing. The row cannot settle into a nag
+ * for the same reason `eligibility` cannot: it names a discrepancy, and
+ * `LiveConfig.pending()` is recomputed against the running config on every apply,
+ * so putting a key back to what the harness is running takes the row away by
+ * itself.
+ */
+test('a harness running what its file says has no restart row', async () => {
+  const reading = await buildSetupReading({
+    config: config(),
+    store: buildSystem(config()).store,
+    probes: probes(),
+    configFile: '/nowhere/lubbdubb.config.json',
+    pending: [],
+  });
+  assert.equal(
+    reading.checks.find((c) => c.id === 'restart'),
+    undefined,
+  );
+});
+
+/**
+ * The one thing a restatement must never do. `credential` and `billing` read the
+ * environment, and no edit to the config file puts a variable into a process that
+ * is already running — so a pending change must leave both saying exactly what
+ * they said. Telling an operator that a restart will fix an expired token sends
+ * them to bounce the fleet for nothing, and leaves the fault in place afterwards.
+ */
+test('a pending change never restates a check the environment owns', async () => {
+  const running = config({
+    integrations: { sourceControl: 'github', issues: 'github' },
+    github: { owner: 'a', repo: 'b' },
+  });
+  const reading = await buildSetupReading({
+    config: running,
+    store: buildSystem(config()).store,
+    probes: probes({ env: (name) => (name === 'ANTHROPIC_API_KEY' ? 'sk-ant-x' : undefined) }),
+    configFile: '/nowhere/lubbdubb.config.json',
+    pending: pendingFor(running, {
+      integrations: { sourceControl: 'github', issues: 'github' },
+      github: { owner: 'a', repo: 'b' },
+      heartbeatIntervalMs: 5000,
+    }),
+  });
+  for (const id of ['credential', 'billing']) {
+    const check = reading.checks.find((c) => c.id === id);
+    assert.equal(check?.verdict, 'bad');
+    assert.doesNotMatch(check?.remedy ?? '', /[Rr]estart to take it up/);
+  }
 });

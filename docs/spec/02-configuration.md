@@ -234,6 +234,15 @@ running config against the file on every apply rather than accumulated. Once the
 whatever still differs _is_ the definition of waiting for a restart, so editing a key twice leaves one
 row and putting one back leaves none.
 
+It is read in two places, and the second is not a duplicate of the first. The config page draws it as
+the pending card, with the restart button on it. The **configuration health reading** takes the same
+list and uses it to stop asking for work already done: a check the file has already answered keeps its
+verdict and changes its words to say a restart is owed, and whatever no check speaks for becomes a row
+of its own. Without that, a restart-only key was a change an operator could make correctly, in the
+file, and be told on the rail to make again — which is what `integrations` and `userId`, the two most
+consequential restart-only keys there are, did to every first-run deployment.
+→ [26](26-setup.md#a-fault-the-file-has-already-answered)
+
 ## Writing the file
 
 Nothing in the harness wrote `lubbdubb.config.json` until the config form existed. The write is

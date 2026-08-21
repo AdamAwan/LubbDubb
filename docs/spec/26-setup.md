@@ -128,7 +128,8 @@ has an arm and applies now; everything else lands in the file and is reported as
 
 ## The checks
 
-`buildSetupReading` (`src/setup/reading.ts`) answers six, and they outlive the first three minutes on
+`buildSetupReading` (`src/setup/reading.ts`) answers six, plus a seventh whenever the file has moved
+ahead of the process ([below](#a-fault-the-file-has-already-answered)), and they outlive the first three minutes on
 purpose. That is the argument for their being checks rather than wizard steps: `credential` is how an
 operator finds out on a Tuesday that a token expired, and `eligibility` is how they find out that a
 filter of their own is hiding every tagged item on the tracker.
@@ -142,6 +143,7 @@ filter of their own is hiding every tagged item on the tracker.
 | `wiring`      | nothing tagged, and nothing ever picked up              | the same, on the one day an empty panel is unreadable because none has ever been full                                            |
 | `agent`       | `agentMode` is `raw`, or `claudeCommand` is not on PATH | a `raw` dispatch writes a transcript and never calls a model                                                                     |
 | `billing`     | `ANTHROPIC_API_KEY` is in the environment               | agents inherit it and the CLI prefers a key with no prompt, so the whole fleet bills the API ([02](02-configuration.md#secrets)) |
+| `restart`     | the file holds changes this process is not running      | `warn`, not `bad` — the harness works, it is just not working on what the operator last wrote                                     |
 
 ### A check earns a row for a discrepancy, never a quantity
 
@@ -161,6 +163,43 @@ As one standing check it settled into a permanent scold for doing nothing wrong,
   already states, and the one that could disagree with reality is the one that would be wrong.
 
 Every other check names a fault that clears when it is fixed, so none of them can settle into a nag.
+
+### A fault the file has already answered
+
+Most keys are restart-only — a key is live only if `src/configApply.ts` holds an arm for it
+([02](02-configuration.md#liveness)) — and `integrations` and `userId` are two of the ones that are
+not. So an operator can write both, watch nothing happen, and open this reading to be told to point
+the harness at a project they have already pointed it at. Every surface involved was telling the
+truth: the reading is built from the **running** config, and the running config really was the shipped
+mock. The only thing that said a restart was owed was the config page's pending card, which is a page
+you have to already suspect something to open.
+
+So the reading takes `LiveConfig.pending()` as an argument, and a check the file has already answered
+is **restated, never suppressed**:
+
+- **The verdict is kept.** A `bad` that a restart would clear is still `bad` now — the fleet is on the
+  fake provider until the process comes back, inventing a backlog that reads exactly like a real one.
+  Softening it for a fix that has not taken effect would state something untrue about what is running.
+- **The words and the offer change.** The detail names the value the file holds
+  (`integrations.issues = "github"`), the remedy says the process is still running what it booted
+  with, and the fix becomes a `goto` to the config page — where the pending card and its
+  `Apply and restart` button already are. Leaving the old fix would offer to write a value the file is
+  already holding, or re-ask a question it has answered.
+
+A check's settle set is **the keys the check itself reads**, and nothing that merely rides along in
+the same save. The confirm sheet writes `repoRoot`, `defaultBranch` and the provider target alongside
+`integrations`, and hanging those off `pointed` would have a pending `defaultBranch` announce that
+`pointed` had been answered — a sentence about a key that check never looked at. They land in
+`restart` instead, which claims nothing about what they fix.
+
+`credential` and `billing` are **not** in the map and must not be. Both read the environment, and no
+edit to `lubbdubb.config.json` puts a variable into a running process: a restatement there would tell
+an operator that bouncing the fleet will fix their expired token, and leave the fault in place
+afterwards.
+
+What no check spoke for becomes the `restart` row, computed from what was actually restated rather
+than from the map — otherwise a pending `userId` on a harness whose `identity` check is already `ok`
+falls between the two and reaches no surface at all.
 
 ### The verdicts are four-valued
 
