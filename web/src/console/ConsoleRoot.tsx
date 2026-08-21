@@ -11,7 +11,7 @@ import { Panel } from './Panel.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
 import { TicketsPanel } from '../components/TicketsPanel.js';
 import { ConfigPage } from '../components/ConfigPage.js';
-import { WorkTreePanel } from '../components/WorkTreePanel.js';
+import { RecordPanel } from '../components/RecordPanel.js';
 import { FindingsPanel } from '../components/FindingsPanel.js';
 import { LessonsPanel } from '../components/LessonsPanel.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
@@ -126,9 +126,9 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       // rather than held inside it, so a link to one carries both.
       return <InsightsPage view={view.insightsView} window={view.insightsWindow} actions={actions} />;
     case 'tickets':
-      // Embedded exactly as the work tree is, and for the same reason: it reaches
-      // its own route, which `console/` may not, but rendering a component that
-      // does is not reaching — the import ban is on `api.js` and still holds.
+      // Embedded exactly as Insights is, and for the same reason: it reaches its
+      // own route, which `console/` may not, but rendering a component that does
+      // is not reaching — the import ban is on `api.js` and still holds.
       return (
         <TicketsPanel
           query={{
@@ -169,15 +169,6 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       // own routes, which `console/` may not, but rendering a component that does
       // is not reaching — the import ban is on `api.js` and still holds.
       return <ConfigPage view={view} actions={actions} />;
-    case 'work':
-      // The shared panel, embedded exactly as the launch desk is: it reaches its
-      // own routes, which `console/` may not, but rendering one that does is not
-      // reaching — the import ban is on `api.js`, and it still holds here.
-      return (
-        <section className="work-panel">
-          <WorkTreePanel now={view.now} canFileTickets={view.state.config.canFileTickets} />
-        </section>
-      );
   }
 }
 
@@ -223,6 +214,7 @@ const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string>
   pets: 'Vivarium',
   localRun: 'Running locally',
   setup: 'Setup',
+  record: 'The record',
 };
 
 /**
@@ -371,6 +363,12 @@ function panelBody(
       );
     case 'setup':
       return <SetupPanel onClose={() => actions.openPanel(null)} />;
+    case 'record':
+      // The durable work graph, which was the console's second nav destination
+      // until every part of it found a better home. A panel now: an archive is
+      // consulted rather than worked on, and this way it is reachable from a goal
+      // page too — which the tab, outranked by any selected goal, never was.
+      return <RecordPanel now={view.now} />;
     case 'build':
       return (
         <BuildPanel

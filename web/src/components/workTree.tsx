@@ -7,7 +7,7 @@ import { relTime } from './util.js';
  * One node of the durable work graph, and the walk that indents it.
  *
  * Here rather than in either panel because there are two surfaces onto the same
- * subtree now — the [work tab](./WorkTreePanel.js), which draws a root the operator
+ * subtree now — [the record panel](./RecordPanel.js), which draws a root the operator
  * expanded, and [the record](./WorkRecord.js) on a goal's page, which draws that
  * goal's own. A row copied into the second would drift from the first exactly
  * where it matters least visibly: `inferred` is a chip that says the harness never

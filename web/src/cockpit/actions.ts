@@ -51,6 +51,8 @@ export type ConsolePanel =
   | 'pets'
   | 'localRun'
   | 'setup'
+  /** The durable work graph, which was the console's second nav destination. */
+  | 'record'
   | { ask: string }
   | null;
 
@@ -62,8 +64,13 @@ export type ConsolePanel =
  *
  * A selected goal outranks all three, so this says where the nav last was, never
  * what is drawn.
+ *
+ * `work` was the second of these and is not a destination any more: the record it
+ * drew reads on the goal pages, its triage list reads on the tickets tab, and what
+ * was left is the {@link ConsolePanel} `record`. `readPlace` aliases the old name
+ * onto `tickets`, where the one part of it an operator still acts on went.
  */
-export type ConsoleTab = 'overview' | 'work' | 'tickets' | 'insights' | 'pets' | 'config';
+export type ConsoleTab = 'overview' | 'tickets' | 'insights' | 'pets' | 'config';
 
 /**
  * Which reading the Insights page is showing.

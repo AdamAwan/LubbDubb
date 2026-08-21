@@ -58,7 +58,7 @@ The console asks for each the way it asks for a plan — a method on the seam �
 
 **Reaching `api.js` is not itself a reason to sit on the shell.** The rule is that no module under
 `console/` _imports_ it; a shared component that does is embedded like any other, and several are —
-`LaunchPanel`, `SchedulePanel` and `WorkTreePanel` all ride their own routes from inside the console.
+`LaunchPanel`, `SchedulePanel` and `RecordPanel` all ride their own routes from inside the console.
 
 The two screens `App.tsx` still draws itself — "Connecting…" and the locked-out page — stay there
 because neither has a view-model to draw.
@@ -128,7 +128,7 @@ Five surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ident ↗issue │ Overview Work Tickets Insights │ Scan · Fleet  Findings … ⚙ │ top bar
+│ ident ↗issue │ Overview Tickets Insights │ Scan · Fleet  Findings … Record ⚙ │ top bar
 ├────────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned            │
 ├───────────────┬────────────────────────────────────────────────────────┤
@@ -136,7 +136,7 @@ Five surfaces and one shell.
 │ ┌───────────┐ │                                                        │
 │ │ Blocking  │ │                                                        │
 │ │ escalation│ │             the situation area                         │
-│ │ plan      │ │  (a tab — overview, work, tickets, insights, pets — or a goal) │
+│ │ plan      │ │  (a tab — overview, tickets, insights, pets — or a goal) │
 │ │ permission│ │                                                        │
 │ │ Yours     │ │                                                        │
 │ │ bench     │ │                                                        │
@@ -154,14 +154,22 @@ placement rather than trusting the stylesheet.
 **The situation area draws exactly one thing**, and the precedence is load-bearing: a selected goal
 outranks the nav's tab, whichever it is. Selecting a goal is what a queue row does, and it does not
 move the nav — so with a tab winning, clicking an ask would land the operator on a triage list, or on
-the record, instead of on the ask.
+a reading, instead of on the ask.
 
-The **nav** is three tabs: Overview, Work, and Tickets — the last carrying the untriaged count, the
-one number that says whether triage is worth opening. It is `untriagedCount` (`web/src/worldBuckets.ts`)
+The **nav** is three tabs: Overview, Tickets and Insights — the second carrying the untriaged count,
+the one number that says whether triage is worth opening. It is `untriagedCount` (`web/src/worldBuckets.ts`)
 over the same watch bucket the tab's Unwatched filter uses, so the number on the button and the rows
 behind it cannot differ, and it is hidden at zero because a badge that always shows is one nobody
 reads. Every button clears _both_ pieces of state, because a nav click
 means "go here" and either half left standing would land somewhere else.
+
+**Work was the second of these and is not a destination any more** ([below](#the-record-panel)). Every
+part of it had found a better home — a goal's own record onto its goal page, the unrecorded-work
+call-out onto the tickets tab, the roots nothing has claimed into the `record` panel — so what the slot
+held by the end was a disclosure triangle over an index of pages that are one click away anyway. A nav
+slot is the most expensive space in the cockpit, and the rule for what earns one is the same rule that
+keeps Config out: **the nav is the surfaces work happens on**. `readPlace` aliases `?tab=work` onto
+tickets, where the one half of it an operator acted on went.
 
 **The nav sits in the top bar** (`TopBar.tsx`), not at the head of the situation area. The situation
 area scrolls, and a page's primary navigation that scrolls away is navigation you have to scroll back
@@ -184,7 +192,8 @@ The tabs are a **list** (`ConsoleTab`, `web/src/cockpit/actions.ts`) rather than
 of buttons over a boolean, for `ConsolePanel`'s reason: a destination that has to be remembered in two
 booleans and four call sites is a destination that arrives half-wired. `test/console.test.ts` renders
 the nav and asserts all three labels, so a tab added to the type and forgotten in the nav is a view
-nothing can reach — and fails.
+nothing can reach — and fails. It asserts `Work` is **not** among them for the mirror reason: a slot
+given back is given back.
 
 **Pets is the fourth, and it is conditional.** It is appended to the list only when
 `state.pets` is non-null — the same reading that decides whether the rail draws a vivarium at all —
@@ -241,9 +250,9 @@ once.
 
 | Parameter                            | Carries                                                                                                                           |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
-| `tab`                                | `work` / `tickets`; the overview is the absent value. `backlog` is an alias for `tickets`, so links to the deleted tab still land |
+| `tab`                                | `tickets` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, so links to either deleted tab still land |
 | `goal`                               | the open goal page, as `issue:<n>`                                                                                                |
-| `panel`                              | `findings` / `lessons` / `faults` / `output` / `launch`                                                                           |
+| `panel`                              | `findings` / `lessons` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                  |
 | `ask`                                | the queue row a `{ ask }` panel is showing                                                                                        |
 | `agent`                              | the open drawer's agent                                                                                                           |
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                    |
@@ -978,42 +987,44 @@ since stopped honouring it.
 The demo backend holds its own clock and reports the claim two beats after load, so the ending — the
 entry leaving with nobody having pressed anything — is visible in the Pages build.
 
-## The work tab
+## The record panel
 
-The durable record: `WorkTreePanel`, the shared component, drawn as the third nav destination. It is
-**the one surface that outlives the world snapshot** — every other panel draws the snapshot and so
-forgets a pull request the moment it ages out of `closedPrWindowMs`, while this one still knows that
-#40 merged and which issue it delivered.
+The durable record: `RecordPanel`, opened from the **Record** reading on the top bar. It is **the one
+surface that outlives the world snapshot** — every other panel draws the snapshot and so forgets a pull
+request the moment it ages out of `closedPrWindowMs`, while this one still knows that #40 merged and
+which issue it delivered.
 
-It is a **tab rather than a strip below the console**, which is where it used to sit. A surface hung
-under a full-height layout is reachable only by scrolling past everything else, so the record an
-operator opens the cockpit to check read as an afterthought of the page — and the two views above it,
-already tabbed, said plainly what shape the third should be.
+It has been three shapes, and the argument each time was the same one about where a reader finds it. It
+was a strip below the console, reachable only by scrolling past everything else; then the second nav
+destination, which is what a record an operator opens the cockpit to check deserved; and it is a panel
+now, because by the end the tab was drawing almost nothing at full weight. Its two halves had both
+found somewhere better to be: a goal's own subtree onto [its goal page](#the-record-on-the-goal-it-belongs-to),
+where the reader already is, and the unrecorded-work call-out onto [the tickets tab](#unrecorded-work),
+where the rest of triage happens. What was left in the slot was a disclosure triangle over an index of
+pages that are one click away anyway.
 
-Two things it keeps from that move. It is **fetched on open and never polled** — `/api/work` for the
-roots, `/api/work/:ref` for a subtree — because `/api/state` comes round every couple of seconds and
-the graph only ever grows; being a tab is what makes "on open" honest, since nothing fetches until the
-operator goes there. And **unrecorded work** stays at its head: what the harness did that nothing in
-the tracker accounts for, with `File a work item` and `Ignore` beside each row, since nobody outside
-can ever mark done what nothing records.
+**A panel is the right shape for an archive, and it is also a better one than the tab was.** A record is
+consulted — you go to it with a question, read one thing and leave — where the nav is the surfaces work
+happens *on*. And the bar is reachable from everywhere: a selected goal outranks every tab, so the
+record-as-a-tab could not be read beside the goal that sent you looking for it, while a panel draws over
+whatever is in front. What it costs is the glance: nothing on the bar says the graph has anything new in
+it, and nothing should — the reading carries **no count**, because every number the strip states is a
+thing waiting on a person and the record is never waiting on anyone. It sits at the tail of the strip
+with Config, the two ways-in that are not gauges.
 
-That list is only worth a reader's attention while it is **short and true**, and for a time it was
-neither: a job requeued after a crash, and a job promoted from a finding, both named the tracker item
-they stood in for and neither was adopted by it, so the panel filled with rows reading
-`Requeued: Plan issue #35699` — a tracker link on the face of the row and a filing button beside it.
-The predicate did not change; the fold's [third adoption arm](16-http-api.md#get-apiwork) did, and the
-rows cleared themselves on the next pulse. Worth stating because it is the failure mode a surface like
-this one has: a list of things that are owed is read exactly as long as everything on it is owed.
-→ [16](16-http-api.md#get-apiwork)
+It is **fetched on open and never polled** — `/api/work` for the roots, `/api/work/:ref` for a subtree —
+because `/api/state` comes round every couple of seconds and the graph only ever grows. Being a panel is
+what makes "on open" honest, since nothing fetches until the operator opens it.
 
-**Goal roots are collapsed behind a disclosure**, because each is now drawn in full on its own goal
-page ([below](#the-record-on-the-goal-it-belongs-to)). Collapsed and not dropped: `Ref` is the only
-thing that knows whether a ref _has_ a page — a ticket the snapshot has forgotten does not — so
-hiding those rows would make their record unreachable rather than relocated. They stay, drawn as
-references, and the component picks the destination. What is left at full weight is what has nowhere
-else to be: operator jobs, and the work items filed for them.
+**Goal roots are collapsed behind a disclosure**, because each is now drawn in full on its own goal page
+([below](#the-record-on-the-goal-it-belongs-to)). Collapsed and not dropped: `Ref` is the only thing that
+knows whether a ref _has_ a page — a ticket the snapshot has forgotten does not — so hiding those rows
+would make their record unreachable rather than relocated. They stay, drawn as references, and the
+component picks the destination. What is left at full weight is what has nowhere else to be: operator
+jobs, and the work items filed for them.
 
 It is a **lens**: nothing here, and nothing in the dispatcher, decides anything from what it draws.
+→ [16](16-http-api.md#get-apiwork)
 
 ### The record, on the goal it belongs to
 
@@ -1046,7 +1057,7 @@ Both surfaces wrap it in `RefLinksExtended` with the **route's** `refUrls`, neve
 shell's map is assembled from the world, and the graph's whole job is remembering what left it.
 
 The demo derives this from `buildGoalPage` rather than returning the empty graph `getWorkRoots` does.
-The two are asked different questions — the tab lists roots _nothing has claimed_, and a world rebuilt
+The two are asked different questions — the panel lists roots _nothing has claimed_, and a world rebuilt
 each load has none, but answering "nothing is recorded" for a goal the demo is visibly working
 misrepresents the surface rather than under-claiming it. It is derived so it cannot contradict the
 cards above it; what it cannot show is the one thing the record is _for_, since this world has never
@@ -1056,8 +1067,8 @@ forgotten anything.
 
 Every item the tracker's assignment filter has returned since the harness first swept — worked or
 not, live or frozen — and, since the backlog was folded into it (#351), **the one surface triage
-happens on**. Where the [work tab](#the-work-tab) is the record of what the harness _did_, this is
-what it was **asked** to do, and what you are asking it to do next. It is drawn as a table because it
+happens on**. Where [the record](#the-record-panel) is what the harness _did_, this is what it was
+**asked** to do, and what you are asking it to do next. It is drawn as a table because it
 is read as one: the tracker id, the ticket, the readings, the cost and the date, each row taking the
 list's tracks by subgrid so the columns line up however long one title runs.
 
@@ -1078,10 +1089,13 @@ backlog is deleted and every part of it is named a destination here rather than 
 
 `?tab=backlog` **resolves to this tab** rather than falling through to the overview, which is what an
 unknown tab does: every bookmark and shared link to it would otherwise land somewhere else with
-nothing saying so. One alias entry in `place.ts`; a stranded link is a bug report.
+nothing saying so. One alias entry in `place.ts`; a stranded link is a bug report. `?tab=work` resolves
+here too, and that one is the weaker claim of the two — tickets is not a superset of the retired work
+tab, it has [the half of it](#unrecorded-work) an operator acted on, while the record itself is a panel
+a tab alias cannot open.
 
-It is **fetched on open and per page rather than polled** (`/api/tickets`), for the work tab's reason:
-the list is all-time and only grows, and `/api/state` comes round every couple of seconds.
+It is **fetched on open and per page rather than polled** (`/api/tickets`), for the record panel's
+reason: the list is all-time and only grows, and `/api/state` comes round every couple of seconds.
 → [16](16-http-api.md#get-apitickets)
 
 ### The mirror is the list; the world is the overlay
@@ -1219,6 +1233,38 @@ reading about a goal nobody is going to work.
 Unlike the group it replaces, the call-out is **absent when nothing is held** rather than drawn empty.
 A group that vanishes when quiet reads as one that broke; an exception nobody has is not a heading.
 
+### Unrecorded work
+
+What the harness did that nothing in the tracker accounts for, with `File a work item` and `Ignore`
+beside each row — since nobody outside can ever mark done what nothing records. `UnrecordedWork`, drawn
+as a second call-out above the list, below intake.
+
+**It is here because it is triage.** Filing or ignoring is a verdict cast on a row, which is what this
+whole tab is for; it sat at the head of the work tab while that existed, and by the end it was the only
+part of that tab an operator ever acted on. It is drawn **below** the intake
+call-out because intake is the louder of the two: an unclear assay stops dispatch, while an unrecorded
+job is a debt that costs nothing until somebody outside asks what the harness has been doing.
+
+It reads `/api/work` on mount, **fetched on open and never polled** — the same route and the same
+reasoning as [the record panel](#the-record-panel), and the rows change on a pulse at most. Both
+surfaces reading one route is also what keeps them from disagreeing about what is outstanding.
+
+Like intake, it draws **nothing at all** when there is nothing outstanding. That is the opposite of the
+rule the overview's cards obey, and deliberately: those are gauges an operator glances at the same spot
+for, where a card that vanishes when quiet is indistinguishable from one that broke — this is a call-out
+above somebody else's list, and a permanent "nothing to record" heading over the tickets table is a row
+of chrome saying so on every visit. Ignored rows stay behind a disclosure at the tail, since an ignore
+that could only be set would make an accidental click permanent.
+
+That list is only worth a reader's attention while it is **short and true**, and for a time it was
+neither: a job requeued after a crash, and a job promoted from a finding, both named the tracker item
+they stood in for and neither was adopted by it, so the panel filled with rows reading
+`Requeued: Plan issue #35699` — a tracker link on the face of the row and a filing button beside it.
+The predicate did not change; the fold's [third adoption arm](16-http-api.md#get-apiwork) did, and the
+rows cleared themselves on the next pulse. Worth stating because it is the failure mode a surface like
+this one has: a list of things that are owed is read exactly as long as everything on it is owed.
+→ [16](16-http-api.md#get-apiwork)
+
 ### Two controls, and no more
 
 This tab used to state that nothing in it changed the world. That was true of a record and is false of
@@ -1338,10 +1384,20 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 ## The top bar and the panels
 
-The strip carries the ident, the nav, the pulse, the fleet cap, and six readings: **Findings**,
-**Lessons**, **Faults**, **Launch**, **Build** and **Config**. Each is one subject stated once, in
-a plain label-and-number face. None reaches `api.js`: every one is a method on `CockpitActions`, and
-the fleet cap is the shared `FleetControl`, which is already on that seam.
+The strip carries the ident, the nav, the pulse, the fleet cap, and seven readings: **Findings**,
+**Lessons**, **Faults**, **Launch**, **Build**, **Record** and **Config**. Each is one subject stated
+once, in a plain label-and-number face. None reaches `api.js`: every one is a method on
+`CockpitActions`, and the fleet cap is the shared `FleetControl`, which is already on that seam.
+
+**The last two state no number, and they sit together at the tail for that reason.** Every reading
+before them is a count or a state — a thing waiting on a person, or where this build stands — and is
+_glanced at_; [Record](#the-record-panel) and Config are destinations, _aimed at_, and interleaving them
+among numbers that change would put two things you look for in a fixed spot behind two things you read.
+Neither is in the nav, and it is one rule keeping both out: the nav is the surfaces work happens **on**,
+so a button beside them would say the archive is somewhere work happens and configuration is something
+you do rather than the thing you set up once. Record is on the bar rather than a tab for a second reason
+of its own — a selected goal outranks every tab, so as a tab the record could not be read beside the goal
+that sent you looking for it.
 
 **The ident carries the one way off this bar to a tracker**, and it has two faces onto _one_
 destination. Connected, `Raise an issue` is a button opening a compose modal and the issue is created
@@ -1428,7 +1484,7 @@ It is deliberately **not** drawn as the crash-recovery banner. That treatment is
 is loud because the harness is running no cycles at all while it is up; an available update stops
 nothing, so borrowing it would say something untrue — and after the second time, be scrolled past.
 
-Five panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings is a shell-owned modal beside them:
+Six panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings is a shell-owned modal beside them:
 
 - **Findings** — the shared `FindingsPanel`, with promote / file / dismiss. The count is findings at
   `open` and nothing else: promoted, filed and dismissed are done, and `filing` is decided. Nothing in
@@ -1489,6 +1545,10 @@ Five panels open from the bar, the ask panel opens from a queue row ([the rail](
   without a supervisor gets the commands instead of the buttons, and a line saying what to run to get
   the button; the commit list says when it has been capped, since a truncated history with no note
   reads as the whole of it.
+
+- **Record** — the durable work graph, `RecordPanel`, which was the console's second nav destination
+  until every part of it found a better home. It is the one surface here that carries no count and no
+  verdict: an archive, consulted when a question sends you to it. → [the record panel](#the-record-panel)
 
 ### Launching work
 
@@ -2793,8 +2853,8 @@ from a reader that broke, and because each of these is a decision rather than an
   be built from.
 - **`reorderUpNext`, `dismissHumanTask` and `fetchWorkSubtree` have no caller either.** The overview's
   Up next carries one control — the profile picker — and no drag handle; the rail carries only
-  `open` human tasks, so there is no settled tail to dismiss from; and the work tab embeds the shared panel, which reaches its own route
-  directly — the seam keeps the method for the reason it keeps `setStackLanding`.
+  `open` human tasks, so there is no settled tail to dismiss from; and the record panel reaches its own
+  route directly — the seam keeps the method for the reason it keeps `setStackLanding`.
 - **`tailByAgent` is folded and drawn nowhere.** `agent:tail` frames still arrive and still cost
   nothing to keep — they are one line per agent — but the fleet row draws the agent's `note`
   instead, which is what the agent chose to say rather than whatever its last line happened to be.
@@ -2896,9 +2956,11 @@ no measured spend drawing no `$0.00`, the overview's five cards, an empty rack s
 tickets tab's intake call-out, its rows being ways into their goals and its container cascade, the fault
 log keeping its clear at zero, a panel's two ways out, the demo gate on injection, the precedence
 between a goal and whichever tab the nav is on, all three tabs appearing in the nav (a destination added
-to `ConsoleTab` and forgotten there is a view nothing can reach), the work graph drawn by its own tab
-and no other, the recovery banner outside the situation area, a dropped socket drawing nothing at all,
-and the shell rendering the drawer the console only asks for — and no longer the work graph.
+to `ConsoleTab` and forgotten there is a view nothing can reach) and `Work` appearing in none of them,
+the work graph reachable from the bar at every tab and over an open goal, the tickets tab mounting the
+unrecorded-work call-out and drawing nothing when it has nothing, the recovery banner outside the
+situation area, a dropped socket drawing nothing at all, and the shell rendering the drawer the console
+only asks for — and no longer the work graph.
 
 ## Setup
 

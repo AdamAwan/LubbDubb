@@ -25,7 +25,7 @@ test('every place round-trips through the query string', () => {
     at({ tab: 'tickets', ticketTracking: 'frozen', ticketState: 'In Review' }),
     at({ tab: 'tickets', ticketFeature: 812, ticketGroup: 'flat', ticketOrder: 'changed' }),
     at({ tab: 'tickets', ticketFeature: 'none' }),
-    at({ tab: 'work' }),
+    at({ panel: 'record' }),
     at({ goal: 'issue:142' }),
     at({ tab: 'tickets', goal: 'issue:142', agent: 'agent-7' }),
     at({ panel: 'findings' }),
@@ -130,6 +130,20 @@ test('a link to the deleted backlog tab lands on the tickets tab', () => {
   assert.equal(readPlace('?tab=backlog').tab, 'tickets');
   assert.equal(readPlace('?tab=backlog&collapsed=3').collapsed[0], 3, 'and keeps the rest of the place');
   assert.equal(readPlace('?tab=nonsense').tab, 'overview', 'a tab that never existed is still the overview');
+});
+
+/**
+ * The work tab went the same way, and lands in the same place.
+ *
+ * It is the weaker of the two aliases and deliberately so: tickets is not a
+ * superset of the work tab, it has the half of it an operator *acted* on — the
+ * unrecorded-work call-out — while the record itself is a panel now. A tab alias
+ * cannot open a panel, and of the two halves this is the one a saved `?tab=work`
+ * was overwhelmingly about.
+ */
+test('a link to the retired work tab lands where its triage went', () => {
+  assert.equal(readPlace('?tab=work').tab, 'tickets');
+  assert.equal(readPlace('?tab=work&goal=issue:142').goal, 'issue:142', 'and keeps the rest of the place');
 });
 
 // The two coarse axes swapped meaning in #351: `state` is the tracker's own word

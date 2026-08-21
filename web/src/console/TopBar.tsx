@@ -10,18 +10,25 @@ import { untriagedCount } from '../worldBuckets.js';
 /**
  * The nav's destinations, in reading order — the order the tabs are drawn in.
  *
- * Four, since Insights arrived. It is the first destination here that is read
- * rather than acted on, which is worth stating because the nav used to be
- * described as "the three surfaces work happens on": the rule that actually
- * holds is that the nav is where you *go*, and Config stays out of it because it
- * is set up once, not because it is passive. Insights is somewhere an operator
- * goes several times a day and comes back from.
+ * Three. Insights is the one destination here that is read rather than acted on,
+ * which is worth stating because the nav used to be described as "the surfaces
+ * work happens on": the rule that actually holds is that the nav is where you
+ * *go*, and Config stays out of it because it is set up once, not because it is
+ * passive. Insights is somewhere an operator goes several times a day and comes
+ * back from.
+ *
+ * **Work was the second of these and is not here any more.** Every part of it had
+ * found a better home — a goal's record onto its goal page, the unrecorded-work
+ * call-out onto the tickets tab, and the roots nothing has claimed into the
+ * `record` panel on this bar — so what the slot held by the end was a disclosure
+ * triangle over an index of pages that are one click away anyway. A nav slot is
+ * the most expensive space in the cockpit and it was buying a fold.
  *
  * `pets` is absent when the snapshot ships no vivarium — the feature off, or on
  * and hidden — exactly as the rail's vivarium is: a tab that opens on a page
  * explaining a subsystem this cockpit does not draw is worse than no tab.
  */
-const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets', 'insights'];
+const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'insights'];
 
 /**
  * Where a bug in LubbDubb goes when the harness cannot file one itself — fixed, and
@@ -49,7 +56,6 @@ const NEW_ISSUE_URL = 'https://github.com/AdamAwan/LubbDubb/issues/new';
 
 export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
-  work: 'Work',
   tickets: 'Tickets',
   insights: 'Insights',
   pets: 'Pets',
@@ -461,10 +467,29 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
         <Setup view={view} actions={actions} />
         <LocalRun view={view} actions={actions} />
         <Build view={view} actions={actions} />
-        {/* Config is a destination now, not a modal — but it stays here rather
-            than joining the nav: the nav is the three surfaces work happens on,
-            and a fourth button beside them would say configuration is a fourth
-            thing you do rather than the thing you set up once. */}
+        {/* The tail of the strip is the two ways-in that are not gauges. Every
+            reading above states a count or a state and is glanced at; these two
+            state nothing and are aimed at, so they sit together at the end rather
+            than interleaved among numbers that change.
+
+            Record is the durable work graph, which was the console's second nav
+            destination until everything on it found a better home. It keeps a way
+            in because it is the only surface that outlives the world snapshot —
+            the answer to "what happened to that job" long after the pulse forgot
+            — and it is a way in from the *bar* so it is reachable from a goal
+            page too, which a tab never was.
+
+            Config is a destination and not a modal, but it stays off the nav for
+            the same reason as Record: the nav is the surfaces work happens on,
+            and a button beside them would say configuration is another thing you
+            do rather than the thing you set up once. */}
+        <Read
+          label="Record"
+          value={null}
+          quiet={false}
+          onOpen={() => actions.openPanel('record')}
+          title="What the harness did, after the world snapshot forgot it — operator jobs, and the goals it has worked"
+        />
         <Read
           label="Config"
           value={null}
