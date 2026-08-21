@@ -232,12 +232,64 @@ measured nothing contributes no row and no agent count, and a goal worked entire
 goal as a free one. `costUsd` is a **running** total: it climbs while agents work and stops when the
 last one ends.
 
+## The window
+
+`src/insightsWindow.ts`. Every reading the Insights page draws is measured over one stretch of time,
+chosen by the operator and resolved here — the key comes in on the query string of the three fetched
+routes ([16](16-http-api.md#the-fetched-routes)), and the resolution is passed down to every fold under
+them.
+
+Before this, each reading picked its own span and none of them lined up: six hours for the production
+graph, five and seven days for the spend tiles, a fortnight for the spend timeline, another fortnight
+for CI health, eight weeks for the trend — and all-time for the run half of reliability and for the
+spend totals. Two figures side by side on one surface described different stretches of the fleet's life,
+and nothing said so. A number moving in one panel could not be read against a number in another, which
+is what made the whole set feel inert.
+
+Five windows, each with the resolution it is drawn at:
+
+| Key    | Span      | Timeline    |
+| ------ | --------- | ----------- |
+| `6h`   | 6 hours   | 12 × 30m    |
+| `24h`  | 24 hours  | 24 × 1h     |
+| `7d`   | 7 days    | 28 × 6h     |
+| `30d`  | 30 days   | 30 × 1d     |
+| `all`  | unbounded | 26, computed |
+
+**The bucket count is stated rather than derived** from `span / bucket`, because the two must agree and
+a derived count hides the disagreement: a span that is not a whole number of buckets silently draws a
+final bar covering less time than the ones beside it — a bar shorter for a reason nothing on the glass
+gives.
+
+**`all` is genuinely unbounded**, which is what makes it worth having: it is the reading the panels gave
+by default, and folding it into a long fixed span would quietly drop the deployment that has been
+running since March. `ResolvedWindow.startMs` is `null` for it and every fold reads that as "no lower
+bound" rather than as a date; the store reads take `sinceOrEpoch`, written once so that a route reaching
+for `?? new Date(0)` itself cannot spell the same decision differently. A *timeline* still needs two
+ends, so `timelineSpan` takes the earliest datum the caller actually holds and divides what it finds —
+the buckets describe the history that exists rather than a span guessed at here, and a harness that
+started last Tuesday does not draw twenty-five empty buckets in front of itself.
+
+**A run counts where it ended**, and where it started only while it is still going (`runInstant`). A run
+that opened before the window and finished inside it spent its money inside it, and counting it at its
+start would leave a nine-hour agent out of the six-hour window it in fact dominated.
+
+**The window is shipped back on every payload** as `InsightsWindowView`, and the page draws that rather
+than the key it asked with. A caption computed in the browser from the key is free to disagree with the
+buckets the server actually cut, and the caption is the half a reader would believe.
+
+**The `window` query parameter is declared with the rule, not in the routes.** `InsightsQuery` lives in
+`src/insightsWindow.ts` beside the union it validates, for the reason `ShortfallBody` lives with the
+shortfall rule: three routes take it and all three must accept exactly the set the cockpit can offer.
+The default is applied there too, so a route reached without one answers for the same stretch the page
+opens on rather than for whatever that route's author picked.
+
 ## The spend breakdown
 
 `buildSpendInsights` (`src/spendInsights.ts`) answers the question a cost figure raises and cannot
 hold: **where did it go**. It is served by `GET /api/spend` ([16](16-http-api.md#the-fetched-routes))
-and drawn by the Spend panel ([17](17-cockpit.md#spend)). Three splits of one pot of money, plus the
-coverage caveat:
+and drawn by the Insights page's Economics and Work mix tabs ([17](17-cockpit.md#economics)). Three
+splits of one pot of money, plus the coverage caveat:
 
 - **By phase** — `deliberation` (`:plan`, `:assay`), `build` (the pickup root and every `:part:`),
   `ci` (`pr:<n>:ci`, `pr:<n>:ci-gate`), `landing` (every other `pr:*`), `evidence` (`:assess`,
@@ -249,11 +301,22 @@ coverage caveat:
   own ref, which is the one shape that would classify as `build`.
 - **By goal** — `rollUpIssueSpend`'s own per-issue totals, ranked, with the phase split inside each
   row and `unattributedCostUsd` as the last row rather than a footnote.
-- **Over time** — 14 rolling 24-hour buckets over `usage_events`. Rolling rather than calendar days
-  for the same reason the 5h/7d windows are: a calendar day needs a timezone the harness has no
-  opinion about.
+- **Over time** — rolling buckets over `usage_events` at [the window](#the-window)'s own resolution.
+  Rolling rather than calendar buckets: a calendar day needs a timezone the harness has no opinion
+  about, and the last bucket is therefore "up to now" — still filling, which is why the page draws it
+  hollow.
 - **By task type** and **by failing check** — `rollUpTaskTypes` and `rollUpChecks`
   (`src/taskTypeSpend.ts`), the grain below `phases`. See below.
+- **`landed` and `lostCostUsd`** — the two figures the Economics headline's ratio needs beside the
+  total: pull requests merged inside the window, and what the runs that failed or crashed inside it
+  cost. They ride on **this** payload rather than being fetched from the reliability one because
+  "$26 of $118 never landed" is one sentence, and fetching its two halves from two routes is how they
+  end up describing two windows. `lostCostUsd` counts `failed` and `crashed` only: a killed run is a
+  steer, and counting an operator's own change of mind as waste makes every steered fleet look broken.
+
+**The window is applied once, at the top of the fold**, and everything below reads the list it
+produces. Applying it per split would put the same filter in five places for four of them to get subtly
+different — and the way that shows up is a phase table whose costs do not add to the total beside it.
 
 ### By task type, and by check
 
@@ -342,10 +405,18 @@ fallback, but it now means one thing only — a goal older than the run record i
 
 ## The spend trend
 
-`buildSpendTrend` (`src/spendTrend.ts`) answers the question the breakdown cannot, being all-time:
-**is what I did working**. It is served by `GET /api/spend/trend`
-([16](16-http-api.md#the-fetched-routes)) and drawn by the Spend panel's Trend tab
-([17](17-cockpit.md#spend)). Eight weekly buckets, three readings, one shared axis.
+`buildSpendTrend` (`src/spendTrend.ts`) answers the question the breakdown cannot, being a single
+stretch: **is what I did working**. It is served by `GET /api/spend/trend`
+([16](16-http-api.md#the-fetched-routes)) and drawn by the Insights page's Trend tab
+([17](17-cockpit.md#the-trend-tab)). Eight buckets, three readings, one shared axis.
+
+**A bucket is one window, and there are eight of them.** The axis is the last eight windows *of the
+length the operator picked* (`trendSpan`) — `7d` gives eight weeks, `24h` gives eight days — which is
+what keeps one control meaningful on the one tab that is inherently about change. It has a second
+payoff: the comparison a headline draws against "the previous window" is literally the last two bars
+here, rather than a second notion of "before" for a reader to reconcile. The route's `since` therefore
+comes from `trendSince` rather than the window's own, which would fetch a single period and draw seven
+empty bars.
 
 **Cost over time is not the answer, which is why this is not a token timeline.** A fleet's bill falls
 when it is idle exactly as readily as when it is efficient, so a total per day says nothing about
@@ -356,7 +427,7 @@ work**.
 gameable for free: split the same work across twice as many smaller agents and input-per-run halves
 while nothing whatever improves. A closed goal cannot be subdivided by a dispatch change. It is the
 more awkward denominator — goals differ in size — so the **whole cohort's costs are shipped**
-(`SpendTrendWeek.costs`) rather than only the median, and the panel draws the spread as points. A
+(`SpendTrendBucket.costs`) rather than only the median, and the panel draws the spread as points. A
 median with no spread beside it lets a week that happened to close three small goals read as
 progress.
 
@@ -503,15 +574,16 @@ free, and a watch that cannot see must not be allowed to conclude anything — i
 
 `buildReliabilityInsights` (`src/reliabilityInsights.ts`) answers the question the spend breakdown
 stops one short of: the money bought _something_, and **did it work**. It is served by
-`GET /api/reliability` ([16](16-http-api.md#the-fetched-routes)) and drawn by the Yield panel
-([17](17-cockpit.md#yield)). Two halves, and they are the two halves of one funnel:
+`GET /api/reliability` ([16](16-http-api.md#the-fetched-routes)) and drawn by the Insights page's
+Reliability tab ([17](17-cockpit.md#reliability)). Two halves, and they are the two halves of one
+funnel:
 
-- **Run outcomes**, all-time. Every agent the harness has settled, split by how it ended (`done`,
+- **Run outcomes**, over the window. Every agent the harness settled inside it, split by how it ended (`done`,
   `failed`, `crashed`, `killed`, `interrupted`) and by the **spend panel's own phases** — the same
   `phaseOf` classifier, imported rather than re-written, so a row here and a row there are about the
   same set of runs. Plus what the faults cost, the median run length per phase, and the origins the
   harness went round more than once.
-- **CI health**, over 14 rolling days. Transitions into failing and into passing, the red rate over
+- **CI health**, over the same window. Transitions into failing and into passing, the red rate over
   them, how long a pull request stays red, which pull requests went red repeatedly, and what the `ci`
   and `landing` phases each cost inside the same window — fleet-wide as `ciCostUsd`, and **per pull
   request** as `CiSubject.costUsd`, so a count of reds and the money it took to answer them sit in
@@ -554,11 +626,18 @@ sentence. **The matcher that writes it and the matcher that reads it are the sam
 module**, for the PTY sentinel's reason: a reader that re-derived the format for itself would report
 zero failures, silently, the first time the wording changed.
 
-**The gauge and the panel fold once.** `tallyRunOutcomes` is exported and called twice — by
-`buildStateSnapshot`, which puts `runOutcomes` on `/api/state` for the Yield gauge to draw, and by
-this module, which spreads it as the panel's headline counts. A panel opened from a gauge must begin
-by agreeing with it, and agreement by construction is the only kind that holds. The gauge draws
-**nothing** until the first run settles: a rate over no runs is not 100%.
+**One fold behind the headline counts.** `tallyRunOutcomes` is exported and called twice — by
+`buildStateSnapshot`, which puts `runOutcomes` on `/api/state`, and by this module, which spreads it as
+the tab's headline counts over the windowed run list. Two counts of one population written a hundred
+lines apart is the disagreement this reading is least able to survive, and agreement by construction is
+the only kind that holds.
+
+**Both halves take the window, and that is the change.** The run half used to be all-time and the CI
+half a rolling fortnight, so a completion rate and a red rate sat side by side describing two different
+stretches of the fleet's life with nothing on the glass saying so. The cut is made **once**, at the
+door of `buildReliabilityInsights`, and every fold under it reads the list that produces: applying it
+per fold would put the same filter in four places for three of them to get subtly different.
+→ [the window](#the-window)
 
 **Derived, never stored,** and **fetched, never polled**, for the spend breakdown's reasons exactly.
 Everything it folds — the `agents` rows, `usage_events`, and the `pr_ci` rows of `world_events` — is
@@ -574,8 +653,8 @@ flakiest pipeline in the repository as recovering instantly.
 The reliability breakdown counts reds and prices them. It cannot say **why** any of them happened,
 and a flaky runner, a stale assertion, a missing `.js` extension and a real defect are the same red,
 the same dollars and the same row everywhere else the harness draws one. `remedies` is the record
-that closes that, and `buildRemedyInsights` (`src/remedyInsights.ts`) is its reading — a section of
-the Yield panel, on the same payload and over the same 14 days ([17](17-cockpit.md#yield)).
+that closes that, and `buildRemedyInsights` (`src/remedyInsights.ts`) is its reading — the Insights
+page's Causes tab, on the same payload and over the same window ([17](17-cockpit.md#causes)).
 
 **The agent that fixed it writes it.** `report_remedy` ([11](11-mcp-tools.md)) is called at the end
 of a `pr:<n>:ci` or `pr:<n>:comments` dispatch, and the knowledge is at its cheapest exactly then:

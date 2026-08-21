@@ -49,8 +49,8 @@ function view(over: Partial<CockpitView> = {}): CockpitView {
       viewingRetro: null,
       hatching: null,
       viewingScratchpad: null,
-      spendOpen: false,
-      reliabilityOpen: false,
+      insightsView: 'economics',
+      insightsWindow: '7d',
       selectedGoal: null,
       consolePanel: null,
       tab: 'overview',
@@ -602,8 +602,8 @@ function goalView(mutate: (state: CockpitView['state']) => void = () => {}, ref:
     viewingRetro: null,
     hatching: null,
     viewingScratchpad: null,
-    spendOpen: false,
-    reliabilityOpen: false,
+    insightsView: 'economics',
+    insightsWindow: '7d',
     selectedGoal: ref,
     consolePanel: null,
     tab: 'overview',
@@ -1222,7 +1222,6 @@ test('a reading opens the panel behind it, in front of the console', () => {
     ['findings', 'Findings'],
     ['lessons', 'Lessons'],
     ['faults', 'Faults'],
-    ['output', 'Output'],
     ['launch', 'Launch'],
   ];
   for (const [panel, title] of panels) {
@@ -1393,17 +1392,45 @@ test('each tab replaces the last, and a selected goal outranks every one of them
  * The work graph is the one surface that outlives the world snapshot, and it used
  * to hang off the bottom of the shell below the whole console — reachable only by
  * scrolling past every panel. It is a destination now. The nav is what says so:
- * three tabs, so a tab added to `ConsoleTab` and forgotten in the nav fails here
+ * four tabs, so a tab added to `ConsoleTab` and forgotten in the nav fails here
  * rather than being a view nothing can reach.
  */
 test('the work graph is a nav destination, not a strip under the page', () => {
   const nav = render(view()).split('</nav>')[0] ?? '';
-  for (const label of ['Overview', 'Work', 'Tickets']) {
+  for (const label of ['Overview', 'Work', 'Tickets', 'Insights']) {
     assert.ok(nav.includes(`>${label}`), `the nav is missing ${label}`);
   }
 
   assert.ok(render(view({ tab: 'work' })).includes('work-panel'), 'the Work tab draws the graph');
   assert.ok(!render(view()).includes('work-panel'), 'and no other tab draws it');
+});
+
+/**
+ * Insights is a destination, and the three readings it replaced are gone from the
+ * bar.
+ *
+ * Both halves matter and they are one change. Spend, Yield and Output were three
+ * readings of one subject — what the fleet cost, what it landed, how much of that
+ * survived — and each had grown a version of the other two on the panel behind
+ * it. Leaving any of them on the bar beside the page would be the cockpit stating
+ * one subject twice, which is the rule the strip is built on.
+ */
+test('Insights is where the three cost readings went, and they did not stay behind', () => {
+  const bar = render(view()).split('</div>')[0] ?? '';
+  const full = render(view());
+  for (const gone of ['>Spend<', '>Yield<', '>Output<']) {
+    assert.ok(!full.includes(gone), `${gone} must not be on the bar beside the page that replaced it`);
+  }
+  assert.ok(!bar.includes('Yield'), 'the bar states a subject once');
+
+  // The page itself draws under the nav rather than over the console: the rail is
+  // where the ask that sends an operator here comes from, and a sheet that covers
+  // it hides the row being answered.
+  const page = render(view({ tab: 'insights' }));
+  assert.ok(page.includes('insights-bar'), 'the Insights tab draws its window control');
+  assert.ok(!page.includes('read-backdrop'), 'Insights is a destination, not a modal over the console');
+  assert.ok(page.includes('cn-rail'), 'the queue rail stays in frame while a reading is open');
+  assert.ok(!render(view()).includes('insights-bar'), 'and no other tab draws it');
 });
 
 test('the shell renders the console, and the drawer that the console only asks for', () => {

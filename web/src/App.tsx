@@ -6,8 +6,6 @@ import { HatchModal } from './components/HatchModal.js';
 import { RetroModal } from './components/RetroModal.js';
 import { ScratchpadModal } from './components/ScratchpadModal.js';
 import { PlanModal } from './components/PlanModal.js';
-import { ReliabilityModal } from './components/ReliabilityModal.js';
-import { SpendModal } from './components/SpendModal.js';
 import { RefLinks } from './components/refs.js';
 import { goalIssue } from './view/goalPage.js';
 
@@ -158,8 +156,6 @@ export function App() {
       {status.view.viewingScratchpad && (
         <ScratchpadModal issueRef={status.view.viewingScratchpad} onClose={() => status.actions.viewScratchpad(null)} />
       )}
-      {status.view.spendOpen && <SpendModal onClose={() => status.actions.openSpend(false)} />}
-      {status.view.reliabilityOpen && <ReliabilityModal onClose={() => status.actions.openReliability(false)} />}
     </RefLinks>
   );
 }

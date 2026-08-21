@@ -6,16 +6,22 @@ import { FleetControl } from '../components/FleetControl.js';
 import { ExtLink } from '../components/util.js';
 import { RaiseIssueModal } from '../components/RaiseIssueModal.js';
 import { untriagedCount } from '../worldBuckets.js';
-import { productionReading } from '../view/production.js';
 
 /**
  * The nav's destinations, in reading order — the order the tabs are drawn in.
+ *
+ * Four, since Insights arrived. It is the first destination here that is read
+ * rather than acted on, which is worth stating because the nav used to be
+ * described as "the three surfaces work happens on": the rule that actually
+ * holds is that the nav is where you *go*, and Config stays out of it because it
+ * is set up once, not because it is passive. Insights is somewhere an operator
+ * goes several times a day and comes back from.
  *
  * `pets` is absent when the snapshot ships no vivarium — the feature off, or on
  * and hidden — exactly as the rail's vivarium is: a tab that opens on a page
  * explaining a subsystem this cockpit does not draw is worse than no tab.
  */
-const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets'];
+const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets', 'insights'];
 
 /**
  * Where a bug in LubbDubb goes when the harness cannot file one itself — fixed, and
@@ -45,6 +51,7 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
   work: 'Work',
   tickets: 'Tickets',
+  insights: 'Insights',
   pets: 'Pets',
   config: 'Config',
 };
@@ -334,27 +341,25 @@ function originIssueNumber(originRef: string): number | null {
 }
 
 /**
- * The control-room strip: ident, the nav, the pulse, the fleet cap, and seven
+ * The control-room strip: ident, the nav, the pulse, the fleet cap, and the
  * readings. The nav is here because this is the only row of the shell that never
  * scrolls — everything else lives inside `.cn-sit`, which does. The ident carries
  * the one way off this bar to a tracker — the compose modal where the harness can
  * file, and the external form it falls back to where it cannot ({@link Ident}).
  *
- * Each reading is one subject stated once, mirroring `StatusBar`'s rule but
- * with the mockup's plain text-and-number face — the console has no icon set of
- * its own to draw from. Spend,
- * Yield, Output, Findings and Faults open a panel or a full-surface view;
- * Settings does too. None reaches `api.js` — every one of these is a method on
- * `CockpitActions`, and the fleet cap is the shared `FleetControl`, which is
- * already on that seam.
+ * Each reading is one subject stated once, in a plain text-and-number face — the
+ * console has no icon set of its own to draw from. None reaches `api.js`: every
+ * one is a method on `CockpitActions`, and the fleet cap is the shared
+ * `FleetControl`, which is already on that seam.
  *
- * Output reads `productionReading` from `../view/production.js` — the same
- * derivation the production graph itself is built on — rather than a
- * differently-shaped count of the same events: a gauge and the panel it opens
- * must agree from the first paint, and only sharing the one function keeps
- * that true by construction. It sits in `view/` — a pure, React-free derivation,
- * same as `viewModel.ts` and `goalPage.ts` — so that a gauge and the panel behind
- * it can share it without either reaching into the other's presentation.
+ * **Spend, Yield and Output are no longer here.** They were three readings of one
+ * subject — what the fleet cost, what it landed, how much of that survived — and
+ * each of the three had grown a version of the other two on its own panel. They
+ * are the Insights destination now, which is in the nav: a reading you go to and
+ * come back from rather than a number you glance at, and one whose window an
+ * operator changes rather than accepts. What is left on this bar is what a glance
+ * can actually settle — counts of things waiting on a person, and the state of
+ * this build. → docs/spec/17-cockpit.md#insights
  */
 export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const { state } = view;
@@ -371,25 +376,11 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
     );
   }
 
-  const yieldPct =
-    state.runOutcomes.completionRate === null ? null : Math.round(state.runOutcomes.completionRate * 100);
-  const spendUsd = state.usage.windows.fiveHourCostUsd;
   const faultCount = state.errors.length;
   // The queue, not the history: a launched blueprint that has been dispatched is
   // an agent in the Fleet, and counting it here would have the reading climb as
   // work starts rather than as it waits.
   const queued = state.jobs.filter((job) => job.status === 'queued').length;
-  // Same derivation the production graph itself is built on (`actions.openPanel('output')`
-  // opens it) — a gauge and the panel it opens must start out agreeing, so this is
-  // the windowed rate, not a different-shaped count of the same events.
-  const production = productionReading({
-    decisions: state.decisions,
-    worldEvents: state.worldEvents,
-    fiveHourCostUsd: state.usage.windows.fiveHourCostUsd,
-    now: view.now,
-  });
-  const mergesPerHour = production.series.find((s) => s.key === 'merges')?.perHour ?? 0;
-
   return (
     <div className="cn-bar">
       <Ident view={view} actions={actions} />
@@ -407,27 +398,6 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
       </div>
 
       <div className="cn-reads">
-        <Read
-          label="Spend"
-          value={`$${spendUsd.toFixed(2)}`}
-          quiet={spendUsd === 0}
-          onOpen={() => actions.openSpend(true)}
-          title="What the fleet has spent — open the breakdown"
-        />
-        <Read
-          label="Yield"
-          value={yieldPct === null ? null : `${yieldPct}%`}
-          quiet={yieldPct === null || yieldPct === 100}
-          onOpen={() => actions.openReliability(true)}
-          title="How much of the settled work finished — open the breakdown"
-        />
-        <Read
-          label="Output"
-          value={`${mergesPerHour.toFixed(1)}/h`}
-          quiet={mergesPerHour === 0}
-          onOpen={() => actions.openPanel('output')}
-          title={`${mergesPerHour.toFixed(1)} merges an hour over the last ${Math.round(production.windowMs / 3_600_000)}h — open the output panel`}
-        />
         <Read
           label="Findings"
           value={`${view.openFindingCount}`}

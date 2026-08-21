@@ -8,6 +8,7 @@ import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
 import { CiLadder, CourtChip } from './GoalPage.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
+import { productionReading } from '../view/production.js';
 
 /**
  * What is shown when no goal is selected: five cards, rows rather than pictures.
@@ -31,8 +32,79 @@ export function Overview({ view, actions }: { view: CockpitView; actions: Cockpi
       <GoalsInFlight view={view} actions={actions} />
       <Rack view={view} actions={actions} />
       <UpNext view={view} actions={actions} />
+      <Rate view={view} actions={actions} />
       <WorldSignals view={view} />
     </div>
+  );
+}
+
+/**
+ * Is the floor producing, or merely busy?
+ *
+ * The one reading in the cockpit that is against **time**, and the only way to
+ * tell a fleet that is working from one that is spinning. It was the Output
+ * panel; the half of it that was about money is the Insights page's headline
+ * ratio now, and what is left is the half that belongs on the overview — rates
+ * over the last six hours, which is a *now* question rather than an analytical
+ * one.
+ *
+ * It stays a **fixed six hours** while everything on Insights obeys a control,
+ * and deliberately: this card answers "what is happening", and a window an
+ * operator has to set before the answer means anything is not that question. It
+ * says the span out loud for the same reason.
+ *
+ * **The churn ratio is the point.** Dispatches are effort and merges are output,
+ * so a rising first figure over a flat second one is a fleet going round. The
+ * truncation note is not decoration either: a rate that silently under-reports
+ * is worse than no rate.
+ */
+function Rate({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
+  const reading = productionReading({
+    decisions: view.state.decisions,
+    worldEvents: view.state.worldEvents,
+    fiveHourCostUsd: view.state.usage.windows.fiveHourCostUsd,
+    now: view.now,
+  });
+  const hours = Math.round(reading.windowMs / 3_600_000);
+  return (
+    <section className="cn-card">
+      <h3>
+        Rate <i className="cn-n">last {hours}h</i>
+        {/* The way on to the money behind these rates. A card that names a
+            reading and offers no way to it is the cockpit's most repeated dead
+            end. */}
+        <button type="button" className="cn-tgl" onClick={() => actions.openInsights({})}>
+          Insights
+        </button>
+      </h3>
+      <div className="cn-rows">
+        {reading.series.map((s) => (
+          <div className="cn-row" key={s.key}>
+            <span className="cn-grow">
+              <b className="cn-name">{s.label}</b>
+              {/* The first half being empty is not a 0% change — there is nothing
+                  to have changed from, and an arrow there would be invented. */}
+              <span className="cn-sub">
+                {s.deltaPct === null
+                  ? 'nothing in the first half to compare against'
+                  : `${s.deltaPct > 0 ? '+' : ''}${s.deltaPct}% against the first half`}
+              </span>
+            </span>
+            <span className="cn-num">{s.perHour.toFixed(1)}/h</span>
+          </div>
+        ))}
+      </div>
+      <p className="cn-empty">
+        {reading.churnRatio === null
+          ? `Nothing has merged in ${hours}h — every dispatch so far is effort without output.`
+          : `${reading.churnRatio.toFixed(1)} dispatches per merge — the number that separates producing from churning.`}
+      </p>
+      {reading.truncated && (
+        <p className="cn-empty">
+          The decision log does not reach back {hours}h, so the dispatch and escalation rates are a floor.
+        </p>
+      )}
+    </section>
   );
 }
 

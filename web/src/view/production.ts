@@ -1,20 +1,26 @@
 import type { Decision, WorldEvent } from '../types.js';
 
 /**
- * Production statistics — the panel the game opens on `P`, and the one reading
- * this cockpit had no equivalent of.
+ * Production statistics — is the floor producing, or merely busy?
  *
- * Every other panel answers "what is happening right now". None of them answers
- * "is this floor actually producing", which is a question about *rates* and can
- * only be read against time. The inputs are already on the snapshot and already
- * timestamped, so this derives rather than asking the server for anything.
+ * A question about *rates*, which can only be read against time, and the one the
+ * rest of the overview does not answer: every other card there says what is
+ * happening, not whether it is adding up to anything. The inputs are already on
+ * the snapshot and already timestamped, so this derives rather than asking the
+ * server for anything.
+ *
+ * **It keeps a fixed six-hour window while the Insights page obeys a control**,
+ * and that is not an oversight. This is a *now* reading, drawn on the surface an
+ * operator glances at; a window they have to set before the answer means anything
+ * is a different question, and that question has a page of its own.
+ * → docs/spec/17-cockpit.md#the-overview
  */
 
 /** Six one-hour buckets. Long enough to show a trend, short enough to be about today. */
 const WINDOW_MS = 6 * 60 * 60 * 1000;
 const BUCKETS = 6;
 
-export type SeriesKey = 'dispatches' | 'merges' | 'escalations';
+type SeriesKey = 'dispatches' | 'merges' | 'escalations';
 
 interface ProductionSeries {
   key: SeriesKey;
@@ -26,7 +32,7 @@ interface ProductionSeries {
   deltaPct: number | null;
 }
 
-export interface ProductionReading {
+interface ProductionReading {
   series: ProductionSeries[];
   windowMs: number;
   /** The tallest bucket across every series — the graph's shared y-scale. */
@@ -44,21 +50,6 @@ export interface ProductionReading {
    * panel: a rate that silently under-reports is worse than no rate.
    */
   truncated: boolean;
-}
-
-/**
- * A y-scale whose labels are whole events.
- *
- * Four fixed gridlines over a raw peak prints "1 1 1 0 0" whenever the floor is
- * quiet, because these are counts and a quarter of an event does not exist. So
- * the axis takes as many steps as it can label with an integer: the peak itself
- * while it is small, and a multiple of four above that.
- */
-export function axisScale(peak: number): { max: number; lines: number[] } {
-  const top = Math.max(1, Math.ceil(peak));
-  const steps = top <= 4 ? top : 4;
-  const max = top <= 4 ? top : Math.ceil(top / 4) * 4;
-  return { max, lines: Array.from({ length: steps + 1 }, (_, i) => i / steps) };
 }
 
 function bucketise(times: readonly number[], start: number, bucketMs: number): number[] {

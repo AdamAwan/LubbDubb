@@ -1,9 +1,9 @@
 import type { JSX } from 'react';
-import type { SpendPhase, SpendTrend, SpendTrendComparison, SpendTrendPhaseShift, SpendTrendWeek } from '../types.js';
+import type { SpendPhase, SpendTrend, SpendTrendComparison, SpendTrendPhaseShift, SpendTrendBucket } from '../types.js';
 import { fmtTokens, fmtUsd } from './util.js';
 
 /**
- * The trend behind the breakdown: three questions on one week axis.
+ * The trend behind the breakdown: three questions on one axis.
  *
  * The breakdown answers *where the money went* and every table on it is
  * all-time. This answers the question an operator has while actively trying to
@@ -47,6 +47,24 @@ const PHASE_ORDER: readonly SpendPhase[] = ['deliberation', 'build', 'ci', 'land
  */
 const PLOT = { left: 44, right: 600, top: 12, bottom: 128 };
 const VIEW_BOX = '0 0 646 150';
+
+/**
+ * What one bar on this axis is called.
+ *
+ * The axis is **eight of whatever window the page is set to**, so the word is
+ * the window's rather than a fixed "week": at 24h the bars are days, at 7d they
+ * are weeks. Derived from the shipped bucket length rather than from the key,
+ * because the unbounded window's period is computed from the history the
+ * deployment actually has and has no key to look up.
+ */
+function periodWord(trend: SpendTrend): string {
+  const hours = trend.bucketMs / 3_600_000;
+  if (hours <= 12) return `${Math.round(hours)}h period`;
+  if (hours <= 36) return 'day';
+  if (hours <= 24 * 10) return 'week';
+  if (hours <= 24 * 45) return 'month';
+  return 'quarter';
+}
 
 /** A share as a rounded percentage, with `<1%` for a slice that is small but not absent. */
 function fmtPct(fraction: number): string {
@@ -114,7 +132,7 @@ export function SpendTrendTab({ trend }: { trend: SpendTrend }): JSX.Element {
     const unmeasured = buckets.reduce((n, w) => n + w.goalsUnmeasured, 0);
     return (
       <p className="empty">
-        No goal has closed in the last {trend.weeks} weeks with any spend on it
+        No goal has closed in the last {trend.periods} {periodWord(trend)}s with any spend on it
         {unmeasured > 0 && `, though ${unmeasured} closed with none recorded`}. The trend is per closed goal, so there
         is nothing yet to trend.
       </p>
@@ -133,8 +151,8 @@ export function SpendTrendTab({ trend }: { trend: SpendTrend }): JSX.Element {
       <PhaseBand buckets={buckets} />
       {comparison === null ? (
         <p className="empty">
-          Not enough complete weeks yet to compare halves — the shift table needs two either side, so a fortnight of
-          goals cannot pass for a trend.
+          Not enough complete periods yet to compare halves — the shift table needs two either side, so a couple of
+          periods cannot pass for a trend.
         </p>
       ) : (
         <PhaseShift phases={comparison.phases} />
@@ -199,7 +217,7 @@ function Tiles({ trend }: { trend: SpendTrend }): JSX.Element {
         <span className="lb">Goals closed</span>
         <span className="vl">{closed}</span>
         <span className="sb">
-          over {trend.weeks} weeks · {(closed / trend.weeks).toFixed(1)} a week
+          over {trend.periods} {periodWord(trend)}s · {(closed / trend.periods).toFixed(1)} a {periodWord(trend)}
         </span>
         {/* The denominator, stated where the medians above are read. A fleet
             closing two goals a week has medians that move on one goal. */}
@@ -230,7 +248,7 @@ function Tiles({ trend }: { trend: SpendTrend }): JSX.Element {
  * by construction, and a hollow bar is the only way to draw a figure that is
  * going to grow.
  */
-function CostPerGoal({ buckets }: { buckets: readonly SpendTrendWeek[] }): JSX.Element {
+function CostPerGoal({ buckets }: { buckets: readonly SpendTrendBucket[] }): JSX.Element {
   const { width, centre } = columns(buckets.length);
   const height = PLOT.bottom - PLOT.top;
   const peak = Math.max(...buckets.flatMap((w) => w.costs), 0);
@@ -321,7 +339,7 @@ function CostNote({
   buckets,
   comparison,
 }: {
-  buckets: readonly SpendTrendWeek[];
+  buckets: readonly SpendTrendBucket[];
   comparison: SpendTrendComparison | null;
 }): JSX.Element {
   const unmeasured = buckets.reduce((n, w) => n + w.goalsUnmeasured, 0);
@@ -352,7 +370,7 @@ function CostNote({
  * whose share doubles while its dollars fall is a fleet doing the same work more
  * cheaply everywhere else, and the band alone draws that as a regression.
  */
-function PhaseBand({ buckets }: { buckets: readonly SpendTrendWeek[] }): JSX.Element {
+function PhaseBand({ buckets }: { buckets: readonly SpendTrendBucket[] }): JSX.Element {
   const { width, centre } = columns(buckets.length);
   const height = PLOT.bottom - PLOT.top;
   const drawn = PHASE_ORDER.filter((p) => buckets.some((w) => w.byPhase[p] > 0));
@@ -486,7 +504,7 @@ function PhaseShift({ phases }: { phases: readonly SpendTrendPhaseShift[] }): JS
  * numbers. Completion is a rate on the left and reds are a count per goal on the
  * right, and neither is meaningful in the other's units.
  */
-function Landing({ buckets }: { buckets: readonly SpendTrendWeek[] }): JSX.Element {
+function Landing({ buckets }: { buckets: readonly SpendTrendBucket[] }): JSX.Element {
   const { centre } = columns(buckets.length);
   const height = PLOT.bottom - PLOT.top;
   // The left axis floors at 50% rather than 0: a completion rate that has never
@@ -496,7 +514,7 @@ function Landing({ buckets }: { buckets: readonly SpendTrendWeek[] }): JSX.Eleme
   const peakReds = Math.max(...buckets.map((w) => w.redsPerGoal ?? 0), 1);
   const redY = (reds: number) => PLOT.bottom - (reds / peakReds) * height;
 
-  const path = (pick: (w: SpendTrendWeek) => number | null, y: (v: number) => number): string =>
+  const path = (pick: (w: SpendTrendBucket) => number | null, y: (v: number) => number): string =>
     buckets
       .map((w, i) => ({ v: pick(w), i }))
       .filter((p): p is { v: number; i: number } => p.v !== null)
@@ -668,7 +686,8 @@ function Method({ trend }: { trend: SpendTrend }): JSX.Element {
         delivered work.
       </p>
       <p className="dim">
-        {trend.weeks} weeks, ending with the one still in progress. Goals with no recorded spend are in no figure here.
+        {trend.periods} {periodWord(trend)}s, ending with the one still in progress. Goals with no recorded spend are in
+        no figure here.
       </p>
     </div>
   );
