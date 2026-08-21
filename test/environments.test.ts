@@ -13,7 +13,7 @@ import { FakeEnvironmentProber } from '../src/environments/fakeProber.js';
 import { CommandEnvironmentProber } from '../src/environments/prober.js';
 import { validateEnvironments, type EnvironmentConfig } from '../src/environments/policy.js';
 import { unattributedMerges, unrecordedLandings } from '../src/environments/landings.js';
-import { goalReach } from '../src/environments/reach.js';
+import { allGoalReach, goalReach } from '../src/environments/reach.js';
 import { environmentGateHold, openedGoals } from '../src/environments/arrival.js';
 import { EnvironmentDesk } from '../src/environments/environmentDesk.js';
 import { GitCliObserver } from '../src/git/gitObserver.js';
@@ -25,6 +25,8 @@ import type {
   EnvironmentReading,
   GoalArrival,
   GoalLanding,
+  Plan,
+  PlanPart,
   PullRequest,
   WorkNode,
   WorldSnapshot,
@@ -203,6 +205,7 @@ function reachOf(over: {
   landings: GoalLanding[];
   readings: EnvironmentReading[];
   unattributed?: number;
+  outstanding?: number;
 }): Record<string, string> {
   const rows = goalReach({
     goalRef: 'issue:12',
@@ -210,6 +213,7 @@ function reachOf(over: {
     readings: over.readings,
     environments: ENVS,
     unattributed: over.unattributed ?? 0,
+    outstanding: over.outstanding ?? 0,
   });
   return Object.fromEntries(rows.map((r) => [r.environment, r.status]));
 }
@@ -226,7 +230,14 @@ test('half a goal in an environment is partial, never reached', () => {
     reading({ sha: 'a', environment: 'prod' }),
     reading({ sha: 'b', environment: 'prod', status: 'absent' }),
   ];
-  const rows = goalReach({ goalRef: 'issue:12', landings, readings: half, environments: ENVS, unattributed: 0 });
+  const rows = goalReach({
+    goalRef: 'issue:12',
+    landings,
+    readings: half,
+    environments: ENVS,
+    unattributed: 0,
+    outstanding: 0,
+  });
   const prod = rows.find((r) => r.environment === 'prod');
   assert.equal(prod?.status, 'partial', 'a release cut between two merges puts half a feature in production');
   assert.equal(prod?.landed, 1);
@@ -249,7 +260,14 @@ test('a merge the sweep never caught holds the whole goal at unknown', () => {
   // attributed — so "all of it is there" is a claim nothing supports.
   const landings = [landing({ prNumber: 1, sha: 'a' })];
   const readings = [reading({ sha: 'a', environment: 'staging' })];
-  const rows = goalReach({ goalRef: 'issue:12', landings, readings, environments: ENVS, unattributed: 1 });
+  const rows = goalReach({
+    goalRef: 'issue:12',
+    landings,
+    readings,
+    environments: ENVS,
+    unattributed: 1,
+    outstanding: 0,
+  });
   const staging = rows.find((r) => r.environment === 'staging');
   assert.equal(staging?.status, 'partial');
   assert.equal(staging?.total, 2, 'the unattributed merge is counted, so the fraction stays honest');
@@ -271,14 +289,183 @@ test('a reached goal reports when its last landing arrived, not its first', () =
     reading({ sha: 'a', environment: 'prod', observedAt: '2026-03-01T00:00:00.000Z' }),
     reading({ sha: 'b', environment: 'prod', observedAt: '2026-03-04T00:00:00.000Z' }),
   ];
-  const rows = goalReach({ goalRef: 'issue:12', landings, readings, environments: ENVS, unattributed: 0 });
+  const rows = goalReach({
+    goalRef: 'issue:12',
+    landings,
+    readings,
+    environments: ENVS,
+    unattributed: 0,
+    outstanding: 0,
+  });
   assert.equal(rows.find((r) => r.environment === 'prod')?.at, '2026-03-04T00:00:00.000Z');
+});
+
+test('a plan’s unmerged parts are counted, so one part of four is not the whole goal', () => {
+  // The shape this exists for: part one merged and is in staging, three parts have
+  // yet to merge. "All of this goal's merges are here" was true, and reported the
+  // goal as arrived — on a quarter of the feature.
+  const landings = [landing({ prNumber: 1, sha: 'a' })];
+  const readings = [reading({ sha: 'a', environment: 'staging' })];
+  const rows = goalReach({
+    goalRef: 'issue:12',
+    landings,
+    readings,
+    environments: ENVS,
+    unattributed: 0,
+    outstanding: 3,
+  });
+  const staging = rows.find((r) => r.environment === 'staging');
+  assert.equal(staging?.status, 'partial');
+  assert.equal(staging?.landed, 1);
+  assert.equal(staging?.total, 4);
+  assert.equal(staging?.at, null, 'nothing arrived as a whole, so there is no moment to record');
+});
+
+test('a part with no commit yet is absent, never unknown', () => {
+  // The distinction the probe's tri-state exists for, pointed the other way: an
+  // unmerged part is not something the probe failed to answer, so it must not send
+  // an operator looking at a probe that is working.
+  const landings = [landing({ prNumber: 1, sha: 'a' })];
+  const readings = [reading({ sha: 'a', environment: 'prod', status: 'absent' })];
+  assert.equal(reachOf({ landings, readings, outstanding: 2 })['prod'], 'absent');
+});
+
+test('a goal owing nothing more is reached on its landings alone', () => {
+  const landings = [landing({ prNumber: 1, sha: 'a' })];
+  const readings = [reading({ sha: 'a', environment: 'staging' })];
+  assert.equal(reachOf({ landings, readings, outstanding: 0 })['staging'], 'reached');
+});
+
+// --- what a goal still owes ------------------------------------------------
+
+function plan(over: Partial<Plan> = {}): Plan {
+  return {
+    id: 'plan_1',
+    originRef: 'issue:12',
+    title: 'Big thing',
+    status: 'active',
+    reason: null,
+    diagnosis: null,
+    approach: null,
+    risks: null,
+    outOfScope: null,
+    alternatives: null,
+    openQuestions: null,
+    verification: null,
+    evidence: [],
+    document: null,
+    statusCommentRef: null,
+    createdAt: '2026-07-25T00:00:00.000Z',
+    updatedAt: '2026-07-25T00:00:00.000Z',
+    ...over,
+  };
+}
+
+function part(slug: string, over: Partial<PlanPart> = {}): PlanPart {
+  return {
+    id: `plan_1:${slug}`,
+    planId: 'plan_1',
+    slug,
+    seq: 1,
+    title: `The ${slug} part`,
+    scope: `src/${slug}/`,
+    rationale: null,
+    acceptance: null,
+    acceptanceMet: [],
+    touches: [],
+    size: null,
+    expectedKind: null,
+    outcomeKind: null,
+    outcomeRef: null,
+    outcomeSummary: null,
+    dependsOn: [],
+    branch: null,
+    prNumber: null,
+    status: 'ready',
+    blockedReason: null,
+    taskId: null,
+    createdAt: '2026-07-25T00:00:00.000Z',
+    updatedAt: '2026-07-25T00:00:00.000Z',
+    ...over,
+  };
+}
+
+function totalFor(parts: PlanPart[], plans: Plan[] = [plan()]): number {
+  const rows = allGoalReach({
+    landings: [landing({ prNumber: 1, sha: 'a' })],
+    readings: [reading({ sha: 'a', environment: 'staging' })],
+    nodes: [],
+    landed: new Set([1]),
+    plans,
+    parts,
+    environments: ENVS,
+  });
+  const staging = rows.find((r) => r.goalRef === 'issue:12')?.environments.find((e) => e.environment === 'staging');
+  return staging?.total ?? -1;
+}
+
+test('the parts a goal still owes a merge widen its denominator', () => {
+  assert.equal(totalFor([part('one', { status: 'merged' }), part('two'), part('three')]), 3);
+});
+
+test('a settled part is not owed twice — its merge is already the landing', () => {
+  assert.equal(totalFor([part('one', { status: 'merged' })]), 1, 'the landing, and nothing beside it');
+  assert.equal(totalFor([part('one', { status: 'concluded' })]), 1, 'a concluded part produced no merge to wait for');
+});
+
+test('a retired part, and an abandoned plan’s parts, are not work any more', () => {
+  assert.equal(totalFor([part('one', { status: 'merged' }), part('two', { status: 'retired' })]), 1);
+  assert.equal(
+    totalFor([part('one', { status: 'merged' }), part('two')], [plan({ status: 'abandoned' })]),
+    1,
+    'the plan withdrew the claim that its parts were work',
+  );
+});
+
+test('a part that will never merge anything stays out of the denominator', () => {
+  // Counted, it sits there for good: the goal reads partial in an environment
+  // holding every commit it has, and its arrival — and the obligations gated on it
+  // — never come. `expectedKind` null reads as code, as it does everywhere else.
+  for (const kind of ['report', 'determination', 'human'] as const)
+    assert.equal(totalFor([part('one', { status: 'merged' }), part('two', { expectedKind: kind })]), 1, kind);
+  assert.equal(totalFor([part('one', { status: 'merged' }), part('two', { expectedKind: 'code' })]), 2);
+  assert.equal(totalFor([part('one', { status: 'merged' }), part('two', { expectedKind: null })]), 2);
+});
+
+test('another plan’s parts are never this goal’s to owe', () => {
+  const other = plan({ id: 'plan_9', originRef: 'issue:99' });
+  const parts = [part('one', { status: 'merged' }), { ...part('two'), id: 'plan_9:two', planId: 'plan_9' }];
+  assert.equal(totalFor(parts, [plan(), other]), 1);
+});
+
+test('a goal with a plan but nothing merged is still dropped, not drawn 0/4', () => {
+  const rows = allGoalReach({
+    landings: [],
+    readings: [],
+    nodes: [node({ ref: 'issue:12', kind: 'issue' })],
+    landed: new Set(),
+    plans: [plan()],
+    parts: [part('one'), part('two')],
+    environments: ENVS,
+  });
+  assert.equal(
+    rows.length,
+    0,
+    'a plan cut this morning has not been anywhere; a row of 0/2 would bury the ones that moved',
+  );
 });
 
 test('another goal’s landings never count towards this one', () => {
   const landings = [landing({ prNumber: 1, sha: 'a' }), landing({ prNumber: 9, sha: 'z', goalRef: 'issue:99' })];
   const readings = [reading({ sha: 'a', environment: 'prod' }), reading({ sha: 'z', environment: 'prod' })];
-  const rows = goalReach({ goalRef: 'issue:12', landings, readings, environments: ENVS, unattributed: 0 });
+  const rows = goalReach({
+    goalRef: 'issue:12',
+    landings,
+    readings,
+    environments: ENVS,
+    unattributed: 0,
+    outstanding: 0,
+  });
   assert.equal(rows.find((r) => r.environment === 'prod')?.total, 1);
 });
 

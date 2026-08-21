@@ -3121,7 +3121,13 @@ export type GoalReachStatus = 'reached' | 'partial' | 'absent' | 'unknown';
 export interface GoalEnvironmentReach {
   environment: string;
   status: GoalReachStatus;
-  /** How many of the goal's landings this environment has, and how many it has in total. */
+  /**
+   * How many of the goal's landings this environment has, out of everything the
+   * goal owes: its landings, its merges nothing could attribute, **and its plan
+   * parts that have yet to merge**. The last of those is why the fraction does not
+   * close the day part one of four lands — work with no commit yet is work no
+   * environment is holding. → `docs/spec/24-environments.md#the-lens`
+   */
   landed: number;
   total: number;
   /**

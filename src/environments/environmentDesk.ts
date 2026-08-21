@@ -169,6 +169,11 @@ export class EnvironmentDesk {
         readings: store.listEnvironmentReach(),
         nodes: store.listWorkNodes(),
         landed: store.landedPrs(),
+        // Same denominator the panel is drawn from: a goal whose plan still owes a
+        // part has not arrived anywhere, so nothing is written down and no comment
+        // goes out until the last of its work is there.
+        plans: store.listPlans(),
+        parts: store.listAllPlanParts(),
         environments: this.deps.environments,
       });
       for (const arrival of newArrivals({ reach, recorded: store.listGoalArrivals() }))

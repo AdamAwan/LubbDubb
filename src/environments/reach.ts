@@ -1,4 +1,5 @@
-import type { EnvironmentReading, GoalEnvironmentReach, GoalLanding, WorkNode } from '../types.js';
+import type { EnvironmentReading, GoalEnvironmentReach, GoalLanding, Plan, PlanPart, WorkNode } from '../types.js';
+import { partSettled } from '../plans/parts.js';
 import { unattributedMerges } from './landings.js';
 import type { EnvironmentConfig } from './policy.js';
 
@@ -16,6 +17,13 @@ interface GoalReachInput {
    * into an `unknown`, and it is the whole reason this parameter exists.
    */
   unattributed: number;
+  /**
+   * This goal's plan parts still owed a merge — from {@link partsOwed}. Work whose
+   * commit does not exist yet is work no environment can be holding, and leaving it
+   * out of the denominator is what let the first part of a four-part plan read as
+   * the whole goal arriving.
+   */
+  outstanding: number;
 }
 
 /**
@@ -29,6 +37,14 @@ interface GoalReachInput {
  * pull requests, they land separately, and a release cut between two of them puts
  * half a feature in production — a boolean rollup calls that "shipped".
  *
+ * **The denominator is the goal's work, not its merges.** A plan is cut into parts
+ * up front and they merge one at a time, so counting only what has landed makes the
+ * fraction whole on the day part one merges: the environment holding the first of
+ * four parts reported `reached`, the goal's arrival was recorded, its comment went
+ * out and its gates opened — all on a tenth of the feature. What has not merged is
+ * counted too, and it counts as **`absent`, never `unresolved`**: nobody has to go
+ * looking for a part that has no commit yet.
+ *
  * **`unknown` beats `absent`.** Nothing here may report work as not-deployed on the
  * strength of a probe that could not answer, or a merge whose commit nobody caught:
  * the two states read identically on the glass and only one of them is a reason to
@@ -38,11 +54,13 @@ interface GoalReachInput {
  */
 export function goalReach(input: GoalReachInput): GoalEnvironmentReach[] {
   const landings = input.landings.filter((l) => l.goalRef === input.goalRef);
-  const total = landings.length + input.unattributed;
+  const total = landings.length + input.unattributed + input.outstanding;
   return input.environments.map(({ name: environment, arrival }) => {
     const verdicts = readingsFor(input.readings, environment);
     let reached = 0;
-    let absent = 0;
+    // Work still owed a merge starts the absent count rather than the unresolved
+    // one: an unmerged part is not a question the probe could have answered.
+    let absent = input.outstanding;
     let latest: string | null = null;
     for (const landing of landings) {
       const reading = verdicts.get(landing.sha);
@@ -80,13 +98,20 @@ export function goalReach(input: GoalReachInput): GoalEnvironmentReach[] {
  * stops listing it.
  *
  * A goal with nothing merged is dropped rather than drawn as `absent` everywhere:
- * a row on every issue the graph has ever held would bury the ones that moved.
+ * a row on every issue the graph has ever held would bury the ones that moved. That
+ * is a rule about the **goal set**, and the parts a goal still owes do not widen it:
+ * a plan whose first part has yet to merge has been nowhere, and the row would say
+ * `0/4` on every environment from the day it was cut.
  */
 export function allGoalReach(input: {
   landings: GoalLanding[];
   readings: EnvironmentReading[];
   nodes: WorkNode[];
   landed: ReadonlySet<number>;
+  /** Every plan, for {@link partsOwed} — the goal each belongs to is its `originRef`. */
+  plans: Plan[];
+  /** Every plan's parts, whichever plan they belong to; filtered per goal below. */
+  parts: PlanPart[];
   environments: EnvironmentConfig[];
 }): { goalRef: string; environments: GoalEnvironmentReach[] }[] {
   const goalRefs = new Set(input.landings.map((l) => l.goalRef));
@@ -95,9 +120,48 @@ export function allGoalReach(input: {
   for (const goalRef of goalRefs) {
     const unattributed = unattributedMerges(goalRef, input.nodes, input.landed);
     if (unattributed === 0 && !input.landings.some((l) => l.goalRef === goalRef)) continue;
-    out.push({ goalRef, environments: goalReach({ ...input, goalRef, unattributed }) });
+    const outstanding = partsOwed(goalRef, input.plans, input.parts);
+    out.push({ goalRef, environments: goalReach({ ...input, goalRef, unattributed, outstanding }) });
   }
   return out;
+}
+
+/**
+ * How much of a goal's planned work is still owed a merge — the parts that exist
+ * as intent and not yet as a commit.
+ *
+ * Three exclusions, and each is the difference between a fraction that closes and
+ * one that never does:
+ *
+ * - a **settled** part is done being owed. Its merge is already counted as a
+ *   landing (or as an unattributed merge), so counting it here as well would put
+ *   half a goal's work in the denominator twice;
+ * - a **retired** part was un-planned by an amendment and is not work any more;
+ * - a part expected to produce anything **other than code** never merges anything,
+ *   so a report, a determination or a person's hand-check would sit in the
+ *   denominator for good — the goal would read `partial` in an environment holding
+ *   every commit it has, its arrival would never be recorded, its comment never
+ *   posted and its gated obligations never filed. A goal held out of the bench for
+ *   ever by a part with nothing to deploy is the expensive direction here, and it
+ *   is silent: the card says `3/4` and looks like it is waiting for a deploy.
+ *   → `docs/spec/24-environments.md#the-lens`
+ *
+ * An **abandoned** plan's parts are not owed either — the plan is the thing that
+ * said they were work, and it has withdrawn the claim.
+ */
+function partsOwed(goalRef: string, plans: Plan[], parts: PlanPart[]): number {
+  // `originRef` is the goal ref itself (`issue:12`), which is how every other
+  // reader of a plan finds the goal it hangs off.
+  const owning = new Set(plans.filter((p) => p.originRef === goalRef && p.status !== 'abandoned').map((p) => p.id));
+  let owed = 0;
+  for (const part of parts) {
+    if (!owning.has(part.planId)) continue;
+    if (part.status === 'retired' || partSettled(part)) continue;
+    // Null reads as `code` — the planner leaving it unstated is the common case.
+    if (part.expectedKind !== null && part.expectedKind !== 'code') continue;
+    owed += 1;
+  }
+  return owed;
 }
 
 function rollUp(counts: { total: number; reached: number; unresolved: number }): GoalEnvironmentReach['status'] {

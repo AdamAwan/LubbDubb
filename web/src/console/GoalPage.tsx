@@ -859,11 +859,18 @@ const REACH_TONE: Record<GoalReachStatus, string> = {
   absent: '',
 };
 
-/** What each verdict means, in the words an operator would use asking about it. */
+/**
+ * What each verdict means, in the words an operator would use asking about it.
+ *
+ * **Work, not merges.** The fraction counts a plan's unmerged parts too, so a goal
+ * three parts short of done reads `1/4` here — and "all of this goal's merges are
+ * here" would be true of a row saying `partial`, which is the sentence disagreeing
+ * with the count beside it.
+ */
 const REACH_SAID: Record<GoalReachStatus, string> = {
-  reached: 'all of this goal’s merges are here',
-  partial: 'some of this goal’s merges are here',
-  absent: 'none of this goal’s merges are here yet',
+  reached: 'all of this goal’s work is here',
+  partial: 'some of this goal’s work is here',
+  absent: 'none of this goal’s work is here yet',
   unknown: 'nothing here could be confirmed — check the probe, not the deploy',
 };
 
