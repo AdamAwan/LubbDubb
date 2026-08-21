@@ -14,6 +14,7 @@ import type {
   ProfileOverride,
   Proposal,
   PullRequest,
+  Remedy,
   TaskSummary,
   ValidationCheck,
   WorldEvent,
@@ -57,6 +58,21 @@ export interface DispatchContext {
    * the other direction would have an unwired caller silently repricing the fleet.
    */
   modelPins?: { labelPrefix: string; models: AgentModels };
+  /**
+   * The most recent accounts of why the fleet came back to a pull request, newest
+   * first — what `pr-ci-failing` and `pr-review-comment` append to a fresh
+   * dispatch's prompt (`src/remedies/priorRemedies.ts`).
+   *
+   * Read-only, and it changes **no** decision: the rules render it into a prompt
+   * and nothing gates on it. That is the whole of what it may be — a remedy is an
+   * agent's account of its own run, and a dispatch that turned on one would be
+   * the fleet deciding what to work from what it said about itself.
+   *
+   * Absent/empty means nothing has been accounted for yet, which is every
+   * deployment until an agent files the first one, and every prompt is then
+   * byte-identical to a build without the feature.
+   */
+  priorRemedies?: Remedy[];
   /** Current fleet: running / waiting / recently-finished tasks and their agents. */
   tasks: TaskSummary[];
   agents: Agent[];

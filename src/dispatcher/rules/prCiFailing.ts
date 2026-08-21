@@ -21,6 +21,8 @@ import {
   reviewThreadNote,
   reviewThreadsNote,
 } from '../reviewThreads.js';
+import { priorCiRemediesNote, priorReviewRemediesNote } from '../../remedies/priorRemedies.js';
+import { remedyAskNote } from '../../remedies/remedies.js';
 import { isActive, type RawAction, type StageContext } from './context.js';
 
 /**
@@ -97,7 +99,13 @@ export function prCiFailing(s: StageContext): void {
             comment: unhandled[0]!.body,
           }) +
           reviewThreadsNote(unhandled) +
-          reviewRecheckNote(pr.number),
+          reviewRecheckNote(pr.number) +
+          // Last, after the threads and the re-check: it is the least urgent thing
+          // in the prompt and the only part that is not about *this* review. An
+          // agent that read it first would answer the repository's habits instead
+          // of the reviewer in front of it.
+          priorReviewRemediesNote(ctx.priorRemedies ?? []) +
+          remedyAskNote('review'),
         dispatchReason: many
           ? `${unhandled.length} unhandled review comments from ${authors.join(', ')} on PR #${pr.number}.`
           : `Unhandled review comment from ${authors[0]} on PR #${pr.number}.`,
@@ -142,7 +150,16 @@ export function prCiFailing(s: StageContext): void {
         // word of the operator's own per-check guidance (see `ciFailureNote`).
         prompt:
           s.templates.render('pr-ci-fix', { number: pr.number, title: pr.title, branch: pr.branch }) +
-          ciFailureNote(ciVerdict),
+          ciFailureNote(ciVerdict) +
+          // Scoped to the checks that are red now, and after the failure note for
+          // the review arm's reason: what is failing comes before what has failed
+          // before. The evidence excerpt itself is appended later still, by the
+          // executor — it is fetched at dispatch, not resolved here.
+          priorCiRemediesNote(
+            ctx.priorRemedies ?? [],
+            ciVerdict.dispatch.map((m) => m.name),
+          ) +
+          remedyAskNote('ci'),
         dispatchReason: ciDispatchReason(pr.number, ciVerdict),
         note: `CI is now failing on PR #${pr.number} — investigate and push a fix.${ciFailureNote(ciVerdict)}`,
         originTitle: pr.title,

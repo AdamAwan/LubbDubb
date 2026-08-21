@@ -1211,6 +1211,86 @@ export interface Lesson {
 export type LessonInput = Pick<Lesson, 'text' | 'originRef'>;
 
 /**
+ * Which kind of return to a pull request a {@link Remedy} accounts for: its CI
+ * going red, or a review asking for changes.
+ *
+ * Resolved from the dispatch origin and never from an argument — see
+ * `remedyOrigin` in `src/remedies/remedies.ts`, which is also where the copy for
+ * every value below lives.
+ */
+export type RemedyKind = 'ci' | 'review';
+
+/**
+ * What was actually wrong. Which values a given {@link RemedyKind} may name is
+ * `CAUSES_BY_KIND`'s to say, not this union's: a review round is never a flake.
+ */
+export type RemedyCause =
+  | 'flake'
+  | 'environment'
+  | 'inherited'
+  | 'stale_test'
+  | 'missed_gate'
+  | 'contract_drift'
+  | 'missed_requirement'
+  | 'convention'
+  | 'approach'
+  | 'scope'
+  | 'docs'
+  | 'clarity'
+  | 'defect'
+  | 'other';
+
+/**
+ * What would have caught it before the push — the second axis, and the one that
+ * answers *how do we get fewer of these*. `undocumented` is the only value the
+ * harness can act on, and the only one a proposed {@link Lesson} may ride on.
+ */
+export type RemedyGuard = 'local_check' | 'documented' | 'undocumented' | 'unpreventable';
+
+/**
+ * One account of why the fleet had to come back to a pull request, written by the
+ * agent that settled it.
+ *
+ * A **record, not a verdict**: nothing gates on it, no rule reads it, and a pull
+ * request goes green whether or not one was ever filed. It has exactly two
+ * readers — the Causes reading on the Yield panel, and the note appended to a
+ * later dispatch on the same check (`src/remedies/priorRemedies.ts`).
+ *
+ * Why it is a table of its own rather than columns on `tasks`: a task is what was
+ * dispatched, and this is what was found. One run can settle several reds and one
+ * red can take several runs, so the two do not share a key — and a nullable
+ * cause/guard pair on every task row would make "no remedy filed" and "not that
+ * kind of task" the same reading.
+ */
+export interface Remedy {
+  id: string;
+  /** From the origin, never claimed. */
+  kind: RemedyKind;
+  /** The dispatch origin it was filed against: `pr:<n>:ci` or `pr:<n>:comments`. */
+  originRef: string;
+  prNumber: number;
+  cause: RemedyCause;
+  guard: RemedyGuard;
+  /** One line: what was wrong, and what fixed it. Required — a bare pair of enums is not a reading. */
+  summary: string;
+  /**
+   * The checks that were red when this agent was dispatched, from
+   * {@link Task.ciChecks} rather than from the submission — the same rule the
+   * kind follows. Empty for a review remedy, and for a CI dispatch on a provider
+   * that reported no per-check detail.
+   */
+  checks: string[];
+  /** The reporting agent and its task, from the credential. */
+  agentId: string;
+  taskId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** A remedy as submitted, before the store assigns identity and stamps it. */
+export type RemedyInput = Omit<Remedy, 'id' | 'createdAt' | 'updatedAt'>;
+
+/**
  * Where a piece of work only a person can do has got to. Two terminals, and both
  * are settlements — there is no way for one to lapse, expire or be deleted.
  *

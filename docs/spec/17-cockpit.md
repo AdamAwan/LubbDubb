@@ -2118,13 +2118,14 @@ mode. A fleet with runs still out and none settled gets its own sentence rather 
 — **not yet is not perfect**.
 
 **Nothing here is derived in the browser**, again for `PrAttention`'s reason. What the cockpit owns is
-presentation: the outcome **colours**, which live in the stylesheet as `--rl-<outcome>` beside the phase
+presentation: the outcome **colours**, which live in the stylesheet as `--rl-<outcome>` and
+`--rm-<guard>` beside the phase
 palette. The two palettes differ in kind on purpose — a phase is a category whose colours only have to
 read apart, while an outcome is a _verdict_ and carries the alarm vocabulary. Grey is doing real work
 in it: a killed run is not a fault, and colouring it like one would make every steered fleet look
 broken.
 
-Four pictures:
+Five pictures:
 
 - **Four tiles** — runs finished, money lost to faults, the CI red rate, and the median time back to
   green. The first restates exactly what the reading just said, for the reason Spend's windows do. The
@@ -2135,6 +2136,16 @@ Four pictures:
 - **CI verdicts** — 14 rolling daily buckets, red **stacked on** green rather than two series, because
   the reading is a ratio and two lines make that a comparison instead of a glance. Bars for the spend
   trend's reason.
+- **Causes** — why the fleet came back, drawn **below** the two readings it explains, because a cause
+  table read before the counts has no denominator ([18](18-observability.md#causes-why-the-fleet-came-back)).
+  The guard split leads it as one bar and a legend, ordered by what acting on each costs; the two
+  cause tables follow, one per kind, ranked by accounts with the empty causes kept at the foot —
+  "nothing was a flake this fortnight" is a reading, and a table that dropped its own zero rows could
+  not make it. Then **Lately**: the most recent accounts in the agents' own words, which is the only
+  thing on the panel that shows the taxonomy is being used rather than guessed at. The section's own
+  caveat is drawn with its total rather than in a footnote — every share in it is a share of what was
+  _reported_, and `unaccounted` is what says how much that is.
+
 - **By phase**, then the two rankings — the reddest pull requests and the origins that ran more than
   once. Both are capped and **say so**. The repeats table is a ranking and never a count of mistakes: a
   part agent that lands and then answers review comments legitimately runs twice, and what earns it a

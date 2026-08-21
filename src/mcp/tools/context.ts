@@ -12,6 +12,7 @@ import type {
   IssueConclusionVerdict,
   PartOutcomeKind,
   PlanPart,
+  Remedy,
   ScratchEntry,
   ShortfallCause,
   Task,
@@ -22,6 +23,7 @@ import type { TicketFiler } from '../../tickets/filing.js';
 import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
 import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAssayVerdictName } from '../goalAssay.js';
+import type { RemedySubmission } from '../../remedies/remedies.js';
 import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
 
@@ -103,6 +105,10 @@ export interface AgentToolTarget {
     document: string,
     lessons: string[],
   ): { ok: true; issueOrigin: string; lessonsFiled: number } | { ok: false; error: string };
+  recordRemedy(
+    agentId: string,
+    submission: RemedySubmission,
+  ): { ok: true; remedy: Remedy; lessonProposed: boolean } | { ok: false; error: string };
 }
 
 export interface McpToolDeps {

@@ -1081,13 +1081,29 @@ leaves an unmatched token untouched.
 ### What a CI-fix dispatch carries
 
 `pr-ci-fix` renders five lines naming the pull request and its branch. Appended after it, never
-interpolated into it, are two things:
+interpolated into it, are four things:
 
 - **`ciFailureNote`** — the operator's per-check `guidance`, which checks are non-blocking, and which
   are failing but held (`src/ci/ciPolicy.ts`).
+- **`priorCiRemediesNote`** — what the last few reds on **these** checks turned out to be, according
+  to the agents that fixed them (`src/remedies/priorRemedies.ts`,
+  [18](18-observability.md#the-note-a-later-dispatch-carries)). Scoped to the checks that are red now
+  and empty when the record says nothing about them, so a fresh deployment's prompt is byte-identical
+  to a build without it.
+- **`remedyAskNote`** — the ask to call `report_remedy` before finishing. Unconditional, unlike the
+  note above it, because the account is the thing being asked for and a fleet with nothing recorded
+  yet is the one that most needs the ask. It is here rather than only in the tool description because
+  `report_remedy` is named nowhere in the protocol addendum — a tool discoverable from `tools/list`
+  alone is a tool an agent finishes without.
 - **`ciEvidenceNote`** — what those checks actually reported: the check-run annotations or build-
   timeline errors where the provider extracted any, otherwise the tail of the failing job's log
   (`src/ci/ciEvidence.ts`, [15](15-integrations.md#outbound-is-many-small-interfaces-not-one-fat-one)).
+
+`pr-review-comment` carries the same last two, with the prior-remedy half unfiltered — there is no
+review equivalent of a check name, and filtering to this pull request would leave it empty on the
+first review of every branch. Both ride **after** the thread list and the re-check instruction: they
+are the least urgent thing in the prompt and the only part not about the review in front of the
+agent.
 
 The evidence is fetched in the **executor**, at dispatch, not in the rule. The rule pipeline is
 synchronous and pure over the world snapshot, and the world read is per pulse — so the only place a

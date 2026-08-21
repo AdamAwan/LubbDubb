@@ -11,6 +11,7 @@ import { PriorityStore } from './priority.js';
 import { ProfileOverrideStore } from './profileOverrides.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { LessonStore } from './lessons.js';
+import { RemedyStore } from './remedies.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
 import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './validation.js';
@@ -80,6 +81,9 @@ import type {
   JobSchedule,
   Lesson,
   LessonInput,
+  Remedy,
+  RemedyInput,
+  RemedyKind,
   LocalRun,
   LocalRunStatus,
   Pet,
@@ -151,6 +155,7 @@ export class Store {
   private readonly profileOverrides: ProfileOverrideStore;
   private readonly findings: FindingStore;
   private readonly lessons: LessonStore;
+  private readonly remedies: RemedyStore;
   private readonly humanTasks: HumanTaskStore;
   private readonly plans: PlanStore;
   private readonly validation: ValidationStore;
@@ -242,6 +247,7 @@ export class Store {
     this.profileOverrides = new ProfileOverrideStore(ctx);
     this.findings = new FindingStore(ctx);
     this.lessons = new LessonStore(ctx);
+    this.remedies = new RemedyStore(ctx);
     this.humanTasks = new HumanTaskStore(ctx);
     this.plans = new PlanStore(ctx);
     this.validation = new ValidationStore(ctx);
@@ -447,6 +453,18 @@ export class Store {
   }
   retireLesson(id: string): Lesson | null {
     return this.lessons.retireLesson(id);
+  }
+
+  // -- Remedies (why the fleet came back to a PR, and what settled it) --------
+
+  recordRemedy(input: RemedyInput): Remedy {
+    return this.remedies.recordRemedy(input);
+  }
+  listRemediesSince(since: string): Remedy[] {
+    return this.remedies.listRemediesSince(since);
+  }
+  listRecentRemedies(kind: RemedyKind, limit: number): Remedy[] {
+    return this.remedies.listRecentRemedies(kind, limit);
   }
 
   // -- Human tasks (work only a person can do) -------------------------------

@@ -20,6 +20,7 @@ import type {
   IssueConclusionVerdict,
   PartOutcomeKind,
   PlanPart,
+  Remedy,
   ScratchEntry,
   ShortfallCause,
   Task,
@@ -51,6 +52,7 @@ import { assayerOrigin, type GoalAssayVerdictName } from '../mcp/goalAssay.js';
 import { goalFingerprint } from '../intake/assay.js';
 import { padWriteTarget } from '../scratch/pad.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
+import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
 import { partConclusionOrigin } from '../mcp/partOutcome.js';
 import type { AgentToolTarget } from '../mcp/tools/context.js';
 import type { ParsedFlag } from './sentinels.js';
@@ -232,6 +234,13 @@ interface AgentManagerEvents {
   scratch: [{ agentId: string; taskId: string; entry: ScratchEntry }];
   /** The retrospective for a delivered goal was written (already persisted against the issue origin). */
   retrospective: [{ agentId: string; taskId: string; issueOrigin: string }];
+  /**
+   * An agent accounted for why it had to come back to a pull request (already
+   * persisted, along with any lesson it proposed). Nothing schedules off this —
+   * it is the repaint, so the Causes reading and the lessons list are current the
+   * moment the account lands rather than on the next pulse.
+   */
+  remedy: [{ agentId: string; taskId: string; originRef: string }];
   /** The file-events hook recorded one or more written files (the "files changed" list grew). */
   files: [{ agentId: string; taskId: string }];
   /**
@@ -928,6 +937,62 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       for (const text of lessons) this.store.proposeLesson({ text, originRef: origin.issueOrigin });
       this.emit('retrospective', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin });
       return { ok: true, issueOrigin: origin.issueOrigin, lessonsFiled: lessons.length };
+    });
+  }
+
+  /**
+   * Record why this agent had to come back to a pull request (the `report_remedy`
+   * tool).
+   *
+   * {@link remedyOrigin} resolves the kind and the pull request from the
+   * credential and refuses every other caller by name, so a review agent cannot
+   * file a CI remedy and no agent can file against another pull request. The
+   * **checks come from the task row**, never from the submission, for the same
+   * reason the kind does: `Task.ciChecks` is what the harness dispatched this
+   * agent about, and a list an agent could assert is a column reporting whatever
+   * it remembered.
+   *
+   * The lesson rides on the same call rather than on a second tool, exactly as
+   * `recordRetrospective`'s does and for its reason: there is no submission that
+   * proposed a lesson but recorded no remedy, and none that lost its lesson to a
+   * follow-up call the agent never got to make. It lands `proposed` and reaches
+   * no agent until an operator vouches.
+   *
+   * Routed through the manager rather than straight to the store so the cockpit
+   * repaints now rather than on the next pulse — {@link recordFinding}'s reason —
+   * and, like a finding, it needs no *live* session: a remedy filed on an agent's
+   * last breath is still the account of the run.
+   */
+  recordRemedy(
+    agentId: string,
+    submission: RemedySubmission,
+  ): { ok: true; remedy: Remedy; lessonProposed: boolean } | { ok: false; error: string } {
+    return this.withCaller(agentId, ({ task }) => {
+      const scope = remedyOrigin(task.originRef);
+      if (!scope.ok) return { ok: false, error: scope.error };
+      const remedy = this.store.recordRemedy({
+        kind: scope.kind,
+        originRef: scope.originRef,
+        prNumber: scope.prNumber,
+        cause: submission.cause,
+        guard: submission.guard,
+        summary: submission.summary,
+        checks: task.ciChecks ?? [],
+        agentId,
+        taskId: task.id,
+      });
+      // The pull request, not the dispatch origin: `pr:42` is what both lesson
+      // surfaces already render — the block writes "learned on pr:42" and the
+      // cockpit draws it as a link — and it is the truthful answer, since what
+      // taught this was the review or the red, not the goal above it. Resolving
+      // the goal instead would mean a second parser of the branch convention, and
+      // a lesson carrying the wrong goal is worse provenance than a narrower
+      // right one.
+      if (submission.lesson !== null) {
+        this.store.proposeLesson({ text: submission.lesson, originRef: `pr:${scope.prNumber}` });
+      }
+      this.emit('remedy', { agentId, taskId: task.id, originRef: scope.originRef });
+      return { ok: true, remedy, lessonProposed: submission.lesson !== null };
     });
   }
 
