@@ -1229,6 +1229,31 @@ test('the local run panel names the ref each goal would run', () => {
   if (orphan) assert.ok(html.includes('no pull request of its own'));
 });
 
+/**
+ * Two empty pickers that look identical and are not: a filter holding every row
+ * back, and nothing to hold back. Only the first has a control that would help, and
+ * the count behind that control has to be taken from the **same** population the
+ * rows are — counting hidden targets instead let the checkbox disappear at exactly
+ * the moment somebody needed it, under a message telling them to tick it.
+ */
+test('the local run panel offers its filter when the filter is what is hiding the rows', () => {
+  const base = view({ consolePanel: 'localRun' });
+  const withState = (localRunTargets: CockpitView['state']['localRunTargets']): CockpitView => ({
+    ...base,
+    state: { ...base.state, localRunTargets },
+  });
+
+  const held = decode(render(withState(base.state.localRunTargets.map((t) => ({ ...t, runnable: false })))));
+  assert.ok(held.includes('show every goal'), 'the control that would reveal them must be on screen');
+  assert.ok(held.includes('would run the integration branch'), 'and the message must say what ticking it does');
+
+  // Nothing to reveal: no control offered, and the panel says which situation it is
+  // rather than leaving somebody hunting for a filter that would not help.
+  const nothing = decode(render(withState([])));
+  assert.ok(nothing.includes('nowhere to run yet') || nothing.includes('anywhere to run yet'));
+  assert.ok(!nothing.includes('show every goal'), 'a filter that can reveal nothing must not be drawn');
+});
+
 test('the lessons panel draws the retired ones too', () => {
   // The load-bearing half of the prune surface (#355): a lesson that vanished on
   // being retired would leave no way to tell a list you have finished with from
