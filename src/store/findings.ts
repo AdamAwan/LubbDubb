@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid';
+import { claimKey, claimsMatch } from '../claims.js';
 import type { Finding, FindingInput, FindingKind, FindingStatus } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
@@ -245,38 +246,4 @@ function rowToFinding(r: FindingRow): Finding {
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
-}
-
-/**
- * A summary reduced to the claim it makes: case, markdown emphasis, backticks,
- * quotes and punctuation dropped, whitespace collapsed. Two agents describing one
- * discovery rarely type the same string, but they very often type the same string
- * modulo exactly this — "`ingest.ts` buffers the whole body" and "ingest.ts
- * buffers the whole body." are one claim.
- */
-function claimKey(summary: string): string {
-  return summary
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-}
-
-/**
- * Whether two claim keys are the same claim.
- *
- * Equal, or one wholly contains the other — a restatement that appends its own
- * qualifier ("… on large uploads") is the same claim, and folding it in is the
- * point. The length floor is what keeps containment from being a merge-everything
- * rule: a very short key is a substring of far too much, and a wrong merge is
- * worse than a duplicate because it hides one agent's report inside another's.
- */
-const MIN_CONTAINMENT = 24;
-
-function claimsMatch(a: string, b: string): boolean {
-  if (a === b) return true;
-  const [short, long] = a.length <= b.length ? [a, b] : [b, a];
-  if (short.length < MIN_CONTAINMENT) return false;
-  // Padded, so containment lands on whole words: "rate limit" is not a claim
-  // about "rate limiter" merely because one string sits inside the other.
-  return ` ${long} `.includes(` ${short} `);
 }

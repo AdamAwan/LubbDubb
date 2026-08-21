@@ -427,7 +427,10 @@ this order:
    whitespace collapsed. Two keys match when they are equal, or when one wholly contains the other on
    word boundaries and the shorter is at least 24 characters — a restatement that appends its own
    qualifier is the same claim, while a short key would be a substring of far too much, and a wrong
-   merge is worse than a duplicate because it hides one agent's report inside another's.
+   merge is worse than a duplicate because it hides one agent's report inside another's. The matcher
+   itself is `src/claims.ts` rather than this store's own, because `knowledge_facts` matches claims the
+   same way and by the same rule: a claim dismissed here and re-proposed there has to look like the
+   same sentence to both, or the knowledge base's rejection bar leaks. → [27](27-knowledge.md)
 2. **The author's own repeat** — same agent, kind, ref and summary, whatever its status. At this
    point that can only be a row someone dismissed, since a live one would have matched above.
 

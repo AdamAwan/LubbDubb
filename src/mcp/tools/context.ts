@@ -10,6 +10,7 @@ import type {
   HumanTaskInput,
   IssueConclusion,
   IssueConclusionVerdict,
+  KnowledgeFact,
   PartOutcomeKind,
   PlanPart,
   Remedy,
@@ -24,6 +25,8 @@ import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
 import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAssayVerdictName } from '../goalAssay.js';
 import type { RemedySubmission } from '../../remedies/remedies.js';
+import type { FactProposal } from '../../knowledge/knowledge.js';
+import type { FactProposalOutcome } from '../../store/knowledge.js';
 import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
 
@@ -109,6 +112,21 @@ export interface AgentToolTarget {
     agentId: string,
     submission: RemedySubmission,
   ): { ok: true; remedy: Remedy; lessonProposed: boolean } | { ok: false; error: string };
+  proposeFact(
+    agentId: string,
+    proposal: FactProposal,
+  ): { ok: true; outcome: FactProposalOutcome } | { ok: false; error: string };
+  askKnowledge(
+    agentId: string,
+    query: { question: string | null; scopes: readonly string[] | null },
+  ): { ok: true; scopes: string[]; facts: AnsweredFact[] } | { ok: false; error: string };
+}
+
+/** One fact as an asking agent reads it: the claim, and enough provenance to weigh it. */
+export interface AnsweredFact {
+  fact: KnowledgeFact;
+  /** How many independent goals have said they saw it. */
+  corroborations: number;
 }
 
 export interface McpToolDeps {
