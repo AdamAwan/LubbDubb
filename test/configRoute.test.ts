@@ -393,25 +393,25 @@ test('a harness whose project carries no config says so rather than guessing', a
  * file is not touched, because it belongs to the team.
  */
 test('a save overrides a project value locally and leaves the project’s file alone', async () => {
-  const { system, file, projectFile } = fixture({}, { lessonBlockChars: 1000 });
+  const { system, file, projectFile } = fixture({}, { knowledgeBlockChars: 1000 });
   const before = readFileSync(projectFile, 'utf8');
 
   const shownFirst = (await read(system)).groups
     .flatMap((group) => group.entries)
-    .find((entry) => entry.path === 'lessonBlockChars');
+    .find((entry) => entry.path === 'knowledgeBlockChars');
   assert.equal(shownFirst?.value, 1000, 'the team’s value is what the harness booted on');
   assert.equal(shownFirst?.isDefault, true);
 
   const revision = (await read(system)).revision;
-  const saved = await save(system, { set: { lessonBlockChars: 2000 }, baseline: revision });
+  const saved = await save(system, { set: { knowledgeBlockChars: 2000 }, baseline: revision });
   assert.equal(saved.status, 200);
 
-  assert.match(readFileSync(file, 'utf8'), /"lessonBlockChars": 2000/);
+  assert.match(readFileSync(file, 'utf8'), /"knowledgeBlockChars": 2000/);
   assert.equal(readFileSync(projectFile, 'utf8'), before, 'the team’s file is read, never written');
 
   const shown = (await read(system)).groups
     .flatMap((group) => group.entries)
-    .find((entry) => entry.path === 'lessonBlockChars');
+    .find((entry) => entry.path === 'knowledgeBlockChars');
   assert.equal(shown?.value, 2000, 'a live key, so the override is in force now');
   assert.equal(shown?.isDefault, false, 'this one is theirs');
   assert.equal(shown?.fromProject, true, 'and clearing it would leave the team’s value, not the built-in one');

@@ -1805,6 +1805,47 @@ a.btn {
   white-space: pre-wrap;
 }
 
+/* What the injected block costs against its cap. A bar rather than a bare pair of
+   numbers because the reading an operator wants is "how much room is left", which
+   a ratio answers at a glance and two figures do not. */
+.kn-budget {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.kn-meter {
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  flex: 1;
+  height: 8px;
+  min-width: 120px;
+  overflow: hidden;
+}
+.kn-meter-fill {
+  background: var(--accent);
+  height: 100%;
+}
+/* Full is not an error — it is the cap doing its job — but it is the state where
+   something above is reaching nobody, so it is drawn as the thing to look at. */
+.kn-meter-fill.full {
+  background: var(--amber);
+}
+/* The prompt text verbatim. Pre-wrapped and scrollable in its own box: this is
+   what the agent reads, and re-flowing it would make it a paraphrase. */
+.kn-sent {
+  background: var(--well);
+  border-radius: var(--r-sm);
+  font-size: 12px;
+  margin: 6px 0 0;
+  max-height: 320px;
+  overflow: auto;
+  padding: 8px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
 .plan-part {
   display: flex;
   align-items: center;

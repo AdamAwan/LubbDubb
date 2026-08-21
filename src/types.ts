@@ -1155,10 +1155,11 @@ export type FindingInput = Pick<Finding, 'kind' | 'ref' | 'summary' | 'where' | 
  *
  * - `proposed` — written down, visible to the operator, and **read by nothing
  *   else**. This is where every lesson starts.
- * - `promoted` — the operator has vouched for it, and it is rendered into every
+ * - `promoted` — the operator has vouched for it, and it is mirrored into the
+ *   knowledge base as an injected fleet claim, which is rendered into every
  *   agent's system-prompt append at that agent's next launch: dated, attributed
- *   to the goal it was learned on, and capped (`lessonBlockChars`). This is the
- *   only status any agent ever sees.
+ *   to the goal it was learned on, and capped (`knowledgeBlockChars`). This is
+ *   the only status any agent ever sees.
  * - `retired` — pruned. Terminal, and the reason the surface is allowed to
  *   exist: a store that could only grow is the unprunable pad.
  *

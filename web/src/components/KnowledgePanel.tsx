@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { JSX } from 'react';
-import type { FactRuling, KnowledgeCorroboration, KnowledgeFactView } from '../types.js';
+import type { FactRuling, KnowledgeCorroboration, KnowledgeDeliveryView, KnowledgeFactView } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { renderMarkdown } from './markdown.js';
@@ -33,6 +33,7 @@ import { Ref } from './refs.js';
  */
 export function KnowledgePanel({
   facts,
+  delivery,
   now,
   refUrls,
   viewingFact,
@@ -41,6 +42,8 @@ export function KnowledgePanel({
   onViewFact,
 }: {
   facts: KnowledgeFactView[];
+  /** What the two renderers actually send, projected server-side. Never recomputed here. */
+  delivery: KnowledgeDeliveryView;
   now: number;
   refUrls: Record<string, string>;
   /** The claim whose provenance is open, from `Place` — never this component's own state. */
@@ -60,15 +63,19 @@ export function KnowledgePanel({
   const section = (reach: KnowledgeFactView['reach'], ruled: boolean | null = null): KnowledgeFactView[] =>
     standing.filter((f) => f.reach === reach && (ruled === null || (f.ruledAt !== null) === ruled));
 
-  const shared = { now, refUrls, viewingFact, onReach, onDetail, onViewFact };
+  // Which injected claims the cap left out, as the renderer that ran reported it.
+  // Never a character count taken here: a second implementation of "what fits" is
+  // free to disagree with the one that shipped, and nothing is red when it does.
+  const dropped = new Set(delivery.dropped);
+  const shared = { now, refUrls, viewingFact, onReach, onDetail, onViewFact, dropped };
   return (
     <div className="kn">
       <p className="muted small kn-note">
         What agents have learned about <em>working</em> this repository, and how far each claim carries. Agents write
         these down through <code>knowledge_propose</code>; two of them on two different goals carry a claim as far as{' '}
         <b>on lookup</b>, and nothing but a person puts one in front of every agent. A promoted lesson is mirrored in
-        here as an injected fleet claim, so the <b>Lessons</b> panel and this page show the same claims until delivery
-        moves — govern a mirrored claim wherever you first vouched for it.
+        here as an injected fleet claim, so the <b>Lessons</b> panel and this page show the same claims — govern a
+        mirrored claim wherever you first vouched for it.
       </p>
       <KnowledgeSection
         title="Live notices"
@@ -84,8 +91,9 @@ export function KnowledgePanel({
       />
       <KnowledgeSection
         title="Injected"
-        blurb="Vouched for, and bound for every agent's prompt before it reads any code. Nothing here is delivered yet — the block that renders these lands in phase 3, and until it does a promoted lesson still reaches agents through the Lessons block."
+        blurb="Vouched for, and in every agent's system prompt before it reads any code. Fleet-wide claims ride the block below; a check or goal claim you inject rides the task prompt of the dispatches it matches."
         facts={section('injected')}
+        meter={<BlockBudget delivery={delivery} />}
         {...shared}
       />
       <KnowledgeSection
@@ -112,7 +120,92 @@ export function KnowledgePanel({
         facts={section('rejected')}
         {...shared}
       />
+      <Receives delivery={delivery} />
     </div>
+  );
+}
+
+/**
+ * The block against its budget.
+ *
+ * Both numbers are the renderer's: the block is the string that will ship, and
+ * the drop is the list it reported dropping. What an operator does about a full
+ * meter is per-row — which is why the count is here and the marking is on the
+ * cards, rather than a bare "two are over" they would then have to go and find.
+ */
+function BlockBudget({ delivery }: { delivery: KnowledgeDeliveryView }): JSX.Element {
+  const used = delivery.block.length;
+  const full = delivery.limit > 0 && used >= delivery.limit;
+  const over = delivery.dropped.length;
+  return (
+    <div className="kn-budget">
+      <div className="kn-meter" role="presentation">
+        <div
+          className={`kn-meter-fill${full ? ' full' : ''}`}
+          style={{ width: `${delivery.limit > 0 ? Math.min(100, (used / delivery.limit) * 100) : 100}%` }}
+        />
+      </div>
+      <span className="muted small">
+        {used.toLocaleString()} of {delivery.limit.toLocaleString()} characters
+        {over > 0 ? (
+          <>
+            {' '}
+            ·{' '}
+            <b title="Over the cap, so no agent reads them. Demote something above to make room — the agent is told the count and nothing else.">
+              {over} not sent
+            </b>
+          </>
+        ) : (
+          ' · everything above is being sent'
+        )}
+      </span>
+    </div>
+  );
+}
+
+/**
+ * What an agent actually receives, from the same two functions that send it.
+ *
+ * The half of this page a store this size cannot be governed without: the reach
+ * machine says where a claim *stands*, and this says what is *sent* — and they
+ * come apart at the cap, silently, because the agent is told a count and never
+ * which claims it is missing. `LessonsPanel` carries the idea in miniature, per
+ * row; a whole store needs the text itself.
+ *
+ * The scoped lists are per scope rather than per dispatch: a dispatch matches its
+ * goal and every check it answers at once, so an agent fixing CI on a goal with
+ * claims against both receives both of these, in one pass through the renderer.
+ */
+function Receives({ delivery }: { delivery: KnowledgeDeliveryView }): JSX.Element {
+  return (
+    <section className="kn-section">
+      <h3 className="kn-head">What an agent actually receives</h3>
+      <p className="muted small">
+        Verbatim, from the same renderers the harness launches and dispatches with — not a description of them. The
+        block is in every agent&rsquo;s system prompt on its next launch; the scoped lists are appended to the task
+        prompt of a dispatch that matches, and to nothing else.
+      </p>
+      <div className="kn-card">
+        <div className="kn-head small">Every launch · system prompt</div>
+        {delivery.block === '' ? (
+          <p className="empty">Nothing is injected, so the launch carries no block at all.</p>
+        ) : (
+          <pre className="kn-sent">{delivery.block}</pre>
+        )}
+      </div>
+      {delivery.scoped.length === 0 ? (
+        <p className="empty">No claim is scoped to a check or a goal, so no dispatch carries an append.</p>
+      ) : (
+        delivery.scoped.map((entry) => (
+          <div className="kn-card" key={entry.scope}>
+            <div className="kn-head small">
+              A dispatch matching <code>{entry.scope}</code> · task prompt
+            </div>
+            <pre className="kn-sent">{entry.text}</pre>
+          </div>
+        ))
+      )}
+    </section>
   );
 }
 
@@ -123,20 +216,24 @@ interface RowProps {
   onReach: (id: string, reach: FactRuling) => Promise<unknown> | unknown;
   onDetail: (id: string) => Promise<{ corroborations: KnowledgeCorroboration[] }>;
   onViewFact: (id: string | null) => void;
+  /** Ids the block's cap left out, from the renderer that left them out. */
+  dropped: Set<string>;
 }
 
 function KnowledgeSection({
   title,
   blurb,
   facts,
+  meter,
   ...row
-}: { title: string; blurb: string; facts: KnowledgeFactView[] } & RowProps): JSX.Element {
+}: { title: string; blurb: string; facts: KnowledgeFactView[]; meter?: JSX.Element } & RowProps): JSX.Element {
   return (
     <section className="kn-section">
       <h3 className="kn-head">
         {title} <span className="muted small">· {facts.length}</span>
       </h3>
       <p className="muted small">{blurb}</p>
+      {meter}
       {facts.length === 0 ? (
         <p className="empty">Nothing here.</p>
       ) : (
@@ -164,6 +261,7 @@ function FactCard({
   onReach,
   onDetail,
   onViewFact,
+  dropped,
 }: { fact: KnowledgeFactView } & RowProps) {
   const open = viewingFact === fact.id;
   const settled = fact.reach === 'rejected' || fact.reach === 'committed';
@@ -181,6 +279,18 @@ function FactCard({
         {fact.expiresAt !== null && (
           <span className="chip small warn" title="An expiring fact is out of every read once it lapses; the row stays">
             {new Date(fact.expiresAt).getTime() > now ? `lapses in ${untilTime(fact.expiresAt, now)}` : 'lapsed'}
+          </span>
+        )}
+        {/* Whether agents are getting this one. Per row rather than as a count,
+            because "two are over the cap" leaves the operator to work out which two
+            before they can demote anything — and the drop is the one thing here
+            that the agent is told only the size of. */}
+        {dropped.has(fact.id) && (
+          <span
+            className="chip small warn"
+            title="Over the block's character cap, so no agent reads it. Demote a newer injected claim to make room."
+          >
+            over the cap
           </span>
         )}
         {fact.supersedes !== null && (

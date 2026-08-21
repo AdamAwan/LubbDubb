@@ -33,6 +33,7 @@ import { retroDossier, retroPad } from '../retro/dossier.js';
 import { neighbourSeedPaths, priorWorkBriefing } from '../briefing/priorWork.js';
 import { ciEvidenceNote, type CiEvidenceReader, type CiEvidenceTarget } from '../ci/ciEvidence.js';
 import { padOriginFor } from '../scratch/pad.js';
+import { dispatchFactScopes, KNOWLEDGE_READ_LIMIT, renderScopedKnowledgeNote } from '../knowledge/block.js';
 import { retryNote, retryResumeFor, type RetryResume } from './retryResume.js';
 import { isActiveTask } from '../tasks.js';
 import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
@@ -892,7 +893,29 @@ export class ActionExecutor {
     // the attachments rather than to the exact origin, and placed first among the
     // appended blocks: it is the only one of them that changes what the work is.
     const instructions = instructionsFor(action.originRef, store, this.deps.instructionTracker);
-    const prompt = [note, action.prompt, instructions, evidence, guidance, outstanding, prior, briefing, attachments]
+    // What the fleet knows about *this* dispatch's own goal and checks (issue #27
+    // phase 3). Appended for the reason every block above it is — a `{knowledge}`
+    // placeholder would be dropped in silence by any operator template override
+    // written before this existed — and here rather than in a rule for the reason
+    // the attachments are: every dispatch passes through this method whatever
+    // composed it, and no rule, desk or gate may read a fact at all.
+    //
+    // The fleet-wide claims are **not** here. They ride the system prompt, where
+    // they are a cached prefix; only what varies per dispatch belongs in a task
+    // prompt, and that is the whole of the split.
+    const knowledge = knowledgeFor(action, store);
+    const prompt = [
+      note,
+      action.prompt,
+      instructions,
+      evidence,
+      knowledge,
+      guidance,
+      outstanding,
+      prior,
+      briefing,
+      attachments,
+    ]
       .filter(Boolean)
       .join('\n\n');
     // The model this kind of work runs on and the depth it runs at, resolved once
@@ -1013,6 +1036,33 @@ export class ActionExecutor {
 function attachmentsFor(originRef: string | null | undefined, store: Store): string | null {
   if (!originRef) return null;
   return attachmentsNote(store.listAttachments(padOriginFor(originRef) ?? originRef)) || null;
+}
+
+/**
+ * What the knowledge base has to say about this dispatch — or null when it has
+ * nothing about this goal or these checks, which is most dispatches.
+ *
+ * **The scopes are the dispatch's, not the origin's.** `dispatchFactScopes`
+ * collapses `pr:412:ci` to the goal `pr:412`, so a claim filed by an agent on the
+ * review concern reaches the one fixing CI: they are two origins of one goal, and
+ * a fact scoped to a *concern* would be a fact almost nothing ever matched. The
+ * check names come off the action, matched exactly for `priorRemedies`' reason.
+ *
+ * **The store decides what is deliverable.** `askFacts` answers only from `lookup`
+ * and `injected` and never with a lapsed row — a proposal one agent made is not
+ * evidence, and reading one out here would be auto-promotion arriving through the
+ * prompt instead of through the tool.
+ */
+function knowledgeFor(
+  action: ValidatedAction & { type: 'dispatch_code_agent' | 'dispatch_desk_agent' },
+  store: Store,
+): string | null {
+  const scopes = dispatchFactScopes(
+    action.originRef ?? null,
+    action.type === 'dispatch_code_agent' ? (action.ciChecks ?? null) : null,
+  );
+  if (scopes.length === 0) return null;
+  return renderScopedKnowledgeNote(store.askFacts({ scopes, limit: KNOWLEDGE_READ_LIMIT })) || null;
 }
 
 /**

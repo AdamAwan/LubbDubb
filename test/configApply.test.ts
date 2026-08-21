@@ -21,7 +21,7 @@ function recordingDispatcher(): { seen: CiPolicy[]; setCiPolicy: (ci: CiPolicy) 
 }
 
 function harness(overrides: Partial<Config> = {}) {
-  const running = loadConfig({ maxConcurrentAgents: 3, lessonBlockChars: 6000, ...overrides });
+  const running = loadConfig({ maxConcurrentAgents: 3, knowledgeBlockChars: 6000, ...overrides });
   const runtimeControl = new RuntimeControl(running.maxConcurrentAgents, running.startPaused);
   const dispatcher = recordingDispatcher();
   return { running, runtimeControl, dispatcher, live: new LiveConfig({ running, runtimeControl, dispatcher }) };
@@ -30,7 +30,7 @@ function harness(overrides: Partial<Config> = {}) {
 test('the agent cap applies now: the configured value and the live one both move', () => {
   const { running, runtimeControl, live } = harness();
 
-  const changes = live.apply(loadConfig({ maxConcurrentAgents: 6, lessonBlockChars: 6000 }));
+  const changes = live.apply(loadConfig({ maxConcurrentAgents: 6, knowledgeBlockChars: 6000 }));
 
   assert.deepEqual(
     changes.map((change) => ({ path: change.path, applied: change.applied })),
@@ -44,16 +44,16 @@ test('the agent cap applies now: the configured value and the live one both move
 test('the lesson cap applies now, because it is read at every launch', () => {
   const { running, live } = harness();
 
-  live.apply(loadConfig({ maxConcurrentAgents: 3, lessonBlockChars: 9000 }));
+  live.apply(loadConfig({ maxConcurrentAgents: 3, knowledgeBlockChars: 9000 }));
 
-  assert.equal(running.lessonBlockChars, 9000);
+  assert.equal(running.knowledgeBlockChars, 9000);
 });
 
 test('the CI policy applies now by re-seating the dispatcher, not by assignment alone', () => {
   const { running, dispatcher, live } = harness();
   const checks = [{ match: 'build', onFailure: 'dispatch' as const }];
 
-  live.apply(loadConfig({ maxConcurrentAgents: 3, lessonBlockChars: 6000, ci: { checks } }));
+  live.apply(loadConfig({ maxConcurrentAgents: 3, knowledgeBlockChars: 6000, ci: { checks } }));
 
   assert.deepEqual(
     dispatcher.seen,
@@ -67,7 +67,7 @@ test('the state colours apply now, because the snapshot reads the running config
   const { running, live } = harness();
   const colours = { Worthyable: '#7fb3ff' };
 
-  live.apply(loadConfig({ maxConcurrentAgents: 3, lessonBlockChars: 6000, issueStateColours: colours }));
+  live.apply(loadConfig({ maxConcurrentAgents: 3, knowledgeBlockChars: 6000, issueStateColours: colours }));
 
   assert.deepEqual(running.issueStateColours, colours, 'the object the snapshot builder reads by reference');
   assert.deepEqual(live.pending(), [], 'no restart is owed for a colour');
@@ -76,7 +76,7 @@ test('the state colours apply now, because the snapshot reads the running config
 test('a key with no arm lands in the file and is reported as pending, not applied', () => {
   const { running, live } = harness();
 
-  const changes = live.apply(loadConfig({ maxConcurrentAgents: 3, lessonBlockChars: 6000, agentMode: 'pty' }));
+  const changes = live.apply(loadConfig({ maxConcurrentAgents: 3, knowledgeBlockChars: 6000, agentMode: 'pty' }));
 
   assert.deepEqual(changes, [{ path: 'agentMode', from: 'stream', to: 'pty', applied: false }]);
   assert.deepEqual(
@@ -88,7 +88,7 @@ test('a key with no arm lands in the file and is reported as pending, not applie
 
 test('editing a pending key twice leaves one row, saying where it started and where it is now', () => {
   const { live } = harness();
-  const base = { maxConcurrentAgents: 3, lessonBlockChars: 6000 };
+  const base = { maxConcurrentAgents: 3, knowledgeBlockChars: 6000 };
 
   live.apply(loadConfig({ ...base, agentMode: 'pty' }));
   live.apply(loadConfig({ ...base, agentMode: 'raw' }));
@@ -98,7 +98,7 @@ test('editing a pending key twice leaves one row, saying where it started and wh
 
 test('putting a pending key back to what the harness is running clears it', () => {
   const { live } = harness();
-  const base = { maxConcurrentAgents: 3, lessonBlockChars: 6000 };
+  const base = { maxConcurrentAgents: 3, knowledgeBlockChars: 6000 };
 
   live.apply(loadConfig({ ...base, agentMode: 'pty' }));
   live.apply(loadConfig({ ...base }));
@@ -109,7 +109,7 @@ test('putting a pending key back to what the harness is running clears it', () =
 test('one apply reports live and restart-only changes together, each saying which it is', () => {
   const { live } = harness();
 
-  const changes = live.apply(loadConfig({ maxConcurrentAgents: 8, lessonBlockChars: 6000, agentMode: 'pty' }));
+  const changes = live.apply(loadConfig({ maxConcurrentAgents: 8, knowledgeBlockChars: 6000, agentMode: 'pty' }));
 
   assert.deepEqual(changes.map((change) => `${change.path}:${change.applied ? 'now' : 'restart'}`).sort(), [
     'agentMode:restart',
@@ -119,5 +119,5 @@ test('one apply reports live and restart-only changes together, each saying whic
 
 test('an unchanged config is not a change', () => {
   const { live } = harness();
-  assert.deepEqual(live.apply(loadConfig({ maxConcurrentAgents: 3, lessonBlockChars: 6000 })), []);
+  assert.deepEqual(live.apply(loadConfig({ maxConcurrentAgents: 3, knowledgeBlockChars: 6000 })), []);
 });

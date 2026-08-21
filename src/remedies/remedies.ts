@@ -37,7 +37,7 @@
  * The guard is where the loop closes. `undocumented` is the one verdict that
  * names something the harness can act on — a fact about working this repository
  * that is written down nowhere — so it is the one verdict that may carry a
- * proposed lesson, and `src/lessonBlock.ts` puts a vouched-for lesson in front of
+ * proposed lesson, and `src/knowledge/block.ts` puts a vouched-for claim in front of
  * every later dispatch. Everything else is a reading for a person.
  *
  * ## Nothing gates on a remedy

@@ -248,25 +248,25 @@ modals — and nothing that answers _what is true_. It replaced ten independent 
 page on the tickets tab is **one** place, and stepping back out of it has to restore all three at
 once.
 
-| Parameter                            | Carries                                                                                                                           |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| Parameter                            | Carries                                                                                                                                             |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tab`                                | `tickets` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, so links to either deleted tab still land |
-| `goal`                               | the open goal page, as `issue:<n>`                                                                                                |
-| `panel`                              | `findings` / `lessons` / `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                    |
-| `ask`                                | the queue row a `{ ask }` panel is showing                                                                                        |
-| `agent`                              | the open drawer's agent                                                                                                           |
-| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                    |
-| `fact`                               | the claim whose provenance is open on the Knowledge panel, by fact id                                                             |
-| `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                          |
-| `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                 |
-| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                |
-| `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on    |
-| `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis     |
-| `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                         |
-| `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                   |
-| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                               |
-| `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                       |
-| `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                      |
+| `goal`                               | the open goal page, as `issue:<n>`                                                                                                                  |
+| `panel`                              | `findings` / `lessons` / `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                     |
+| `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                          |
+| `agent`                              | the open drawer's agent                                                                                                                             |
+| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                      |
+| `fact`                               | the claim whose provenance is open on the Knowledge panel, by fact id                                                                               |
+| `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                            |
+| `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                   |
+| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                  |
+| `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                      |
+| `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis                       |
+| `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                                           |
+| `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                                     |
+| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                                                 |
+| `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                                        |
+| `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                                       |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
@@ -1021,7 +1021,7 @@ pages that are one click away anyway.
 
 **A panel is the right shape for an archive, and it is also a better one than the tab was.** A record is
 consulted — you go to it with a question, read one thing and leave — where the nav is the surfaces work
-happens *on*. And the bar is reachable from everywhere: a selected goal outranks every tab, so the
+happens _on_. And the bar is reachable from everywhere: a selected goal outranks every tab, so the
 record-as-a-tab could not be read beside the goal that sent you looking for it, while a panel draws over
 whatever is in front. What it costs is the glance: nothing on the bar says the graph has anything new in
 it, and nothing should — the reading carries **no count**, because every number the strip states is a
@@ -1090,12 +1090,12 @@ tracker id, the ticket, the readings, the cost and the date, each row taking the
 subgrid so the columns line up however long one title runs.
 
 **Two facts about state writes ride on the snapshot**, because neither is the cockpit's to infer.
-`canSetWorkItemState` is asked of the connector — `setWorkItemState` *throws* where no integration
+`canSetWorkItemState` is asked of the connector — `setWorkItemState` _throws_ where no integration
 implements it, so a surface that wants to **offer** the operation rather than attempt it has no other
 way to find out, and inferring it from the provider name would be a second opinion about a capability.
 `stateRules` carries the state words the three work-item rules act on, with `pickup` as the
 **effective** set: `effectivePickupStates` folds `issueInProgressState` in, so a reader built from the
-raw key would report that the state work is *in* is one the harness will not work. It is null where
+raw key would report that the state work is _in_ is one the harness will not work. It is null where
 `issuePickupStates` is unset, because all three rules are switched out entirely then — the same fact
 the dispatcher acts on, rather than an object of nulls inviting a reader to imply otherwise.
 
@@ -1276,12 +1276,12 @@ explain. So the operator decides, and the board tells them first — the whole b
 a card is lifted, rather than one column at a time as the pointer finds it.
 
 `dropWarning` composes the sentence from independent clauses rather than picking a case, because a
-column can be outside the pickup gate *and* the one a rule writes *and* hold nothing live, and any
+column can be outside the pickup gate _and_ the one a rule writes _and_ hold nothing live, and any
 enumeration would report whichever of the three the reader did not need. Three of its wordings are
 counter-intuitive and each is checked against the rule rather than against the config key:
 
 - **The in-progress state reads as a pickup state.** `effectivePickupStates` folds it in, so a warning
-  built from the raw `issuePickupStates` would say the fleet stops on exactly the column work is *in*.
+  built from the raw `issuePickupStates` would say the fleet stops on exactly the column work is _in_.
 - **The review state names the condition on its bounce and never promises one.**
   `work-item-back-to-pickup` fires only on an explicit `more_work` verdict — never on a missing PR,
   which was changed deliberately after a merged PR bounced its ticket back to "Ready" and put a fresh
@@ -1301,7 +1301,7 @@ still that long reads as a drop that missed.
 **A landed write re-reads every column, and the placement is released once they have.** Both halves are
 load-bearing, and getting either wrong is a board that lies about where work is:
 
-- Without the re-read the placement is the *only* thing holding a card in its new column, and a
+- Without the re-read the placement is the _only_ thing holding a card in its new column, and a
   placement is one slot. A second drop replaces it, the first card falls back to its column's
   never-refreshed page — where it started — and one drag appears to move two cards. The mirror is
   already patched by the route, so re-reading is what makes the move real rather than drawn.
@@ -1662,15 +1662,14 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   irreversible act on the surface.
 
   And every **promoted** row says whether agents are actually getting it — a `sent to agents` chip,
-  or `over the cap`. Promoted lessons are rendered into the fleet's system-prompt append newest-vouched
-  first, up to `lessonBlockChars`, and whatever does not fit is dropped whole
-  → [10](10-agent-runtimes.md#the-lesson-block). The agent is never told the list it reads is partial —
-  a partial list presented as whole is the failure the cap exists to bound — so this panel is the only
-  place a dropped claim is visible, and the only place something can be retired to make room for it.
-  Per row rather than as a count, because "two are over the cap" leaves the operator to work out
-  _which_ two before they can act. `rendered` is computed server-side by the same `renderLessonBlock`
-  the launch calls (`LessonView` in `src/wire.ts`), never re-derived in the browser: a second
-  implementation of "what fits" would be free to disagree with the one that actually ran.
+  or `over the cap`. Since #27 phase 3 a promoted lesson reaches agents as the **fact it is mirrored
+  into**, so this flag is the knowledge block's own answer looked up under the adopted id
+  (`LessonView.rendered` in `src/wire.ts`) → [10](10-agent-runtimes.md#the-knowledge-block). One block
+  ships, so both panels have to be describing it, and a second rendering of the lessons table here
+  would be a chip about a row that is not the one delivered. Per row rather than as a count, because
+  "two are over the cap" leaves the operator to work out _which_ two before they can act; computed
+  server-side and never re-derived in the browser, since a second implementation of "what fits" would
+  be free to disagree with the one that actually ran.
 
 - **Knowledge** — `KnowledgePanel`: what the fleet has written down about working this repository, and
   how far each claim carries (#27 phase 2). It is the Lessons panel's shape one axis wider, because
@@ -1702,10 +1701,23 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   on `Place`, so it is a link somebody can send.
 
   Promoted lessons are mirrored into this store, so the Lessons panel and this page show the same
-  claims until delivery moves; the panel says so at the top rather than leaving a reader to work out
-  which surface is authoritative. Nothing in the Injected section is delivered yet — the block that
-  renders it, and the character budget drawn against its cap, are phase 3, from the renderer's own
-  answer rather than a second count of what fits. → [27](27-knowledge.md#in-the-cockpit)
+  claims; the panel says so at the top rather than leaving a reader to work out which surface is
+  authoritative.
+
+  **The Injected section carries a budget meter**, drawn against `knowledgeBlockChars`, and marks the
+  claims the cap left out — the same `over the cap` reading the Lessons panel gives, on the store that
+  now delivers. Both are the block renderer's own answer, projected onto the wire
+  (`KnowledgeDeliveryView`): a meter drawn from a character count taken in the browser would be exactly
+  the second implementation of "what fits" that rule exists to prevent.
+
+  **And the page ends with what an agent actually receives** — the system-prompt block verbatim, and
+  the task-prompt append for each `check:` and `goal:` scope with anything deliverable in it, from the
+  same two renderers the launch and the dispatch use. Per scope rather than per dispatch, because a
+  dispatch matches its goal and every check it answers at once and the set of dispatches is not a list.
+  The reach machine says where a claim _stands_; this says what is _sent_, and the two come apart at
+  the cap — silently, since the agent is told a count and never which claims it is missing.
+  `LessonsPanel` carries the idea in miniature, per row; a store this size cannot be governed without
+  it. → [27](27-knowledge.md#in-the-cockpit)
 
 - **Faults** — the recorded failures, forty rows, the surface you went looking for rather than a crop
   for a column. It offers a **two-step clear**, drawn **above** the rows and **at zero rows as well**:

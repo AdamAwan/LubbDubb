@@ -6,6 +6,7 @@ import type {
   IssueAssay,
   IssueDelivery,
   IssueInstruction,
+  KnowledgeFact,
   LocalRun,
   PlanPart,
   Retrospective,
@@ -16,6 +17,7 @@ import type {
 import type {
   CockpitState,
   GoalReachView,
+  KnowledgeDeliveryView,
   LocalRunRefFacts,
   LocalRunTargetView,
   LocalRunView,
@@ -44,8 +46,10 @@ import { readRunway } from '../supply/runway.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { trackerCoordinates } from '../mcp/findings.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
+import { adoptedFactId } from '../store/knowledge.js';
+import type { Store } from '../store/store.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
-import { renderLessonBlock } from '../lessonBlock.js';
+import { KNOWLEDGE_READ_LIMIT, renderKnowledgeBlock, renderScopedKnowledgeNote } from '../knowledge/block.js';
 import { acceptanceCriteria, bySlug, partDepth, planIssueNumber } from '../plans/parts.js';
 import { planScopeDrift } from '../plans/scopeDrift.js';
 import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
@@ -122,13 +126,19 @@ export function buildStateSnapshot(
   // the world has long since dropped is exactly the one a dated lesson points at,
   // so its ref has to be resolved directly rather than looked up off the snapshot.
   const lessons = store.listLessons();
-  // Which promoted lessons are actually in the block agents get (issue #355
-  // phase 3), from the same renderer the launch calls with the same cap — so the
-  // per-row marking below is what really happened, not a second opinion about it.
-  // The agent is never told the list it reads is partial; this is the surface
-  // where that is visible, and the only one from which something can be retired
-  // to make room.
-  const inLessonBlock = new Set(renderLessonBlock(lessons, config.lessonBlockChars).rendered.map((l) => l.id));
+  // What the knowledge base actually delivers (issue #27 phase 3), from the two
+  // renderers that deliver it, with the cap the launch reads. Everything the two
+  // panels say about what is *sent* comes from here — the block's budget meter,
+  // the per-claim drop, and the lesson rows' "sent to agents" chip alike.
+  const delivery = knowledgeDelivery(store, config.knowledgeBlockChars);
+  // Which promoted lessons are actually in the block agents get. A lesson reaches
+  // the fleet as the fact it is mirrored into (`adoptLessons`), so the answer is
+  // the knowledge block's, read back through the adopted id — never a second
+  // rendering of the lessons table, which has not been delivered in its own right
+  // since delivery moved. The agent is never told the list it reads is partial;
+  // this is the surface where that is visible, and the only one from which
+  // something can be retired to make room.
+  const deliveredFacts = new Set(delivery.rendered);
   // What the fleet knows about working this repository, every reach and the
   // rejected tail included (issue #27 phase 2). Read here for lessons' reason
   // twice over: each fact's `originRef` and its `goal:` scope both name a goal the
@@ -719,12 +729,14 @@ export function buildStateSnapshot(
     // rule reads one — a promoted lesson reaches agents only as a claim in the
     // fleet's system-prompt append, and `rendered` says which promoted ones the
     // cap actually let through.
-    lessons: lessons.map((lesson) => ({ ...lesson, rendered: inLessonBlock.has(lesson.id) })),
+    lessons: lessons.map((lesson) => ({ ...lesson, rendered: deliveredFacts.has(adoptedFactId(lesson.id)) })),
     // Every fact, the rejected ones included: the page is the governance, and a
     // surface drawing only what it let through cannot show that a claim was
     // killed. Nothing in the dispatcher reads one — a fact feeds prompts (phase 3)
     // and this panel, and that is the whole of it.
     knowledge: facts.map((fact) => ({ ...fact, corroborations: factCorroborations.get(fact.id) ?? 0 })),
+    // What that list actually sends, from the renderers that send it.
+    knowledgeDelivery: delivery,
     // Bugs raised from a story row: `filing` while the desk agent writes one, `filed`
     // with a ref once it exists. Several per story is the normal case, not an error —
     // a story can be wrong in more than one way.
@@ -1105,5 +1117,42 @@ function workItemStateRules(config: Config): CockpitState['config']['stateRules'
     inProgress: config.issueInProgressState ?? null,
     inReview: config.issueInReviewState ?? null,
     returnsTo: config.issuePickupStates?.[0] ?? null,
+  };
+}
+
+/**
+ * What the knowledge base actually delivers, projected from the renderers that
+ * deliver it.
+ *
+ * **Never a second reading.** The block is `renderKnowledgeBlock`'s own output —
+ * the string, the ids it carries, and the ids the cap left out — so the cockpit's
+ * budget meter is measuring the block that will ship rather than a character count
+ * of its own. A recomputation here would be free to disagree with the launch, and
+ * nothing would be red when it did.
+ *
+ * The scoped half is one entry per `check:` or `goal:` scope holding anything
+ * deliverable, rendered through the same function `recordDispatchTask` appends
+ * with. Per scope rather than per dispatch because a dispatch matches its goal and
+ * every check it answers at once, and the set of dispatches is not a list — an
+ * agent on `pr:412:ci` with `test (windows)` red receives this page's `goal:pr:412`
+ * entry and its `check:test (windows)` entry, in one pass through the renderer.
+ */
+function knowledgeDelivery(store: Store, limit: number): KnowledgeDeliveryView {
+  const block = renderKnowledgeBlock(store.askFacts({ scopes: ['fleet'], limit: KNOWLEDGE_READ_LIMIT }), limit);
+  const byScope = new Map<string, KnowledgeFact[]>();
+  for (const fact of store.askFacts({ limit: KNOWLEDGE_READ_LIMIT })) {
+    if (fact.scope === 'fleet') continue;
+    byScope.set(fact.scope, [...(byScope.get(fact.scope) ?? []), fact]);
+  }
+  return {
+    block: block.text,
+    limit,
+    rendered: block.rendered.map((f) => f.id),
+    dropped: block.dropped.map((f) => f.id),
+    scoped: [...byScope]
+      // Alphabetical, so the list an operator reads twice is the same list twice —
+      // insertion order here is the store's recency, which moves under them.
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([scope, facts]) => ({ scope, text: renderScopedKnowledgeNote(facts), facts: facts.map((f) => f.id) })),
   };
 }

@@ -318,20 +318,17 @@ export interface CockpitWorld extends WorldSnapshot {
 /**
  * A lesson, plus whether agents are actually getting it (issue #355 phase 3).
  *
- * The one thing the operator can see and the agent must not: promoted lessons are
- * rendered into the fleet's system-prompt append newest-vouched first, up to
- * `lessonBlockChars`, and whatever does not fit is dropped whole. The agent is
- * never told the list it reads is partial — a partial list presented as whole is
- * the failure the cap exists to bound — so the drop has to surface *here*, per
- * row, or the only person who can act on it cannot see it.
+ * The one thing the operator can see and the agent must not: a promoted lesson is
+ * mirrored into the knowledge base as an injected fleet claim, and *that* is what
+ * the system-prompt block renders — newest-vouched first, up to
+ * `knowledgeBlockChars`, whole claims dropped at the bound. So this flag is the
+ * knowledge block's answer read back through the lesson it came from, never a
+ * second reading of its own: one block is delivered, and both panels have to be
+ * describing it.
  *
  * Per row rather than as a count, because a count says "two are not reaching
  * agents" and leaves the operator to work out which two before they can retire
  * something to make room.
- *
- * Computed server-side from the same `renderLessonBlock` the launch uses, never
- * re-derived in the browser: a second implementation of "what fits" would be free
- * to disagree with the one that actually ran.
  */
 /**
  * A fact, plus the count that promoted it (issue #27 phase 2).
@@ -376,6 +373,42 @@ export type FactRuling = Extract<FactReach, 'lookup' | 'injected' | 'rejected'>;
 export interface KnowledgeFactPayload {
   fact: KnowledgeFactView;
   corroborations: KnowledgeCorroboration[];
+}
+
+/**
+ * What an agent actually receives from the knowledge base, computed from the same
+ * two renderers the launch and the dispatch use (issue #27 phase 3).
+ *
+ * A store this size cannot be governed without it. The reach machine says where a
+ * claim *stands*; this says what is *sent*, and the two come apart the moment the
+ * character cap bites — silently, and only for the operator, because the agent is
+ * told a count and never which claims it is missing.
+ *
+ * **Projected server-side, never re-derived in the browser.** What fits is
+ * returned by `renderKnowledgeBlock`, and a meter drawn from a plain character
+ * count in the cockpit would be exactly the second implementation of "what fits"
+ * that rule exists to prevent — free to disagree with the one that actually ran,
+ * with both looking like counts of the same characters.
+ */
+export interface KnowledgeDeliveryView {
+  /** The system-prompt block verbatim, as the next launch will carry it. `''` when nothing renders. */
+  block: string;
+  /** The bound the block was rendered under — `knowledgeBlockChars`. */
+  limit: number;
+  /** The facts the block carries, newest-vouched first, by id. */
+  rendered: string[];
+  /** The injected fleet facts the cap left out, by id. Nobody is reading these. */
+  dropped: string[];
+  /**
+   * What a dispatch matching one scope has appended to its **task** prompt — one
+   * entry per `check:` or `goal:` scope with anything deliverable in it.
+   *
+   * Per scope rather than per dispatch because a dispatch matches several at once
+   * (its goal, and every check it answers) and the set of dispatches is not
+   * enumerable; a dispatch matching two of these entries receives both lists, run
+   * through the same renderer in one pass.
+   */
+  scoped: { scope: string; text: string; facts: string[] }[];
 }
 
 export interface LessonView extends Lesson {
@@ -938,6 +971,12 @@ export interface CockpitState {
    * operator cannot tell a list they have finished with from one that lost rows.
    */
   lessons: LessonView[];
+  /**
+   * What the fleet's knowledge actually delivers, from the renderers that deliver
+   * it (issue #27 phase 3) — the system-prompt block against its budget, and the
+   * scoped appends a matching dispatch carries.
+   */
+  knowledgeDelivery: KnowledgeDeliveryView;
   /**
    * What the fleet knows about working this repository, newest first — every
    * reach, **the rejected ones included** (issue #27 phase 2).

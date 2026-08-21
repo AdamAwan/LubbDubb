@@ -248,13 +248,13 @@ is what made the whole set feel inert.
 
 Five windows, each with the resolution it is drawn at:
 
-| Key    | Span      | Timeline    |
-| ------ | --------- | ----------- |
-| `6h`   | 6 hours   | 12 × 30m    |
-| `24h`  | 24 hours  | 24 × 1h     |
-| `7d`   | 7 days    | 28 × 6h     |
-| `30d`  | 30 days   | 30 × 1d     |
-| `all`  | unbounded | 26, computed |
+| Key   | Span      | Timeline     |
+| ----- | --------- | ------------ |
+| `6h`  | 6 hours   | 12 × 30m     |
+| `24h` | 24 hours  | 24 × 1h      |
+| `7d`  | 7 days    | 28 × 6h      |
+| `30d` | 30 days   | 30 × 1d      |
+| `all` | unbounded | 26, computed |
 
 **The bucket count is stated rather than derived** from `span / bucket`, because the two must agree and
 a derived count hides the disagreement: a span that is not a whole number of buckets silently draws a
@@ -265,7 +265,7 @@ gives.
 by default, and folding it into a long fixed span would quietly drop the deployment that has been
 running since March. `ResolvedWindow.startMs` is `null` for it and every fold reads that as "no lower
 bound" rather than as a date; the store reads take `sinceOrEpoch`, written once so that a route reaching
-for `?? new Date(0)` itself cannot spell the same decision differently. A *timeline* still needs two
+for `?? new Date(0)` itself cannot spell the same decision differently. A _timeline_ still needs two
 ends, so `timelineSpan` takes the earliest datum the caller actually holds and divides what it finds —
 the buckets describe the history that exists rather than a span guessed at here, and a harness that
 started last Tuesday does not draw twenty-five empty buckets in front of itself.
@@ -410,8 +410,8 @@ stretch: **is what I did working**. It is served by `GET /api/spend/trend`
 ([16](16-http-api.md#the-fetched-routes)) and drawn by the Insights page's Trend tab
 ([17](17-cockpit.md#the-trend-tab)). Eight buckets, three readings, one shared axis.
 
-**A bucket is one window, and there are eight of them.** The axis is the last eight windows *of the
-length the operator picked* (`trendSpan`) — `7d` gives eight weeks, `24h` gives eight days — which is
+**A bucket is one window, and there are eight of them.** The axis is the last eight windows _of the
+length the operator picked_ (`trendSpan`) — `7d` gives eight weeks, `24h` gives eight days — which is
 what keeps one control meaningful on the one tab that is inherently about change. It has a second
 payoff: the comparison a headline draws against "the previous window" is literally the last two bars
 here, rather than a second notion of "before" for a reader to reconcile. The route's `since` therefore
@@ -719,7 +719,7 @@ for — **turns, not bytes**: an agent handed "the last three reds on `format:ch
 goes to the formatter, where an agent handed the check name alone reproduces the whole gate to find
 out what a person already found out three times.
 
-It is **evidence, never instruction**, framed as `renderLessonBlock`'s block is and for its reason: a
+It is **evidence, never instruction**, framed as `renderKnowledgeBlock`'s block is and for its reason: a
 wall of assertions read as orders makes every agent worse the moment one goes stale, silently, with
 no test able to see it. Every line is attributed to its pull request, ordered newest first, and the
 header says out loud that the code in front of the agent is the authority.

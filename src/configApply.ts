@@ -17,7 +17,7 @@ import type { RuntimeControl } from './runtimeControl.js';
  *
  * The arms mutate the running `Config` object as well as poking the consumer,
  * because the object *is* the late reader for anything read through a closure
- * (`system.ts`'s `lessonBlock`). That mirrors {@link RuntimeControl}, which the
+ * (`system.ts`'s `knowledgeBlock`). That mirrors {@link RuntimeControl}, which the
  * cap and pause flag have always worked this way through.
  *
  * → `docs/spec/02-configuration.md#liveness`
@@ -70,11 +70,11 @@ const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
     deps.running.maxConcurrentAgents = next.maxConcurrentAgents;
     deps.runtimeControl.apply({ cap: next.maxConcurrentAgents });
   },
-  // `system.ts` renders the lesson block through a closure at every agent launch,
-  // reading `config.lessonBlockChars` each time — so assigning onto the running
-  // object *is* the arm, and the next dispatch uses it.
-  lessonBlockChars: (next, deps) => {
-    deps.running.lessonBlockChars = next.lessonBlockChars;
+  // `system.ts` renders the knowledge block through a closure at every agent
+  // launch, reading `config.knowledgeBlockChars` each time — so assigning onto the
+  // running object *is* the arm, and the next dispatch uses it.
+  knowledgeBlockChars: (next, deps) => {
+    deps.running.knowledgeBlockChars = next.knowledgeBlockChars;
   },
   // `buildStateSnapshot` reads the running config by reference at every poll and
   // ships the colours to the cockpit, so assigning onto it *is* the arm: a colour

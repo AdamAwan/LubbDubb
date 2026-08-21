@@ -383,8 +383,14 @@ const LIVE_REACHES: readonly FactReach[] = ['proposal', 'lookup', 'injected', 'c
  * The fact a promoted lesson becomes. Derived from the lesson's id rather than
  * minted, which is the whole of the adoption's idempotence: the second boot
  * inserts nothing, and the row can still be found again when the lesson is retired.
+ *
+ * Exported because the cockpit needs the same answer from the other side: since
+ * delivery moved (phase 3) a lesson reaches agents *as its fact*, so whether a
+ * promoted lesson is being sent is the knowledge block's answer looked up under
+ * this id. A second spelling of the derivation in the view layer would make the
+ * Lessons panel's chip a claim about a row that might not be the one delivered.
  */
-function adoptedFactId(lessonId: string): string {
+export function adoptedFactId(lessonId: string): string {
   return `fact_${lessonId}`;
 }
 

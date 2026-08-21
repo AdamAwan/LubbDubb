@@ -472,11 +472,27 @@ export class Store {
   listLessons(limit?: number): Lesson[] {
     return this.lessons.listLessons(limit);
   }
+  /**
+   * Vouch for a lesson — and mirror it in, here rather than only at the next boot.
+   *
+   * Since delivery moved (issue #27 phase 3) the system prompt carries **one**
+   * block and it is the knowledge base's, so a promoted lesson reaches agents as
+   * the fact it is adopted into. Adopting only on boot would mean a lesson vouched
+   * for now reached nobody until the harness was restarted — which is the failure
+   * `adoptLessons` runs every boot to avoid, pointed at the other clock. The
+   * cross-domain read belongs here for its reason: this is the caller that holds
+   * both tables.
+   */
   promoteLesson(id: string): Lesson | null {
-    return this.lessons.promoteLesson(id);
+    const lesson = this.lessons.promoteLesson(id);
+    if (lesson) this.knowledge.adoptLessons([lesson]);
+    return lesson;
   }
+  /** Prune one, and un-mirror the fact it was adopted into while nothing has touched it. */
   retireLesson(id: string): Lesson | null {
-    return this.lessons.retireLesson(id);
+    const lesson = this.lessons.retireLesson(id);
+    if (lesson) this.knowledge.adoptLessons([lesson]);
+    return lesson;
   }
 
   // -- Knowledge (what the fleet knows about this repository) -----------------

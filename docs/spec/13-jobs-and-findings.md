@@ -779,16 +779,24 @@ always arrives.
 ### What a promoted lesson reaches, and what it does not
 
 **No dispatcher rule reads a lesson, and no dispatch prompt renders one.** A promoted lesson reaches
-agents through exactly one channel: the fleet's system-prompt append, rendered by `src/lessonBlock.ts`
-and threaded in by `src/system.ts` → [10](10-agent-runtimes.md#the-lesson-block). Filing a proposal is
-all the tool channel got; promotion is still a click in the cockpit and stays one.
+agents through exactly one channel, and since #27 phase 3 that channel is the **knowledge base**: the
+lesson is mirrored in as an injected fleet claim (`KnowledgeStore.adoptLessons`), and the fleet's
+system-prompt block renders that → [27](27-knowledge.md#delivery-two-prompts-not-one),
+[10](10-agent-runtimes.md#the-knowledge-block). Filing a proposal is all the tool channel got;
+promotion is still a click in the cockpit and stays one.
 
-`test/lessons.test.ts` asserts that structurally: `src/dispatcher/` and `src/executor/` never touch
-the store in any direction, and `src/mcp/` and `src/agents/` reach `proposeLesson` and nothing else —
-never `listLessons` or `getLesson`. Which is why phase 3's seam is a **rendered string** passed
+**Rendering both blocks would have sent every promoted lesson twice** — once as a lesson and once as
+its own mirror — so delivery moved rather than doubling. The adoption runs at every boot _and_ on the
+promote and retire routes themselves, which is what keeps the crossing invisible: a lesson vouched for
+now reaches agents at the next launch, exactly as it did before, rather than at the next restart. A
+lesson that silently stopped reaching agents would look precisely like one nobody promoted.
+
+`test/lessons.test.ts` asserts the structure: `src/dispatcher/` and `src/executor/` never touch the
+lesson store in any direction, and `src/mcp/` and `src/agents/` reach `proposeLesson` and nothing else
+— never `listLessons` or `getLesson`. Which is why the launch seam is a **rendered string** passed
 through `ClaudeArgsOptions` rather than a store handed to `agentProtocol.ts`: the launch path stays
-unable to read a lesson, and `src/system.ts` — already the composition root — is the only module on
-it that knows lessons exist. A change that needs that assertion relaxed has the seam wrong.
+unable to read either store, and `src/system.ts` — already the composition root — is the only module
+on it that knows they exist. A change that needs that assertion relaxed has the seam wrong.
 
 That structural test used to ban the _word_, across four directories. It matches the store's methods
 instead as of phase 2, because a prompt that tells an agent the channel exists is the dispatcher
@@ -797,16 +805,17 @@ the invariant is a call.
 
 ### What the block is, and what bounds it
 
-Four properties, and each is one of the four the table above rests on, carried through to the render:
+The four properties the table above rests on are carried through to the render, and they are the
+knowledge block's now → [10](10-agent-runtimes.md#the-knowledge-block): only what an operator vouched
+for renders, each claim carries the goal it was learned on and the date it was written, the cost is
+bounded by `knowledgeBlockChars`, and what the cap drops is visible to the operator — on the Knowledge
+page, per row and against the budget, since that is where the block that ships is drawn.
 
-| Holds                                         | How                                                                                                                                                                                                                                         |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Only vouched-for claims render                | `renderLessonBlock` filters to `promoted` itself rather than trusting its caller. The gate has no bypass on this path either.                                                                                                               |
-| A reader can date what it is told             | Each lesson renders with the goal it was learned on and the date it was written, under a header saying the repository in front of the agent is the authority. Claims with provenance, not instructions — so a stale one can be discounted.  |
-| The cost is bounded                           | `lessonBlockChars` (default 6,000), on **characters**, since a lesson runs from a line to 2,000 of them. `0` renders nothing. → [02](02-configuration.md#agent-launch)                                                                      |
-| The drop is visible to the person who can act | Over the cap, whole lessons are dropped **oldest-vouched first** — never a truncated claim. The **operator** sees which, per row, in the Lessons panel; the **agent** is told nothing about the cap, the drop, or that the list is partial. |
+The Lessons panel still says per row whether a promoted lesson is reaching agents, and that flag is
+the knowledge block's own answer read back through the fact the lesson was adopted into
+→ [17](17-cockpit.md#the-console). One block is delivered, so both panels have to be describing it.
 
-With no promoted lessons, nothing is appended at all — not a header, not a newline — and the launch
+With nothing injected, nothing is appended at all — not a header, not a newline — and the launch
 arguments are byte-identical to a build without the feature. A retired lesson stops appearing at the
 agent's **next** launch, not mid-run: the block is re-appended on every launch, `--resume` included,
 so an agent already running keeps the block it started with.
