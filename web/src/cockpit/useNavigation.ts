@@ -31,9 +31,26 @@ import { NOWHERE, placeQuery, readPlace, type Place } from './place.js';
  * tick compose instead of the second dropping the first, which is the same
  * guarantee the patch arm already had.
  */
-type PlacePatch = Partial<Place> | ((place: Place) => Partial<Place>);
+type PlacePatch<P> = (P & Record<Exclude<keyof P, keyof Place>, never>) | ((place: Place) => Partial<Place>);
 
-export function useNavigation(): { place: Place; go: (patch: PlacePatch) => void } {
+/**
+ * A move, typed so that a key `Place` does not have is a **type error at the
+ * call site** rather than a field written onto the place and read by nothing.
+ *
+ * `Partial<Place>` alone does not get this: every caller here builds its patch
+ * by spreading a partial in (`go({ tab: 'insights', ...where })`), and a spread
+ * is precisely where TypeScript stops checking for excess properties. So
+ * `openInsights` shipped for a release passing `{ view, window }` against a
+ * place whose fields are `insightsView` and `insightsWindow` — every tab and
+ * every window button on that page changed nothing, pushed no history entry,
+ * and looked exactly like a page whose controls were not wired up at all.
+ *
+ * The generic makes the excess key `never`, which no value satisfies, and the
+ * updater arm falls back to the constraint so `go((current) => …)` is unchanged.
+ */
+type Go = <P extends Partial<Place>>(patch: PlacePatch<P>) => void;
+
+export function useNavigation(): { place: Place; go: Go } {
   // `location` is simply undefined under node, which is how the cockpit's
   // modules are imported by the tests — the same reason `readToken` guards.
   const [place, setPlace] = useState<Place>(() =>
@@ -59,7 +76,7 @@ export function useNavigation(): { place: Place; go: (patch: PlacePatch) => void
     return () => window.removeEventListener('popstate', onPop);
   }, []);
 
-  const go = useCallback((patch: PlacePatch) => {
+  const go = useCallback<Go>((patch) => {
     const next = { ...pending.current, ...(typeof patch === 'function' ? patch(pending.current) : patch) };
     pending.current = next;
     setPlace(next);

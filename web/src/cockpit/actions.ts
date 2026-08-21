@@ -201,8 +201,15 @@ export interface CockpitActions {
    * entries for one move. The window is here at all rather than in the page
    * because it is the page's whole subject: a link to "the causes tab over the
    * last 24 hours" has to carry both halves or it is a link to neither.
+   *
+   * **The fields are named for the `Place` fields they set**, as `openConfig`'s
+   * are, because the implementation spreads this object straight into a place
+   * patch — and a spread is exactly where TypeScript stops checking for excess
+   * properties. Named `view` and `window`, both halves landed on the place as
+   * keys nothing reads, so every tab and every window button on the page was a
+   * control that pushed no history entry and changed nothing.
    */
-  openInsights(where: { view?: InsightsView; window?: InsightsWindow }): void;
+  openInsights(where: { insightsView?: InsightsView; insightsWindow?: InsightsWindow }): void;
   /** Open a goal's page, or return to the overview with null. */
   selectGoal(ref: string | null): void;
   /** Bring a full-surface panel in front, or dismiss it with null. */
@@ -248,7 +255,17 @@ export interface CockpitActions {
    */
   setTicketQuery(
     next: Partial<
-      Pick<Place, 'ticketWatch' | 'ticketTracking' | 'ticketState' | 'ticketFeature' | 'ticketGroup' | 'ticketOrder'>
+      Pick<
+        Place,
+        | 'ticketWatch'
+        | 'ticketTracking'
+        | 'ticketState'
+        | 'ticketFeature'
+        | 'ticketGroup'
+        | 'ticketOrder'
+        | 'ticketView'
+        | 'ticketColumns'
+      >
     >,
   ): void;
   /**
@@ -319,6 +336,16 @@ export interface CockpitActions {
    */
   setStackLanding(ref: string, landing: boolean): Promise<void>;
   setIssueWatched(issueNumber: number, watched: boolean): Promise<void>;
+  /**
+   * Move a work item to one of the tracker's own states — the board's drag, and the
+   * only thing in the cockpit that writes one.
+   *
+   * **Rejects with the provider's own sentence**, which the card quotes: a snap-back
+   * with no words attached reads as the board being broken rather than as the tracker
+   * refusing a transition. So the caller handles the rejection itself rather than
+   * routing the click through `AsyncButton`, which folds one into a tooltip.
+   */
+  setIssueState(issueNumber: number, state: string): Promise<void>;
   /**
    * Put this goal at the front of the queue, or take it back out. On the seam for
    * every mutation's reason: `console/` may not import `api.js`.

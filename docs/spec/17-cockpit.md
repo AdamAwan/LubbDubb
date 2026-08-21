@@ -264,6 +264,8 @@ once.
 | `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                         |
 | `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                   |
 | `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                               |
+| `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                       |
+| `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                      |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
@@ -521,6 +523,18 @@ snapshot. It returns **null** for a ref the world does not carry: a page of empt
 indistinguishable from a goal that exists and has nothing on it, and only one of those is worth
 drawing. A **retained run** is found too (`retainedRuns`), so a goal whose ticket the tracker has
 stopped returning still has a page to be dismissed from.
+
+**A null page is drawn as a null page, not as the tab underneath.** Returning null is the right answer
+and falling through to the tab body was the other half of that decision left unmade: the address bar
+said `goal=issue:412` while the screen went on showing the list, so the click read as a control that
+does nothing — the dead end this spec calls the cockpit's most repeated bug, one level up. So a selected
+goal the snapshot does not carry gets a short panel naming it, saying why there is nothing to draw, and
+offering the **tracker** — which is where the answer actually is — plus the crumb back to the tab.
+
+On the Tickets tab this is the common case rather than the corner. The tab lists the **mirror**, which
+keeps every item ever swept; the page is built from the **snapshot**, which holds only what the last
+scan returned. Every frozen row is therefore in exactly this position, and under `tracking=any` that is
+most of them.
 
 `needs` is **passed in** rather than rebuilt, so the rail and the page are one reading — answering on
 either settles the row and the next snapshot clears both, with nothing kept in step by hand.
@@ -846,30 +860,16 @@ from.
 
 ## The overview
 
-What the situation area shows when no goal is selected: six cards, rows rather than pictures, in
-reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **Rate**, **World
-signals**. The fleet's **runway** is a band along the foot of the first of them rather than a seventh
-card, because "who is out" and "what is behind them" are one thought.
+What the situation area shows when no goal is selected: five cards, rows rather than pictures, in
+reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **World signals**. The
+fleet's **runway** is a band along the foot of the first of them rather than a sixth card, because "who
+is out" and "what is behind them" are one thought.
 
 Two rules run through all five. **Nothing here re-decides what the server decided**: a PR's court is
 `attention.status`, its checks are `ciVerdict`, a queued item's hold is the queue's own sentence, and a
 goal's state is its `pickup.status`. And **an empty card still draws**, muted, because a surface that
 vanishes when quiet is indistinguishable from one that broke.
 
-- **Rate** — is the floor producing, or merely busy? The one reading in the cockpit that is against
-  _time_, drawn from the timestamps already on `decisions` and `worldEvents` (`web/src/view/production.ts`);
-  a held or skipped dispatch is not counted, because it produced no work. **The churn ratio (dispatches
-  per merge) is the point**: dispatches are effort and merges are output, and a rising first figure over
-  a flat second one is a fleet going round. A series with nothing in the first half of its window draws
-  no delta rather than a 0% one — there is nothing to have changed from — and when the decision log does
-  not reach back to the window's start the card **says so**, because a rate that silently under-reports
-  is worse than no rate.
-
-  It was the Output panel. The half of it that was about money is [Insights](#insights)' headline ratio
-  now; this is the half that belongs on the overview. It keeps a **fixed six hours** while everything on
-  that page obeys a control, and deliberately: this card answers "what is happening", and a window an
-  operator has to set before the answer means anything is not that question. It says the span out loud
-  for the same reason, and carries the one way through to the money behind the rates.
 - **Goals in flight** carries the **furthest environment** holding a goal whole, where any is —
   last-declared in the operator's list, since that list is the order the work travels in. `partial`
   gets no chip: a row reading `liveUs` for half a feature is the boolean rollup the reach fold refuses
@@ -953,6 +953,21 @@ vanishes when quiet is indistinguishable from one that broke.
   world event on its issue ref — so an arrival written as one would lift the delivery park on the goal
   it announced and hand the work straight back to the fleet.
   → [24](24-environments.md#in-the-cockpit)
+
+### Rate, removed
+
+There was a sixth card here — **Rate**, the fleet's dispatches, merges and escalations per hour over a
+fixed six hours, with dispatches-per-merge under them as a churn ratio. It is gone, and so is the
+derivation behind it: the production module under the cockpit's view layer is deleted rather than left
+unimported, since knip runs every rule at `error` and an export nothing names fails `check`.
+
+It was the surviving half of the Output panel, kept on the overview on the argument that rates are a
+_now_ question and the money behind them an analytical one. What that argument did not survive is how
+little the card said on a real deployment: three figures a fleet's own pace makes unreadable at this
+resolution — most six-hour stretches have one merge in them or none — under which every series
+routinely drew _nothing in the first half to compare against_, which is a card whose whole content is
+an admission it cannot answer yet. The reading it was pointing at is on [Insights](#insights), over a
+window the operator chooses, and the nav carries the way there.
 
 ### The keyboard entry
 
@@ -1068,9 +1083,20 @@ forgotten anything.
 Every item the tracker's assignment filter has returned since the harness first swept — worked or
 not, live or frozen — and, since the backlog was folded into it (#351), **the one surface triage
 happens on**. Where [the record](#the-record-panel) is what the harness _did_, this is what it was
-**asked** to do, and what you are asking it to do next. It is drawn as a table because it
-is read as one: the tracker id, the ticket, the readings, the cost and the date, each row taking the
-list's tracks by subgrid so the columns line up however long one title runs.
+**asked** to do, and what you are asking it to do next. It has two views — a table and a
+board of state columns — and the table is the default because it is what the tab has always been: the
+tracker id, the ticket, the readings, the cost and the date, each row taking the list's tracks by
+subgrid so the columns line up however long one title runs.
+
+**Two facts about state writes ride on the snapshot**, because neither is the cockpit's to infer.
+`canSetWorkItemState` is asked of the connector — `setWorkItemState` *throws* where no integration
+implements it, so a surface that wants to **offer** the operation rather than attempt it has no other
+way to find out, and inferring it from the provider name would be a second opinion about a capability.
+`stateRules` carries the state words the three work-item rules act on, with `pickup` as the
+**effective** set: `effectivePickupStates` folds `issueInProgressState` in, so a reader built from the
+raw key would report that the state work is *in* is one the harness will not work. It is null where
+`issuePickupStates` is unset, because all three rules are switched out entirely then — the same fact
+the dispatcher acts on, rather than an object of nulls inviting a reader to imply otherwise.
 
 **Why one surface and not two.** The backlog was open items grouped by watch bucket; this tab was the
 same items plus the closed ones, filtered by the same bucket. Two surfaces that can be told different
@@ -1129,9 +1155,17 @@ The state list is **discovered from the mirror with counts, never hardcoded**. A
 wrong on the first customised process template, and silently: the missing state's items simply stop
 being reachable by any filter. Where the provider has no native states — GitHub, the fake — the tier
 is **not drawn at all**, because a control offering states the tracker cannot produce is one that
-always returns nothing. A `▲` marks the states `pickupStates` lets through, read from config rather
+always returns nothing. A `▲` marks the states the harness picks up from, read from config rather
 than inferred: _why is Ready worked and New not_ is the most-asked question about an Azure deployment,
 answered where the states are.
+
+**The mark is the _effective_ pickup set, not `issuePickupStates` itself.**
+`effectivePickupStates` (`src/dispatcher/issuePickup.ts`) folds `issueInProgressState` in, and
+[02](02-configuration.md#item-selection-labels-priority-states) tells the operator not to list that
+state — an item the harness left there stays pickup-eligible either way. So a mark built from the raw
+key is missing on exactly the state work is _in_, and the chip then answers the question it exists to
+answer with the wrong half. The route therefore passes the dispatcher's own function through to the
+facets: a lens quoting a decision made elsewhere, which is the direction that is allowed.
 
 Facets are counted over the **whole mirror**, not the filtered set. A facet counted after its own
 filter shows `1` beside whichever value is selected and nothing beside the rest — a control that
@@ -1182,6 +1216,113 @@ which on a running fleet is most of the ones in progress — the column then sai
 work that had not finished yet. Where the goal has got to is the row's state and the dispatcher's own
 pickup reasons; this chip is for how the harness _left_ it.
 
+### The board, and what a card says
+
+The second view: one column per tracker state, drawn from `issueBoardStates`
+([02](02-configuration.md#board-columns)) and falling back to the state facets' own order where that is
+empty. `boardColumns` (`web/src/ticketBoard.ts`) owns the three cases — a configured order taken
+exactly as written, a listed state with nothing in it still drawing its column, and a state the mirror
+carries that the list omits reported under the board rather than dropped. The last is the one that
+matters: those items are on no board at all, and unreported that is indistinguishable from a quiet
+tracker.
+
+The toggle is **disabled**, not hidden, where the tracker reports no native states — there are no
+columns to draw, and a control that vanishes on some deployments is one nobody can ask about.
+
+**A column is a `/api/tickets` request pinned to its own state**, with its own cursor and its own
+`IntersectionObserver` rooted on its own scroll box. There is no board route and no new payload: the
+list route already filters `state` as an exact match on `work_item_state`, which is a column's
+definition. Bucketing one shared page client-side was the alternative, and it makes a column's
+contents depend on how far somebody scrolled a list that is not on screen. The board scrolls sideways
+and each column scrolls inside itself, so a column running off the right edge hides nothing in the
+others and one running long pushes nothing off the bottom. A column's header count is its own
+response's `total` once the first page lands, and the whole-mirror facet before that, so both numbers
+in "12 of 218" are about one set. Its foot distinguishes three emptinesses, because they are three
+facts: nothing has ever been in this state, nothing under it is still in the open set (with the widen),
+and nothing here matches these filters.
+
+**A card's reason lane is always drawn, and it is the board's whole advantage over the table.** A
+column of cards answers _why is nothing on this_ without a click on any of them. `cardReason` decides
+which of five readings supplies it — an intake hold, then the outcome word, then the dispatcher's own
+first sentence, then frozen, then unwatched — and it is pure for `cascadeNote`'s reason: the invariant
+is about which reading wins, which no render can show. An **unwatched** item is never held, whatever a
+stale verdict says, exactly as in the list. A blank lane would read as a card that failed to draw,
+which is why the absence of any reading is itself a sentence.
+
+**The watch dot is the control.** The list's Watch/Unwatch pair does not fit a card and the lane has
+the space it would take, so the dot both reports the tag and writes it, carrying `cascadeNote`'s phrase
+in its title — a click that writes eight tags says eight. It is refused in the three cases the list
+refuses it, each with its reason in the title. It is a button and the drag handle is the card body, so
+a drag beginning on the dot moves nothing.
+
+**In card view the rail differs in three ways.** `Group` hides, because a flat board has no headings to
+indent under, and the ordering takes its place — the list sorts from its column headers, which is where
+a reader of a table looks, and a board has none. The State tier becomes **column visibility**: the same
+chips and counts, `aria-pressed` now meaning "drawn", the hidden ones in `Place.ticketColumns`. And
+`state` stops meaning anything once every state is a column, so switching to cards **clears it and says
+so** — the `widenedFor` band pointed the other way, with the way back restoring both the view and the
+narrowing. A control silently ignored is worse than one that moved and told you.
+
+### Dragging a card between columns
+
+A drop writes the tracker's state through `POST /api/issues/:number/state`
+([16](16-http-api.md#post-apiissuesnumberstate)) — the only place the cockpit writes one.
+
+**Every column is a drop target, and every header says what dropping there costs.** The alternative
+considered was refusing the columns the rules own, and it was rejected: it forbids the genuinely useful
+move of parking something in review by hand, and a dead drop target is the hardest thing on a board to
+explain. So the operator decides, and the board tells them first — the whole board at once, the moment
+a card is lifted, rather than one column at a time as the pointer finds it.
+
+`dropWarning` composes the sentence from independent clauses rather than picking a case, because a
+column can be outside the pickup gate *and* the one a rule writes *and* hold nothing live, and any
+enumeration would report whichever of the three the reader did not need. Three of its wordings are
+counter-intuitive and each is checked against the rule rather than against the config key:
+
+- **The in-progress state reads as a pickup state.** `effectivePickupStates` folds it in, so a warning
+  built from the raw `issuePickupStates` would say the fleet stops on exactly the column work is *in*.
+- **The review state names the condition on its bounce and never promises one.**
+  `work-item-back-to-pickup` fires only on an explicit `more_work` verdict — never on a missing PR,
+  which was changed deliberately after a merged PR bounced its ticket back to "Ready" and put a fresh
+  agent on merged work.
+- **A column with nothing live claims nothing about closing.** Whether a state maps to closed is the
+  tracker's workflow, which the harness has no reading of, so the clause states only what the State
+  tier already states.
+
+With no `issuePickupStates` at all there is no state gate and all three rules are switched out, so the
+board says the drop changes the tracker and nothing else. Warning about a mechanism that is not running
+would be worse than silence.
+
+**The card moves on release and says it is still writing**, because the write is a round trip — a
+provider call, both patches, a broadcast and a pulse before the route answers — and a card that sits
+still that long reads as a drop that missed.
+
+**A landed write re-reads every column, and the placement is released once they have.** Both halves are
+load-bearing, and getting either wrong is a board that lies about where work is:
+
+- Without the re-read the placement is the *only* thing holding a card in its new column, and a
+  placement is one slot. A second drop replaces it, the first card falls back to its column's
+  never-refreshed page — where it started — and one drag appears to move two cards. The mirror is
+  already patched by the route, so re-reading is what makes the move real rather than drawn.
+- Without the release the placement outlives its usefulness and starts overriding the rail: it drew a
+  card in a column the operator had just filtered it out of. So it is retired on a condition rather
+  than a delay — when every drawn column has completed a read — because any timeout long enough to
+  cover a provider write plus a pulse is long enough to see.
+
+**A drag is disarmed when it ends, however it ends.** A drag released outside every column fires
+`dragend` and no `drop`, so without handling it the board stays armed: the headers go on speaking, and
+the next stray drop writes the state of a card nobody is holding. That was a real unintended write, not
+a cosmetic one.
+
+A refusal puts the card back **and quotes the provider on it**. A snap-back with no sentence attached
+reads as the board being broken rather than as the tracker refusing a transition, which is why the drop
+handles its own rejection instead of routing the click through `AsyncButton` — that component folds a
+refusal into a tooltip, which is right for a button and wrong for a card that has just moved.
+
+**Where the provider cannot write states at all, nothing is draggable and the board says so once**,
+above the columns, off the `canSetWorkItemState` flag the snapshot ships. Letting each drop fail
+separately would teach the same thing five times and explain it none.
+
 ### The type is tinted by family, never by name
 
 A row's work-item type is drawn as a chip tinted by **family** — bug, story, debt, container, task —
@@ -1201,8 +1342,10 @@ container name is uncoloured here while the dispatcher's gate still knows exactl
 A row's state chip is the tracker's own word (`workItemState`) where there is one, and it draws in
 whatever colour the operator gave that word — `issueStateColours`
 ([02](02-configuration.md#item-selection-labels-priority-states)), shipped on `CockpitConfig` and read
-through `stateColour` (`web/src/stateColour.ts`). The goal page's header chip reads the same map, so a
-state is one colour wherever it is drawn.
+through `stateColour` (`web/src/stateColour.ts`). The goal page's header chip reads the same map, and so
+does the **name of a board column**, so a state is one colour wherever it is drawn. On the board it
+letters the word itself rather than striping the header: a rule along the top edge reads as decoration,
+and the whole point of the setting is that the state is something you read.
 
 This is the opposite arrangement from the type chip above, and for the same reason. A type has
 _families_ the harness genuinely knows, so it can tint one and fall through on the rest. A state has
@@ -2057,6 +2200,29 @@ Every table the three panels drew lands in exactly one of these, and the duplica
 in: there is one phase table rather than two, and one completion rate rather than the reliability fold's
 and the trend's.
 
+### The page is bounded, because a reading is not
+
+Every surface here is read **across** — a phase against its share, a goal against its runs, a cause
+against what would have caught it — so the page is capped at `1400px` like the tickets tab. A row let
+out to the width of the monitor puts the two ends of one fact far enough apart that the eye loses the
+line between them, and none of the graphs say anything more for the space.
+
+Two consequences of that are in the stylesheet rather than left to the grid:
+
+- **The ratio row is flex, not the `sp-tiles` grid.** The two operators are punctuation, and
+  `auto-fit` gave each of them a full `1fr` column — so the sentence arrived as three figures marooned
+  a couple of hundred pixels apart with a lone `÷` adrift in each gap, the division still true and no
+  longer legible as one thing.
+- **A graph is capped at `800px`**, about `1.3x` its own viewBox. Axis labels are drawn in user units,
+  so a chart handed the whole page scales its text up with its bars and arrives in a size nothing else
+  on the panel uses. The two-column charts sit under that bound already; the Trend tab's three, which
+  have a section each, were being drawn at twice their size.
+
+And in a table, **a left-aligned column that follows a right-aligned one pays the gutter at the join**
+(`.sp-tbl .n + td`). A `.n` cell pays its own on the leading edge and nothing on the trailing, which is
+right between two figures and wrong at that boundary: the Causes table met its reddest check with no
+space at all, drawing `4 of 9format:check` under a header reading `UNDOCUMENTEDREDDEST CHECK`.
+
 ### A destination, not a modal
 
 The two modals covered the queue rail, and the rail is where the ask that sends an operator here comes
@@ -2073,6 +2239,16 @@ escaped it by being modals rather than panels.
 **It fetches, so it lives under `components/` rather than `console/`.** The console may not reach
 `api.js`, and the sanctioned route is the one the tickets tab and the work tree already take: a component
 that fetches, rendered from the situation area, with the place it reads handed in as props.
+
+Because it is `Place`, **the tabs and the window buttons are `Place` moves**, and their fields must be
+`Place`'s own — `insightsView` and `insightsWindow`, which is why `openInsights` takes those names
+rather than the shorter `view` / `window`. The action spreads what it is given straight into a place
+patch, and a spread is exactly where TypeScript stops checking for excess properties: named for the
+page rather than for the place, both halves landed on the place as keys nothing read, and **every tab
+and every window button on the page was a control that changed nothing** — no state, no query string,
+not even a history entry to go back from. `useNavigation`'s patch type now makes a key `Place` does not
+have a type error at the call site, since nothing else about that failure was visible: the page
+rendered correctly and simply did not move.
 
 ### The time bar
 

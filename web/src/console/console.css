@@ -559,6 +559,28 @@
   margin-bottom: 10px;
   font-size: 12.5px;
 }
+
+/* A goal the world no longer carries. Drawn as a panel rather than left to fall
+   through to the tab body, which read as a click that did nothing. */
+.cn-gone {
+  max-width: 60ch;
+  padding: 14px 16px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  background: var(--cn-panel);
+}
+.cn-gone h2 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cn-fg);
+}
+.cn-gone p {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--cn-fg-dim);
+}
 .cn-crumb button {
   padding: 3px 8px 3px 5px;
   margin-left: -5px; /* the label sits on the situation area's own left edge */

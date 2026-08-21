@@ -668,6 +668,31 @@ class DemoServer {
   }
 
   /**
+   * Move a work item to one of the tracker's own states — the demo's half of the
+   * board's drag.
+   *
+   * It moves the card for real. A demo whose drop animates and then springs back
+   * would teach a visitor that the feature does not work, which is worse than not
+   * demonstrating it.
+   */
+  async setIssueState(issueNumber: number, state: string): Promise<{ ok: true; state: string }> {
+    DEMO_STATE_MOVES.set(issueNumber, state);
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (issue) issue.workItemState = state;
+    this.addDecision(
+      'no_op',
+      'executed',
+      `moving issue #${issueNumber} to "${state}"`,
+      undefined,
+      undefined,
+      undefined,
+      `issue:${issueNumber}`,
+    );
+    this.dirty();
+    return { ok: true, state };
+  }
+
+  /**
    * Mark a goal a priority, or clear it. The demo does not re-rank anything — its
    * queue is scripted — so this writes the reading the chip and the button draw and
    * stops there, which is the honest half: the ordering is the server's.
@@ -3360,6 +3385,7 @@ export const demoApi = {
   setPrWatched: (prNumber: number, watched: boolean) => getServer().setPrWatched(prNumber, watched),
   setStackLanding: (ref: string, landing: boolean) => getServer().setStackLanding(ref, landing),
   setIssueWatched: (issueNumber: number, watched: boolean) => getServer().setIssueWatched(issueNumber, watched),
+  setIssueState: (issueNumber: number, state: string) => getServer().setIssueState(issueNumber, state),
   setGoalPriority: (issueNumber: number, priority: boolean) => getServer().setGoalPriority(issueNumber, priority),
   setIssueProfile: (issueNumber: number, profile: string | null) => getServer().setIssueProfile(issueNumber, profile),
   setPartProfile: (planId: string, slug: string, profile: string | null) =>
@@ -3449,6 +3475,16 @@ export function connectDemoWs(onEvent: (ev: unknown) => void, onStatus?: (connec
  * route does it — because a demo whose controls do nothing demonstrates the chrome
  * and not the tab.
  */
+/**
+ * States the visitor has dragged a card into, by issue number.
+ *
+ * `demoTickets` derives a row's state from its number, which is what makes the demo's
+ * board reproducible — so a drag needs somewhere to say otherwise. Module-level for
+ * the same reason the rest of the demo world is mutable: a board that looks draggable
+ * and springs back would teach a visitor the wrong thing about the product.
+ */
+const DEMO_STATE_MOVES = new Map<number, string>();
+
 function demoTickets(query: {
   watch: string;
   tracking: string;
@@ -3485,7 +3521,7 @@ function demoTickets(query: {
     changedAt: iso(seed.hoursAgo),
     // Closed in the tracker, so the mirror has stopped enriching them.
     tracking: 'frozen' as const,
-    workItemState: 'Closed',
+    workItemState: DEMO_STATE_MOVES.get(seed.issueNumber) ?? 'Closed',
     issueType: 'Task',
     parent: featureOf(seed.issueNumber),
     featureSlot: featureSlotOf(featureOf(seed.issueNumber)),
@@ -3502,7 +3538,8 @@ function demoTickets(query: {
     addedAt: iso(seed.hoursAgo),
     changedAt: iso(seed.hoursAgo),
     tracking: 'live' as const,
-    workItemState: seed.number % 3 === 0 ? 'Ready' : seed.number % 3 === 1 ? 'New' : 'Active',
+    workItemState:
+      DEMO_STATE_MOVES.get(seed.number) ?? (seed.number % 3 === 0 ? 'Ready' : seed.number % 3 === 1 ? 'New' : 'Active'),
     issueType: seed.issueType,
     parent: featureOf(seed.number),
     featureSlot: featureSlotOf(featureOf(seed.number)),

@@ -14,7 +14,7 @@ reader can tell the two apart at a glance. So:
 - **Unbuilt behaviour is marked where it is described**, at the top of the document or the section
   that carries it, saying plainly what is outstanding. An unmarked statement is a claim about
   running code, and being wrong about that is a bug.
-- **A path that does not exist yet is written in italics** — _src/knowledge/facts.ts_ — where a real
+- **A path that does not exist yet is written in italics** — _src/knowledge/block.ts_ — where a real
   one is backticked. `test/docsReferences.test.ts` asserts that every backticked repo path exists,
   so the two forms stay separated mechanically rather than by good intentions.
 - **A marker is removed by the change that makes it true**, in that change and not later. A spec

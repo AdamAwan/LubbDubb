@@ -78,6 +78,8 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
         <Crumb goal={view.goalPage.issue} tab={view.tab} actions={actions} />
         <GoalPage page={view.goalPage} view={view} actions={actions} />
       </>
+    ) : view.selectedGoal !== null ? (
+      <GoalGone ref_={view.selectedGoal} tab={view.tab} actions={actions} />
     ) : (
       tabBody(view.tab, view, actions)
     );
@@ -138,6 +140,8 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
             feature: view.ticketFeature,
             group: view.ticketGroup,
             order: view.ticketOrder,
+            view: view.ticketView,
+            columns: view.ticketColumns,
           }}
           onQuery={(next) =>
             actions.setTicketQuery({
@@ -147,6 +151,8 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
               ...(next.feature !== undefined ? { ticketFeature: next.feature } : {}),
               ...(next.group !== undefined ? { ticketGroup: next.group } : {}),
               ...(next.order !== undefined ? { ticketOrder: next.order } : {}),
+              ...(next.view !== undefined ? { ticketView: next.view } : {}),
+              ...(next.columns !== undefined ? { ticketColumns: next.columns } : {}),
             })
           }
           view={view}
@@ -182,6 +188,45 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
  * whole of the way back — the tab was never cleared, so there is nothing to
  * restore, and naming it is what makes the trail a trail rather than a label.
  */
+/**
+ * A goal was selected and the world does not carry it.
+ *
+ * `buildGoalPage` answers null here deliberately — a page of empty sections cannot be
+ * told apart from a goal that exists with nothing on it. But falling through to the
+ * tab body was the other half of that decision left unmade: the address bar said
+ * `goal=issue:412` while the screen showed the list, so the click read as a control
+ * that does nothing. Every **frozen** ticket is in exactly this position, because the
+ * mirror keeps what the tracker has stopped returning and the snapshot does not — so
+ * on the Tickets tab it is the common case, not the corner.
+ *
+ * The tracker is where the answer actually is, so the reference is the offer, drawn
+ * with `<Ref>` like every other one.
+ */
+function GoalGone({ ref_, tab, actions }: { ref_: string; tab: ConsoleTab; actions: CockpitActions }): JSX.Element {
+  const number = /^issue:(\d+)$/.exec(ref_)?.[1] ?? null;
+  return (
+    <>
+      <nav className="cn-crumb">
+        <button type="button" onClick={() => actions.selectGoal(null)}>
+          ‹ {TAB_LABEL[tab]}
+        </button>
+        <span className="cn-crumbsep">/</span>
+        <span className="cn-crumbnow">{number === null ? ref_ : `#${number}`}</span>
+      </nav>
+      <section className="cn-gone">
+        <h2>{number === null ? ref_ : `#${number}`} is not in the current world</h2>
+        <p>
+          The harness has a record of this item, but the last scan did not return it — so there is no plan, no run and
+          no verdict to draw. That is what a closed, reassigned or untagged ticket looks like from here.
+        </p>
+        <span className="cn-refs">
+          <Ref to={ref_} />
+        </span>
+      </section>
+    </>
+  );
+}
+
 function Crumb({
   goal,
   tab,

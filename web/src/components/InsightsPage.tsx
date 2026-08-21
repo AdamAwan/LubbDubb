@@ -175,7 +175,7 @@ export function InsightsPage({
               type="button"
               aria-pressed={w.key === chosen}
               className={w.key === chosen ? 'on' : ''}
-              onClick={() => actions.openInsights({ window: w.key })}
+              onClick={() => actions.openInsights({ insightsWindow: w.key })}
             >
               {w.label}
             </button>
@@ -196,7 +196,7 @@ export function InsightsPage({
             aria-selected={t.id === view}
             tabIndex={t.id === view ? 0 : -1}
             className={t.id === view ? 'on' : ''}
-            onClick={() => actions.openInsights({ view: t.id })}
+            onClick={() => actions.openInsights({ insightsView: t.id })}
           >
             {t.label}
           </button>

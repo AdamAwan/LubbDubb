@@ -84,6 +84,13 @@ const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
   issueStateColours: (next, deps) => {
     deps.running.issueStateColours = next.issueStateColours;
   },
+  // The colours' arm, for the colours' reason: the snapshot reads the running config
+  // by reference at every poll, so assigning onto it *is* the arm — a column
+  // reordered on the config page is on the board a heartbeat later. Nothing in the
+  // harness reads this either, so there is no consumer to re-seat.
+  issueBoardStates: (next, deps) => {
+    deps.running.issueBoardStates = next.issueBoardStates;
+  },
   // The runner reads `config.localRun` by reference at every start, and the
   // snapshot reads it at every poll — so assigning the object onto the running
   // config *is* the arm. Live because this is the one field an operator edits
