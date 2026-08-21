@@ -5,6 +5,7 @@ import type {
   GoalArrival,
   GoalLanding,
 } from '../types.js';
+import type Database from 'better-sqlite3';
 import type { StoreContext } from './context.js';
 
 /**
@@ -31,6 +32,53 @@ import type { StoreContext } from './context.js';
  * new *once* does not keep it exempt, and a column added later will.
  * → `docs/spec/24-environments.md`
  */
+/**
+ * Undo the landings and arrivals a part-ref goal was filed under (#472).
+ *
+ * `goalOfPr` stopped its walk on any ref starting with `issue:`, and since parts
+ * arrived a part is one — `issue:35916:part:orc-bucket-config` — so every planned
+ * goal's merges were attributed to whichever part opened the pull request. The
+ * walk is fixed; these are the rows it already wrote, and neither table can be
+ * left as it is: nothing ever asks about a part ref, so the goal reads as having
+ * been nowhere and its gate never opens.
+ *
+ * **The two rows are repaired in opposite directions, because they claim
+ * different things.**
+ *
+ * A landing is a fact about *one pull request* — the commit it merged as — and
+ * the goal ref is only the label it is filed under, so truncating the `:part:…`
+ * suffix restores the label without touching the fact. `pr_number` is the primary
+ * key, so the rewrite cannot collide: two parts of one goal becoming two rows
+ * under `issue:35916` is exactly what that goal's two landings are.
+ *
+ * An arrival is a claim about the goal's *whole* work, and a part-ref row makes it
+ * about one part. Rewriting the ref would promote "one part of this is in testUk"
+ * into "this goal has arrived" — an assertion nobody made, on a row that
+ * `openedGoals` reads to release a `validate` or `close_out` hold. So they
+ * are discarded, and the desk re-derives the real ones from the repaired landings:
+ * an arrival is only recorded once *every* landing of the goal is confirmed.
+ *
+ * Re-deriving cannot re-comment on old tickets. `announceableArrivals` announces
+ * only an arrival whose confirming reading is within two probe intervals of now,
+ * and the readings behind these rows are already recorded — a goal confirmed last
+ * week comes back stamped and silent, exactly as it would on a fresh database
+ * that had been probing all along.
+ *
+ * Unconditional and idempotent, in `absorbSinglePlanStatus`' sense rather than
+ * `openPetsFromBeforeEggs`': no column changed, so there is nothing to gate on,
+ * and the fixed walk can never write a part ref again — a second boot finds
+ * nothing to do, forever.
+ */
+export function repairPartRefGoals(db: Database.Database): void {
+  db.transaction(() => {
+    db.prepare(
+      `UPDATE goal_landings SET goal_ref = substr(goal_ref, 1, instr(goal_ref, ':part:') - 1)
+       WHERE goal_ref LIKE 'issue:%:part:%'`,
+    ).run();
+    db.prepare(`DELETE FROM goal_arrivals WHERE goal_ref LIKE 'issue:%:part:%'`).run();
+  })();
+}
+
 export class EnvironmentStore {
   constructor(private readonly ctx: StoreContext) {}
 
