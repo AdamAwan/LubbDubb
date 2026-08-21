@@ -75,13 +75,23 @@ function mergedPulls(world: WorldSnapshot): PullRequest[] {
 }
 
 /**
- * Each PR node's goal, by walking `parentRef` to the `issue:` root.
+ * Each PR node's goal, by walking `parentRef` to the goal root.
  *
  * The graph is the right source because it is the one that *persists* the edge: a
  * pull request whose branch was reaped and whose issue the world has closed still
  * has its node and its parent chain. The world-side {@link issueForPr} is the
  * fallback for the case the graph cannot serve: a merged pull request whose node
  * the fold never gave a parent, because nothing ever linked it to a goal.
+ *
+ * **The stop condition is a bare `issue:<n>`, not the `issue:` prefix.** A plan's
+ * parts are nodes of their own — `issue:35916:part:orc-bucket-config` — and a
+ * part's pull request hangs off the part, not off the issue two levels up. A
+ * prefix test stops there, so every landing of a planned goal is filed under a ref
+ * no other reader of these tables ever asks about: {@link goalReach} finds no
+ * landings for the real goal and `allGoalReach` drops it, so the goal gets no
+ * environment row at all, and `openedGoals` never opens a gate the goal is held
+ * on. Both are silent in the same direction — a goal that has shipped, drawn as
+ * one that has not been anywhere.
  */
 function goalOfPr(nodes: WorkNode[]): Map<number, string> {
   const byRef = new Map(nodes.map((n) => [n.ref, n]));
@@ -94,7 +104,7 @@ function goalOfPr(nodes: WorkNode[]): Map<number, string> {
     // `parentRef` is written by a fold that has no opinion about acyclicity.
     let current: WorkNode | undefined = node;
     for (let hops = 0; hops < nodes.length && current !== undefined; hops += 1) {
-      if (current.ref.startsWith('issue:')) {
+      if (isGoalRoot(current.ref)) {
         out.set(number, current.ref);
         break;
       }
@@ -107,6 +117,11 @@ function goalOfPr(nodes: WorkNode[]): Map<number, string> {
 function issueRefFor(pr: PullRequest, world: WorldSnapshot): string | null {
   const issue = issueForPr(pr, world.issues);
   return issue === null ? null : `issue:${issue.number}`;
+}
+
+/** `issue:12` and nothing under it — a part, a plan and an assay are not goals. */
+function isGoalRoot(ref: string): boolean {
+  return /^issue:\d+$/.test(ref);
 }
 
 function prNumberOf(ref: string): number | null {

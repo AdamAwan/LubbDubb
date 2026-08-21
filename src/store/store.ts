@@ -25,7 +25,7 @@ import { TranscriptStore } from './transcripts.js';
 import { EscalationStore } from './escalations.js';
 import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
-import { EnvironmentStore } from './environments.js';
+import { EnvironmentStore, repairPartRefGoals } from './environments.js';
 import { LocalRunStore } from './localRuns.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
@@ -232,6 +232,13 @@ export class Store {
     // by-check spend tables can speak about the runs that predate the columns.
     // The one place a dispatch reason is ever parsed — see the function.
     backfillTaskDispatchKind(this.db);
+    // The environment rows a part-ref goal was filed under. The attribution walk
+    // stopped on any `issue:`-prefixed ref, which a part is, so a planned goal's
+    // landings were labelled with the part that opened the pull request — a ref
+    // nothing else asks about. The landings are relabelled and the arrivals
+    // discarded for the desk to re-derive; see the function for why those are
+    // opposite answers.
+    repairPartRefGoals(this.db);
     const ctx: StoreContext = { db: this.db, now: clock };
     this.tasksStore = new TaskStore(ctx);
     this.jobs = new JobStore(ctx);

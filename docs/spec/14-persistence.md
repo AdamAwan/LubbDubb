@@ -204,7 +204,35 @@ unrecognised sentence leaves the row null, the money lands in the panel's stated
 remainder, and nothing reads as free that was not. It only ever fills nulls, so it is idempotent and
 cannot overwrite what the dispatcher recorded properly.
 
-All three run from `Store`'s constructor beside the `ensureColumns` pass, before any module is
+### Repairing a mis-attributed goal ref
+
+`repairPartRefGoals()` (`src/store/environments.ts`) is the fourth, and the one whose two halves pull
+in opposite directions. The landing sweep's walk stopped on any ref beginning `issue:`, which a plan's
+part is — so every planned goal's merges were filed under `issue:<n>:part:<slug>`, a ref no reader of
+those tables ever asks about ([24](24-environments.md#recording-a-landing)). The walk is fixed; these
+are the rows it already wrote, and leaving them is the same silence the fix removes.
+
+- **`goal_landings` is relabelled.** A landing is a fact about one pull request — the commit it merged
+  as — and the goal ref is only the label it is filed under, so truncating the `:part:…` suffix
+  restores the label and touches nothing else. `pr_number` is the primary key, so the rewrite cannot
+  collide: two parts of one goal becoming two rows under `issue:35916` is what that goal's two
+  landings are.
+- **`goal_arrivals` is discarded.** An arrival claims the goal's _whole_ work is confirmed somewhere,
+  and a part-ref row makes that claim about one part. Rewriting it would promote "one part of this is
+  in testUk" into "this goal has arrived" — an assertion nobody made, on the row `openedGoals` reads
+  to release a `validate` or `close_out` hold. Deleted instead, the desk re-derives the real ones from
+  the repaired landings, and only once _every_ landing of the goal is confirmed.
+  Re-deriving cannot re-comment on old tickets: the announce pass announces only an arrival whose
+  confirming reading is within two probe intervals of now
+  ([24](24-environments.md#announcing-an-arrival)), and the readings behind these rows are already
+  recorded — so a goal confirmed last week comes back stamped and silent, exactly as it would on a
+  fresh database that had been probing all along.
+
+Unconditional and idempotent, in `absorbSinglePlanStatus`' sense rather than `openPetsFromBeforeEggs`':
+no column changed, so there is nothing to gate the run on, and the fixed walk can never write a part
+ref again — a second boot finds nothing to do, permanently.
+
+They all run from `Store`'s constructor beside the `ensureColumns` pass, before any module is
 constructed, let alone reads. The rebuild pass runs before all of them — it is what applies `SCHEMA`
 at all.
 
