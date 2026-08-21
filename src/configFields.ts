@@ -283,6 +283,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Tracker state → colour for its chip, so a state is one you read rather than one you spell out.',
   },
   {
+    path: 'issueBoardStates',
+    type: 'stringList',
+    access: 'plain',
+    why: 'Tracker states as board columns, left to right. Empty = every state the mirror carries.',
+  },
+  {
     path: 'issueDefaultPriority',
     type: 'number',
     access: 'plain',

@@ -511,6 +511,7 @@ export function buildStateSnapshot(
       // decides is the one the route asks.
       canFileTickets: trackerCoordinates(config) !== null,
       stateColours: { ...config.issueStateColours },
+      boardStates: [...config.issueBoardStates],
     },
     // When the world below was actually observed — null before the first cycle,
     // when there is no baseline and the lists are empty. Shipped because the

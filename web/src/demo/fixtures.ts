@@ -230,6 +230,9 @@ export function buildDemoState(): DemoSeed {
       // The demo tracker's own vocabulary, coloured — the setting is invisible
       // until a deployment has used it, and the demo is where it is looked at.
       stateColours: { New: '#8a93a0', Ready: '#7fb3ff', Active: '#63d297', Closed: '#666b73' },
+      // The same four states, in workflow order rather than the colours' — the demo's
+      // board is a real one, so the order has to be a judgement somebody made.
+      boardStates: ['New', 'Ready', 'Active', 'Closed'],
       // Cheapest first, as `rank` orders them — the demo's profile controls draw
       // this list in this order.
       profiles: [

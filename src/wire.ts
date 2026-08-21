@@ -625,6 +625,14 @@ interface CockpitConfig {
    * key — the tracker's punctuation is not the operator's.
    */
   stateColours: Record<string, string>;
+  /**
+   * `issueBoardStates` — the tracker's state words in the order the card view draws
+   * them as columns. Empty means the cockpit falls back to the state facets' own
+   * order, which is the one thing the server must not decide for it: the fallback is
+   * a statement about a screen, and an order invented here would be a policy no
+   * config file states.
+   */
+  boardStates: string[];
 }
 
 /** Account-level Claude usage: the rolling cost windows, plus real limits when captured. */

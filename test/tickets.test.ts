@@ -14,7 +14,7 @@ import { buildTicketPage, TICKET_PAGE } from '../src/tickets/ticketList.js';
 import { ticketOutcomes } from '../src/tickets/outcomes.js';
 import { TicketSweep } from '../src/tickets/sweep.js';
 import type { LiveTicketFacts, MirroredTicket } from '../src/store/tickets.js';
-import type { TicketsPayload } from '../src/wire.js';
+import type { CockpitState, TicketsPayload } from '../src/wire.js';
 import type { TrackerItem } from '../src/types.js';
 import { statePick } from '../web/src/cockpit/place.js';
 
@@ -746,4 +746,55 @@ test('the pickup mark on a state facet is the dispatcher’s effective set, not 
 
   assert.equal(byState.get('Ready'), true, 'a listed pickup state is marked');
   assert.equal(byState.get('Doing'), true, 'and so is the in-progress state the dispatcher folds in');
+});
+
+test('the board column order is an operator policy, shipped to the cockpit as it was written', async () => {
+  const config = loadConfig({
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    labelPrefix: 'lubbdubb',
+    agentMode: 'raw',
+    heartbeatIntervalMs: 999_999,
+    startPaused: true,
+    // Not alphabetical and not count order: the whole point of the key is that the
+    // order is a judgement only the operator can make.
+    issueBoardStates: ['New', 'Ready', 'Doing', 'In Review', 'Closed'],
+  });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
+  await system.harness.runCycle('manual');
+
+  const { app } = await buildApp(system);
+  const state = await app.inject({ method: 'GET', url: '/api/state' });
+  assert.equal(state.statusCode, 200);
+  const body = state.json() as CockpitState;
+  assert.deepEqual(
+    body.config.boardStates,
+    ['New', 'Ready', 'Doing', 'In Review', 'Closed'],
+    'the list arrives in the order the file states it',
+  );
+});
+
+test('a deployment that configures no board states ships an empty list, not a guess', async () => {
+  const config = loadConfig({
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    agentMode: 'raw',
+    heartbeatIntervalMs: 999_999,
+    startPaused: true,
+  });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
+  await system.harness.runCycle('manual');
+  const { app } = await buildApp(system);
+  const body = (await app.inject({ method: 'GET', url: '/api/state' })).json() as CockpitState;
+  // Empty means "fall back to the facets", which the cockpit decides. The server
+  // inventing an order here would be a policy no file states.
+  assert.deepEqual(body.config.boardStates, []);
 });

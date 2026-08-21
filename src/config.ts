@@ -116,6 +116,22 @@ export interface Config {
    */
   issueStateColours: Record<string, string>;
   /**
+   * The tracker's own state words, in the left-to-right order the Tickets tab's card
+   * view draws them as columns. Empty (the default) = every state the mirror carries,
+   * in the facets' own count order.
+   *
+   * An **order** rather than a set, because that is the part nothing else knows: the
+   * facets carry the words and their counts, `issuePickupStates` is a set, and no
+   * provider reports its process template's column order. Naming a state the tracker
+   * has nothing in still draws its column — listing one is the operator saying they
+   * expect work there — and a state the mirror carries that this omits is reported
+   * under the board rather than silently dropped.
+   *
+   * Display only, like `issueStateColours`: nothing in the harness reads it.
+   * Replaced wholesale by an override, not merged.
+   */
+  issueBoardStates: string[];
+  /**
    * Dispatcher-level, state-based pickup gate. When non-empty, only issues whose
    * provider-native workflow state is in this list are picked up — e.g.
    * `["Ready", "Doing"]` for Azure DevOps, so items sitting in "In Review"/"New"
@@ -634,6 +650,9 @@ const DEFAULTS: Config = {
   // Empty on purpose: every state keeps the reading it had before there were
   // colours until an operator names one.
   issueStateColours: {},
+  // Empty on purpose too: with no order stated the board falls back to the state
+  // facets, so a deployment that never configures this still gets a working one.
+  issueBoardStates: [],
   issueContainerTypes: [...DEFAULT_CONTAINER_TYPES],
   issueFilingTypes: [...DEFAULT_FILING_TYPES],
   // Each policy's own module owns the operator default; the dispatcher's fallback
