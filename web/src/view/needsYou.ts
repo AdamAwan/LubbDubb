@@ -18,7 +18,8 @@ export type NeedKind =
   | 'close_out'
   | 'validate'
   | 'burn'
-  | 'limit';
+  | 'limit'
+  | 'supply';
 
 /**
  * Who is stopped. `blocking` means an agent is parked and cannot proceed;
@@ -181,6 +182,7 @@ const TASK_KIND: Record<HumanTask['kind'], NeedKind> = {
   close_out: 'close_out',
   validate: 'validate',
   burn: 'burn',
+  supply: 'supply',
 };
 
 function needKindOfTask(kind: HumanTask['kind']): NeedKind {

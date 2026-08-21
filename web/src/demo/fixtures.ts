@@ -2172,6 +2172,26 @@ export function buildDemoState(): DemoSeed {
     // The dispatcher's ranked pickup plan from the "last pulse": cap 3 with two
     // live agents leaves headroom 1, so the top candidate dispatches and the
     // rest sit below the cut.
+    // A fleet with more work than slots — the state the harness is *for*, so the
+    // demo shows the band at rest rather than mid-alarm. The queued figure is
+    // above the reservoir deliberately: a demo whose headline reading is a
+    // warning teaches the warning as the normal case.
+    runway: {
+      state: 'healthy',
+      runwayMinutes: 187,
+      inflight: 3,
+      queued: 11,
+      reservoir: 4,
+      reservoirContainers: 1,
+      held: 2,
+      latent: { plans: 0, profiles: 0, escalated: 0, parts: 0 },
+      debt: 2,
+      medianLeadMinutes: 40,
+      completedRuns: 47,
+      idleSlots: 0,
+      headline: 'About 3h 7m of work queued',
+      detail: '3 in flight, 11 waiting.',
+    },
     upcoming: {
       cycleId: 'cycle-103',
       at: ago(0),

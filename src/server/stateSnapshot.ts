@@ -23,6 +23,7 @@ import { rollUpIssueSpend } from '../issueSpend.js';
 import { tallyRunOutcomes } from '../reliabilityInsights.js';
 import { retainedRunIssues } from '../floor/runs.js';
 import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
+import { readRunway } from '../supply/runway.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { trackerCoordinates } from '../mcp/findings.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
@@ -666,6 +667,28 @@ export function buildStateSnapshot(
     // headroom cut (issue #69). A per-pulse projection — null until a cycle
     // has run, or when the active dispatcher doesn't materialise a plan.
     upcoming: harness.upcoming,
+    // The band under Fleet. Taken here rather than cached off the pulse's own
+    // desk because a snapshot is served far more often than a cycle runs, and a
+    // reading a pulse old would show a queue the operator has just topped up as
+    // still empty — on exactly the surface they topped it up from. The same
+    // function the desk calls, over this route's own pickup context, so what the
+    // band says and what the bench row says cannot disagree about the gate.
+    //
+    // `standing` is read off the bench rather than assumed: the hysteresis band
+    // the card draws has to be the one the desk is actually applying, or the card
+    // reports `healthy` for a queue whose notice is still standing.
+    runway: readRunway({
+      policy: config.runway,
+      issues: world.issues,
+      pickup: pickupCtx,
+      runs: issueRuns,
+      // The open rows, not the panel's capped feed above: the debt clause is a
+      // count, and a hundred-row cap would report "100" to the deployment
+      // furthest behind and to the one exactly at the cap alike.
+      humanTasks: store.listOpenHumanTasks(),
+      cap: control.cap,
+      standing: humanTasks.some((t) => t.kind === 'supply' && t.status === 'open'),
+    }),
     worldEvents,
     // Recorded failures (cycle exceptions, provider outages, agent crashes,
     // route 500s) for the cockpit's Errors panel.

@@ -394,6 +394,30 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     access: 'plain',
     why: 'Spend above which a run is flagged whatever its comparables say.',
   },
+  {
+    path: 'runway.enabled',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Say when the queue of work is running out.',
+  },
+  {
+    path: 'runway.warnHours',
+    type: 'number',
+    access: 'plain',
+    why: 'Hours of queued work below which you are told.',
+  },
+  {
+    path: 'runway.clearHours',
+    type: 'number',
+    access: 'plain',
+    why: 'Hours the queue must be back above before the notice clears. Must be above warnHours.',
+  },
+  {
+    path: 'runway.minimumRuns',
+    type: 'number',
+    access: 'plain',
+    why: 'How many finished goals are needed before a typical goal length is known.',
+  },
   // The two pets keys there are, and both are switches. The rates used to sit
   // here too, and each of them was a way of hatching a pet without doing anything
   // — so they are constants in `src/pets/rules.ts` now, and this page cannot reach

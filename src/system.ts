@@ -44,6 +44,7 @@ import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import { ValidationAskDesk } from './validation/askDesk.js';
 import { ValidationReadyDesk } from './validation/readyDesk.js';
 import { SpendBurnDesk } from './spendBurnDesk.js';
+import { RunwayDesk } from './supply/runwayDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
 import { EnvironmentDesk } from './environments/environmentDesk.js';
 import { CommandEnvironmentProber, type EnvironmentProber } from './environments/prober.js';
@@ -814,6 +815,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // run, so the verdict is a visible obligation and never a kill.
   const burn = new SpendBurnDesk(store, config.spendBurn);
 
+  // The other reading taken while nothing is wrong: whether there is anything
+  // left for the fleet to do. Store-only on the burn watch's terms — it files a
+  // visible obligation and settles it when the queue recovers, and it is the one
+  // desk whose subject is the *pipeline* rather than a piece of work in it.
+  const runway = new RunwayDesk(store, config.runway);
+
   // Where a recurrence becomes a queued job. Store-only, like the close-out desk:
   // it writes the same `jobs` row the launch route writes and leaves every
   // question about what happens to it to rule `manual-job`.
@@ -858,6 +865,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     validationAsks,
     validationReady,
     burn,
+    runway,
+    // The gate the runway watch reads supply through — the same policy object the
+    // dispatcher carries, so the lens and rule `issue-pickup` cannot come to
+    // different answers about one issue.
+    issuePickup,
     branchReaps,
     environments,
     prWatch,

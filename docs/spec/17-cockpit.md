@@ -831,7 +831,9 @@ from.
 ## The overview
 
 What the situation area shows when no goal is selected: five cards, rows rather than pictures, in
-reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **World signals**.
+reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **World signals**. The
+fleet's **runway** is a band along the foot of the first of them rather than a sixth card, because
+"who is out" and "what is behind them" are one thought.
 
 Two rules run through all five. **Nothing here re-decides what the server decided**: a PR's court is
 `attention.status`, its checks are `ciVerdict`, a queued item's hold is the queue's own sentence, and a
@@ -861,6 +863,14 @@ vanishes when quiet is indistinguishable from one that broke.
   that origin is a pull request some ticket owns, the goal behind it, resolved through `goalOfPr`. The
   card used to name both in text and offer a way to neither, so the two questions a fleet row raises —
   what is it working on, and what is that — could only be answered somewhere else.
+  Along the card's **foot** is the **runway band** ([25](25-supply.md#in-the-cockpit)): who is out,
+  then what is queued behind them, in that order and in one card. The foot rather than the head
+  because the agents are the card's subject and this is its consequence, and it costs nothing to
+  reach — Fleet's rows are bounded by the agent cap, so the band never travels far down the page. It
+  quotes `state.runway` and re-decides nothing, draws **no control** (the reading is a statement about
+  the fleet, and a "watch something" shortcut would make it a prompt for the quickest fix rather than
+  the truest one), always draws — muted when healthy, grey while paused — and **changes unit rather
+  than lying**: with nothing queued there is no runway to state, so it counts idle slots instead.
 - **Goals in flight** — every goal whose `pickup.status` says the harness has it in hand now
   (`active` / `has_pr` / `planning` / `delivered`). Read off the dispatcher's own word rather than
   re-inferred from agents, plans and pull requests, which are three inputs the server has already

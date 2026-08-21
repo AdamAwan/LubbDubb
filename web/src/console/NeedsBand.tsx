@@ -106,7 +106,13 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   // with a reason — because that is all it ever asks for: it holds nothing, and
   // the run it names carries on either way. What differs is only where the
   // operator goes next, and the row's own agent id is what says that.
-  if (row.kind === 'bench' || row.kind === 'close_out' || row.kind === 'burn' || row.kind === 'validate') {
+  if (
+    row.kind === 'bench' ||
+    row.kind === 'close_out' ||
+    row.kind === 'burn' ||
+    row.kind === 'validate' ||
+    row.kind === 'supply'
+  ) {
     const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
     if (!task) return null;
     return (

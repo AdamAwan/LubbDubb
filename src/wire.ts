@@ -38,6 +38,7 @@
 import type { FilingTarget } from './sink/actionSink.js';
 import type { PlanDiff } from './plans/planDiff.js';
 import type { AcceptanceCriterion } from './plans/parts.js';
+import type { RunwayReading } from './supply/runway.js';
 import type { PlanningPolicy } from './plans/planning.js';
 import type { PetRules } from './pets/rules.js';
 import type { CiPolicyDescription } from './ci/describeCiPolicy.js';
@@ -765,6 +766,17 @@ export interface CockpitState {
    * persisted FIFO.
    */
   upcoming: UpcomingPlan | null;
+  /**
+   * Whether there is work left for the fleet, and whether the reason there is not
+   * is upstream of it — the band under Fleet.
+   *
+   * A domain type shipped whole rather than a widened copy: the pulse's desk and
+   * this take the same reading through the same function, and a wire shape that
+   * dropped a field would let the card and the bench row describe one fleet
+   * differently. Never null — an empty card still draws, and `unknown` is the
+   * reading for a deployment with no history rather than an absence.
+   */
+  runway: RunwayReading;
   worldEvents: WorldEvent[];
   /** Recorded failures, newest first — the Errors panel. */
   errors: ErrorLogEntry[];
@@ -1274,6 +1286,7 @@ export type { ChecksSpend, TaskTypeSpend } from './taskTypeSpend.js';
 export type { Stack } from './stacks/stack.js';
 export type { PlanDiff } from './plans/planDiff.js';
 export type { AcceptanceCriterion } from './plans/parts.js';
+export type { SupplyState } from './supply/runway.js';
 export type { PlanningPolicy } from './plans/planning.js';
 export type { PetRules } from './pets/rules.js';
 export type { ValidationPolicy } from './validation/policy.js';

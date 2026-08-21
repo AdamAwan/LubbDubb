@@ -1246,7 +1246,7 @@ export type HumanTaskStatus = 'open' | 'done' | 'declined';
  * sentence it wrote — parsing prose the harness composed, which is the failure
  * mode `signalPolarity` and the reason plates already refuse.
  */
-export type HumanTaskKind = 'ask' | 'close_out' | 'burn' | 'validate';
+export type HumanTaskKind = 'ask' | 'close_out' | 'burn' | 'validate' | 'supply';
 
 /**
  * A unit of work only a person can do: flipping a setting in a console nobody

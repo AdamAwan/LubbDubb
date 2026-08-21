@@ -25,6 +25,9 @@ import type { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import type { ValidationAskDesk } from './validation/askDesk.js';
 import type { ValidationReadyDesk } from './validation/readyDesk.js';
 import type { SpendBurnDesk } from './spendBurnDesk.js';
+import type { RunwayDesk } from './supply/runwayDesk.js';
+import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
+import { DEFAULT_COOLDOWN } from './dispatcher/dispatchCooldown.js';
 import type { BranchReapDesk } from './branchReapDesk.js';
 import type { EnvironmentDesk } from './environments/environmentDesk.js';
 import type { ScheduleDesk } from './schedules/scheduleDesk.js';
@@ -109,6 +112,21 @@ interface HarnessDeps {
    * no dispatch, and stops nothing.
    */
   burn?: SpendBurnDesk;
+  /**
+   * Says when the queue of work is running out. Absent = no runway watch (tests
+   * that do not care). It writes `human_tasks` rows, decides no dispatch and
+   * holds nothing — and it needs {@link HarnessDeps.issuePickup} to read the same
+   * gate the dispatcher reads.
+   */
+  runway?: RunwayDesk;
+  /**
+   * The pickup gate's own policy, so the runway watch can ask
+   * `issuePickupStatus` the question rule `issue-pickup` asks. Read here rather
+   * than off the dispatcher because {@link Dispatcher} is an interface and only
+   * one implementation happens to carry a policy — a lens reaching through it
+   * would be reading a private field of one dispatcher.
+   */
+  issuePickup?: IssuePickupPolicy;
   /** Deletes the branch behind a merged pull request. Absent = `reapMergedBranches` is off. */
   branchReaps?: BranchReapDesk;
   /**
@@ -585,6 +603,48 @@ export class Harness extends EventEmitter {
       // naming an origin nothing tracks any more prices no dispatch, and a
       // profile pin that outlives its row is one nobody can see to take off.
       store.reconcileProfileOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
+
+      // Whether there is anything left for the fleet to do, and whether the reason
+      // there is not is upstream of it. Beside the other bookkeeping and not in the
+      // dispatcher for `closeOuts`' reason — it staffs nobody, holds nothing and no
+      // rule reads what it writes.
+      //
+      // **Below `decide` rather than above it**, and for both neighbours. It needs
+      // every read `decide` needs — the plan funnel, the verdicts, the decision
+      // window — so this is the first point in the pulse where they all exist; and
+      // running it after the decision means a lens about supply can never delay a
+      // dispatch, however long its walk over the issues takes.
+      //
+      // It reads the *pre-dispatch* headroom, so a goal this pulse is about to
+      // start still counts as queued rather than in flight. One pulse of lag, the
+      // same lag the retarget and the reap accept, and in the safe direction: it
+      // over-reports supply for a beat rather than announcing a drought that the
+      // dispatch happening milliseconds later has already answered.
+      if (this.deps.runway && this.deps.issuePickup)
+        this.deps.runway.run({
+          issues: world.issues,
+          pickup: {
+            policy: this.deps.issuePickup,
+            cooldown: DEFAULT_COOLDOWN,
+            now: world.takenAt,
+            tasks,
+            recentDecisions,
+            // Unfiltered, exactly as the gate itself takes it: an unwatched PR is
+            // hidden from dispatch but is still an open PR, and one read as gone
+            // would have its goal counted as unstarted supply.
+            openPrs: world.pullRequests,
+            plans,
+            planParts,
+            deliveries,
+            deliverySignals,
+            assays,
+            assaySignals,
+            runs: store.listIssueRuns(),
+            headroom,
+            paused: this.deps.runtime.paused,
+          },
+          cap: this.deps.runtime.cap,
+        });
 
       // The dispatcher's reasoning is itself an audit record — prefixed, when any
       // provider served a fallback slice, with the fact that it was reasoning about

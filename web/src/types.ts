@@ -95,6 +95,7 @@ export type {
   RunPhaseHealth,
   RunRepeat,
   RunTally,
+  SupplyState,
   RunningConfigGroup,
   RunningConfigEntry,
   RunningConfigPayload,

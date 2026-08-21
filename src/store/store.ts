@@ -452,6 +452,9 @@ export class Store {
   listHumanTasks(limit?: number): HumanTask[] {
     return this.humanTasks.listHumanTasks(limit);
   }
+  listOpenHumanTasks(): HumanTask[] {
+    return this.humanTasks.listOpenHumanTasks();
+  }
   humanTaskLabels(ids: string[]): Map<string, string> {
     return this.humanTasks.humanTaskLabels(ids);
   }

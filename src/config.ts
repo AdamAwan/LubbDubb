@@ -4,6 +4,7 @@ import type { IntegrationSelection } from './integrations/integration.js';
 import { DEFAULT_CONTAINER_TYPES } from './issueRelations.js';
 import { DEFAULT_PLANNING, type PlanningPolicy } from './plans/planning.js';
 import { DEFAULT_BURN, validateBurnPolicy, type BurnPolicy } from './spendBurn.js';
+import { DEFAULT_RUNWAY, validateRunwayPolicy, type RunwayPolicy } from './supply/runway.js';
 import type { SelfUpdatePolicy } from './selfUpdate/upgradePlan.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from './validation/policy.js';
 import { DEFAULT_LOCAL_RUN, type LocalRunPolicy } from './localRun/policy.js';
@@ -205,6 +206,14 @@ export interface Config {
    * one field can be set alone.
    */
   spendBurn: BurnPolicy;
+  /**
+   * The runway watch (`src/supply/runway.ts`) — how thin the queue of work may
+   * get before somebody is told the fleet is about to run out of things to do.
+   * **On by default**, on the burn watch's terms: it spends no agent and gates
+   * nothing, filing a `supply` obligation and settling it when the queue
+   * recovers. Deep-merged, so one field can be set alone.
+   */
+  runway: RunwayPolicy;
   /**
    * The vivarium (`src/pets/`) — creatures that hatch from what the operator does,
    * fed on beats converted from what the fleet has already spent.
@@ -631,6 +640,7 @@ const DEFAULTS: Config = {
   // for an *omitted* policy is a separate answer (off) and lives with the rules.
   planning: DEFAULT_PLANNING,
   spendBurn: DEFAULT_BURN,
+  runway: DEFAULT_RUNWAY,
   // One switch and no rates. Everything a pet costs lives in `src/pets/rules.ts`
   // as a constant, because each of those numbers was also a way of writing a pet
   // into existence without doing anything.
@@ -852,6 +862,7 @@ function mergeLayers(lower: Partial<Config>, upper: Partial<Config>): Partial<Co
   if (lower.pets ?? upper.pets) merged.pets = { ...DEFAULTS.pets, ...lower.pets, ...upper.pets };
   if (lower.spendBurn ?? upper.spendBurn)
     merged.spendBurn = { ...DEFAULTS.spendBurn, ...lower.spendBurn, ...upper.spendBurn };
+  if (lower.runway ?? upper.runway) merged.runway = { ...DEFAULTS.runway, ...lower.runway, ...upper.runway };
   if (lower.selfUpdate ?? upper.selfUpdate)
     merged.selfUpdate = { ...DEFAULTS.selfUpdate, ...lower.selfUpdate, ...upper.selfUpdate };
   if (lower.validation ?? upper.validation)
@@ -957,6 +968,10 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // floor and run minimum rather than leaving them undefined — which would read
   // as a watch that fires on any run above six times nothing.
   merged.spendBurn = { ...DEFAULTS.spendBurn, ...overrides.spendBurn };
+  // And the runway watch, so `{"runway": {"warnHours": 2}}` keeps the clear
+  // threshold above it rather than leaving it undefined — which is the one
+  // combination that turns the notice into a flap.
+  merged.runway = { ...DEFAULTS.runway, ...overrides.runway };
   // And the self-update watch, so `{"selfUpdate": {"enabled": false}}` keeps the
   // remote and branch rather than blanking them — a disabled watch that is later
   // re-enabled must not come back pointed at nothing.
@@ -986,6 +1001,12 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // minimum of no runs, leaves a watch that is on, files constantly and teaches
   // the operator to stop reading it.
   validateBurnPolicy(merged.spendBurn);
+
+  // And the runway watch, for the burn watch's reason with one addition: a clear
+  // threshold at or below the warn threshold does not fail, it oscillates — a
+  // notice filed and settled on alternate pulses, which is the one outcome worse
+  // than never warning at all.
+  validateRunwayPolicy(merged.runway);
 
   // A list, so it replaces rather than merges, for `ci.checks`' reason. The
   // fallback is not defensive: an override naming the key with nothing under it

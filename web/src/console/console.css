@@ -411,6 +411,16 @@
   --cn-tone-ink: var(--cn-green-ink);
   --cn-tone-bg: var(--cn-green-bg);
 }
+/* The fifth tone, and the only one that is not a verdict: it is the absence of
+   one. `--cn-inert` and the faint ink are the neutrals already one step off the
+   core, so a theme moves this with everything else and no new token is owed. */
+.cn-t-grey {
+  --cn-tone: var(--cn-fg-faint);
+  --cn-tone-fill: var(--cn-panel-2);
+  --cn-tone-line: var(--cn-inert);
+  --cn-tone-ink: var(--cn-fg-dim);
+  --cn-tone-bg: var(--cn-panel-2);
+}
 
 /* The glyph inside a tag or a band header. Sized down from the word it precedes:
    at the tag's own 10px the geometric ones (◆ ▲ ⊘) out-weigh the lettering and
@@ -1326,6 +1336,71 @@ button.cn-grow {
   padding: 16px 13px;
   color: var(--cn-fg-faint);
   font-size: 12px;
+}
+
+/* ---------- the runway band ----------
+   Along the foot of the Fleet card: who is out, then what is queued behind them.
+   A tone alias on the wrapper, so every colour inside is `--cn-tone-*` and the
+   band follows a theme with the tags and the queue rail rather than being a
+   second opinion about what amber means. */
+.cn-runway {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding: 9px 13px 10px;
+  border-top: 1px solid var(--cn-line-soft);
+  background: var(--cn-tone-bg);
+  /* The rows above own the card's remaining height; this is a foot and keeps its
+     own. Without it a short fleet stretches the band down the card. */
+  margin-top: auto;
+}
+.cn-runway .cn-runway-read {
+  font: 600 15px/1 var(--cn-mono);
+  color: var(--cn-tone-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.cn-runway .cn-runway-say {
+  flex: 1;
+  min-width: 140px;
+  font: 400 11.5px/1.45 var(--cn-mono);
+  color: var(--cn-fg-dim);
+}
+.cn-runway .cn-runway-legend {
+  font: 400 11px/1 var(--cn-mono);
+  color: var(--cn-fg-faint);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* The same four buckets in every state, so a glance across a week reads as one
+   shape changing. `flex-grow` carries the counts, so a bucket at zero collapses
+   to nothing without a width to compute. */
+.cn-runway-bar {
+  display: flex;
+  gap: 2px;
+  width: 104px;
+  height: 6px;
+  border-radius: 99px;
+  overflow: hidden;
+  background: var(--cn-track);
+  flex: none;
+}
+.cn-runway-bar > i {
+  display: block;
+  min-width: 0;
+}
+.cn-seg-inflight {
+  background: var(--cn-green-ink);
+}
+.cn-seg-queued {
+  background: var(--cn-blue-ink);
+}
+.cn-seg-reservoir {
+  background: var(--cn-inert);
+}
+.cn-seg-empty {
+  background: var(--cn-track);
 }
 
 /* ---------- detail ---------- */

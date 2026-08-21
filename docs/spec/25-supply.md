@@ -1,0 +1,234 @@
+# 25 — Supply and the runway
+
+`src/supply/runway.ts` is the lens. `src/supply/runwayDesk.ts` is the pulse's half of it.
+
+Every other lens in the harness asks about one piece of work — whose turn a pull request is on, where
+a goal's commit has got to, what a plan has left. This one asks about the **pipeline**: is there
+anything left for the fleet to do, and if not, is the reason upstream of it.
+
+It exists because both ways that pipeline fails are invisible. A fleet with nothing left to pick up
+does not error, parks no agent and records nothing worth reading — it goes quiet, which is also what
+a fleet between goals looks like, and what a fleet whose provider stopped answering looks like. A
+fleet whose every goal is parked on a person looks identical from outside and is the same failure
+from the other end: the fleet outrunning somebody's ability to _absorb_ work rather than to supply
+it.
+
+## The unit is time, never a count
+
+"Fewer than three eligible issues" does not survive a changing `maxConcurrentAgents`. A three-wide
+fleet on twenty-minute goals empties a five-deep backlog inside the hour; a one-wide fleet on
+day-long goals is comfortable with two. So the reading is **how long until nothing is left for a slot
+to take**:
+
+```
+supply  = inflight + queued                      (goals)
+runway  = supply × medianLeadTime ÷ max(1, cap)  (minutes)
+```
+
+The median comes off `IssueRun`'s `startedAt → completedAt` ([13](13-jobs-and-findings.md)), which is
+the only span that already contains a goal's whole tail — the CI fixes, the review threads, the
+assessment and the write-up that follow its pull request. Agent durations would miss all of it and
+read a goal as twenty minutes of work when it occupies the fleet for three hours.
+
+**The drain is capacity, never the observed start rate.** The obvious estimator is how fast goals
+have actually been starting, and it is the one estimator that cannot work: a starved fleet starts
+nothing, so the observed rate falls towards zero, so the runway computed from it rises towards
+infinity — the warning suppresses itself exactly when it is due. Capacity over median lead time is
+self-consistent: it says how fast the fleet drains when saturated, which is the question.
+
+**Median, never mean**, for the burn watch's reason ([18](18-observability.md)): one nine-day goal in
+the history would drag a mean upward until a fleet with a fortnight of backlog reported a week of
+runway.
+
+## The buckets
+
+There is no new taxonomy. `issuePickupStatus` ([06](06-issue-pickup.md)) already sorts every open
+issue, and the lens re-reads that one function's answer — it never asks the world a second question
+of its own, which is what stops it and rule `issue-pickup` coming to different conclusions about the
+same issue.
+
+| Bucket        | Pickup status                                | What it means                                                        |
+| ------------- | -------------------------------------------- | -------------------------------------------------------------------- |
+| **Inflight**  | `active` · `has_pr` · `planning`             | The fleet is on it. Drains over time.                                |
+| **Queued**    | `eligible` · `blocked` · `cooldown` · `assay`\* | Unstarted supply the fleet may take.                                 |
+| **Reservoir** | `unwatched`                                  | Not supply. One watch write away from being it.                      |
+| **Held**      | `escalated` · `delivered` · `retained` · `assay`\* | Parked on a person. The fleet cannot drain it.                   |
+| **Gone**      | `done`                                       | —                                                                    |
+
+`blocked` is in **queued** and it is the healthiest number on the card: it means more work than
+slots, which is the condition this whole module exists to keep a deployment in. A count that dropped
+it would report a full backlog as a drought on precisely the fleet working hardest. `cooldown` is
+supply that is coming back.
+
+### \* Why `assay` is in two rows
+
+`assay` is the one status that covers two opposite situations, and it must not be bucketed by name.
+An issue the fleet has not assayed **yet** is ordinary unstarted supply — an assayer is coming. One
+an assayer refused, or priced and left standing, is parked on a person. The lens separates them by
+asking `assayHold` (`src/intake/assay.ts`), the same pure function the gate itself asks: a null hold
+is the pending arm.
+
+Read as held, **every freshly tagged issue would count as work nobody can do**, and a deployment
+would look starved on the pulse after somebody filled its queue — which is the exact moment the
+feature must stay quiet.
+
+### The reservoir counts issues, and a container is a way in
+
+A container (a Feature or an Epic — [06](06-issue-pickup.md)) is never dispatched at, so it is worth
+nothing to the fleet on its own. But one watch write on it cascades to every descendant, so it is
+worth reporting: `reservoirContainers` counts the unwatched ones **beside** the reservoir rather than
+adding to it. Its children are already in the reservoir under their own numbers, and counting them
+again through their parent would state the same stories twice.
+
+## The states
+
+Five, and the ordering is load-bearing:
+
+1. **`starved`** — not paused, nothing queued, and `headroom > 0`. Slots are empty _now_.
+2. **`dry`** — nothing queued. Every slot is full, but the next goal to finish finds nothing behind
+   it.
+3. **`unknown`** — fewer than `runway.minimumRuns` completed goals, so there is no median.
+4. **`thin`** — the runway is below the band (see [hysteresis](#hysteresis)).
+5. **`healthy`** — above it.
+
+**`starved` above `dry`**: any fleet with a free slot and an empty queue satisfies both, and
+reporting the weaker one describes a fleet that is _about to_ go idle while it already has.
+
+**Both above `unknown`**: they are observations about this instant and need no median. A deployment
+two days old with two empty slots is genuinely starved, and withholding that until five goals have
+completed would silence the warning for exactly the week it is most useful. `unknown` guards only the
+arms that need a _duration_.
+
+**`unknown` is not folded into anything**, on the reach verdict's grounds
+([24](24-environments.md#the-three-verdicts)): a deployment two days old and one that has run dry
+present identically to anything that rounds "cannot say" down to "nothing left".
+
+**`idleSlots` comes off the pulse's own headroom**, never `cap − inflight`. They are different
+questions and only one is about slots: a goal with an open pull request is in flight and holds no
+agent, so counting goals would report a fully-staffed fleet as having spare capacity.
+
+### There is no sixth state
+
+The obvious sixth is the fleet idle because everything is parked on a person. It is not a state: it
+is `starved` with the sentence rearranged, because the fleet is in precisely the same condition and
+only the reason differs. A state whose whole content is which clause leads the detail would double
+the machine to say what the wording already says.
+
+## The second direction
+
+What the bench holds splits three ways, by what answering a row actually does:
+
+| Split             | Rows                                         | Answering it…                                                  |
+| ----------------- | -------------------------------------------- | -------------------------------------------------------------- |
+| **Latent supply** | plans awaiting approval · profile gates · `escalated` goals | puts work **back in the fleet**.                  |
+| Stalled inflight  | escalations · permissions · usage-limit parks | restores throughput; supply is unchanged.                      |
+| Human debt        | close-outs · validations · bench asks         | returns nothing to the fleet.                                  |
+
+**Latent supply leads the sentence** on every arm that means the fleet has stopped. Telling an
+operator with three plans awaiting approval to go and find more work would be wrong twice over: there
+is work, and they are the reason it is not moving. The headline becomes _"The fleet is waiting on
+you, not on work"_ and the detail names what answering would release.
+
+**Debt is never a threshold.** The queue rail already draws all twelve close-outs as twelve rows —
+"you have 12 close-outs" is not news, it is on screen. Debt earns a trailing clause when it explains
+a starved fleet and nothing else. It is counted off `listOpenHumanTasks`, which is deliberately
+unbounded where the panel's feed takes a limit: this is a count, and a cap would report a hundred to
+the deployment furthest behind and to the one exactly at the cap alike. `supply` rows are excluded —
+the reading must not describe itself.
+
+## What it files
+
+A `supply` human task ([13](13-jobs-and-findings.md)), on `SpendBurnDesk`'s terms: store-only, it
+dispatches nobody, holds nothing, and no rule reads what it writes. `healthy` and `unknown` file
+nothing.
+
+Joining the bench is what gets the notification for free — `NeedKind` gains `supply`, and
+`notify.ts` diffs the rendered needs-you queue by row id ([17](17-cockpit.md)). Its tone is **amber**
+and its group is **yours**: a gate rather than a fault, and no agent is parked on it.
+
+**Exactly one open row, and a state change replaces it.** `recordHumanTask` dedups on the title, so a
+row whose wording changed is a _new_ row rather than a refreshed one. That is what the notification
+chain needs — a standing row is already in the previous snapshot and cannot re-announce, so
+`thin → dry` gets one further banner and nothing else does — and it is also what makes settling the
+old one obligatory, since leaving both would put two rows describing one fleet on the bench.
+
+A row the operator has already **answered** is not raised again under the same wording. A row
+standing under the same wording _is_ re-filed, so `recordHumanTask`'s refresh keeps its figures
+current without moving its id.
+
+### Hysteresis
+
+The condition oscillates hard: a goal completes, the queue dips, one issue gets watched, it recovers.
+Two bands are the whole of the anti-nag design, not a refinement.
+
+- Entering the warn band costs `runway.warnHours`.
+- Leaving it costs `runway.clearHours`.
+
+With one number the row files at 59 minutes, settles at 61 when a goal is watched, files again at 59
+when the next one starts, and the operator gets a banner every few minutes for a queue that is
+hovering. `validateRunwayPolicy` **refuses** a `clearHours` at or below `warnHours` at load: it does
+not fail, it flaps, and a channel that cries wolf is worse than no channel.
+
+The hysteresis needs no stored state. Its one input is whether a `supply` row is standing, which the
+desk reads off the bench and the cockpit reads off the snapshot.
+
+## When it stays quiet
+
+- **Paused.** `idleSlots` is zero by definition and nothing here is news to whoever pressed the
+  button.
+- **The recovery hold.** No pulse runs at all ([04](04-harness-cycle.md#the-crash-recovery-hold)),
+  and the banner above the console already says so.
+- **Below `minimumRuns`** — on the duration arms only.
+- **`runway.enabled: false`.** Files nothing **and still settles standing rows**, so turning it off
+  drains the bench rather than stranding a row nothing left running will ever close.
+
+## Where it runs
+
+`RunwayDesk.run` sits in the pulse **below `dispatcher.decide`**, and both neighbours are the reason
+([04](04-harness-cycle.md#ordering)). It needs every read `decide` needs — the plan funnel, the
+verdicts, the decision window — so that is the first point in the pulse where they all exist; and
+running it after the decision means a lens about supply can never delay a dispatch, however long its
+walk over the issues takes.
+
+It reads the **pre-dispatch** headroom, so a goal this pulse is about to start still counts as queued
+rather than in flight. One pulse of lag, the same lag the retarget and the reap accept, and in the
+safe direction: it over-reports supply for a beat rather than announcing a drought the dispatch
+happening milliseconds later has already answered.
+
+The cockpit takes its **own** reading in `buildStateSnapshot` rather than reading a cached one off
+the pulse. A snapshot is served far more often than a cycle runs, and a reading a pulse old would
+show a queue the operator has just topped up as still empty — on exactly the surface they topped it
+up from. The two agree because the lens is one function, not because anything is passed between them.
+
+## In the cockpit
+
+A band along the **foot of the Fleet card** ([17](17-cockpit.md)) — who is out, then what is queued
+behind them, in that order and in one card. The foot rather than the head because the agents are the
+card's subject and this is its consequence, and it costs nothing to reach: Fleet's rows are bounded
+by the agent cap, so the band never travels far down the page.
+
+It draws no control. The reading is a statement about the fleet, and a "watch something" shortcut
+there would make it a prompt for the quickest fix rather than the truest one — which on the `starved`
+arm would point at the reservoir when the answer is the three plans awaiting approval.
+
+**It always draws**, muted when healthy, on the empty-card rule: a band that vanished when the queue
+was full would be indistinguishable from one that broke, on exactly the deployment where nobody has
+seen it before. `paused` wears the grey tone rather than the alarm.
+
+The reading **changes unit rather than lying**: with nothing queued there is no runway to state, so
+the band counts idle slots instead.
+
+## Configuration
+
+→ [02](02-configuration.md#runway)
+
+| Key                   | Default | Effect                                                            |
+| --------------------- | ------- | ----------------------------------------------------------------- |
+| `runway.enabled`      | `true`  | Master switch. Off files nothing and drains standing rows.        |
+| `runway.warnHours`    | `1`     | Runway below which a row is filed.                                |
+| `runway.clearHours`   | `3`     | Runway a standing row must be back above. Must exceed `warnHours`. |
+| `runway.minimumRuns`  | `5`     | Completed goals before the median lead time is trusted.           |
+
+An hour is roughly one goal's work on a three-wide fleet at this repo's own median, which is the
+point: late enough that a fleet dipping between goals never trips it, early enough that there is
+still time to triage before a slot goes empty.
