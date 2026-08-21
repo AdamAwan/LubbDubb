@@ -44,6 +44,7 @@ export const MCP_TOOL_NAMES = [
   'report_remedy',
   'knowledge_propose',
   'knowledge_ask',
+  'knowledge_notice',
 ] as const;
 
 /**

@@ -262,6 +262,7 @@ CREATE TABLE IF NOT EXISTS knowledge_facts (
   supersedes TEXT,                 -- the fact this amends; exempts it from that fact's rejection bar
   origin_ref TEXT,                 -- the goal it was first observed on, or null for an operator's own
   ruled_at   TEXT,                 -- when an operator last moved it; null means nobody has ruled on it yet
+  resolves_when TEXT,              -- JSON: what settles a notice before its clock; null = the clock is the whole of it
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

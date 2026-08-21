@@ -181,6 +181,22 @@ export interface PullRequest {
    */
   mergeCommitSha?: string;
   /**
+   * The commit the checks on this pull request ran against — GitHub's `head.sha`,
+   * Azure's `lastMergeSourceCommit`.
+   *
+   * The one thing that tells a check *fixed* from a check that flaked: a red
+   * result followed by a green one is a push on a different commit and a flake on
+   * the same one, and nothing else in the snapshot separates them. Read by the
+   * knowledge base's notice desk (`src/knowledge/noticeDesk.ts`) and by nothing
+   * that dispatches.
+   *
+   * **Absent means the harness cannot say**, and every reader must stay silent
+   * rather than guess: a provider that does not report it leaves two consecutive
+   * snapshots indistinguishable, and a flake claimed on that basis would be the
+   * notice teaching the fleet to ignore a genuinely broken check.
+   */
+  headSha?: string;
+  /**
    * Labels/tags on the PR. Drives the provider-agnostic exclusion gate: a PR
    * carrying `config.prExclusionLabel` is left alone by the dispatcher. Absent when
    * the PR carries no labels (or the provider/persisted row predates this field) —
@@ -1302,9 +1318,41 @@ export interface KnowledgeFact {
    * operator's only way to silence it would be to make the wrong one.
    */
   ruledAt: string | null;
+  /**
+   * What would settle this notice before its clock runs out, or null for a fact
+   * whose clock is the whole of it.
+   *
+   * **The clock is the backstop, not the mechanism.** A timer alone either drops a
+   * notice while it is still true — and the fleet rediscovers it — or keeps one
+   * alive after the thing is fixed, which teaches every agent to disbelieve a
+   * check that is now genuinely failing. Both are silent.
+   *
+   * Only ever written by the harness's own notices, because a condition is a
+   * mechanism rather than a sentence: settling one means watching a world object
+   * pulse after pulse, and the harness can only watch what it already reads.
+   * → `docs/spec/27-knowledge.md#notices`
+   */
+  resolvesWhen: FactResolution | null;
   createdAt: string;
   /** When it last moved — for anything but a fresh proposal, when its reach changed. */
   updatedAt: string;
+}
+
+/**
+ * A condition the harness can evaluate against the world it already reads, which
+ * is the whole of what may be written here: `main` red on a check resolves when
+ * that check goes green, not when a timer runs out.
+ *
+ * One member today, and a discriminated union rather than a bare pair so a second
+ * kind cannot arrive as a widened field every reader would have to re-check.
+ */
+export interface FactResolution {
+  /** Settled when the named check stops failing on the pull request named — or that pull request is gone. */
+  kind: 'ci-check-green';
+  /** The pull request the check runs on, as a ref (`pr:412`). */
+  ref: string;
+  /** The check, named exactly as the provider names it — `priorRemedies`' fragility, for its reason. */
+  check: string;
 }
 
 /**

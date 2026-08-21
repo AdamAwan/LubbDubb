@@ -1,7 +1,14 @@
 import { nanoid } from 'nanoid';
 import { claimKey, claimsMatch } from '../claims.js';
 import { corroborationGoal, distinctCorroborators, questionScore, type FactProposal } from '../knowledge/knowledge.js';
-import type { FactObservation, FactReach, KnowledgeCorroboration, KnowledgeFact, Lesson } from '../types.js';
+import type {
+  FactObservation,
+  FactReach,
+  FactResolution,
+  KnowledgeCorroboration,
+  KnowledgeFact,
+  Lesson,
+} from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
 
@@ -14,10 +21,17 @@ import type { StoreContext } from './context.js';
  * Null spells *no operator has ruled on this*, and phase 1 shipped no operator
  * surface at all — every fact on an older database reached where it is by being
  * proposed or corroborated, which is exactly what null says.
+ *
+ * `resolves_when` (phase 4) is the same shape of addition and the same absence of
+ * a backfill, for a stronger reason: null spells *nothing but the clock settles
+ * this*, and nothing before phase 4 could write a condition — so null is not
+ * merely acceptable on an older row, it is the only true value. The rows that
+ * carry one are written by the harness's own notice desk from the pulse it lands
+ * on, and a backfill could only invent conditions for notices nobody was watching.
  * → `docs/spec/14-persistence.md#migrations`
  */
 export const KNOWLEDGE_COLUMNS: ColumnMigrations = {
-  knowledge_facts: { ruled_at: 'TEXT' },
+  knowledge_facts: { ruled_at: 'TEXT', resolves_when: 'TEXT' },
 };
 
 /**
@@ -148,6 +162,55 @@ export class KnowledgeStore {
   }
 
   /**
+   * The notices the sweep has something to ask about: expiring, still live, and
+   * carrying a condition somebody can evaluate.
+   *
+   * Narrow on purpose. A notice whose clock is the whole of it needs no sweep —
+   * {@link askFacts} already answers nobody with a lapsed row — so widening this
+   * to "every notice" would hand the desk rows it can do nothing with and invite a
+   * second opinion about lapsing beside the one this store already holds.
+   *
+   * Rejected rows are out for the reason they are out of every other read: a claim
+   * an operator killed is not something the harness goes on tending.
+   */
+  listResolvableNotices(): KnowledgeFact[] {
+    const now = this.ctx.now();
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT * FROM knowledge_facts
+           WHERE lifetime='expiring' AND reach<>'rejected' AND resolves_when IS NOT NULL AND expires_at > ?
+           ORDER BY created_at ASC, rowid ASC`,
+      )
+      .all(now) as FactRow[];
+    return rows.map(rowToFact);
+  }
+
+  /**
+   * End a notice now, because what it reported has been settled.
+   *
+   * **Lapsing it, not deleting or demoting it.** A lapsed expiring fact is already
+   * out of every read while its row stays saying what it said, so resolution rides
+   * the mechanism the lifetime axis already has rather than adding a second way to
+   * be out of a prompt — and the page can still show what the fleet was told and
+   * when it stopped being told it. The reach is deliberately untouched: `rejected`
+   * means *not true*, and a notice that was true this morning is not that.
+   *
+   * Idempotent, and guarded on the row still being live so a sweep that runs twice
+   * cannot walk a lapse backwards or forwards.
+   */
+  resolveNotice(id: string): KnowledgeFact | null {
+    const at = this.ctx.now();
+    const result = this.ctx.db
+      .prepare(
+        `UPDATE knowledge_facts SET expires_at=?, updated_at=?
+           WHERE id=? AND lifetime='expiring' AND expires_at > ?`,
+      )
+      .run(at, at, id, at);
+    if (result.changes === 0) return null;
+    return this.getFact(id);
+  }
+
+  /**
    * Where a claim stands, on an operator's say-so — and the record that they said
    * so, which is the second half of this call rather than a detail of it.
    *
@@ -255,8 +318,9 @@ export class KnowledgeStore {
     this.ctx.db
       .prepare(
         `INSERT OR IGNORE INTO knowledge_facts
-           (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, created_at, updated_at)
-         VALUES (?, ?, 'fleet', 'standing', NULL, 'injected', NULL, ?, ?, ?, ?)`,
+           (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, resolves_when,
+            created_at, updated_at)
+         VALUES (?, ?, 'fleet', 'standing', NULL, 'injected', NULL, ?, ?, NULL, ?, ?)`,
       )
       // Ruled, and by the operator who promoted the lesson: the mirror is the
       // identity, so the moment they vouched for it is the moment it was ruled on.
@@ -316,17 +380,22 @@ export class KnowledgeStore {
       supersedes: proposal.supersedes,
       originRef: observer.goalRef,
       ruledAt: null,
+      // A condition on a standing claim would be a condition nothing ever
+      // evaluates — the sweep reads notices — so it is dropped rather than stored
+      // where it would sit looking like a mechanism.
+      resolvesWhen: proposal.lifetime === 'expiring' ? proposal.resolvesWhen : null,
       createdAt: ts,
       updatedAt: ts,
     };
     this.ctx.db
       .prepare(
         `INSERT INTO knowledge_facts
-           (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, created_at, updated_at)
+           (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, resolves_when,
+            created_at, updated_at)
          VALUES (@id, @claim, @scope, @lifetime, @expiresAt, @reach, @supersedes, @originRef, @ruledAt,
-                 @createdAt, @updatedAt)`,
+                 @resolvesWhen, @createdAt, @updatedAt)`,
       )
-      .run(fact);
+      .run({ ...fact, resolvesWhen: fact.resolvesWhen === null ? null : JSON.stringify(fact.resolvesWhen) });
     return fact;
   }
 
@@ -341,8 +410,8 @@ export class KnowledgeStore {
   }
 
   /**
-   * Two corroborations from two different goals carry a proposal to `lookup`, and
-   * **no further**.
+   * Two corroborations from two different goals carry a proposal as far as
+   * {@link autoReach} says, and **no further**.
    *
    * That ceiling is the safety argument of the whole design rather than a
    * conservative default: `lookup` costs nothing until somebody asks or the scope
@@ -355,7 +424,7 @@ export class KnowledgeStore {
     if (fact.reach !== 'proposal' || corroborations < CORROBORATIONS_TO_LOOKUP) return fact;
     // No stamp: two agents agreeing is not an operator ruling, and the page's
     // **Needs you** section is exactly the facts that arrived here this way.
-    return this.moveReach(fact.id, 'lookup', null) ?? fact;
+    return this.moveReach(fact.id, autoReach(fact), null) ?? fact;
   }
 }
 
@@ -376,6 +445,25 @@ export interface FactQuery {
 /** How many distinct goals must have seen it before a proposal is answerable on a lookup. */
 const CORROBORATIONS_TO_LOOKUP = 2;
 
+/**
+ * As far as agreement *alone* carries a claim — and the one place in this store
+ * where that is further than `lookup`.
+ *
+ * A notice may reach `injected` on corroboration because its blast radius is
+ * capped by its own clock, and that is the whole of the safety argument: a claim
+ * in front of every agent before it reads any code is a false instruction handed
+ * to the whole fleet if it is wrong, and the only thing that makes accepting the
+ * risk sane is that it ends by itself. A **standing** claim has nothing that ends
+ * it, so nothing but an operator puts one there.
+ *
+ * Which is why the clock is read here rather than the lifetime alone: an expiring
+ * fact with no `expiresAt` would be a standing claim wearing the word, and it is
+ * one missed validation away from being the thing this function exists to refuse.
+ */
+function autoReach(fact: KnowledgeFact): FactReach {
+  return fact.lifetime === 'expiring' && fact.expiresAt !== null ? 'injected' : 'lookup';
+}
+
 /** The reaches a live claim can be in — everything a re-proposal may join. */
 const LIVE_REACHES: readonly FactReach[] = ['proposal', 'lookup', 'injected', 'committed'];
 
@@ -394,6 +482,15 @@ export function adoptedFactId(lessonId: string): string {
   return `fact_${lessonId}`;
 }
 
+function parseResolution(raw: string | null | undefined): FactResolution | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as FactResolution;
+  } catch {
+    return null;
+  }
+}
+
 function lapsesAt(from: string, hours: number): string {
   return new Date(new Date(from).getTime() + hours * 3_600_000).toISOString();
 }
@@ -409,6 +506,8 @@ interface FactRow {
   origin_ref: string | null;
   /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
   ruled_at: string | null;
+  /** Nullable and possibly absent, for {@link FactRow.ruled_at}'s reason. JSON, or null. */
+  resolves_when: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -424,6 +523,11 @@ function rowToFact(r: FactRow): KnowledgeFact {
     supersedes: r.supersedes,
     originRef: r.origin_ref,
     ruledAt: r.ruled_at,
+    // Written by the harness and read by the harness, so a row that will not parse
+    // is a bug in this file rather than in the world — but it is read on the
+    // delivery path, where a throw would take the launch down with it. Null is the
+    // safe reading: the clock still settles the notice.
+    resolvesWhen: parseResolution(r.resolves_when),
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

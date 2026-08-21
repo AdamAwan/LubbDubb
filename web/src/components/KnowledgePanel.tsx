@@ -18,11 +18,14 @@ import { Ref } from './refs.js';
  * invisible everywhere else in the harness. So the rejected tail is a section
  * here, exactly as the Lessons panel keeps its retired one.
  *
- * **Nothing on this page auto-promotes anything.** The store carries a claim to
- * `lookup` on two corroborations from two different goals and no further;
- * `injected` — in front of every agent before it reads any code — is an
- * operator's and only an operator's. Every control below is one of the four
- * things a person can say, and none of them is available to an agent.
+ * **Nothing on this page auto-promotes anything.** The store carries a standing
+ * claim to `lookup` on two corroborations from two different goals and no
+ * further; `injected` — in front of every agent before it reads any code — is an
+ * operator's and only an operator's. The one exception is a **notice**, which the
+ * store injects on corroboration alone because its blast radius is capped by its
+ * own clock (phase 4) — and that is the store's doing, not a control here. Every
+ * control below is one of the four things a person can say, and none of them is
+ * available to an agent.
  *
  * The order is the order things demand attention rather than the order of the
  * state machine: the notices with clocks on them, then the corroborated claims
@@ -73,13 +76,15 @@ export function KnowledgePanel({
       <p className="muted small kn-note">
         What agents have learned about <em>working</em> this repository, and how far each claim carries. Agents write
         these down through <code>knowledge_propose</code>; two of them on two different goals carry a claim as far as{' '}
-        <b>on lookup</b>, and nothing but a person puts one in front of every agent. A promoted lesson is mirrored in
-        here as an injected fleet claim, so the <b>Lessons</b> panel and this page show the same claims — govern a
-        mirrored claim wherever you first vouched for it.
+        <b>on lookup</b>, and nothing but a person puts a standing one in front of every agent. The one exception is a{' '}
+        <b>notice</b> — an observation with a clock on it, raised through <code>knowledge_notice</code> or by the
+        harness itself — which agreement alone injects, because it ends by itself. A promoted lesson is mirrored in here
+        as an injected fleet claim, so the <b>Lessons</b> panel and this page show the same claims — govern a mirrored
+        claim wherever you first vouched for it.
       </p>
       <KnowledgeSection
         title="Live notices"
-        blurb="Expiring observations, with the clock they were filed under. A notice states what was seen and never what to do about it; the agent draws the conclusion. Nothing here is raised by the harness itself yet."
+        blurb="Expiring observations, with the clock they were filed under. A notice states what was seen and never what to do about it; the agent draws the conclusion. These are the one thing agreement alone puts in front of every agent — two goals seeing the same thing is enough, and what makes that safe is that each one ends by itself. The harness raises its own for a check that went red and green on one commit, and for a check red on a branch other pull requests are based on; it reads those rather than being told them, so it counts as an observer."
         facts={notices}
         {...shared}
       />
@@ -91,7 +96,7 @@ export function KnowledgePanel({
       />
       <KnowledgeSection
         title="Injected"
-        blurb="Vouched for, and in every agent's system prompt before it reads any code. Fleet-wide claims ride the block below; a check or goal claim you inject rides the task prompt of the dispatches it matches."
+        blurb="In every agent's system prompt before it reads any code — vouched for by you, or a notice two goals saw. Everything here rides the block below whatever its scope, because a claim about one check is for the agent about to run it as much as for the one sent to fix it. The exception is a goal claim: it dies with its goal, so it rides that goal's own dispatches instead."
         facts={section('injected')}
         meter={<BlockBudget delivery={delivery} />}
         {...shared}
@@ -279,6 +284,14 @@ function FactCard({
         {fact.expiresAt !== null && (
           <span className="chip small warn" title="An expiring fact is out of every read once it lapses; the row stays">
             {new Date(fact.expiresAt).getTime() > now ? `lapses in ${untilTime(fact.expiresAt, now)}` : 'lapsed'}
+          </span>
+        )}
+        {fact.resolvesWhen !== null && (
+          <span
+            className="chip small info"
+            title="The harness watches this and ends the notice when it is met. The clock is the backstop, not the mechanism."
+          >
+            ends when {fact.resolvesWhen.check} passes on {fact.resolvesWhen.ref}
           </span>
         )}
         {/* Whether agents are getting this one. Per row rather than as a count,

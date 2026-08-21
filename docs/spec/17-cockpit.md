@@ -1678,12 +1678,20 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   tail — read top to bottom in the order things demand attention rather than in the order of the
   machine.
 
+  **Live notices** is the one section drawing rows nobody vouched for. A notice is an expiring
+  observation, and it is the one thing agreement alone puts in front of every agent — so the blurb
+  says that, says the clock is what makes it safe, and says that the harness raises its own: a check
+  that went red and green on one commit, and a check red on a branch other pull requests are based on
+  (#27 phase 4). A row that carries a resolution condition draws it, because a notice ending when the
+  world settles it rather than when its clock runs out is otherwise invisible.
+
   **It draws what it stopped.** The rejected tail is not a courtesy: this page is the whole of the
   governance, a surface showing only what it let through cannot tell an operator that a claim was
   killed, and the rejection bar — which is what stops two agents re-proposing next week what was
   killed today — is invisible everywhere else in the harness.
 
-  Four controls and no fifth, and none of them files anything: agents propose through the tool channel,
+  Four controls and no fifth, and none of them files anything — and none of them is what put a notice
+  at `injected`, which is the store's own doing: agents propose through the tool channel,
   so a page that could write a claim would be writing one with no observation behind it. Promote,
   demote, reject — a `ConfirmButton`, since a rejection is terminal and what comes back is an amendment
   an agent files — and **keep**, which looks like a no-op and is not: `lookup` is both where two agents
@@ -1711,7 +1719,8 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   the second implementation of "what fits" that rule exists to prevent.
 
   **And the page ends with what an agent actually receives** — the system-prompt block verbatim, and
-  the task-prompt append for each `check:` and `goal:` scope with anything deliverable in it, from the
+  the task-prompt append for each scope with anything deliverable left in it once the block has taken
+  what it carries (since #27 phase 4 that is every injected claim but a goal-scoped one), from the
   same two renderers the launch and the dispatch use. Per scope rather than per dispatch, because a
   dispatch matches its goal and every check it answers at once and the set of dispatches is not a list.
   The reach machine says where a claim _stands_; this says what is _sent_, and the two come apart at

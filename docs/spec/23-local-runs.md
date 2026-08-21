@@ -13,13 +13,13 @@ This is that fact, plus the thing that acts on it.
 
 ## What it is not
 
-| Not                       | Because                                                                                                                    |
-| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| A deployment             | Nothing here reaches a server, a registry or an environment. It runs the project on the machine the harness is on.          |
-| A fleet agent            | No task row, no dispatch, no cap. The dispatcher does not know it exists and no rule reads it.                              |
-| A test run               | `npm run check` runs on every branch. This is a person looking at a screen.                                                 |
-| A reading                | `running` means the session that brought it up did not fail. **Nothing polls the application.**                             |
-| A queue                  | One environment, so one run. Starting a second thing is stopping the first, and there is no route that means anything else. |
+| Not           | Because                                                                                                                     |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| A deployment  | Nothing here reaches a server, a registry or an environment. It runs the project on the machine the harness is on.          |
+| A fleet agent | No task row, no dispatch, no cap. The dispatcher does not know it exists and no rule reads it.                              |
+| A test run    | `npm run check` runs on every branch. This is a person looking at a screen.                                                 |
+| A reading     | `running` means the session that brought it up did not fail. **Nothing polls the application.**                             |
+| A queue       | One environment, so one run. Starting a second thing is stopping the first, and there is no route that means anything else. |
 
 ## One at a time
 
@@ -35,7 +35,7 @@ limit invented here — the same one the validation claim is built on
   instead", and there is no second route. Two names for one transition are two things to keep in step.
 - **The row outlives the run.** A start that failed is the case an operator actually hits, and its
   reason has to be readable after the process is gone. `liveLocalRun()` is the live one;
-  `currentLocalRun()` is the live one *or the last that ended*, which is what the panel draws.
+  `currentLocalRun()` is the live one _or the last that ended_, which is what the panel draws.
 
 ## The instruction is config, not a prompt
 
@@ -46,7 +46,7 @@ application lands. All three are **live fields**
 restart. They sit under **Features** there, beside the other policy objects, and `localRunRoot` under
 **Paths** — which is a thing `GROUPS` in `src/server/runningConfig.ts` has to be told: a declared key
 in no group is drawn nowhere, because the group loop never reaches it and the "Other" fallback skips
-it precisely *because* it is declared. `test/configFields.test.ts` asserts every declared key is
+it precisely _because_ it is declared. `test/configFields.test.ts` asserts every declared key is
 claimed by a group, since the symptom is a field that validates, applies, and is invisible.
 
 It began as a prompt id (`local-run`), on the argument that _how a project starts_ is the operator's
@@ -55,7 +55,7 @@ opinion and the prompt book is where this repo keeps those — the same argument
 file drop that takes effect at the next boot, and are read-only in the cockpit **on purpose**
 (`src/server/routes/state.ts`: a write route "would have to answer 'when does this take effect', and
 the honest answer — at the next restart — is worse than not offering it"). This is the one
-instruction an operator corrects *while* a start is failing in front of them, and bouncing the
+instruction an operator corrects _while_ a start is failing in front of them, and bouncing the
 harness to fix a typo in a command would take the fleet's agents down with it.
 
 The id is **retired, not deleted** — `loadPromptTemplates` throws on a file naming no known id, so
@@ -74,7 +74,7 @@ directory ([09](09-execution.md#the-checkout-a-local-run-uses)).
 
 **Deliberately not a pool slot**, and each difference is load-bearing:
 
-- **Outside `worktreeRoot`.** `slots()` counts every *registered* worktree under that root whatever
+- **Outside `worktreeRoot`.** `slots()` counts every _registered_ worktree under that root whatever
   the directory is called, so a preview checkout in there would count toward the pool's bound and be
   handed to an agent — wiped `git clean -ffdx` on the way.
 - **Ignored files survive a change of ref.** That wipe is right for an agent's branch and wrong here:
@@ -87,8 +87,8 @@ Three orderings inside it were wrong before the current one, and each failed dif
 `git worktree list` paths to decide whether the checkout exists breaks where a short-name TEMP
 resolves to a different string for the same directory (`worktree add` then says "already exists" about
 a tree that was ready); `switch` before the tree is clean refuses outright when the last run left a
-tracked file edited; and `reset --hard` on a checkout somehow standing on a branch would rewind *that
-branch*, the damage `git switch -C` is banned for. So: existence check, `checkout --detach`,
+tracked file edited; and `reset --hard` on a checkout somehow standing on a branch would rewind _that
+branch_, the damage `git switch -C` is banned for. So: existence check, `checkout --detach`,
 `reset --hard <commit>`, `clean -fd`. An unresolvable ref throws before anything is touched.
 
 ## Which ref, and what else is on offer
@@ -97,12 +97,12 @@ branch*, the damage `git switch -C` is banned for. So: existence check, `checkou
 could be run at, and how much of the plan has landed.
 
 The default is the **tip of the stack** — the furthest-along part with a branch, `merged`, `retired`
-and `concluded` skipped. Plan order *is* stacking order, since a part is cut from its predecessor's
+and `concluded` skipped. Plan order _is_ stacking order, since a part is cut from its predecessor's
 branch, so the last unmerged one contains everything behind it.
 
 Failing that, the goal's **own** branch, resolved by the same `openPrForIssue` the pickup verdict uses
 — its conventional `issue/<n>` or whatever its linked pull request is on. A goal nobody decomposed has
-its whole work on one pull request, and this feature could not see those goals *at all*: no parts meant
+its whole work on one pull request, and this feature could not see those goals _at all_: no parts meant
 no candidate, so a goal with an open PR in front of the operator resolved to the integration branch,
 started there, and said nothing about it. On the panel it was worse than silent — the row was filtered
 out, because a goal that resolves to the integration branch is not offering a choice.
@@ -117,7 +117,7 @@ said so — the environment came up on a real branch of the right goal, one sect
 panel named neither the branch nor the part.
 
 The skipped statuses stay **on offer**, labelled: each can still carry a branch from before it got
-there, so none of them is a sane *default*, and looking at what a merged part delivered is a
+there, so none of them is a sane _default_, and looking at what a merged part delivered is a
 perfectly sane thing to ask for. Which makes the list the **allow-list** as well as the thing the
 panel draws — `start(originRef, at)` checks an override against it, so the route is a way to run this
 goal's own work and not a way to check out an arbitrary ref. One function for all three questions
@@ -165,7 +165,7 @@ have a command for stopping, for exactly this reason.
 
 So a stop is the mirror of a start, in this order:
 
-1. The row goes to **`stopping`**, which is a *live* status: a run being taken down still holds the
+1. The row goes to **`stopping`**, which is a _live_ status: a run being taken down still holds the
    environment, so nothing may begin beside it and the panel must not offer to.
 2. The stop instruction is carried out **in a session** — the one that brought it up if it is still
    there, since it knows what it started and is already warm; otherwise a **fresh** one in the run's
@@ -187,7 +187,7 @@ So a stop is the mirror of a start, in this order:
 all wait on one teardown rather than racing two.
 
 **A swap stops before it prepares the checkout**, and that order is load-bearing: the stop instruction
-runs *in* the checkout — `docker compose down` reads the compose file that is in it — and
+runs _in_ the checkout — `docker compose down` reads the compose file that is in it — and
 `ensurePreview` is a `reset --hard` and a `clean -fd` on the same directory. Preparing first pulls the
 project out from under the session being asked to shut it down. The cost is that a checkout which
 cannot be prepared now fails with the previous environment already gone, so that refusal says so.
@@ -274,7 +274,7 @@ read off deltas ([18](18-observability.md#the-spend-breakdown)).
 - **On the panel**, beside the ref: what the run holding the environment has cost so far, climbing as
   it comes up. It is the one spend figure an operator sees while the money is still being spent, which
   is where the decision to keep it running is made. Absent, not `$0.00`, when nothing was measured.
-- **On the goal**, folded into `Issue.spend` — a local run's origin *is* the goal, so it attributes by
+- **On the goal**, folded into `Issue.spend` — a local run's origin _is_ the goal, so it attributes by
   name with no lineage hop ([18](18-observability.md#per-goal-spend)). The count is
   `IssueSpend.localRuns`, kept apart from `agents` because the goal page prints that figure as
   "Agents" and a local run is not one.
@@ -286,10 +286,10 @@ read off deltas ([18](18-observability.md#the-spend-breakdown)).
 
 ## Two triggers, one owner
 
-| From                | How                                                                    |
-| ------------------- | ---------------------------------------------------------------------- |
-| The cockpit         | The **Local** reading in the top bar, opening the running-locally panel |
-| The operator's Claude | `local_run` on the desktop channel ([11](11-mcp-tools.md))            |
+| From                  | How                                                                     |
+| --------------------- | ----------------------------------------------------------------------- |
+| The cockpit           | The **Local** reading in the top bar, opening the running-locally panel |
+| The operator's Claude | `local_run` on the desktop channel ([11](11-mcp-tools.md))              |
 
 Both reach the same runner, which is the point: the tool used to render an instruction and let the
 session act on it, so there were two definitions of what running meant and a harness that could not
@@ -305,18 +305,18 @@ strength of a status is the one outcome the validation channel exists to prevent
 `checked(schemas, handler)`; a refusal is a returned 400 carrying the reason, never a throw
 ([16](16-http-api.md#request-validation)).
 
-| Route                       | Does                                                                  |
-| --------------------------- | --------------------------------------------------------------------- |
-| `POST /api/local-run`       | `{issue, ref?}` — start it on that goal, stopping whatever was running. |
+| Route                       | Does                                                                                                            |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `POST /api/local-run`       | `{issue, ref?}` — start it on that goal, stopping whatever was running.                                         |
 | `POST /api/local-run/stop`  | No body and no id: there is one run, and stopping it is the request. Answers as soon as the teardown has begun. |
-| `GET /api/local-run/output` | The session's last lines.                                             |
+| `GET /api/local-run/output` | The session's last lines.                                                                                       |
 
 Stopping **answers before it has finished**, because it is a session's turn: the run goes to
 `stopping` and the runner's own `changed` events carry the rest. Awaiting the turn in the handler would
 hold a request open for up to two minutes.
 
 `ref` runs an earlier part of the goal instead of the tip of its stack. The schema checks its
-*shape*, and the runner checks that it is one of **that goal's** part branches — a question about the
+_shape_, and the runner checks that it is one of **that goal's** part branches — a question about the
 plan, so it is asked where the plan is. A schema that took any string and a runner that trusted it
 would make this route a way to check out anything in the repository.
 
@@ -336,7 +336,7 @@ leaves an operator opening the panel to find out whether it is the goal they are
 The panel (`web/src/components/LocalRunPanel.tsx`) is `'localRun'` on `ConsolePanel`, so it is a
 **place**: it survives a reload and the back button steps out of it
 ([17](17-cockpit.md#the-address-bar)). It draws one state and a picker, never a table of runs — a list
-would imply two could be up. What is running, since when, the URL as a link *to try*, the session's
+would imply two could be up. What is running, since when, the URL as a link _to try_, the session's
 output, and Stop plus a goal picker whose button says it stops what is running now.
 
 ### The picker
@@ -351,7 +351,7 @@ never opened as a PR, and a goal can carry three PRs none of which describes the
 started. So a ref with no pull request of its own **says so**, beside the count of what did land in
 the integration branch — which is a different statement from silence, and from a number borrowed off a
 sibling. That is why `LocalRunRefFacts` is derived per ref in `stateSnapshot.ts`: the cockpit could
-match a branch to a PR itself, but deciding *which of a goal's PRs speaks for a ref* is the mistake
+match a branch to a PR itself, but deciding _which of a goal's PRs speaks for a ref_ is the mistake
 the type exists to make unrepeatable.
 
 Each row carries the branch, the part's position, that ref's PR with the CI policy's own verdict, and
@@ -376,7 +376,7 @@ By default the list shows only goals with a branch of their own. Everything else
 integration branch, which is one choice however many goals offer it; `show every goal` reveals them.
 
 **The filter and the empty state are counted off one population**, and that is a fix rather than a
-tidiness: the count was taken over the *targets* while the rows were taken over the join of the goals
+tidiness: the count was taken over the _targets_ while the rows were taken over the join of the goals
 on screen and their targets, so the two could disagree — and in the case that mattered they disagreed
 the wrong way round. Nothing drawn, nothing hidden by the count's reckoning, so no checkbox, under a
 message that said there was nothing to run. Both now read `holdingBack`, the difference between the
@@ -384,14 +384,14 @@ candidates and the rows, so the arm that says "tick it" is only ever drawn when 
 The other arms tell the two remaining cases apart — no goals on screen at all, or goals with nowhere
 to run — because "nothing to run" reads as a hidden filter to anybody who has just been offered
 one. The selection, the
-expander and the filter are local state and not `Place`: which row is highlighted is not *where you
-are*, and the panel itself is the place.
+expander and the filter are local state and not `Place`: which row is highlighted is not _where you
+are_, and the panel itself is the place.
 
 Three details are about the minutes a start takes rather than the state it ends in:
 
 - **The elapsed time is a clock, not "3m ago".** Rounded relative time sits on one value for ninety
   seconds, which on the one surface an operator is watching reads as a frozen screen. `stopping` gets
-  no clock: the only timestamp on the row is when the *run* started, and "Stopping · 18:04" reads as a
+  no clock: the only timestamp on the row is when the _run_ started, and "Stopping · 18:04" reads as a
   teardown that has been going for eighteen minutes.
 - **The stage line, under the header**, while starting **or** stopping — both are a session's turn with
   somebody watching, and a teardown that says nothing for a minute is the same failure at the other end
@@ -418,7 +418,7 @@ of the four is silent in both directions: missed by `liveLocalRun` the store let
 beside a live one, and missed by `endStaleLocalRuns` a row stays live across every restart for ever.
 `describeRun` in `src/mcp/desktopTools.ts` had a fifth copy and now calls `localRunIsLive`.
 A brand-new table needs no `ColumnMigrations`
-entry — but a table being new *once* does not keep it exempt
+entry — but a table being new _once_ does not keep it exempt
 ([14](14-persistence.md#migrations)), which is exactly what the usage columns cost: this table was new
 in #451 and had no entry, and the columns added in this change needed one. `url` is frozen as configured when the run started, so a later
 config edit does not rewrite what a past run reported.

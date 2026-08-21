@@ -124,6 +124,12 @@ export class AzureDevOpsSourceControlIntegration
             title: p.title,
             branch: p.branch,
             baseBranch: p.baseBranch,
+            // The commit the policies above evaluated against — what tells a check
+            // that was fixed from one that flaked (`src/knowledge/noticeDesk.ts`).
+            // Azure reports it as `lastMergeSourceCommit`, which is also what a
+            // completion has to quote back, so an empty string means "not reported"
+            // here exactly as it does there.
+            ...(p.lastMergeSourceCommit ? { headSha: p.lastMergeSourceCommit } : {}),
             ciStatus: aggregatePolicyCiStatus(policyEvals),
             ciChecks: listPolicyCiChecks(policyEvals, this.opts.policyChecks),
             unresolvedComments: buildUnresolvedComments(threads, viewer),

@@ -49,7 +49,12 @@ import { rejectionSignalQuery } from '../proposals/proposals.js';
 import { adoptedFactId } from '../store/knowledge.js';
 import type { Store } from '../store/store.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
-import { KNOWLEDGE_READ_LIMIT, renderKnowledgeBlock, renderScopedKnowledgeNote } from '../knowledge/block.js';
+import {
+  KNOWLEDGE_READ_LIMIT,
+  renderKnowledgeBlock,
+  renderScopedKnowledgeNote,
+  ridesSystemPrompt,
+} from '../knowledge/block.js';
 import { acceptanceCriteria, bySlug, partDepth, planIssueNumber } from '../plans/parts.js';
 import { planScopeDrift } from '../plans/scopeDrift.js';
 import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
@@ -1138,10 +1143,14 @@ function workItemStateRules(config: Config): CockpitState['config']['stateRules'
  * entry and its `check:test (windows)` entry, in one pass through the renderer.
  */
 function knowledgeDelivery(store: Store, limit: number): KnowledgeDeliveryView {
-  const block = renderKnowledgeBlock(store.askFacts({ scopes: ['fleet'], limit: KNOWLEDGE_READ_LIMIT }), limit);
+  const block = renderKnowledgeBlock(store.askFacts({ limit: KNOWLEDGE_READ_LIMIT }), limit);
   const byScope = new Map<string, KnowledgeFact[]>();
   for (const fact of store.askFacts({ limit: KNOWLEDGE_READ_LIMIT })) {
-    if (fact.scope === 'fleet') continue;
+    // What rides the block is out of the scoped half, through the renderers' own
+    // predicate rather than a scope test of this page's — a fact counted in both
+    // halves here would tell an operator a claim is sent twice when it is sent
+    // once, which is the drift this whole surface exists to make visible.
+    if (fact.scope === 'fleet' || ridesSystemPrompt(fact)) continue;
     byScope.set(fact.scope, [...(byScope.get(fact.scope) ?? []), fact]);
   }
   return {

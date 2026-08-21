@@ -1,11 +1,12 @@
 # 27 — Knowledge
 
-> **Status: partly built — phases 4–7 outstanding.** The store, its three axes, the corroboration
+> **Status: partly built — phases 5–7 outstanding.** The store, its three axes, the corroboration
 > count, the rejection bar and `supersedes` are running; any agent can write to and read from them
-> (`knowledge_propose`, `knowledge_ask`); delivery is wired, so an injected fleet claim is in every
-> agent's system prompt and a scope-matched one is in the task prompt of the dispatch it matches; and
-> the cockpit page is where an operator governs both. What is outstanding is notices, contradiction,
-> graduation and the cost reading — the sections marked below describe behaviour that does not exist.
+> (`knowledge_propose`, `knowledge_ask`, `knowledge_notice`); delivery is wired, so an injected claim
+> is in every agent's system prompt and a scope-matched one is in the task prompt of the dispatch it
+> matches; notices run, including the two the harness raises for itself; and the cockpit page is where
+> an operator governs all of it. What is outstanding is contradiction, graduation and the cost reading
+> — the sections marked below describe behaviour that does not exist.
 > [The phases](#the-phases) says what lands when. Per `docs/README.md`, a module that does not exist
 > yet is named in italics where a real one is backticked, and a phase landing deletes its row and
 > unmarks the part of this document it makes true. When the last row goes, so does this banner.
@@ -103,15 +104,26 @@ notices are a different animal in every respect that matters — see [Notices](#
 An expiring fact carries the moment it lapses, and a lapsed fact is answered to nobody — the row
 stays, saying what it said, but it is out of every read.
 
-> **Not yet built — [phase 4](#the-phases):** the resolution condition below, and the sweep that acts
-> on it. Today the clock is the whole mechanism, and an agent proposing an expiring fact says how long
-> it expects what it saw to still be true.
+An expiring fact may also carry a **resolution condition** the harness can evaluate: a check red on a
+branch other pull requests are based on resolves when that check goes green, not when a timer runs
+out. The clock is the backstop, not the mechanism. A timer alone either drops a notice while it is
+still true — and the fleet rediscovers it — or keeps one alive after the thing is fixed, which
+teaches every agent to disbelieve a check that is now genuinely failing. Both are silent.
 
-An expiring fact may also carry a **resolution condition** the harness can evaluate: `main` red on a
-check resolves when that check goes green, not when a timer runs out. The clock is the backstop, not
-the mechanism. A timer alone either drops a notice while it is still true — and the fleet
-rediscovers it — or keeps one alive after the thing is fixed, which teaches every agent to skip a
-check that is now genuinely failing. Both are silent.
+**A condition is the harness's to write and never an agent's**, and that is not a trust judgement: a
+condition is a mechanism rather than a sentence. Settling one means reading a world object pulse
+after pulse, and the only party that can promise to do that is the one already reading it. An agent
+naming a condition would be naming something nothing watches, and the notice would then be exactly
+what it was without one — a clock — while its row claimed otherwise. There is one condition kind
+today, `ci-check-green`: the named check passing on the named pull request. It is also met when that
+check stops being reported at all, and when the pull request leaves the open set — merged, which is
+the commonest way a red base branch stops being anybody's base. A check sitting at `pending` does
+**not** meet it: a re-run in flight is not a green one.
+
+A resolution **lapses** the notice rather than deleting or demoting it: a lapsed expiring fact is
+already out of every read while its row stays saying what it said, so resolution rides the mechanism
+the lifetime axis already has instead of adding a second way to be out of a prompt. The reach is
+untouched — `rejected` means _not true_, and a notice that was true this morning is not that.
 
 ### Reach — how far it carries
 
@@ -121,12 +133,12 @@ Reach is the state machine, and it is the whole of the governance.
 | ----------- | -------------------------------------------------- | --------------------------------------- |
 | `proposal`  | Nowhere. One agent said it and nothing has agreed. | An agent proposing.                     |
 | `lookup`    | Answered when asked; injected on a matching scope. | Two independent corroborations, or you. |
-| `injected`  | In front of every agent, before it reads any code. | **You, and only you.**                  |
+| `injected`  | In front of every agent, before it reads any code. | **You** — or two goals, for a notice.   |
 | `committed` | In the repository. **Out of every prompt.**        | A docs pull request landing.            |
 | `rejected`  | Nowhere, and barred from coming back.              | You.                                    |
 
 Two of those transitions belong to the fleet: an agent proposing, and corroboration carrying a
-proposal to `lookup`. The rest are the operator's, and the [page](#in-the-cockpit) is what they are
+proposal to `lookup` — or, for a [notice](#notices) and only a notice, to `injected`. The rest are the operator's, and the [page](#in-the-cockpit) is what they are
 reached through — promote, demote and reject through `POST /api/knowledge/facts/:id/reach`, and
 `committed` through the documentation pull request that is [phase 6](#the-phases).
 
@@ -147,7 +159,8 @@ hold.
 ## Corroboration
 
 A fact reaches `lookup` on **two corroborations from two different goals**, and never on an operator's
-absence of objection.
+absence of objection. The same two carry a _notice_ one further, to `injected` — see
+[Notices](#notices) for why a clock is what makes that difference.
 
 **The proposal is the first of the two.** An agent writing a claim down is making an observation, with
 words and a goal behind it, so it is recorded as a corroboration like any other — which is what makes
@@ -162,9 +175,6 @@ conversation through `spawn`'s `resumeSessionId` ([10](10-agent-runtimes.md)) �
 its own predecessor's claim is one agent counted twice, which is exactly the shape auto-promotion must
 not reward.
 
-> **Not yet built — [phase 4](#the-phases):** the harness corroborating for itself, below. Today every
-> corroboration is an agent's.
-
 **The harness is a better corroborator than a second agent**, wherever it can speak. Two agents are
 not independent if the second read the first's notice before forming its own view, and contamination
 is invisible in the count. But whether a check went red and then green on the same commit is a fact
@@ -172,6 +182,25 @@ the harness holds in `world_events` already, and whether a check is red on the b
 computes to send the base-branch-recovered notice. A harness observation is stronger evidence than an
 agreeing agent and cannot be contaminated by one, so it counts as a corroboration and, for the notice
 kinds it can evaluate, raises the notice itself.
+
+It is attributed like any other observation and to nothing it does not have: a harness corroboration
+carries the **goal** it was read on and no agent, task or session. `distinctCorroborators` counts by
+goal, so two readings of one check on two different pull requests are two corroborators — which is
+what carries a harness notice to `injected` — while two readings on one pull request stay one,
+exactly as an agent's two dispatches on one goal do. Its **words** are the reading itself, in the
+terms an operator can check: which check, which commit, which pull request, and what was true on the
+pulse before. That is what they read to decide whether the claim should have promoted, and a harness
+row that said only "observed by the harness" would be a count with nothing behind it.
+
+`src/knowledge/noticeDesk.ts` is where both live, and it is a **writer** of facts rather than a
+reader. It sits in the pulse above `decide` and above the executor, and that ordering is what it is
+for: the block a dispatch carries is rendered at launch, so a desk run below that point would raise a
+notice the agents dispatched on that pulse are not told, and settle one they are still told. It is
+the argument [24](24-environments.md#the-bench-asks-for-one-thing-at-a-time) makes about
+`DeliveryCloseOutDesk` running below `ValidationReadyDesk`, pointed the other way. It is not under
+`src/dispatcher/` for the reason nothing there reads a fact: `test/knowledge.test.ts` matches
+`proposeFact` over that directory as well as `askFacts`, so a writer put among the rules fails the
+same assertion a reader does.
 
 Corroborations are rows in their own table, each carrying the agent, the goal, the moment and **the
 agent's own words** — never a counter on the fact. The count is what promotes; the words are what an
@@ -228,10 +257,6 @@ from ever being found.
 
 ## Notices
 
-> **Not yet built — [phase 4](#the-phases).** The lifetime axis exists and an expiring fact lapses out
-> of every read, but nothing auto-promotes one, `knowledge_notice` does not exist, and no notice is
-> raised by the harness. Until it does, an expiring fact is governed exactly like any other.
-
 A notice is fleet-visible within minutes, on two corroborations, with no operator in the loop. It is
 the one path in this design where agents put text in front of the whole fleet by themselves, and
 everything below is about bounding what that can do.
@@ -250,19 +275,75 @@ smallest tier and the most time-critical, and a lookup is a **turn** — the cos
 few hundred bytes and no round trip. The long tail of permanent facts is the part that belongs behind
 a lookup, not this.
 
+Which is why **`injected` decides the prompt and the scope only excepts**. A notice is usually about
+one check, and a check that flakes flakes for the agent about to run it rather than only for the one
+already dispatched to fix it — so leaving a notice scoped would put it in front of exactly the agents
+who had already found out. `renderKnowledgeBlock` therefore carries every injected fact whatever its
+scope, and the one exception is a `goal:` scope, which is an exception about **lifetime** rather than
+audience: a goal fact is true of one goal and dies with it, so it is not merely irrelevant to the
+rest of the fleet but a claim about something most readers cannot see. It rides the task prompt of
+its own goal's dispatches, where it reaches everyone it is about. One predicate decides
+(`ridesSystemPrompt`), read by the block to filter _in_ and by the scoped note to filter _out_, so no
+fact is delivered twice and none falls between the two — two lists that merely agreed today would
+send one sentence twice, charged twice and read as two claims.
+
+**Its line in the block carries the fact's own dates and no clock.** "Lapses in three hours" is
+computed from _now_, which is different bytes on every launch — the cached prefix thrown away for a
+countdown, with nothing measuring the loss. So the line says `lapses <date>`, which is the fact's own
+`expiresAt`. A notice leaving the block when it lapses is a change that happens once per notice and
+is unavoidable; a countdown rendered into it is neither.
+
+**Notices are rendered first, and are therefore the last thing the cap drops.** They are the smallest
+tier and the most time-critical, and each one leaves the block by its own clock within days anyway.
+
 **Auto-promotion is bounded by lifetime, and that is the whole safety argument.** A notice may reach
 `injected` on corroboration alone because its blast radius is capped by its own clock; a permanent
 fleet-wide fact may not, because a stale line in every agent's prompt is a false instruction handed to
 every agent before it reads any code, and it fails silently. That is the argument
 `src/server/routes/lessons.ts` already makes about promotion being the feature, and nothing here
-weakens it.
+weakens it. It is stated once, in `autoReach` (`src/store/knowledge.ts`), and it reads the **clock**
+rather than the lifetime word: an expiring fact with no `expiresAt` would be a standing claim wearing
+the word, one missed validation away from being the thing the rule exists to refuse.
+
+**A notice reaches nobody until the moment it is injected**, and that is what stops its own delivery
+manufacturing its second voice. With one corroborator it is a `proposal`: answered to no
+`knowledge_ask`, riding no prompt, and shown only on the page an operator reads. The second goal to
+say it therefore cannot have read the first's — the contamination the count cannot see is closed by
+construction rather than by a rule somebody has to remember.
+
+### What the harness raises
+
+Two kinds, both **edge-triggered** — a transition between two consecutive world snapshots, never a
+state. A level-triggered raise would file the same observation on every pulse for as long as the
+condition held, and the corroborations are a record of observations rather than a counter.
+
+- **A check that went red and then green on the same commit.** The commit is the whole of it: red
+  followed by green is the ordinary shape of a _fix_, and calling that a flake would teach the fleet
+  to disbelieve every check anybody ever repaired. What separates them is whether anything was pushed
+  in between, which is `PullRequest.headSha` — GitHub's `head.sha`, Azure's `lastMergeSourceCommit`.
+  **A provider that does not report it gets silence**: absent means the harness cannot say, and a
+  flake claimed on that basis would be the notice teaching the fleet to ignore a genuinely broken
+  check. It carries no resolution condition, because the check is already green and no later reading
+  settles it — here the clock genuinely is the mechanism, which is why it is a short one.
+- **A check newly red on a branch other open pull requests are based on.** The harness computes that
+  relation already (`basePrOf`, `inheritedCiFailure` — [07](07-pull-requests.md)), and a rung whose
+  own CI is red for its base's reason is the case it exists for. This one names the branch, where the
+  flake notice names no goal at all: a different branch being red is a different fact, and folding two
+  of them together would let one team's broken base speak for another's. It is also what the
+  `ci-check-green` condition is anchored to.
+
+The claim a harness notice files carries **no pull request number**, and that is what makes the count
+mean anything: `claimsMatch` compares sentences, so a claim naming the goal it was seen on could
+never be corroborated by the same thing seen elsewhere, and a notice would need one pull request to
+flake twice before it reached anybody.
 
 ## Delivery: two prompts, not one
 
 Reach and scope interact, and the interaction decides **which** prompt a fact rides.
 
-- **The system prompt** carries the notices and the globally-injected fleet facts, rendered by
-  `renderKnowledgeBlock` (`src/knowledge/block.ts`) and threaded in by `src/system.ts`. It is
+- **The system prompt** carries every injected fact except a goal-scoped one — the notices and the
+  fleet's standing claims — rendered by `renderKnowledgeBlock` (`src/knowledge/block.ts`) and threaded
+  in by `src/system.ts`. Which fact rides which prompt is [one predicate](#notices). It is
   identical for every agent on every dispatch, which is what keeps it a cached prefix — the entire
   reason this lives there rather than in the task prompt. Nothing in it varies per run: no goal name,
   no branch, no agent id, and every date is the fact's own.
@@ -273,8 +354,9 @@ Reach and scope interact, and the interaction decides **which** prompt a fact ri
   ([10](10-agent-runtimes.md#the-knowledge-block)), and the Lessons panel's per-row "sent to agents"
   chip is that block's answer read back through the fact the lesson was adopted into.
 
-- **The task prompt** carries the facts whose scope matches _this_ dispatch — the `check:` facts for
-  the checks that are red, the `goal:` facts for the goal. These vary per dispatch and would destroy
+- **The task prompt** carries the facts whose scope matches _this_ dispatch and that the block is not
+  already carrying — the `lookup` facts for the checks that are red, and the goal's own. These vary
+  per dispatch and would destroy
   the cache in the system prompt. They are **appended**, exactly as `priorRemedies` is appended
   today, and for its reason: prompt templates are operator-overridable and `loadPromptTemplates`
   rejects only _unknown_ placeholders, so a `{knowledge}` token would be silently dropped by every
@@ -318,14 +400,22 @@ nothing until somebody vouches, and the gate is unchanged.
 | `knowledge_propose`    | **Any agent**   | Files a claim with its scope, lifetime and evidence — or records the caller as agreeing. |
 | `knowledge_ask`        | **Any agent**   | Returns facts matching a scope or a question.                                            |
 | _knowledge_contradict_ | **Any agent**   | Says an injected fact is contradicted, **with the amendment**. [Phase 5](#the-phases).   |
-| _knowledge_notice_     | **Any agent**   | Raises an expiring observation. [Phase 4](#the-phases).                                  |
+| `knowledge_notice`     | **Any agent**   | Raises an expiring observation, with the clock it is bounded by.                         |
 
 Before this, only `retro_submit` and `report_remedy` could propose a lesson, and the remedy arm only
 under one of four guard verdicts — so a planning agent, an assayer, a validator or an issue-work agent
 could not record what it learned at all except by surviving to a retrospective. That narrowness had no
 argument behind it.
 
-Both live tools are named in `MCP_PROTOCOL_ADDENDUM` rather than at a point of use — the choice
+`knowledge_notice` is deliberately its own tool rather than a flag on `knowledge_propose`, and for
+two reasons that are the same reason: the clock is required where `knowledge_propose` defaults to
+standing, so a notice cannot be filed without one by forgetting a field — which would be a standing
+fleet-wide claim filed by accident, the one thing agreement alone must never produce — and the
+description is where the observation-not-instruction rule is actually enforced, since nothing
+downstream can check it. What it validates is `validateFactProposal` with the lifetime supplied, not
+a second opinion about what a claim may be.
+
+All three live tools are named in `MCP_PROTOCOL_ADDENDUM` rather than at a point of use — the choice
 `test/mcpChannel.test.ts` forces on every tool. Every agent may write to this store and every agent
 may read it, so there is no one dispatch prompt that could name them.
 
@@ -350,7 +440,10 @@ front and which claim has its provenance open are both on `Place`
 ([17](17-cockpit.md#the-address-bar)): `?fact=<id>` is a link to what two agents actually saw, and a
 row held open in a `useState` works right up until the back button steps over it.
 
-The page reads top to bottom in the order things demand attention: **Live notices** with their clocks,
+The **Live notices** section says what a notice is and where one comes from — including that the
+harness raises its own, and that a row carrying a resolution condition ends when the world meets it
+rather than when its clock runs out. The page reads top to bottom in the order things demand
+attention: **Live notices** with their clocks,
 **Needs you** — the corroborated claims waiting on the one decision that is yours — then **Injected**,
 **On lookup**, **One voice**, **Committed to the repository**, and the **Rejected** tail. A row
 carries the claim, its scope as a reference, its corroboration count and its provenance, with the
@@ -393,7 +486,8 @@ actually being sent"); a store this size cannot be governed without it.
 - **No rule, desk or gate reads a fact.** Nothing is dispatched, held, or ranked because of one. A
   fact feeds prompts and a panel, and that is the whole of it — `src/remedies/remedies.ts` takes this
   stance already and it survives unchanged.
-- **Nothing auto-promotes to `injected` except a notice**, and a notice cannot outlive its clock.
+- **Nothing auto-promotes to `injected` except a notice**, and a notice cannot outlive its clock —
+  `autoReach` reads the clock itself rather than the lifetime word.
 - **Nothing auto-commits to the repository.** A docs pull request is a dispatch a person promotes,
   through the machinery `src/mcp/findings.ts` already has.
 
@@ -430,14 +524,14 @@ A fact leaves for one of two places, and they are not interchangeable.
 Ordered so each lands something usable and nothing before it is wasted. Every phase updates the part
 of this document it makes true.
 
-| #   | Lands                                                                                                                                                                | Depends on |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| 4   | Notices. `knowledge_notice`, expiry, resolution conditions, the always-injected tier, and the harness-written notices for same-commit red→green and base-branch red. | 3          |
-| 5   | Contradiction and amendment. `knowledge_contradict`, the amendment proposal, the contradiction ratio on the page.                                                    | 2, 3       |
-| 6   | Graduation. Committing a fact opens a documentation pull request through the `docs`-finding machinery, and the fact leaves every prompt when it lands.               | 2          |
-| 7   | Cost and drift. Dollars per dispatch on the page; stale `check:` scopes surfaced; lookup ask-counts.                                                                 | 3          |
+| #   | Lands                                                                                                                                                  | Depends on |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
+| 5   | Contradiction and amendment. `knowledge_contradict`, the amendment proposal, the contradiction ratio on the page.                                      | 2, 3       |
+| 6   | Graduation. Committing a fact opens a documentation pull request through the `docs`-finding machinery, and the fact leaves every prompt when it lands. | 2          |
+| 7   | Cost and drift. Dollars per dispatch on the page; stale `check:` scopes surfaced; lookup ask-counts.                                                   | 3          |
 
-Phases 1 to 3 — `src/store/knowledge.ts`, the axes, the bar, the two tools, the page an operator
-governs them from, and `src/knowledge/block.ts` with the two prompts it renders — have landed. That is
-the whole spine: a claim can be written, ruled on and delivered. 4 through 7 are independent of each
-other and can land in any order.
+Phases 1 to 4 — `src/store/knowledge.ts`, the axes, the bar, the three tools, the page an operator
+governs them from, `src/knowledge/block.ts` with the two prompts it renders, and
+`src/knowledge/noticeDesk.ts` with the notices the harness raises for itself — have landed. That is
+the whole spine: a claim can be written, ruled on, delivered, and expire. 5 through 7 are independent
+of each other and can land in any order.

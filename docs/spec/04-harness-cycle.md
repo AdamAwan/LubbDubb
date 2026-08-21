@@ -143,6 +143,16 @@ flowchart TD
    recorded, and **before** `decide`, which is where a later stage would read the graph from. A failure
    is recorded through `errors.record` and never fails the cycle — nothing reads the graph for a
    decision, so it must not be able to break the pulse.
+
+   Below the graph and the environment probes, and still above `decide`, `notices.run(prev, world)`
+   raises the knowledge notices the harness can see for itself and ends the ones the world has settled
+   ([27](27-knowledge.md#what-the-harness-raises)). It is handed the **pair** step 2's diff was taken
+   from, read before the baseline moved on, so the two cannot come to be looking at different pulses.
+   Its position is the point: the knowledge block a dispatch carries is rendered at launch, a few steps
+   below, so a notice raised under that line would not reach the agents dispatched on this pulse and
+   one settled under it would still reach them. It writes facts, staffs nobody, and no rule reads what
+   it writes.
+
 9. **Read the fleet and the store** — tasks, agents, open escalations, queued jobs, plans, plan parts,
    and the most recent 200 decisions. Immediately **above** the whole read,
    `fleet.resumeExpiredParks()` ends every usage-limit park whose reset time has passed, so an agent

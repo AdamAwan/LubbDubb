@@ -518,6 +518,12 @@ export class Store {
   setFactReach(id: string, reach: FactReach): KnowledgeFact | null {
     return this.knowledge.setFactReach(id, reach);
   }
+  listResolvableNotices(): KnowledgeFact[] {
+    return this.knowledge.listResolvableNotices();
+  }
+  resolveNotice(id: string): KnowledgeFact | null {
+    return this.knowledge.resolveNotice(id);
+  }
 
   // -- Remedies (why the fleet came back to a PR, and what settled it) --------
 

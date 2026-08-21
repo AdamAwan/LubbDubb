@@ -180,7 +180,8 @@ variable.
 ### The knowledge block
 
 Since #27 phase 3 the appended system prompt carries a third part: what the fleet **knows** about
-working this repository — the claims an operator has injected → [27](27-knowledge.md#delivery-two-prompts-not-one).
+working this repository — the claims an operator has injected, and (since phase 4) the notices two
+goals have seen → [27](27-knowledge.md#delivery-two-prompts-not-one).
 
 It replaced the lesson block rather than joining it, and that is the one thing to know about this
 section's history: a promoted lesson is mirrored into the knowledge base as an injected fleet claim
@@ -207,10 +208,19 @@ scoped to one goal or one check ride the **task** prompt for exactly that reason
 - **With nothing injected, nothing is appended at all** — not a header, not a newline. The argv is
   byte-identical to a build without the feature, which is what `test/lessons.test.ts` and
   `test/knowledgeBlock.test.ts` pin between them.
-- **Only an `injected` `fleet` claim is in it.** `lookup` is as far as two agents agreeing can carry
-  anything, so delivering one here would make corroboration an auto-promotion into every agent's
-  context — the arrival by the back door the whole reach machine exists to stop. A `check:` or `goal:`
-  claim an operator injects is not fleet-wide and rides the task prompt instead.
+- **Only an `injected` claim is in it, and never a goal-scoped one.** `lookup` is as far as two agents
+  agreeing can carry a standing claim, so delivering one here would make corroboration an
+  auto-promotion into every agent's context — the arrival by the back door the whole reach machine
+  exists to stop. `injected` is the reach that _means_ in front of every agent, so an injected
+  `check:` claim rides this block too: a check that flakes flakes for the agent about to run it, not
+  only for the one dispatched to fix it. The exception is a `goal:` claim, which dies with its goal
+  and rides that goal's own dispatches instead. One predicate decides — `ridesSystemPrompt` — and the
+  task-prompt append reads the same one inverted, so no claim is delivered twice and none falls
+  between them.
+- **A notice's line carries its lapse date and never a countdown.** Every date in this block is the
+  fact's own, and "lapses in three hours" would be computed from _now_ — different bytes on every
+  launch, which is the cached prefix thrown away for nothing that measures it. Notices render first
+  and are therefore the last thing the cap drops.
 - **Capped at `knowledgeBlockChars` (default 6,000), on characters rather than on a count**, since a
   claim runs from a line to 2,000 characters. Over the cap, whole facts are dropped **newest-vouched
   first surviving** — ordered by `ruledAt` descending, so what goes is the ruling most likely to have
