@@ -47,6 +47,23 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
+  // "No, wait" — buy `agentStallExtendMs` more before a stall park settles itself
+  // done (see `AgentManager.completeExpiredStalls`). The countdown is the operator's
+  // window to disagree with the harness's reading, and this is the disagreement:
+  // pressing it says only "I am looking at this", which is why it takes no note and
+  // records nothing. It refuses an agent that has no countdown running rather than
+  // reporting success over one — an operator told they had bought time on a run that
+  // is already over is worse off than one told they cannot.
+  app.post(
+    '/api/agents/:id/extend-stall',
+    checked({ params: IdParams }, async ({ params, reply }) => {
+      const result = agents.extendStallPark(params.id);
+      if (!result.ok) return reply.code(409).send({ error: result.error });
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, expiresAt: result.expiresAt };
+    }),
+  );
+
   // "The limit has cleared, carry on" — the one way out of a usage-limit park
   // (issue #318). It is not `respond`: there is no question and nothing to type,
   // and the session is usually gone, since `claude` exits with the exhausted

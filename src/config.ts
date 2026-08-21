@@ -415,6 +415,36 @@ export interface Config {
    */
   agentStallNudges: number;
   /**
+   * How long an *unannounced stop* stands parked in front of a person before the
+   * harness settles it as `done` itself, in milliseconds. 0 leaves it standing
+   * forever, which is the behaviour this replaced.
+   *
+   * The park is filed either way — the operator sees the item, its countdown, and
+   * the two controls on it — so this is not the harness deciding the stop was a
+   * finish. It is the harness reading the cost of being wrong in each direction and
+   * defaulting to the cheap one. A stop that survives the nudges is overwhelmingly
+   * an agent that finished and did not say so, and settling it costs nothing that
+   * cannot be recovered: `complete` keeps the branch, the commits and the pull
+   * request, releases the worktree slot rather than deleting the checkout, and the
+   * pulse dispatches again from the world if there is more to do. Standing there
+   * unanswered costs a live slot and a fee-paying agent for as long as nobody
+   * looks.
+   *
+   * Short by design (five minutes), because the window is not "how long until we
+   * are sure" — nothing gets surer while an agent sits idle — it is how long an
+   * operator watching the panel has to say "no, wait". `agentStallExtendMs` is what
+   * they say it with.
+   */
+  agentStallParkMs: number;
+  /**
+   * How much one press of Extend adds to a stall park's countdown, in
+   * milliseconds. Additive from *now*, so a card extended twice is fifteen minutes
+   * from the second press rather than thirty from the first — the operator is
+   * saying "give me another quarter of an hour", which is a claim about their own
+   * clock and not about the agent's.
+   */
+  agentStallExtendMs: number;
+  /**
    * How many times a *live* agent whose process dies mid-run is re-attached to
    * its own session before the harness settles it as failed (issue #318).
    *
@@ -674,6 +704,8 @@ const DEFAULTS: Config = {
   agentIdleWaitMs: 90_000,
   agentWaitingPatterns: [],
   agentStallNudges: 2,
+  agentStallParkMs: 300_000,
+  agentStallExtendMs: 900_000,
   agentResumeAttempts: 3,
   lessonBlockChars: 6_000,
   claudeCommand: 'claude',

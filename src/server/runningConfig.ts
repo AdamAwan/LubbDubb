@@ -110,6 +110,8 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
       'agentIdleWaitMs',
       'agentWaitingPatterns',
       'agentStallNudges',
+      'agentStallParkMs',
+      'agentStallExtendMs',
       'agentResumeAttempts',
       'lessonBlockChars',
       'whitelistedApprovals',

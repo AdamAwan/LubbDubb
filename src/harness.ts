@@ -187,7 +187,7 @@ interface HarnessDeps {
    * Resume as it did before. It staffs nobody and no rule reads what it writes: the
    * agent it wakes is one already holding its slot.
    */
-  fleet?: { resumeExpiredParks(): LimitResumeFailure[] };
+  fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
   /**
    * Clears "Needs you" items whose agent has died. Absent = no sweep (tests that
    * do not care), and then only the terminal-state listeners tidy. It settles
@@ -399,6 +399,21 @@ export class Harness extends EventEmitter {
           message: `Agent ${agentId} could not be resumed after its usage limit cleared; it stays parked`,
           detail: error,
         });
+      // The other park with an ending nobody has to decide, settled on the same
+      // terms and immediately below it. An agent that stopped without saying why,
+      // was asked and did not answer, and has since stood in front of the operator
+      // for `agentStallParkMs` without being answered there either, is recorded
+      // `done` — the click they were always going to make, made for them. It settles
+      // agents and dismisses their inbox rows; it staffs nobody, and no rule reads
+      // what it writes.
+      //
+      // Above the reads below for the resume's reason in reverse: an agent this
+      // settles must *stop* counting as live for the rest of the pulse, so the slot
+      // it was holding is one the dispatch decided a few lines down can use.
+      //
+      // Nothing is recorded here — each settle writes its own audit row, and the ids
+      // it returns are for a test to read rather than for the cycle.
+      this.deps.fleet?.completeExpiredStalls();
       const tasks = store.listTasks();
       // How long each open PR has been sitting on a reviewer. Folded here rather
       // than derived on read because it is the one reading about a *span*: the

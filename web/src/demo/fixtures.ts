@@ -1933,6 +1933,10 @@ export function buildDemoState(): DemoSeed {
     // than absent because the wire always ships it, and a surface that has never
     // seen the empty case is one that renders it wrong the first time it happens.
     parkedOnLimit: [],
+    // Nor is anybody stopped without saying why. Present-and-empty for
+    // `parkedOnLimit`'s reason: the wire always ships it, and the empty case is the
+    // one a surface renders wrong if it has never seen it.
+    stallParks: [],
     // The act behind the drafted-reply escalation below. It is what turns that
     // card from "type something" into "approve & send / reject": the draft was
     // written, and nothing goes out until you say so.

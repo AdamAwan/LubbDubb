@@ -2676,6 +2676,16 @@ delivery's reason and the correction the ticket gets, and an overrule with an em
 name on it. So the button is disabled rather than hidden until there is text, and the placeholder
 says which of the three arms needs it.
 
+A card raised by an **unannounced stop** carries a clock. The chip in its head reads `done in 4m 12s`
+and the row beside `Open agent transcript` gains **Give me 15 minutes** next to **Mark work done** —
+the harness settles that agent itself when the countdown runs out
+([10](10-agent-runtimes.md#when-nobody-answers-the-stop)), so the two controls are "zero now" and "not
+yet". The deadline comes from the wire's `stallParks` (agent id → expiry) by way of
+`view.stallExpiryByAgent`, never from reading the park's sentence — three parks wear the `waiting`
+status and only the fleet knows which is which, the same argument `parkedOnLimit` is shipped under.
+Every other card on this panel is a question somebody asked, and none of them counts down: a question
+that answers itself after five minutes is worse than no question at all.
+
 A **permission request** (`context.permission`, #130) renders the command and **Allow / Deny** instead
 of the answer box — the agent is blocked in a tool call, so the verdict goes to
 `POST /api/escalations/:id/permission`, not `/answer`. A **questionnaire** (`context.questions`) is the

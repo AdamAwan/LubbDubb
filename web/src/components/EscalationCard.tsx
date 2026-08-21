@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { AgentAskQuestion, Escalation, Proposal } from '../types.js';
-import { relTime, linkify } from './util.js';
+import { relTime, untilTime, linkify } from './util.js';
 import { renderMarkdown } from './markdown.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { QuestionnaireModal } from './QuestionnaireModal.js';
@@ -19,6 +19,8 @@ export function EscalationCard({
   onDismiss,
   onOpenAgent,
   onComplete,
+  onExtend,
+  stallExpiresAt,
   onViewPlan,
 }: {
   escalation: Escalation;
@@ -63,6 +65,15 @@ export function EscalationCard({
    * for direction — and often the direction is "you're finished".
    */
   onComplete?: (agentId: string) => Promise<unknown> | unknown;
+  /**
+   * When the harness will record this agent done by itself — set only for the park
+   * it applies to, an agent that ended a turn without saying whether it had
+   * finished. Everything else on this panel is a question somebody asked, and a
+   * question that expires is worse than no question at all.
+   */
+  stallExpiresAt?: string | null;
+  /** Buy more of that time. Offered only alongside {@link stallExpiresAt}. */
+  onExtend?: (agentId: string) => Promise<unknown> | unknown;
   /** Open the full plan behind a `plan` proposal — the card carries what it does, not how it is cut up. */
   onViewPlan?: (planId: string) => void;
 }) {
@@ -91,6 +102,9 @@ export function EscalationCard({
   // Only meaningful if the agent moved on *after* asking; a stamp from an earlier
   // park would call a brand-new question stale.
   const resumed = resumedAt != null && Date.parse(resumedAt) > Date.parse(escalation.createdAt);
+  // The countdown, drawn only where there is an agent to settle: a stall park is
+  // always attached to one, and a card without the agent has no control to offer.
+  const expiring = escalation.agentId && stallExpiresAt ? stallExpiresAt : null;
   const [headline, body] = splitPrompt(escalation.prompt);
   // The plan behind a `plan` proposal. Drawn as its own control below the body
   // rather than as one more ghost link among the agent actions: the card carries
@@ -132,6 +146,14 @@ export function EscalationCard({
             title={`The agent has made tool calls since asking (last ${relTime(resumedAt!, now)}), so it carried on rather than waiting. Probably safe to dismiss.`}
           >
             agent resumed
+          </span>
+        )}
+        {expiring && (
+          <span
+            className="chip small warn esc-expiry"
+            title="This agent stopped without saying whether it had finished, and did not answer when asked. Unless you say otherwise, the harness records it done when this runs out — its branch, commits and pull request are kept, and its worktree slot goes back to the fleet."
+          >
+            done in {untilTime(expiring, now)}
           </span>
         )}
         {signal && <span className="chip small">{linkify(signal, refUrls)}</span>}
@@ -198,6 +220,17 @@ export function EscalationCard({
               onClick={() => onComplete(escalation.agentId!)}
             >
               Mark work done
+            </AsyncButton>
+          ) : null}
+          {/* Only where a clock is actually running: an Extend button on a card with
+              no countdown would offer to postpone nothing, and 409. */}
+          {expiring && onExtend ? (
+            <AsyncButton
+              className="ghost small"
+              title="Hold the countdown for another fifteen minutes while you read the transcript. Nothing is decided by this."
+              onClick={() => onExtend(escalation.agentId!)}
+            >
+              Give me 15 minutes
             </AsyncButton>
           ) : null}
         </div>

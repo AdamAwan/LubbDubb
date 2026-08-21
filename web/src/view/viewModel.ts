@@ -134,6 +134,13 @@ export interface CockpitView {
    * offer the resume button off a sentence.
    */
   limitParked: ReadonlySet<string>;
+  /**
+   * agentId → when the harness will record that agent done itself, for the agents
+   * parked on an unannounced stop. A map rather than a set for the same reason the
+   * wire ships pairs: the card draws a countdown, and the answer to "is this one"
+   * is the same read as "until when".
+   */
+  stallExpiryByAgent: ReadonlyMap<string, string>;
   /** Artifacts agents flagged mid-run, grouped for the card and drawer. */
   flagsByAgent: ReadonlyMap<string, AgentFlag[]>;
   /** Every file agents wrote, grouped for the drawer's "files changed" list. */
@@ -325,6 +332,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
       openEscalations.flatMap((e) => (e.agentId ? ([[e.agentId, e]] as [string, Escalation][]) : [])),
     ),
     limitParked: new Set(state.parkedOnLimit),
+    stallExpiryByAgent: new Map(state.stallParks.map((p) => [p.agentId, p.expiresAt])),
     flagsByAgent: groupByAgent(state.flags),
     filesByAgent: groupByAgent(state.files),
     tailByAgent: input.tails,

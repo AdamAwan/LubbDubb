@@ -890,6 +890,12 @@ a.btn {
 .esc-time {
   margin-left: auto;
 }
+/* A running clock, so the digits must not shuffle the chip's width every second.
+   No colour of its own: it is a `warn` chip, and the tint comes from the token
+   layer with every other one. */
+.esc-expiry {
+  font-variant-numeric: tabular-nums;
+}
 /* The headline, and the measure every block of prose on this card is held to.
    `ch` rather than a pixel width because it is a reading measure and not a
    layout: the card is as wide as the panel it sits in — 1130px on the stamp

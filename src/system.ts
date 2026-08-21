@@ -620,6 +620,8 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     promptDelayMs: agentSetup.promptDelayMs,
     waitingPatterns: config.agentWaitingPatterns,
     stallNudges: config.agentStallNudges,
+    stallParkMs: config.agentStallParkMs,
+    stallExtendMs: config.agentStallExtendMs,
     resumable: agentSetup.resumable,
     resumeAttempts: config.agentResumeAttempts,
     statusFile: rateLimits ? (sessionId): string => rateLimits.fileFor(sessionId) : undefined,
@@ -969,7 +971,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         ? 'agent failed'
         : by === 'operator'
           ? 'operator marked the work complete'
-          : 'agent finished its work',
+          : by === 'expiry'
+            ? 'nobody answered the stop, so the harness recorded the work complete'
+            : 'agent finished its work',
     );
   });
 

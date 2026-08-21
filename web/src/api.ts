@@ -479,6 +479,9 @@ const realApi = {
   // End a usage-limit park: re-opens the agent's own conversation in its own
   // worktree and tells it to carry on. 409s for an agent parked on anything else.
   resumeAgent: (id: string) => post(`/api/agents/${id}/resume`),
+  // Push a stall park's countdown out by `agentStallExtendMs`. 409s for an agent
+  // that has no countdown running — it was answered, dismissed or has ended.
+  extendStall: (id: string) => post<{ ok: true; expiresAt: string }>(`/api/agents/${id}/extend-stall`),
 };
 
 /**

@@ -177,6 +177,7 @@ export function useCockpit(): CockpitStatus {
       interruptAgent: (id) => api.interruptAgent(id).then(() => undefined),
       respondAgent: (id, text) => api.respondAgent(id, text).then(() => undefined),
       resumeAgent: (id) => then(api.resumeAgent(id)),
+      extendStall: (id) => then(api.extendStall(id)),
 
       answerEscalation: (id, text) => then(api.answerEscalation(id, text)),
       answerQuestions: (id, answers) => then(api.answerQuestions(id, answers)),

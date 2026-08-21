@@ -1175,6 +1175,23 @@ class DemoServer {
     return { ok: true };
   }
 
+  /**
+   * Buy fifteen more minutes before a stall park settles itself. The demo world
+   * holds no stall parks, so this is the refusal arm made visible rather than a
+   * second copy of the clock: the real route 409s an agent with no countdown, and a
+   * demo that silently succeeded would teach the panel a shape the server never
+   * sends.
+   */
+  async extendStall(id: string): Promise<{ ok: true; expiresAt: string }> {
+    const park = this.state.stallParks.find((p) => p.agentId === id);
+    const expiresAt = new Date(Date.now() + 900_000).toISOString();
+    if (park) {
+      park.expiresAt = expiresAt;
+      this.dirty();
+    }
+    return { ok: true, expiresAt };
+  }
+
   async interruptAgent(id: string): Promise<{ ok: true }> {
     this.append(id, '\n^C interrupt received');
     return { ok: true };
@@ -3124,6 +3141,7 @@ export const demoApi = {
   completeAgent: (id: string) => getServer().completeAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),
   resumeAgent: (id: string) => getServer().resumeAgent(id),
+  extendStall: (id: string) => getServer().extendStall(id),
 };
 
 export function connectDemoWs(onEvent: (ev: unknown) => void, onStatus?: (connected: boolean) => void): WsClient {

@@ -23,6 +23,7 @@ import type {
   Remedy,
   ScratchEntry,
   ShortfallCause,
+  StallPark,
   Task,
   BugFiling,
 } from '../types.js';
@@ -140,6 +141,14 @@ interface AgentManagerOptions {
    */
   stallNudges?: number;
   /**
+   * `agentStallParkMs` — how long an unannounced stop stands parked in front of a
+   * person before the harness settles it `done` itself. Unset or 0 means it stands
+   * until somebody acts on it, which is the behaviour this replaced.
+   */
+  stallParkMs?: number;
+  /** `agentStallExtendMs` — what one press of Extend adds to that countdown. */
+  stallExtendMs?: number;
+  /**
    * Whether this runtime can capture a session id and be resumed after a restart.
    * True only for the interactive PTY `claude`; the mock and stream runtimes leave
    * agents without a session id, so boot reconciliation falls back to interrupting.
@@ -187,6 +196,16 @@ interface LimitPark {
   resetsAt: string | null;
 }
 
+/**
+ * Who reached a terminal. `agent` is the sentinel or a clean exit, `operator` is
+ * the cockpit's "Mark work done", and `expiry` is a stall park whose countdown ran
+ * out with nobody having said otherwise ({@link AgentManager.completeExpiredStalls}).
+ * They record identically — the run really did finish — and are told apart only
+ * where the *provenance* matters: the dismissal wording on the escalation the park
+ * left open, and the audit row.
+ */
+type TerminalBy = 'agent' | 'operator' | 'expiry';
+
 /** A park whose window turned over but which could not be resumed. */
 export interface LimitResumeFailure {
   agentId: string;
@@ -200,12 +219,13 @@ interface AgentManagerEvents {
   autoAnswered: [{ agentId: string; taskId: string; reason: string; response: string }];
   /**
    * `by` distinguishes the agent declaring itself finished (a sentinel, a clean
-   * exit) from an operator declaring it so through {@link AgentManager.complete}.
-   * The record is identical either way — that is the point — but only the second
-   * leaves an escalation nobody can answer, so the composition root needs to tell
-   * them apart to dismiss it.
+   * exit) from one declared so through {@link AgentManager.complete} — by an
+   * operator's click, or by a stall park's countdown running out. The record is
+   * identical for all three — that is the point — but the latter two leave an
+   * escalation nobody can answer, so the composition root needs to tell them apart
+   * to dismiss it, and to say which of them did it.
    */
-  done: [{ agentId: string; taskId: string; status: AgentStatus; by: 'agent' | 'operator' }];
+  done: [{ agentId: string; taskId: string; status: AgentStatus; by: TerminalBy }];
   /**
    * The agent finished (done/failed) *and* its OS process has actually exited —
    * the two arrive in either order (PTY: sentinel first, exit later; stream:
@@ -314,6 +334,17 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   // nobody told. In memory because it describes this launch's conversation; a
   // resume starts the budget over, which is the same fresh start the agent gets.
   private readonly nudges = new Map<string, number>();
+  // agentId -> when its *unannounced-stop* park settles itself as done, epoch ms.
+  // A subset of `parked` with a third kind of ending, beside a limit park's window
+  // turning over and a question park's answer: nobody has to do anything, and if
+  // nobody does, the stop is read as the finish it almost always is.
+  //
+  // Only a stop the nudges could not settle is entered here. A park an agent asked
+  // for — the `escalate` tool, the WAITING sentinel — is a real question, and a
+  // question that answers itself after five minutes is worse than no question at
+  // all. In memory for `limited`'s reason: it describes a park *this process* is
+  // holding, and a restart hands the same rows to the recovery desk instead.
+  private readonly stalled = new Map<string, number>();
 
   constructor(
     private readonly store: Store,
@@ -603,6 +634,79 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     return [...this.limited.keys()];
   }
 
+  /**
+   * Every unannounced-stop park this process is holding, and when each settles
+   * itself — what the cockpit draws the countdown from.
+   *
+   * Asked of the fleet rather than derived from the rows, for `limitedAgentIds`'
+   * reason: all three parks are `waiting` with a sentence on the row, and a cockpit
+   * that told them apart by reading the sentence would be one wording change away
+   * from putting a countdown on a question nobody is counting down.
+   */
+  stallDeadlines(): StallPark[] {
+    return [...this.stalled].map(([agentId, at]) => ({ agentId, expiresAt: new Date(at).toISOString() }));
+  }
+
+  /**
+   * "No, wait" — push a stall park's countdown out by `agentStallExtendMs`.
+   *
+   * From *now* rather than from the deadline, because the operator is making a
+   * claim about their own clock ("give me another quarter of an hour to look at
+   * this"), not adding time to the agent's. Two presses a minute apart are
+   * therefore fifteen minutes from the second, not thirty from the first.
+   *
+   * Only a park that is actually counting can be extended: an agent that has since
+   * been answered, dismissed, killed or finished has no clock, and returning `ok`
+   * for one would tell the operator they had bought time on a run that is already
+   * over.
+   */
+  extendStallPark(agentId: string): { ok: true; expiresAt: string } | { ok: false; error: string } {
+    if (!this.stalled.has(agentId)) return { ok: false, error: 'this agent is not parked on an unannounced stop' };
+    const at = Date.now() + (this.opts.stallExtendMs ?? 0);
+    this.stalled.set(agentId, at);
+    const expiresAt = new Date(at).toISOString();
+    debugLog('agent', `stall park extended agent=${agentId} until=${expiresAt}`);
+    return { ok: true, expiresAt };
+  }
+
+  /**
+   * Settle every stall park whose countdown has run out — the harness reading an
+   * unanswered stop as the finish it almost always was.
+   *
+   * The sibling of {@link resumeExpiredParks}, and the same shape of act: a park
+   * with an ending nobody has to decide, ended off the pulse instead of waiting for
+   * a person to come back and press the button they were always going to press. It
+   * is not a *verdict* about the work — it is the observation that a stop which
+   * survived the nudges and then survived the operator's own window is not one
+   * anybody is going to answer, and that leaving it standing costs a live slot and a
+   * running agent for as long as nobody looks.
+   *
+   * **Nothing here is destructive, which is what makes the default safe.**
+   * {@link complete} keeps the branch, its commits and its pull request, releases
+   * the worktree slot rather than deleting the checkout, and settles the task
+   * `done`; if there is more to do, the world says so and the pulse dispatches for
+   * it again. The countdown is the operator's window to say otherwise, not the
+   * harness's confidence.
+   *
+   * An agent that is no longer live has already ended some other way — the
+   * escalation it left is dismissed by the terminal listeners — so its clock is
+   * simply dropped, not an error: there is nothing to settle and nobody to tell.
+   *
+   * Returns the ids it settled, for the caller to log.
+   */
+  completeExpiredStalls(): string[] {
+    const now = Date.now();
+    const settled: string[] = [];
+    // Copied before iterating: `complete` deletes from the map it walks.
+    for (const [agentId, at] of [...this.stalled]) {
+      if (at > now) continue;
+      debugLog('agent', `stall park expired agent=${agentId}`);
+      if (this.complete(agentId, 'expiry')) settled.push(agentId);
+      else this.stalled.delete(agentId);
+    }
+    return settled;
+  }
+
   /** Type text into a live agent (a human response or a follow-up prompt). */
   respond(agentId: string, text: string): boolean {
     const session = this.sessions.get(agentId);
@@ -610,6 +714,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     session.send(text);
     this.parked.delete(agentId); // the park is over; the next ask is a new one
     this.limited.delete(agentId); // ...including a limit park an operator typed straight past
+    this.stalled.delete(agentId); // ...and a stall park an answer overtook: it is working again
     this.store.setAgentResumed(agentId, null); // answered, so "it carried on anyway" is spent
     this.store.updateAgent(agentId, { status: 'running', waitingReason: null });
     return true;
@@ -1267,6 +1372,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     this.releaseMcp(agentId); // the credential dies with the agent, not with the process
     this.parked.delete(agentId);
     this.limited.delete(agentId); // a killed agent's park is over, and nothing may resume it
+    this.stalled.delete(agentId); // ...as is its countdown; there is nothing left to settle
     this.store.flushTranscript(agentId); // make the killed agent's transcript durable
     const agent = this.store.getAgent(agentId);
     this.store.updateAgent(agentId, { status: 'killed', endedAt: new Date().toISOString(), pid: null });
@@ -1304,7 +1410,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * since re-labelling a settled record is a different question with a different
    * answer. Returns false in that case, which the route turns into a 409.
    */
-  complete(agentId: string): boolean {
+  complete(agentId: string, by: 'operator' | 'expiry' = 'operator'): boolean {
     const session = this.sessions.get(agentId);
     if (!session) return false;
     const agent = this.store.getAgent(agentId);
@@ -1318,15 +1424,23 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     // canonical value back off the record keeps a caller's string out of both.
     const id = agent.id;
     session.kill();
-    this.handleTerminal(id, agent.taskId, 'done', 'operator');
+    this.handleTerminal(id, agent.taskId, 'done', by);
     // Audited under the cycle id the cockpit reads as yours, the way an act decided
     // outside a pulse already is. No proposal: there is nothing to authorize — the
     // act is the operator's own and already taken, where a proposal is a standing
     // verdict a rule re-reads every pulse.
     const task = this.store.getTask(agent.taskId);
     this.store.recordDecision({
-      cycleId: `human:${id}`,
-      action: { type: 'no_op', reason: 'operator marked the work complete' },
+      // `human:` for the click and `stall:` for the countdown, because the audit log
+      // is read to answer "who ended this run" and the two answers are different.
+      cycleId: `${by === 'operator' ? 'human' : 'stall'}:${id}`,
+      action: {
+        type: 'no_op',
+        reason:
+          by === 'operator'
+            ? 'operator marked the work complete'
+            : 'an unannounced stop stood unanswered until its park expired',
+      },
       outcome: 'executed',
       detail: `Marked agent ${id} done (task ${agent.taskId}${task?.originRef ? `, ${task.originRef}` : ''})`,
     });
@@ -1700,6 +1814,16 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       }
     }
     this.handleWaiting(agentId, task, stallReason(lastWords));
+    // Armed *after* the park and only if the park took: `handleWaiting` auto-answers
+    // a whitelisted reason and returns with the agent running, and an agent already
+    // parked on a question of its own keeps that park — neither is a stop waiting on
+    // a clock. Read off the latch rather than from what we just did, because both of
+    // those arms are decided in there.
+    const window = this.opts.stallParkMs ?? 0;
+    if (window > 0 && this.parked.has(agentId) && !this.limited.has(agentId)) {
+      this.stalled.set(agentId, Date.now() + window);
+      debugLog('agent', `stall park armed agent=${agentId} window=${window}ms`);
+    }
   }
 
   private handleWaiting(agentId: string, task: Task, reason: string, ask?: AgentAsk): void {
@@ -1827,6 +1951,10 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    */
   releasePark(agentId: string): void {
     this.parked.delete(agentId);
+    // Dismissing the alert is the operator saying the stop is not theirs to settle,
+    // so the countdown goes with it: it is the clock on *that* item, and one left
+    // running would finish an agent nobody is looking at any more.
+    this.stalled.delete(agentId);
     this.store.setAgentResumed(agentId, null);
   }
 
@@ -1848,7 +1976,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     agentId: string,
     taskId: string,
     status: 'done' | 'failed',
-    by: 'agent' | 'operator' = 'agent',
+    by: TerminalBy = 'agent',
     /** Appended to the recorded failure, e.g. how many automatic resumes were spent. */
     failureNote?: string,
   ): void {
@@ -1856,6 +1984,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     this.parked.delete(agentId);
     this.limited.delete(agentId);
     this.nudges.delete(agentId);
+    this.stalled.delete(agentId);
     this.store.flushTranscript(agentId); // make the finished agent's transcript durable
     this.store.updateAgent(agentId, { status, endedAt: new Date().toISOString(), pid: null });
     this.store.updateTask(taskId, { status });

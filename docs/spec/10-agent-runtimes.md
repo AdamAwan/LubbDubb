@@ -323,7 +323,61 @@ thing said rather than the first. The blank line is load-bearing — the cockpit
 splits a prompt on the first one into a headline and a body ([17](17-cockpit.md)), so the quote reads
 as evidence under the claim rather than as part of it.
 
-Tests: `test/stallNudge.test.ts` (the nudge, the budget, the quoted park, the parked-agent guard),
+#### When nobody answers the stop
+
+The park is filed, and it is **counting down**. `agentStallParkMs` after it is raised (five minutes by
+default) the harness settles the agent itself, through the very `complete` the operator's own button
+calls — task `done`, worktree slot released, the escalation dismissed on the way out with "nobody
+answered the stop, so the harness recorded the work complete".
+
+This is not the harness deciding the stop was a finish. It is the harness reading the cost of being
+wrong in each direction and defaulting to the cheap one:
+
+- The population has not changed since the nudge was written. A stop that survived being asked
+  directly, three exits stated, is overwhelmingly an agent that finished and did not say so — and the
+  operator's answer to nearly every one of these cards is the Mark work done button.
+- **Nothing about settling one is irrecoverable.** `complete` keeps the branch, its commits and its
+  pull request; it releases the worktree _lease_ rather than deleting the checkout
+  ([09](09-execution.md#the-lease)); and the harness is world-driven, so if there is more to do the
+  world still says so and the pulse dispatches for it again.
+- Standing there unanswered is not free. A parked agent counts as live, so it holds a slot against the
+  cap the entire time — an hour of nobody looking is an hour of the fleet being one agent smaller,
+  with a fee-paying process sitting in the worktree.
+
+So the countdown is the operator's window to _disagree_, not the harness's confidence, and it is short
+for exactly that reason: nothing about an idle agent gets surer with time. What they disagree with it
+in is **Extend** (`POST /api/agents/:id/extend-stall`), which adds `agentStallExtendMs` — a quarter of
+an hour — from *now* rather than from the deadline, because the operator is making a claim about their
+own clock and not about the agent's. Two presses a minute apart are fifteen minutes from the second,
+not thirty from the first.
+
+Three things about which parks count down:
+
+- **Only the unannounced stop.** A park an agent _asked_ for — the `escalate` tool, the WAITING
+  sentinel — is a real question, and a question that answers itself after five minutes is worse than
+  no question at all. `handleStalled` arms the clock, and only after `handleWaiting` has actually
+  parked: a whitelisted auto-answer left the agent running, and an agent already parked on a question
+  of its own keeps that park.
+- **Nor a limit park.** That one has its own ending — the window turning over — and settling it `done`
+  would throw away a conversation the account will be able to continue in an hour.
+- **In memory, like `limited`**, because it describes a park _this process_ is holding. A restart
+  drops every one of them, at which point the same rows are the recovery desk's question and its
+  verdicts are the ones on offer.
+
+It runs off the pulse, in `AgentManager.completeExpiredStalls`, immediately below `resumeExpiredParks`
+and above the reads the dispatcher decides from — the sibling ordering argument in reverse: an agent
+this settles must _stop_ counting as live for the rest of the pulse, so the slot it was holding is one
+the same cycle's dispatch can use. `agentStallParkMs: 0` turns the whole thing off and restores the
+park that stands until somebody acts on it.
+
+The cockpit draws the clock as a `done in 4m 12s` chip on the escalation card, off the wire's
+`stallParks` — the agent id and the deadline, asked of the fleet rather than read off the row's
+sentence, for the reason `parkedOnLimit` is ([17](17-cockpit.md)). The card carries both verbs beside
+the transcript link: Mark work done, which is the countdown reaching zero now, and Give me 15 minutes,
+which is not.
+
+Tests: `test/stallNudge.test.ts` (the nudge, the budget, the quoted park, the parked-agent guard, the
+countdown settling itself, the extend, and the two parks that never count down),
 `test/streamJsonSession.test.ts` and `test/streamQueuedTurn.test.ts` (the runtime's half — which event
 a turn end produces, and on whose text).
 

@@ -71,7 +71,8 @@ flowchart TD
         CLOSE --> SCHED["fire due schedules — a recurrence queues an ordinary job,<br/>above the read below so it dispatches this same pulse"]
         SCHED --> GRAPH["record the work graph — after the reconciler, before decide"]
         GRAPH --> LIMIT["end the usage-limit parks whose window has turned over,<br/>above the read below so a woken agent reads as running this pulse"]
-        LIMIT --> TIDY["tidy the inbox — dismiss the questions whose agent has died,<br/>immediately above the read that ships them"]
+        LIMIT --> STALL["settle the stall parks whose countdown has run out —<br/>an unanswered stop is recorded done, and its slot goes back to the fleet"]
+        STALL --> TIDY["tidy the inbox — dismiss the questions whose agent has died,<br/>immediately above the read that ships them"]
         TIDY --> READ["read the fleet and the store<br/>tasks, agents, escalations, queued jobs, plans and parts,<br/>verdicts, proposals, overrides, the last 200 decisions"]
         READ --> ANN["announce the assay's question on the ticket · record issue runs"]
         ANN --> HR["compute headroom — paused ? 0 : cap - live agents,<br/>both read by reference"]
@@ -150,8 +151,15 @@ flowchart TD
    wakes must read as `running` for the rest of this pulse, not appear parked to the burn watch and
    the state snapshot one more time. It claims no headroom — a parked agent counts as live throughout
    its park, so it has held its own slot since it was dispatched — and a resume that fails is recorded
-   through `errors.record` with the park put back for the next pulse. Immediately above the escalation
-   read,
+   through `errors.record` with the park put back for the next pulse. Immediately below it,
+   `fleet.completeExpiredStalls()` does the same job for the other park with an ending nobody has to
+   decide: an agent that stopped without saying why, was asked and did not answer, and has since stood
+   in front of the operator for `agentStallParkMs` is recorded `done` — the click they were going to
+   make, made for them ([10](10-agent-runtimes.md#when-nobody-answers-the-stop)). Its position is the
+   resume's argument in reverse: an agent it settles must **stop** counting as live for the rest of
+   this pulse, so the slot it was holding is one the dispatch below can use. It settles agents and
+   dismisses their inbox rows; it staffs nobody, and no rule reads what it writes. Immediately above
+   the escalation read,
    `escalations.tidyDeadAgents()` dismisses every open question whose agent has left the fleet — the
    backstop to the terminal-state listeners in `src/system.ts`, so a dead agent's un-answerable card is
    off "Needs you" on this pulse rather than never
