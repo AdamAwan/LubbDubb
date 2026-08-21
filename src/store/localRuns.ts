@@ -1,6 +1,18 @@
 import { randomUUID } from 'node:crypto';
 import type { StoreContext } from './context.js';
-import type { LocalRun, LocalRunStatus } from '../types.js';
+import type { ColumnMigrations } from './migrate.js';
+import type { CostDelta, LocalRun, LocalRunStatus, LocalRunUsageDelta } from '../types.js';
+
+export const LOCAL_RUN_COLUMNS: ColumnMigrations = {
+  local_runs: {
+    cost_usd: 'REAL',
+    input_tokens: 'INTEGER',
+    output_tokens: 'INTEGER',
+    cache_read_tokens: 'INTEGER',
+    cache_creation_tokens: 'INTEGER',
+    num_turns: 'INTEGER',
+  },
+};
 
 /**
  * Live means the harness believes something is holding an environment up — including
@@ -59,6 +71,12 @@ export class LocalRunStore {
       note: null,
       startedAt: now,
       endedAt: null,
+      costUsd: null,
+      inputTokens: null,
+      outputTokens: null,
+      cacheReadTokens: null,
+      cacheCreationTokens: null,
+      numTurns: null,
     };
     const write = this.ctx.db.transaction(() => {
       this.ctx.db
@@ -117,6 +135,78 @@ export class LocalRunStore {
   }
 
   /**
+   * Add one session's usage since its own last report, and date the money.
+   *
+   * **Adds rather than folds**, which is the one thing here that differs from
+   * `recordAgentUsage` and the whole reason this is not that method. An `agents` row
+   * has exactly one session behind it, so a cumulative report can be written straight
+   * on. A local run has up to two — the session that brought the environment up, and
+   * the one spawned to take it down when that one is gone
+   * ([23](../../docs/spec/23-local-runs.md#stopping-is-a-turn-not-a-signal)) — and the
+   * second one's cumulative total starts at zero. Written on, it would replace a run's
+   * $2.00 with $0.15; clamped as a delta, it would report nothing at all. Both are
+   * silent, and both under-report the money that was actually spent.
+   *
+   * A null field adds nothing and leaves the column as it was, so a report carrying a
+   * cost and no cache split does not write a zero share — the same distinction
+   * `rowToAgent` keeps between an unmeasured column and a measured zero.
+   */
+  addLocalRunUsage(id: string, delta: LocalRunUsageDelta): void {
+    const existing = this.ctx.db
+      .prepare(
+        `SELECT cost_usd, input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, num_turns
+           FROM local_runs WHERE id = ?`,
+      )
+      .get(id) as LocalRunUsageRow | undefined;
+    if (existing === undefined) throw new Error(`Local run ${id} not found`);
+    const add = (was: number | null, more: number | null): number | null => (more === null ? was : (was ?? 0) + more);
+    this.ctx.db
+      .prepare(
+        `UPDATE local_runs SET cost_usd = @costUsd, input_tokens = @inputTokens, output_tokens = @outputTokens,
+                cache_read_tokens = @cacheReadTokens, cache_creation_tokens = @cacheCreationTokens,
+                num_turns = @numTurns WHERE id = @id`,
+      )
+      .run({
+        id,
+        costUsd: add(existing.cost_usd, delta.costUsd),
+        inputTokens: add(existing.input_tokens, delta.inputTokens),
+        outputTokens: add(existing.output_tokens, delta.outputTokens),
+        cacheReadTokens: add(existing.cache_read_tokens, delta.cacheReadTokens),
+        cacheCreationTokens: add(existing.cache_creation_tokens, delta.cacheCreationTokens),
+        numTurns: add(existing.num_turns, delta.numTurns),
+      });
+    if (delta.costUsd !== null && delta.costUsd > 0)
+      this.ctx.db
+        .prepare(`INSERT INTO local_run_cost_deltas (local_run_id, cost_usd, at) VALUES (?, ?, ?)`)
+        .run(id, delta.costUsd, this.ctx.now());
+  }
+
+  /** What local runs have cost since `sinceIso` — half of the rolling window sum. */
+  sumLocalRunCostSince(sinceIso: string): number {
+    const row = this.ctx.db
+      .prepare(`SELECT COALESCE(SUM(cost_usd), 0) AS total FROM local_run_cost_deltas WHERE at >= ?`)
+      .get(sinceIso) as { total: number };
+    return row.total;
+  }
+
+  /** The same rows unaggregated, oldest first — half of the spend timeline. */
+  listLocalRunCostDeltasSince(sinceIso: string): CostDelta[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT cost_usd, at FROM local_run_cost_deltas WHERE at >= ? ORDER BY at`)
+      .all(sinceIso) as { cost_usd: number; at: string }[];
+    return rows.map((r) => ({ costUsd: r.cost_usd, at: r.at }));
+  }
+
+  /**
+   * Every run the table holds, newest first — for the spend rollups, which price a
+   * goal over its whole history rather than over what is up now.
+   */
+  listLocalRuns(): LocalRun[] {
+    const rows = this.ctx.db.prepare(`SELECT * FROM local_runs ORDER BY started_at DESC`).all() as LocalRunRow[];
+    return rows.map(toLocalRun);
+  }
+
+  /**
    * Mark every live row stopped — the boot sweep.
    *
    * A row saying `running` after a restart is a claim about a process this harness
@@ -147,6 +237,22 @@ interface LocalRunRow {
   note: string | null;
   started_at: string;
   ended_at: string | null;
+  cost_usd: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cache_read_tokens: number | null;
+  cache_creation_tokens: number | null;
+  num_turns: number | null;
+}
+
+/** Just the usage columns, for the read {@link LocalRunStore.addLocalRunUsage} adds onto. */
+interface LocalRunUsageRow {
+  cost_usd: number | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cache_read_tokens: number | null;
+  cache_creation_tokens: number | null;
+  num_turns: number | null;
 }
 
 function toLocalRun(row: LocalRunRow): LocalRun {
@@ -161,6 +267,14 @@ function toLocalRun(row: LocalRunRow): LocalRun {
     note: row.note,
     startedAt: row.started_at,
     endedAt: row.ended_at,
+    // Null on every row written before these columns existed, and on every run of a
+    // PTY deployment — which has no usage channel at all. Unmeasured, not free.
+    costUsd: row.cost_usd ?? null,
+    inputTokens: row.input_tokens ?? null,
+    outputTokens: row.output_tokens ?? null,
+    cacheReadTokens: row.cache_read_tokens ?? null,
+    cacheCreationTokens: row.cache_creation_tokens ?? null,
+    numTurns: row.num_turns ?? null,
   };
 }
 

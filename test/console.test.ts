@@ -1076,6 +1076,7 @@ test('a goal with no measured spend draws no spend row rather than $0.00', () =>
           originRef: `issue:${page.issue.number}`,
           issueNumber: page.issue.number,
           costUsd: 6.4,
+          localRuns: 0,
           inputTokens: 0,
           outputTokens: 0,
           agents: 7,
@@ -1084,6 +1085,29 @@ test('a goal with no measured spend draws no spend row rather than $0.00', () =>
     },
   });
   assert.ok(measured.includes('$6.40'), 'a measured goal states what it cost');
+  assert.ok(!measured.includes('Local runs'), 'a goal nobody ran locally names no such row');
+
+  // The total holds a local run's money, so the card has to name it: the row above
+  // says "Agents", and a figure that outruns the agents behind it reads as an error.
+  const previewed = render({
+    ...v,
+    goalPage: {
+      ...page,
+      issue: {
+        ...page.issue,
+        spend: {
+          originRef: `issue:${page.issue.number}`,
+          issueNumber: page.issue.number,
+          costUsd: 7.1,
+          localRuns: 2,
+          inputTokens: 0,
+          outputTokens: 0,
+          agents: 7,
+        },
+      },
+    },
+  });
+  assert.ok(previewed.includes('Local runs'), 'money no agent spent has to be accounted for on the card');
 
   const unmeasured = render({ ...v, goalPage: { ...page, issue: { ...page.issue, spend: null } } });
   assert.ok(!unmeasured.includes('$0.00'), 'null is "never measured", not zero');
@@ -1227,6 +1251,26 @@ test('the local run panel names the ref each goal would run', () => {
   // nobody asked.
   const orphan = runnable.find((t) => t.target.pr === null);
   if (orphan) assert.ok(html.includes('no pull request of its own'));
+});
+
+/**
+ * What the environment currently up has cost. It is the one spend figure an operator
+ * sees while the money is still being spent, and it is on the panel rather than only
+ * in the breakdown because that is where the decision to keep it running is made.
+ */
+test('the local run panel states what the run holding the environment has cost', () => {
+  const v = view({ consolePanel: 'localRun' });
+  const run = v.state.localRun;
+  assert.ok(run?.costUsd != null, 'the demo fixture must carry a measured run');
+  const html = decode(render(v));
+  assert.ok(html.includes(`$${run.costUsd.toFixed(2)}`), 'the run’s own cost is not on the panel');
+
+  // Unmeasured is not free: a PTY deployment reports no usage at all, and $0.00 there
+  // would be the panel inventing a reading.
+  const unmeasured = decode(
+    render({ ...v, state: { ...v.state, localRun: { ...run, costUsd: null, numTurns: null } } }),
+  );
+  assert.ok(!unmeasured.includes('$0.00'), 'null is "never measured", not zero');
 });
 
 /**

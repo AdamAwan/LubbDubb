@@ -780,10 +780,12 @@ nobody wrote up: "no retrospective" is an ordinary answer here, not a missing re
 The breakdown behind the cost indicators: the same money split by phase, by goal and over a
 fortnight, plus the coverage caveat. Returns `{ insights }` — see
 [18](18-observability.md#the-spend-breakdown) for what each split means and why the phases are a
-partition.
+partition. A `SpendRun` carries `id` and `kind` rather than an `agentId`, because a run in that
+ranking can be a **local run** ([23](23-local-runs.md#what-it-costs)) and an id of one kind sitting in
+a field named for the other is a join nobody can see fail.
 
-Fetched on open for `/api/work`'s reason: it reads **every agent the harness has ever run** and every
-dated cost delta of the last fourteen days, where `/api/state` comes round every couple of seconds for
+Fetched on open for `/api/work`'s reason: it reads **every agent the harness has ever run**, every
+local run it has recorded, and every dated cost delta of the last fourteen days, where `/api/state` comes round every couple of seconds for
 every open cockpit. What the indicators themselves need — the rolling windows, and each goal's own
 total — is already on the snapshot and costs nothing.
 

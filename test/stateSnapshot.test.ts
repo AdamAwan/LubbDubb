@@ -252,6 +252,36 @@ test('buildStateSnapshot with no baseline ships an empty world, not a live fetch
 });
 
 /**
+ * A goal's cost is not only its agents'. A local run is a Claude Code session on the
+ * same account, and its origin is the goal — so the figure on the card has to hold it
+ * or the panel behind the card states more money than the card it was opened from.
+ */
+test('buildStateSnapshot puts a local run’s spend on the goal it ran', async () => {
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
+  system.connector.inject({ kind: 'new_issue', number: 31, title: 'A goal somebody looked at' });
+  failPlanningOpen(system.store, 31);
+  system.store.setWorldBaseline(await system.connector.getState());
+
+  const run = system.store.beginLocalRun({ originRef: 'issue:31', ref: 'issue/31', dir: '/preview', url: null });
+  system.store.addLocalRunUsage(run.id, {
+    costUsd: 0.8,
+    inputTokens: 4000,
+    outputTokens: 200,
+    cacheReadTokens: null,
+    cacheCreationTokens: null,
+    numTurns: 5,
+  });
+
+  const snap = await buildStateSnapshot(system);
+  const issue = snap.world.issues.find((i) => i.number === 31);
+  assert.equal(issue?.spend?.costUsd, 0.8);
+  // The count the goal page prints as "Agents" stays agents; the run is named beside it.
+  assert.equal(issue?.spend?.agents, 0);
+  assert.equal(issue?.spend?.localRuns, 1);
+  system.store.close();
+});
+
+/**
  * Where the local run could be pointed, and — the whole discipline of the view —
  * what has happened on **that ref** and nothing else.
  *

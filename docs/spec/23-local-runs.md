@@ -244,6 +244,46 @@ instead trades away the one guarantee that a tracked file the last run edited is
 that is worth pulling is `localRun.instruction` itself — a stack that starts fewer things, named as a
 command rather than as an interactive skill with a phase per turn — and it belongs to the operator.
 
+## What it costs
+
+A local run is a Claude Code session, and a long one: it holds the environment for as long as somebody
+is looking at it, and its teardown is a second turn. That is money on the same account the fleet is
+billed to, and for the feature's first three revisions no surface in the cockpit had heard of it.
+
+The reading arrives for free. The stream runtime emits `usage` at every turn end — cumulative cost,
+tokens and turns off the `result` event ([10](10-agent-runtimes.md)) — and the runner now listens:
+`absorb` takes a session's usage the same way it takes its output. The PTY runtime has no such channel,
+so **every local run of a `agentMode: 'pty'` deployment is unmeasured**, which is the null the columns
+carry rather than a zero ([18](18-observability.md#usage-accounting)).
+
+**The row accumulates; it is not folded.** Every other usage figure the harness holds is a session's
+cumulative report written straight onto a row, because an `agents` row has exactly one session behind
+it. A local run has **up to two** — the one that brought the environment up, and the one spawned to
+take it down when that one is gone ([above](#stopping-is-a-turn-not-a-signal)). A fresh session's
+cumulative total starts at zero, so a cumulative write would replace a run's $2.00 with the teardown's
+$0.15, and a delta clamped at zero would report the teardown as free. Both under-report, and both do it
+silently. So the runner holds each session's last report in that session's own closure, and
+`Store.addLocalRunUsage` **adds** the difference.
+
+The delta is also dated, in `local_run_cost_deltas` — for the reason `usage_events` exists at all: a
+row says what a run came to and never when the money went, so a rolling window or a trend can only be
+read off deltas ([18](18-observability.md#the-spend-breakdown)).
+
+### Where it shows
+
+- **On the panel**, beside the ref: what the run holding the environment has cost so far, climbing as
+  it comes up. It is the one spend figure an operator sees while the money is still being spent, which
+  is where the decision to keep it running is made. Absent, not `$0.00`, when nothing was measured.
+- **On the goal**, folded into `Issue.spend` — a local run's origin *is* the goal, so it attributes by
+  name with no lineage hop ([18](18-observability.md#per-goal-spend)). The count is
+  `IssueSpend.localRuns`, kept apart from `agents` because the goal page prints that figure as
+  "Agents" and a local run is not one.
+- **In the spend breakdown**, as the `local` phase — its own row in the partition, so "what is
+  previewing costing me" is answerable and the phases still sum to the total.
+- **In the 5h/7d gauges and the pets' beats**, because `Store.sumUsageCostSince` adds both tables.
+  One figure for what this deployment spent; the panel and the gauge an operator opened it from cannot
+  disagree.
+
 ## Two triggers, one owner
 
 | From                | How                                                                    |
@@ -368,7 +408,10 @@ Three details are about the minutes a start takes rather than the state it ends 
 ## Persistence
 
 `local_runs`, one row per run, `src/store/localRuns.ts`. `id`, `origin_ref`, `ref`, `dir`, `pid`,
-`status`, `url`, `note`, `started_at`, `ended_at`. Which statuses count as **live** is declared once,
+`status`, `url`, `note`, `started_at`, `ended_at`, and the six usage columns
+(`cost_usd`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_creation_tokens`,
+`num_turns`) — all nullable, all declared in `LOCAL_RUN_COLUMNS`, because the table predates them.
+`local_run_cost_deltas` holds the dated deltas beside it. Which statuses count as **live** is declared once,
 in `LIVE`, and the SQL derives its `IN` clause from it — it used to be written out as
 `('starting', 'running')` in three statements with `LIVE` read by nobody, and adding a status to three
 of the four is silent in both directions: missed by `liveLocalRun` the store lets a second run begin
@@ -376,7 +419,8 @@ beside a live one, and missed by `endStaleLocalRuns` a row stays live across eve
 `describeRun` in `src/mcp/desktopTools.ts` had a fifth copy and now calls `localRunIsLive`.
 A brand-new table needs no `ColumnMigrations`
 entry — but a table being new *once* does not keep it exempt
-([14](14-persistence.md#migrations)). `url` is frozen as configured when the run started, so a later
+([14](14-persistence.md#migrations)), which is exactly what the usage columns cost: this table was new
+in #451 and had no entry, and the columns added in this change needed one. `url` is frozen as configured when the run started, so a later
 config edit does not rewrite what a past run reported.
 
 ## Tests
@@ -392,7 +436,11 @@ writes the row and appends the rules; a merged goal runs from the integration br
 is the environment up and kills nothing; a failure keeps what the session last said; a stop reaps
 before it signals, asserted as an **order** rather than as a pair; a second goal supersedes the first;
 a restart settles what it cannot vouch for; the newest `phase:` line is the stage and the output
-between two of them leaves it standing; the stage goes when the environment comes up and when the run
+between two of them leaves it standing; what the session spends lands on the run and a cumulative second report is not
+counted twice; a teardown by a **fresh** session adds to the run rather than replacing it; a run that
+reported nothing stays unmeasured; a local run's money is in the rolling window, dated, and not among
+the agents' own deltas; a database from before the usage columns reads them as null and can still be
+written; the stage goes when the environment comes up and when the run
 is stopped; `localRunRef`'s two arms; and — against a real repository — that a change of ref keeps
 ignored files and drops everything else, and that an unresolvable ref leaves the checkout untouched.
 

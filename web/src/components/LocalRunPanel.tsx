@@ -2,7 +2,7 @@ import { useEffect, useState, type JSX } from 'react';
 import type { Issue, LocalRunRefFacts, LocalRunTargetView, LocalRunView } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Ref } from './refs.js';
-import { elapsed, relTime } from './util.js';
+import { elapsed, fmtUsd, relTime } from './util.js';
 
 /** How often the tail is refetched while the run is live. */
 const POLL_MS = 2000;
@@ -159,6 +159,10 @@ export function LocalRunPanel({
           {run !== null && (
             <p className="lrun-meta">
               <Ref to={run.originRef} /> · <code>{run.ref}</code>
+              {/* What the sessions behind this run have cost — the bring-up's and, once
+                  it has run, the teardown's. Absent rather than $0.00 when nothing was
+                  measured: a PTY deployment reports no usage at all. */}
+              {run.costUsd !== null && <> · {fmtUsd(run.costUsd)}</>}
               {run.url !== null && (
                 <>
                   {' · '}

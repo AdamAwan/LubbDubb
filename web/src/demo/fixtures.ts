@@ -121,7 +121,7 @@ function demoCheck(
 }
 
 /** A worked goal's spend, in the shape the roll-up ships it. */
-function demoSpend(issueNumber: number, costUsd: number, agents: number): Issue['spend'] {
+function demoSpend(issueNumber: number, costUsd: number, agents: number, localRuns = 0): Issue['spend'] {
   return {
     originRef: `issue:${issueNumber}`,
     issueNumber,
@@ -129,6 +129,7 @@ function demoSpend(issueNumber: number, costUsd: number, agents: number): Issue[
     inputTokens: Math.round(costUsd * 180_000),
     outputTokens: Math.round(costUsd * 9_000),
     agents,
+    localRuns,
   };
 }
 
@@ -673,7 +674,7 @@ export function buildDemoState(): DemoSeed {
           // Still running, and the figure with it: a decomposed goal's spend is the
           // planner plus every part, which is exactly what one number per goal is
           // for — no card anywhere else adds those up.
-          spend: demoSpend(390, 18.42, 7),
+          spend: demoSpend(390, 19.16, 7, 2),
         }),
         demoIssue({
           id: 'iss-371',
@@ -755,7 +756,7 @@ export function buildDemoState(): DemoSeed {
             by: 'assessor',
             decidedAt: ago(4),
           },
-          spend: demoSpend(382, 4.2, 3),
+          spend: demoSpend(382, 4.38, 3, 1),
         }),
         // Attempted twice and failed twice: the dispatcher is waiting out the
         // re-dispatch gap rather than spending a third agent on the same minute.
@@ -994,6 +995,14 @@ export function buildDemoState(): DemoSeed {
       note: 'Up on :5173. Seeded the sample invoices — the instruction did not mention that step.',
       startedAt: ago(18),
       endedAt: null,
+      // What the session holding it up has cost so far — one of the two runs the
+      // spend panel's #390 row counts.
+      costUsd: 0.22,
+      inputTokens: 39_600,
+      outputTokens: 1_980,
+      cacheReadTokens: 30_800,
+      cacheCreationTokens: 2_420,
+      numTurns: 4,
       live: true,
       // An environment that is already up has nothing in flight to caption. The
       // phase is what a bring-up shows *while* it is happening — press Start in the

@@ -29,6 +29,10 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     return {
       insights: buildSpendInsights({
         agents: store.listAgents(),
+        // The fleet is not the only thing spending: a local run is a session on the
+        // same account, and leaving it out here would put the panel's total below the
+        // gauge the operator opened it from.
+        localRuns: store.listLocalRuns(),
         tasks: store.listTasks(),
         nodes: store.listWorkNodes(),
         // Titles only, and a goal missing from the baseline still gets its row —
@@ -37,7 +41,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         // moment it closes, and the harness's own record of what it worked does not.
         issues: store.getWorldBaseline()?.issues ?? [],
         runs: store.listIssueRuns(),
-        usageEvents: store.listUsageEventsSince(spendTimelineSince(now)),
+        costDeltas: store.listCostDeltasSince(spendTimelineSince(now)),
         // The same two sums `buildUsage` puts on the snapshot, asked the same way,
         // so the panel and the chip an operator opened it from state one figure.
         fiveHourCostUsd: store.sumUsageCostSince(iso(5 * 60 * 60 * 1000)),
@@ -69,6 +73,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
       trend: buildSpendTrend({
         goals: buildSpendGoals({
           agents,
+          localRuns: store.listLocalRuns(),
           tasks: store.listTasks(),
           nodes: store.listWorkNodes(),
           issues: world?.issues ?? [],

@@ -5,7 +5,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { rollUpIssueSpend } from '../src/issueSpend.js';
-import type { Agent, Task, WorkNode } from '../src/types.js';
+import type { Agent, LocalRun, Task, WorkNode } from '../src/types.js';
 import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
@@ -61,6 +61,28 @@ function task(id: string, originRef: string | null): Task {
   };
 }
 
+function localRun(id: string, originRef: string, over: Partial<LocalRun> = {}): LocalRun {
+  return {
+    id,
+    originRef,
+    ref: 'feature/x',
+    dir: '/preview',
+    pid: 2,
+    status: 'stopped',
+    url: null,
+    note: null,
+    startedAt: T,
+    endedAt: T,
+    costUsd: 1,
+    inputTokens: 1000,
+    outputTokens: 100,
+    cacheReadTokens: null,
+    cacheCreationTokens: null,
+    numTurns: 4,
+    ...over,
+  };
+}
+
 function node(ref: string, parentRef: string | null, kind: WorkNode['kind'] = 'pr'): WorkNode {
   return {
     ref,
@@ -93,6 +115,7 @@ test('the whole issue subtree is one goal, deliberation included', () => {
       task('d', 'issue:12:part:auth'),
     ],
     nodes: [],
+    localRuns: [],
   });
   const spend = byIssue.get('issue:12')!;
   assert.equal(spend.costUsd, 7.75);
@@ -108,6 +131,7 @@ test('a goal keeps its own spend, and issue:120 is not issue:12', () => {
     agents: [agent('a', { costUsd: 1 }), agent('b', { costUsd: 3 })],
     tasks: [task('a', 'issue:12'), task('b', 'issue:120')],
     nodes: [],
+    localRuns: [],
   });
   assert.equal(byIssue.get('issue:12')!.costUsd, 1);
   assert.equal(byIssue.get('issue:120')!.costUsd, 3);
@@ -121,6 +145,7 @@ test("a pull request's agents are charged to the goal that produced it, sub-refs
     tasks: [task('ci', 'pr:41:ci'), task('rev', 'pr:41:comments'), task('conf', 'pr:41:mergeable')],
     // The part's PR, two levels down: the walk has to climb both edges.
     nodes: [node('pr:41', 'issue:12:part:auth'), node('issue:12:part:auth', 'issue:12', 'part')],
+    localRuns: [],
   });
   assert.equal(byIssue.get('issue:12')!.costUsd, 1.5);
   assert.equal(byIssue.get('issue:12')!.agents, 3);
@@ -132,6 +157,7 @@ test('a job reaches its goal only once the graph has adopted it', () => {
     agents: [agent('j', { costUsd: 2 })],
     tasks: [task('j', 'job:job_x')],
     nodes: [node('job:job_x', null, 'job')],
+    localRuns: [],
   });
   assert.equal(orphan.byIssue.size, 0);
   assert.equal(orphan.unattributedCostUsd, 2, 'a job nobody linked is the remainder, never a goal');
@@ -140,9 +166,52 @@ test('a job reaches its goal only once the graph has adopted it', () => {
     agents: [agent('j', { costUsd: 2 })],
     tasks: [task('j', 'job:job_x')],
     nodes: [node('job:job_x', 'issue:12', 'job')],
+    localRuns: [],
   });
   assert.equal(adopted.byIssue.get('issue:12')!.costUsd, 2);
   assert.equal(adopted.unattributedCostUsd, 0);
+});
+
+// -- the second spender: local runs ------------------------------------------
+
+test('a local run is the goal’s money too, counted apart from its agents', () => {
+  const { byIssue, localRunAttribution } = rollUpIssueSpend({
+    agents: [agent('a', { costUsd: 2 })],
+    tasks: [task('a', 'issue:12')],
+    nodes: [],
+    // Its origin *is* the goal, so it needs no lineage hop — the one thing about a
+    // local run that makes it the simplest source here.
+    localRuns: [localRun('r1', 'issue:12', { costUsd: 0.5 }), localRun('r2', 'issue:12', { costUsd: 0.25 })],
+  });
+  const spend = byIssue.get('issue:12')!;
+  assert.equal(spend.costUsd, 2.75, 'one figure: it was one goal’s work being looked at');
+  assert.equal(spend.agents, 1, 'and the count the cockpit prints as “Agents” stays agents');
+  assert.equal(spend.localRuns, 2);
+  assert.equal(localRunAttribution.get('r1'), 12);
+});
+
+test('a local run of nothing the graph knows lands in the remainder', () => {
+  const { byIssue, unattributedCostUsd, localRunAttribution } = rollUpIssueSpend({
+    agents: [],
+    tasks: [],
+    nodes: [],
+    localRuns: [localRun('r1', 'job:42', { costUsd: 0.6 })],
+  });
+  assert.equal(byIssue.size, 0);
+  assert.equal(unattributedCostUsd, 0.6, 'never dropped — a partition with a visible remainder');
+  assert.equal(localRunAttribution.get('r1'), null);
+});
+
+test('an unmeasured local run is no row and no count', () => {
+  // Every local run on a PTY deployment: the runtime has no usage channel, so the
+  // row carries nulls for ever. A count without money would read as a free preview.
+  const { byIssue } = rollUpIssueSpend({
+    agents: [],
+    tasks: [],
+    nodes: [],
+    localRuns: [localRun('r1', 'issue:12', { costUsd: null, inputTokens: null, outputTokens: null, numTurns: null })],
+  });
+  assert.equal(byIssue.size, 0);
 });
 
 // -- the remainder, and what is deliberately not counted ---------------------
@@ -152,6 +221,7 @@ test('spend that reaches no goal is shipped as the remainder, never dropped', ()
     agents: [agent('a', { costUsd: 1 }), agent('x', { costUsd: 0.3 }), agent('y', { costUsd: 0.7 })],
     tasks: [task('a', 'issue:12'), task('x', null), task('y', 'pr:99:ci')],
     nodes: [], // pr:99 is in no graph: nothing says which goal it came out of
+    localRuns: [],
   });
   assert.equal(byIssue.get('issue:12')!.costUsd, 1);
   assert.equal(unattributedCostUsd, 1);
@@ -167,6 +237,7 @@ test('a runtime that measured nothing contributes no row and no agent count', ()
     ],
     tasks: [task('p', 'issue:12'), task('q', 'issue:12')],
     nodes: [],
+    localRuns: [],
   });
   assert.equal(byIssue.size, 0, 'no measurement is not a zero measurement');
 });
@@ -180,6 +251,7 @@ test('a token-only report still counts, and float sums stay readable', () => {
     ],
     tasks: [task('a', 'issue:7'), task('b', 'issue:7'), task('c', 'issue:7')],
     nodes: [],
+    localRuns: [],
   });
   const spend = byIssue.get('issue:7')!;
   assert.equal(spend.costUsd, 0.3, 'not 0.30000000000000004');
@@ -195,6 +267,7 @@ test('a cycle in the lineage cannot hang the walk', () => {
     agents: [agent('a', { costUsd: 1 })],
     tasks: [task('a', 'pr:1:ci')],
     nodes: [node('pr:1', 'pr:2'), node('pr:2', 'pr:1')],
+    localRuns: [],
   });
   assert.equal(byIssue.size, 0);
   assert.equal(unattributedCostUsd, 1);
