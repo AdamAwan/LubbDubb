@@ -1,6 +1,7 @@
 import type {
   AppState,
   Agent,
+  SetupPayload,
   TaskSummary,
   AgentFlag,
   AgentFile,
@@ -36,6 +37,15 @@ export interface CockpitView {
   connected: boolean;
   /** True when serving the bundled fixtures rather than a real harness. */
   demo: boolean;
+  /**
+   * What the harness says about its own configuration, or null when it could not
+   * say — which is drawn as nothing, exactly as a fully-configured harness is.
+   *
+   * Fetched rather than polled (see `useCockpit`), so it is on the view rather
+   * than off `state`: the snapshot is what the pulse persisted, and a reading that
+   * shells out to git has no business riding it.
+   */
+  setup: SetupPayload | null;
 
   /** Work the previous run orphaned. Non-empty ⇒ the harness is holding every pulse. */
   crashed: OrphanedWork[];
@@ -220,6 +230,7 @@ interface ViewInputs {
   now: number;
   connected: boolean;
   demo: boolean;
+  setup: SetupPayload | null;
   selected: string | null;
   liveOutput: ReadonlyMap<string, string>;
   tails: ReadonlyMap<string, string>;
@@ -293,6 +304,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     now,
     connected: input.connected,
     demo: input.demo,
+    setup: input.setup,
 
     crashed,
     live,

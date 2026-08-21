@@ -7,6 +7,10 @@
 // Kept side-effect-free at module scope: the real build imports this file but the
 // `VITE_DEMO` branch in api.ts is statically false there, so Rollup drops it.
 import type {
+  ConfigChange,
+  SetupCheck,
+  SetupPayload,
+  SetupResolvePayload,
   TicketRow,
   QueueItem,
   TicketsPayload,
@@ -2986,6 +2990,170 @@ async function demoWorkSubtree(ref: string): Promise<{ nodes: WorkNodeView[]; re
   return { nodes, refUrls };
 }
 
+// ---- Setup, scripted -------------------------------------------------------
+//
+// The demo's repository is the one its whole world is built on:
+// `example/markdown-magpie`, cloned over SSH, with a project file its "team"
+// committed. The two checks that are *not* green are the two the real reading
+// most often finds outstanding on a first run, and they are the reason the
+// surface exists — a fleet that is idle and correct, and a stray key that moves
+// every agent onto API billing.
+
+const DEMO_REPO_ROOT = '/Users/you/code/markdown-magpie';
+const DEMO_ORIGIN = 'git@github.com:example/markdown-magpie.git';
+
+/** Whether the demo's setup flow has been run this session. Flips the reading. */
+let demoSetupWritten = false;
+
+/** The demo's `lubbdubb.config.json`, as bytes. Replaced by a save. */
+let demoConfigText = '{}\n';
+
+/** The file a given set of edits would produce — the demo's stand-in for the server's splice. */
+function demoConfigTextFor(set: Record<string, unknown>): string {
+  const lines = Object.entries(set).map(([path, value]) => `  ${JSON.stringify(path)}: ${JSON.stringify(value)}`);
+  return `{\n  "//": "Written by Setup. Every key is OPTIONAL; the project file underneath this one wins nothing — this file wins key by key.",\n\n${lines.join(',\n')}\n}\n`;
+}
+
+/** Every edited key, reported as landed-but-waiting. See the note on `saveConfig`. */
+function demoChanges(set: Record<string, unknown>): ConfigChange[] {
+  return Object.entries(set).map(([path, value]) => ({ path, from: undefined, to: value, applied: false }));
+}
+
+function demoSetupReading(): SetupPayload {
+  const checks: SetupCheck[] = demoSetupWritten
+    ? [
+        {
+          id: 'pointed',
+          label: 'Pointed at real work',
+          verdict: 'ok',
+          detail: 'issues via github, source control via github',
+        },
+        { id: 'credential', label: 'Credential', verdict: 'ok', detail: 'GITHUB_TOKEN present' },
+        { id: 'identity', label: 'Who you are', verdict: 'ok', detail: 'userId is you' },
+        {
+          id: 'watch',
+          label: 'Something to work',
+          verdict: 'warn',
+          detail:
+            'none of the 12 open item(s) carries magpie-watch, so nothing is eligible and the fleet will correctly do nothing.',
+          remedy: 'Tag something from the Tickets tab, or create magpie-watch on the tracker.',
+        },
+        { id: 'agent', label: 'Agent runtime', verdict: 'ok', detail: 'stream · 2.1.4' },
+        {
+          id: 'billing',
+          label: 'Model billing',
+          verdict: 'bad',
+          detail:
+            'ANTHROPIC_API_KEY is set, and agents inherit it — in non-interactive mode the CLI uses the key whenever it is present, with no prompt, so every agent bills the API rather than the login.',
+          remedy: 'Unset it in the shell that starts the harness unless that is what you meant.',
+        },
+      ]
+    : [
+        {
+          id: 'pointed',
+          label: 'Pointed at real work',
+          verdict: 'warn',
+          detail: 'No config file at all, so this is the shipped mock: a fake tracker and a fake agent.',
+          remedy: 'Answer the two questions and Setup will write the file.',
+        },
+        { id: 'credential', label: 'Credential', verdict: 'ok', detail: 'the fake provider needs none' },
+        {
+          id: 'identity',
+          label: 'Who you are',
+          verdict: 'warn',
+          detail:
+            'userId is unset, so all three ownership gates are off: any tagger counts, filed tickets go unassigned, and every open pull request is surfaced.',
+          remedy: 'Setup resolves it from your email against the provider.',
+        },
+        {
+          id: 'watch',
+          label: 'Something to work',
+          verdict: 'unknown',
+          detail: 'no cycle has read the world yet, so there is nothing to count.',
+        },
+        {
+          id: 'agent',
+          label: 'Agent runtime',
+          verdict: 'warn',
+          detail: 'agentMode is raw, the mock — a dispatch writes a transcript and never calls a model.',
+          remedy: 'Set agentMode to stream.',
+        },
+        {
+          id: 'billing',
+          label: 'Model billing',
+          verdict: 'bad',
+          detail:
+            'ANTHROPIC_API_KEY is set, and agents inherit it — in non-interactive mode the CLI uses the key whenever it is present, with no prompt, so every agent bills the API rather than the login.',
+          remedy: 'Unset it in the shell that starts the harness unless that is what you meant.',
+        },
+      ];
+  return {
+    pointed: demoSetupWritten,
+    configFile: '/Users/you/code/LubbDubb/lubbdubb.config.json',
+    configFileExists: demoSetupWritten,
+    prefill: { email: 'you@example.com', repoRoot: '/Users/you/code/LubbDubb' },
+    checks,
+    outstanding: checks.filter((check) => check.verdict !== 'ok').length,
+  };
+}
+
+function demoSetupResolution(answers: { email: string; repoRoot: string }): SetupResolvePayload {
+  // The scripted repository answers only to its own path — so pointing the demo
+  // somewhere else shows the *other* half of the design: a directory that could
+  // not be read, said out loud rather than papered over with the fake provider.
+  const found = answers.repoRoot.trim() === DEMO_REPO_ROOT;
+  if (!found) {
+    return {
+      repoRoot: answers.repoRoot,
+      originUrl: null,
+      isRepo: false,
+      target: null,
+      defaultBranch: null,
+      identity: {
+        email: answers.email,
+        userId: null,
+        confidence: 'unknown',
+        why: 'no provider yet — nothing to resolve a login against',
+      },
+      credential: { variable: null, present: false },
+      project: { file: null, keys: [] },
+      watch: { label: 'lubbdubb-watch', fromProject: false },
+      writes: { repoRoot: answers.repoRoot, agentMode: 'stream', maxConcurrentAgents: 1 },
+    };
+  }
+  const login = answers.email.split('@')[0] || 'you';
+  return {
+    repoRoot: DEMO_REPO_ROOT,
+    originUrl: DEMO_ORIGIN,
+    isRepo: true,
+    target: { provider: 'github', parts: ['example', 'markdown-magpie'], url: DEMO_ORIGIN },
+    defaultBranch: { name: 'main', commit: '4f2a91c8e0d3b7a15c9f2e6d40b81a7c3e5f9d02' },
+    identity: {
+      email: answers.email,
+      userId: login,
+      confidence: 'confirmed',
+      why: `the credential authenticates as ${login}`,
+    },
+    credential: { variable: 'GITHUB_TOKEN', present: true },
+    project: {
+      file: `${DEMO_REPO_ROOT}/lubbdubb.project.json`,
+      keys: ['ci', 'environments', 'issuePickupStates', 'labelPrefix'],
+    },
+    watch: { label: 'magpie-watch', fromProject: true },
+    writes: {
+      repoRoot: DEMO_REPO_ROOT,
+      agentMode: 'stream',
+      maxConcurrentAgents: 1,
+      defaultBranch: 'main',
+      userId: login,
+      // Written, unlike `labelPrefix` and the rest below, because the project
+      // file does not select a provider — only the remote does.
+      integrations: { sourceControl: 'github', issues: 'github' },
+      github: { owner: 'example', repo: 'markdown-magpie' },
+    },
+  };
+}
+
 export const demoApi = {
   getState: () => getServer().getState(),
   getTranscript: (agentId: string) => getServer().getTranscript(agentId),
@@ -3074,6 +3242,18 @@ export const demoApi = {
       species: [],
       sources: [],
     }),
+  // ---- Setup -----------------------------------------------------------
+  //
+  // The demo's config file is a **text buffer in memory**, and that is a
+  // narrower fabrication than it looks. What the demo refuses to invent is the
+  // *running* config — `describeRunningConfig` resolves it server-side from
+  // `loadConfig` and a copy here would be a duplicate free to drift. A file's
+  // bytes are not that: the setup flow's whole subject is what would be written,
+  // and a buffer is a truthful stand-in for a path nobody can write to from a
+  // static page. So the flow runs end to end here, against the scripted
+  // repository this demo's world is already built on.
+  getSetup: () => Promise.resolve(demoSetupReading()),
+  resolveSetup: (answers: { email: string; repoRoot: string }) => Promise.resolve(demoSetupResolution(answers)),
   // Same answer as the prompt book, for the same reason: the running config is
   // resolved by `loadConfig` on the server, and the web bundle imports no server
   // code — so a demo copy would be a duplicate free to drift with nothing to
@@ -3083,16 +3263,32 @@ export const demoApi = {
       groups: [] as RunningConfigGroup[],
       file: 'lubbdubb.config.json',
       projectFile: null,
-      text: '{}\n',
+      text: demoConfigText,
       revision: 'demo',
       pending: [],
       canRestart: false,
     }),
-  // The demo has no file to write, and saying so is more honest than pretending a
-  // save landed: the form draws the refusal exactly as it draws a real one.
-  saveConfig: () => Promise.reject(new Error('the demo has no config file to write')),
+  // Writes land in the buffer above. The *effect* is still honestly refused —
+  // `applied: false` on every key, because there is no live config object here to
+  // re-seat and claiming otherwise would be the one lie the setup flow exists to
+  // prevent operators from being told.
+  saveConfig: (edits: { set?: Record<string, unknown>; clear?: string[]; baseline: string }) => {
+    demoConfigText = demoConfigTextFor(edits.set ?? {});
+    demoSetupWritten = true;
+    return Promise.resolve({
+      ok: true as const,
+      revision: 'demo',
+      changes: demoChanges(edits.set ?? {}),
+      pending: demoChanges(edits.set ?? {}),
+    });
+  },
   restartHarness: () => Promise.reject(new Error('the demo has no process to restart')),
-  previewConfig: () => Promise.reject(new Error('the demo has no config file to preview')),
+  previewConfig: (edits: { set?: Record<string, unknown>; clear?: string[]; text?: string; baseline: string }) =>
+    Promise.resolve({
+      ok: true as const,
+      text: demoConfigTextFor(edits.set ?? {}),
+      changes: demoChanges(edits.set ?? {}),
+    }),
   saveRawConfig: () => Promise.reject(new Error('the demo has no config file to write')),
   // The demo configures no `ci.checks`, so an empty policy is not a stand-in —
   // it is what this backend is actually running on, and the tab's empty state is

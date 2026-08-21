@@ -460,6 +460,7 @@ test('the cockpit draws the park where the agent is, with a way out of it', asyn
     now: Date.now(),
     connected: true,
     demo: true,
+    setup: null,
     selected: null,
     liveOutput: new Map(),
     tails: new Map(),

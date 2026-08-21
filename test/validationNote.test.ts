@@ -66,6 +66,7 @@ function goalView(mutate: (state: CockpitView['state']) => void): CockpitView {
     now: Date.now(),
     connected: true,
     demo: true,
+    setup: null,
     selected: null,
     liveOutput: new Map(),
     tails: new Map(),

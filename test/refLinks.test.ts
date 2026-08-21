@@ -28,6 +28,7 @@ function view(over: Partial<CockpitView> = {}, selectedGoal: string | null = nul
       now: Date.now(),
       connected: true,
       demo: true,
+      setup: null,
       selected: null,
       liveOutput: new Map(),
       tails: new Map(),

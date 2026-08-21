@@ -36,6 +36,8 @@
  */
 
 import type { FilingTarget } from './sink/actionSink.js';
+import type { SetupReading } from './setup/reading.js';
+import type { SetupResolution } from './setup/resolve.js';
 import type { PlanDiff } from './plans/planDiff.js';
 import type { AcceptanceCriterion } from './plans/parts.js';
 import type { RunwayReading } from './supply/runway.js';
@@ -1272,6 +1274,29 @@ export interface PromptsPayload {
  * reached the file and is waiting for a restart — the same list a hand edit
  * produces, because both go through one apply path.
  */
+/**
+ * `GET /api/setup` — what the harness can say about its own configuration without
+ * being asked anything, plus the two prefills the first screen opens with.
+ *
+ * A reading rather than a verdict: none of it gates anything, because the harness
+ * running on the shipped mock is a supported posture and not a broken one. The
+ * cockpit decides how loudly to draw it. → `docs/spec/26-setup.md`
+ */
+export type SetupPayload = SetupReading;
+
+/**
+ * `POST /api/setup/resolve` — the two answers, read into everything they imply.
+ *
+ * Read-only despite the verb: it takes a body, and it writes nothing. The keys it
+ * derives are handed to `POST /api/config/preview` and `POST /api/config` like any
+ * other edit, so there is exactly one path that writes `lubbdubb.config.json`.
+ */
+export type SetupResolvePayload = SetupResolution;
+
+/** Re-exported so the cockpit names one module for the whole setup contract. */
+export type { SetupCheck, SetupVerdict } from './setup/reading.js';
+export type { RemoteTarget } from './setup/remote.js';
+
 export interface RunningConfigPayload {
   groups: RunningConfigGroup[];
   /** Absolute path of the file a save writes — the operator's own. */

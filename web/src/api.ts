@@ -21,6 +21,8 @@ import type {
   PromptsPayload,
   RetrospectivePayload,
   RunningConfigPayload,
+  SetupPayload,
+  SetupResolvePayload,
   ConfigSavePayload,
   ConfigPreviewPayload,
   ScratchpadPayload,
@@ -197,6 +199,15 @@ const realApi = {
   getPetCatalogue: () => authFetch('/api/pets/catalogue').then((r) => json<PetCatalogue>(r)),
 
   getPrompts: () => authFetch('/api/prompts').then((r) => json<PromptsPayload>(r)),
+  // What the harness can say about its own configuration without being asked.
+  // Fetched on open and after a write rather than polled: it shells out to git and
+  // to the agent binary, which is not a thing to do on a heartbeat.
+  getSetup: () => authFetch('/api/setup').then((r) => json<SetupPayload>(r)),
+  // The two answers, read into everything they imply. A POST for a read because
+  // the answers are a body; it writes nothing — what it derives is handed to
+  // `previewConfig`/`saveConfig` like any other edit.
+  resolveSetup: (answers: { email: string; repoRoot: string }) =>
+    post<SetupResolvePayload>('/api/setup/resolve', answers),
   // The running config, fetched on open for the same reason as the prompt book:
   // `loadConfig` runs once at boot, so this can never change while the tab is up.
   getConfig: () => authFetch('/api/config').then((r) => json<RunningConfigPayload>(r)),

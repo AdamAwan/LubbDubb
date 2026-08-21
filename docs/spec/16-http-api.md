@@ -1694,3 +1694,21 @@ finishes.
 The tail is **ephemeral and per-server**: it lives only in the `Hub`'s map, so a cockpit opened
 mid-run shows nothing until the agent's next output. That is precisely the gap `note_progress` fills —
 see [11](11-mcp-tools.md).
+
+## Setup
+
+Two routes, and **neither writes anything**. What the first-run surface produces is a set of config
+keys, and those go to `POST /api/config` like any other edit — so there is exactly one path that
+writes `lubbdubb.config.json`, with one refusal ladder and one surgical splice behind it.
+
+| Route                     | Answers                                                                           |
+| ------------------------- | --------------------------------------------------------------------------------- |
+| `GET /api/setup`          | `SetupPayload` — `pointed`, the six checks, `outstanding`, and the two prefills   |
+| `POST /api/setup/resolve` | `SetupResolvePayload` — an email and a directory, read into everything they imply |
+
+`resolve` is a `POST` for a read because its answers are a body rather than a path, and because it
+resolves a directory the caller names and may reach the provider to ask who they are — which earns
+the rate limit a `GET` would invite caching around. Neither is polled: the reading shells out to git
+and to the agent binary, so it is fetched on open and on `config:changed`.
+
+→ [26](26-setup.md)

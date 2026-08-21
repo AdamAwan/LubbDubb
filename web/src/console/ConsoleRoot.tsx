@@ -15,6 +15,7 @@ import { WorkTreePanel } from '../components/WorkTreePanel.js';
 import { FindingsPanel } from '../components/FindingsPanel.js';
 import { LessonsPanel } from '../components/LessonsPanel.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
+import { SetupPanel } from '../components/SetupPanel.js';
 import { PetsPanel } from '../components/PetsPanel.js';
 import { PetsPage } from '../components/PetsPage.js';
 import { Vivarium } from './Vivarium.js';
@@ -215,6 +216,7 @@ const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string>
   build: 'Build',
   pets: 'Vivarium',
   localRun: 'Running locally',
+  setup: 'Setup',
 };
 
 /**
@@ -372,6 +374,8 @@ function panelBody(
           fetchOutput={() => actions.localRunOutput()}
         />
       );
+    case 'setup':
+      return <SetupPanel onClose={() => actions.openPanel(null)} />;
     case 'build':
       return (
         <BuildPanel
