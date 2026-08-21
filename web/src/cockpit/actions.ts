@@ -1,5 +1,7 @@
 import type {
+  FactRuling,
   FilingTargetProbe,
+  KnowledgeFactPayload,
   InsightsWindow,
   IssueFiled,
   RecoveryVerdict,
@@ -45,12 +47,15 @@ export type ConfigTab = 'values' | 'raw' | 'ci' | 'prompts' | 'mcp' | 'notificat
 export type ConsolePanel =
   | 'findings'
   | 'lessons'
+  | 'knowledge'
   | 'faults'
   | 'launch'
   | 'build'
   | 'pets'
   | 'localRun'
   | 'setup'
+  /** The durable work graph, which was the console's second nav destination. */
+  | 'record'
   | { ask: string }
   | null;
 
@@ -62,8 +67,13 @@ export type ConsolePanel =
  *
  * A selected goal outranks all three, so this says where the nav last was, never
  * what is drawn.
+ *
+ * `work` was the second of these and is not a destination any more: the record it
+ * drew reads on the goal pages, its triage list reads on the tickets tab, and what
+ * was left is the {@link ConsolePanel} `record`. `readPlace` aliases the old name
+ * onto `tickets`, where the one part of it an operator still acts on went.
  */
-export type ConsoleTab = 'overview' | 'work' | 'tickets' | 'insights' | 'pets' | 'config';
+export type ConsoleTab = 'overview' | 'tickets' | 'insights' | 'pets' | 'config';
 
 /**
  * Which reading the Insights page is showing.
@@ -194,8 +204,15 @@ export interface CockpitActions {
    * entries for one move. The window is here at all rather than in the page
    * because it is the page's whole subject: a link to "the causes tab over the
    * last 24 hours" has to carry both halves or it is a link to neither.
+   *
+   * **The fields are named for the `Place` fields they set**, as `openConfig`'s
+   * are, because the implementation spreads this object straight into a place
+   * patch — and a spread is exactly where TypeScript stops checking for excess
+   * properties. Named `view` and `window`, both halves landed on the place as
+   * keys nothing reads, so every tab and every window button on the page was a
+   * control that pushed no history entry and changed nothing.
    */
-  openInsights(where: { view?: InsightsView; window?: InsightsWindow }): void;
+  openInsights(where: { insightsView?: InsightsView; insightsWindow?: InsightsWindow }): void;
   /** Open a goal's page, or return to the overview with null. */
   selectGoal(ref: string | null): void;
   /** Bring a full-surface panel in front, or dismiss it with null. */
@@ -257,7 +274,17 @@ export interface CockpitActions {
    */
   setTicketQuery(
     next: Partial<
-      Pick<Place, 'ticketWatch' | 'ticketTracking' | 'ticketState' | 'ticketFeature' | 'ticketGroup' | 'ticketOrder'>
+      Pick<
+        Place,
+        | 'ticketWatch'
+        | 'ticketTracking'
+        | 'ticketState'
+        | 'ticketFeature'
+        | 'ticketGroup'
+        | 'ticketOrder'
+        | 'ticketView'
+        | 'ticketColumns'
+      >
     >,
   ): void;
   /**
@@ -312,6 +339,30 @@ export interface CockpitActions {
   /** Prune one, from either live status. Terminal: there is no un-retire. */
   retireLesson(id: string): Promise<void>;
 
+  /**
+   * Where a claim stands, on the operator's say-so (#27 phase 2) — promote,
+   * demote, reject, or keep it exactly where it is.
+   *
+   * The whole write surface the Knowledge page has. Nothing here *files* a fact:
+   * agents propose through the tool channel, and a page that could file one would
+   * be filing a claim with no observation behind it. Naming the reach a fact
+   * already has is a ruling rather than a no-op — it is how an operator says a
+   * corroborated claim belongs where it is, and the only way the page's "Needs
+   * you" section ever empties.
+   */
+  setFactReach(id: string, reach: FactRuling): Promise<void>;
+  /**
+   * One claim with the observations behind it, in the observers' own words.
+   *
+   * A read, so it refetches nothing — and its own fetch rather than a field on the
+   * snapshot for the transcript tail's reason: the evidence behind a claim runs to
+   * thousands of characters, and a polled snapshot should not carry it for every
+   * row nobody has opened.
+   */
+  factDetail(id: string): Promise<KnowledgeFactPayload>;
+  /** Open one fact's provenance, or close it. A place, so a link to it lands on it. */
+  viewFact(id: string | null): void;
+
   /** `note` is required by the route on a close-out whose goal's validation is flagged. */
   completeHumanTask(id: string, note?: string): Promise<void>;
   declineHumanTask(id: string, note: string): Promise<void>;
@@ -328,6 +379,16 @@ export interface CockpitActions {
    */
   setStackLanding(ref: string, landing: boolean): Promise<void>;
   setIssueWatched(issueNumber: number, watched: boolean): Promise<void>;
+  /**
+   * Move a work item to one of the tracker's own states — the board's drag, and the
+   * only thing in the cockpit that writes one.
+   *
+   * **Rejects with the provider's own sentence**, which the card quotes: a snap-back
+   * with no words attached reads as the board being broken rather than as the tracker
+   * refusing a transition. So the caller handles the rejection itself rather than
+   * routing the click through `AsyncButton`, which folds one into a tooltip.
+   */
+  setIssueState(issueNumber: number, state: string): Promise<void>;
   /**
    * Put this goal at the front of the queue, or take it back out. On the seam for
    * every mutation's reason: `console/` may not import `api.js`.

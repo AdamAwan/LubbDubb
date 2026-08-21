@@ -376,6 +376,28 @@ export class TicketStore {
       }
     })();
   }
+
+  /**
+   * Fold a work-item state the provider has just taken onto the mirrored row —
+   * `WorldStore.patchWorldState`'s half of the same drop, for the surface that reads
+   * this table instead of the baseline.
+   *
+   * The Tickets tab's card view groups its columns by `work_item_state` **here**, not
+   * in the world: the board's rows come from `/api/tickets`. Nothing else writes this
+   * column between sweeps, and `TicketSweep` runs last in a cycle that coalesces away
+   * — so without this the card returns to the column it was dragged out of, which
+   * reads as a drop that failed while the tracker has already taken it
+   * ({@link patchTicketLabels}, issue #417).
+   *
+   * A number the mirror does not hold is skipped by the `WHERE`: this is a record of
+   * what was *seen*, and a row invented for it would be a ticket the tracker never
+   * handed us.
+   */
+  patchTicketState(patch: { number: number; state: string }): void {
+    this.ctx.db
+      .prepare(`UPDATE tracker_items SET work_item_state = ?, updated_at = ? WHERE number = ?`)
+      .run(patch.state, this.ctx.now(), patch.number);
+  }
 }
 
 /**

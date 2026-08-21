@@ -18,6 +18,7 @@ import type {
   HumanTaskInput,
   IssueConclusion,
   IssueConclusionVerdict,
+  KnowledgeFact,
   PartOutcomeKind,
   PlanPart,
   Remedy,
@@ -54,6 +55,9 @@ import { goalFingerprint } from '../intake/assay.js';
 import { padWriteTarget } from '../scratch/pad.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
+import { corroborationGoal, distinctCorroborators, type FactProposal } from '../knowledge/knowledge.js';
+import type { AnsweredFact } from '../mcp/tools/context.js';
+import type { FactProposalOutcome } from '../store/knowledge.js';
 import { partConclusionOrigin } from '../mcp/partOutcome.js';
 import type { AgentToolTarget } from '../mcp/tools/context.js';
 import type { ParsedFlag } from './sentinels.js';
@@ -261,6 +265,16 @@ interface AgentManagerEvents {
    * moment the account lands rather than on the next pulse.
    */
   remedy: [{ agentId: string; taskId: string; originRef: string }];
+  /**
+   * An agent wrote down what it learned about working this repository, or agreed
+   * with something already written (already persisted). `filed` is false when the
+   * call landed as a corroboration on a standing claim rather than as a new one.
+   *
+   * Nothing schedules off this — no rule, desk or gate reads a fact. It is the
+   * repaint, so the Knowledge page hears a proposal the moment it is filed rather
+   * than on the next pulse, exactly as `finding` and `remedy` do.
+   */
+  fact: [{ agentId: string; taskId: string; fact: KnowledgeFact; filed: boolean; corroborations: number }];
   /** The file-events hook recorded one or more written files (the "files changed" list grew). */
   files: [{ agentId: string; taskId: string }];
   /**
@@ -1098,6 +1112,79 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       }
       this.emit('remedy', { agentId, taskId: task.id, originRef: scope.originRef });
       return { ok: true, remedy, lessonProposed: submission.lesson !== null };
+    });
+  }
+
+  /**
+   * File what this agent learned about working the repository, or record that it
+   * saw what somebody else had already filed (the `knowledge_propose` tool).
+   *
+   * **The observer is the credential's**, exactly as a finding's reporter is, and
+   * for a stronger reason: corroboration is what carries a claim out of one
+   * agent's head, so an agent that could name the goal it was observed on could
+   * promote its own claim by asserting two of them. The goal is
+   * {@link corroborationGoal}'s reading of the caller's own origin — `pr:412:ci`
+   * and `pr:412:comments` collapse to one goal — and the session id is carried
+   * beside it so an agent that inherited a conversation through a re-dispatch
+   * (`spawn`'s `resumeSessionId`) cannot corroborate its own predecessor.
+   *
+   * Like a finding, it needs no *live* session: a claim written on an agent's last
+   * breath is still what it learned.
+   */
+  proposeFact(
+    agentId: string,
+    proposal: FactProposal,
+  ): { ok: true; outcome: FactProposalOutcome } | { ok: false; error: string } {
+    return this.withCaller(agentId, ({ agent, task }) => {
+      const outcome = this.store.proposeFact(proposal, {
+        agentId,
+        taskId: task.id,
+        goalRef: corroborationGoal(task.originRef),
+        sessionId: agent.sessionId,
+        // The agent's own words, never the claim restated: the count is what
+        // promotes a fact and this is what an operator reads to decide whether it
+        // should have.
+        words: proposal.evidence,
+      });
+      // A barred proposal wrote nothing, so there is nothing to repaint — and an
+      // event on it would put a claim an operator killed back in front of them as
+      // if it had just arrived.
+      if (outcome.outcome !== 'barred') {
+        this.emit('fact', {
+          agentId,
+          taskId: task.id,
+          fact: outcome.fact,
+          filed: outcome.outcome === 'filed',
+          corroborations: outcome.corroborations,
+        });
+      }
+      return { ok: true, outcome };
+    });
+  }
+
+  /**
+   * Answer what the fleet knows, for this caller (the `knowledge_ask` tool).
+   *
+   * The default scopes are the caller's own: the fleet's, its goal's, and one per
+   * check it was dispatched about — resolved here rather than asked for, so the
+   * answer to "what does anyone know about this" cannot be another goal's record.
+   * A named scope narrows that; it never widens it past what an agent may see,
+   * because every visible fact has already reached at least `lookup`.
+   */
+  askKnowledge(
+    agentId: string,
+    query: { question: string | null; scopes: readonly string[] | null },
+  ): { ok: true; scopes: string[]; facts: AnsweredFact[] } | { ok: false; error: string } {
+    return this.withCaller(agentId, ({ task }) => {
+      const goalRef = corroborationGoal(task.originRef);
+      const scopes = query.scopes
+        ? [...query.scopes]
+        : ['fleet', ...(goalRef ? [`goal:${goalRef}`] : []), ...(task.ciChecks ?? []).map((c) => `check:${c}`)];
+      const facts = this.store.askFacts({ scopes, question: query.question }).map((fact) => ({
+        fact,
+        corroborations: distinctCorroborators(this.store.listCorroborations(fact.id)),
+      }));
+      return { ok: true, scopes, facts };
     });
   }
 

@@ -11,6 +11,7 @@ import { PriorityStore } from './priority.js';
 import { ProfileOverrideStore } from './profileOverrides.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { LessonStore } from './lessons.js';
+import { KnowledgeStore, KNOWLEDGE_COLUMNS, type FactProposalOutcome, type FactQuery } from './knowledge.js';
 import { RemedyStore } from './remedies.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
@@ -63,6 +64,7 @@ import type {
   ErrorLogInput,
   Escalation,
   EscalationSpan,
+  FactReach,
   Finding,
   FindingInput,
   FindingStatus,
@@ -79,6 +81,8 @@ import type {
   Job,
   JobAttachment,
   JobSchedule,
+  KnowledgeCorroboration,
+  KnowledgeFact,
   Lesson,
   LessonInput,
   Remedy,
@@ -148,6 +152,13 @@ import type {
  * {@link IssueVerdictStore} being the clearest — sits in one readable scope instead of
  * hundreds of lines apart, joined only by prose.
  */
+/**
+ * How many lessons the knowledge adoption reads. Far above any real deployment's
+ * count — the point is that it is not `listLessons`' display default, which would
+ * silently leave the oldest promoted lessons behind on a long-lived store.
+ */
+const ADOPTION_LIMIT = 10_000;
+
 export class Store {
   private readonly db: Database.Database;
   private readonly tasksStore: TaskStore;
@@ -157,6 +168,7 @@ export class Store {
   private readonly profileOverrides: ProfileOverrideStore;
   private readonly findings: FindingStore;
   private readonly lessons: LessonStore;
+  private readonly knowledge: KnowledgeStore;
   private readonly remedies: RemedyStore;
   private readonly humanTasks: HumanTaskStore;
   private readonly plans: PlanStore;
@@ -212,6 +224,7 @@ export class Store {
       TICKET_COLUMNS,
       PET_COLUMNS,
       LOCAL_RUN_COLUMNS,
+      KNOWLEDGE_COLUMNS,
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }
@@ -250,6 +263,7 @@ export class Store {
     this.profileOverrides = new ProfileOverrideStore(ctx);
     this.findings = new FindingStore(ctx);
     this.lessons = new LessonStore(ctx);
+    this.knowledge = new KnowledgeStore(ctx);
     this.remedies = new RemedyStore(ctx);
     this.humanTasks = new HumanTaskStore(ctx);
     this.plans = new PlanStore(ctx);
@@ -276,6 +290,13 @@ export class Store {
     this.tickets = new TicketStore(ctx);
     this.upgrades = new UpgradeStore(ctx);
     this.pets = new PetStore(ctx);
+    // Last, and after every module rather than beside the migrations above,
+    // because it is a *cross-domain* copy rather than a schema repair: the
+    // promoted lessons are facts, and `lessons.ts` owns its table while
+    // `knowledge.ts` owns its own. This is the caller that holds both, which is
+    // the only place a read across two domains belongs. Idempotent and re-run on
+    // every boot — see `KnowledgeStore.adoptLessons` for why once is not enough.
+    this.knowledge.adoptLessons(this.lessons.listLessons(ADOPTION_LIMIT));
   }
 
   close(): void {
@@ -456,6 +477,30 @@ export class Store {
   }
   retireLesson(id: string): Lesson | null {
     return this.lessons.retireLesson(id);
+  }
+
+  // -- Knowledge (what the fleet knows about this repository) -----------------
+
+  proposeFact(...args: Parameters<KnowledgeStore['proposeFact']>): FactProposalOutcome {
+    return this.knowledge.proposeFact(...args);
+  }
+  getFact(id: string): KnowledgeFact | null {
+    return this.knowledge.getFact(id);
+  }
+  listFacts(limit?: number): KnowledgeFact[] {
+    return this.knowledge.listFacts(limit);
+  }
+  listCorroborations(factId: string): KnowledgeCorroboration[] {
+    return this.knowledge.listCorroborations(factId);
+  }
+  corroborationCounts(): Map<string, number> {
+    return this.knowledge.corroborationCounts();
+  }
+  askFacts(query: FactQuery): KnowledgeFact[] {
+    return this.knowledge.askFacts(query);
+  }
+  setFactReach(id: string, reach: FactReach): KnowledgeFact | null {
+    return this.knowledge.setFactReach(id, reach);
   }
 
   // -- Remedies (why the fleet came back to a PR, and what settled it) --------
@@ -1031,6 +1076,10 @@ export class Store {
   patchWorldLabels(patch: WorldLabelPatch): void {
     this.world.patchWorldLabels(patch);
   }
+
+  patchWorldState(patch: { number: number; state: string }): void {
+    this.world.patchWorldState(patch);
+  }
   getConnectorState(key: string): string | null {
     return this.world.getConnectorState(key);
   }
@@ -1135,6 +1184,10 @@ export class Store {
   }
   patchTicketLabels(patch: TicketLabelPatch): void {
     this.tickets.patchTicketLabels(patch);
+  }
+
+  patchTicketState(patch: { number: number; state: string }): void {
+    this.tickets.patchTicketState(patch);
   }
   // -- Pets -----------------------------------------------------------------
 

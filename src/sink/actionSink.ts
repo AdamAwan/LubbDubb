@@ -175,6 +175,17 @@ export interface ActionSink {
   /** Add/remove a label on an issue / work item — the cockpit's watch/ignore toggle. Throws if it fails. */
   setIssueLabel(input: IssueLabelInput): Promise<SendResult>;
   /**
+   * Whether any configured integration can write a work item's state at all.
+   *
+   * Asked rather than inferred, because {@link setWorkItemState} *throws* when
+   * nothing implements it — so a caller that wants to **offer** the operation rather
+   * than attempt it has no other way to find out. The cockpit's board is that
+   * caller: it draws no drag at all where this is false, instead of letting every
+   * drop fail separately and teaching nothing each time. GitHub issues carry no
+   * such state and answer false.
+   */
+  canSetWorkItemState(): boolean;
+  /**
    * Move a work item to a provider-native state (e.g. Azure "In Review" once a PR
    * is open), so it stops being re-picked while under review. Idempotent. Throws if
    * it fails. Only providers with a rich state model implement it.

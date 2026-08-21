@@ -1205,6 +1205,29 @@ test('nothing held at intake draws no call-out at all', () => {
   assert.ok(!html.includes('tickets-intake'), 'no goal is held, so nothing claims one is');
 });
 
+/**
+ * Unrecorded work went to the tickets tab when the work tab was retired, because
+ * `File a work item` / `Ignore` is a triage decision and this is the surface
+ * triage happens on.
+ *
+ * Asserted structurally rather than on the markup: the call-out reads `/api/work`
+ * on mount and nothing fetches in a static render, so what a render proves is only
+ * that it draws nothing when it has nothing — which is the *other* half of this,
+ * below. What matters here is that the tab mounts it at all, since a call-out
+ * nothing renders is a triage list an operator can no longer reach from anywhere.
+ */
+test('the tickets tab is where unrecorded work is triaged', () => {
+  const src = readFileSync(fileURLToPath(new URL('../web/src/components/TicketsPanel.tsx', import.meta.url)), 'utf8');
+  assert.ok(/import\s+\{[^}]*UnrecordedWork/.test(src), 'the tickets tab must mount the unrecorded-work call-out');
+  assert.ok(src.includes('<UnrecordedWork'), 'and render it, not merely import it');
+
+  // Nothing outstanding draws nothing: this is a call-out above somebody else's
+  // list, and a permanent "nothing to record" heading over the tickets table is a
+  // row of chrome saying so on every visit. The overview's cards are the opposite
+  // rule and for the opposite reason — those are gauges glanced at in a fixed spot.
+  assert.ok(!render(view({ tab: 'tickets' })).includes('Unrecorded work'));
+});
+
 test('the fault log keeps its clear even when it is empty', () => {
   const v = view({ consolePanel: 'faults' });
   const html = render({ ...v, state: { ...v.state, errors: [] } });
@@ -1380,31 +1403,45 @@ test('injection rides in the launch panel, and the demo build is the whole of it
 test('each tab replaces the last, and a selected goal outranks every one of them', () => {
   assert.ok(render(view()).includes('World signals'), 'the overview is the tab the console opens on');
   assert.ok(!render(view({ tab: 'tickets' })).includes('World signals'), 'a tab replaces the one before it');
-  assert.ok(!render(view({ tab: 'work' })).includes('World signals'));
+  assert.ok(!render(view({ tab: 'insights' })).includes('World signals'));
 
   // A queue row selects a goal without moving the nav, so the goal has to win —
-  // otherwise clicking an ask lands on a triage list, or on the record.
+  // otherwise clicking an ask lands on a triage list, or on a reading.
   const v = goalView();
-  for (const tab of ['tickets', 'work'] as const) {
+  for (const tab of ['tickets', 'insights'] as const) {
     assert.ok(render({ ...v, tab }).includes('cn-goal'), `a goal must outrank the ${tab} tab`);
   }
 });
 
 /**
- * The work graph is the one surface that outlives the world snapshot, and it used
- * to hang off the bottom of the shell below the whole console — reachable only by
- * scrolling past every panel. It is a destination now. The nav is what says so:
- * four tabs, so a tab added to `ConsoleTab` and forgotten in the nav fails here
- * rather than being a view nothing can reach.
+ * The nav is the surfaces work happens **on**, and the work graph is not one.
+ *
+ * It hung off the bottom of the shell, then held the second nav slot, and now it
+ * is a panel — because by the end the tab drew a disclosure triangle over an index
+ * of pages that are one click away anyway: a goal's record reads on its goal page,
+ * and the triage list that was its only acted-on part reads on the tickets tab.
+ *
+ * Both halves are asserted. The three labels, so a tab added to `ConsoleTab` and
+ * forgotten in the nav fails here rather than being a view nothing can reach — and
+ * `Work` explicitly *not* among them, since the whole change is that the slot went
+ * back. And the record reachable from the bar at every tab, since a panel nothing
+ * opens is the graph unreachable rather than relocated.
  */
-test('the work graph is a nav destination, not a strip under the page', () => {
+test('the work graph is a panel reached from the bar, not a nav destination', () => {
   const nav = render(view()).split('</nav>')[0] ?? '';
-  for (const label of ['Overview', 'Work', 'Tickets', 'Insights']) {
+  for (const label of ['Overview', 'Tickets', 'Insights']) {
     assert.ok(nav.includes(`>${label}`), `the nav is missing ${label}`);
   }
+  assert.ok(!nav.includes('>Work'), 'the record is not a nav destination — it is the Record reading');
+  assert.ok(render(view()).includes('>Record<'), 'and the bar carries the way to it');
 
-  assert.ok(render(view({ tab: 'work' })).includes('work-panel'), 'the Work tab draws the graph');
-  assert.ok(!render(view()).includes('work-panel'), 'and no other tab draws it');
+  const panel = render(view({ consolePanel: 'record' }));
+  assert.ok(panel.includes('The record'), 'the panel names itself');
+  assert.ok(!render(view()).includes('The record'), 'and nothing draws it unopened');
+
+  // A goal outranks every tab, so a record that was one could not be read beside
+  // the goal that sent you looking for it. A panel is drawn over whatever is there.
+  assert.ok(render({ ...goalView(), consolePanel: 'record' as ConsolePanel }).includes('The record'));
 });
 
 /**
@@ -1443,11 +1480,12 @@ test('the shell renders the console, and the drawer that the console only asks f
   // `actions.select(id)` and the shell answers; without this the three call sites
   // that open an agent do nothing at all.
   assert.ok(src.includes('AgentDrawer'), 'the shell must answer the console’s request for a drawer');
-  // The graph moved into the console's nav. Left here as well it would draw twice,
-  // once below everything, which is the surface this replaced. Asserted on the
-  // import and the element, not on the name: the shell's own comments cite
-  // `WorkTreePanel` as the precedent for what else hangs off the shell, and a
-  // substring test made writing down the reason a build failure.
-  assert.ok(!/import\s+\{[^}]*WorkTreePanel/.test(src), 'the shell must not import the work graph');
-  assert.ok(!src.includes('<WorkTreePanel'), 'the work graph is the console’s Work tab, not a strip under it');
+  // The graph moved into the console — its nav first, and since the tab was
+  // retired, the record panel. Left here as well it would draw twice, once below
+  // everything, which is the surface this replaced. Asserted on the import and the
+  // element, not on the name: the shell's own comments cite the panel as the
+  // precedent for what else hangs off the shell, and a substring test made writing
+  // down the reason a build failure.
+  assert.ok(!/import\s+\{[^}]*RecordPanel/.test(src), 'the shell must not import the work graph');
+  assert.ok(!src.includes('<RecordPanel'), 'the work graph is a console panel, not a strip under the shell');
 });

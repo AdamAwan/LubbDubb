@@ -7,3 +7,6 @@ lubbdubb.config.json
 *.sqlite
 *.db
 .env
+
+# Superpowers brainstorming scratch (mockups, session state)
+.superpowers/

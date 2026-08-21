@@ -267,6 +267,8 @@ introduced.
 | `findings`                  | Things agents noticed outside their own task.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | —                                                                                                                                            |
 | `remedies`                  | Why the fleet had to come back to a pull request, and what settled it — one row per CI failure or review round an agent answered, written by that agent through `report_remedy`. `kind`, `pr_number` and `checks` are resolved from the caller's own task rather than from arguments, which is what makes the counts mean one thing. **Nothing gates on a row here**: no dispatch rule, desk or gate reads the table, and its only two readers are the Yield panel's Causes section and the note a later dispatch on the same check carries. Its own table rather than columns on `tasks` because one run can settle several reds and one red can take several runs, so the two do not share a key. → [18](18-observability.md#causes-why-the-fleet-came-back)                                                                                                                                                                                                      | —                                                                                                                                            |
 | `lessons`                   | What working a goal taught about **working this repository** (#355) — kept in the store rather than in the tree, because the three properties that make it safe are ones a markdown pad cannot hold: the gate (`status`), the provenance (`origin_ref` + `created_at`) and the prune (`retired`). Read by the cockpit and by `renderLessonBlock` — which puts the `promoted` rows, and only those, into every agent's system-prompt append (#355 phase 3). No dispatcher rule reads it at any status.                                                                                                                                                                                                                                                                                                                                                                                                                                                               | —                                                                                                                                            |
+| `knowledge_facts`           | What the fleet knows about **working this repository**, on three independent axes: `scope` (fleet, one check, one goal), `lifetime` (standing or expiring, with `expires_at`) and `reach` (proposal → lookup → injected → committed, or rejected). `supersedes` names the fact an amendment sharpens, and is what exempts it from a rejected parent's bar. Nothing in the dispatcher reads it, exactly as nothing reads `remedies`. A promoted `lessons` row is mirrored in as a fleet-scoped standing fact at reach `injected`, under an id derived from the lesson's — which is what makes that adoption idempotent across boots. → [27](27-knowledge.md) | — |
+| `knowledge_corroborations`  | Who says a fact is true — one row per observation, carrying the observer's **own words**, never a counter on the fact. `goal_ref` is the *goal* rather than the dispatch origin (`pr:412:ci` and `pr:412:comments` are one observation), and `session_id` is carried so an agent that inherited a conversation through a re-dispatch is not counted twice. → [27](27-knowledge.md#corroboration) | — |
 | `human_tasks`               | Work only a person can do. `part_id` is the only way one holds work off the fleet; nothing in the dispatcher reads this table. `kind` tells the harness's own close-out from everything a person or an agent asked for, and `dismissed_at` is the settled row an operator has cleared off the bench — presentation, never a fourth status.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | —                                                                                                                                            |
 | `issue_conclusions`         | Whether an issue is finished, per issue origin. One row, overwritten per declaration.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | `origin_ref` is `PRIMARY KEY`                                                                                                                |
 | `issue_instructions`        | What the operator has told the fleet to do on a goal, in their own words ("change the button to primary"). Append-only, several per goal, and settled together by the conclusion that answers them. Not a verdict: nothing gates on it.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
@@ -493,6 +495,24 @@ Both transitions are **guarded in the write** rather than by a read-then-check, 
 live status, and each returns null when there was nothing in a status it could leave. `retired` is
 terminal — there is no un-retire. → [13](13-jobs-and-findings.md#lessons)
 
+### Knowledge
+
+`proposeFact(proposal, observer)` → `filed`, `corroborated` or `barred`; `getFact`,
+`listFacts(limit=200)` (rejected ones included, for the reason `listLessons` keeps its retired rows),
+`listCorroborations(factId)`, `askFacts({scopes, question, limit})` and `setFactReach(id, reach)`.
+
+One entry point files a claim *or* records an observer as agreeing with the standing one, because from
+the caller's side those are one act: an agent writes down what it learned, and whether anybody already
+has is not something it can know. `claimsMatch` (`src/claims.ts`, shared with `findings`) decides
+which, inside one scope. `barred` is a claim an operator rejected: it is refused rather than re-filed,
+and a proposal naming that fact in `supersedes` is the only thing exempt from the bar.
+
+`setFactReach` is guarded in the write, like every lesson transition, and refuses to move a rejected
+row at all — an un-reject would be a way to lift the bar without reading the amendment that should
+have lifted it. Two corroborations from two distinct goals carry a proposal to `lookup` and no
+further: nothing but an operator (or, once notices land, a fact with a clock on it) reaches
+`injected`. → [27](27-knowledge.md)
+
 ### Issue verdicts, and the exclusion matrix
 
 Four tables record a verdict about an issue, keyed on the same `issue:<n>` origin:
@@ -682,6 +702,13 @@ table is a record of what the tracker handed us, and a row invented for a click 
 that was never swept. An empty label is a no-op: that is `labelPrefix: ''`, the gate off, where there
 is no tag at all.
 
+`patchTicketState({number, state})` is the same fold for the tracker's own state word, and it exists
+for the card view: the board draws a column per `work_item_state` and reads its rows from
+`/api/tickets`, so a state written to the tracker and not folded here leaves the dragged card in the
+column it came from. That reads as a drop that failed while the tracker has already taken it — the
+same symptom as #417, one field over. Skipped for a number the mirror does not hold, and overwritten
+by the next sweep, on the same terms as the labels above.
+
 **The mirror is also the spend trend's closure source.** `listTicketsClosedSince(since)` is the one
 narrowed read on this table: the rows in the `closed` state whose `changed_at` is at or after an
 instant. It exists because the closure event the trend would otherwise use never fires on a real
@@ -859,7 +886,7 @@ See [05](05-dispatcher.md#two-columns-on-the-decision-row).
 ### World and errors
 
 `recordWorldEvents(inputs)` (stamps id and timestamp), `listWorldEvents(limit=200)`,
-`getWorldBaseline()`, `setWorldBaseline(world)`, `patchWorldLabels(patch)`, `recordError(input)`, `listErrors(limit=100)`, `clearErrors()` (deletes the whole log, returns the row count).
+`getWorldBaseline()`, `setWorldBaseline(world)`, `patchWorldLabels(patch)`, `patchWorldState(patch)`, `recordError(input)`, `listErrors(limit=100)`, `clearErrors()` (deletes the whole log, returns the row count).
 
 `patchWorldLabels({issues?, pullRequests?, label, present})` folds one label onto the named items in
 the stored baseline, for a route that has just had the provider accept the write and must not make
@@ -868,6 +895,11 @@ It moves `labelsAddedByViewer` with `labels` where the item carries one, or the 
 "Watching" on an issue pickup still treats as untagged; it skips an item the baseline does not carry,
 rather than inventing a row no snapshot described; and it is overwritten by the next cycle's reading,
 which is the point — the tracker stays the source of truth.
+
+`patchWorldState({number, state})` folds a work-item state the same way and on the same terms, for the
+Tickets tab's board: `/api/state` serves the baseline, so without it a card that has just been dragged
+redraws in its old column until the next pulse — and `runCycle('manual')` coalesces away while another
+cycle is in flight, which is most drops on a busy fleet.
 
 ### Connector state
 

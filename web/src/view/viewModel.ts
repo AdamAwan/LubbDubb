@@ -65,6 +65,14 @@ export interface CockpitView {
   /** Findings nobody has ruled on — a finding never becomes work on its own. */
   openFindingCount: number;
   /**
+   * Corroborated claims nobody has ruled on (#27 phase 2). The reading the
+   * Knowledge tile draws, and `lookup`-and-unruled rather than every proposal for
+   * `proposedLessonCount`'s reason: what wants the operator is the claim two
+   * agents already agreed on, and a count that included one agent's unseconded
+   * note would never come down.
+   */
+  factsNeedingYou: number;
+  /**
    * Lessons nobody has ruled on (#355). The reading the Lessons tile draws, and
    * proposals rather than promotions on purpose: what wants the operator is the
    * undecided claim, and a count of what is already vouched for would tick up on
@@ -106,6 +114,8 @@ export interface CockpitView {
   ticketFeature: number | 'none' | null;
   ticketGroup: 'feature' | 'flat';
   ticketOrder: TicketOrder;
+  ticketView: 'table' | 'card';
+  ticketColumns: string[];
 
   /** The agent whose drawer is open, if any. */
   selectedAgent: Agent | null;
@@ -170,6 +180,8 @@ export interface CockpitView {
   hatching: string | null;
   /** The goal whose shared scratchpad is open, as an `issue:<n>` ref. */
   viewingScratchpad: string | null;
+  /** The claim whose provenance is open on the Knowledge page, by fact id. */
+  viewingFact: string | null;
   /** Which reading the Insights page is showing. */
   insightsView: InsightsView;
   /** The stretch of time every reading on that page is measured over. */
@@ -246,6 +258,11 @@ interface ViewInputs {
   hatching: string | null;
   /** The goal whose shared scratchpad is open, as an `issue:<n>` ref. */
   viewingScratchpad: string | null;
+  /**
+   * The claim whose provenance is open on the Knowledge page, by fact id.
+   * Optional for `collapsed`'s reason: nothing open is what a bare URL means.
+   */
+  viewingFact?: string | null;
   /** Which reading the Insights page is showing. */
   insightsView: InsightsView;
   /** The stretch of time every reading on that page is measured over. */
@@ -271,6 +288,8 @@ interface ViewInputs {
   ticketFeature?: number | 'none' | null;
   ticketGroup?: 'feature' | 'flat';
   ticketOrder?: TicketOrder;
+  ticketView?: 'table' | 'card';
+  ticketColumns?: string[];
 }
 
 function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefined): Map<string, T[]> {
@@ -314,6 +333,10 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     openEscalations,
     openFindingCount: (state.findings ?? []).filter((f) => f.status === 'open').length,
     proposedLessonCount: (state.lessons ?? []).filter((l) => l.status === 'proposed').length,
+    // Corroborated claims nobody has ruled on — the reading the Knowledge tile
+    // draws. Two agents on two goals carried each of these as far as anything but
+    // an operator can carry a claim, and the decision left is theirs alone.
+    factsNeedingYou: (state.knowledge ?? []).filter((f) => f.reach === 'lookup' && f.ruledAt === null).length,
     openHumanTaskCount: (state.humanTasks ?? []).filter((t) => t.status === 'open').length,
     liveOverlapCount: (state.overlaps ?? []).filter((o) => o.live).length,
 
@@ -333,6 +356,8 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     ticketFeature: input.ticketFeature ?? null,
     ticketGroup: input.ticketGroup ?? 'feature',
     ticketOrder: input.ticketOrder ?? 'added',
+    ticketView: input.ticketView ?? 'table',
+    ticketColumns: input.ticketColumns ?? [],
 
     selectedAgent: state.agents.find((a) => a.id === selected) ?? null,
     selectedOutput: selected ? input.liveOutput.get(selected) : undefined,
@@ -357,5 +382,6 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     viewingRetro: input.viewingRetro,
     hatching: input.hatching,
     viewingScratchpad: input.viewingScratchpad,
+    viewingFact: input.viewingFact ?? null,
   };
 }

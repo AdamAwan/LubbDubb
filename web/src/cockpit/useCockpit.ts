@@ -230,6 +230,7 @@ export function useCockpit(): CockpitStatus {
       viewRetro: (issueRef) => go({ retro: issueRef }),
       hatchEgg: (id) => go({ hatch: id }),
       viewScratchpad: (issueRef) => go({ scratchpad: issueRef }),
+      viewFact: (id) => go({ fact: id }),
       openConfig: (where) => go({ tab: 'config', goal: null, ...where }),
       // One `go` for both halves: the tab and the window are one place, and two
       // calls would push two history entries for a single change of question.
@@ -269,6 +270,10 @@ export function useCockpit(): CockpitStatus {
       proposeLesson: (text, originRef) => then(api.proposeLesson(text, originRef)),
       promoteLesson: (id) => then(api.promoteLesson(id)),
       retireLesson: (id) => then(api.retireLesson(id)),
+      setFactReach: (id, reach) => then(api.setFactReach(id, reach)),
+      // A read, so no refetch: the evidence behind one claim rides its own route
+      // precisely because it must not be pulled along by the state poll.
+      factDetail: (id) => api.knowledgeFact(id),
       completeHumanTask: (id, note) => then(api.completeHumanTask(id, note)),
       declineHumanTask: (id, note) => then(api.declineHumanTask(id, note)),
       dismissHumanTask: (id) => then(api.dismissHumanTask(id)),
@@ -276,6 +281,7 @@ export function useCockpit(): CockpitStatus {
       setPrWatched: (n, watched) => then(api.setPrWatched(n, watched)),
       setStackLanding: (ref, landing) => then(api.setStackLanding(ref, landing)),
       setIssueWatched: (n, watched) => then(api.setIssueWatched(n, watched)),
+      setIssueState: (n, state) => then(api.setIssueState(n, state)),
       setGoalPriority: (n, priority) => then(api.setGoalPriority(n, priority)),
       setIssueProfile: (n, profile) => then(api.setIssueProfile(n, profile)),
       setPartProfile: (planId, slug, profile) => then(api.setPartProfile(planId, slug, profile)),
@@ -367,6 +373,7 @@ export function useCockpit(): CockpitStatus {
       viewingRetro: place.retro,
       hatching: place.hatch,
       viewingScratchpad: place.scratchpad,
+      viewingFact: place.fact,
       insightsView: place.insightsView,
       insightsWindow: place.insightsWindow,
       selectedGoal: place.goal,
@@ -381,6 +388,8 @@ export function useCockpit(): CockpitStatus {
       ticketFeature: place.ticketFeature,
       ticketGroup: place.ticketGroup,
       ticketOrder: place.ticketOrder,
+      ticketView: place.ticketView,
+      ticketColumns: place.ticketColumns,
     }),
   };
 }

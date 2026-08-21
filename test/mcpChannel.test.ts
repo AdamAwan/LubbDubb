@@ -177,6 +177,11 @@ const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   open_pr: 'addendum',
   report_finding: 'addendum',
   note_progress: 'addendum',
+  // Every agent may write to the knowledge base and every agent may read it, so
+  // neither has a point of use to be named at: a tool named nowhere but in
+  // `tools/list` is a tool an agent finishes without.
+  knowledge_propose: 'addendum',
+  knowledge_ask: 'addendum',
   request_human_task: 'addendum',
   // Terminal or task-scoped: the dispatch prompt names these where they are used.
   link_ticket: 'point-of-use',

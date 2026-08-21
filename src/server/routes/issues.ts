@@ -151,6 +151,57 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
+  // Move a work item to one of the tracker's own states — the card view's drag, and
+  // the first thing in the cockpit that writes one.
+  //
+  // **The state word is not validated here.** The provider owns its process
+  // template: a check against the states the mirror has seen would refuse a
+  // legitimately configured but still-empty column, and a check against nothing at
+  // all is what lets the provider's own refusal reach the operator intact. The schema
+  // asks only that a state was named.
+  //
+  // The capability *is* checked, because `setWorkItemState` throws where no
+  // integration implements it — an exception the operator would read as this write
+  // failing rather than as the deployment not having the operation at all.
+  const StateBody = z.object({ state: z.string().trim().min(1, 'state must name a tracker state').max(80) });
+  app.post(
+    '/api/issues/:number/state',
+    checked({ params: IssueNumberParams, body: StateBody }, async ({ params, body, reply }) => {
+      const { number } = params;
+      const { state } = body;
+      if (!connector.canSetWorkItemState()) {
+        return reply
+          .code(400)
+          .send({ error: 'This tracker cannot write work item states, so nothing here can be moved.' });
+      }
+
+      try {
+        const result = await connector.setWorkItemState({ number, state });
+        if (!result.ok) {
+          return reply.code(400).send({ error: `The tracker did not take "${state}" for #${number}.` });
+        }
+      } catch (err) {
+        const message = (err as Error).message;
+        errors.record({ source: 'server', message: `Failed to move #${number} to "${state}": ${message}` });
+        // The provider's own sentence, quoted whole: it is the only account of why the
+        // card is going back where it came from, and a paraphrase would be the only
+        // account there is.
+        return reply.code(400).send({ error: message });
+      }
+
+      // Both readings, in this order, for the watch route's reasons: `/api/state`
+      // serves the baseline, so a broadcast ahead of the write only makes the cockpit
+      // redraw the old column; and the Tickets tab's own list is built from
+      // `tracker_items`, which the sweep would carry only at the end of a cycle that
+      // coalesces away while another is in flight.
+      store.patchWorldState({ number, state });
+      store.patchTicketState({ number, state });
+      hub.broadcast({ type: 'world:changed' });
+      await harness.runCycle('manual');
+      return { ok: true, state };
+    }),
+  );
+
   // Pin this issue's work to a model profile, or clear the pin (issue #342).
   //
   // The write is a **label on the ticket**, through the same seam and for the same

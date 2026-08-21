@@ -16,7 +16,9 @@ import { watchBucket } from '../worldBuckets.js';
 import type { CockpitView } from '../view/viewModel.js';
 import { stateColour } from '../stateColour.js';
 import { AsyncButton } from './AsyncButton.js';
+import { UnrecordedWork } from './UnrecordedWork.js';
 import { Ref, RefLinksExtended } from './refs.js';
+import { TicketsBoard } from './TicketsBoard.js';
 import { absDate, fmtUsd, relAge } from './util.js';
 
 /** What the tab is narrowed to, grouped and ordered by — every field of it a `Place` field. */
@@ -30,6 +32,10 @@ interface TicketQueryPlace {
   /** Features as headings, or one flat list with a feature column. */
   group: 'feature' | 'flat';
   order: TicketOrder;
+  /** The table, or the board of state columns. */
+  view: 'table' | 'card';
+  /** The board columns the operator has hidden. */
+  columns: string[];
 }
 
 interface TicketsPanelProps {
@@ -59,6 +65,23 @@ const TRACKING_OPTIONS: ReadonlyArray<{ value: TicketTrackingFilter; label: stri
 const GROUP_OPTIONS: ReadonlyArray<{ value: 'feature' | 'flat'; label: string; title: string }> = [
   { value: 'feature', label: 'By feature', title: 'Features as headings, with their work indented under them' },
   { value: 'flat', label: 'Flat', title: 'One list, with the feature as a column' },
+];
+
+const VIEW_OPTIONS: ReadonlyArray<{ value: 'table' | 'card'; label: string; title: string }> = [
+  { value: 'table', label: 'Table', title: 'One list, sortable, with a row per item' },
+  { value: 'card', label: 'Cards', title: 'A column per tracker state, with the work as cards' },
+];
+
+/**
+ * The ordering, as a control rather than a column header.
+ *
+ * Drawn in card view only: the table sorts from its own headers, which is where a
+ * reader of a table looks, and a board has none.
+ */
+const ORDER_OPTIONS: ReadonlyArray<{ value: TicketOrder; label: string; title: string }> = [
+  { value: 'added', label: 'Added', title: 'Newest tracker id first' },
+  { value: 'changed', label: 'Changed', title: 'Order by when the tracker last saw it change' },
+  { value: 'cost', label: 'Cost', title: 'Order by what the fleet has spent under each ticket' },
 ];
 
 /**
@@ -99,6 +122,11 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
   const [cursor, setCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [done, setDone] = useState(false);
+  // What the State narrowing was when the board took over, so the notice can name it
+  // and the way back can restore it. Not a `Place` field: it is a fact about one
+  // switch that just happened, not somewhere the operator can be — and a URL
+  // carrying it would re-announce the clearing on every reload of a shared link.
+  const [clearedState, setClearedState] = useState('');
 
   // The scalars rather than the record they arrive in: `query` is built fresh by the
   // caller on every render, so a dependency on the object identity re-runs the
@@ -191,6 +219,16 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
           rows it reads as a detail rather than as the thing holding all the work. */}
       {held.length > 0 && <IntakeCallout held={held} actions={actions} />}
 
+      {/* Work nothing in the tracker accounts for, above the list of things it
+          does. It is here because `File a work item` / `Ignore` is a triage
+          decision and this is the surface triage happens on — and *below* intake,
+          which is the louder of the two: an unclear assay stops dispatch, while an
+          unrecorded job is a debt that costs nothing until somebody outside asks
+          what the harness has been doing. It draws its own fetch and nothing at
+          all when there is nothing outstanding.
+          → docs/spec/17-cockpit.md#unrecorded-work */}
+      <UnrecordedWork now={now} canFileTickets={view.state.config.canFileTickets} />
+
       <div className="tickets-filters">
         <Segment
           label="Watch"
@@ -208,13 +246,66 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
           hint="What the harness is doing about it"
         />
         <i className="tickets-fdiv" />
-        <Segment
-          label="Group"
-          options={GROUP_OPTIONS}
-          value={query.group}
-          onPick={(group) => onQuery({ group })}
-          hint="How the list is arranged"
-        />
+        {/* A flat board has no headings to indent under, so the arrangement control
+            is the table's alone; the ordering takes its place, because the table
+            sorts from its column headers and the board has none. */}
+        {query.view === 'table' ? (
+          <Segment
+            label="Group"
+            options={GROUP_OPTIONS}
+            value={query.group}
+            onPick={(group) => onQuery({ group })}
+            hint="How the list is arranged"
+          />
+        ) : (
+          <Segment
+            label="Order"
+            options={ORDER_OPTIONS}
+            value={query.order}
+            onPick={(order) => onQuery({ order })}
+            hint="How each column is ordered"
+          />
+        )}
+        <i className="tickets-fdiv" />
+        <div className="tickets-fgroup">
+          <span className="tickets-flabel" title="How the work is laid out">
+            View
+          </span>
+          <div className="tickets-seg">
+            {VIEW_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                className={option.value === query.view ? 'on' : ''}
+                // Disabled rather than hidden where the tracker has no native states:
+                // there are no columns to draw, and a control that vanishes on some
+                // deployments is one nobody can ask a question about.
+                disabled={states.length === 0 && option.value === 'card'}
+                aria-pressed={option.value === query.view}
+                title={
+                  states.length === 0 && option.value === 'card'
+                    ? 'This tracker reports no native states, so there are no columns to draw'
+                    : option.title
+                }
+                onClick={() => {
+                  if (option.value === query.view) return;
+                  if (option.value === 'card') {
+                    // `state` stops meaning anything once every state is a column, so
+                    // it is cleared — and said, below. A control silently ignored is
+                    // worse than one that moved and told you.
+                    setClearedState(query.state === 'any' ? '' : query.state);
+                    onQuery({ view: 'card', state: 'any' });
+                  } else {
+                    setClearedState('');
+                    onQuery({ view: 'table' });
+                  }
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        </div>
         <span className="tickets-sum">
           {/* Loaded of total, because an infinite list with no total says nothing
               about whether you are near the end. */}
@@ -246,11 +337,48 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
         </div>
       )}
 
+      {/* The `tickets-widened` idiom pointed the other way: the axis did not widen,
+          it stopped applying — and either way a control that moved has to say so. */}
+      {query.view === 'card' && clearedState !== '' && (
+        <div className="tickets-widened">
+          <span>
+            Cards draw every state as a column, so the <b>State</b> narrowing to <b>{clearedState}</b> was cleared.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              onQuery({ view: 'table', state: clearedState });
+              setClearedState('');
+            }}
+            title="Back to the table, narrowed to that state again"
+          >
+            Back to the table
+          </button>
+        </div>
+      )}
+
       {/* Drawn only where the provider has native states. A filter offering states
           the tracker cannot produce is a control that always returns nothing. */}
-      {states.length > 0 && (
-        <StateTier states={states} value={query.state} onPick={(facet) => onQuery(statePick(facet, query.tracking))} />
-      )}
+      {states.length > 0 &&
+        (query.view === 'card' ? (
+          <StateTier
+            states={states}
+            hidden={query.columns}
+            onToggle={(state) =>
+              onQuery({
+                columns: query.columns.includes(state)
+                  ? query.columns.filter((s) => s !== state)
+                  : [...query.columns, state],
+              })
+            }
+          />
+        ) : (
+          <StateTier
+            states={states}
+            value={query.state}
+            onPick={(facet) => onQuery(statePick(facet, query.tracking))}
+          />
+        ))}
 
       {(features.length > 0 || orphanCount > 0) && (
         <FeatureLegend
@@ -264,50 +392,61 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
       {/* The route's URLs merged over the shell's, so a `<Ref>` to a ticket that
           left the world months ago still resolves to a link. Without this the rows
           would render correct-looking references that go nowhere. */}
-      <RefLinksExtended refUrls={refUrls}>
-        <section className="tickets-card">
-          <div className={`tickets-rows by-${query.order} ${query.group === 'feature' ? 'grouped' : ''}`}>
-            <div className="tickets-thead">
-              <span>#</span>
-              <span>Ticket</span>
-              {query.group === 'flat' && <span>Feature</span>}
-              <span>Watch</span>
-              <span>State</span>
-              <SortHead label="Cost" order="cost" active={query.order} onPick={onQuery} />
-              <SortHead label="Changed" order="changed" active={query.order} onPick={onQuery} />
-              <span />
-            </div>
+      {query.view === 'card' ? (
+        <TicketsBoard
+          query={{ watch: query.watch, tracking: query.tracking, feature: query.feature, order: query.order }}
+          facets={states}
+          hidden={query.columns}
+          view={view}
+          actions={actions}
+          now={now}
+        />
+      ) : (
+        <RefLinksExtended refUrls={refUrls}>
+          <section className="tickets-card">
+            <div className={`tickets-rows by-${query.order} ${query.group === 'feature' ? 'grouped' : ''}`}>
+              <div className="tickets-thead">
+                <span>#</span>
+                <span>Ticket</span>
+                {query.group === 'flat' && <span>Feature</span>}
+                <span>Watch</span>
+                <span>State</span>
+                <SortHead label="Cost" order="cost" active={query.order} onPick={onQuery} />
+                <SortHead label="Changed" order="changed" active={query.order} onPick={onQuery} />
+                <span />
+              </div>
 
-            {query.group === 'flat'
-              ? rows.map((row) => (
-                  <TicketRowView
-                    key={row.number}
-                    row={row}
-                    issue={live_.get(row.number) ?? null}
-                    view={view}
-                    actions={actions}
-                    now={now}
-                    showFeature
-                  />
-                ))
-              : featureBlocks(rows).map((block) => (
-                  <FeatureBlockView
-                    key={block.key}
-                    block={block}
-                    live={live_}
-                    view={view}
-                    actions={actions}
-                    now={now}
-                  />
-                ))}
+              {query.group === 'flat'
+                ? rows.map((row) => (
+                    <TicketRowView
+                      key={row.number}
+                      row={row}
+                      issue={live_.get(row.number) ?? null}
+                      view={view}
+                      actions={actions}
+                      now={now}
+                      showFeature
+                    />
+                  ))
+                : featureBlocks(rows).map((block) => (
+                    <FeatureBlockView
+                      key={block.key}
+                      block={block}
+                      live={live_}
+                      view={view}
+                      actions={actions}
+                      now={now}
+                    />
+                  ))}
 
-            <div className="tickets-foot" ref={foot}>
-              {loading && <span className="tickets-spin" aria-hidden="true" />}
-              {footWords({ loading, backfilling, done, empty: rows.length === 0, anchorAt })}
+              <div className="tickets-foot" ref={foot}>
+                {loading && <span className="tickets-spin" aria-hidden="true" />}
+                {footWords({ loading, backfilling, done, empty: rows.length === 0, anchorAt })}
+              </div>
             </div>
-          </div>
-        </section>
-      </RefLinksExtended>
+          </section>
+        </RefLinksExtended>
+      )}
     </div>
   );
 }
@@ -370,43 +509,60 @@ function IntakeCallout({ held, actions }: { held: Issue[]; actions: CockpitActio
   );
 }
 
-/** The tracker's own states, with counts, and a mark on the ones `pickupStates` lets through. */
-function StateTier({
-  states,
-  value,
-  onPick,
-}: {
-  states: readonly TicketStateFacet[];
-  value: string;
-  onPick: (next: TicketStateFacet | null) => void;
-}): JSX.Element {
+/**
+ * The tracker's own states, with counts, and a mark on the ones the harness picks up
+ * from — as a filter over the table, and as column visibility over the board.
+ *
+ * One control with two jobs rather than two controls, because it is the same question
+ * asked of the same list: *which of the tracker's states am I looking at*. On a board
+ * the answer is which columns are drawn, so `aria-pressed` means "drawn" and the
+ * chips carry no `Any`, there being nothing to widen back to.
+ */
+function StateTier(
+  props:
+    | { states: readonly TicketStateFacet[]; value: string; onPick: (next: TicketStateFacet | null) => void }
+    | { states: readonly TicketStateFacet[]; hidden: readonly string[]; onToggle: (state: string) => void },
+): JSX.Element {
+  const columns = 'onToggle' in props;
   return (
     <div className="tickets-states">
-      <span className="tickets-flabel" title="What the tracker itself calls it">
-        State
-      </span>
-      <button
-        type="button"
-        className={value === 'any' ? 'on' : ''}
-        onClick={() => onPick(null)}
-        aria-pressed={value === 'any'}
+      <span
+        className="tickets-flabel"
+        title={columns ? 'Which columns the board draws' : 'What the tracker itself calls it'}
       >
-        Any
-      </button>
-      {states.map((facet) => (
+        {columns ? 'Columns' : 'State'}
+      </span>
+      {!columns && (
         <button
-          key={facet.state}
           type="button"
-          className={`${value === facet.state ? 'on' : ''} ${facet.pickup ? 'gate' : ''}`}
-          aria-pressed={value === facet.state}
-          onClick={() => onPick(facet)}
-          title={stateWhy(facet)}
+          className={props.value === 'any' ? 'on' : ''}
+          onClick={() => props.onPick(null)}
+          aria-pressed={props.value === 'any'}
         >
-          {facet.state}
-          {facet.pickup && <i className="tickets-gate">▲</i>}
-          <i className="tickets-k">{facet.count.toLocaleString()}</i>
+          Any
         </button>
-      ))}
+      )}
+      {props.states.map((facet) => {
+        const on = columns ? !props.hidden.includes(facet.state) : props.value === facet.state;
+        return (
+          <button
+            key={facet.state}
+            type="button"
+            className={`${on ? 'on' : ''} ${facet.pickup ? 'gate' : ''}`}
+            aria-pressed={on}
+            onClick={() => (columns ? props.onToggle(facet.state) : props.onPick(facet))}
+            title={
+              columns
+                ? `${on ? 'Hide' : 'Show'} the ${facet.state} column${facet.pickup ? ' — a state the harness picks up from' : ''}`
+                : stateWhy(facet)
+            }
+          >
+            {facet.state}
+            {facet.pickup && <i className="tickets-gate">▲</i>}
+            <i className="tickets-k">{facet.count.toLocaleString()}</i>
+          </button>
+        );
+      })}
       <span className="tickets-why">
         <i className="tickets-gate">▲</i> a state <code>pickupStates</code> lets through
       </span>

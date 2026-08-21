@@ -1,10 +1,14 @@
 # 27 — Knowledge
 
-> **Status: not yet built — all seven phases outstanding.** Everything below describes behaviour this
-> subsystem is meant to have, none of which exists yet; [The phases](#the-phases) says what lands
-> when. Per `docs/README.md`, a module that does not exist yet is named in italics —
-> _src/knowledge/facts.ts_ — where a real one is backticked, and a phase landing deletes its row and
-> unmarks the part of this document it makes true. When the last row goes, so does this banner.
+> **Status: partly built — phases 3–7 outstanding.** The store, its three axes, the corroboration
+> count, the rejection bar and `supersedes` are running; any agent can write to and read from them
+> (`knowledge_propose`, `knowledge_ask`); and the cockpit page is where an operator governs what
+> they carry. Nothing reaches an agent that did not ask — delivery is [phase 3](#the-phases) — and
+> the sections marked below describe behaviour that does not exist.
+> [The phases](#the-phases) says what lands when. Per `docs/README.md`, a module that does not exist
+> yet is named in italics — _src/knowledge/block.ts_ — where a real one is backticked, and a phase
+> landing deletes its row and unmarks the part of this document it makes true. When the last row
+> goes, so does this banner.
 
 Hundreds of agents work this repository and each one starts knowing nothing about it. What they learn
 — that `knip` runs every rule at `error`, that a route handler never reads the request, that
@@ -17,13 +21,13 @@ different distances it can carry a fact.
 Knowledge is not a sixth store beside five others. It is those five collapsed into one, because they
 are five answers to one question that share no vocabulary and cannot be read against each other.
 
-| Today                   | Holds                                        | Reaches an agent                        |
-| ----------------------- | -------------------------------------------- | --------------------------------------- |
-| `lessons`               | Durable claims, operator-vouched             | System prompt, capped                   |
-| `findings` kind `docs`  | "The repository does not say this"           | Nothing — until an operator makes a job |
-| `remedies`              | Why the fleet came back to a pull request    | The next CI/review prompt, per check    |
-| `scratchpads`           | Notes between siblings on one goal           | The goal's own agents, on request       |
-| `retrospectives`        | The write-up of a delivered goal             | Nothing                                 |
+| Today                  | Holds                                     | Reaches an agent                        |
+| ---------------------- | ----------------------------------------- | --------------------------------------- |
+| `lessons`              | Durable claims, operator-vouched          | System prompt, capped                   |
+| `findings` kind `docs` | "The repository does not say this"        | Nothing — until an operator makes a job |
+| `remedies`             | Why the fleet came back to a pull request | The next CI/review prompt, per check    |
+| `scratchpads`          | Notes between siblings on one goal        | The goal's own agents, on request       |
+| `retrospectives`       | The write-up of a delivered goal          | Nothing                                 |
 
 Three of the five hold the same shape of claim — _something true of this repository that the
 repository does not say_ — arriving through three tools that do not know about each other and landing
@@ -37,9 +41,19 @@ everywhere else, so the pad keeps its own writer and this page links to it. A pa
 to be durable is **proposed** as a fact by the agent that found it useful.
 
 `remedies` survives as what it always was — the **event** record of one return to a pull request,
-with its counts and its dollars ([18](18-observability.md)) — and gains the ability to propose a fact.
-An account of an event and a durable claim are different animals and folding them together would lose
-the counts.
+with its counts and its dollars ([18](18-observability.md)) — and gains the ability to propose a fact
+([not yet built](#what-the-fleet-writes-with)). An account of an event and a durable claim are
+different animals and folding them together would lose the counts.
+
+**The promoted lessons are already here.** A promoted `lessons` row _is_ a fleet-scoped standing claim
+an operator vouched for that reaches every agent's system prompt — which is `injected`, exactly — so
+`KnowledgeStore.adoptLessons` mirrors it under an id derived from the lesson's. That runs on every
+boot rather than once, because `lessons` keeps its own surface until delivery moves
+([phase 3](#the-phases)): a lesson promoted between the two phases would otherwise be a claim that
+silently stopped reaching agents on the boot the operator took that build. The mirror runs backwards
+too — a lesson retired after it was adopted takes its fact with it, unless something has since
+corroborated or amended it, at which point it is a fact in its own right and the lessons panel is not
+where it is governed.
 
 ## Three axes, not one list
 
@@ -50,27 +64,48 @@ fleet-scoped **and** expiring; "the pets vivarium is off by default" is fleet-sc
 
 ### Scope — who it is relevant to
 
-| Scope           | Written                | Means                                                                 |
-| --------------- | ---------------------- | --------------------------------------------------------------------- |
-| Fleet           | `fleet`                | True of working this repository at all. The most expensive to be wrong. |
-| Check           | `check:<name>`         | True of one CI check. The name is the provider's identifier.           |
-| Goal            | `goal:<issue ref>`     | True of one goal, and dies with it.                                    |
+| Scope | Written           | Means                                                                                                                              |
+| ----- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| Fleet | `fleet`           | True of working this repository at all. The most expensive to be wrong.                                                            |
+| Check | `check:<name>`    | True of one CI check. The name is the provider's identifier.                                                                       |
+| Goal  | `goal:<goal ref>` | True of one goal, and dies with it. The goal an origin collapses to — `goal:issue:41`, `goal:pr:412` — never the dispatch concern. |
 
-Scope is drawn as a reference token in the cockpit, so it is a place a reader can go rather than a
-label.
+A scope is stored as it is written above, and **resolved from the credential wherever it can be**: an
+agent says `goal` and the harness expands it to its own goal, exactly as every other write in the tool
+channel is attributed (`token -> agent -> task -> origin`). A check name is the one part it cannot
+derive, so that one is an argument. An agent with no goal behind it is _refused_ the `goal` scope
+rather than quietly widened to `fleet` — a silent widening files a fleet-wide claim on behalf of an
+agent that thought it was writing a note about one goal.
+
+A scope is **drawn as a reference** on the page, so it is a place a reader can go rather than a label:
+a `goal:` scope is the goal's own ref, and a `check:` scope is the provider's identifier, said as one.
+
+**Matching is inside a scope.** The same sentence about one check and about the fleet are two claims:
+they carry different costs to be wrong and reach different agents, so folding them would let a note
+about one job be corroborated into a fleet-wide instruction.
 
 **A `check:` scope is fragile, and the page says so.** A check name is a provider identifier that
 changes when somebody renames a job or adds a matrix dimension. `priorRemedies` already matches check
 names exactly and accepts the same fragility for the same reason — a prefix match would put another
 job's history in front of an agent under a name it would read as its own. The failure is silent: the
-fact simply stops being delivered. So a fact whose scope has matched nothing in `knowledgeScopeStaleDays`
-is surfaced on the page as scoped to a check that no longer runs, which is the only way that can be
-seen.
+fact simply stops being delivered. The page names a check scope as the provider's own identifier and
+says that much where it is drawn.
+
+> **Not yet built — [phase 7](#the-phases):** the staleness reading itself. A fact whose scope has
+> matched nothing in `knowledgeScopeStaleDays` is surfaced on the page as scoped to a check that no
+> longer runs, which is the only way a silently-unmatched scope can be seen.
 
 ### Lifetime — how it ends
 
 A fact either **stands** until it is retired, or it **expires**. An expiring fact is a _notice_, and
 notices are a different animal in every respect that matters — see [Notices](#notices).
+
+An expiring fact carries the moment it lapses, and a lapsed fact is answered to nobody — the row
+stays, saying what it said, but it is out of every read.
+
+> **Not yet built — [phase 4](#the-phases):** the resolution condition below, and the sweep that acts
+> on it. Today the clock is the whole mechanism, and an agent proposing an expiring fact says how long
+> it expects what it saw to still be true.
 
 An expiring fact may also carry a **resolution condition** the harness can evaluate: `main` red on a
 check resolves when that check goes green, not when a timer runs out. The clock is the backstop, not
@@ -82,13 +117,25 @@ check that is now genuinely failing. Both are silent.
 
 Reach is the state machine, and it is the whole of the governance.
 
-| Reach       | Where the fact is                                  | What moves it here                       |
-| ----------- | -------------------------------------------------- | ---------------------------------------- |
-| `proposal`  | Nowhere. One agent said it and nothing has agreed.  | An agent proposing.                      |
-| `lookup`    | Answered when asked; injected on a matching scope.  | Two independent corroborations, or you.  |
-| `injected`  | In front of every agent, before it reads any code.  | **You, and only you.**                   |
-| `committed` | In the repository. **Out of every prompt.**         | A docs pull request landing.             |
-| `rejected`  | Nowhere, and barred from coming back.               | You.                                     |
+| Reach       | Where the fact is                                  | What moves it here                      |
+| ----------- | -------------------------------------------------- | --------------------------------------- |
+| `proposal`  | Nowhere. One agent said it and nothing has agreed. | An agent proposing.                     |
+| `lookup`    | Answered when asked; injected on a matching scope. | Two independent corroborations, or you. |
+| `injected`  | In front of every agent, before it reads any code. | **You, and only you.**                  |
+| `committed` | In the repository. **Out of every prompt.**        | A docs pull request landing.            |
+| `rejected`  | Nowhere, and barred from coming back.              | You.                                    |
+
+Two of those transitions belong to the fleet: an agent proposing, and corroboration carrying a
+proposal to `lookup`. The rest are the operator's, and the [page](#in-the-cockpit) is what they are
+reached through — promote, demote and reject through `POST /api/knowledge/facts/:id/reach`, and
+`committed` through the documentation pull request that is [phase 6](#the-phases).
+
+**Naming the reach a claim already has is a ruling, not a no-op.** `lookup` is where two agents
+agreeing puts a claim _and_ where an operator puts one that is true but not worth every agent's
+context, so an operator who has read a corroborated claim and decided it belongs exactly where it is
+has to be able to say so — the store stamps `ruled_at` on any move they make, whether or not the
+reach changed. Without it the page's **Needs you** section would ask again forever, and the only way
+to empty it would be a decision the operator does not agree with.
 
 **`committed` is not the top of a ladder — it is a different medium.** Once a fact is in
 `docs/spec/` an agent reads it from the repository, and keeping it injected pays context twice for
@@ -102,11 +149,21 @@ hold.
 A fact reaches `lookup` on **two corroborations from two different goals**, and never on an operator's
 absence of objection.
 
+**The proposal is the first of the two.** An agent writing a claim down is making an observation, with
+words and a goal behind it, so it is recorded as a corroboration like any other — which is what makes
+"two corroborations from two different goals" the literal count rather than a rule with an off-by-one
+in it. It also means the second agent to hit a wall calls the _same_ tool with the same words it would
+have used anyway, and its call lands as agreement rather than as a second copy of the claim:
+`claimsMatch` decides which, so nobody has to know whether they are first.
+
 **Different goals, not different origins.** `pr:412:ci` and `pr:412:comments` are two origins and one
 confusion; two parts of one goal hitting one wall is one observation. And a re-dispatch inherits the
 conversation through `spawn`'s `resumeSessionId` ([10](10-agent-runtimes.md)) — an agent corroborating
 its own predecessor's claim is one agent counted twice, which is exactly the shape auto-promotion must
 not reward.
+
+> **Not yet built — [phase 4](#the-phases):** the harness corroborating for itself, below. Today every
+> corroboration is an agent's.
 
 **The harness is a better corroborator than a second agent**, wherever it can speak. Two agents are
 not independent if the second read the first's notice before forming its own view, and contamination
@@ -121,6 +178,10 @@ agent's own words** — never a counter on the fact. The count is what promotes;
 operator reads to decide whether it should have.
 
 ## Contradiction, and why it does not delete
+
+> **Not yet built — [phase 5](#the-phases).** `supersedes` and the rejection bar's exemption for it are
+> in the store already, which is the half that had to be right in the schema; `knowledge_contradict`
+> and the contradiction ratio are not.
 
 An agent that finds an injected fact contradicted by the code in front of it says so. This is the
 half `lessons` never had: today staleness rests on an agent mentioning it in a retrospective and a
@@ -148,9 +209,12 @@ takes this stance for a dismissed finding — a claim an operator has answered i
 report is folded silently into — and here it is load-bearing rather than tidy: without it, two agents
 re-propose next week what you killed today and auto-promotion resurrects it, on its own.
 
-Matching is `claimKey` and `claimsMatch` from `src/store/findings.ts`: normalisation to alphanumerics,
-then equality or whole-word containment above a length floor. That machinery is already written and
-already tuned; this store uses it rather than growing a second matcher free to disagree with it.
+Matching is `claimKey` and `claimsMatch` (`src/claims.ts`): normalisation to alphanumerics, then
+equality or whole-word containment above a length floor. That machinery was already written and
+already tuned for `src/store/findings.ts`, and it moved up to a module of its own rather than being
+copied — a claim an operator dismissed as a finding and re-proposed as a fact has to look like the
+same sentence to both stores, or the bar leaks. A domain module under `src/store/` may not reach a
+sibling (`test/storeModules.test.ts`), which is the other half of why it lives outside both.
 
 **Which is precisely why an amendment needs an explicit link.** An amended claim usually _contains_
 its original — that is what amending is — so a rejected claim's bar would swallow its own correction,
@@ -163,6 +227,10 @@ it is `lookup`, where it costs nothing until somebody asks. Folding the two toge
 from ever being found.
 
 ## Notices
+
+> **Not yet built — [phase 4](#the-phases).** The lifetime axis exists and an expiring fact lapses out
+> of every read, but nothing auto-promotes one, `knowledge_notice` does not exist, and no notice is
+> raised by the harness. Until it does, an expiring fact is governed exactly like any other.
 
 A notice is fleet-visible within minutes, on two corroborations, with no operator in the loop. It is
 the one path in this design where agents put text in front of the whole fleet by themselves, and
@@ -190,6 +258,13 @@ every agent before it reads any code, and it fails silently. That is the argumen
 weakens it.
 
 ## Delivery: two prompts, not one
+
+> **Not yet built — [phase 3](#the-phases).** Nothing here reaches an agent that did not ask for it:
+> `knowledge_ask` is the whole of delivery today, and the system-prompt block still renders the
+> `lessons` table (`src/lessonBlock.ts`). What an ask can reach is already the rule below, though — a
+> `proposal` is unreachable, because answering with one would be auto-promotion arriving by the back
+> door, and a `committed` fact is unreachable because it is in the repository now and reading it out
+> of a tool pays context twice for one sentence.
 
 Reach and scope interact, and the interaction decides **which** prompt a fact rides.
 
@@ -225,37 +300,77 @@ trimmed, which is worse than having no record at all.
 Four tools, and the widening of who may write is the cheap half of this design — proposals cost
 nothing until somebody vouches, and the gate is unchanged.
 
-| Tool                    | Who may call it     | Does                                                            |
-| ----------------------- | ------------------- | ---------------------------------------------------------------- |
-| `knowledge_propose`     | **Any agent**       | Files a claim with its scope, lifetime and evidence.             |
-| `knowledge_ask`         | **Any agent**       | Returns facts matching a scope or a question.                    |
-| `knowledge_contradict`  | **Any agent**       | Says an injected fact is contradicted, **with the amendment**.   |
-| `knowledge_notice`      | **Any agent**       | Raises an expiring observation.                                  |
+| Tool                   | Who may call it | Does                                                                                     |
+| ---------------------- | --------------- | ---------------------------------------------------------------------------------------- |
+| `knowledge_propose`    | **Any agent**   | Files a claim with its scope, lifetime and evidence — or records the caller as agreeing. |
+| `knowledge_ask`        | **Any agent**   | Returns facts matching a scope or a question.                                            |
+| _knowledge_contradict_ | **Any agent**   | Says an injected fact is contradicted, **with the amendment**. [Phase 5](#the-phases).   |
+| _knowledge_notice_     | **Any agent**   | Raises an expiring observation. [Phase 4](#the-phases).                                  |
 
-Today only `retro_submit` and `report_remedy` may propose a lesson, and the remedy arm only under one
-of four guard verdicts — so a planning agent, an assayer, a validator or an issue-work agent cannot
-record what it learned at all except by surviving to a retrospective. That narrowness has no argument
-behind it.
+Before this, only `retro_submit` and `report_remedy` could propose a lesson, and the remedy arm only
+under one of four guard verdicts — so a planning agent, an assayer, a validator or an issue-work agent
+could not record what it learned at all except by surviving to a retrospective. That narrowness had no
+argument behind it.
+
+Both live tools are named in `MCP_PROTOCOL_ADDENDUM` rather than at a point of use — the choice
+`test/mcpChannel.test.ts` forces on every tool. Every agent may write to this store and every agent
+may read it, so there is no one dispatch prompt that could name them.
+
+**A proposal is refused by name when it is barred**, with the id of the rejected claim and the
+`supersedes` argument that is the way back. A silent refusal teaches the fleet nothing, and it files
+the same claim again tomorrow.
+
+> **Not yet built:** the proposal arm on the two tools below. `report_remedy` still proposes a
+> `lessons` row under an `undocumented` guard, and a `docs` finding is still only a finding. Both are
+> a small change once delivery has moved in [phase 3](#the-phases) — before that they would be writing
+> into a store nothing reads.
 
 `report_remedy` and `report_finding` keep their own jobs and gain a proposal arm: a remedy is still
 the event record, and a `docs` finding is still the thing that becomes a documentation pull request.
 
 ## In the cockpit
 
-One page, `?page=knowledge`, and its state lives on `Place` like every other piece of "where am I"
-([17](17-cockpit.md#the-address-bar)).
+One full-surface panel, `?panel=knowledge`, reached from the **Knowledge** reading in the top bar —
+which counts the corroborated claims nobody has ruled on, and nothing else, for the reason the
+Lessons reading counts proposals ([17](17-cockpit.md#the-top-bar-and-the-panels)). Which panel is in
+front and which claim has its provenance open are both on `Place`
+([17](17-cockpit.md#the-address-bar)): `?fact=<id>` is a link to what two agents actually saw, and a
+row held open in a `useState` works right up until the back button steps over it.
 
 The page reads top to bottom in the order things demand attention: **Live notices** with their clocks,
-**Needs you** — the corroborated proposals waiting on the one decision that is yours — then
-**Injected** with the block's character budget drawn against its cap, **On lookup**, and **Committed
-to the repository**. A row carries the claim, its scope as a reference, its corroboration count and
-its provenance; a contradicted fact is drawn as contradicted, and a fact past the cap is drawn as not
-reaching agents, because the panel is the only place either can be seen.
+**Needs you** — the corroborated claims waiting on the one decision that is yours — then **Injected**,
+**On lookup**, **One voice**, **Committed to the repository**, and the **Rejected** tail. A row
+carries the claim, its scope as a reference, its corroboration count and its provenance, with the
+observers' own words a click away.
 
-**A second surface renders what an agent actually receives**, per dispatch kind and per check, from
-the same function the launch uses — never a second reading of it. `LessonsPanel` already carries this
-idea in miniature ("is this claim actually being sent"); a store this size cannot be governed without
-it.
+**The page draws what it stopped**, which is why the last two sections are there. A surface showing
+only what it let through cannot tell an operator that a claim was killed — and the rejection bar,
+which is what stops two agents re-proposing next week what was killed today, is invisible everywhere
+else in the harness. The Lessons panel keeps its retired tail for the same reason.
+
+**The count on a row is `distinctCorroborators`', taken server-side.** Two observations are one
+corroborator if they share a goal _or_ a session, transitively, so a length counted in the browser
+would be a different number wearing the same label — free to disagree with the one that actually
+carries a claim to `lookup`.
+
+**Nothing on the page auto-promotes anything, and it files nothing.** Agents propose through the tool
+channel on a scoped MCP credential; the cockpit's bearer token reaches four verbs — promote, demote,
+reject, keep — and none of them is available to an agent. There is no un-reject: a rejection is
+terminal, and what comes back is an amendment naming the barred claim.
+
+**Promoted lessons are mirrored in, so the Lessons panel and this page show the same claims** until
+delivery moves in [phase 3](#the-phases). The page says so in as many words rather than leaving a
+reader to work out which surface is authoritative.
+
+> **Not yet built — [phase 3](#the-phases):** the Injected section's character budget drawn against
+> `knowledgeBlockChars`, and the second surface that renders **what an agent actually receives**, per
+> dispatch kind and per check, from the same function the launch uses — never a second reading of it.
+> Both wait on the renderer for the same reason: what fits is returned by the block renderer and never
+> recomputed at the call site (`renderLessonBlock` and `LessonsPanel` are the precedent), and a meter
+> drawn from a plain character count today would be exactly the second implementation of "what fits"
+> that rule exists to prevent. Until then the Injected section says plainly that nothing in it is
+> delivered yet. `LessonsPanel` already carries the second surface's idea in miniature ("is this claim
+> actually being sent"); a store this size cannot be governed without it.
 
 ## What nothing does
 
@@ -268,6 +383,8 @@ it.
 
 ## What it costs
 
+> **Not yet built — [phase 7](#the-phases).**
+
 The injected block is input tokens on **every dispatch**, so the page prices it in the dollars the
 rest of the cockpit uses — against the same window as Insights ([18](18-observability.md)) — rather
 than in tokens, which mean nothing at a glance.
@@ -278,6 +395,9 @@ not pretend to the fourth. A `lookup` fact has the better signal — how often i
 — and that is drawn on its row.
 
 ## Committing to the repository
+
+> **Not yet built — [phase 6](#the-phases).** `committed` is a reach the store holds, and a committed
+> fact is already out of every read; what does not exist is the pull request that puts it in the tree.
 
 A fact leaves for one of two places, and they are not interchangeable.
 
@@ -294,15 +414,14 @@ A fact leaves for one of two places, and they are not interchangeable.
 Ordered so each lands something usable and nothing before it is wasted. Every phase updates the part
 of this document it makes true.
 
-| # | Lands                                                                                                                                                                                                | Depends on |
-| - | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| 1 | The store and the axes. _src/store/knowledge.ts_ (facts, corroborations), scope/lifetime/reach, `claimKey` matching reused from findings, the rejection bar and `supersedes`. `knowledge_propose` and `knowledge_ask`. Promoted `lessons` migrate in. | —          |
-| 2 | The Knowledge page: the five sections, the budget meter, promote/demote/reject. Nothing new reaches an agent — this is the surface that makes phase 3 safe to turn on.                                | 1          |
-| 3 | Delivery. _src/knowledge/block.ts_ renders the system-prompt block under `knowledgeBlockChars`; scope-matched facts append to the task prompt beside `priorRemedies`. The "what an agent receives" surface. | 1, 2       |
-| 4 | Notices. `knowledge_notice`, expiry, resolution conditions, the always-injected tier, and the harness-written notices for same-commit red→green and base-branch red.                                  | 3          |
-| 5 | Contradiction and amendment. `knowledge_contradict`, the amendment proposal, the contradiction ratio on the page.                                                                                     | 2, 3       |
-| 6 | Graduation. Committing a fact opens a documentation pull request through the `docs`-finding machinery, and the fact leaves every prompt when it lands.                                                | 2          |
-| 7 | Cost and drift. Dollars per dispatch on the page; stale `check:` scopes surfaced; lookup ask-counts.                                                                                                  | 3          |
+| #   | Lands                                                                                                                                                                                                       | Depends on |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 3   | Delivery. _src/knowledge/block.ts_ renders the system-prompt block under `knowledgeBlockChars`; scope-matched facts append to the task prompt beside `priorRemedies`. The "what an agent receives" surface. | 1, 2       |
+| 4   | Notices. `knowledge_notice`, expiry, resolution conditions, the always-injected tier, and the harness-written notices for same-commit red→green and base-branch red.                                        | 3          |
+| 5   | Contradiction and amendment. `knowledge_contradict`, the amendment proposal, the contradiction ratio on the page.                                                                                           | 2, 3       |
+| 6   | Graduation. Committing a fact opens a documentation pull request through the `docs`-finding machinery, and the fact leaves every prompt when it lands.                                                      | 2          |
+| 7   | Cost and drift. Dollars per dispatch on the page; stale `check:` scopes surfaced; lookup ask-counts.                                                                                                        | 3          |
 
-Phases 1–3 are the spine: without 3 nothing reaches an agent, and without 2 nothing can be governed.
-4 through 7 are independent of each other and can land in any order.
+Phases 1 and 2 — `src/store/knowledge.ts`, the axes, the bar, the two tools, and the page an operator
+governs them from — have landed. Phase 3 is the rest of the spine: until it lands nothing reaches an
+agent that did not ask. 4 through 7 are independent of each other and can land in any order.

@@ -11,9 +11,10 @@ import { Panel } from './Panel.js';
 import { RecoveryPanel } from '../components/RecoveryPanel.js';
 import { TicketsPanel } from '../components/TicketsPanel.js';
 import { ConfigPage } from '../components/ConfigPage.js';
-import { WorkTreePanel } from '../components/WorkTreePanel.js';
+import { RecordPanel } from '../components/RecordPanel.js';
 import { FindingsPanel } from '../components/FindingsPanel.js';
 import { LessonsPanel } from '../components/LessonsPanel.js';
+import { KnowledgePanel } from '../components/KnowledgePanel.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
 import { SetupPanel } from '../components/SetupPanel.js';
 import { PetsPanel } from '../components/PetsPanel.js';
@@ -78,6 +79,8 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
         <Crumb goal={view.goalPage.issue} tab={view.tab} actions={actions} />
         <GoalPage page={view.goalPage} view={view} actions={actions} />
       </>
+    ) : view.selectedGoal !== null ? (
+      <GoalGone ref_={view.selectedGoal} tab={view.tab} actions={actions} />
     ) : (
       tabBody(view.tab, view, actions)
     );
@@ -126,9 +129,9 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       // rather than held inside it, so a link to one carries both.
       return <InsightsPage view={view.insightsView} window={view.insightsWindow} actions={actions} />;
     case 'tickets':
-      // Embedded exactly as the work tree is, and for the same reason: it reaches
-      // its own route, which `console/` may not, but rendering a component that
-      // does is not reaching — the import ban is on `api.js` and still holds.
+      // Embedded exactly as Insights is, and for the same reason: it reaches its
+      // own route, which `console/` may not, but rendering a component that does
+      // is not reaching — the import ban is on `api.js` and still holds.
       return (
         <TicketsPanel
           query={{
@@ -138,6 +141,8 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
             feature: view.ticketFeature,
             group: view.ticketGroup,
             order: view.ticketOrder,
+            view: view.ticketView,
+            columns: view.ticketColumns,
           }}
           onQuery={(next) =>
             actions.setTicketQuery({
@@ -147,6 +152,8 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
               ...(next.feature !== undefined ? { ticketFeature: next.feature } : {}),
               ...(next.group !== undefined ? { ticketGroup: next.group } : {}),
               ...(next.order !== undefined ? { ticketOrder: next.order } : {}),
+              ...(next.view !== undefined ? { ticketView: next.view } : {}),
+              ...(next.columns !== undefined ? { ticketColumns: next.columns } : {}),
             })
           }
           view={view}
@@ -169,15 +176,6 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       // own routes, which `console/` may not, but rendering a component that does
       // is not reaching — the import ban is on `api.js` and still holds.
       return <ConfigPage view={view} actions={actions} />;
-    case 'work':
-      // The shared panel, embedded exactly as the launch desk is: it reaches its
-      // own routes, which `console/` may not, but rendering one that does is not
-      // reaching — the import ban is on `api.js`, and it still holds here.
-      return (
-        <section className="work-panel">
-          <WorkTreePanel now={view.now} canFileTickets={view.state.config.canFileTickets} />
-        </section>
-      );
   }
 }
 
@@ -191,6 +189,45 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
  * whole of the way back — the tab was never cleared, so there is nothing to
  * restore, and naming it is what makes the trail a trail rather than a label.
  */
+/**
+ * A goal was selected and the world does not carry it.
+ *
+ * `buildGoalPage` answers null here deliberately — a page of empty sections cannot be
+ * told apart from a goal that exists with nothing on it. But falling through to the
+ * tab body was the other half of that decision left unmade: the address bar said
+ * `goal=issue:412` while the screen showed the list, so the click read as a control
+ * that does nothing. Every **frozen** ticket is in exactly this position, because the
+ * mirror keeps what the tracker has stopped returning and the snapshot does not — so
+ * on the Tickets tab it is the common case, not the corner.
+ *
+ * The tracker is where the answer actually is, so the reference is the offer, drawn
+ * with `<Ref>` like every other one.
+ */
+function GoalGone({ ref_, tab, actions }: { ref_: string; tab: ConsoleTab; actions: CockpitActions }): JSX.Element {
+  const number = /^issue:(\d+)$/.exec(ref_)?.[1] ?? null;
+  return (
+    <>
+      <nav className="cn-crumb">
+        <button type="button" onClick={() => actions.selectGoal(null)}>
+          ‹ {TAB_LABEL[tab]}
+        </button>
+        <span className="cn-crumbsep">/</span>
+        <span className="cn-crumbnow">{number === null ? ref_ : `#${number}`}</span>
+      </nav>
+      <section className="cn-gone">
+        <h2>{number === null ? ref_ : `#${number}`} is not in the current world</h2>
+        <p>
+          The harness has a record of this item, but the last scan did not return it — so there is no plan, no run and
+          no verdict to draw. That is what a closed, reassigned or untagged ticket looks like from here.
+        </p>
+        <span className="cn-refs">
+          <Ref to={ref_} />
+        </span>
+      </section>
+    </>
+  );
+}
+
 function Crumb({
   goal,
   tab,
@@ -217,12 +254,14 @@ function Crumb({
 const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string> = {
   findings: 'Findings',
   lessons: 'Lessons',
+  knowledge: 'Knowledge',
   faults: 'Faults',
   launch: 'Launch',
   build: 'Build',
   pets: 'Vivarium',
   localRun: 'Running locally',
   setup: 'Setup',
+  record: 'The record',
 };
 
 /**
@@ -335,6 +374,18 @@ function panelBody(
           onRetire={(id) => actions.retireLesson(id)}
         />
       );
+    case 'knowledge':
+      return (
+        <KnowledgePanel
+          facts={state.knowledge}
+          now={view.now}
+          refUrls={state.refUrls}
+          viewingFact={view.viewingFact}
+          onReach={(id, reach) => actions.setFactReach(id, reach)}
+          onDetail={(id) => actions.factDetail(id)}
+          onViewFact={(id) => actions.viewFact(id)}
+        />
+      );
     case 'pets':
       return state.pets === null ? null : (
         <PetsPanel
@@ -371,6 +422,12 @@ function panelBody(
       );
     case 'setup':
       return <SetupPanel onClose={() => actions.openPanel(null)} />;
+    case 'record':
+      // The durable work graph, which was the console's second nav destination
+      // until every part of it found a better home. A panel now: an archive is
+      // consulted rather than worked on, and this way it is reachable from a goal
+      // page too — which the tab, outranked by any selected goal, never was.
+      return <RecordPanel now={view.now} />;
     case 'build':
       return (
         <BuildPanel

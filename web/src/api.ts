@@ -16,6 +16,8 @@ import type {
   CiPolicyPayload,
   FilingTargetProbe,
   IssueFiled,
+  FactRuling,
+  KnowledgeFactPayload,
   PetCatalogue,
   PlanHistory,
   McpChannelPayload,
@@ -292,6 +294,11 @@ const realApi = {
         ),
   setIssueWatched: (issueNumber: number, watched: boolean) =>
     post<{ ok: true; watched: boolean }>(`/api/issues/${issueNumber}/watch`, { watched }),
+  // Move a work item to one of the tracker's own states — the board's drag. The route
+  // validates no state word: the provider owns its process template, and its refusal
+  // is what reaches the card.
+  setIssueState: (issueNumber: number, state: string) =>
+    post<{ ok: true; state: string }>(`/api/issues/${issueNumber}/state`, { state }),
   // Put this goal at the front of the queue, or take it back out. It re-orders and
   // never un-holds, so the answer is the next pulse's queue and nothing else.
   setGoalPriority: (issueNumber: number, priority: boolean) =>
@@ -456,6 +463,17 @@ const realApi = {
   proposeLesson: (text: string, originRef: string | null) => post<{ ok: true }>('/api/lessons', { text, originRef }),
   promoteLesson: (id: string) => post<{ ok: true }>(`/api/lessons/${id}/promote`),
   retireLesson: (id: string) => post<{ ok: true }>(`/api/lessons/${id}/retire`),
+
+  // Knowledge (#27 phase 2). Two calls and no third: the operator's arm of this
+  // store is where a claim stands, and nothing here files one — agents propose
+  // through the tool channel, on a scoped credential rather than this bearer
+  // token. The detail is fetched per row rather than polled, because the evidence
+  // behind one claim is thousands of characters the snapshot has no business
+  // carrying for rows nobody has opened.
+  knowledgeFact: (id: string) =>
+    authFetch(`/api/knowledge/facts/${encodeURIComponent(id)}`).then((r) => json<KnowledgeFactPayload>(r)),
+  setFactReach: (id: string, reach: FactRuling) =>
+    post<{ ok: true }>(`/api/knowledge/facts/${encodeURIComponent(id)}/reach`, { reach }),
   // Work only a person can do. `done` settles it and concludes any plan step it
   // backs, which releases whatever was waiting; `decline` settles it the other way
   // and deliberately does not conclude the step, so nothing downstream starts.

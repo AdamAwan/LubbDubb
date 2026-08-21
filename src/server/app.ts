@@ -24,6 +24,7 @@ import { register as registerFindings } from './routes/findings.js';
 import { register as registerHumanTasks } from './routes/humanTasks.js';
 import { register as registerIssues } from './routes/issues.js';
 import { register as registerJobs } from './routes/jobs.js';
+import { register as registerKnowledge } from './routes/knowledge.js';
 import { register as registerLessons } from './routes/lessons.js';
 import { register as registerLocalRun } from './routes/localRun.js';
 import { register as registerPets } from './routes/pets.js';
@@ -57,6 +58,7 @@ const ROUTE_MODULES: RouteModule[] = [
   registerHumanTasks,
   registerIssues,
   registerJobs,
+  registerKnowledge,
   registerLessons,
   registerLocalRun,
   registerPets,

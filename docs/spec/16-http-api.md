@@ -27,6 +27,7 @@ is about.
 | `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                            |
 | `routes/issues.ts`      | Watch, priority, conclusion, assay, delivered, shortfall, dismiss-run                         |
 | `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`               |
+| `routes/knowledge.ts`   | One claim's observations, and how far an operator says a claim carries                        |
 | `routes/plans.ts`       | Plan history, replan, acceptance ticks, part model pins                                       |
 | `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it        |
 | `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                            |
@@ -366,6 +367,31 @@ and it is what issue #417 reported.
 
 The PR route has no equivalent because the mirror holds tracker items and a pull request was never one.
 
+### `POST /api/issues/:number/state`
+
+Body `{state: string}`. Moves a work item to one of the tracker's own states — the Tickets tab's card
+view drags onto it, and it is the first thing in the cockpit that writes a state at all. Answers
+`{ok: true, state}`.
+
+**It does not validate the state word.** The provider owns its process template: a check against the
+states the mirror has seen would refuse a legitimately configured but still-empty column, and a check
+against nothing at all is what lets the provider's own refusal reach the operator intact. The schema
+asks only that a state was named, so `{state: ""}` is a 400 rather than a blank write. An unsupported
+transition comes back as the provider's own sentence, recorded through `errors.record` on the way past
+and quoted verbatim in the refusal — the board puts it on the card it is returning, and a snap-back
+with no words attached reads as the board being broken.
+
+**The capability is checked, though.** `ActionSink.setWorkItemState` *throws* where no integration
+implements it, so without the check a GitHub deployment would answer every drop with an exception that
+reads as this write failing rather than as the operation not existing. `connector.canSetWorkItemState()`
+answers it, the same predicate `/api/state` ships to the cockpit as `canSetWorkItemState` — which is
+why the board draws no drag at all there and says so once, instead of failing one drop at a time.
+
+On success it does what the watch route does, in the same order and for the reasons stated there:
+`store.patchWorldState` folds the state onto the baseline, `store.patchTicketState` folds it onto the
+mirror, `world:changed` goes out, and a manual cycle runs. Both patches, because these are the same
+two readers — `/api/state` serves the baseline and the board's own rows come from `tracker_items`.
+
 ### `POST /api/issues/:number/profile`
 
 Body `{profile?: string}`. Pins this goal's work to a model profile; absent or empty **clears** the
@@ -665,14 +691,16 @@ the cockpit draws.
 ### `GET /api/work`
 
 The durable work graph's roots — every node with no parent — plus `unrecorded`: work the harness did
-that nothing in the tracker accounts for. Rate-limited rather than polled; the cockpit's Work panel
-fetches it on open, because `/api/state` comes round every couple of seconds and the graph only ever
-grows. Returns `{ roots, unrecorded, refUrls }`. Each unrecorded entry carries `ignored` — an item the
-operator cleared is still reported, because the panel is what hides it and a row filtered out at the
-source has no title left to offer back under the un-ignore. `refUrls` keys the root and unrecorded-item
-refs the panel draws, resolved through the connector's own `resolveRefUrl` for the same reason the
-subtree route does (#199): this route ships no snapshot, and a PR the graph remembers merging left the
-world hours ago.
+that nothing in the tracker accounts for. Rate-limited rather than polled; **two cockpit surfaces**
+fetch it on open — the record panel for the roots, and the tickets tab's unrecorded-work call-out for
+the rest — because `/api/state` comes round every couple of seconds and the graph only ever grows. One
+route for both is also what stops the two disagreeing about what is outstanding. Returns
+`{ roots, unrecorded, refUrls }`. Each unrecorded entry carries `ignored` — an item the operator cleared
+is still reported, because the call-out is what hides it and a row filtered out at the source has no
+title left to offer back under the un-ignore. `refUrls` keys the root and unrecorded-item refs those
+surfaces draw, resolved through the connector's own `resolveRefUrl` for the same reason the subtree
+route does (#199): this route ships no snapshot, and a PR the graph remembers merging left the world
+hours ago.
 
 **Unrecorded means parentless, and a job is adopted by three arms.** A dispatched code job with no
 parent is what the detector reports, so what counts as unrecorded is decided entirely by the fold's
@@ -683,7 +711,7 @@ issue its own PR names; **C** — a job is adopted by the origin it stands in fo
 
 Arm C is what makes the list honest. Arms A and B can only adopt a job that produced a pull request,
 and a requeued assay, plan, retro or review-comment job opens none — so every one of them was
-parentless forever and the panel offered to file a second tracker item for work an existing one
+parentless forever and the call-out offered to file a second tracker item for work an existing one
 already named. Not a stale row that ages out: the condition is permanent until acted on, which is how
 the list came to be mostly `Requeued: Plan issue #35699` and read as noise.
 
@@ -700,8 +728,8 @@ unrecorded. That is the case the detector was written for. → [14](14-persisten
 
 ### `GET /api/work/:ref`
 
-One subtree, walked from the given root by `parent_ref`. **Two consumers**: the work tab, for a root
-the operator expanded, and the goal page's record card, for `issue:<n>` — the goal it is drawn on.
+One subtree, walked from the given root by `parent_ref`. **Two consumers**: the record panel, for a
+root the operator expanded, and the goal page's record card, for `issue:<n>` — the goal it is drawn on.
 The second is why a 404 here is not a fault and is not recorded through `errors`: a goal picked up
 minutes ago, or one the harness never worked, has no node yet, and filing an error report for the
 ordinary case is worse than the empty state. 404 when the ref names no node. Refs carry
@@ -1197,6 +1225,40 @@ reports the ticket through `link_ticket` — see [11](11-mcp-tools.md).
 
 409 when absent or already resolved. Returns `{ ok: true, finding }`.
 
+### `GET /api/knowledge/facts/:id`
+
+One claim with the observations behind it, in the observers' own words — `{fact, corroborations}`.
+**404** when absent. Its own route rather than a field on the snapshot for the reason in
+[_Bulk text_](#bulk-text): the evidence for one claim runs to thousands of characters per
+observation, and the rows nobody opens should cost nothing per poll. The count on the `fact` is
+`distinctCorroborators`', never `corroborations.length` — two observations are one corroborator if
+they share a goal or a session, so the length is a different number wearing the same label.
+
+### `POST /api/knowledge/facts/:id/reach`
+
+How far an operator says a claim carries. Body `{reach}`, one of `lookup`, `injected` or `rejected`
+— the wire's `FactRuling`, narrowed out of `FactReach` so the route and the cockpit cannot drift.
+**404** when absent, **400** on any other reach, and **409** on a claim that was rejected, in the
+words that name the way back: a rejection is terminal, and what lifts the bar is an amendment naming
+the claim, filed by an agent. Broadcasts `dirty` — nothing in the world moved — and returns
+`{ ok: true, fact }`.
+
+Two members of `FactReach` are deliberately not accepted. Nothing restores `proposal` ("nobody has
+agreed with this" is not a state an operator can put a claim back into), and `committed` is a
+documentation pull request landing ([27](27-knowledge.md#committing-to-the-repository)) — setting the
+reach without opening one would take the claim out of every prompt while putting it nowhere.
+
+**Naming the reach a claim already has is a ruling rather than a no-op**, which is the one place this
+route differs from `POST /api/lessons/:id/promote`'s 409-on-a-settled-row discipline. `lookup` is both
+where two agents agreeing puts a claim and where an operator parks one that is true but not worth
+every agent's context, so the store stamps `ruled_at` on any operator move whether or not the reach
+changed — without it the cockpit's **Needs you** section would ask again forever, and the only way to
+empty it would be a decision the operator does not agree with.
+
+**These two are the whole write surface the cockpit has on this store.** Nothing here files a claim:
+agents propose through `knowledge_propose` on a scoped MCP credential ([11](11-mcp-tools.md)), which
+is the same split between an operator's arm and an agent's that the lessons store keeps.
+
 ### `POST /api/human-tasks`
 
 Body `{title, detail?, originRef?}`. The operator's own arm beside the `request_human_task` tool; the
@@ -1540,6 +1602,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `overlaps`                      | Paths two concurrently-live code agents wrote.                                                                                                                                                                                |
 | `humanTasks`                    | Work only a person can do — open ones and a settled tail, newest first. Beside `findings` rather than inside `escalations`: nobody is parked on one.                                                                          |
 | `findings`                      | Every finding.                                                                                                                                                                                                                |
+| `knowledge`                     | Every fact the fleet has written down, newest first, **the rejected ones included** — each with the corroborator count that promotes it. The evidence behind a claim is not here: see `GET /api/knowledge/facts/:id`.         |
 | `escalations`                   | The escalations still waiting on a person — **open only**. See _Bulk text_ below.                                                                                                                                             |
 | `recovery`                      | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**.                                                   |
 | `decisions`                     | The last 100 decisions, each with `subjectRef` — the one external thing the act is about (`issue:13`, `pr:42`), or null.                                                                                                      |

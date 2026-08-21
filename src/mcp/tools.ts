@@ -6,6 +6,8 @@ import { assessIssue } from './tools/assessIssue.js';
 import { concludePart } from './tools/concludePart.js';
 import { concludeWork } from './tools/concludeWork.js';
 import { escalate } from './tools/escalate.js';
+import { knowledgeAsk } from './tools/knowledgeAsk.js';
+import { knowledgePropose } from './tools/knowledgePropose.js';
 import { linkTicket } from './tools/linkTicket.js';
 import { noteProgress } from './tools/noteProgress.js';
 import { openPr } from './tools/openPr.js';
@@ -57,6 +59,8 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   validation_amend: validationAmend,
   validation_report: validationReport,
   report_remedy: reportRemedy,
+  knowledge_propose: knowledgePropose,
+  knowledge_ask: knowledgeAsk,
 };
 
 /**

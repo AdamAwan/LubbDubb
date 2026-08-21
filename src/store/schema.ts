@@ -239,6 +239,51 @@ CREATE TABLE IF NOT EXISTS lessons (
   updated_at TEXT NOT NULL
 );
 
+-- What the fleet knows about working *this repository* (docs/spec/27-knowledge.md).
+-- One row per claim, carrying three independent axes that are the thing most
+-- easily folded into one enum: who it is relevant to (scope), how it ends
+-- (lifetime), and how far it carries (reach). "A flaky check" and "fleet-wide" are
+-- not two values of one field — the first says how long a fact lives, the second
+-- who it applies to.
+--
+-- Nothing in the dispatcher reads this table: no rule, desk or gate consults a
+-- fact, exactly as none consults a remedy. It feeds prompts and a panel.
+--
+-- A promoted lessons row is mirrored in here as a fleet-scoped standing fact at
+-- reach 'injected', under an id derived from the lesson's — which is what makes
+-- that adoption idempotent across boots.
+CREATE TABLE IF NOT EXISTS knowledge_facts (
+  id         TEXT PRIMARY KEY,
+  claim      TEXT NOT NULL,        -- the claim itself, markdown
+  scope      TEXT NOT NULL,        -- fleet | check:<name> | goal:<ref>
+  lifetime   TEXT NOT NULL,        -- standing | expiring
+  expires_at TEXT,                 -- when an expiring fact lapses; null for a standing one
+  reach      TEXT NOT NULL,        -- proposal | lookup | injected | committed | rejected
+  supersedes TEXT,                 -- the fact this amends; exempts it from that fact's rejection bar
+  origin_ref TEXT,                 -- the goal it was first observed on, or null for an operator's own
+  ruled_at   TEXT,                 -- when an operator last moved it; null means nobody has ruled on it yet
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- Who says a fact is true, one row per observation, each carrying the observer's
+-- own words. Never a counter on the fact: the count is what promotes a claim, and
+-- the words are what an operator reads to decide whether it should have.
+--
+-- goal_ref is the *goal* rather than the dispatch origin, because pr:412:ci and
+-- pr:412:comments are two origins and one observation; session_id is carried so an
+-- agent that inherited a conversation through a re-dispatch is not counted twice.
+CREATE TABLE IF NOT EXISTS knowledge_corroborations (
+  id         TEXT PRIMARY KEY,
+  fact_id    TEXT NOT NULL,
+  agent_id   TEXT,                 -- null for an operator's own observation
+  task_id    TEXT,
+  goal_ref   TEXT,                 -- the goal it was observed on, collapsed from the origin
+  session_id TEXT,
+  words      TEXT NOT NULL,        -- what the observer actually saw
+  created_at TEXT NOT NULL
+);
+
 -- Why the fleet had to come back to a pull request, and what settled it: one row
 -- per CI failure or review round an agent answered, written by that agent through
 -- the report_remedy tool.

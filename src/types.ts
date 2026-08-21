@@ -1210,6 +1210,139 @@ export interface Lesson {
 /** A lesson as written, before the store assigns identity and status. */
 export type LessonInput = Pick<Lesson, 'text' | 'originRef'>;
 
+// ---------------------------------------------------------------------------
+// Knowledge (what the fleet knows about this repository)
+// ---------------------------------------------------------------------------
+
+/**
+ * Who a fact is relevant to — the first of the three axes, and the one that is
+ * most often folded into the other two by mistake.
+ *
+ * "A flaky check" and "fleet-wide" are not two values of one enum: the first says
+ * how long a fact lives and the second says who it applies to. A flaky check is
+ * fleet-scoped *and* expiring; "the pets vivarium is off by default" is
+ * fleet-scoped and permanent.
+ *
+ * - `fleet` — true of working this repository at all. The most expensive to be wrong.
+ * - `check:<name>` — true of one CI check, named exactly as the provider names it.
+ *   Fragile on purpose: `priorRemedies` matches check names exactly for the same
+ *   reason, and a prefix match would put another job's history in front of an
+ *   agent under a name it would read as its own.
+ * - `goal:<ref>` — true of one goal, and dies with it.
+ *
+ * → `docs/spec/27-knowledge.md`
+ */
+export type FactScope = 'fleet' | `check:${string}` | `goal:${string}`;
+
+/**
+ * How a fact ends. It either **stands** until it is retired, or it **expires** —
+ * and an expiring fact is a *notice*, which is a different animal in every
+ * respect that matters.
+ */
+export type FactLifetime = 'standing' | 'expiring';
+
+/**
+ * How far a fact carries. This is the state machine, and it is the whole of the
+ * governance.
+ *
+ * - `proposal` — nowhere. One agent said it and nothing has agreed.
+ * - `lookup` — answered when asked, and injected on a matching scope. Reached on
+ *   two corroborations from two different goals, or by an operator.
+ * - `injected` — in front of every agent, before it reads any code. **An operator,
+ *   and only an operator**, moves a fact here; the one exception is a notice,
+ *   whose blast radius is capped by its own clock.
+ * - `committed` — in the repository. Out of every prompt: once a fact is in
+ *   `docs/spec/` an agent reads it there, and keeping it injected pays context
+ *   twice for one sentence.
+ * - `rejected` — nowhere, and barred from coming back. Means **not true**, and
+ *   nothing else: "true, but not worth the context" is `lookup`, where it costs
+ *   nothing until somebody asks.
+ */
+export type FactReach = 'proposal' | 'lookup' | 'injected' | 'committed' | 'rejected';
+
+/**
+ * One thing the fleet believes about this repository that the repository does not
+ * say.
+ *
+ * Not a fact about the code — that belongs in the repository's own documentation,
+ * which is what `committed` records having happened. Not a defect, which is a
+ * {@link Finding}. And not a note between siblings on one goal, which is the
+ * scratchpad: a pad entry is chronological prose with nothing to corroborate, and
+ * it keeps its own writer.
+ */
+export interface KnowledgeFact {
+  id: string;
+  /** The claim, in the words it is rendered in. Markdown, and free-form. */
+  claim: string;
+  scope: FactScope;
+  lifetime: FactLifetime;
+  /** When an expiring fact lapses. Null for a standing one, and set for every expiring one. */
+  expiresAt: string | null;
+  reach: FactReach;
+  /**
+   * The fact this amends, when it is an amendment.
+   *
+   * Load-bearing rather than decorative: an amended claim usually *contains* its
+   * original — that is what amending is — so a rejected claim's bar would swallow
+   * its own correction, and the sharpest version of a fact would be the one form
+   * of it that could never be filed. A fact naming a barred parent is exempt from
+   * that parent's bar. Nothing else is.
+   */
+  supersedes: string | null;
+  /** The goal it was first observed on (`issue:41`, `pr:42`), or null when an operator wrote it. */
+  originRef: string | null;
+  /**
+   * When an operator last moved it, or null while nobody has ruled on it.
+   *
+   * The one thing that tells a fact two agents carried to `lookup` from a fact an
+   * operator *left* there. Both are the same reach — "true, but not worth every
+   * agent's context" is `lookup` too — so without this the cockpit's **Needs you**
+   * section would go on asking for a decision that has already been made, and the
+   * operator's only way to silence it would be to make the wrong one.
+   */
+  ruledAt: string | null;
+  createdAt: string;
+  /** When it last moved — for anything but a fresh proposal, when its reach changed. */
+  updatedAt: string;
+}
+
+/**
+ * One agent saying it saw the same thing.
+ *
+ * Rows in their own table, each carrying the agent, the goal, the moment and the
+ * agent's **own words** — never a counter on the fact. The count is what promotes;
+ * the words are what an operator reads to decide whether it should have.
+ */
+export interface KnowledgeCorroboration {
+  id: string;
+  factId: string;
+  /** Null for an operator's own observation. */
+  agentId: string | null;
+  taskId: string | null;
+  /**
+   * The goal it was observed on, collapsed from the dispatch origin — the unit
+   * the count is taken over, because two origins on one goal are one observation.
+   */
+  goalRef: string | null;
+  /**
+   * The session it was observed in, so an agent that inherited a conversation
+   * through `spawn`'s `resumeSessionId` is not counted twice.
+   */
+  sessionId: string | null;
+  /** What the observer actually saw. Never the claim restated. */
+  words: string;
+  createdAt: string;
+}
+
+/** Who observed a claim, resolved from the credential and never from an argument. */
+export interface FactObservation {
+  agentId: string | null;
+  taskId: string | null;
+  goalRef: string | null;
+  sessionId: string | null;
+  words: string;
+}
+
 /**
  * Which kind of return to a pull request a {@link Remedy} accounts for: its CI
  * going red, or a review asking for changes.

@@ -78,6 +78,7 @@ import type {
   EnvironmentGateRelease,
   ErrorLogEntry,
   Escalation,
+  FactReach,
   Finding,
   GoalArrival,
   GoalAssayVerdict,
@@ -100,6 +101,8 @@ import type {
   PetStage,
   PetWallet,
   JobSchedule,
+  KnowledgeCorroboration,
+  KnowledgeFact,
   Lesson,
   LocalRun,
   Plan,
@@ -330,6 +333,51 @@ export interface CockpitWorld extends WorldSnapshot {
  * re-derived in the browser: a second implementation of "what fits" would be free
  * to disagree with the one that actually ran.
  */
+/**
+ * A fact, plus the count that promoted it (issue #27 phase 2).
+ *
+ * The count is {@link distinctCorroborators}' answer, taken server-side beside
+ * the rows it counts and never re-derived in the browser — two observations are
+ * one corroborator if they share a goal *or* a session, transitively, which is a
+ * rule about a re-dispatch inheriting a conversation and not something a list
+ * length can express. A second count in the view layer would be free to disagree
+ * with the one that carries a claim to `lookup`, and both would look like counts
+ * of the same rows.
+ *
+ * The words behind the count are deliberately **not** here: evidence runs to
+ * thousands of characters per observation and this list is polled, so the
+ * provenance a reader opens a row for rides its own route
+ * (`GET /api/knowledge/facts/:id`) — the argument `docs/spec/16-http-api.md#bulk-text`
+ * makes about every other body of text on this snapshot.
+ */
+export interface KnowledgeFactView extends KnowledgeFact {
+  /** How many independent corroborators say so. Two is what carries a proposal to `lookup`. */
+  corroborations: number;
+}
+
+/**
+ * How far an operator can say a claim carries — the body of
+ * `POST /api/knowledge/facts/:id/reach`, and the whole write surface the cockpit
+ * has on this store.
+ *
+ * Narrowed out of {@link FactReach} rather than written again, so it cannot drift
+ * from the state machine it is a subset of. Two members are missing on purpose:
+ * nothing moves a claim back to `proposal` — "nobody has agreed with this" is not
+ * something an operator can restore — and `committed` is a documentation pull
+ * request landing (phase 6), so setting the reach without opening one would take
+ * the claim out of every prompt while putting it nowhere.
+ */
+export type FactRuling = Extract<FactReach, 'lookup' | 'injected' | 'rejected'>;
+
+/**
+ * `GET /api/knowledge/facts/:id` — one fact with the observations behind it, in
+ * the observers' own words, fetched when a reader opens the row.
+ */
+export interface KnowledgeFactPayload {
+  fact: KnowledgeFactView;
+  corroborations: KnowledgeCorroboration[];
+}
+
 export interface LessonView extends Lesson {
   /**
    * Whether this lesson is in the block agents get at their **next** launch.
@@ -629,6 +677,41 @@ interface CockpitConfig {
    * key — the tracker's punctuation is not the operator's.
    */
   stateColours: Record<string, string>;
+  /**
+   * `issueBoardStates` — the tracker's state words in the order the card view draws
+   * them as columns. Empty means the cockpit falls back to the state facets' own
+   * order, which is the one thing the server must not decide for it: the fallback is
+   * a statement about a screen, and an order invented here would be a policy no
+   * config file states.
+   */
+  boardStates: string[];
+  /**
+   * Whether the provider can write a work item's state — the board's drag, and
+   * nothing else, depends on it.
+   *
+   * A flag rather than left to the cockpit to infer from the provider name, for
+   * `canFileTickets`' reason: the one place that decides is the one the route asks.
+   * False means no card is draggable and the board says so once, above the columns,
+   * rather than every drag failing separately and teaching nothing each time.
+   */
+  canSetWorkItemState: boolean;
+  /**
+   * The state words the three work-item rules act on, so a column header can say
+   * what dropping there disturbs.
+   *
+   * `pickup` is the **effective** set (`effectivePickupStates`), which is what makes
+   * this a quotation of the dispatcher's gate rather than a second opinion about it:
+   * `issueInProgressState` is folded in there and deliberately not listed in
+   * `issuePickupStates`, so a board built from the raw key would warn that dropping
+   * onto the state work is *in* stops the fleet. `returnsTo` is where
+   * `work-item-back-to-pickup` sends an item — the first configured pickup state,
+   * read the way that rule reads it.
+   *
+   * Null when `issuePickupStates` is unset, because all three rules are switched out
+   * entirely by the registry's `workItemStates` condition then: there is nothing a
+   * drop can disturb, and an object of nulls would invite the board to imply there is.
+   */
+  stateRules: { pickup: string[]; inProgress: string | null; inReview: string | null; returnsTo: string | null } | null;
 }
 
 /** Account-level Claude usage: the rolling cost windows, plus real limits when captured. */
@@ -855,6 +938,16 @@ export interface CockpitState {
    * operator cannot tell a list they have finished with from one that lost rows.
    */
   lessons: LessonView[];
+  /**
+   * What the fleet knows about working this repository, newest first — every
+   * reach, **the rejected ones included** (issue #27 phase 2).
+   *
+   * The rejected rows ship for `lessons`' reason twice over: the page is the
+   * governance, so a surface drawing only what it let through cannot show an
+   * operator that a claim was killed — and the bar that keeps a killed claim from
+   * being re-proposed is invisible everywhere else.
+   */
+  knowledge: KnowledgeFactView[];
   /**
    * Bugs the operator raised from a story row, oldest first — `filing` while the
    * desk agent writes one, `filed` with a ref once it exists.
@@ -1377,6 +1470,9 @@ export type {
   EnvironmentGateRelease,
   ErrorLogEntry,
   Escalation,
+  FactLifetime,
+  FactReach,
+  FactScope,
   Finding,
   GoalArrival,
   GoalEnvironmentReach,
@@ -1388,6 +1484,8 @@ export type {
   JobAttachment,
   JobAttachmentInput,
   JobSchedule,
+  KnowledgeCorroboration,
+  KnowledgeFact,
   Lesson,
   LessonStatus,
   Plan,
