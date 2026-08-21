@@ -6,12 +6,14 @@ something broken **silently** — a failure `npm run check` does not catch, that
 call site, and that no test surfaces.
 
 Everything else — how each subsystem works, and why it came out that way — is in
-**[`docs/spec/`](docs/README.md)**, written as fact and read on demand. If the code does something a
-spec does not say, that is a bug in one of them. The [README](README.md) covers what LubbDubb _is_
-and how to run it.
+**[`docs/spec/`](docs/README.md)**, read on demand. A spec states the behaviour the product is meant
+to have, so if the code does something a spec does not say, that is a bug in one of them — **unless
+the spec has marked that behaviour as not yet built**, which is the one honest reason for the two to
+differ, and which is a thing you may find yourself sent to implement. The [README](README.md) covers
+what LubbDubb _is_ and how to run it.
 
 **When you change behaviour, update the spec document that owns it in the same change.** That is the
-repo's one documentation rule; [`docs/README.md`](docs/README.md) indexes the twenty-five documents and
+repo's one documentation rule; [`docs/README.md`](docs/README.md) indexes the twenty-six documents and
 says which owns what.
 
 ## Making a change
@@ -386,7 +388,7 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
 
 ## Where to read further
 
-[`docs/README.md`](docs/README.md) is the index: twenty-five specs, one per subsystem, numbered by the
+[`docs/README.md`](docs/README.md) is the index: twenty-six specs, one per subsystem, numbered by the
 order they build on each other. Start there rather than grepping — each document states the
 invariants of its area and the reasoning behind them, which is what stops a change re-litigating a
 settled decision badly.
