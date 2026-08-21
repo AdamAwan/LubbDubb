@@ -4722,9 +4722,6 @@ a.btn {
   padding: 7px 9px;
   background: var(--cn-panel-2);
   border-bottom: 1px solid var(--cn-line);
-  /* Transparent until the operator has given this state a colour, so the strip is a
-     reading rather than decoration — `stateColour` writes the value inline. */
-  border-top: 2px solid transparent;
   border-radius: var(--cn-r) var(--cn-r) 0 0;
 }
 .tb-head b {

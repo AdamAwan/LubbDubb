@@ -1311,8 +1311,10 @@ container name is uncoloured here while the dispatcher's gate still knows exactl
 A row's state chip is the tracker's own word (`workItemState`) where there is one, and it draws in
 whatever colour the operator gave that word — `issueStateColours`
 ([02](02-configuration.md#item-selection-labels-priority-states)), shipped on `CockpitConfig` and read
-through `stateColour` (`web/src/stateColour.ts`). The goal page's header chip reads the same map, so a
-state is one colour wherever it is drawn.
+through `stateColour` (`web/src/stateColour.ts`). The goal page's header chip reads the same map, and so
+does the **name of a board column**, so a state is one colour wherever it is drawn. On the board it
+letters the word itself rather than striping the header: a rule along the top edge reads as decoration,
+and the whole point of the setting is that the state is something you read.
 
 This is the opposite arrangement from the type chip above, and for the same reason. A type has
 _families_ the harness genuinely knows, so it can tint one and fall through on the rest. A state has

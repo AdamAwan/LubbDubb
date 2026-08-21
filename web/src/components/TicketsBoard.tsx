@@ -334,8 +334,12 @@ function Column({
       }}
       onDrop={() => void onDrop(column)}
     >
-      <header className="tb-head" style={colour === null ? undefined : { borderTopColor: colour }}>
-        <b>{column.state}</b>
+      <header className="tb-head">
+        {/* The operator's colour letters the state's own name. It was a strip along the
+            top of the header and that read as decoration; on the word it is the same
+            reading the table's state chips carry. Absent leaves the name in the
+            default ink, exactly as a chip with no colour draws. */}
+        <b style={colour === null ? undefined : { color: colour }}>{column.state}</b>
         {column.pickup && <i className="tickets-gate">▲</i>}
         <i className="tb-k">
           {rows.length} of {(total ?? column.count).toLocaleString()}
