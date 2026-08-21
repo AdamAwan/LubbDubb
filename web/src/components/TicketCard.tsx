@@ -38,6 +38,7 @@ export function TicketCard({
   writing = null,
   refused = null,
   onDragStart,
+  onDragEnd,
 }: {
   row: TicketRow;
   /** The live world's own row where it still holds one — the source of every live reading. */
@@ -51,6 +52,7 @@ export function TicketCard({
   /** The provider's own sentence, after a refusal put this card back. */
   refused?: string | null;
   onDragStart?: () => void;
+  onDragEnd?: () => void;
 }): JSX.Element {
   const { watchLabel, containerTypes } = view.state.config;
   const frozen = row.tracking === 'frozen';
@@ -72,6 +74,7 @@ export function TicketCard({
       className={`tb-card${frozen ? ' frozen' : ''}${writing !== null ? ' writing' : ''}${refused !== null ? ' refused' : ''}`}
       draggable={draggable}
       onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
       data-number={row.number}
     >
       <i className={`tb-stripe f${row.featureSlot ?? 0}`} />

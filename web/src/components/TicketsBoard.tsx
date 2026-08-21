@@ -58,25 +58,57 @@ export function TicketsBoard({
   const { boardStates, stateRules, canSetWorkItemState } = view.state.config;
   const { columns, unlisted } = boardColumns(boardStates, facets, stateRules?.pickup ?? []);
   const shown = columns.filter((column) => !hidden.includes(column.state));
+  // In a ref so `columnRead` below can read the current count without being rebuilt
+  // on every render — a new callback identity would re-run every column's fetch.
+  const shownCount = useRef(shown.length);
+  shownCount.current = shown.length;
 
   // Held here rather than in a column, because the warnings are about *every* header
   // at once: the whole board's consequences have to be readable before a choice is
   // made rather than after it, which is the habit `stateWhy` and `cascadeNote` keep.
   const [drag, setDrag] = useState<{ row: TicketRow; from: string } | null>(null);
   /**
-   * Where the board believes the dragged card now is, and whether its write is still
-   * out.
+   * Where the board believes the dragged card is, until real rows say so.
    *
-   * `placed` **outlives the write**, and that is the part worth stating: a column
-   * fetched its rows once and nothing refetches them on a world change, so dropping
-   * the placement the moment the write returned would snap the card back to whatever
-   * its column's stale page still said. It is one card, it is reconciled by number
-   * against every column's rows below, and it is cleared by the next drop — so it can
-   * only ever agree with the write that put it there.
+   * It exists only to bridge the drop and the arrival of a fresh page: the route
+   * writes to the provider, patches both readings, broadcasts and runs a cycle before
+   * it answers, which is long enough that a card left in its old column reads as a
+   * drop that missed.
+   *
+   * **It is released as soon as every drawn column has completed a read**, which is
+   * the condition rather than a delay — see {@link settled}. Held any longer it
+   * starts lying: one slot cannot describe two moved cards, so a second drop used to
+   * revert the first, and a placement surviving a filter change force-drew a card the
+   * filter excludes.
    */
   const [placed, setPlaced] = useState<{ row: TicketRow; state: string } | null>(null);
   const [writing, setWriting] = useState(false);
   const [refused, setRefused] = useState<{ number: number; message: string } | null>(null);
+  /**
+   * Bumped once per landed write, and in every column's fetch dependencies — so a
+   * drop re-reads the board from the mirror the route has just patched.
+   *
+   * Without it `placed` is the *only* thing putting a moved card in its new column,
+   * and `placed` is one slot: a second drop replaces it and the first card falls back
+   * to its column's never-refreshed page, which is where it started. One drag then
+   * appears to move two cards, and the board disagrees with the tracker until
+   * something else happens to refetch.
+   */
+  const [reload, setReload] = useState(0);
+  /**
+   * Which columns have finished a read since the placement was made.
+   *
+   * Counted rather than waited on: the round trip is a provider write plus a pulse,
+   * so any timeout long enough to be safe is long enough to be visible. Once every
+   * drawn column has re-read, the pages are the truth and the placement is retired.
+   */
+  const settled = useRef(new Set<string>());
+  const columnRead = useCallback((state: string) => {
+    settled.current.add(state);
+    // Read off `shown` at call time rather than captured, so hiding a column while a
+    // write is out cannot leave the placement waiting for a column nobody draws.
+    if (settled.current.size >= shownCount.current) setPlaced(null);
+  }, []);
 
   const drop = async (column: BoardColumn): Promise<void> => {
     const moving = drag;
@@ -85,10 +117,14 @@ export function TicketsBoard({
     // Optimistic, because the write is a round trip to the tracker and a card that
     // sits still for a second reads as a drop that missed.
     setRefused(null);
+    settled.current = new Set();
     setPlaced({ row: moving.row, state: column.state });
     setWriting(true);
     try {
       await actions.setIssueState(moving.row.number, column.state);
+      // Re-read from the patched mirror, so the placement above stops being the only
+      // thing holding this card in its new column.
+      setReload((n) => n + 1);
     } catch (err) {
       // Back where it came from, with the provider's own words on it.
       setPlaced(null);
@@ -119,8 +155,11 @@ export function TicketsBoard({
             writing={writing}
             refused={refused}
             rules={stateRules}
+            reload={reload}
+            onRead={columnRead}
             draggable={canSetWorkItemState}
             onDragStart={(row) => setDrag({ row, from: column.state })}
+            onDragEnd={() => setDrag(null)}
             onDrop={drop}
           />
         ))}
@@ -164,8 +203,11 @@ function Column({
   writing,
   refused,
   rules,
+  reload,
+  onRead,
   draggable,
   onDragStart,
+  onDragEnd,
   onDrop,
 }: {
   column: BoardColumn;
@@ -180,8 +222,19 @@ function Column({
   writing: boolean;
   refused: { number: number; message: string } | null;
   rules: CockpitView['state']['config']['stateRules'];
+  /** Bumped by the board on every landed write; re-reads this column's first page. */
+  reload: number;
+  /** Reported after every completed read, so the board can retire its placement. */
+  onRead: (state: string) => void;
   draggable: boolean;
   onDragStart: (row: TicketRow) => void;
+  /**
+   * The end of a drag however it ended, which is the only signal an *abandoned* one
+   * gives. Without it a drag released outside every column leaves the board armed:
+   * the headers go on speaking, and the next stray drop writes the state of a card
+   * nobody is holding.
+   */
+  onDragEnd: () => void;
   onDrop: (column: BoardColumn) => Promise<void>;
 }): JSX.Element {
   const [rows, setRows] = useState<TicketRow[]>([]);
@@ -200,6 +253,12 @@ function Column({
 
   const read = useCallback(
     async (from: string | null) => {
+      // Referenced, not sent: the generation is a local signal, so naming it here is
+      // what changes this callback's identity when the board reports a landed write —
+      // which re-runs the effect below and re-reads the patched mirror. Keeping the
+      // column's state rather than remounting it is deliberate: a remount would drop
+      // the pages and the scroll position a reader had built up.
+      void reload;
       setLoading(true);
       const page = await api.getTickets({
         watch,
@@ -215,8 +274,9 @@ function Column({
       setCursor(page.nextCursor);
       setDone(page.nextCursor === null);
       setLoading(false);
+      onRead(state);
     },
-    [watch, tracking, state, feature, order],
+    [watch, tracking, state, feature, order, reload, onRead],
   );
 
   useEffect(() => {
@@ -296,6 +356,7 @@ function Column({
               writing={writing && placed?.row.number === row.number ? placed.state : null}
               refused={refused !== null && refused.number === row.number ? refused.message : null}
               onDragStart={() => onDragStart(row)}
+              onDragEnd={onDragEnd}
             />
           ))}
         </RefLinksExtended>

@@ -1250,12 +1250,26 @@ With no `issuePickupStates` at all there is no state gate and all three rules ar
 board says the drop changes the tracker and nothing else. Warning about a mechanism that is not running
 would be worse than silence.
 
-**The card moves on release and says it is still writing**, because the write is a round trip and a
-card that sits still reads as a drop that missed. That placement **outlives the write**, and this is the
-part that is not obvious: a column fetches its page once and nothing refetches it on a world change, so
-releasing the placement when the write returned would snap the card back to whatever its column's stale
-page still said. The placement is one card, reconciled by number against every column's rows, and
-replaced by the next drop — so it can only ever agree with the write that put it there.
+**The card moves on release and says it is still writing**, because the write is a round trip — a
+provider call, both patches, a broadcast and a pulse before the route answers — and a card that sits
+still that long reads as a drop that missed.
+
+**A landed write re-reads every column, and the placement is released once they have.** Both halves are
+load-bearing, and getting either wrong is a board that lies about where work is:
+
+- Without the re-read the placement is the *only* thing holding a card in its new column, and a
+  placement is one slot. A second drop replaces it, the first card falls back to its column's
+  never-refreshed page — where it started — and one drag appears to move two cards. The mirror is
+  already patched by the route, so re-reading is what makes the move real rather than drawn.
+- Without the release the placement outlives its usefulness and starts overriding the rail: it drew a
+  card in a column the operator had just filtered it out of. So it is retired on a condition rather
+  than a delay — when every drawn column has completed a read — because any timeout long enough to
+  cover a provider write plus a pulse is long enough to see.
+
+**A drag is disarmed when it ends, however it ends.** A drag released outside every column fires
+`dragend` and no `drop`, so without handling it the board stays armed: the headers go on speaking, and
+the next stray drop writes the state of a card nobody is holding. That was a real unintended write, not
+a cosmetic one.
 
 A refusal puts the card back **and quotes the provider on it**. A snap-back with no sentence attached
 reads as the board being broken rather than as the tracker refusing a transition, which is why the drop
