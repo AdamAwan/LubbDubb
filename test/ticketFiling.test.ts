@@ -24,6 +24,9 @@ function sinkRecording(created: IssueCreateInput[], ref: string | null = 'issue:
       created.push(input);
       return ref === null ? { ok: true } : { ok: true, ref };
     },
+    // A predicate rather than an act, so `unused` is the wrong shape: this test's
+    // subject cannot reach it, and a throw would be a stub failing on a question.
+    canSetWorkItemState: () => false,
     requeueCiCheck: unused,
     postPrReply: unused,
     mergePr: unused,

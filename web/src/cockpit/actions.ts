@@ -248,7 +248,17 @@ export interface CockpitActions {
    */
   setTicketQuery(
     next: Partial<
-      Pick<Place, 'ticketWatch' | 'ticketTracking' | 'ticketState' | 'ticketFeature' | 'ticketGroup' | 'ticketOrder'>
+      Pick<
+        Place,
+        | 'ticketWatch'
+        | 'ticketTracking'
+        | 'ticketState'
+        | 'ticketFeature'
+        | 'ticketGroup'
+        | 'ticketOrder'
+        | 'ticketView'
+        | 'ticketColumns'
+      >
     >,
   ): void;
   /**
@@ -319,6 +329,16 @@ export interface CockpitActions {
    */
   setStackLanding(ref: string, landing: boolean): Promise<void>;
   setIssueWatched(issueNumber: number, watched: boolean): Promise<void>;
+  /**
+   * Move a work item to one of the tracker's own states — the board's drag, and the
+   * only thing in the cockpit that writes one.
+   *
+   * **Rejects with the provider's own sentence**, which the card quotes: a snap-back
+   * with no words attached reads as the board being broken rather than as the tracker
+   * refusing a transition. So the caller handles the rejection itself rather than
+   * routing the click through `AsyncButton`, which folds one into a tooltip.
+   */
+  setIssueState(issueNumber: number, state: string): Promise<void>;
   /**
    * Put this goal at the front of the queue, or take it back out. On the seam for
    * every mutation's reason: `console/` may not import `api.js`.

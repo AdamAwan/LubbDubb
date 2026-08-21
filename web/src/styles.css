@@ -4736,6 +4736,261 @@ a.btn {
   color: var(--cn-fg-faint);
 }
 
+/* -- The tickets board (card view) ---------------------------------------- */
+
+/* The board scrolls sideways and every column scrolls inside itself, which is the
+   whole request: a column running off the right edge must not hide the others, and a
+   column running long must not push its neighbours off the bottom. */
+.tb-cols {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.tb-col {
+  flex: 0 0 300px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--cn-bg);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  /* Bounded here rather than by the situation area, because `.tb-body` below is the
+     element that has to be the scroller — a column sized by its content would make
+     the page scroll instead, and the sticky heads would leave with it. */
+  max-height: calc(100vh - 300px);
+}
+.tb-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 7px 9px;
+  background: var(--cn-panel-2);
+  border-bottom: 1px solid var(--cn-line);
+  border-radius: var(--cn-r) var(--cn-r) 0 0;
+}
+.tb-head b {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cn-fg);
+}
+.tb-k {
+  margin-left: auto;
+  font-family: var(--cn-mono);
+  font-size: 10px;
+  font-style: normal;
+  color: var(--cn-fg-faint);
+}
+.tb-body {
+  overflow-y: auto;
+  min-height: 60px;
+  /* Vertical only. The horizontal inset is the cards' own margin, which puts the
+     scrollbar flush against the column's edge instead of inside the padding — where
+     it ate fifteen pixels off the right of any column long enough to scroll and
+     nothing off a short one. Reserving a gutter on both edges instead made every
+     column's sides three times its top. */
+  padding: 8px 0 0;
+  /* The gap belongs to the container, not to the cards: a `margin-bottom` on each one
+     is also below the *last* one, where it stacked with the foot and the padding into
+     a bottom inset near three times the top's. No bottom padding here because the
+     gap and the sentinel below already come to 8 — the same as the top. */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tb-card {
+  position: relative;
+  background: var(--cn-panel);
+  border: 1px solid var(--cn-line);
+  border-radius: 5px;
+  padding: 7px 9px 7px 11px;
+  overflow: hidden;
+  /* A flex item with no explicit basis shrinks to fit a full column; the cards are
+     content-sized and the column scrolls instead. */
+  flex: 0 0 auto;
+  /* The column's horizontal inset lives here, not on its scroll box — see `.tb-body`. */
+  margin: 0 8px;
+}
+/* Closed is a fact about the item, not a shade of its state — the table's frozen row
+   says it the same way. */
+.tb-card.frozen {
+  border-style: dashed;
+  opacity: 0.78;
+}
+.tb-card.writing {
+  opacity: 0.6;
+}
+.tb-card.refused {
+  border-color: var(--cn-red-line);
+}
+.tb-card[draggable='true'] {
+  cursor: grab;
+}
+.tb-stripe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+.tb-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.tb-id {
+  font-family: var(--cn-mono);
+  font-size: 11px;
+  color: var(--cn-fg-dim);
+}
+.tb-gap {
+  flex: 1;
+}
+/* The watch tag as a control: filled when the harness may pick this up, hollow when
+   nobody has opted it in. A button, so a keyboard reaches it and a drag beginning
+   here moves no card. */
+.tb-dot {
+  padding: 0;
+  border: 0;
+  background: none;
+  line-height: 0;
+}
+.tb-dot span {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--cn-fg-faint);
+}
+.tb-dot.on span {
+  background: var(--cn-green);
+  border-color: var(--cn-green);
+}
+.tb-dot:disabled {
+  opacity: 0.45;
+}
+.tb-name {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--cn-fg);
+  cursor: pointer;
+}
+.tb-name:hover {
+  text-decoration: underline;
+}
+.tb-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--cn-fg-faint);
+}
+.tb-meta .money {
+  color: var(--cn-green-ink);
+}
+.tb-feat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* Always drawn, and that is the point: a column of cards answers "why is nothing on
+   this?" without a click on any of them, and a blank lane would read as a card that
+   failed to draw. */
+.tb-why {
+  margin: 6px 0 0;
+  padding-top: 5px;
+  border-top: 1px dotted var(--cn-line);
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--cn-fg-dim);
+}
+.tb-why.held {
+  color: var(--cn-amber-ink);
+}
+.tb-why.outcome {
+  color: var(--cn-fg);
+}
+.tb-writing {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 5px 0 0;
+  font-size: 10.5px;
+  color: var(--cn-fg-faint);
+}
+.tb-refused {
+  margin: 5px 0 0;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--cn-red-ink);
+}
+/* The paging sentinel, and the column's own last word. No padding of its own — the
+   container's gap already separates it — but a floor, because it has to have a box for
+   the observer to intersect even when it says nothing. Two pixels rather than one so
+   the box is unambiguous, and with the 6px gap above it that is the column's whole
+   bottom inset: 8, matching the top. */
+.tb-foot {
+  min-height: 2px;
+  margin: 0 8px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--cn-fg-faint);
+}
+.tb-note,
+.tb-unlisted {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--cn-fg-dim);
+}
+/* The states with no column, named with their counts. Work on no board at all and
+   unreported is how a typo in `issueBoardStates` looks exactly like a quiet tracker. */
+.tb-unlisted {
+  margin: 10px 0 0;
+  color: var(--cn-fg-faint);
+}
+.tb-unlisted b {
+  color: var(--cn-fg-dim);
+}
+
+/* Every header speaks the moment a card is lifted, so the whole board's consequences
+   are readable before a choice is made rather than after it. */
+.tb-say {
+  flex-basis: 100%;
+  font-size: 9px;
+  line-height: 1.35;
+  font-style: normal;
+  color: var(--cn-fg-faint);
+}
+.tb-say.ok {
+  color: var(--cn-green-ink);
+}
+.tb-say.warn {
+  color: var(--cn-amber-ink);
+}
+.tb-say.stop {
+  color: var(--cn-red-ink);
+}
+.tb-col.droppable {
+  border-color: var(--cn-line-hi);
+}
+.tb-col.droppable:hover {
+  border-color: var(--cn-accent);
+}
+
 /* -- The build panel ------------------------------------------------------ */
 /* Tokens only, like every shared component: the console sheet must not reach in
    here, so this reads the same on any theme the console later takes. */

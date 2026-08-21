@@ -203,6 +203,10 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     return handler.linkWorkItem(input);
   }
 
+  canSetWorkItemState(): boolean {
+    return this.integrations.some(isWorkItemStateCapable);
+  }
+
   async setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
     const handler = this.integrations.find(isWorkItemStateCapable);
     if (!handler)

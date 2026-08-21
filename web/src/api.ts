@@ -292,6 +292,11 @@ const realApi = {
         ),
   setIssueWatched: (issueNumber: number, watched: boolean) =>
     post<{ ok: true; watched: boolean }>(`/api/issues/${issueNumber}/watch`, { watched }),
+  // Move a work item to one of the tracker's own states — the board's drag. The route
+  // validates no state word: the provider owns its process template, and its refusal
+  // is what reaches the card.
+  setIssueState: (issueNumber: number, state: string) =>
+    post<{ ok: true; state: string }>(`/api/issues/${issueNumber}/state`, { state }),
   // Put this goal at the front of the queue, or take it back out. It re-orders and
   // never un-holds, so the answer is the next pulse's queue and nothing else.
   setGoalPriority: (issueNumber: number, priority: boolean) =>

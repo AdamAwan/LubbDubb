@@ -474,6 +474,7 @@ reading the file is not the same as knowing the policy.
 | `labelPrefix`          | `string`                 | `"lubbdubb"`                                                      | Derives the one tag `${prefix}-watch`. Everything is opt-in: an item without it is left alone. An **empty** prefix turns the gate off.                                                                                                   |
 | `issuePriorityLabels`  | `Record<string, number>` | `{ 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 }` | Label → weight for pickup ordering. Replaced wholesale by an override.                                                                                                                                                                   |
 | `issueStateColours`    | `Record<string, string>` | `{}`                                                              | Tracker state → `#rrggbb` for its chip in the cockpit. Display only. Keys match on letters and digits, so `In Review` and `in-review` are one state. Replaced wholesale by an override; live.                                            |
+| `issueBoardStates`     | `string[]`               | `[]`                                                              | Tracker states as the card view's columns, left to right — see [board columns](#board-columns). Display only. Empty = every state the mirror carries, in the facets' own order. Replaced wholesale by an override; live.                  |
 | `issueDefaultPriority` | `number`                 | `2`                                                               | Weight for an issue with no matching priority label.                                                                                                                                                                                     |
 | `issuePickupStates`    | `string[]` (optional)    | unset                                                             | When non-empty, only items whose provider-native state is listed are eligible. Items with no such state bypass it.                                                                                                                       |
 | `issueInReviewState`   | `string` (optional)      | unset                                                             | The state an item is moved to once a PR is open for it. Takes effect only alongside `issuePickupStates`.                                                                                                                                 |
@@ -481,6 +482,25 @@ reading the file is not the same as knowing the policy.
 | `issueContainerTypes`  | `string[]`               | `["Feature", "Epic"]`                                             | Item types that **hold** work rather than being work. Never picked up, planned or assayed. Matched case-insensitively; `[]` turns the gate off; items with no type bypass it.                                                            |
 | `issueFilingTypes`     | `string[]`               | `["User Story", "Bug"]`                                           | The types the harness **creates** at when filing a finding, a blueprint or unrecorded work; the **first** entry is the one it uses — see [what a filed item is](#what-type-a-filed-item-is). Azure only; `[]` falls back to the default. |
 | `issueBugType`         | `string` (optional)      | `"Bug"`                                                           | The type a bug an operator raised is filed as. A project on the Basic process sets `"Issue"`. Azure only.                                                                                                                                |
+
+#### Board columns
+
+`issueBoardStates` is the Tickets tab's card view, which draws a column per tracker state
+([17](17-cockpit.md#the-tickets-tab)). It is an **order**, and that is the part nothing else in the
+harness knows: the state facets carry the words and their counts, `issuePickupStates` is a set, and no
+provider reports its process template's column order. Nothing reads this key to decide anything — it
+is display only, like `issueStateColours`.
+
+Three behaviours, because each is otherwise a quiet loss:
+
+- **Empty falls back to the state facets**, count descending — the order the State tier already shows.
+  A deployment that never configures this gets a working board.
+- **A listed state the tracker has nothing in still draws its column, empty.** Naming a column is you
+  saying you expect work there; dropping it would make the board disagree with the file you are
+  reading, on exactly the day the state went quiet.
+- **A state the mirror carries that the list omits gets no column — and the board says so**, naming it
+  and its count under the columns. Its items are otherwise on no board at all, and a typo in this key
+  would look exactly like a quiet tracker.
 
 #### The in-progress state
 

@@ -14,7 +14,7 @@ import { buildTicketPage, TICKET_PAGE } from '../src/tickets/ticketList.js';
 import { ticketOutcomes } from '../src/tickets/outcomes.js';
 import { TicketSweep } from '../src/tickets/sweep.js';
 import type { LiveTicketFacts, MirroredTicket } from '../src/store/tickets.js';
-import type { TicketsPayload } from '../src/wire.js';
+import type { CockpitState, TicketsPayload } from '../src/wire.js';
 import type { TrackerItem } from '../src/types.js';
 import { statePick } from '../web/src/cockpit/place.js';
 
@@ -707,4 +707,149 @@ test('the pickup states config marks the states it lets through', () => {
     ],
     'read from config, never inferred from what happened to be dispatched',
   );
+});
+
+test('the pickup mark on a state facet is the dispatcher’s effective set, not the raw list', async () => {
+  const config = loadConfig({
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    labelPrefix: 'lubbdubb',
+    agentMode: 'raw',
+    heartbeatIntervalMs: 999_999,
+    startPaused: true,
+    // "Doing" is deliberately absent from the pickup list: `effectivePickupStates`
+    // folds the in-progress state in, and src/config.ts says it should not be
+    // listed. A facet built from the raw list therefore marks it not-pickup, which
+    // is the bug — cosmetic on a table, and the whole warning on a board.
+    issuePickupStates: ['Ready'],
+    issueInProgressState: 'Doing',
+  });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
+
+  system.connector.inject({ kind: 'new_issue', number: 20, title: 'Waiting' });
+  system.connector.inject({ kind: 'new_issue', number: 21, title: 'In flight' });
+  // The fake has no way to inject a native state, so it is written through the
+  // provider seam the harness itself uses — which is also the only path that puts
+  // the state into the world the sweep then mirrors.
+  await system.connector.setWorkItemState({ number: 20, state: 'Ready' });
+  await system.connector.setWorkItemState({ number: 21, state: 'Doing' });
+  await system.harness.runCycle('manual');
+
+  const { app } = await buildApp(system);
+  const page = await app.inject({ method: 'GET', url: '/api/tickets' });
+  const body = page.json() as TicketsPayload;
+  const byState = new Map(body.states.map((facet) => [facet.state, facet.pickup]));
+
+  assert.equal(byState.get('Ready'), true, 'a listed pickup state is marked');
+  assert.equal(byState.get('Doing'), true, 'and so is the in-progress state the dispatcher folds in');
+});
+
+test('the board column order is an operator policy, shipped to the cockpit as it was written', async () => {
+  const config = loadConfig({
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    labelPrefix: 'lubbdubb',
+    agentMode: 'raw',
+    heartbeatIntervalMs: 999_999,
+    startPaused: true,
+    // Not alphabetical and not count order: the whole point of the key is that the
+    // order is a judgement only the operator can make.
+    issueBoardStates: ['New', 'Ready', 'Doing', 'In Review', 'Closed'],
+  });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
+  await system.harness.runCycle('manual');
+
+  const { app } = await buildApp(system);
+  const state = await app.inject({ method: 'GET', url: '/api/state' });
+  assert.equal(state.statusCode, 200);
+  const body = state.json() as CockpitState;
+  assert.deepEqual(
+    body.config.boardStates,
+    ['New', 'Ready', 'Doing', 'In Review', 'Closed'],
+    'the list arrives in the order the file states it',
+  );
+});
+
+test('a deployment that configures no board states ships an empty list, not a guess', async () => {
+  const config = loadConfig({
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    agentMode: 'raw',
+    heartbeatIntervalMs: 999_999,
+    startPaused: true,
+  });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
+  await system.harness.runCycle('manual');
+  const { app } = await buildApp(system);
+  const body = (await app.inject({ method: 'GET', url: '/api/state' })).json() as CockpitState;
+  // Empty means "fall back to the facets", which the cockpit decides. The server
+  // inventing an order here would be a policy no file states.
+  assert.deepEqual(body.config.boardStates, []);
+});
+
+test('the cockpit is told whether a state can be written, and which states the rules own', async () => {
+  const config = loadConfig({
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    agentMode: 'raw',
+    heartbeatIntervalMs: 999_999,
+    startPaused: true,
+    issuePickupStates: ['Ready', 'Queued'],
+    issueInProgressState: 'Doing',
+    issueInReviewState: 'In Review',
+  });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
+  await system.harness.runCycle('manual');
+  const { app } = await buildApp(system);
+  const body = (await app.inject({ method: 'GET', url: '/api/state' })).json() as CockpitState;
+
+  assert.equal(body.config.canSetWorkItemState, true, 'the fake issues provider can write states');
+  assert.deepEqual(body.config.stateRules, {
+    // The *effective* set, so the in-progress state is in it — the same list the
+    // dispatcher gates on, quoted rather than re-derived in the browser.
+    pickup: ['Ready', 'Queued', 'Doing'],
+    inProgress: 'Doing',
+    inReview: 'In Review',
+    // Where `work-item-back-to-pickup` returns an item: the first *configured*
+    // pickup state, which is the operator's own "start here".
+    returnsTo: 'Ready',
+  });
+});
+
+test('with no state gate configured there are no rules to report, and null says so', async () => {
+  const config = loadConfig({
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    agentMode: 'raw',
+    heartbeatIntervalMs: 999_999,
+    startPaused: true,
+  });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
+  await system.harness.runCycle('manual');
+  const { app } = await buildApp(system);
+  const body = (await app.inject({ method: 'GET', url: '/api/state' })).json() as CockpitState;
+  // Null rather than an object of nulls: without `issuePickupStates` all three
+  // work-item rules are switched out by the registry's `workItemStates` condition,
+  // so there is nothing for a drop to disturb. The same fact the dispatcher acts on.
+  assert.equal(body.config.stateRules, null);
 });

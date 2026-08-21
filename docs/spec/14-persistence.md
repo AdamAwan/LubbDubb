@@ -702,6 +702,13 @@ table is a record of what the tracker handed us, and a row invented for a click 
 that was never swept. An empty label is a no-op: that is `labelPrefix: ''`, the gate off, where there
 is no tag at all.
 
+`patchTicketState({number, state})` is the same fold for the tracker's own state word, and it exists
+for the card view: the board draws a column per `work_item_state` and reads its rows from
+`/api/tickets`, so a state written to the tracker and not folded here leaves the dragged card in the
+column it came from. That reads as a drop that failed while the tracker has already taken it — the
+same symptom as #417, one field over. Skipped for a number the mirror does not hold, and overwritten
+by the next sweep, on the same terms as the labels above.
+
 **The mirror is also the spend trend's closure source.** `listTicketsClosedSince(since)` is the one
 narrowed read on this table: the rows in the `closed` state whose `changed_at` is at or after an
 instant. It exists because the closure event the trend would otherwise use never fires on a real
@@ -879,7 +886,7 @@ See [05](05-dispatcher.md#two-columns-on-the-decision-row).
 ### World and errors
 
 `recordWorldEvents(inputs)` (stamps id and timestamp), `listWorldEvents(limit=200)`,
-`getWorldBaseline()`, `setWorldBaseline(world)`, `patchWorldLabels(patch)`, `recordError(input)`, `listErrors(limit=100)`, `clearErrors()` (deletes the whole log, returns the row count).
+`getWorldBaseline()`, `setWorldBaseline(world)`, `patchWorldLabels(patch)`, `patchWorldState(patch)`, `recordError(input)`, `listErrors(limit=100)`, `clearErrors()` (deletes the whole log, returns the row count).
 
 `patchWorldLabels({issues?, pullRequests?, label, present})` folds one label onto the named items in
 the stored baseline, for a route that has just had the provider accept the write and must not make
@@ -888,6 +895,11 @@ It moves `labelsAddedByViewer` with `labels` where the item carries one, or the 
 "Watching" on an issue pickup still treats as untagged; it skips an item the baseline does not carry,
 rather than inventing a row no snapshot described; and it is overwritten by the next cycle's reading,
 which is the point — the tracker stays the source of truth.
+
+`patchWorldState({number, state})` folds a work-item state the same way and on the same terms, for the
+Tickets tab's board: `/api/state` serves the baseline, so without it a card that has just been dragged
+redraws in its old column until the next pulse — and `runCycle('manual')` coalesces away while another
+cycle is in flight, which is most drops on a busy fleet.
 
 ### Connector state
 

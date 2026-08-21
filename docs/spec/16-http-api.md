@@ -366,6 +366,31 @@ and it is what issue #417 reported.
 
 The PR route has no equivalent because the mirror holds tracker items and a pull request was never one.
 
+### `POST /api/issues/:number/state`
+
+Body `{state: string}`. Moves a work item to one of the tracker's own states — the Tickets tab's card
+view drags onto it, and it is the first thing in the cockpit that writes a state at all. Answers
+`{ok: true, state}`.
+
+**It does not validate the state word.** The provider owns its process template: a check against the
+states the mirror has seen would refuse a legitimately configured but still-empty column, and a check
+against nothing at all is what lets the provider's own refusal reach the operator intact. The schema
+asks only that a state was named, so `{state: ""}` is a 400 rather than a blank write. An unsupported
+transition comes back as the provider's own sentence, recorded through `errors.record` on the way past
+and quoted verbatim in the refusal — the board puts it on the card it is returning, and a snap-back
+with no words attached reads as the board being broken.
+
+**The capability is checked, though.** `ActionSink.setWorkItemState` *throws* where no integration
+implements it, so without the check a GitHub deployment would answer every drop with an exception that
+reads as this write failing rather than as the operation not existing. `connector.canSetWorkItemState()`
+answers it, the same predicate `/api/state` ships to the cockpit as `canSetWorkItemState` — which is
+why the board draws no drag at all there and says so once, instead of failing one drop at a time.
+
+On success it does what the watch route does, in the same order and for the reasons stated there:
+`store.patchWorldState` folds the state onto the baseline, `store.patchTicketState` folds it onto the
+mirror, `world:changed` goes out, and a manual cycle runs. Both patches, because these are the same
+two readers — `/api/state` serves the baseline and the board's own rows come from `tracker_items`.
+
 ### `POST /api/issues/:number/profile`
 
 Body `{profile?: string}`. Pins this goal's work to a model profile; absent or empty **clears** the

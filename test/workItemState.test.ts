@@ -34,6 +34,7 @@ function statePlan(number: number, state: string): DispatchResult {
 function recordingSink(): { sink: ActionSink; states: WorkItemStateInput[] } {
   const states: WorkItemStateInput[] = [];
   const sink: ActionSink = {
+    canSetWorkItemState: () => true,
     async postPrReply(): Promise<SendResult> {
       return { ok: true };
     },
@@ -102,6 +103,7 @@ test('set_work_item_state routes to the sink and is audited (no auto-send gate)'
 
 test('a failing transition is recorded as rejected, not escalated', async () => {
   const failingSink: ActionSink = {
+    canSetWorkItemState: () => true,
     async postPrReply(): Promise<SendResult> {
       return { ok: true };
     },
