@@ -1978,7 +1978,10 @@ a panel of `$0.00` rows says the wrong one of those.
 and `StackLandingView` are shipped: a cockpit-side re-derivation of which goal a pull request's money
 belongs to would be a second opinion about a decision made elsewhere, drawn inches from the first. What
 the cockpit owns is presentation — the phase **colours**, which live in the stylesheet as `--sp-<phase>`
-so the component names a phase and the sheet decides what that looks like.
+so the component names a phase and the sheet decides what that looks like. There are eight phases and
+seven hues that read apart at swatch size, so `--sp-local` is a `color-mix` of two rather than a
+literal — a hex at a use site is a swatch that stays put when somebody switches theme
+([tokens](#tokens)).
 
 Four pictures, in the order the questions arrive:
 
@@ -1995,7 +1998,11 @@ Four pictures, in the order the questions arrive:
 - **By goal**, then **the costliest runs**. Each goal row's bar is drawn at the width of its share of
   the fleet and split by phase inside, so it carries two readings at once: how much of the budget this
   goal was, and what inside it the money went on. The runs table is capped and **says so** — a silently
-  truncated table reads as a complete one.
+  truncated table reads as a complete one. A row can be a **local run** rather than an agent, named by
+  the branch it was pointed at, because the table ranks what money went on and an operator's preview is
+  money ([23](23-local-runs.md#what-it-costs)). The by-task-type table beside it can hold none of them —
+  nothing dispatched a local run — so it states that remainder in the shape the checks table states its
+  own.
 
 **The method note is part of the panel, not a footnote**, and it sits level with the figures it
 qualifies rather than three screens below them. It states the one thing the numbers cannot: dollars are
@@ -2459,6 +2466,12 @@ back button steps out of it, exactly as every other panel does. It draws one sta
 than a table of runs — a list would imply two environments could be up, which is the one thing the
 store refuses — and its start button says, where the control is, that starting stops what is running
 now.
+
+Beside the ref it draws **what the run has cost**, climbing while the environment comes up. It is the
+only spend figure in the cockpit read while the money is still going out, and it is here because this is
+where the decision to leave something running is made. Absent rather than `$0.00` when nothing was
+measured, the convention every spend surface keeps. The goal page's Spend card names the count in a row
+of its own for the same reason: the row above it says "Agents".
 
 ## Links
 

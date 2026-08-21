@@ -85,6 +85,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
       // money was spent whether or not the world still lists the ticket.
       const { goals } = buildSpendGoals({
         agents: store.listAgents(),
+        localRuns: store.listLocalRuns(),
         tasks: store.listTasks(),
         nodes: store.listWorkNodes(),
         issues: store.getWorldBaseline()?.issues ?? [],

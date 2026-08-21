@@ -3553,11 +3553,13 @@ a.btn {
 
    **Phase colour is a variable, not a value.** The panel's components name a
    phase (`var(--sp-landing)`) and this block decides what that looks like, which
-   keeps the palette in the stylesheet where the rest of the shell's is. Seven are
+   keeps the palette in the stylesheet where the rest of the shell's is. Eight are
    needed and the token palette has six that read apart at swatch size, so
    `--sp-job` is the one new hue — deliberately outside the alarm colours, because
-   a job is not a warning. `--sp-ci` is the one phase that *is* an alarm colour,
-   and the only one that should be: it is what a red pipeline is charging.
+   a job is not a warning — and `--sp-local` is a mix of two, because a local run is
+   the operator's own work and reads as a neighbour of the fleet's rather than a
+   ninth voice. `--sp-ci` is the one phase that *is* an alarm colour, and the only
+   one that should be: it is what a red pipeline is charging.
 
    **Tables here are read down a column, so every numeric cell is tabular.** A
    ranked table whose figures do not line up is a list. */
@@ -3570,6 +3572,10 @@ a.btn {
   --sp-ci: var(--red);
   --sp-landing: var(--accent);
   --sp-evidence: var(--amber);
+  /* The eighth phase, and the palette's seven distinguishable hues were spent on the
+     first seven — so this one is mixed from two of them rather than written as a
+     literal, which is what keeps it following the theme an operator picked. */
+  --sp-local: color-mix(in srgb, var(--blue) 45%, var(--green));
   --sp-job: var(--violet);
   --sp-other: var(--grey);
 }

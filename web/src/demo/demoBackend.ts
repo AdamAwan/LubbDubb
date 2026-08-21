@@ -1053,6 +1053,14 @@ class DemoServer {
       // minutes in and the one the panel had nothing to say about. The scripted
       // bring-up below walks out of it.
       status: 'starting',
+      // Nothing reported yet: the figure appears with the session's first turn end,
+      // which is what an unmeasured run looks like on the real thing too.
+      costUsd: null,
+      inputTokens: null,
+      outputTokens: null,
+      cacheReadTokens: null,
+      cacheCreationTokens: null,
+      numTurns: null,
       url: 'http://localhost:5173',
       note: null,
       startedAt: now,
@@ -1091,7 +1099,9 @@ class DemoServer {
     }
     this.bringUp += 1;
     this.lines = [...this.lines, `phase: ${step.phase}`, ...step.lines];
-    this.state.localRun = { ...run, phase: step.phase };
+    // The money climbs with the work, because that is what the panel is showing: a
+    // reading that only appeared at the end would demonstrate the opposite of it.
+    this.state.localRun = { ...run, phase: step.phase, ...localRunSpent(run, 0.06) };
     this.dirty();
   }
 
@@ -1129,7 +1139,9 @@ class DemoServer {
     }
     this.teardown += 1;
     this.lines = [...this.lines, `phase: ${step.phase}`, ...step.lines];
-    this.state.localRun = { ...run, phase: step.phase };
+    // A teardown is a turn too, and it is billed to the run it takes down — which is
+    // the whole reason the row accumulates rather than being written once.
+    this.state.localRun = { ...run, phase: step.phase, ...localRunSpent(run, 0.03) };
     this.dirty();
   }
 
@@ -1834,6 +1846,8 @@ const DEMO_GOAL_SEEDS: {
   issueNumber: number;
   title: string | null;
   agents: number;
+  /** Local runs of this goal — the operator's own previews, priced in `byPhase.local`. */
+  localRuns: number;
   hoursAgo: number;
   byPhase: Partial<Record<SpendPhase, number>>;
 }[] = [
@@ -1841,13 +1855,17 @@ const DEMO_GOAL_SEEDS: {
     issueNumber: 390,
     title: 'Validate job payloads in the catalog, not in each runner',
     agents: 7,
+    // The goal that has been looked at locally, twice — the row that shows a total
+    // holding money no agent spent.
+    localRuns: 2,
     hoursAgo: 2,
-    byPhase: { deliberation: 3.4, build: 9.8, ci: 2.6, landing: 1.3, evidence: 1.32 },
+    byPhase: { deliberation: 3.4, build: 9.8, ci: 2.6, landing: 1.3, evidence: 1.32, local: 0.74 },
   },
   {
     issueNumber: 364,
     title: 'Document the two-watcher requirement for maintenance jobs',
     agents: 4,
+    localRuns: 0,
     hoursAgo: 1,
     byPhase: { deliberation: 1.6, build: 3.24, ci: 0.3, landing: 0.2, evidence: 0.8 },
   },
@@ -1855,11 +1873,12 @@ const DEMO_GOAL_SEEDS: {
     issueNumber: 382,
     title: 'Gap clustering merges unrelated questions into one gap',
     agents: 3,
+    localRuns: 1,
     hoursAgo: 26,
     // The goal whose CI dwarfs its build — the shape the split exists to surface,
     // on screen in the demo rather than only in the argument for it. Sums to the
     // $4.20 the goal's own card states.
-    byPhase: { deliberation: 0.3, build: 1.1, ci: 2.6, landing: 0.1, evidence: 0.1 },
+    byPhase: { deliberation: 0.3, build: 1.1, ci: 2.6, landing: 0.1, evidence: 0.1, local: 0.18 },
   },
   {
     // A goal the world snapshot no longer carries — closed and aged out of the
@@ -1867,6 +1886,7 @@ const DEMO_GOAL_SEEDS: {
     issueNumber: 331,
     title: null,
     agents: 2,
+    localRuns: 0,
     hoursAgo: 74,
     byPhase: { deliberation: 0.3, build: 0.62, evidence: 0.5 },
   },
@@ -1877,6 +1897,28 @@ const DEMO_LOOSE: { phase: SpendPhase; costUsd: number }[] = [
   { phase: 'job', costUsd: 0.96 },
   { phase: 'other', costUsd: 0.7 },
 ];
+
+/**
+ * A local run's usage after one more turn — the accumulation the real store does,
+ * so the demo shows the figure climbing rather than appearing.
+ */
+function localRunSpent(
+  run: LocalRunView,
+  costUsd: number,
+): Pick<
+  LocalRunView,
+  'costUsd' | 'inputTokens' | 'outputTokens' | 'cacheReadTokens' | 'cacheCreationTokens' | 'numTurns'
+> {
+  const cost = (run.costUsd ?? 0) + costUsd;
+  return {
+    costUsd: Math.round(cost * 1e6) / 1e6,
+    inputTokens: Math.round(cost * 180_000),
+    outputTokens: Math.round(cost * 9_000),
+    cacheReadTokens: Math.round(cost * 140_000),
+    cacheCreationTokens: Math.round(cost * 11_000),
+    numTurns: (run.numTurns ?? 0) + 1,
+  };
+}
 
 /** The demo world's token ratio, shared with `demoSpend` in the fixtures. */
 const demoTokens = (costUsd: number) => ({
@@ -1897,12 +1939,14 @@ const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
   ci: { label: 'CI', blurb: 'Answering a pull request’s failing or blocked checks — what a red pipeline costs' },
   landing: { label: 'Landing', blurb: 'The rest of getting a pull request in — review comments, retargets, the merge' },
   evidence: { label: 'Evidence', blurb: 'Assessing what shipped, and writing the run up' },
+  local: { label: 'Local runs', blurb: 'Bringing a goal’s branch up on this machine to look at it' },
   job: { label: 'Jobs', blurb: 'Work an operator queued directly, rather than a goal the harness picked up' },
   other: { label: 'Unclassified', blurb: 'Runs whose origin names none of the above — see the note below' },
 };
 
 const DEMO_RUNS: {
-  agentId: string;
+  id: string;
+  kind: 'agent' | 'local';
   title: string;
   originRef: string;
   phase: SpendPhase;
@@ -1911,7 +1955,8 @@ const DEMO_RUNS: {
   hoursAgo: number;
 }[] = [
   {
-    agentId: 'agent-d1',
+    id: 'agent-d1',
+    kind: 'agent',
     title: 'Validate every payload at enqueue',
     originRef: 'issue:390:part:validate',
     phase: 'build',
@@ -1920,7 +1965,8 @@ const DEMO_RUNS: {
     hoursAgo: 3,
   },
   {
-    agentId: 'agent-d2',
+    id: 'agent-d2',
+    kind: 'agent',
     title: 'Plan the jobs-catalog move',
     originRef: 'issue:390:plan',
     phase: 'deliberation',
@@ -1929,7 +1975,8 @@ const DEMO_RUNS: {
     hoursAgo: 19,
   },
   {
-    agentId: 'agent-d3',
+    id: 'agent-d3',
+    kind: 'agent',
     title: 'Route the watcher’s intake through the catalog',
     originRef: 'issue:390:part:watcher',
     phase: 'build',
@@ -1938,7 +1985,8 @@ const DEMO_RUNS: {
     hoursAgo: 2,
   },
   {
-    agentId: 'agent-d4',
+    id: 'agent-d4',
+    kind: 'agent',
     title: 'Fix the failing checks on #413',
     originRef: 'pr:413:ci',
     phase: 'ci',
@@ -1947,7 +1995,8 @@ const DEMO_RUNS: {
     hoursAgo: 4,
   },
   {
-    agentId: 'agent-d5',
+    id: 'agent-d5',
+    kind: 'agent',
     title: 'Document the two-watcher requirement',
     originRef: 'issue:364:part:docs',
     phase: 'build',
@@ -1956,7 +2005,8 @@ const DEMO_RUNS: {
     hoursAgo: 1,
   },
   {
-    agentId: 'agent-d6',
+    id: 'agent-d6',
+    kind: 'agent',
     title: 'Answer the review on #414',
     originRef: 'pr:414:comments',
     phase: 'landing',
@@ -1965,7 +2015,8 @@ const DEMO_RUNS: {
     hoursAgo: 5,
   },
   {
-    agentId: 'agent-d7',
+    id: 'agent-d7',
+    kind: 'agent',
     title: 'Assess what shipped for #390',
     originRef: 'issue:390:assess',
     phase: 'evidence',
@@ -1974,7 +2025,21 @@ const DEMO_RUNS: {
     hoursAgo: 2,
   },
   {
-    agentId: 'agent-d8',
+    // A local run in the ranking, because the ranking is of what money went on and
+    // an operator's preview is money. It carries the branch rather than a task title
+    // — nothing asked it to do anything, so there is nothing else to name it by.
+    id: 'run-390-b',
+    kind: 'local',
+    title: 'Local run · issue/390/validate',
+    originRef: 'issue:390',
+    phase: 'local',
+    costUsd: 0.52,
+    turns: 9,
+    hoursAgo: 2,
+  },
+  {
+    id: 'agent-d8',
+    kind: 'agent',
     title: 'Sweep docs/ for links that no longer resolve',
     originRef: 'job:demo-1',
     phase: 'job',
@@ -2496,6 +2561,7 @@ function buildDemoSpend(): SpendInsights {
     ci: 0,
     landing: 0,
     evidence: 0,
+    local: 0,
     job: 0,
     other: 0,
   });
@@ -2507,6 +2573,7 @@ function buildDemoSpend(): SpendInsights {
       originRef: `issue:${seed.issueNumber}`,
       issueNumber: seed.issueNumber,
       title: seed.title,
+      localRuns: seed.localRuns,
       costUsd,
       ...demoTokens(costUsd),
       agents: seed.agents,
@@ -2530,7 +2597,7 @@ function buildDemoSpend(): SpendInsights {
     phaseRuns[loose.phase] += 1;
   }
 
-  const order: SpendPhase[] = ['deliberation', 'build', 'ci', 'landing', 'evidence', 'job', 'other'];
+  const order: SpendPhase[] = ['deliberation', 'build', 'ci', 'landing', 'evidence', 'local', 'job', 'other'];
   const phases = order
     .filter((phase) => phaseRuns[phase] > 0)
     .map((phase) => ({
@@ -2542,9 +2609,10 @@ function buildDemoSpend(): SpendInsights {
     }));
 
   const costUsd = round(phases.reduce((a, p) => a + p.costUsd, 0));
-  const measuredRuns = goals.reduce((a, g) => a + g.agents, 0) + DEMO_LOOSE.length;
+  const measuredRuns = goals.reduce((a, g) => a + g.agents + g.localRuns, 0) + DEMO_LOOSE.length;
   const runs: SpendRun[] = DEMO_RUNS.map((r) => ({
-    agentId: r.agentId,
+    id: r.id,
+    kind: r.kind,
     originRef: r.originRef,
     title: r.title,
     phase: r.phase,
@@ -2712,6 +2780,7 @@ function buildDemoTrend(): SpendTrend {
     ci: 0,
     landing: 0,
     evidence: 0,
+    local: 0,
     job: 0,
     other: 0,
   });

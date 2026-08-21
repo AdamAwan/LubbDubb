@@ -998,7 +998,7 @@ function OnThisGoal({
 }
 
 /**
- * What the goal has cost, over every agent under it. The whole card is absent
+ * What the goal has cost, over every agent under it and every local run of it. The whole card is absent
  * when nothing was measured — the rows would all read zero and none of them would
  * be a reading.
  */
@@ -1017,6 +1017,14 @@ function Spend({ issue }: { issue: Issue }): JSX.Element | null {
           <span>Agents</span>
           <b>{spend.agents}</b>
         </div>
+        {/* Named separately because the row above says "Agents" and a local run is
+            not one. The total already holds its money. */}
+        {spend.localRuns > 0 && (
+          <div className="cn-kv">
+            <span>Local runs</span>
+            <b>{spend.localRuns}</b>
+          </div>
+        )}
         <div className="cn-kv">
           <span>Tokens</span>
           <b>

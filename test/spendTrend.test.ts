@@ -47,6 +47,7 @@ function goal(issueNumber: number, costUsd: number, byPhase: Partial<Record<Spen
     originRef: `issue:${issueNumber}`,
     issueNumber,
     costUsd,
+    localRuns: 0,
     inputTokens: costUsd * 1000,
     outputTokens: costUsd * 10,
     agents: 2,

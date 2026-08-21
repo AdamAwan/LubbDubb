@@ -26,7 +26,7 @@ import { EscalationStore } from './escalations.js';
 import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
 import { EnvironmentStore, repairPartRefGoals } from './environments.js';
-import { LocalRunStore } from './localRuns.js';
+import { LocalRunStore, LOCAL_RUN_COLUMNS } from './localRuns.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
 import { ReviewWaitStore } from './reviewWaits.js';
@@ -84,8 +84,10 @@ import type {
   Remedy,
   RemedyInput,
   RemedyKind,
+  CostDelta,
   LocalRun,
   LocalRunStatus,
+  LocalRunUsageDelta,
   Pet,
   PetAction,
   PetActionKind,
@@ -209,6 +211,7 @@ export class Store {
       FLOOR_COLUMNS,
       TICKET_COLUMNS,
       PET_COLUMNS,
+      LOCAL_RUN_COLUMNS,
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }
@@ -745,11 +748,36 @@ export class Store {
   recordAgentNote(id: string, note: string): string {
     return this.agents.recordAgentNote(id, note);
   }
+  /**
+   * What this deployment has spent since `sinceIso` — **every** source of it.
+   *
+   * Two tables hold dated cost deltas: `usage_events` for the fleet's agents, and
+   * `local_run_cost_deltas` for the sessions holding the machine's dev environment
+   * up. Both are money on the same account, so both belong in the one figure the
+   * gauges draw and the pets' beats are earned from — and this addition is the one
+   * place they are added. A third source of spend is added here, or it is money the
+   * cockpit states nowhere while claiming to state all of it.
+   */
   sumUsageCostSince(sinceIso: string): number {
-    return this.agents.sumUsageCostSince(sinceIso);
+    return this.agents.sumUsageCostSince(sinceIso) + this.localRuns.sumLocalRunCostSince(sinceIso);
   }
+  /**
+   * The agents' dated deltas alone, for the reader that needs to know **whose**.
+   *
+   * Deliberately not the merged list: the reliability breakdown joins these to agents
+   * by id to price a pull request's CI, and a local run's delta is a row it can never
+   * match. {@link Store.listCostDeltasSince} is the one to reach for when the question
+   * is "what went out, and when".
+   */
   listUsageEventsSince(sinceIso: string): UsageEvent[] {
     return this.agents.listUsageEventsSince(sinceIso);
+  }
+  /** Every dated delta, whatever spent it, oldest first — the spend timeline's input. */
+  listCostDeltasSince(sinceIso: string): CostDelta[] {
+    return [
+      ...this.agents.listUsageEventsSince(sinceIso).map((e) => ({ costUsd: e.costUsd, at: e.at })),
+      ...this.localRuns.listLocalRunCostDeltasSince(sinceIso),
+    ].sort((a, b) => a.at.localeCompare(b.at));
   }
   listAgentsByStatus(...statuses: Agent['status'][]): Agent[] {
     return this.agents.listAgentsByStatus(...statuses);
@@ -935,6 +963,12 @@ export class Store {
   }
   currentLocalRun(): LocalRun | null {
     return this.localRuns.currentLocalRun();
+  }
+  listLocalRuns(): LocalRun[] {
+    return this.localRuns.listLocalRuns();
+  }
+  addLocalRunUsage(id: string, delta: LocalRunUsageDelta): void {
+    this.localRuns.addLocalRunUsage(id, delta);
   }
   endStaleLocalRuns(note: string): number {
     return this.localRuns.endStaleLocalRuns(note);
