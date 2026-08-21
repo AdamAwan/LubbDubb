@@ -6457,3 +6457,54 @@ a.btn {
   margin: 0;
   max-width: 78ch;
 }
+
+/* ---------------------------------------------------------------------------
+ * Causes — the Yield panel's third reading (why the fleet came back)
+ *
+ * Scoped to `.rl` like the outcome palette above and for the same reason: these
+ * are a *verdict* vocabulary, not a category one. The order they are declared in
+ * is the order they are drawn in, and it is what an operator can do about each —
+ * run the gate, hand over what is written, write down what is not, accept it. So
+ * the ramp runs from the alarm colours through to grey, and the one an operator
+ * can actually act on is the accent rather than a hue of its own: it is the row
+ * this whole section exists to surface.
+ * ------------------------------------------------------------------------- */
+.rl {
+  --rm-local_check: var(--amber);
+  --rm-documented: color-mix(in srgb, var(--amber) 45%, var(--grey));
+  --rm-undocumented: var(--accent);
+  --rm-unpreventable: var(--grey);
+}
+
+/* One account in the "lately" list. A bordered row rather than a card: it is a
+   dense list of testimony, and eight cards is a wall. */
+.rm-row {
+  display: grid;
+  gap: 2px;
+  padding: 7px 0;
+  border-top: 1px solid var(--border);
+}
+.rm-row .rm-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+/* The two enums as chips, coloured only on the guard axis. Colouring both would
+   put two competing readings on one line — the guard is the one that is a
+   verdict, and the cause is already the row's own words. */
+.rm-tag {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+.rm-tag.guard {
+  border-color: currentColor;
+}
+.rm-row .rm-when {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}

@@ -189,6 +189,7 @@ const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   scratch_read: 'point-of-use',
   validation_report: 'point-of-use',
   validation_amend: 'point-of-use',
+  report_remedy: 'point-of-use',
   // The one tool an agent is never told about: Claude Code calls it through
   // --permission-prompt-tool, so naming it would invite a call that means nothing.
   request_permission: 'point-of-use',

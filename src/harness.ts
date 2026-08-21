@@ -37,6 +37,17 @@ import type { UpcomingPlan } from './wire.js';
 import { isActiveTask } from './tasks.js';
 import type { StackLandingDesk } from './stacks/landingDesk.js';
 
+/**
+ * How many accounts of each kind the dispatch context carries.
+ *
+ * Read on **every** pulse, and it feeds a prompt block that renders at most a
+ * handful of lines — so this is the read's bound rather than the block's, which
+ * `priorRemedies.ts` keeps for itself. Wider than that block's cap on purpose:
+ * the CI arm filters to the checks that are red now, so a fetch of exactly six
+ * would routinely arrive with none of them relevant.
+ */
+const PRIOR_REMEDY_ROWS = 40;
+
 interface HarnessDeps {
   store: Store;
   connector: Connector;
@@ -583,6 +594,14 @@ export class Harness extends EventEmitter {
         priorityOverrides,
         goalPriorities,
         profileOverrides,
+        // What agents said the last few returns to a pull request turned out to
+        // be. Prompt material only — no rule reads it, and the two CI/review
+        // arms render it into the prompt they were already building. Both kinds
+        // are fetched because both arms can fire in one pass over one PR.
+        priorRemedies: [
+          ...store.listRecentRemedies('ci', PRIOR_REMEDY_ROWS),
+          ...store.listRecentRemedies('review', PRIOR_REMEDY_ROWS),
+        ],
         // The goal tags and the profiles they may name, so a dispatch on a pinned
         // issue is priced by the pin rather than by its rule.
         modelPins: this.deps.modelPins,

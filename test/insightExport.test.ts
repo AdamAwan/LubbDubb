@@ -249,7 +249,7 @@ function yieldOf(over: Partial<ReliabilityInsights> = {}): ReliabilityInsights {
 }
 
 test('yield leaves at full precision too — a rate as a fraction, a wait in milliseconds', () => {
-  const csv = reliabilityCsv(yieldOf());
+  const csv = reliabilityCsv(yieldOf(), null);
   assert.ok(section(csv, 'Tallies').includes('Completion rate,0.75'), 'not the panel’s 75%');
   assert.ok(section(csv, 'Tallies').includes('CI red rate,0.3'));
   assert.ok(section(csv, 'Tallies').includes('Median back to green (ms),900000'));
@@ -261,7 +261,7 @@ test('yield leaves at full precision too — a rate as a fraction, a wait in mil
 });
 
 test('yield carries the six tables the panel draws, in the order it draws them', () => {
-  const csv = reliabilityCsv(yieldOf());
+  const csv = reliabilityCsv(yieldOf(), null);
   const lead = `\r\n${csv}`;
   const names = ['Tallies', 'Outcomes', 'CI verdicts by day', 'Phases', 'Reddest pull requests', 'Ran more than once'];
   const order = names.map((s) => lead.indexOf(`\r\n${s}\r\n`));
@@ -272,8 +272,65 @@ test('yield carries the six tables the panel draws, in the order it draws them',
   assert.ok(section(csv, 'Reddest pull requests').some((r) => r.startsWith('pr:143,143,5,2,7200000,1.5,yes')));
 });
 
+test('the causes half leaves with its caveat, or does not leave at all', () => {
+  // Nothing accounted for means no section, not an empty one: a header with no
+  // rows under it reads as a table that failed to load rather than as a fleet
+  // that has not been back to a pull request.
+  assert.ok(!reliabilityCsv(yieldOf(), null).includes('\r\nCauses\r\n'));
+
+  const csv = reliabilityCsv(yieldOf(), {
+    accounts: 2,
+    costUsd: 8.5,
+    unaccounted: 3,
+    byKind: [
+      {
+        kind: 'ci',
+        accounts: 2,
+        costUsd: 8.5,
+        byCause: [
+          {
+            cause: 'missed_gate',
+            label: 'Missed gate',
+            blurb: 'the gate would have',
+            accounts: 2,
+            costUsd: 8.5,
+            undocumented: 1,
+            topCheck: { name: 'format:check', accounts: 2 },
+          },
+        ],
+      },
+      { kind: 'review', accounts: 0, costUsd: 0, byCause: [] },
+    ],
+    byGuard: [{ guard: 'local_check', label: 'The local check', blurb: 'run the gate', accounts: 2, costUsd: 8.5 }],
+    recent: [
+      {
+        id: 'rmd_1',
+        kind: 'ci',
+        ref: 'pr:143',
+        prNumber: 143,
+        cause: 'missed_gate',
+        causeLabel: 'Missed gate',
+        guard: 'local_check',
+        guardLabel: 'The local check',
+        summary: 'line endings',
+        checks: ['format:check'],
+        at: '2026-08-20T09:00:00.000Z',
+      },
+    ],
+  });
+
+  const causes = section(csv, 'Causes');
+  // The caveat leads: every share in this half is a share of what was *reported*,
+  // and a spreadsheet strips the sentence on the glass that said so.
+  assert.ok(causes.includes('Dispatches that filed nothing,3'));
+  assert.ok(causes.some((r) => r.startsWith('An account is,')), 'an account is not a red'); // prettier-ignore
+  assert.ok(causes.some((r) => r.startsWith('Cost is,')), 'divided money must say it is divided'); // prettier-ignore
+  assert.ok(section(csv, 'By cause').some((r) => r.startsWith('ci,missed_gate,')));
+  assert.ok(section(csv, 'Lately').some((r) => r.includes('format:check')));
+});
+
 test('the method note leaves as rows — the two windows, what a red is, what stopped is not', () => {
-  const csv = reliabilityCsv(yieldOf());
+  const csv = reliabilityCsv(yieldOf(), null);
   const tallies = section(csv, 'Tallies');
   // The window split reads as a mistake until it is stated, and there is no note
   // beside a spreadsheet to state it.

@@ -41,6 +41,7 @@ export const MCP_TOOL_NAMES = [
   'open_pr',
   'validation_amend',
   'validation_report',
+  'report_remedy',
 ] as const;
 
 /**

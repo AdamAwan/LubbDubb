@@ -57,6 +57,7 @@ import type { ControlState } from './runtimeControl.js';
 import type { RunningConfigGroup } from './server/runningConfig.js';
 import type { ConfigChange } from './configApply.js';
 import type { ReliabilityInsights, RunTally } from './reliabilityInsights.js';
+import type { RemedyInsights } from './remedyInsights.js';
 import type { SpendInsights } from './spendInsights.js';
 import type { SpendTrend } from './spendTrend.js';
 import type { Stack } from './stacks/stack.js';
@@ -1228,6 +1229,16 @@ export interface SpendTrendPayload {
  */
 export interface ReliabilityPayload {
   insights: ReliabilityInsights;
+  /**
+   * Why the fleet came back, over the same fortnight and out of the same usage
+   * events — the Causes reading.
+   *
+   * On this payload rather than a route of its own because it is a section of
+   * this panel and shares its window: two fetches for one modal would be two
+   * chances for the two halves to describe different fortnights, which is exactly
+   * the disagreement the shared `since` in the route exists to prevent.
+   */
+  remedies: RemedyInsights;
 }
 
 /**
@@ -1392,6 +1403,8 @@ export type {
   RunRepeat,
   RunTally,
 } from './reliabilityInsights.js';
+export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './remedyInsights.js';
+export type { RemedyCause, RemedyGuard, RemedyKind } from './types.js';
 export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
 export type {
   SpendTrend,

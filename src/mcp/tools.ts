@@ -11,6 +11,7 @@ import { noteProgress } from './tools/noteProgress.js';
 import { openPr } from './tools/openPr.js';
 import { planSubmit } from './tools/planSubmit.js';
 import { reportFinding } from './tools/reportFinding.js';
+import { reportRemedy } from './tools/reportRemedy.js';
 import { requestHumanTask } from './tools/requestHumanTask.js';
 import { requestPermission } from './tools/requestPermission.js';
 import { retroSubmit } from './tools/retroSubmit.js';
@@ -55,6 +56,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   open_pr: openPr,
   validation_amend: validationAmend,
   validation_report: validationReport,
+  report_remedy: reportRemedy,
 };
 
 /**

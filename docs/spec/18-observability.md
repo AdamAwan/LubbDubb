@@ -545,6 +545,95 @@ already durable, already dated, and pruned by nothing.
 the _next_ passing. A descending read pairs every red with the green that preceded it and reports the
 flakiest pipeline in the repository as recovering instantly.
 
+## Causes: why the fleet came back
+
+The reliability breakdown counts reds and prices them. It cannot say **why** any of them happened,
+and a flaky runner, a stale assertion, a missing `.js` extension and a real defect are the same red,
+the same dollars and the same row everywhere else the harness draws one. `remedies` is the record
+that closes that, and `buildRemedyInsights` (`src/remedyInsights.ts`) is its reading — a section of
+the Yield panel, on the same payload and over the same 14 days ([17](17-cockpit.md#yield)).
+
+**The agent that fixed it writes it.** `report_remedy` ([11](11-mcp-tools.md)) is called at the end
+of a `pr:<n>:ci` or `pr:<n>:comments` dispatch, and the knowledge is at its cheapest exactly then:
+that agent read the failing assertion the harness put in its prompt
+([07](07-pull-requests.md)) and then made the fix. A post-hoc classifier over CI logs would be a
+_second_ opinion about a call the first one already made — the arrangement the phase and CI-status
+classifiers above are both refused, and for the same reason.
+
+**Two axes, because a cause and a preventability are different questions.**
+
+- **`cause`** — what was actually wrong. Two taxonomies, one per kind, in
+  `src/remedies/remedies.ts`: a CI failure may be `flake`, `environment`, `inherited`, `stale_test`,
+  `missed_gate`, `contract_drift`, `defect` or `other`; a review round may be `missed_requirement`,
+  `convention`, `approach`, `scope`, `docs`, `clarity`, `defect` or `other`. They are split rather
+  than shared because a review round is never a flake and a red check is never a matter of taste, and
+  a taxonomy nobody can hold in mind is one where everything lands on `other`. `defect` and `other`
+  appear in both under **one name**: a bug the suite caught and a bug a reviewer caught are the same
+  fact about the fleet, and two names for it would split the count that matters most.
+- **`guard`** — what would have caught it before the push: `local_check`, `documented`,
+  `undocumented`, `unpreventable`, in that order, which is the order of what it costs an operator to
+  act on each. This is the axis that answers _how do we get fewer of these_, and it is why the record
+  is two enums rather than one.
+
+**The kind, the pull request and the checks are never claimed.** `remedyOrigin` resolves the first
+two from the caller's own task origin and refuses every other caller by name; the checks come from
+`Task.ciChecks`, which is what the harness dispatched that agent about. A `kind` an agent could
+assert is a column reporting whatever each agent took it to mean, and the counts would be worth
+nothing.
+
+**`undocumented` is the one verdict that may carry a lesson**, and it rides on the same call rather
+than a second tool — atomic, exactly as a retrospective's lessons are ([13](13-jobs-and-findings.md)).
+A lesson on any other guard is **refused rather than dropped**: a claim reaches every later dispatch
+once an operator vouches for it, so the gate on what may become one has to be visible to the agent
+proposing it. The lesson's provenance is the pull request (`pr:<n>`), which both lesson surfaces
+already render; resolving the goal above it would mean a second parser of the branch convention.
+
+**An account is not a red, and not a run.** One agent that settled four reds in one dispatch files
+one row; a pull request that went red four times over four days collects four. So `accounts` is never
+comparable to `CiHealth.reds`, and the panel never subtracts one from the other —
+`RemedyInsights.unaccounted` is the honest form of that question and counts **dispatches** with no
+account at all, which is the thing an operator can chase. It is drawn with the total rather than in a
+footnote, because every share in the section is a share of what was _reported_.
+
+**Money is divided, and the payload says so.** Cost is the filing agent's spend inside the window,
+split evenly across the accounts it filed. One agent answering three unrelated reds genuinely spent
+its money on all three and no reading says which third went where — dividing is the only claim the
+data supports.
+
+**Nothing gates on a remedy.** No dispatch rule, desk or gate reads the table; a pull request goes
+green whether or not one was ever filed, and an agent that files none costs the account and nothing
+else. There are exactly two readers: this panel, and the prior-remedy note below.
+
+**Derived, never stored,** like every other fold here. A pre-summed table of causes would go stale the
+moment one more account landed.
+
+### The note a later dispatch carries
+
+`src/remedies/priorRemedies.ts` renders the record back into the prompt of the **next** agent
+dispatched for a red or a review ([05](05-dispatcher.md#the-rule-book)), which is the half that
+reduces the work rather than merely measuring it. The saving is the one `ciEvidence` already argues
+for — **turns, not bytes**: an agent handed "the last three reds on `format:check` were line endings"
+goes to the formatter, where an agent handed the check name alone reproduces the whole gate to find
+out what a person already found out three times.
+
+It is **evidence, never instruction**, framed as `renderLessonBlock`'s block is and for its reason: a
+wall of assertions read as orders makes every agent worse the moment one goes stale, silently, with
+no test able to see it. Every line is attributed to its pull request, ordered newest first, and the
+header says out loud that the code in front of the agent is the authority.
+
+Three bounds, and the last is the point. The CI note shows only accounts naming a check that is red
+**now** — an account of `knip` is noise on a dispatch about `test`. The review note is not filtered at
+all, because there is no review equivalent of a check name and filtering to this pull request would
+leave it empty on the first review of every branch. And **what the cap dropped is named**, never
+silently cut, exactly as `ciEvidenceNote` names its own: an agent that reads a partial record as a
+whole one concludes something from the absence of an entry that was merely trimmed.
+
+The note and the **ask** are separate, and both are appended rather than interpolated
+([05](05-dispatcher.md#prompt-templates)). The ask — "call `report_remedy` before you finish" —
+renders unconditionally, because the account is the thing being asked for and a fleet with nothing
+recorded yet is the fleet that most needs it. The note renders only when the record says something,
+so a deployment with an empty table produces byte-identical prompts to a build without the feature.
+
 ## The live tail
 
 `agent:tail` is a per-agent rolling last-non-empty-line, folded in `Hub.updateTail` with ANSI stripped.

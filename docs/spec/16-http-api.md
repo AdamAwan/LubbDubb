@@ -32,7 +32,7 @@ is about.
 | `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                            |
 | `routes/spend.ts`       | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend |
 | `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                           |
-| `routes/reliability.ts` | `/api/reliability` — run outcomes and CI health, the reading beside the spend one             |
+| `routes/reliability.ts` | `/api/reliability` — run outcomes, CI health, and why the fleet came back                     |
 | `routes/work.ts`        | The work graph and its ignore / file verdicts                                                 |
 | `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                                |
 
@@ -811,9 +811,17 @@ apart, and agreement by construction is the only kind that holds.
 
 ### `GET /api/reliability`
 
-What the spending bought: run outcomes all-time and CI health over the last fortnight. Returns
-`{ insights }` — see [18](18-observability.md#the-reliability-breakdown) for what each half means,
-why the two windows differ, and why `killed` is not counted as a failure.
+What the spending bought: run outcomes all-time, CI health over the last fortnight, and — over that
+same fortnight — the accounts agents wrote of why they had to come back. Returns
+`{ insights, remedies }` — see [18](18-observability.md#the-reliability-breakdown) for what each half
+of the first means, why the two windows differ, and why `killed` is not counted as a failure, and
+[18](18-observability.md#causes-why-the-fleet-came-back) for the second.
+
+`remedies` rides on **this** payload rather than a route of its own because it is a section of this
+panel and shares its window: two fetches for one modal would be two chances for the two halves to
+describe different fortnights. It is folded from the same `usage_events` this handler already read,
+and its `unaccounted` denominator counts tasks whose **origin** is `pr:<n>:ci` or `pr:<n>:comments` —
+the same fence `report_remedy` uses, so the numerator and the denominator are one population.
 
 Fetched on open for `/api/spend`'s reason and at the same cost: it walks every agent the harness has
 ever run, plus a fortnight of `pr_ci` transitions. What the **Yield gauge** needs to draw is already
@@ -901,15 +909,15 @@ The configuration this process resolved at boot, for the cockpit's config page
 titled list of entries — dotted paths into the config object, with nested blocks expanded to leaves so
 one overridden member of `planning` does not make the other three read as chosen — carrying:
 
-| Field                | What it answers                                                                  |
-| -------------------- | -------------------------------------------------------------------------------- |
-| `value`, `isDefault` | what it is, and whether *this operator* chose it — the baseline is the built-in default with the project layer folded in ([02](02-configuration.md#the-project-layer)) |
-| `fromProject`        | set when that baseline came from the project's shared config, so a row can name the file it came from and a reset can say what it falls back to |
-| `type`, `options`    | what widget draws it, from `CONFIG_FIELDS` ([02](02-configuration.md#fields))    |
-| `access`             | `plain`, `advanced` (behind the disclosure) or `fileOnly` (not offered)          |
-| `live`               | whether saving it takes effect now, because `configApply.ts` holds an arm for it |
-| `env`                | the environment variable currently beating the file, or null                     |
-| `why`, `ms`          | the one line under the key, and whether the number is a duration                 |
+| Field                | What it answers                                                                                                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `value`, `isDefault` | what it is, and whether _this operator_ chose it — the baseline is the built-in default with the project layer folded in ([02](02-configuration.md#the-project-layer)) |
+| `fromProject`        | set when that baseline came from the project's shared config, so a row can name the file it came from and a reset can say what it falls back to                        |
+| `type`, `options`    | what widget draws it, from `CONFIG_FIELDS` ([02](02-configuration.md#fields))                                                                                          |
+| `access`             | `plain`, `advanced` (behind the disclosure) or `fileOnly` (not offered)                                                                                                |
+| `live`               | whether saving it takes effect now, because `configApply.ts` holds an arm for it                                                                                       |
+| `env`                | the environment variable currently beating the file, or null                                                                                                           |
+| `why`, `ms`          | the one line under the key, and whether the number is a duration                                                                                                       |
 
 `file` is the absolute path a save writes, and `text` is its current contents. `projectFile` is the
 targeted project's shared config, or null when that repository carries none — read, never written: it

@@ -28,6 +28,9 @@ import type {
   CiSubject,
   PromptTemplateView,
   ReliabilityInsights,
+  RemedyCause,
+  RemedyInsights,
+  RemedyRow,
   RunOutcome,
   RunningConfigGroup,
   Proposal,
@@ -2122,6 +2125,283 @@ const DEMO_REPEATS: {
   { originRef: 'issue:345', title: 'Retry the pickup on #345', runs: 2, lost: 0, costUsd: 4.1, hoursAgo: 19 },
 ];
 
+/**
+ * The Causes reading, authored against the same fixture as the reliability one
+ * beside it and for the same reason: the demo's world is built fresh in the
+ * browser each load, so no agent has ever filed an account.
+ *
+ * The shape it is authored *into* is the point. A demo where every account was
+ * `undocumented` would teach an operator that the guard axis is decoration, and
+ * one where everything was a flake would teach them the panel cannot see their
+ * own mistakes. So the split below is the uncomfortable one — the largest single
+ * share is work the repository's own gate would have caught — because that is
+ * what the panel is for.
+ */
+function buildDemoRemedies(): RemedyInsights {
+  const hour = 3_600_000;
+  const now = Date.now();
+  const ci: {
+    cause: RemedyCause;
+    label: string;
+    blurb: string;
+    accounts: number;
+    costUsd: number;
+    undocumented: number;
+    topCheck: { name: string; accounts: number } | null;
+  }[] = [
+    {
+      cause: 'missed_gate',
+      label: 'Missed gate',
+      blurb: 'The repository’s own check would have caught it, and it was not run',
+      accounts: 9,
+      costUsd: 31.4,
+      undocumented: 4,
+      topCheck: { name: 'format:check', accounts: 6 },
+    },
+    {
+      cause: 'flake',
+      label: 'Flake',
+      blurb: 'The same commit answers differently on a re-run — nothing in the diff',
+      accounts: 6,
+      costUsd: 26.8,
+      undocumented: 0,
+      topCheck: { name: 'test (windows)', accounts: 5 },
+    },
+    {
+      cause: 'stale_test',
+      label: 'Stale test',
+      blurb: 'The change was right; the test still encoded the old behaviour',
+      accounts: 5,
+      costUsd: 21.1,
+      undocumented: 1,
+      topCheck: { name: 'test', accounts: 4 },
+    },
+    {
+      cause: 'contract_drift',
+      label: 'Contract drift',
+      blurb: 'The change broke a caller, a type, or a second place the thing had to be registered',
+      accounts: 4,
+      costUsd: 19.6,
+      undocumented: 3,
+      topCheck: { name: 'typecheck:web', accounts: 3 },
+    },
+    {
+      cause: 'defect',
+      label: 'Defect',
+      blurb: 'A genuine bug in the change',
+      accounts: 2,
+      costUsd: 12.2,
+      undocumented: 0,
+      topCheck: { name: 'test', accounts: 2 },
+    },
+    {
+      cause: 'environment',
+      label: 'Environment',
+      blurb: 'The runner, a dependency, the network or a credential — not the diff',
+      accounts: 1,
+      costUsd: 4.3,
+      undocumented: 0,
+      topCheck: { name: 'knip', accounts: 1 },
+    },
+    {
+      cause: 'inherited',
+      label: 'Inherited',
+      blurb: 'Already red before this branch, or red from the base it sits on',
+      accounts: 0,
+      costUsd: 0,
+      undocumented: 0,
+      topCheck: null,
+    },
+    {
+      cause: 'other',
+      label: 'Other',
+      blurb: 'None of the above — the summary carries it',
+      accounts: 0,
+      costUsd: 0,
+      undocumented: 0,
+      topCheck: null,
+    },
+  ];
+  const review: typeof ci = [
+    {
+      cause: 'convention',
+      label: 'Convention',
+      blurb: 'A house rule or repository idiom the agent did not know',
+      accounts: 6,
+      costUsd: 17.9,
+      undocumented: 5,
+      topCheck: null,
+    },
+    {
+      cause: 'docs',
+      label: 'Docs',
+      blurb: 'The document that owns the behaviour was not updated with it',
+      accounts: 4,
+      costUsd: 8.4,
+      undocumented: 0,
+      topCheck: null,
+    },
+    {
+      cause: 'missed_requirement',
+      label: 'Missed requirement',
+      blurb: 'The ticket asked for it and the diff did not do it',
+      accounts: 3,
+      costUsd: 10.7,
+      undocumented: 1,
+      topCheck: null,
+    },
+    {
+      cause: 'approach',
+      label: 'Approach',
+      blurb: 'The reviewer wanted the problem solved a different way',
+      accounts: 2,
+      costUsd: 2.6,
+      undocumented: 0,
+      topCheck: null,
+    },
+    {
+      cause: 'clarity',
+      label: 'Clarity',
+      blurb: 'Naming, comments or structure the reviewer could not read',
+      accounts: 1,
+      costUsd: 1.4,
+      undocumented: 0,
+      topCheck: null,
+    },
+    {
+      cause: 'defect',
+      label: 'Defect',
+      blurb: 'A genuine bug in the change',
+      accounts: 1,
+      costUsd: 3.1,
+      undocumented: 0,
+      topCheck: null,
+    },
+    {
+      cause: 'scope',
+      label: 'Scope',
+      blurb: 'Too much, or too little, for what was asked',
+      accounts: 0,
+      costUsd: 0,
+      undocumented: 0,
+      topCheck: null,
+    },
+    {
+      cause: 'other',
+      label: 'Other',
+      blurb: 'None of the above — the summary carries it',
+      accounts: 0,
+      costUsd: 0,
+      undocumented: 0,
+      topCheck: null,
+    },
+  ];
+  const sum = (rows: typeof ci, field: 'accounts' | 'costUsd'): number =>
+    Math.round(rows.reduce((total, row) => total + row[field], 0) * 1e6) / 1e6;
+
+  const recent: RemedyRow[] = [
+    {
+      id: 'rmd_demo1',
+      kind: 'ci',
+      ref: 'pr:412',
+      prNumber: 412,
+      cause: 'missed_gate',
+      causeLabel: 'Missed gate',
+      guard: 'undocumented',
+      guardLabel: 'Written down nowhere',
+      summary:
+        'format:check went red on line endings — the file was written by a script that emits LF. Rewrote it through the repository’s own formatter.',
+      checks: ['format:check'],
+      at: new Date(now - 2 * hour).toISOString(),
+    },
+    {
+      id: 'rmd_demo2',
+      kind: 'ci',
+      ref: 'pr:409',
+      prNumber: 409,
+      cause: 'flake',
+      causeLabel: 'Flake',
+      guard: 'unpreventable',
+      guardLabel: 'Nothing would have',
+      summary:
+        'test (windows) timed out waiting on a pty exit and passed unchanged on a re-run. Nothing in the diff touches that seam.',
+      checks: ['test (windows)'],
+      at: new Date(now - 6 * hour).toISOString(),
+    },
+    {
+      id: 'rmd_demo3',
+      kind: 'review',
+      ref: 'pr:407',
+      prNumber: 407,
+      cause: 'convention',
+      causeLabel: 'Convention',
+      guard: 'undocumented',
+      guardLabel: 'Written down nowhere',
+      summary:
+        'Reviewer asked for the colour as a token on :root rather than a hex at the use site. Moved it and added it to the registry.',
+      checks: [],
+      at: new Date(now - 27 * hour).toISOString(),
+    },
+    {
+      id: 'rmd_demo4',
+      kind: 'ci',
+      ref: 'pr:404',
+      prNumber: 404,
+      cause: 'contract_drift',
+      causeLabel: 'Contract drift',
+      guard: 'documented',
+      guardLabel: 'Already written down',
+      summary:
+        'typecheck:web went red on a domain type widened in the wire module. The rule is in CLAUDE.md; I had not read it.',
+      checks: ['typecheck:web', 'knip'],
+      at: new Date(now - 40 * hour).toISOString(),
+    },
+  ];
+
+  return {
+    accounts: sum(ci, 'accounts') + sum(review, 'accounts'),
+    costUsd: Math.round((sum(ci, 'costUsd') + sum(review, 'costUsd')) * 1e6) / 1e6,
+    // Non-zero on purpose: a demo claiming every dispatch filed one would hide the
+    // panel's own honesty figure, which is the line an operator most needs to read.
+    unaccounted: 5,
+    byKind: [
+      { kind: 'ci', accounts: sum(ci, 'accounts'), costUsd: sum(ci, 'costUsd'), byCause: ci },
+      { kind: 'review', accounts: sum(review, 'accounts'), costUsd: sum(review, 'costUsd'), byCause: review },
+    ],
+    byGuard: [
+      {
+        guard: 'local_check',
+        label: 'The local check',
+        blurb: 'Running the repository’s own gate before pushing would have caught it',
+        accounts: 11,
+        costUsd: 38.2,
+      },
+      {
+        guard: 'documented',
+        label: 'Already written down',
+        blurb: 'The rule exists in the repository and the agent did not read it',
+        accounts: 9,
+        costUsd: 33.5,
+      },
+      {
+        guard: 'undocumented',
+        label: 'Written down nowhere',
+        blurb: 'Nothing available to the agent said this — the one an operator can fix',
+        accounts: 14,
+        costUsd: 51.6,
+      },
+      {
+        guard: 'unpreventable',
+        label: 'Nothing would have',
+        blurb: 'A flake, the environment, or a judgement only the reviewer could make',
+        accounts: 10,
+        costUsd: 36.2,
+      },
+    ],
+    recent,
+  };
+}
+
 function buildDemoReliability(): ReliabilityInsights {
   const now = Date.now();
   const day = 24 * 3_600_000;
@@ -2662,7 +2942,7 @@ export const demoApi = {
   // The reliability breakdown, authored for the spend panel's reason exactly: the
   // demo's world is built fresh in the browser each load, so there are no settled
   // agents and no CI history to fold.
-  getReliability: () => Promise.resolve({ insights: buildDemoReliability() }),
+  getReliability: () => Promise.resolve({ insights: buildDemoReliability(), remedies: buildDemoRemedies() }),
   // The prompt book lives in the server's template registry, and the web bundle
   // deliberately imports no server code. Shipping a copy of eighteen prompts here
   // to fill the demo panel would be a duplicate free to drift from the originals
