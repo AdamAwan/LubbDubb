@@ -513,6 +513,18 @@ indistinguishable from a goal that exists and has nothing on it, and only one of
 drawing. A **retained run** is found too (`retainedRuns`), so a goal whose ticket the tracker has
 stopped returning still has a page to be dismissed from.
 
+**A null page is drawn as a null page, not as the tab underneath.** Returning null is the right answer
+and falling through to the tab body was the other half of that decision left unmade: the address bar
+said `goal=issue:412` while the screen went on showing the list, so the click read as a control that
+does nothing — the dead end this spec calls the cockpit's most repeated bug, one level up. So a selected
+goal the snapshot does not carry gets a short panel naming it, saying why there is nothing to draw, and
+offering the **tracker** — which is where the answer actually is — plus the crumb back to the tab.
+
+On the Tickets tab this is the common case rather than the corner. The tab lists the **mirror**, which
+keeps every item ever swept; the page is built from the **snapshot**, which holds only what the last
+scan returned. Every frozen row is therefore in exactly this position, and under `tracking=any` that is
+most of them.
+
 `needs` is **passed in** rather than rebuilt, so the rail and the page are one reading — answering on
 either settles the row and the next snapshot clears both, with nothing kept in step by hand.
 
