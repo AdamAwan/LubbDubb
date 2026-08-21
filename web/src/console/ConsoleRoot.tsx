@@ -14,6 +14,7 @@ import { ConfigPage } from '../components/ConfigPage.js';
 import { RecordPanel } from '../components/RecordPanel.js';
 import { FindingsPanel } from '../components/FindingsPanel.js';
 import { LessonsPanel } from '../components/LessonsPanel.js';
+import { KnowledgePanel } from '../components/KnowledgePanel.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
 import { SetupPanel } from '../components/SetupPanel.js';
 import { PetsPanel } from '../components/PetsPanel.js';
@@ -253,6 +254,7 @@ function Crumb({
 const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string> = {
   findings: 'Findings',
   lessons: 'Lessons',
+  knowledge: 'Knowledge',
   faults: 'Faults',
   launch: 'Launch',
   build: 'Build',
@@ -370,6 +372,18 @@ function panelBody(
           onPropose={(text, originRef) => actions.proposeLesson(text, originRef)}
           onPromote={(id) => actions.promoteLesson(id)}
           onRetire={(id) => actions.retireLesson(id)}
+        />
+      );
+    case 'knowledge':
+      return (
+        <KnowledgePanel
+          facts={state.knowledge}
+          now={view.now}
+          refUrls={state.refUrls}
+          viewingFact={view.viewingFact}
+          onReach={(id, reach) => actions.setFactReach(id, reach)}
+          onDetail={(id) => actions.factDetail(id)}
+          onViewFact={(id) => actions.viewFact(id)}
         />
       );
     case 'pets':

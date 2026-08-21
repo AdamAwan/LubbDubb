@@ -252,10 +252,11 @@ once.
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
 | `tab`                                | `tickets` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, so links to either deleted tab still land |
 | `goal`                               | the open goal page, as `issue:<n>`                                                                                                |
-| `panel`                              | `findings` / `lessons` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                  |
+| `panel`                              | `findings` / `lessons` / `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                    |
 | `ask`                                | the queue row a `{ ask }` panel is showing                                                                                        |
 | `agent`                              | the open drawer's agent                                                                                                           |
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                    |
+| `fact`                               | the claim whose provenance is open on the Knowledge panel, by fact id                                                             |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                          |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                 |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                |
@@ -1527,9 +1528,9 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 ## The top bar and the panels
 
-The strip carries the ident, the nav, the pulse, the fleet cap, and seven readings: **Findings**,
-**Lessons**, **Faults**, **Launch**, **Build**, **Record** and **Config**. Each is one subject stated
-once, in a plain label-and-number face. None reaches `api.js`: every one is a method on
+The strip carries the ident, the nav, the pulse, the fleet cap, and eight readings: **Findings**,
+**Lessons**, **Knowledge**, **Faults**, **Launch**, **Build**, **Record** and **Config**. Each is one
+subject stated once, in a plain label-and-number face. None reaches `api.js`: every one is a method on
 `CockpitActions`, and the fleet cap is the shared `FleetControl`, which is already on that seam.
 
 **The last two state no number, and they sit together at the tail for that reason.** Every reading
@@ -1588,7 +1589,7 @@ the URL should be able to send you.
 **Spend, Yield and Output are not on this bar.** They were three readings of one subject — what the
 fleet cost, what it landed, how much of that survived — and each of the three had grown a version of the
 other two on the panel behind it. They are the [Insights](#insights) destination now, which is in the
-nav: a reading you go to and come back from rather than a number you glance at, and one whose *window* an
+nav: a reading you go to and come back from rather than a number you glance at, and one whose _window_ an
 operator changes rather than accepts. What is left here is what a glance can actually settle — counts of
 things waiting on a person, and the state of this build.
 
@@ -1602,6 +1603,10 @@ Three rules hold them:
 - **A zero count mutes a reading; it never removes it.** The gauge staying put is what lets an operator
   glance at the same spot every time rather than hunting for a control that reflows when its number
   happens to hit zero.
+- **Knowledge counts the corroborated claims nobody has ruled on**, which is the Lessons reading's rule
+  one axis over: what wants the operator is the claim two agents on two goals already agreed on. A
+  count of what is already vouched for would tick up on their own click and never come down, and one
+  that included a single agent's unseconded note would never come down either.
 - **Launch counts the queue, not the history.** A launched blueprint that has been dispatched is an
   agent in the Fleet, and counting it here would have the reading climb as work starts rather than as
   it waits.
@@ -1666,6 +1671,41 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   _which_ two before they can act. `rendered` is computed server-side by the same `renderLessonBlock`
   the launch calls (`LessonView` in `src/wire.ts`), never re-derived in the browser: a second
   implementation of "what fits" would be free to disagree with the one that actually ran.
+
+- **Knowledge** — `KnowledgePanel`: what the fleet has written down about working this repository, and
+  how far each claim carries (#27 phase 2). It is the Lessons panel's shape one axis wider, because
+  reach is a state machine rather than a status: **Live notices** with their clocks, **Needs you**,
+  **Injected**, **On lookup**, **One voice**, **Committed to the repository**, and the **Rejected**
+  tail — read top to bottom in the order things demand attention rather than in the order of the
+  machine.
+
+  **It draws what it stopped.** The rejected tail is not a courtesy: this page is the whole of the
+  governance, a surface showing only what it let through cannot tell an operator that a claim was
+  killed, and the rejection bar — which is what stops two agents re-proposing next week what was
+  killed today — is invisible everywhere else in the harness.
+
+  Four controls and no fifth, and none of them files anything: agents propose through the tool channel,
+  so a page that could write a claim would be writing one with no observation behind it. Promote,
+  demote, reject — a `ConfirmButton`, since a rejection is terminal and what comes back is an amendment
+  an agent files — and **keep**, which looks like a no-op and is not: `lookup` is both where two agents
+  agreeing puts a claim and where an operator parks one that is true but not worth every agent's
+  context, so saying "it belongs here" is the ruling that takes the row out of _Needs you_. Without it
+  the section would ask again forever.
+
+  A row carries the claim, its **scope as a reference** — a `goal:` scope is the goal itself, a
+  `check:` scope is the provider's own identifier and says so — its corroboration count, and its
+  provenance. The count is `distinctCorroborators`' answer taken server-side (`KnowledgeFactView` in
+  `src/wire.ts`), never a length counted in the browser: two observations are one corroborator if they
+  share a goal or a session, so a second count here would be free to disagree with the one that
+  actually promotes. **What the observers saw** is a click and its own fetch — evidence runs to
+  thousands of characters per observation and the snapshot is polled — and the open row is `?fact=<id>`
+  on `Place`, so it is a link somebody can send.
+
+  Promoted lessons are mirrored into this store, so the Lessons panel and this page show the same
+  claims until delivery moves; the panel says so at the top rather than leaving a reader to work out
+  which surface is authoritative. Nothing in the Injected section is delivered yet — the block that
+  renders it, and the character budget drawn against its cap, are phase 3, from the renderer's own
+  answer rather than a second count of what fits. → [27](27-knowledge.md#in-the-cockpit)
 
 - **Faults** — the recorded failures, forty rows, the surface you went looking for rather than a crop
   for a column. It offers a **two-step clear**, drawn **above** the rows and **at zero rows as well**:
@@ -2194,7 +2234,7 @@ shape of a wrong seam.
   requests, the phase health and the repeats.
 - **Causes** — what keeps sending the fleet back? The guard split, both cause tables, and Lately.
 - **Trend** — is what I changed working? The eight-period cohort view.
-- **Work mix** — why does *this kind* of work cost what it does? By task type, and by failing check.
+- **Work mix** — why does _this kind_ of work cost what it does? By task type, and by failing check.
 
 Every table the three panels drew lands in exactly one of these, and the duplicates collapse on the way
 in: there is one phase table rather than two, and one completion rate rather than the reliability fold's
@@ -2268,7 +2308,7 @@ graph, five and seven days for the spend tiles, a fortnight for the spend timeli
 for CI, eight weeks for the trend — and all-time for the run half and the spend totals. Two figures side
 by side on one surface described different stretches of the fleet's life with nothing saying so.
 
-**The Trend tab obeys it too**, by showing the last eight windows *of the length the operator picked*:
+**The Trend tab obeys it too**, by showing the last eight windows _of the length the operator picked_:
 `7d` gives eight weeks, `24h` gives eight days ([18](18-observability.md#the-spend-trend)). That is what
 keeps one control meaningful on a tab that is inherently about change, and it has a second payoff — the
 comparison a headline draws against "the previous window" is literally the last two bars of that chart,
@@ -2278,7 +2318,7 @@ rather than a second notion of "before" for a reader to reconcile.
 
 **The ratio is the headline**, read left to right as one sentence: what the window cost, what landed in
 it, what one landed change therefore cost, and how much of the spend never landed at all. The operators
-between the tiles are drawn because they *are* the reading — four unrelated boxes would leave the
+between the tiles are drawn because they _are_ the reading — four unrelated boxes would leave the
 division to the reader, which is what three separate panels did.
 
 - **Landed is pull requests merged**, not goals closed. A goal closes when a person says it is done,
@@ -2311,7 +2351,7 @@ seven hues that read apart at swatch size, so `--sp-local` is a `color-mix` of t
 literal — a hex at a use site is a swatch that stays put when somebody switches theme
 ([tokens](#tokens)).
 
-**Fetched on open, three states, and the third is the point.** Loading, the reading, and a *failure* —
+**Fetched on open, three states, and the third is the point.** Loading, the reading, and a _failure_ —
 because a fetch that failed must not render as a fleet that has spent nothing. `$0.00` is a real answer
 here (a fresh harness, or one run entirely in PTY mode), so it cannot also be the failure mode. The
 all-unmeasured case gets its own sentence rather than a table of zeroes: **unmeasured is not free**.
@@ -2330,7 +2370,7 @@ saying: a rate over a short window is a rate over few runs, and the reader decid
 
 The outcome **colours** live in the stylesheet as `--rl-<outcome>` and differ in kind from the phase
 palette on purpose — a phase is a category whose colours only have to read apart, while an outcome is a
-*verdict* and carries the alarm vocabulary. Grey is doing real work in it: a killed run is not a fault.
+_verdict_ and carries the alarm vocabulary. Grey is doing real work in it: a killed run is not a fault.
 
 A fleet with runs still out and none settled gets its own sentence rather than a table of zeroes —
 **not yet is not perfect**.
@@ -2338,7 +2378,7 @@ A fleet with runs still out and none settled gets its own sentence rather than a
 ### Causes
 
 Drawn on a tab of its own rather than as the third block of the reliability panel, and it is the section
-that gained most from the move: three tables and a quotation list read *below* two other readings is
+that gained most from the move: three tables and a quotation list read _below_ two other readings is
 where an operator stops scrolling, and this is the one surface on the page that shows the taxonomy is
 being used rather than guessed at ([18](18-observability.md#causes-why-the-fleet-came-back)).
 
@@ -2346,7 +2386,7 @@ The guard split leads it as one bar and a legend, ordered by what acting on each
 tables follow, one per kind, ranked by accounts with the empty causes kept at the foot — "nothing was a
 flake this window" is a reading, and a table that dropped its own zero rows could not make it. Then
 **Lately**: the most recent accounts in the agents' own words. The section's caveat is drawn with its
-total rather than in a footnote — every share in it is a share of what was *reported*, and
+total rather than in a footnote — every share in it is a share of what was _reported_, and
 `unaccounted` is what says how much that is.
 
 ### The Trend tab
@@ -2381,7 +2421,7 @@ the tab says so rather than drawing a percentage off one period of goals.
 operator never opens should cost nothing. The window is part of that key rather than a boolean beside
 it, because a window change invalidates the trend — holding "already fetched" as a boolean is how the
 trend ends up drawn over one stretch while everything above it describes another. The fetch hangs off
-the *place* rather than the click that changed it, so arriving on `?view=trend` from a shared link is a
+the _place_ rather than the click that changed it, so arriving on `?view=trend` from a shared link is a
 first visit too.
 
 ### Work mix

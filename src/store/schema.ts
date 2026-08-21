@@ -261,6 +261,7 @@ CREATE TABLE IF NOT EXISTS knowledge_facts (
   reach      TEXT NOT NULL,        -- proposal | lookup | injected | committed | rejected
   supersedes TEXT,                 -- the fact this amends; exempts it from that fact's rejection bar
   origin_ref TEXT,                 -- the goal it was first observed on, or null for an operator's own
+  ruled_at   TEXT,                 -- when an operator last moved it; null means nobody has ruled on it yet
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

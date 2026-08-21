@@ -1792,6 +1792,102 @@ export function buildDemoState(): DemoSeed {
         rendered: false,
       },
     ],
+    // What the fleet knows about working this repository (#27 phase 2). One of
+    // each reach, because the page's whole claim is that reach is a state machine
+    // and not a label: a live notice on its clock, a corroborated claim waiting on
+    // the operator, one they vouched for, one they parked on lookup, a single
+    // voice nothing has agreed with, and one they killed — which is the row that
+    // shows the surface draws what it stopped.
+    knowledge: [
+      {
+        id: 'fact-notice',
+        claim:
+          '`test (windows)` has been timing out at the dependency-install step since about 09:00 — the same commit ' +
+          'passes on a re-run roughly half the time.',
+        scope: 'check:test (windows)',
+        lifetime: 'expiring',
+        expiresAt: new Date(Date.now() + 5 * 3_600_000).toISOString(),
+        reach: 'lookup',
+        supersedes: null,
+        originRef: 'pr:412',
+        ruledAt: null,
+        createdAt: ago(3),
+        updatedAt: ago(1),
+        corroborations: 2,
+      },
+      {
+        id: 'fact-needsyou',
+        claim:
+          'The console tests render against `web/dist`, so `npm run build:web` has to run before `npm run check` — ' +
+          'the failure names a component and never the stale bundle.',
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'lookup',
+        supersedes: null,
+        originRef: 'issue:376',
+        ruledAt: null,
+        createdAt: ago(30),
+        updatedAt: ago(6),
+        corroborations: 2,
+      },
+      {
+        id: 'fact-injected',
+        claim: 'A ticket that only names a symptom is under-specified for a planner every time.',
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'injected',
+        supersedes: null,
+        originRef: 'issue:364',
+        ruledAt: ago(60),
+        createdAt: ago(70),
+        updatedAt: ago(60),
+        corroborations: 3,
+      },
+      {
+        id: 'fact-lookup',
+        claim: 'The seed script leaves two orphaned catalog rows behind; the fixture reset clears them.',
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'lookup',
+        supersedes: null,
+        originRef: 'issue:341',
+        ruledAt: ago(48),
+        createdAt: ago(96),
+        updatedAt: ago(48),
+        corroborations: 2,
+      },
+      {
+        id: 'fact-proposal',
+        claim: 'The ingest worker holds its Postgres connection open across retries, so a restart is what clears it.',
+        scope: 'goal:issue:390',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'proposal',
+        supersedes: null,
+        originRef: 'issue:390',
+        ruledAt: null,
+        createdAt: ago(9),
+        updatedAt: ago(9),
+        corroborations: 1,
+      },
+      {
+        id: 'fact-rejected',
+        claim: 'The dispatcher reads the lessons table before it ranks anything.',
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'rejected',
+        supersedes: null,
+        originRef: 'issue:355',
+        ruledAt: ago(120),
+        createdAt: ago(140),
+        updatedAt: ago(120),
+        corroborations: 1,
+      },
+    ],
     // Work only a person can do. Four, so the panel shows each shape it has: a
     // plan step holding parts shut, a standalone ask from an agent that could not
     // do it itself, one already declined with the note that stopped it, and the

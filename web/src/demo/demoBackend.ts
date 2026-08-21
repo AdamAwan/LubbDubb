@@ -18,12 +18,14 @@ import type {
   BuildReading,
   CockpitDecision,
   Decision,
+  FactRuling,
   FilingTargetProbe,
   Issue,
   IssueFiled,
   Job,
   LocalRunView,
   JobSchedule,
+  KnowledgeFactPayload,
   LessonStatus,
   McpChannelPayload,
   OpenPullRequest,
@@ -950,6 +952,49 @@ class DemoServer {
   /** Prune one (demo mirror of POST /api/lessons/:id/retire). */
   async retireLesson(id: string): Promise<{ ok: true }> {
     return this.moveLesson(id, 'retired', ['proposed', 'promoted']);
+  }
+
+  /**
+   * Where a claim stands — the demo mirror of `POST /api/knowledge/facts/:id/reach`
+   * (#27 phase 2), including the one refusal the real store makes: a rejected
+   * claim does not move, because the bar is what stops a killed claim coming back.
+   */
+  async setFactReach(id: string, reach: FactRuling): Promise<{ ok: true }> {
+    const fact = this.state.knowledge.find((f) => f.id === id);
+    if (fact && fact.reach !== 'rejected') {
+      fact.reach = reach;
+      // Ruled, whether or not the reach moved: saying a corroborated claim belongs
+      // exactly where it is *is* the decision, and it is what takes the row out of
+      // the page's "Needs you" section.
+      fact.ruledAt = new Date().toISOString();
+      fact.updatedAt = fact.ruledAt;
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /**
+   * One claim's observations, in the observers' own words — the demo mirror of
+   * `GET /api/knowledge/facts/:id`. Synthesised from the count rather than stored,
+   * since the fixture ships the reading and not the rows behind it.
+   */
+  async knowledgeFact(id: string): Promise<KnowledgeFactPayload> {
+    const fact = this.state.knowledge.find((f) => f.id === id);
+    if (!fact) throw new Error('fact not found');
+    const corroborations = Array.from({ length: Math.max(1, fact.corroborations) }, (_, i) => ({
+      id: `knc-${fact.id}-${i + 1}`,
+      factId: fact.id,
+      agentId: null,
+      taskId: null,
+      goalRef: i === 0 ? fact.originRef : `issue:${340 + i}`,
+      sessionId: null,
+      words:
+        i === 0
+          ? 'What I actually saw when I wrote this down.'
+          : 'I hit the same wall on a different goal, and this is what it looked like.',
+      createdAt: fact.createdAt,
+    }));
+    return { fact, corroborations };
   }
 
   /** The legal predecessors, kept here so the demo cannot drift from `LessonStore`. */
@@ -3433,6 +3478,8 @@ export const demoApi = {
   proposeLesson: (text: string, originRef: string | null) => getServer().proposeLesson(text, originRef),
   promoteLesson: (id: string) => getServer().promoteLesson(id),
   retireLesson: (id: string) => getServer().retireLesson(id),
+  setFactReach: (id: string, reach: FactRuling) => getServer().setFactReach(id, reach),
+  knowledgeFact: (id: string) => getServer().knowledgeFact(id),
   completeHumanTask: (id: string, note?: string) => getServer().completeHumanTask(id, note),
   declineHumanTask: (id: string, note: string) => getServer().declineHumanTask(id, note),
   dismissHumanTask: (id: string) => getServer().dismissHumanTask(id),

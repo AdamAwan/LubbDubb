@@ -1721,6 +1721,90 @@ a.btn {
   gap: 6px;
   margin-left: auto;
 }
+/* Knowledge — what the fleet knows, and how far each claim carries (#27 phase 2).
+   Drawn as the lessons are, because it is the same shape one axis wider: a claim,
+   who says so, an operator's ruling, and the tails the surface has to keep
+   visible to be a governance surface at all. Every colour here is a token: a
+   literal would be a face that stays dark when somebody switches to Light. */
+.kn {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.kn-note {
+  line-height: 1.5;
+  margin: 0;
+}
+.kn-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.kn-head {
+  font-size: 13px;
+  margin: 0;
+}
+.kn-section > p {
+  margin: 0;
+}
+.kn-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 8px 12px;
+  font-size: 13px;
+}
+/* Rejected and committed alike: settled, kept visible, and out of the way. */
+.kn-card.resolved {
+  opacity: 0.55;
+}
+.kn-claim {
+  overflow-wrap: anywhere;
+}
+.kn-claim > :first-child {
+  margin-top: 0;
+}
+.kn-claim > :last-child {
+  margin-bottom: 0;
+}
+.kn-foot {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11px;
+  margin-top: 6px;
+}
+.kn-acts {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.kn-acts .spacer {
+  flex: 1;
+}
+.kn-seen {
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+}
+.kn-obs {
+  background: var(--well);
+  border-radius: var(--r-sm);
+  padding: 6px 8px;
+}
+/* The observer's own words, never the claim restated — so they are set as prose
+   rather than as a caption. */
+.kn-words {
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
 .plan-part {
   display: flex;
   align-items: center;

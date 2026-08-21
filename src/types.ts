@@ -1291,6 +1291,16 @@ export interface KnowledgeFact {
   supersedes: string | null;
   /** The goal it was first observed on (`issue:41`, `pr:42`), or null when an operator wrote it. */
   originRef: string | null;
+  /**
+   * When an operator last moved it, or null while nobody has ruled on it.
+   *
+   * The one thing that tells a fact two agents carried to `lookup` from a fact an
+   * operator *left* there. Both are the same reach — "true, but not worth every
+   * agent's context" is `lookup` too — so without this the cockpit's **Needs you**
+   * section would go on asking for a decision that has already been made, and the
+   * operator's only way to silence it would be to make the wrong one.
+   */
+  ruledAt: string | null;
   createdAt: string;
   /** When it last moved — for anything but a fresh proposal, when its reach changed. */
   updatedAt: string;

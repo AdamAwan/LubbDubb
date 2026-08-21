@@ -18,6 +18,7 @@ import type {
   HumanTaskInput,
   IssueConclusion,
   IssueConclusionVerdict,
+  KnowledgeFact,
   PartOutcomeKind,
   PlanPart,
   Remedy,
@@ -264,6 +265,16 @@ interface AgentManagerEvents {
    * moment the account lands rather than on the next pulse.
    */
   remedy: [{ agentId: string; taskId: string; originRef: string }];
+  /**
+   * An agent wrote down what it learned about working this repository, or agreed
+   * with something already written (already persisted). `filed` is false when the
+   * call landed as a corroboration on a standing claim rather than as a new one.
+   *
+   * Nothing schedules off this — no rule, desk or gate reads a fact. It is the
+   * repaint, so the Knowledge page hears a proposal the moment it is filed rather
+   * than on the next pulse, exactly as `finding` and `remedy` do.
+   */
+  fact: [{ agentId: string; taskId: string; fact: KnowledgeFact; filed: boolean; corroborations: number }];
   /** The file-events hook recorded one or more written files (the "files changed" list grew). */
   files: [{ agentId: string; taskId: string }];
   /**
@@ -1135,6 +1146,18 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         // should have.
         words: proposal.evidence,
       });
+      // A barred proposal wrote nothing, so there is nothing to repaint — and an
+      // event on it would put a claim an operator killed back in front of them as
+      // if it had just arrived.
+      if (outcome.outcome !== 'barred') {
+        this.emit('fact', {
+          agentId,
+          taskId: task.id,
+          fact: outcome.fact,
+          filed: outcome.outcome === 'filed',
+          corroborations: outcome.corroborations,
+        });
+      }
       return { ok: true, outcome };
     });
   }

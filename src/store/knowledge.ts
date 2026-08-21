@@ -2,14 +2,31 @@ import { nanoid } from 'nanoid';
 import { claimKey, claimsMatch } from '../claims.js';
 import { corroborationGoal, distinctCorroborators, questionScore, type FactProposal } from '../knowledge/knowledge.js';
 import type { FactObservation, FactReach, KnowledgeCorroboration, KnowledgeFact, Lesson } from '../types.js';
+import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
+
+/**
+ * `ruled_at` arrived with the cockpit page (phase 2): the table shipped in phase
+ * 1, so it is an `ALTER TABLE` rather than a line in the `CREATE`, and every
+ * database from that build needs it added.
+ *
+ * **Null is the right value on every row it is added to, so there is no backfill.**
+ * Null spells *no operator has ruled on this*, and phase 1 shipped no operator
+ * surface at all — every fact on an older database reached where it is by being
+ * proposed or corroborated, which is exactly what null says.
+ * → `docs/spec/14-persistence.md#migrations`
+ */
+export const KNOWLEDGE_COLUMNS: ColumnMigrations = {
+  knowledge_facts: { ruled_at: 'TEXT' },
+};
 
 /**
  * The `knowledge_facts` and `knowledge_corroborations` tables: what the fleet
  * knows about working this repository, and who says so.
  *
- * Brand-new tables, so no {@link ColumnMigrations} entry — but being new *once*
- * does not keep them exempt, and a column added later needs one.
+ * The tables were new in phase 1 and have gained one column since, which is what
+ * {@link KNOWLEDGE_COLUMNS} above is: being new *once* does not keep a table
+ * exempt, and `CREATE TABLE IF NOT EXISTS` never alters an existing one.
  *
  * **Nothing in the dispatcher reads any of this.** No rule, desk or gate consults
  * a fact: nothing is dispatched, held or ranked because of one. A fact feeds
@@ -131,21 +148,71 @@ export class KnowledgeStore {
   }
 
   /**
-   * Move a fact, on an operator's say-so. The guard is in the `WHERE`, the
-   * discipline `promoteLesson` and `decideProposal` use: two clicks that race
-   * cannot both find a movable row, and null means there was nothing in a state
-   * this transition could leave.
+   * Where a claim stands, on an operator's say-so — and the record that they said
+   * so, which is the second half of this call rather than a detail of it.
+   *
+   * **Naming the reach a fact is already at is a ruling, not a no-op.** "True, but
+   * not worth every agent's context" is `lookup`, and it is the same reach two
+   * agents agreeing carries a claim to — so an operator who has read a corroborated
+   * claim and decided it belongs exactly where it is has to have a way to say that,
+   * or the cockpit's **Needs you** section asks them again forever and the only way
+   * to silence it is the wrong decision. That is why the guard below is on
+   * `rejected` alone.
    *
    * `rejected` is terminal in both directions. Nothing un-rejects a claim, because
    * the bar is what stops two agents re-proposing next week what an operator
    * killed today — an un-reject would be a way to lift that bar without reading
-   * the amendment that should have lifted it.
+   * the amendment that should have lifted it. Null means exactly that and nothing
+   * else.
    */
   setFactReach(id: string, reach: FactReach): KnowledgeFact | null {
+    return this.moveReach(id, reach, this.ctx.now());
+  }
+
+  /**
+   * How many independent corroborators every fact has, in one read.
+   *
+   * The count the page draws, and it is {@link distinctCorroborators}' — never
+   * `rows.length`. A second count in the view layer is free to disagree with the
+   * one that promotes, and the disagreement would be invisible: both numbers look
+   * like counts of the same rows.
+   *
+   * Batched rather than a `listCorroborations` per fact because the snapshot is
+   * polled: one query grouped in memory, rather than a query per row per poll per
+   * connected cockpit.
+   */
+  corroborationCounts(): Map<string, number> {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM knowledge_corroborations ORDER BY created_at ASC, rowid ASC`)
+      .all() as CorroborationRow[];
+    const byFact = new Map<string, KnowledgeCorroboration[]>();
+    for (const row of rows) {
+      const list = byFact.get(row.fact_id) ?? [];
+      list.push(rowToCorroboration(row));
+      byFact.set(row.fact_id, list);
+    }
+    return new Map([...byFact].map(([factId, list]) => [factId, distinctCorroborators(list)]));
+  }
+
+  /**
+   * The guarded write both arms of the state machine go through, and the one
+   * place `ruled_at` is written.
+   *
+   * The stamp is what tells the page's **Needs you** section from its **On
+   * lookup** one: a fact two agents carried to `lookup` is waiting on the one
+   * decision that is an operator's, and a fact an operator *left* at `lookup` —
+   * true, but not worth every agent's context — has already had it. Both are the
+   * same reach, and without the stamp the page would nag forever about a call
+   * that was already made.
+   */
+  private moveReach(id: string, reach: FactReach, ruledAt: string | null): KnowledgeFact | null {
     const updatedAt = this.ctx.now();
     const result = this.ctx.db
-      .prepare(`UPDATE knowledge_facts SET reach=?, updated_at=? WHERE id=? AND reach<>'rejected' AND reach<>?`)
-      .run(reach, updatedAt, id, reach);
+      .prepare(
+        `UPDATE knowledge_facts SET reach=?, updated_at=?, ruled_at=COALESCE(?, ruled_at)
+           WHERE id=? AND reach<>'rejected'`,
+      )
+      .run(reach, updatedAt, ruledAt, id);
     if (result.changes === 0) return null;
     return this.getFact(id);
   }
@@ -188,10 +255,12 @@ export class KnowledgeStore {
     this.ctx.db
       .prepare(
         `INSERT OR IGNORE INTO knowledge_facts
-           (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, created_at, updated_at)
-         VALUES (?, ?, 'fleet', 'standing', NULL, 'injected', NULL, ?, ?, ?)`,
+           (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, created_at, updated_at)
+         VALUES (?, ?, 'fleet', 'standing', NULL, 'injected', NULL, ?, ?, ?, ?)`,
       )
-      .run(id, lesson.text, lesson.originRef, lesson.createdAt, lesson.updatedAt);
+      // Ruled, and by the operator who promoted the lesson: the mirror is the
+      // identity, so the moment they vouched for it is the moment it was ruled on.
+      .run(id, lesson.text, lesson.originRef, lesson.updatedAt, lesson.createdAt, lesson.updatedAt);
     this.ctx.db
       .prepare(
         `INSERT OR IGNORE INTO knowledge_corroborations
@@ -246,14 +315,16 @@ export class KnowledgeStore {
       reach: 'proposal',
       supersedes: proposal.supersedes,
       originRef: observer.goalRef,
+      ruledAt: null,
       createdAt: ts,
       updatedAt: ts,
     };
     this.ctx.db
       .prepare(
         `INSERT INTO knowledge_facts
-           (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, created_at, updated_at)
-         VALUES (@id, @claim, @scope, @lifetime, @expiresAt, @reach, @supersedes, @originRef, @createdAt, @updatedAt)`,
+           (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, created_at, updated_at)
+         VALUES (@id, @claim, @scope, @lifetime, @expiresAt, @reach, @supersedes, @originRef, @ruledAt,
+                 @createdAt, @updatedAt)`,
       )
       .run(fact);
     return fact;
@@ -282,7 +353,9 @@ export class KnowledgeStore {
    */
   private promoteOnCorroboration(fact: KnowledgeFact, corroborations: number): KnowledgeFact {
     if (fact.reach !== 'proposal' || corroborations < CORROBORATIONS_TO_LOOKUP) return fact;
-    return this.setFactReach(fact.id, 'lookup') ?? fact;
+    // No stamp: two agents agreeing is not an operator ruling, and the page's
+    // **Needs you** section is exactly the facts that arrived here this way.
+    return this.moveReach(fact.id, 'lookup', null) ?? fact;
   }
 }
 
@@ -328,6 +401,8 @@ interface FactRow {
   reach: string;
   supersedes: string | null;
   origin_ref: string | null;
+  /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
+  ruled_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -342,6 +417,7 @@ function rowToFact(r: FactRow): KnowledgeFact {
     reach: r.reach as FactReach,
     supersedes: r.supersedes,
     originRef: r.origin_ref,
+    ruledAt: r.ruled_at,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };
