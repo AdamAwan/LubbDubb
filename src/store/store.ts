@@ -972,6 +972,10 @@ export class Store {
   patchWorldLabels(patch: WorldLabelPatch): void {
     this.world.patchWorldLabels(patch);
   }
+
+  patchWorldState(patch: { number: number; state: string }): void {
+    this.world.patchWorldState(patch);
+  }
   getConnectorState(key: string): string | null {
     return this.world.getConnectorState(key);
   }
@@ -1076,6 +1080,10 @@ export class Store {
   }
   patchTicketLabels(patch: TicketLabelPatch): void {
     this.tickets.patchTicketLabels(patch);
+  }
+
+  patchTicketState(patch: { number: number; state: string }): void {
+    this.tickets.patchTicketState(patch);
   }
   // -- Pets -----------------------------------------------------------------
 

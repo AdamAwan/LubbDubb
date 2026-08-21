@@ -134,6 +134,30 @@ export class WorldStore {
     if (touched) this.setWorldBaseline(world);
   }
 
+  /**
+   * Write a work-item state the provider has just accepted onto the stored baseline.
+   *
+   * {@link patchWorldLabels}' sibling, for its reasons: `/api/state` serves the
+   * baseline and never a live read, and the pulse cannot be what makes the change
+   * visible — `runCycle` coalesces while a cycle is in flight, so a drop that lands
+   * during one is followed by no world read at all and the card snaps back to its old
+   * column until the next beat.
+   *
+   * Only ever called for a write the provider confirmed, so this is observed fact
+   * arriving early rather than a guess: the next cycle reads the same state back off
+   * the tracker and writes the same baseline. An item the baseline does not carry is
+   * skipped — the world it came from has aged out, and inventing a row for it would
+   * put an issue in the cockpit that no snapshot described.
+   */
+  patchWorldState(patch: { number: number; state: string }): void {
+    const world = this.getWorldBaseline();
+    if (world === null) return;
+    const issue = world.issues.find((i) => i.number === patch.number);
+    if (issue === undefined) return;
+    issue.workItemState = patch.state;
+    this.setWorldBaseline(world);
+  }
+
   setWorldBaseline(world: WorldSnapshot): void {
     this.ctx.db
       .prepare(

@@ -201,8 +201,9 @@ uncaught throw would otherwise vanish as an unhandled rejection. `cycleInFlight`
 - The baseline is then replaced with this cycle's world, both in memory and in the store.
 
 The cycle is the baseline's main writer but not its only one: `Store.patchWorldLabels` folds a label
-a route has just had the provider accept onto the stored snapshot, so the cockpit sees it without
-waiting a pulse. It writes labels and nothing else, and the next cycle's reading overwrites it
+a route has just had the provider accept onto the stored snapshot, and `Store.patchWorldState` folds a
+work-item state the same way, so the cockpit sees either without waiting a pulse. Between them they
+write labels and one state field and nothing else, and the next cycle's reading overwrites both
 either way — observation always wins over the fold, which is what keeps the tracker the source of
 truth.
 
