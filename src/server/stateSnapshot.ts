@@ -917,6 +917,11 @@ function buildEnvironmentReach(store: System['store'], environments: Environment
     readings: store.listEnvironmentReach(),
     nodes: store.listWorkNodes(),
     landed: store.landedPrs(),
+    // The denominator is the goal's *work*: a plan's parts that have yet to merge
+    // are counted alongside its landings, so the first of four parts arriving is
+    // not the goal arriving.
+    plans: store.listPlans(),
+    parts: store.listAllPlanParts(),
     environments,
   }).map((goal) => ({
     ...goal,
