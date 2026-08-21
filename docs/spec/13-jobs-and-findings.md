@@ -485,6 +485,14 @@ The only path from a finding to an agent, and it starts with an operator's click
   silently dropped by every operator override that never learned about it — precisely the deployments
   that customised most — and there is no fallback to get wrong here. → [05](05-dispatcher.md#prompt-templates)
 - The operator may override `title`, `prompt` and `kind` in the request body.
+- The job carries **`originRef: finding.ref`** — the world item the finding is _about_, and never
+  `finding.originRef`, which names what the _reporting_ agent was working on when it noticed. The
+  promoted job stands in for the former; attributing it to the latter would file the work under
+  somebody else's goal. This is structural rather than decorative: the work graph adopts a job by its
+  origin, so a promotion without one is emitted parentless and the unrecorded-work detector offers to
+  file a tracker item for work `pr:31251` already accounts for. The ref was reaching the cockpit
+  before — glued into the job's _title_ by `findingJobRequest` — which is the shape of the defect:
+  readable on screen, queryable by nothing. → [16](16-http-api.md#get-apiwork)
 - The job is created **first**, then the finding is resolved to `promoted` with the job id — so a
   failed create leaves the finding open.
 - A cycle is kicked.

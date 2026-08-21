@@ -1922,6 +1922,48 @@ a.btn {
   padding: 4px 0 8px 18px;
 }
 
+/* The goal page's record. The card chrome is the console's `.cn-card`, which the
+   goal page wraps this in — only the body is styled here, so the console's sheet
+   goes on targeting nothing a shared component owns. `.work-node`'s own flush-left
+   indent is what the padding here is for: the root is filtered out, so its
+   children start at depth 0 and would otherwise sit against the border. */
+.work-record {
+  padding: 8px 13px 10px;
+}
+.work-record .work-node:first-child {
+  padding-top: 0;
+}
+
+/* Goal roots on the work tab: collapsed, because each is drawn in full on its own
+   goal page. A row rather than an expander — the destination is the ref's. */
+.work-goals {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 6px;
+  margin-bottom: 6px;
+}
+.work-goals-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: 0;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: left;
+}
+.work-goals-head:hover {
+  color: var(--text);
+}
+.work-goal-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 0 3px 18px;
+  font-size: 12px;
+}
+
 /* --- Prompt book -------------------------------------------------------- */
 /* The rule dispatcher's template book: a list and a modal, drawn as a tab of the
    settings modal since #244 — so the list needs no chrome of its own, and the

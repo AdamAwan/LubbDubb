@@ -758,7 +758,11 @@ was. That is the whole feature — the world snapshot remembers a merge for `clo
 forgets it, and the graph must not. `parent_ref` is **write-once once non-null**: work lineage does not
 change, and an immutable edge makes a cycle impossible rather than merely guarded, which matters because
 `listWorkSubtree` is recursive. The "once non-null" wrinkle is deliberate — a stray PR can be recorded
-parentless and adopted when its issue link appears, but nothing is ever _re_-parented. Every other column
+parentless and adopted when its issue link appears, but nothing is ever _re_-parented. It is also what
+makes a **new adoption arm retroactive**: `COALESCE(work_nodes.parent_ref, excluded.parent_ref)` fills
+a stored null on the next pulse, so a rule that adopts work the fold used to emit parentless needs no
+migration and no backfill — the rows correct themselves. The mirror of that is the reason the write is
+one-way: an arm that adopted _wrongly_ is equally permanent. Every other column
 is recomputed from the observation and never toggled against its previous value, the `PlanReconciler`
 discipline.
 

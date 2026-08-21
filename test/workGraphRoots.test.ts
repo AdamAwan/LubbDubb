@@ -162,6 +162,118 @@ test("an issue's own branch match is never displaced by a job", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Arm C — a job is adopted by the origin it stands in for
+// ---------------------------------------------------------------------------
+
+/** A node the graph already holds — a candidate parent the world may no longer mention. */
+function stored(over: Partial<WorkNode> & { ref: string }): WorkNode {
+  return {
+    kind: 'issue',
+    parentRef: null,
+    baseRef: null,
+    title: over.ref,
+    status: 'open',
+    terminal: false,
+    provenance: null,
+    firstSeenAt: '2026-07-01T09:00:00.000Z',
+    lastSeenAt: '2026-07-01T09:00:00.000Z',
+    ...over,
+  };
+}
+
+test('a requeued job is adopted by the issue whose work it redoes', () => {
+  // A requeued assay, plan or retro opens no pull request, so arm B can never
+  // reach it — it was parentless forever, and stage 3 offered to file a second
+  // ticket for an issue that already exists.
+  const out = foldWorkGraph(
+    input({
+      world: world({ issues: [issue()] }),
+      jobs: [job({ title: 'Requeued: Plan issue #12', originRef: 'issue:12:plan' })],
+    }),
+  );
+  assert.equal(node(out, 'job:j7').parentRef, 'issue:12', 'the tracker item is named on the job itself');
+});
+
+test("a part's requeue lands on the part, not on the issue two levels up", () => {
+  // The longest prefix the graph holds wins: `issue:12:part:api` is itself a node,
+  // so the walk stops before it reaches the issue — the same lineage-over-aboutness
+  // rule arm A states for a PR.
+  const out = foldWorkGraph(
+    input({
+      world: world({ issues: [issue()] }),
+      jobs: [job({ originRef: 'issue:12:part:api' })],
+      existing: [stored({ ref: 'issue:12:part:api', kind: 'part', parentRef: 'issue:12', title: 'API' })],
+    }),
+  );
+  assert.equal(node(out, 'job:j7').parentRef, 'issue:12:part:api');
+});
+
+test('a requeue of a requeue collapses onto the job it redoes, not into a second row', () => {
+  const out = foldWorkGraph(
+    input({
+      jobs: [job(), job({ id: 'j8', title: 'Requeued: Bump the linter', originRef: 'job:j7' })],
+    }),
+  );
+  assert.equal(node(out, 'job:j8').parentRef, 'job:j7', 'one piece of work, one root');
+  assert.equal(node(out, 'job:j7').parentRef, null, 'and the original is still that root');
+});
+
+test('an origin naming nothing the graph holds leaves the job a root', () => {
+  // Null is the honest answer: the walk cannot invent an edge, so the row stays in
+  // the unrecorded list where an operator can see the mistake.
+  const out = foldWorkGraph(input({ jobs: [job({ originRef: 'issue:99:plan' })] }));
+  assert.equal(node(out, 'job:j7').parentRef, null, 'issue 99 is not in the graph');
+});
+
+test('a job never becomes its own parent', () => {
+  const out = foldWorkGraph(input({ jobs: [job({ originRef: 'job:j7' })] }));
+  assert.equal(node(out, 'job:j7').parentRef, null, 'the write-once parent would make a cycle permanent');
+});
+
+test('arm C only ever fills a null — arm B’s adoption stands', () => {
+  const out = foldWorkGraph(
+    input({
+      world: world({ issues: [issue({ linkedPrNumber: 41 }), issue({ id: 'i13', number: 13 })], pullRequests: [pr()] }),
+      jobs: [job({ originRef: 'issue:13:plan' })],
+    }),
+  );
+  assert.equal(node(out, 'job:j7').parentRef, 'issue:12', "what the job's own PR names is the stronger signal");
+});
+
+test('an origin adopts from a node the world has since forgotten', () => {
+  // `existing` is a candidate too: a closed issue drops out of the world sweep, and
+  // losing the adoption would put its requeued work back in the unrecorded list.
+  const out = foldWorkGraph(
+    input({
+      jobs: [job({ originRef: 'issue:12:retro' })],
+      existing: [stored({ ref: 'issue:12', kind: 'issue', title: 'Widget', status: 'closed', terminal: true })],
+    }),
+  );
+  assert.equal(node(out, 'job:j7').parentRef, 'issue:12');
+});
+
+test('an adopted job is not unrecorded, and an origin-less one still is', () => {
+  const adopted = recorded({
+    world: world({ issues: [issue()] }),
+    jobs: [job({ originRef: 'issue:12:assess' })],
+  });
+  assert.deepEqual(
+    unrecordedWork(adopted.nodes, [job({ originRef: 'issue:12:assess' })], []),
+    [],
+    'the tracker already accounts for it',
+  );
+  adopted.store.close();
+
+  // The case stage 3 was written for: an operator job stands in for nothing.
+  const bare = recorded({ jobs: [job()] });
+  assert.deepEqual(
+    unrecordedWork(bare.nodes, [job()], []).map((u) => u.ref),
+    ['job:j7'],
+  );
+  bare.store.close();
+});
+
+// ---------------------------------------------------------------------------
 // The filing record
 // ---------------------------------------------------------------------------
 
@@ -516,6 +628,38 @@ test('the roots route reports unrecorded work beside the roots', async () => {
     [`job:${job.id}`],
   );
   assert.equal(body.unrecorded[0]?.filing, null);
+  await app.close();
+  system.store.close();
+});
+
+test('a promoted finding carries the ref it is about, so its job is never unrecorded', async () => {
+  // The ref was reaching the cockpit already — glued into the job's *title* by
+  // `findingJobRequest` — so the row read as having a tracker link while the
+  // predicate saw a parentless job and offered to file a second one.
+  const system = buildServed();
+  const task = system.store.createTask({
+    kind: 'code',
+    title: 'Resolve issue #12',
+    prompt: 'do it',
+    branch: 'issue/12',
+    originRef: 'issue:12',
+  });
+  const agent = system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
+  const finding = system.store.recordFinding(agent.id, agent.taskId, 'issue:12', {
+    kind: 'out_of_scope',
+    ref: 'pr:41',
+    summary: 'StatementParallelRunnerTests asserts wall-clock milliseconds',
+    where: null,
+    detail: null,
+  }).finding;
+
+  const { app } = await buildApp(system);
+  const res = await app.inject({ method: 'POST', url: `/api/findings/${finding.id}/promote` });
+  assert.equal(res.statusCode, 200);
+  const job = (res.json() as { job: { originRef: string | null } }).job;
+  // What the finding is *about*, never the reporting agent's own `issue:12`:
+  // attributing it there would file the work under somebody else's goal.
+  assert.equal(job.originRef, 'pr:41');
   await app.close();
   system.store.close();
 });

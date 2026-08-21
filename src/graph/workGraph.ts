@@ -194,9 +194,11 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
     out.push({
       ref,
       kind: 'job',
-      // Null unless arm B found the issue this job's PR names. A null here never
-      // undoes an adoption — `recordWorkGraph` coalesces onto the stored parent —
-      // so the fold may go on emitting one forever.
+      // Null unless arm B found the issue this job's PR names; arm C fills what is
+      // still null from the job's own origin, below, once every candidate parent
+      // has been emitted. A null here never undoes an adoption —
+      // `recordWorkGraph` coalesces onto the stored parent — so the fold may go on
+      // emitting one forever.
       parentRef: jobParent.get(ref) ?? null,
       title: job.title,
       status: job.status,
@@ -265,12 +267,48 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
     });
   }
 
+  const emitted = new Map(out.map((o) => [o.ref, o]));
+
+  // **Arm C — a job is adopted by the origin it stands in for.** `Job.originRef`
+  // names the work being redone — `issue:41:retro` for a requeue, `pr:31251` for a
+  // promoted finding — so it is the job's own statement that something already
+  // accounts for it.
+  //
+  // Arm B can only adopt a job that *produced a pull request an issue links to*,
+  // and a requeued assay, plan, retro or review-comment job opens none — so every
+  // one of them was emitted parentless forever, and stage 3 offered to file a
+  // second tracker item for work an existing one already names. Not a stale row
+  // that ages out: the condition is permanent, which is why the unrecorded list
+  // filled with `Requeued: Plan issue #35699` and read as noise.
+  //
+  // Resolved by walking the origin down to the longest prefix the graph actually
+  // holds a node for, so `issue:41:retro` lands on `issue:41` while
+  // `issue:41:part:api` — itself a node — lands on itself. A prefix walk rather
+  // than a suffix table because an origin vocabulary this does not recognise must
+  // fail to the *visible* mistake, which here is the row staying in the unrecorded
+  // list; a table would silently adopt the next origin added under whichever
+  // parent its author last thought about. It also cannot invent an edge, since
+  // every candidate is a ref something emitted.
+  //
+  // Last, so this only ever fills a null: arm B's adoption and a stray operator
+  // job's honest null both stand. A job with no origin stands in for nothing and
+  // stays unrecorded, which is the case stage 3 was written for.
+  const nodeRefs = new Set([...emitted.keys(), ...input.existing.map((n) => n.ref)]);
+  for (const job of input.jobs) {
+    if (job.originRef === null) continue;
+    const ref = `job:${job.id}`;
+    const node = emitted.get(ref);
+    if (!node || node.parentRef !== null) continue;
+    const parent = originAncestor(job.originRef, ref, nodeRefs);
+    if (parent !== null) node.parentRef = parent;
+  }
+
   // Work items an operator had filed for work nothing external accounted for
   // (stage 3). The filing row is *intent*, the same relationship `plans` and
   // `plan_parts` have to this fold — the parent edge is derived here rather than
   // written by the route or by `link_ticket`, so the recorder stays the graph's
-  // only writer.
-  const emitted = new Map(out.map((o) => [o.ref, o]));
+  // only writer. After arm C, so an operator's own filing outranks a derived
+  // adoption: they filed it, and the ticket exists.
   for (const filing of input.filings) {
     if (filing.ticketRef === null) continue; // still filing: nothing to attach to yet
 
@@ -307,4 +345,25 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
   }
 
   return out;
+}
+
+/**
+ * The node an origin belongs to: the longest prefix of `originRef` on a `:`
+ * boundary that the graph holds a node for, or null when it holds none.
+ *
+ * `self` is excluded so a job whose origin is its own ref never becomes its own
+ * parent — `listWorkSubtree` is recursive, and the write-once parent makes a cycle
+ * permanent once written.
+ *
+ * Null is the honest answer and the safe one: the caller leaves the parent alone,
+ * so the node stays a root and stage 3 goes on offering to record it.
+ */
+function originAncestor(originRef: string, self: string, nodeRefs: ReadonlySet<string>): string | null {
+  let ref = originRef;
+  for (;;) {
+    if (ref !== self && nodeRefs.has(ref)) return ref;
+    const cut = ref.lastIndexOf(':');
+    if (cut <= 0) return null;
+    ref = ref.slice(0, cut);
+  }
 }

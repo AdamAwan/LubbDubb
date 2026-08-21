@@ -25,6 +25,7 @@ import { desktopDeepLink, localRunPrompt } from '../cockpit/desktopLink.js';
 import { ValidationSection } from '../components/ValidationSection.js';
 import { watchBucket } from '../worldBuckets.js';
 import { stateColour } from '../stateColour.js';
+import { WorkRecord } from '../components/WorkRecord.js';
 import { NeedsBand } from './NeedsBand.js';
 
 /** Where the header's validation chip jumps to. Anchors, not refs — one element. */
@@ -85,6 +86,16 @@ export function GoalPage({
           <Ticket issue={page.issue} refUrls={view.state.refUrls} />
           <PullRequests page={page} view={view} />
           <Environments page={page} actions={actions} now={view.now} />
+          {/* Embedded exactly as the work tree and the launch desk are: it reaches
+              its own route, which `console/` may not, but rendering a component
+              that does is not reaching — the import ban is on `api.js` and still
+              holds. Last in the column, and below `PullRequests` and
+              `Environments` on purpose: both of those are the live reading and
+              something the goal still owes, and this is what is left of the same
+              work once the snapshot has forgotten it. Nothing here is owed. */}
+          <section className="cn-card">
+            <WorkRecord goalRef={`issue:${page.issue.number}`} now={view.now} />
+          </section>
         </div>
         <div className="cn-stack">
           <OnThisGoal page={page} view={view} actions={actions} />

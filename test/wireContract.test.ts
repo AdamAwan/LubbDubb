@@ -2,6 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
+// `fileURLToPath`, never `URL.pathname`: on Windows the latter yields
+// `/C:/…`, which `fs` reads as the relative path `C:\C:\…` — so every
+// structural guard in this file threw ENOENT rather than asserting, and a
+// violation of the rule it pins would have merged green on that platform.
+
 import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -24,7 +30,7 @@ import type { AppState } from '../web/src/types.js';
  * surface without anything saying so).
  */
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
 /** The modules the cockpit type-imports, transitively. Each must be declaration-only. */
 const SHARED = ['src/wire.ts', 'src/types.ts'];
