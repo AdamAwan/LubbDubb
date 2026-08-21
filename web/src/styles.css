@@ -4687,6 +4687,217 @@ a.btn {
   color: var(--cn-fg-faint);
 }
 
+/* -- The tickets board (card view) ---------------------------------------- */
+
+/* The board scrolls sideways and every column scrolls inside itself, which is the
+   whole request: a column running off the right edge must not hide the others, and a
+   column running long must not push its neighbours off the bottom. */
+.tb-cols {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  overflow-x: auto;
+  padding-bottom: 6px;
+}
+.tb-col {
+  flex: 0 0 300px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--cn-bg);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r);
+  /* Bounded here rather than by the situation area, because `.tb-body` below is the
+     element that has to be the scroller — a column sized by its content would make
+     the page scroll instead, and the sticky heads would leave with it. */
+  max-height: calc(100vh - 300px);
+}
+.tb-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 7px 9px;
+  background: var(--cn-panel-2);
+  border-bottom: 1px solid var(--cn-line);
+  /* Transparent until the operator has given this state a colour, so the strip is a
+     reading rather than decoration — `stateColour` writes the value inline. */
+  border-top: 2px solid transparent;
+  border-radius: var(--cn-r) var(--cn-r) 0 0;
+}
+.tb-head b {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cn-fg);
+}
+.tb-k {
+  margin-left: auto;
+  font-family: var(--cn-mono);
+  font-size: 10px;
+  font-style: normal;
+  color: var(--cn-fg-faint);
+}
+.tb-body {
+  overflow-y: auto;
+  min-height: 60px;
+  padding: 8px;
+}
+.tb-card {
+  position: relative;
+  background: var(--cn-panel);
+  border: 1px solid var(--cn-line);
+  border-radius: 5px;
+  padding: 7px 9px 7px 11px;
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+/* Closed is a fact about the item, not a shade of its state — the table's frozen row
+   says it the same way. */
+.tb-card.frozen {
+  border-style: dashed;
+  opacity: 0.78;
+}
+.tb-card.writing {
+  opacity: 0.6;
+}
+.tb-card.refused {
+  border-color: var(--cn-red-line);
+}
+.tb-card[draggable='true'] {
+  cursor: grab;
+}
+.tb-stripe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+.tb-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.tb-id {
+  font-family: var(--cn-mono);
+  font-size: 11px;
+  color: var(--cn-fg-dim);
+}
+.tb-gap {
+  flex: 1;
+}
+/* The watch tag as a control: filled when the harness may pick this up, hollow when
+   nobody has opted it in. A button, so a keyboard reaches it and a drag beginning
+   here moves no card. */
+.tb-dot {
+  padding: 0;
+  border: 0;
+  background: none;
+  line-height: 0;
+}
+.tb-dot span {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid var(--cn-fg-faint);
+}
+.tb-dot.on span {
+  background: var(--cn-green);
+  border-color: var(--cn-green);
+}
+.tb-dot:disabled {
+  opacity: 0.45;
+}
+.tb-name {
+  display: block;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--cn-fg);
+  cursor: pointer;
+}
+.tb-name:hover {
+  text-decoration: underline;
+}
+.tb-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 5px;
+  font-size: 10.5px;
+  color: var(--cn-fg-faint);
+}
+.tb-meta .money {
+  color: var(--cn-green-ink);
+}
+.tb-feat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+/* Always drawn, and that is the point: a column of cards answers "why is nothing on
+   this?" without a click on any of them, and a blank lane would read as a card that
+   failed to draw. */
+.tb-why {
+  margin: 6px 0 0;
+  padding-top: 5px;
+  border-top: 1px dotted var(--cn-line);
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--cn-fg-dim);
+}
+.tb-why.held {
+  color: var(--cn-amber-ink);
+}
+.tb-why.outcome {
+  color: var(--cn-fg);
+}
+.tb-writing {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin: 5px 0 0;
+  font-size: 10.5px;
+  color: var(--cn-fg-faint);
+}
+.tb-refused {
+  margin: 5px 0 0;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--cn-red-ink);
+}
+.tb-foot {
+  padding: 4px 2px;
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--cn-fg-faint);
+}
+.tb-note,
+.tb-unlisted {
+  margin: 0 0 10px;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--cn-fg-dim);
+}
+/* The states with no column, named with their counts. Work on no board at all and
+   unreported is how a typo in `issueBoardStates` looks exactly like a quiet tracker. */
+.tb-unlisted {
+  margin: 10px 0 0;
+  color: var(--cn-fg-faint);
+}
+.tb-unlisted b {
+  color: var(--cn-fg-dim);
+}
+
 /* -- The build panel ------------------------------------------------------ */
 /* Tokens only, like every shared component: the console sheet must not reach in
    here, so this reads the same on any theme the console later takes. */

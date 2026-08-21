@@ -1173,6 +1173,53 @@ which on a running fleet is most of the ones in progress — the column then sai
 work that had not finished yet. Where the goal has got to is the row's state and the dispatcher's own
 pickup reasons; this chip is for how the harness _left_ it.
 
+### The board, and what a card says
+
+The second view: one column per tracker state, drawn from `issueBoardStates`
+([02](02-configuration.md#board-columns)) and falling back to the state facets' own order where that is
+empty. `boardColumns` (`web/src/ticketBoard.ts`) owns the three cases — a configured order taken
+exactly as written, a listed state with nothing in it still drawing its column, and a state the mirror
+carries that the list omits reported under the board rather than dropped. The last is the one that
+matters: those items are on no board at all, and unreported that is indistinguishable from a quiet
+tracker.
+
+The toggle is **disabled**, not hidden, where the tracker reports no native states — there are no
+columns to draw, and a control that vanishes on some deployments is one nobody can ask about.
+
+**A column is a `/api/tickets` request pinned to its own state**, with its own cursor and its own
+`IntersectionObserver` rooted on its own scroll box. There is no board route and no new payload: the
+list route already filters `state` as an exact match on `work_item_state`, which is a column's
+definition. Bucketing one shared page client-side was the alternative, and it makes a column's
+contents depend on how far somebody scrolled a list that is not on screen. The board scrolls sideways
+and each column scrolls inside itself, so a column running off the right edge hides nothing in the
+others and one running long pushes nothing off the bottom. A column's header count is its own
+response's `total` once the first page lands, and the whole-mirror facet before that, so both numbers
+in "12 of 218" are about one set. Its foot distinguishes three emptinesses, because they are three
+facts: nothing has ever been in this state, nothing under it is still in the open set (with the widen),
+and nothing here matches these filters.
+
+**A card's reason lane is always drawn, and it is the board's whole advantage over the table.** A
+column of cards answers _why is nothing on this_ without a click on any of them. `cardReason` decides
+which of five readings supplies it — an intake hold, then the outcome word, then the dispatcher's own
+first sentence, then frozen, then unwatched — and it is pure for `cascadeNote`'s reason: the invariant
+is about which reading wins, which no render can show. An **unwatched** item is never held, whatever a
+stale verdict says, exactly as in the list. A blank lane would read as a card that failed to draw,
+which is why the absence of any reading is itself a sentence.
+
+**The watch dot is the control.** The list's Watch/Unwatch pair does not fit a card and the lane has
+the space it would take, so the dot both reports the tag and writes it, carrying `cascadeNote`'s phrase
+in its title — a click that writes eight tags says eight. It is refused in the three cases the list
+refuses it, each with its reason in the title. It is a button and the drag handle is the card body, so
+a drag beginning on the dot moves nothing.
+
+**In card view the rail differs in three ways.** `Group` hides, because a flat board has no headings to
+indent under, and the ordering takes its place — the list sorts from its column headers, which is where
+a reader of a table looks, and a board has none. The State tier becomes **column visibility**: the same
+chips and counts, `aria-pressed` now meaning "drawn", the hidden ones in `Place.ticketColumns`. And
+`state` stops meaning anything once every state is a column, so switching to cards **clears it and says
+so** — the `widenedFor` band pointed the other way, with the way back restoring both the view and the
+narrowing. A control silently ignored is worse than one that moved and told you.
+
 ### The type is tinted by family, never by name
 
 A row's work-item type is drawn as a chip tinted by **family** — bug, story, debt, container, task —

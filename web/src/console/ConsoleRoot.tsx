@@ -130,6 +130,8 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
             feature: view.ticketFeature,
             group: view.ticketGroup,
             order: view.ticketOrder,
+            view: view.ticketView,
+            columns: view.ticketColumns,
           }}
           onQuery={(next) =>
             actions.setTicketQuery({
@@ -139,6 +141,8 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
               ...(next.feature !== undefined ? { ticketFeature: next.feature } : {}),
               ...(next.group !== undefined ? { ticketGroup: next.group } : {}),
               ...(next.order !== undefined ? { ticketOrder: next.order } : {}),
+              ...(next.view !== undefined ? { ticketView: next.view } : {}),
+              ...(next.columns !== undefined ? { ticketColumns: next.columns } : {}),
             })
           }
           view={view}
