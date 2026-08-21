@@ -106,7 +106,14 @@ export interface IssuePickupPolicy {
  * and `undefined`/empty stays `undefined`/empty — an empty gate is the gate off,
  * and an in-progress state must not switch it on.
  */
-export function effectivePickupStates(policy: IssuePickupPolicy): string[] | undefined {
+export function effectivePickupStates(
+  // The two fields it reads, rather than the whole policy: the cockpit's readers —
+  // the state facets and the board's drop warnings — hold a `Config` and not a
+  // dispatch policy, and a signature demanding the priority knobs would make them
+  // assemble a policy object nobody dispatches from. Every existing caller passes a
+  // full `IssuePickupPolicy`, which satisfies this unchanged.
+  policy: Pick<IssuePickupPolicy, 'pickupStates' | 'inProgressState'>,
+): string[] | undefined {
   const states = policy.pickupStates;
   if (!states || states.length === 0) return states;
   const inProgress = policy.inProgressState;

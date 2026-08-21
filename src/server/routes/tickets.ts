@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { TicketStateFilter, TicketTrackingFilter, TicketsPayload } from '../../wire.js';
+import { effectivePickupStates } from '../../dispatcher/issuePickup.js';
 import { buildSpendGoals } from '../../spendInsights.js';
 import { buildTicketPage, NO_FEATURE } from '../../tickets/ticketList.js';
 import { ticketOutcomes } from '../../tickets/outcomes.js';
@@ -100,7 +101,15 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
       const page = buildTicketPage({
         items,
         featureSlots,
-        pickupStates: config.issuePickupStates ?? [],
+        // The dispatcher's own effective set, not the raw key: `issueInProgressState`
+        // is folded in there and deliberately not listed here, so a facet built from
+        // the raw list marks the in-progress state as one the harness will not work.
+        // A lens quoting a decision made elsewhere, which is the allowed direction.
+        pickupStates:
+          effectivePickupStates({
+            pickupStates: config.issuePickupStates,
+            inProgressState: config.issueInProgressState,
+          }) ?? [],
         costs: new Map(goals.map((g) => [g.issueNumber, g.costUsd])),
         outcomes: ticketOutcomes({
           runs,

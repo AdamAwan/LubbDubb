@@ -708,3 +708,42 @@ test('the pickup states config marks the states it lets through', () => {
     'read from config, never inferred from what happened to be dispatched',
   );
 });
+
+test('the pickup mark on a state facet is the dispatcher’s effective set, not the raw list', async () => {
+  const config = loadConfig({
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    labelPrefix: 'lubbdubb',
+    agentMode: 'raw',
+    heartbeatIntervalMs: 999_999,
+    startPaused: true,
+    // "Doing" is deliberately absent from the pickup list: `effectivePickupStates`
+    // folds the in-progress state in, and src/config.ts says it should not be
+    // listed. A facet built from the raw list therefore marks it not-pickup, which
+    // is the bug — cosmetic on a table, and the whole warning on a board.
+    issuePickupStates: ['Ready'],
+    issueInProgressState: 'Doing',
+  });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
+
+  system.connector.inject({ kind: 'new_issue', number: 20, title: 'Waiting' });
+  system.connector.inject({ kind: 'new_issue', number: 21, title: 'In flight' });
+  // The fake has no way to inject a native state, so it is written through the
+  // provider seam the harness itself uses — which is also the only path that puts
+  // the state into the world the sweep then mirrors.
+  await system.connector.setWorkItemState({ number: 20, state: 'Ready' });
+  await system.connector.setWorkItemState({ number: 21, state: 'Doing' });
+  await system.harness.runCycle('manual');
+
+  const { app } = await buildApp(system);
+  const page = await app.inject({ method: 'GET', url: '/api/tickets' });
+  const body = page.json() as TicketsPayload;
+  const byState = new Map(body.states.map((facet) => [facet.state, facet.pickup]));
+
+  assert.equal(byState.get('Ready'), true, 'a listed pickup state is marked');
+  assert.equal(byState.get('Doing'), true, 'and so is the in-progress state the dispatcher folds in');
+});

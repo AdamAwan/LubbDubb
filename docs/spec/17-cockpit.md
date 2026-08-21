@@ -1099,9 +1099,17 @@ The state list is **discovered from the mirror with counts, never hardcoded**. A
 wrong on the first customised process template, and silently: the missing state's items simply stop
 being reachable by any filter. Where the provider has no native states — GitHub, the fake — the tier
 is **not drawn at all**, because a control offering states the tracker cannot produce is one that
-always returns nothing. A `▲` marks the states `pickupStates` lets through, read from config rather
+always returns nothing. A `▲` marks the states the harness picks up from, read from config rather
 than inferred: _why is Ready worked and New not_ is the most-asked question about an Azure deployment,
 answered where the states are.
+
+**The mark is the _effective_ pickup set, not `issuePickupStates` itself.**
+`effectivePickupStates` (`src/dispatcher/issuePickup.ts`) folds `issueInProgressState` in, and
+[02](02-configuration.md#item-selection-labels-priority-states) tells the operator not to list that
+state — an item the harness left there stays pickup-eligible either way. So a mark built from the raw
+key is missing on exactly the state work is _in_, and the chip then answers the question it exists to
+answer with the wrong half. The route therefore passes the dispatcher's own function through to the
+facets: a lens quoting a decision made elsewhere, which is the direction that is allowed.
 
 Facets are counted over the **whole mirror**, not the filtered set. A facet counted after its own
 filter shows `1` beside whichever value is selected and nothing beside the rest — a control that
