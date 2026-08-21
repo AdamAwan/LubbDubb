@@ -36,31 +36,56 @@ export interface Config {
   whitelistedApprovals: WhitelistRule[];
   /**
    * Who *you* are, to every provider the harness talks to — the one identity the
-   * harness acts on behalf of, and the answer to every "me" the config used to ask
-   * about separately.
+   * harness acts on behalf of.
    *
    * It replaces six keys that were all the same fact spelled per provider and per
    * use (`issuePickupRequireOwnLabel`, both `defaultAssignee`s, both
-   * `filters.prAuthor`s, and `filters.workItemAssignedTo`). Set it and three gates
-   * turn on together, because they are one intent — *this harness works my
-   * queue*:
+   * `filters.prAuthor`s, and `filters.workItemAssignedTo`). What it does *not*
+   * replace is the decision of whether to filter by it: that is
+   * {@link Config.ownWorkOnly}, and the line between the two is
+   * **attribution against filtering**.
    *
-   * - **Ownership.** The `${labelPrefix}-watch` tag only counts if you added it, so
-   *   nobody else can tag an item onto the fleet.
+   * This key is attribution, and attribution is always yours:
+   *
    * - **Assignment.** Tickets the harness *files* are assigned to you.
-   * - **Authorship.** Only pull requests you opened are surfaced.
+   * - **Naming.** Branches it opens are named as yours.
    *
    * One string rather than one per provider because one project is worked at a
    * time and each project carries its own config file: the identity that is
    * correct is the one belonging to whichever provider `integrations` selects — a
    * GitHub login where that is `github`, an Azure UPN where that is `azure`.
    *
-   * Unset, all three gates are off: any tagger counts, filed tickets go
-   * unassigned, and every open pull request is surfaced. That is the first-run and
-   * test posture, and it is why this is optional rather than required — the `fake`
-   * provider resolves no identity at all.
+   * Unset, filed tickets go unassigned and nothing can be filtered to you whatever
+   * `ownWorkOnly` says — which is the `fake` provider's posture, since it resolves
+   * no identity at all. It stays optional in the type for exactly that reason, and
+   * is reported as an outstanding check on every real deployment instead
+   * (`src/setup/reading.ts`): a loader refusal here would make the shipped mock
+   * unbootable. → `docs/spec/26-setup.md`
    */
   userId?: string;
+  /**
+   * Whether the world arrives **filtered to you** — pickup counting only a watch
+   * tag you added, and only pull requests you opened being surfaced.
+   *
+   * Separate from {@link Config.userId} because the two answer different questions
+   * and belong to different people. Identity is personal and lives in an
+   * operator's own `lubbdubb.config.json`; whether a project filters by owner is a
+   * team decision and belongs in the `lubbdubb.project.json` they commit. Folded
+   * into one key — which is what `userId !== undefined` was — a team could not
+   * state the policy without every member's login, and an operator could not say
+   * who they were without turning the filters on.
+   *
+   * **Defaults to `true`**, which is what makes the split invisible on upgrade: a
+   * deployment carrying `userId` keeps the gates it already had, and one without
+   * keeps them off, because a filter needs an identity to filter *to*. On with no
+   * identity is not refused here — the harness would be unbootable on the shipped
+   * mock — it is one outstanding check, said in the operator's own words.
+   *
+   * Assignment and branch naming do **not** read this: if the harness files it, it
+   * is yours, whatever the project chooses to show you.
+   * → `docs/spec/02-configuration.md#userid`
+   */
+  ownWorkOnly: boolean;
   /**
    * Which provider fulfils each integration capability. The swap switch: point a
    * capability at a different provider (e.g. `sourceControl: "github"`) to change
@@ -621,9 +646,10 @@ export interface AzureDevOpsConfig {
    * Optional filters narrowing what the harness picks up.
    *
    * Identity-based narrowing is **not** here: who the harness acts as is
-   * {@link Config.userId}, which drives PR authorship and work-item assignment for
-   * every provider at once. What remains is the one filter that is about the
-   * *tracker's* shape rather than about you.
+   * {@link Config.userId} and whether the world is narrowed to them is
+   * {@link Config.ownWorkOnly}, both of which apply to every provider at once.
+   * What remains is the one filter that is about the *tracker's* shape rather
+   * than about you.
    */
   filters?: {
     /** Only surface work items carrying this tag. Unset = all open work items. */
@@ -657,6 +683,10 @@ const DEFAULTS: Config = {
   maxConcurrentAgents: 3,
   startPaused: false,
   whitelistedApprovals: [],
+  // True, so the split off `userId` changes nothing for a deployment that takes
+  // the build: one carrying an identity keeps the gates it had, one without keeps
+  // them off, because a filter needs an identity to filter to.
+  ownWorkOnly: true,
   integrations: { sourceControl: 'fake', issues: 'fake' },
   labelPrefix: 'lubbdubb',
   issuePriorityLabels: { 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 },
@@ -885,12 +915,12 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
   'mcp.permissionEscalation': 'the permission backstop is always on',
   reapMergedBranches: 'the branch behind a merged pull request of yours is always reaped',
   reviewReminderMs: 'the cockpit ages every pull request waiting on a reviewer, with no threshold to cross',
-  issuePickupRequireOwnLabel: 'the ownership gate follows "userId" — set it, and only tags you added count',
+  issuePickupRequireOwnLabel: 'the ownership gate is "ownWorkOnly", and who "own" means is "userId"',
   'github.defaultAssignee': 'tickets the harness files are assigned to "userId"',
   'azureDevOps.defaultAssignee': 'tickets the harness files are assigned to "userId"',
-  'github.filters': 'pull requests are filtered to the ones "userId" opened',
-  'azureDevOps.filters.prAuthor': 'pull requests are filtered to the ones "userId" opened',
-  'azureDevOps.filters.workItemAssignedTo': 'work items are filtered to the ones assigned to "userId"',
+  'github.filters': 'pull requests are filtered to "userId"\'s while "ownWorkOnly" is on',
+  'azureDevOps.filters.prAuthor': 'pull requests are filtered to "userId"\'s while "ownWorkOnly" is on',
+  'azureDevOps.filters.workItemAssignedTo': 'work items are filtered to "userId"\'s while "ownWorkOnly" is on',
 };
 
 function dropRetiredKeys(fromFile: Partial<Config>, filePath: string): void {
