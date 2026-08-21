@@ -2495,8 +2495,17 @@ export interface IssueSpend {
   costUsd: number;
   inputTokens: number;
   outputTokens: number;
-  /** How many agent runs the totals are over. Never 0 — no agents, no row. */
+  /** How many agent runs the totals are over. Zero on a goal whose only measured spend is a local run. */
   agents: number;
+  /**
+   * How many local runs are in the totals — an operator bringing this goal's branch
+   * up on their own machine, which is billed to the same account.
+   *
+   * Counted separately rather than added to {@link IssueSpend.agents} because the
+   * cockpit prints that figure as "Agents" and a local run is not one. The money is
+   * in `costUsd` either way: it was spent on this goal.
+   */
+  localRuns: number;
 }
 
 /**
@@ -3121,7 +3130,13 @@ export type GoalReachStatus = 'reached' | 'partial' | 'absent' | 'unknown';
 export interface GoalEnvironmentReach {
   environment: string;
   status: GoalReachStatus;
-  /** How many of the goal's landings this environment has, and how many it has in total. */
+  /**
+   * How many of the goal's landings this environment has, out of everything the
+   * goal owes: its landings, its merges nothing could attribute, **and its plan
+   * parts that have yet to merge**. The last of those is why the fraction does not
+   * close the day part one of four lands — work with no commit yet is work no
+   * environment is holding. → `docs/spec/24-environments.md#the-lens`
+   */
   landed: number;
   total: number;
   /**
@@ -3251,4 +3266,52 @@ export interface LocalRun {
   note: string | null;
   startedAt: string;
   endedAt: string | null;
+  /**
+   * What the sessions behind this run have cost, and what they spent to do it.
+   *
+   * **Accumulated, not folded.** Every other usage figure the harness holds is a
+   * session's own cumulative report written straight onto a row, because an
+   * `agents` row has exactly one session behind it. A local run has up to two — the
+   * one that brought the environment up, and the one spawned to take it down when
+   * that one is gone — so a cumulative write would replace the bring-up's total
+   * with the teardown's, downwards. `Store.addLocalRunUsage` adds deltas for that
+   * reason. → [23](../docs/spec/23-local-runs.md#what-it-costs)
+   *
+   * **Null is unmeasured, never free**, the convention `Agent.costUsd` sets: a run
+   * from before this was recorded reports nothing, and a PTY deployment reports
+   * nothing ever, since only the stream runtime has a usage channel at all.
+   */
+  costUsd: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+  /** The cached share of {@link LocalRun.inputTokens} — see {@link Agent.cacheReadTokens}. */
+  cacheReadTokens: number | null;
+  cacheCreationTokens: number | null;
+  numTurns: number | null;
+}
+
+/**
+ * One session's usage since its own last report — what {@link LocalRun} accumulates.
+ *
+ * The same fields as {@link AgentUsage} and deliberately a different type: that one
+ * is a *cumulative* report and this is a *difference*, and the whole hazard here is
+ * handing one to something expecting the other. A null field adds nothing and leaves
+ * the column as it was, so a runtime that reports cost but no cache split does not
+ * write a zero share.
+ */
+export type LocalRunUsageDelta = AgentUsage;
+
+/**
+ * One dated cost delta, whatever spent it — the shape a rolling window and the
+ * spend timeline read.
+ *
+ * Sourceless on purpose. Two tables hold these (`usage_events` for agents,
+ * `local_run_cost_deltas` for local runs) and a reader asking "what went out, and
+ * when" has no use for the difference; the readers that *do* — the reliability
+ * breakdown's per-pull-request CI cost — ask `listUsageEventsSince` for agent rows
+ * they can join by id.
+ */
+export interface CostDelta {
+  costUsd: number;
+  at: string;
 }

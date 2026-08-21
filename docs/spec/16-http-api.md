@@ -780,7 +780,9 @@ nobody wrote up: "no retrospective" is an ordinary answer here, not a missing re
 The breakdown behind the Insights page's Economics and Work mix tabs: the money spent inside a window,
 split by phase, by goal and over time, plus what landed and what never did. Returns `{ insights }` — see
 [18](18-observability.md#the-spend-breakdown) for what each split means and why the phases are a
-partition.
+partition. A `SpendRun` carries `id` and `kind` rather than an `agentId`, because a run in that
+ranking can be a **local run** ([23](23-local-runs.md#what-it-costs)) and an id of one kind sitting in
+a field named for the other is a join nobody can see fail.
 
 **Takes `?window=`** — `6h`, `24h`, `7d`, `30d` or `all`, defaulting to `7d`, validated by
 `InsightsQuery`. It is the only parameter, and it is the whole of what makes the page's one control
@@ -789,9 +791,11 @@ mean anything: the window is resolved once here and passed to every fold under i
 silent fallback — the page can only ask with the union, so an unrecognised one came from a hand-edited
 address bar and deserves to be told.
 
-Fetched on open for `/api/work`'s reason: it reads **every agent the harness has ever run** and every
-dated cost delta inside the window, where `/api/state` comes round every couple of seconds for every
-open cockpit.
+Fetched on open for `/api/work`'s reason: it reads **every agent the harness has ever run**, every
+local run it has recorded, and every dated cost delta inside the window, where `/api/state` comes round
+every couple of seconds for every open cockpit. The deltas are read through `listCostDeltasSince`
+rather than the agents' alone, so the timeline cannot fall short of the total above it by exactly the
+local runs.
 
 Derived on the server rather than in the browser, and not only because the timeline needs the store.
 The per-goal totals are `rollUpIssueSpend`'s own, taken whole: the page and the goal card state the

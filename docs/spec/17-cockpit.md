@@ -2056,12 +2056,24 @@ division to the reader, which is what three separate panels did.
 
 Under the headline: the phase bar and its legend-that-is-a-table, the cost timeline at the window's own
 resolution, the goals ranked with the phase split inside each row, and the costliest runs — capped, and
-**saying so**, because a silently truncated table reads as a complete one.
+**saying so**, because a silently truncated table reads as a complete one. A row in that last table can
+be a **local run** rather than an agent, named by the branch it was pointed at, because the table ranks
+what money went on and an operator's preview is money ([23](23-local-runs.md#what-it-costs)).
 
-**Nothing here is derived in the browser.** The server ships the splits, for `PrAttention`'s reason: a
-cockpit-side re-derivation of which goal a pull request's money belongs to would be a second opinion
-about a decision made elsewhere, drawn inches from the first. What the cockpit owns is presentation —
-the phase colours, which live in the stylesheet as `--sp-<phase>`.
+The timeline is drawn as **bars, not lines**: these are totals over a period rather than samples of a
+rate, and a line between two buckets implies money moved smoothly between them, which is exactly what a
+fleet that ran for one afternoon did not do. Each goal row's bar is drawn at the width of its share of
+the window's spend and split by phase inside, so it carries two readings at once: how much of the
+budget this goal was, and what inside it the money went on.
+
+**Nothing here is derived in the browser.** The server ships the splits, for the reason `PrAttention`
+and `StackLandingView` are shipped: a cockpit-side re-derivation of which goal a pull request's money
+belongs to would be a second opinion about a decision made elsewhere, drawn inches from the first. What
+the cockpit owns is presentation — the phase **colours**, which live in the stylesheet as `--sp-<phase>`
+so the component names a phase and the sheet decides what that looks like. There are eight phases and
+seven hues that read apart at swatch size, so `--sp-local` is a `color-mix` of two rather than a
+literal — a hex at a use site is a swatch that stays put when somebody switches theme
+([tokens](#tokens)).
 
 **Fetched on open, three states, and the third is the point.** Loading, the reading, and a *failure* —
 because a fetch that failed must not render as a fleet that has spent nothing. `$0.00` is a real answer
@@ -2144,6 +2156,11 @@ named, it is addressable, and nobody scrolls past it to reach something else. Th
 the same money Economics totals, cut by what the fleet was asked to do rather than by which phase it was
 in — review comments get a figure of their own here, which no phase can give them, and so does
 `dotnet test`.
+
+**By task type can hold no local run at all**, and says so. Its rows are keyed on the dispatch rule that
+sent the agent and nothing dispatched a local run, so that money is in the total above the table and in
+none of its rows — stated as a remainder in the shape the checks table states its own
+([23](23-local-runs.md#what-it-costs)).
 
 ## Exporting a reading
 
@@ -2490,6 +2507,12 @@ back button steps out of it, exactly as every other panel does. It draws one sta
 than a table of runs — a list would imply two environments could be up, which is the one thing the
 store refuses — and its start button says, where the control is, that starting stops what is running
 now.
+
+Beside the ref it draws **what the run has cost**, climbing while the environment comes up. It is the
+only spend figure in the cockpit read while the money is still going out, and it is here because this is
+where the decision to leave something running is made. Absent rather than `$0.00` when nothing was
+measured, the convention every spend surface keeps. The goal page's Spend card names the count in a row
+of its own for the same reason: the row above it says "Agents".
 
 ## Links
 

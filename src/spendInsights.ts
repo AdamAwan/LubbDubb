@@ -1,4 +1,14 @@
-import type { Agent, Issue, IssueRun, IssueSpend, TaskSummary, UsageEvent, WorkNode, WorldEvent } from './types.js';
+import type {
+  Agent,
+  CostDelta,
+  Issue,
+  IssueRun,
+  IssueSpend,
+  LocalRun,
+  TaskSummary,
+  WorkNode,
+  WorldEvent,
+} from './types.js';
 import { issueOriginRole } from './issueOrigins.js';
 import { rollUpIssueSpend, roundUsd } from './issueSpend.js';
 import { rollUpChecks, rollUpTaskTypes, type ChecksSpend, type TaskTypeSpend } from './taskTypeSpend.js';
@@ -72,7 +82,7 @@ import {
  * than failing — counts here too: it is the same pipeline costing the same money,
  * and a phase per dispatch state would rank states instead of causes.
  */
-export type SpendPhase = 'deliberation' | 'build' | 'ci' | 'landing' | 'evidence' | 'job' | 'other';
+export type SpendPhase = 'deliberation' | 'build' | 'ci' | 'landing' | 'evidence' | 'local' | 'job' | 'other';
 
 /**
  * Reading order, funnel order: decide, build, go green, land, check, and the two
@@ -88,6 +98,7 @@ export const PHASE_ORDER: readonly SpendPhase[] = [
   'ci',
   'landing',
   'evidence',
+  'local',
   'job',
   'other',
 ];
@@ -106,6 +117,7 @@ const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
   ci: { label: 'CI', blurb: 'Answering a pull request’s failing or blocked checks — what a red pipeline costs' },
   landing: { label: 'Landing', blurb: 'The rest of getting a pull request in — review comments, retargets, the merge' },
   evidence: { label: 'Evidence', blurb: 'Assessing what shipped, and writing the run up' },
+  local: { label: 'Local runs', blurb: 'Bringing a goal’s branch up on this machine to look at it' },
   job: { label: 'Jobs', blurb: 'Work an operator queued directly, rather than a goal the harness picked up' },
   other: { label: 'Unclassified', blurb: 'Runs whose origin names none of the above — see the note below' },
 };
@@ -155,7 +167,7 @@ interface SpendTotals {
    */
   cacheMeasuredInputTokens: number;
   turns: number;
-  /** Runs the totals are over: every agent that reported any usage at all. */
+  /** Runs the totals are over: every agent and local run that reported any usage at all. */
   measuredRuns: number;
   /**
    * Runs that reported nothing — PTY mode throughout, or a run that ended before
@@ -195,9 +207,17 @@ export interface SpendGoal extends IssueSpend {
   lastAt: string | null;
 }
 
-/** One expensive run, named well enough to open the agent behind it. */
+/** One expensive run, named well enough to find what spent it. */
 export interface SpendRun {
-  agentId: string;
+  /**
+   * The agent's id, or the local run's — {@link SpendRun.kind} says which.
+   *
+   * Not `agentId`, because half of these are not agents. A run id sitting in a field
+   * of that name is a caller one join away from looking a local run up in the agent
+   * drawer and drawing nothing, with no way to see why.
+   */
+  id: string;
+  kind: 'agent' | 'local';
   originRef: string | null;
   /** The task's title — what the agent was actually asked to do. */
   title: string | null;
@@ -284,6 +304,8 @@ export interface SpendInsights {
 
 interface SpendInsightsInput {
   agents: readonly Agent[];
+  /** Every recorded local run — the second thing that spends on a goal's behalf. */
+  localRuns: readonly LocalRun[];
   tasks: readonly TaskSummary[];
   /** The durable work graph — how a pull request's spend finds its goal. */
   nodes: readonly WorkNode[];
@@ -291,8 +313,12 @@ interface SpendInsightsInput {
   issues: readonly Issue[];
   /** The run records, for the titles the world has forgotten. See {@link buildSpendGoals}. */
   runs: readonly IssueRun[];
-  /** The dated cost deltas behind the trend — already windowed by the caller. */
-  usageEvents: readonly UsageEvent[];
+  /**
+   * The dated cost deltas behind the trend — already windowed by the caller, and
+   * **every** source of them (`Store.listCostDeltasSince`). A window drawn off the
+   * agents' alone would fall short of the totals above it by exactly the local runs.
+   */
+  costDeltas: readonly CostDelta[];
   /** `pr_merged` rows inside the window. Only the count is read. */
   mergeEvents: readonly WorldEvent[];
   /** The stretch to measure. Every figure below obeys it, including the goals. */
@@ -302,6 +328,11 @@ interface SpendInsightsInput {
 
 /**
  * Which phase an origin's money belongs to.
+ *
+ * Origins only, which is why `local` is not among the answers: a local run has no
+ * task and no dispatch origin, and the goal ref it does carry is the one shape that
+ * would classify as `build`. Its phase is decided where its money is read, and
+ * asking this function would have it guessing about a ref that means something else.
  *
  * The issue subtree defers to `issueOriginRole`, so the one place an origin suffix
  * is classified stays the one place. Its `unrecognised` answer is carried through
@@ -346,7 +377,7 @@ export function phaseLabel(phase: SpendPhase): string {
  * present. Exported alongside {@link PHASE_ORDER} and for its reason.
  */
 export function zeroPhases(): Record<SpendPhase, number> {
-  return { deliberation: 0, build: 0, ci: 0, landing: 0, evidence: 0, job: 0, other: 0 };
+  return { deliberation: 0, build: 0, ci: 0, landing: 0, evidence: 0, local: 0, job: 0, other: 0 };
 }
 
 /** Where an agent's run sits in time: when it finished, or when it started if it has not. */
@@ -360,6 +391,8 @@ interface SpendGoalRollup {
   unattributedCostUsd: number;
   /** {@link rollUpIssueSpend}'s own agent → goal map, passed through untouched. */
   attribution: Map<string, number | null>;
+  /** The same, for local runs, and for the same reason: one attribution, not two. */
+  localRunAttribution: Map<string, number | null>;
 }
 
 /**
@@ -375,6 +408,8 @@ interface SpendGoalRollup {
  */
 export function buildSpendGoals(input: {
   agents: readonly Agent[];
+  /** The goal's other spender — see {@link rollUpIssueSpend}. */
+  localRuns: readonly LocalRun[];
   tasks: readonly TaskSummary[];
   nodes: readonly WorkNode[];
   issues: readonly Issue[];
@@ -399,7 +434,7 @@ export function buildSpendGoals(input: {
     ...input.runs.map((r): [number, string] => [r.issueNumber, r.title]),
     ...issues.map((i): [number, string] => [i.number, i.title]),
   ]);
-  const rollup = rollUpIssueSpend({ agents, tasks, nodes: input.nodes });
+  const rollup = rollUpIssueSpend({ agents, tasks, nodes: input.nodes, localRuns: input.localRuns });
 
   const goalPhases = new Map<number, Record<SpendPhase, number>>();
   const goalLastAt = new Map<number, string>();
@@ -417,6 +452,18 @@ export function buildSpendGoals(input: {
     const seen = goalLastAt.get(issueNumber);
     if (seen === undefined || at > seen) goalLastAt.set(issueNumber, at);
   }
+  for (const run of input.localRuns) {
+    const issueNumber = rollup.localRunAttribution.get(run.id) ?? null;
+    if (issueNumber === null) continue;
+    const byPhase = goalPhases.get(issueNumber) ?? zeroPhases();
+    byPhase.local = roundUsd(byPhase.local + (run.costUsd ?? 0));
+    goalPhases.set(issueNumber, byPhase);
+    // A local run counts as activity on the goal for the same reason its money does:
+    // somebody was looking at this goal's work then.
+    const at = run.endedAt ?? run.startedAt;
+    const seen = goalLastAt.get(issueNumber);
+    if (seen === undefined || at > seen) goalLastAt.set(issueNumber, at);
+  }
 
   return {
     goals: [...rollup.byIssue.values()]
@@ -429,29 +476,35 @@ export function buildSpendGoals(input: {
       .sort((a, b) => b.costUsd - a.costUsd || a.issueNumber - b.issueNumber),
     unattributedCostUsd: rollup.unattributedCostUsd,
     attribution: rollup.attribution,
+    localRunAttribution: rollup.localRunAttribution,
   };
 }
 
 export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
-  const { tasks, nodes, issues, usageEvents, mergeEvents, window, now } = input;
-  // The window is applied **once, here**, and everything below folds the list it
+  const { tasks, nodes, issues, costDeltas, mergeEvents, window, now } = input;
+  // The window is applied **once, here**, and everything below folds the lists it
   // produces. Applying it per fold instead would put the same filter in five
   // places for the four other folds to get subtly different — and the way that
   // shows up is a phase table whose costs do not add to the total beside it.
+  //
+  // Both spenders are cut, and by the same rule: a local run is a session that
+  // held the dev environment for as long as somebody was looking at it, so it
+  // belongs to the window it *finished* in exactly as an agent does.
   const agents = input.agents.filter((agent) => inWindow(window, runInstant(agent)));
+  const localRuns = input.localRuns.filter((run) => inWindow(window, runInstant(run)));
   const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
   const titleOfTask = new Map(tasks.map((t) => [t.id, t.title]));
   // The per-goal totals and the attribution behind them, computed once by the
   // fold that owns the question — never a second walk of the graph. See above.
-  const rollup = buildSpendGoals({ agents, tasks, nodes, issues, runs: input.runs });
+  const rollup = buildSpendGoals({ agents, localRuns, tasks, nodes, issues, runs: input.runs });
   const span = timelineSpan(
     window,
     // The earliest *reported* instant, which for `all` is what the timeline spans.
-    // Taken off the events rather than off the agents because the events are what
-    // it buckets: an agent row with no usage on it would stretch the axis in front
-    // of a graph that has nothing to draw there.
-    usageEvents.reduce<number | null>((oldest, event) => {
-      const at = Date.parse(event.at);
+    // Taken off the deltas rather than off the runs because the deltas are what it
+    // buckets: a row with no usage on it would stretch the axis in front of a
+    // graph that has nothing to draw there.
+    costDeltas.reduce<number | null>((oldest, delta) => {
+      const at = Date.parse(delta.at);
       return Number.isNaN(at) ? oldest : oldest === null || at < oldest ? at : oldest;
     }, null),
   );
@@ -523,7 +576,8 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
     phaseTotals.set(phase, phaseTotal);
 
     runs.push({
-      agentId: agent.id,
+      id: agent.id,
+      kind: 'agent',
       originRef,
       title: titleOfTask.get(agent.taskId) ?? null,
       phase,
@@ -534,6 +588,61 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
       numTurns: agent.numTurns,
       startedAt: agent.startedAt,
       endedAt: agent.endedAt,
+    });
+  }
+
+  // The same three accumulators, a second source. Its own loop rather than a
+  // widened one: everything an agent's phase and attribution has to be *looked up*
+  // is already decided for a local run — the phase is `local` and the goal is its
+  // own origin — and a merged walk would carry both sets of lookups over both.
+  for (const run of localRuns) {
+    if (run.costUsd === null && run.inputTokens === null && run.outputTokens === null) {
+      totals.unmeasuredRuns += 1;
+      continue;
+    }
+    const cost = run.costUsd ?? 0;
+    const inputTokens = run.inputTokens ?? 0;
+    const outputTokens = run.outputTokens ?? 0;
+    totals.costUsd = roundUsd(totals.costUsd + cost);
+    totals.inputTokens += inputTokens;
+    totals.outputTokens += outputTokens;
+    if (run.cacheReadTokens !== null && run.cacheCreationTokens !== null) {
+      totals.cacheReadTokens += run.cacheReadTokens;
+      totals.cacheCreationTokens += run.cacheCreationTokens;
+      totals.cacheMeasuredInputTokens += inputTokens;
+    }
+    totals.turns += run.numTurns ?? 0;
+    totals.measuredRuns += 1;
+
+    const phaseTotal = phaseTotals.get('local') ?? {
+      phase: 'local' as const,
+      ...PHASE_COPY.local,
+      costUsd: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      runs: 0,
+    };
+    phaseTotal.costUsd = roundUsd(phaseTotal.costUsd + cost);
+    phaseTotal.inputTokens += inputTokens;
+    phaseTotal.outputTokens += outputTokens;
+    phaseTotal.runs += 1;
+    phaseTotals.set('local', phaseTotal);
+
+    runs.push({
+      id: run.id,
+      kind: 'local',
+      originRef: run.originRef,
+      // The branch it was pointed at, which is the one thing about a local run that
+      // is not on its origin — two runs of one goal are told apart by nothing else.
+      title: `Local run · ${run.ref}`,
+      phase: 'local',
+      issueNumber: rollup.localRunAttribution.get(run.id) ?? null,
+      costUsd: cost,
+      inputTokens,
+      outputTokens,
+      numTurns: run.numTurns,
+      startedAt: run.startedAt,
+      endedAt: run.endedAt,
     });
   }
 
@@ -550,7 +659,7 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
     lostCostUsd,
     runs: [...runs].sort((a, b) => b.costUsd - a.costUsd).slice(0, TOP_RUNS),
     rankedFrom: runs.length,
-    timeline: bucketise(usageEvents, span),
+    timeline: bucketise(costDeltas, span),
   };
 }
 
@@ -562,7 +671,7 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
  * outside it is a clock skew rather than history, and a spike drawn on day one
  * that nothing spent there is worse than a missing point.
  */
-function bucketise(events: readonly UsageEvent[], span: TimelineSpan): SpendTimeline {
+function bucketise(events: readonly CostDelta[], span: TimelineSpan): SpendTimeline {
   const buckets: SpendBucket[] = Array.from({ length: span.buckets }, (_, i) => ({
     startsAt: new Date(span.startMs + i * span.bucketMs).toISOString(),
     costUsd: 0,

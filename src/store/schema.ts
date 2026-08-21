@@ -1075,6 +1075,18 @@ CREATE TABLE IF NOT EXISTS local_runs (
   ended_at   TEXT
 );
 
+-- One dated cost delta per usage report a local run's sessions made -- the sibling
+-- of usage_events, and separate from it because that table's agent_id is the join
+-- the reliability breakdown prices a pull request's CI through. A row says what a
+-- run came to and never when the money went, so a rolling window or a trend can
+-- only be read off these.
+CREATE TABLE IF NOT EXISTS local_run_cost_deltas (
+  local_run_id TEXT NOT NULL,
+  cost_usd     REAL NOT NULL,
+  at           TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_local_run_cost_deltas_at ON local_run_cost_deltas(at);
 CREATE INDEX IF NOT EXISTS idx_local_runs_status ON local_runs(status);
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);

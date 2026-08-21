@@ -1,5 +1,7 @@
+import type { SpendInsights } from '../types.js';
+
 /**
- * The formatting and geometry the Insights tabs share.
+ * The formatting, geometry and one-line readings the Insights tabs share.
  *
  * These were declared twice — once in the spend panel and once in the
  * reliability one — with identical bodies, which was harmless while the two were
@@ -60,3 +62,16 @@ export function fmtDuration(ms: number | null): string {
  * one and looks for it on the other finds it somewhere else.
  */
 export const PLOT = { left: 34, right: 596, top: 10, bottom: 152 };
+
+/**
+ * What local runs came to — the `local` phase's own figure, read off the phase
+ * table rather than summed again, so the two cannot disagree.
+ *
+ * Shared because two tabs need it and neither owns it: Economics puts it in the
+ * export, and Work mix says it out loud, because the task-type table is keyed on
+ * the dispatch rule that sent the agent and **nothing dispatched a local run** —
+ * so that money is in the total above the table and in none of its rows.
+ */
+export function localPhaseCostUsd(insights: SpendInsights): number {
+  return insights.phases.find((p) => p.phase === 'local')?.costUsd ?? 0;
+}

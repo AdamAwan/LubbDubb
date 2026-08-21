@@ -1,7 +1,7 @@
 import type { JSX } from 'react';
 import type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun, SpendTrend } from '../types.js';
 import { fmtTokens, fmtUsd, relTime } from './util.js';
-import { fmtShare, share, PLOT } from './insightsFormat.js';
+import { fmtShare, localPhaseCostUsd, share, PLOT } from './insightsFormat.js';
 import { Ref } from './refs.js';
 import { toCsv } from './Downloads.js';
 
@@ -177,6 +177,7 @@ function Ratio({ insights }: { insights: SpendInsights }): JSX.Element {
 export function spendCsv(insights: SpendInsights, trend: SpendTrend | null = null): string {
   const { totals, phases, goals, runs, timeline, taskTypes, checks } = insights;
   const order = phases.map((p) => p.phase);
+  const localCost = localPhaseCostUsd(insights);
 
   return toCsv([
     ['Totals'],
@@ -218,6 +219,9 @@ export function spendCsv(insights: SpendInsights, trend: SpendTrend | null = nul
     ['Task types'],
     ['Rule', 'Label', 'Rationale', 'Cost (USD)', 'Runs', 'Per run (USD)'],
     ...taskTypes.map((t) => [t.rule, t.label, t.description, t.costUsd, t.runs, t.perRunUsd]),
+    // The remainder, stated for the reason every other one is: a rule-keyed table
+    // cannot hold a run that was never dispatched by a rule.
+    ...(localCost > 0 ? [['', 'Local runs — no dispatch rule', localCost]] : []),
     [],
 
     ['Failing checks'],
@@ -254,7 +258,9 @@ export function spendCsv(insights: SpendInsights, trend: SpendTrend | null = nul
 
     ['Runs'],
     [
-      'Agent',
+      // Not 'Agent': half of these can be a local run, and its id is not one.
+      'Run',
+      'Kind',
       'Origin',
       'Title',
       'Phase',
@@ -267,7 +273,8 @@ export function spendCsv(insights: SpendInsights, trend: SpendTrend | null = nul
       'Ended (ISO)',
     ],
     ...runs.map((r) => [
-      r.agentId,
+      r.id,
+      r.kind,
       r.originRef,
       r.title,
       r.phase,
@@ -624,9 +631,9 @@ function Runs({ runs, rankedFrom }: { runs: readonly SpendRun[]; rankedFrom: num
         </thead>
         <tbody>
           {runs.map((r) => (
-            <tr key={r.agentId}>
+            <tr key={r.id}>
               <td>
-                <span className="nm">{r.title ?? r.originRef ?? r.agentId}</span>
+                <span className="nm">{r.title ?? r.originRef ?? r.id}</span>
                 <span className="bl mono">
                   {r.originRef === null ? 'no origin' : <Ref to={r.originRef} label={r.originRef} />}
                 </span>

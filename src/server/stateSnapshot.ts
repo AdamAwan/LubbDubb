@@ -370,10 +370,16 @@ export function buildStateSnapshot(
     ],
     resolve: (ref) => connector.resolveRefUrl(ref),
   });
-  // What every goal has cost, from the same `agents` rows the fleet list ships.
-  // The work graph is read (not the world) because it never forgets a merged pull
-  // request: a goal's total must not fall when its PRs age out of `closedPrs`.
-  const spend = rollUpIssueSpend({ agents, tasks, nodes: store.listWorkNodes() });
+  // What every goal has cost, from the same `agents` rows the fleet list ships —
+  // plus its local runs, which are billed to the same account and named by the same
+  // origin. The work graph is read (not the world) because it never forgets a merged
+  // pull request: a goal's total must not fall when its PRs age out of `closedPrs`.
+  const spend = rollUpIssueSpend({
+    agents,
+    tasks,
+    nodes: store.listWorkNodes(),
+    localRuns: store.listLocalRuns(),
+  });
   // The per-issue enrichment, hoisted so a live world issue and a retained
   // completion synthesized below go through one path — the reasons the pickup and
   // conclusion verdicts are computed here rather than in the browser apply to both,
@@ -917,6 +923,11 @@ function buildEnvironmentReach(store: System['store'], environments: Environment
     readings: store.listEnvironmentReach(),
     nodes: store.listWorkNodes(),
     landed: store.landedPrs(),
+    // The denominator is the goal's *work*: a plan's parts that have yet to merge
+    // are counted alongside its landings, so the first of four parts arriving is
+    // not the goal arriving.
+    plans: store.listPlans(),
+    parts: store.listAllPlanParts(),
     environments,
   }).map((goal) => ({
     ...goal,

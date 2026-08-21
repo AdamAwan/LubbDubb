@@ -75,6 +75,7 @@ function insights(over: Partial<SpendInsights> = {}): SpendInsights {
     landing: 0,
     ci: 0,
     evidence: 0,
+    local: 0,
     job: 0,
     other: 0,
   });
@@ -111,6 +112,7 @@ function insights(over: Partial<SpendInsights> = {}): SpendInsights {
         inputTokens: 1000,
         outputTokens: 100,
         agents: 2,
+        localRuns: 0,
         title: 'Rework the intake, "properly"',
         byPhase: { ...zero(), deliberation: 0.001, build: 0.002 },
         lastAt: '2026-08-13T08:00:00.000Z',
@@ -119,7 +121,8 @@ function insights(over: Partial<SpendInsights> = {}): SpendInsights {
     unattributedCostUsd: 0.001,
     runs: [
       {
-        agentId: 'a1',
+        id: 'a1',
+        kind: 'agent',
         originRef: 'issue:7',
         title: 'Plan it',
         phase: 'deliberation',

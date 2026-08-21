@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildSpendInsights } from '../src/spendInsights.js';
-import type { Agent, Issue, IssueRun, Task, UsageEvent, WorkNode, WorldEvent } from '../src/types.js';
+import type { Agent, CostDelta, Issue, IssueRun, LocalRun, Task, WorkNode, WorldEvent } from '../src/types.js';
 import { resolveWindow, type InsightsWindow } from '../src/insightsWindow.js';
 
 /**
@@ -102,6 +102,28 @@ function run(number: number, title: string): IssueRun {
   };
 }
 
+function localRun(id: string, originRef: string, over: Partial<LocalRun> = {}): LocalRun {
+  return {
+    id,
+    originRef,
+    ref: 'issue/9/one',
+    dir: '/preview',
+    pid: 2,
+    status: 'stopped',
+    url: null,
+    note: null,
+    startedAt: T,
+    endedAt: T,
+    costUsd: 1,
+    inputTokens: 1000,
+    outputTokens: 100,
+    cacheReadTokens: null,
+    cacheCreationTokens: null,
+    numTurns: 4,
+    ...over,
+  };
+}
+
 function build(
   over: {
     agents?: Agent[];
@@ -109,18 +131,20 @@ function build(
     nodes?: WorkNode[];
     issues?: Issue[];
     runs?: IssueRun[];
-    usageEvents?: UsageEvent[];
+    localRuns?: LocalRun[];
+    costDeltas?: CostDelta[];
     mergeEvents?: WorldEvent[];
   },
   key: InsightsWindow = '30d',
 ) {
   return buildSpendInsights({
     agents: over.agents ?? [],
+    localRuns: over.localRuns ?? [],
     tasks: over.tasks ?? [],
     nodes: over.nodes ?? [],
     issues: over.issues ?? [],
     runs: over.runs ?? [],
-    usageEvents: over.usageEvents ?? [],
+    costDeltas: over.costDeltas ?? [],
     mergeEvents: over.mergeEvents ?? [],
     window: resolveWindow(key, NOW),
     now: NOW,
@@ -264,6 +288,70 @@ test('a run that reported nothing is counted as unmeasured and priced nowhere', 
 });
 
 /**
+ * The second source of spend, and the reason it is a phase rather than a footnote:
+ * the panel states its total beside the gauge an operator opened it from, so money
+ * that is in one and not the other is two answers to one question.
+ */
+test('local runs are a phase of the same money, and the partition still closes', () => {
+  const insights = build({
+    agents: [agent('a1', { costUsd: 2 })],
+    tasks: [task('a1', 'issue:9:part:one')],
+    localRuns: [localRun('r1', 'issue:9', { costUsd: 0.5 }), localRun('r2', 'issue:9', { costUsd: 0.25 })],
+  });
+
+  assert.equal(insights.totals.costUsd, 2.75);
+  assert.equal(insights.totals.measuredRuns, 3, 'a local run is a run: the panel speaks for it too');
+  const local = insights.phases.find((p) => p.phase === 'local');
+  assert.equal(local?.costUsd, 0.75);
+  assert.equal(local?.runs, 2);
+  // Reading order is funnel order, and a preview comes after the evidence and before
+  // the work nobody asked a goal for.
+  assert.deepEqual(
+    insights.phases.map((p) => p.phase),
+    ['build', 'local'],
+  );
+
+  const goal = insights.goals[0];
+  assert.equal(goal?.costUsd, 2.75, 'the same figure the goal’s own card carries');
+  assert.equal(goal?.localRuns, 2);
+  assert.equal(goal?.byPhase.local, 0.75);
+  const summed = Object.values(goal?.byPhase ?? {}).reduce((a, b) => a + b, 0);
+  assert.equal(Math.round(summed * 1e6) / 1e6, goal?.costUsd);
+  assert.equal(
+    insights.phases.reduce((a, p) => a + p.costUsd, 0),
+    insights.totals.costUsd,
+    'every phase, back to the total',
+  );
+});
+
+test('a local run ranks among the costliest runs, named by its branch', () => {
+  const insights = build({
+    agents: [agent('a1', { costUsd: 0.4 })],
+    tasks: [task('a1', 'issue:9:part:one')],
+    localRuns: [localRun('r1', 'issue:9', { costUsd: 3, ref: 'issue/9/one' })],
+  });
+
+  const top = insights.runs[0];
+  assert.equal(top?.id, 'r1');
+  assert.equal(top?.kind, 'local');
+  // Nothing dispatched it, so there is no task title to name it by — and two runs of
+  // one goal are told apart by nothing except the branch each was pointed at.
+  assert.equal(top?.title, 'Local run · issue/9/one');
+  assert.equal(top?.issueNumber, 9);
+  assert.equal(insights.rankedFrom, 2);
+});
+
+test('an unmeasured local run is counted once and priced nowhere', () => {
+  const insights = build({
+    localRuns: [localRun('r1', 'issue:9', { costUsd: null, inputTokens: null, outputTokens: null, numTurns: null })],
+  });
+  assert.equal(insights.totals.unmeasuredRuns, 1);
+  assert.equal(insights.totals.costUsd, 0);
+  assert.equal(insights.phases.length, 0);
+  assert.equal(insights.runs.length, 0);
+});
+
+/**
  * The cached split is a *part* of the input, and the fraction it forms is over
  * the runs that reported one — never over the fleet's whole input. A run from
  * before the split was recorded measured a gross figure and nothing about its
@@ -319,12 +407,12 @@ test('goals rank by cost, titled where the world still knows them', () => {
 test('the timeline buckets dated deltas and drops what falls outside the window', () => {
   const day = 24 * 60 * 60 * 1000;
   const insights = build({
-    usageEvents: [
-      { agentId: 'a1', costUsd: 1.5, at: new Date(NOW - 1000).toISOString() },
-      { agentId: 'a1', costUsd: 0.25, at: new Date(NOW - 1000).toISOString() },
-      { agentId: 'a2', costUsd: 4, at: new Date(NOW - 3 * day).toISOString() },
-      { agentId: 'a3', costUsd: 99, at: new Date(NOW - 40 * day).toISOString() },
-      { agentId: 'a4', costUsd: 7, at: 'not a date' },
+    costDeltas: [
+      { costUsd: 1.5, at: new Date(NOW - 1000).toISOString() },
+      { costUsd: 0.25, at: new Date(NOW - 1000).toISOString() },
+      { costUsd: 4, at: new Date(NOW - 3 * day).toISOString() },
+      { costUsd: 99, at: new Date(NOW - 40 * day).toISOString() },
+      { costUsd: 7, at: 'not a date' },
     ],
   });
 
@@ -452,4 +540,37 @@ test('landed counts merges, and what never landed counts faults only', () => {
   assert.equal(insights.landed, 2);
   assert.equal(insights.lostCostUsd, 5, 'failed and crashed only — a killed run cost what it cost and is not waste');
   assert.equal(insights.totals.costUsd, 14, 'every run is still in the total, whatever it was doing');
+});
+
+/**
+ * The window cuts both spenders, and by the same rule.
+ *
+ * A local run is a session that held the dev environment for as long as somebody
+ * was looking at it, so it belongs to the window it *finished* in exactly as an
+ * agent does. Cutting only the agents would leave a preview from last month in
+ * this morning's total — and it would show up as the `local` phase row failing to
+ * add up against a bar drawn from the same figure.
+ */
+test('a local run obeys the window the agents do', () => {
+  const day = 24 * 60 * 60 * 1000;
+  const nodes = [node('issue:9', null)];
+  const inside = localRun('lr1', 'issue:9', {
+    costUsd: 2,
+    startedAt: new Date(NOW - 2 * day).toISOString(),
+    endedAt: new Date(NOW - 2 * day).toISOString(),
+  });
+  const outside = localRun('lr2', 'issue:9', {
+    costUsd: 40,
+    startedAt: new Date(NOW - 40 * day).toISOString(),
+    endedAt: new Date(NOW - 40 * day).toISOString(),
+  });
+
+  const month = build({ localRuns: [inside, outside], nodes });
+  assert.equal(month.totals.costUsd, 2);
+  assert.equal(month.phases.find((p) => p.phase === 'local')?.costUsd, 2);
+  assert.equal(month.goals.find((g) => g.issueNumber === 9)?.byPhase.local, 2);
+
+  const all = build({ localRuns: [inside, outside], nodes }, 'all');
+  assert.equal(all.totals.costUsd, 42);
+  assert.equal(all.phases.find((p) => p.phase === 'local')?.costUsd, 42);
 });

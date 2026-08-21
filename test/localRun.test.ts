@@ -2,8 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { EventEmitter } from 'node:events';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import Database from 'better-sqlite3';
 import { WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { gitRepo } from './support/gitRepo.js';
 import { Store } from '../src/store/store.js';
@@ -412,6 +414,126 @@ test('a restart settles the rows it cannot vouch for', () => {
   assert.equal(store.endStaleLocalRuns('the harness restarted'), 1);
   assert.equal(store.liveLocalRun(), null);
   assert.match(store.currentLocalRun()?.note ?? '', /restarted/);
+  store.close();
+});
+
+// -- what it costs -----------------------------------------------------------
+
+/** One cumulative report, in the shape the stream runtime emits it. */
+function usage(costUsd: number, turns: number) {
+  return {
+    costUsd,
+    inputTokens: turns * 1000,
+    outputTokens: turns * 50,
+    cacheReadTokens: turns * 700,
+    cacheCreationTokens: turns * 60,
+    numTurns: turns,
+  };
+}
+
+test('what the session spends lands on the run, cumulative reports and all', async () => {
+  const { runner, store, sessions } = build();
+  await runner.start('issue:284');
+  const session = sessions[0];
+
+  // Cumulative, as the runtime ships it: the second report is the session's whole
+  // life, not its last turn. Read as a delta it would double the bill.
+  session?.emit('usage', usage(0.4, 3));
+  session?.emit('usage', usage(1.1, 8));
+
+  const run = store.currentLocalRun();
+  assert.equal(run?.costUsd, 1.1);
+  assert.equal(run?.numTurns, 8);
+  assert.equal(run?.inputTokens, 8000);
+  store.close();
+});
+
+/**
+ * The regression the accumulate rule exists for. A teardown by a *fresh* session
+ * reports its own cumulative total, which starts at zero — folded onto the row it
+ * would replace the bring-up's spend with the teardown's, downwards, and clamped as
+ * a delta it would report nothing at all. Both under-report in silence.
+ */
+test('a teardown by a fresh session adds to the run rather than replacing it', async () => {
+  const first = build({ stopInstruction: 'Run /dev-environment stop.' });
+  await first.runner.start('issue:284');
+  first.sessions[0]?.emit('usage', usage(2, 12));
+
+  // A second runner over the same database: the row is live and nothing holds it,
+  // which is what a restart leaves behind.
+  const second = build({ store: first.store, stopInstruction: 'Run /dev-environment stop.' });
+  const stopping = second.runner.stop();
+  const stopper = second.sessions[0];
+  stopper?.emit('usage', usage(0.15, 2));
+  stopper?.emit('done');
+  await stopping;
+
+  const run = first.store.currentLocalRun();
+  assert.equal(run?.costUsd, 2.15, 'the stop is part of what the run cost');
+  assert.equal(run?.numTurns, 14);
+  first.store.close();
+});
+
+test('a run that reports nothing stays unmeasured, not free', async () => {
+  const { runner, store } = build();
+  await runner.start('issue:284');
+  // The PTY runtime has no usage channel at all, so this is every run on a
+  // deployment in that mode. Null, because $0.00 would describe it as free.
+  assert.equal(store.currentLocalRun()?.costUsd, null);
+  assert.equal(store.currentLocalRun()?.numTurns, null);
+  store.close();
+});
+
+test('a local run’s money is in the rolling window, dated', async () => {
+  const { runner, store, sessions } = build();
+  await runner.start('issue:284');
+  sessions[0]?.emit('usage', usage(0.75, 4));
+
+  // The same sum the cost gauges and the pets' beats read. Agents and local runs are
+  // money on one account, and this is the one place the two are added.
+  assert.equal(store.sumUsageCostSince('2000-01-01T00:00:00.000Z'), 0.75);
+  const deltas = store.listCostDeltasSince('2000-01-01T00:00:00.000Z');
+  assert.equal(deltas.length, 1);
+  assert.equal(deltas[0]?.costUsd, 0.75);
+  // And not among the agents' own, which the reliability breakdown joins by id.
+  assert.deepEqual(store.listUsageEventsSince('2000-01-01T00:00:00.000Z'), []);
+  store.close();
+});
+
+/**
+ * A deployment that took this build has a `local_runs` table from before the usage
+ * columns existed. `CREATE TABLE IF NOT EXISTS` never alters an existing table, so
+ * without an entry in `LOCAL_RUN_COLUMNS` the columns are invisible there — every
+ * read `undefined`, every write a thrown statement, and a fresh clone that passes.
+ */
+test('a database from before the columns reads them as unmeasured, and can be written', () => {
+  const path = join(mkdtempSync(join(tmpdir(), 'lubbdubb-lr-')), 'db.sqlite');
+  const old = new Database(path);
+  old.exec(`CREATE TABLE local_runs (
+      id TEXT PRIMARY KEY, origin_ref TEXT NOT NULL, ref TEXT NOT NULL, dir TEXT NOT NULL,
+      pid INTEGER, status TEXT NOT NULL, url TEXT, note TEXT, started_at TEXT NOT NULL, ended_at TEXT)`);
+  old
+    .prepare(
+      `INSERT INTO local_runs (id, origin_ref, ref, dir, status, started_at)
+     VALUES ('r-old', 'issue:9', 'issue/9', '/preview', 'stopped', '2026-08-01T00:00:00.000Z')`,
+    )
+    .run();
+  old.close();
+
+  const store = new Store(path);
+  const run = store.currentLocalRun();
+  assert.equal(run?.id, 'r-old');
+  assert.equal(run?.costUsd, null, 'that run measured nothing, which is not the same as costing nothing');
+  store.addLocalRunUsage('r-old', {
+    costUsd: 0.2,
+    inputTokens: 100,
+    outputTokens: 10,
+    cacheReadTokens: null,
+    cacheCreationTokens: null,
+    numTurns: 1,
+  });
+  assert.equal(store.currentLocalRun()?.costUsd, 0.2);
+  assert.equal(store.sumUsageCostSince('2000-01-01T00:00:00.000Z'), 0.2, 'and the deltas table was created too');
   store.close();
 });
 

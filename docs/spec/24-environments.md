@@ -340,21 +340,47 @@ environment.
 and a release cut between two of them puts half a feature in production. Folded to a boolean, that
 reads as "shipped" — wrong in the expensive direction.
 
+**The denominator is the goal's work, not its merges.** A plan is cut into parts up front and they
+merge one at a time, so a fraction counting only what has landed is whole on the day the _first_ part
+merges: the environment holding one of four parts read `reached`, the arrival was recorded, its
+comment went out and its gates opened — on a quarter of the feature, with nothing red and nothing to
+suggest the other three parts were ever coming. So `total` counts the parts the goal still owes a
+merge as well, and each of them counts as **`absent`, never `unresolved`**: a part with no commit yet
+is not a question the probe could have answered, and reading it as `unknown` would send an operator
+looking at a probe that is working perfectly.
+
+`partsOwed` decides what is still owed, and its three exclusions are each the difference between a
+fraction that closes and one that never does:
+
+- a **settled** part (merged or concluded) is done being owed — and a merged one is already in the
+  count as its landing, so counting it twice would halve every planned goal's reading;
+- a **retired** part was un-planned by an amendment and is not work any more; likewise every part of
+  an **abandoned** plan, since the plan is the thing that claimed they were work;
+- a part expected to produce anything **other than code** never merges anything. A report, a
+  determination or a person's hand-check left in the denominator sits there for good: the goal reads
+  `partial` in an environment holding every commit it has, its arrival is never recorded, its comment
+  never posted and its gated `validate` and `close_out` rows never filed. That is a goal held off the
+  bench for ever by a part with nothing to deploy, and it is silent — the card reads `3/4` and looks
+  exactly like work waiting on a release. `expectedKind` null reads as `code`, as everywhere else.
+
+It is a rule about the **denominator only**. The goal set is unchanged: a plan whose first part has
+yet to merge is still dropped rather than drawn `0/4` on every environment from the day it was cut.
+
 **`unknown` beats `absent`.** Nothing may report work as not-deployed on the strength of a probe that
 could not answer, or a merge whose commit nobody caught. So:
 
-| Counts                                              | Status    |
-| --------------------------------------------------- | --------- |
-| no merges at all                                    | `absent`  |
-| every landing confirmed                             | `reached` |
-| some confirmed, some not                            | `partial` |
-| none confirmed, something unresolved                | `unknown` |
-| none confirmed, every landing asked and answered no | `absent`  |
+| Counts                                                         | Status    |
+| -------------------------------------------------------------- | --------- |
+| nothing owed at all                                            | `absent`  |
+| every landing confirmed, and nothing still owed a merge        | `reached` |
+| some confirmed, some not                                       | `partial` |
+| none confirmed, something unresolved                           | `unknown` |
+| none confirmed, and everything owed is unmerged or answered no | `absent`  |
 
 `total` counts the goal's landings **plus** its merges the sweep could not attribute
-(`unattributedMerges`), which is read from the work graph rather than the world for the reason above:
-a world-only count would report every goal fully accounted for the moment its merges aged out of the
-closed window.
+(`unattributedMerges`) **plus** the plan parts it still owes a merge (`partsOwed`). The middle term is
+read from the work graph rather than the world for the reason above: a world-only count would report
+every goal fully accounted for the moment its merges aged out of the closed window.
 
 `at` is the _newest_ reading among a fully-reached goal's landings — the moment the whole goal was
 there, not the moment the first part of it arrived. It is also what an arrival is stamped with, and
@@ -379,7 +405,9 @@ it.
 The goal page draws an **Environments** card under the pull requests, one row per configured
 environment, with the count on every row that is not whole: `0/3` and `2/3` are the difference
 between work that has not started moving and work that is halfway there, and the word alone says
-neither. The tones are ones the cockpit already defines — `partial` takes the _attention_ tone rather
+neither. Each row's sentence says **work**, not merges — the count includes a plan's unmerged parts,
+so a row reading `some of this goal's merges are here` beside `1/4` would be a sentence disagreeing
+with the number next to it. The tones are ones the cockpit already defines — `partial` takes the _attention_ tone rather
 than a success one, because half a feature in production is the state most likely to want somebody.
 
 Each row that opens something says so (`opens the validation checks and the close-out`), on the row

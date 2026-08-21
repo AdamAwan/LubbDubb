@@ -1,4 +1,4 @@
-import type { Agent, IssueSpend, TaskSummary, WorkNode } from './types.js';
+import type { Agent, IssueSpend, LocalRun, TaskSummary, WorkNode } from './types.js';
 import { issueOrigin } from './plans/planning.js';
 
 /**
@@ -29,6 +29,15 @@ import { issueOrigin } from './plans/planning.js';
  * are reduced to the node they concern before the walk starts, since only `pr:41`
  * is ever a node.
  *
+ * ## Local runs are the second source
+ *
+ * A goal's money is not only its agents'. Bringing its branch up on the operator's
+ * own machine is a Claude Code session billed to the same account
+ * ([23](../docs/spec/23-local-runs.md#what-it-costs)), and its origin *is* the goal —
+ * so it resolves by name through the same walk, with no lineage hop to make. It is
+ * counted apart from the agents in {@link IssueSpend.localRuns} because the cockpit
+ * prints that count as "Agents"; the money is one figure, because it was one goal's.
+ *
  * ## Unattributed is shipped, not swallowed
  *
  * An origin that reaches no issue — an operator's job nobody linked, an agent
@@ -40,12 +49,14 @@ import { issueOrigin } from './plans/planning.js';
  * beneath it is the visible symptom that says so.
  */
 
-/** Everything the roll-up reads — all three lists the snapshot already holds. */
+/** Everything the roll-up reads — all four lists the snapshot already holds. */
 interface SpendInput {
   agents: readonly Agent[];
   tasks: readonly TaskSummary[];
   /** The durable work graph: how a pull request's or a job's spend finds its goal. */
   nodes: readonly WorkNode[];
+  /** Every local run the harness has recorded — the second source of a goal's spend. */
+  localRuns: readonly LocalRun[];
 }
 
 interface SpendRollup {
@@ -53,6 +64,13 @@ interface SpendRollup {
   byIssue: Map<string, IssueSpend>;
   /** Spend that reached no issue. Never folded into a goal, never dropped. */
   unattributedCostUsd: number;
+  /**
+   * Which goal each *measured* local run's spend was folded into, on the same terms
+   * as {@link SpendRollup.attribution}. Keyed on the run's id, and a map of its own
+   * because a run id and an agent id are different namespaces — one map would let a
+   * caller ask the wrong question and be answered.
+   */
+  localRunAttribution: Map<string, number | null>;
   /**
    * Which goal each *measured* agent's spend was folded into, `null` for the ones
    * that reached none. Agent id → issue number; an agent that reported no usage
@@ -99,7 +117,24 @@ export function rollUpIssueSpend(input: SpendInput): SpendRollup {
   const parentOf = new Map(input.nodes.map((n) => [n.ref, n.parentRef]));
   const byIssue = new Map<string, IssueSpend>();
   const attribution = new Map<string, number | null>();
+  const localRunAttribution = new Map<string, number | null>();
   let unattributedCostUsd = 0;
+
+  /** A goal's row, created on first sight — one shape, whichever source reached it. */
+  const rowFor = (issueNumber: number): IssueSpend => {
+    const ref = issueOrigin(issueNumber);
+    const spend = byIssue.get(ref) ?? {
+      originRef: ref,
+      issueNumber,
+      costUsd: 0,
+      inputTokens: 0,
+      outputTokens: 0,
+      agents: 0,
+      localRuns: 0,
+    };
+    byIssue.set(ref, spend);
+    return spend;
+  };
 
   for (const agent of input.agents) {
     // A runtime that reported nothing (PTY mode, or a run that ended before its
@@ -114,22 +149,30 @@ export function rollUpIssueSpend(input: SpendInput): SpendRollup {
       unattributedCostUsd = roundUsd(unattributedCostUsd + cost);
       continue;
     }
-    const ref = issueOrigin(issueNumber);
-    const spend = byIssue.get(ref) ?? {
-      originRef: ref,
-      issueNumber,
-      costUsd: 0,
-      inputTokens: 0,
-      outputTokens: 0,
-      agents: 0,
-    };
+    const spend = rowFor(issueNumber);
     spend.costUsd = roundUsd(spend.costUsd + cost);
     spend.inputTokens += agent.inputTokens ?? 0;
     spend.outputTokens += agent.outputTokens ?? 0;
     spend.agents += 1;
-    byIssue.set(ref, spend);
   }
-  return { byIssue, unattributedCostUsd, attribution };
+
+  for (const run of input.localRuns) {
+    // The silence kept for an agent, kept for a run: one that reported nothing is
+    // unmeasured rather than free, and under `agentMode: 'pty'` they all are.
+    if (run.costUsd === null && run.inputTokens === null && run.outputTokens === null) continue;
+    const issueNumber = issueBehind(run.originRef, parentOf);
+    localRunAttribution.set(run.id, issueNumber);
+    if (issueNumber === null) {
+      unattributedCostUsd = roundUsd(unattributedCostUsd + (run.costUsd ?? 0));
+      continue;
+    }
+    const spend = rowFor(issueNumber);
+    spend.costUsd = roundUsd(spend.costUsd + (run.costUsd ?? 0));
+    spend.inputTokens += run.inputTokens ?? 0;
+    spend.outputTokens += run.outputTokens ?? 0;
+    spend.localRuns += 1;
+  }
+  return { byIssue, unattributedCostUsd, attribution, localRunAttribution };
 }
 
 /** The goal an origin's spend belongs to: by name if it can be, by lineage otherwise. */

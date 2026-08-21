@@ -126,9 +126,29 @@ Two mode-specific sources that must not be conflated.
   5h and weekly windows.
 
 `buildUsage` in the snapshot therefore ships both: `windows.fiveHourCostUsd` and
-`windows.sevenDayCostUsd` are plain `SUM`s over `usage_events` (available in every mode, because they
-are self-computed), and `rateLimits` is the freshest status-line reading or `null`. The cockpit chip
+`windows.sevenDayCostUsd` are `Store.sumUsageCostSince` (available in every mode, because it is
+self-computed), and `rateLimits` is the freshest status-line reading or `null`. The cockpit chip
 prefers the real limits and falls back to cost.
+
+### Two tables of deltas, added in one place
+
+A local run is a session too, and its money is dated the same way — but in
+`local_run_cost_deltas` rather than `usage_events` ([23](23-local-runs.md#what-it-costs)). Two tables,
+because `usage_events.agent_id` is `NOT NULL` and is the **join** the reliability breakdown prices a
+pull request's CI through: a local run id in that column would be a row that can never match, dressed
+as one that should.
+
+So the addition happens once, in `src/store/store.ts`:
+
+- `sumUsageCostSince` is both tables, because the question it answers — what has this deployment spent
+  in this window — has one answer. It is what the gauges draw and what the pets' beats are earned from
+  ([22](22-pets.md#the-two-economies)).
+- `listCostDeltasSince` is both, merged and dated, for the timeline.
+- `listUsageEventsSince` is the **agents' alone**, deliberately, for the one reader that needs to know
+  whose.
+
+A third source of spend is added in that method, or it is money the cockpit states nowhere while
+claiming to state all of it.
 
 ### Dollars are net of cache, tokens are gross
 
@@ -273,10 +293,12 @@ splits of one pot of money, plus the coverage caveat:
 
 - **By phase** — `deliberation` (`:plan`, `:assay`), `build` (the pickup root and every `:part:`),
   `ci` (`pr:<n>:ci`, `pr:<n>:ci-gate`), `landing` (every other `pr:*`), `evidence` (`:assess`,
-  `:retro`), `job` (`job:*`) and `other`. A partition: they sum to the fleet total. The issue-subtree
-  phases are `issueOriginRole`'s vocabulary rather than a second one, so **a new origin suffix is
-  classified in exactly one place** — an unrecognised suffix surfaces as `other` rather than being
-  folded into whichever neighbour looked closest.
+  `:retro`), `local` (a local run), `job` (`job:*`) and `other`. A partition: they sum to the fleet
+  total. The issue-subtree phases are `issueOriginRole`'s vocabulary rather than a second one, so **a
+  new origin suffix is classified in exactly one place** — an unrecognised suffix surfaces as `other`
+  rather than being folded into whichever neighbour looked closest. `local` is the one phase that is
+  **not** read off an origin ref, and `phaseOf` is not asked about it: a local run carries the goal's
+  own ref, which is the one shape that would classify as `build`.
 - **By goal** — `rollUpIssueSpend`'s own per-issue totals, ranked, with the phase split inside each
   row and `unattributedCostUsd` as the last row rather than a footnote.
 - **Over time** — rolling buckets over `usage_events` at [the window](#the-window)'s own resolution.
@@ -303,8 +325,10 @@ landing cost" but **"what is `dotnet test` costing me, and what are review comme
 Two rollups answer it, both keyed on columns the dispatcher writes at dispatch time:
 
 - **`Task.rule`** — the `DISPATCH_RULES` id that proposed the task. A partition of every measured
-  run (each has one rule, or `null`, which is a row and not a silence), so review comments get a
-  figure of their own that no phase can give them. Labels come from the registry, never restated.
+  **agent** run (each has one rule, or `null`, which is a row and not a silence), so review comments
+  get a figure of their own that no phase can give them. Labels come from the registry, never
+  restated. Nothing dispatched a local run, so it can hold none — and the panel states that remainder
+  under the table rather than letting a rule-keyed partition read as the whole of the money.
 - **`Task.ciChecks`** — the checks a CI dispatch was sent to answer, as the provider names them.
 
 **`decisions.rule` already recorded the same id and could not be used.** A decision row has no link

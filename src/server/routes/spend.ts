@@ -20,7 +20,7 @@ import type { RouteContext } from './context.js';
  * would be a second opinion about which goal a pull request's money belongs to,
  * drawn inches from the first.
  *
- * **The window is a parameter, and the store read takes its `since`.** The two
+ * **The window is a parameter, and every store read takes its `since`.** The two
  * used to be one constant apiece and they disagreed across the three routes;
  * resolving it once and passing the resolution down is what makes "the whole
  * page is about the last 24 hours" a fact rather than an intention.
@@ -34,9 +34,14 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
     checked({ query: InsightsQuery }, async ({ query }) => {
       const now = Date.now();
       const window = resolveWindow(query.window, now);
+      const since = sinceOrEpoch(window.since);
       return {
         insights: buildSpendInsights({
           agents: store.listAgents(),
+          // The fleet is not the only thing spending: a local run is a session on
+          // the same account, and leaving it out here would put the page's total
+          // below the money the goal cards already carry.
+          localRuns: store.listLocalRuns(),
           tasks: store.listTasks(),
           nodes: store.listWorkNodes(),
           // Titles only, and a goal missing from the baseline still gets its row —
@@ -45,11 +50,14 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
           // moment it closes, and the harness's own record of what it worked does not.
           issues: store.getWorldBaseline()?.issues ?? [],
           runs: store.listIssueRuns(),
-          usageEvents: store.listUsageEventsSince(sinceOrEpoch(window.since)),
+          // Every source of dated cost, not the agents' alone: a timeline drawn off
+          // half of them would fall short of the total above it by exactly the local
+          // runs, and nothing on the glass would say which half was missing.
+          costDeltas: store.listCostDeltasSince(since),
           // The fleet's own output, over the same window as the money — which is
           // the pairing the production graph could never make, being a browser-side
           // count over a six-hour window nothing else shared.
-          mergeEvents: store.listWorldEventsOfKindsSince(sinceOrEpoch(window.since), ['pr_merged']),
+          mergeEvents: store.listWorldEventsOfKindsSince(since, ['pr_merged']),
           window,
           now,
         }),
@@ -86,6 +94,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         trend: buildSpendTrend({
           goals: buildSpendGoals({
             agents,
+            localRuns: store.listLocalRuns(),
             tasks: store.listTasks(),
             nodes: store.listWorkNodes(),
             issues: world?.issues ?? [],

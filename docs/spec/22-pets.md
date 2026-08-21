@@ -38,8 +38,10 @@ They are separate on purpose, and the separation is the whole of what keeps the 
 plan, authorising a stack landing, launching a job, triaging a finding. The fleet cannot earn a pet,
 at any spend, ever.
 
-**Beats come from fleet spend.** Cumulative `costUsd` across every recorded usage event, converted
-at `pets.beatsPerDollar`. Money already spent, re-read as pet food.
+**Beats come from fleet spend.** Cumulative `costUsd` across every recorded cost delta — the agents'
+and the local runs' alike ([18](18-observability.md#two-tables-of-deltas-added-in-one-place)) —
+converted at `pets.beatsPerDollar`. Money already spent, re-read as pet food, whichever session spent
+it.
 
 So neither half can be farmed by the half you would not want farmed: the fleet cannot buy itself a
 pet, and no amount of clicking produces a beat. An operator who wants a full vivarium has to use the
@@ -47,16 +49,17 @@ harness; an operator who wants a well-fed one has to have _been_ using it.
 
 ### Beats are derived, never stored
 
-`beatsEarned` is `floor(totalCostUsd × beatsPerDollar)`, computed from `usage_events` at read time.
+`beatsEarned` is `floor(totalCostUsd × beatsPerDollar)`, computed from the dated cost deltas
+(`Store.sumUsageCostSince`) at read time.
 `beatsSpent` is `SUM(beats)` over `pet_purchases`. The balance is the subtraction.
 
 Nothing accumulates a running total into a column, because a running total is a second copy of a
-number the store already holds and drifts from it the first time a write lands twice. `usage_events`
-only ever grows, so the derived figure only ever grows with it — and a restore, a re-import or a
+number the store already holds and drifts from it the first time a write lands twice. Both delta
+tables only ever grow, so the derived figure only ever grows with them — and a restore, a re-import or a
 recount changes the balance to the truth rather than to the truth plus whatever the column had
 remembered.
 
-The one floor under it is a **clearance**: `beatsEarned` counts `usage_events` from the last one's
+The one floor under it is a **clearance**: `beatsEarned` counts deltas from the last one's
 timestamp rather than from the beginning, which is what lets a cleared vivarium start at zero instead
 of opening with every beat the deployment had ever earned. With no clearance recorded the floor is an
 epoch before any timestamp the harness can hold, so the sum is every event there has ever been.

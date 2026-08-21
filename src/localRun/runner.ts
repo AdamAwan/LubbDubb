@@ -5,7 +5,7 @@ import type { ProcessReaper } from '../agents/processTree.js';
 import type { ErrorRecorder } from '../errorLog.js';
 import type { Store } from '../store/store.js';
 import type { Worktrees } from '../worktree/worktreeManager.js';
-import type { LocalRun } from '../types.js';
+import type { AgentUsage, LocalRun } from '../types.js';
 import type { LocalRunChoices } from './ref.js';
 import type { LocalRunPolicy } from './policy.js';
 
@@ -400,7 +400,7 @@ export class LocalRunner extends EventEmitter {
     // the harness holds nothing, so a swap would have started a second stack on the
     // same ports.
     const held = this.session;
-    const fresh = held === null ? this.spawnStopSession(live.dir) : null;
+    const fresh = held === null ? this.spawnStopSession(live.dir, live.id) : null;
     const session = held ?? fresh;
     if (session === null) return 'nothing could be told to stop it, and the session that started it is gone';
     try {
@@ -429,16 +429,17 @@ export class LocalRunner extends EventEmitter {
   }
 
   /** A short-lived session in the run's own checkout, for a stop nothing is left holding. */
-  private spawnStopSession(dir: string): AgentSession | null {
+  private spawnStopSession(dir: string, runId: string): AgentSession | null {
     try {
       const session = this.deps.sessions({
         command: this.deps.claudeCommand,
         args: [...STREAM_TRANSPORT_ARGS, '--permission-mode', this.deps.permissionMode, ...this.deps.claudeArgs],
         cwd: dir,
       });
-      // Its output, but not `wire` — the bring-up's handlers would read this
-      // session's turn ending as the environment coming up.
-      this.absorb(session);
+      // Its output and its usage, but not `wire` — the bring-up's handlers would read
+      // this session's turn ending as the environment coming up. The money goes on the
+      // run it is taking down: the stop is part of what that run cost.
+      this.absorb(session, runId);
       session.start();
       return session;
     } catch (err) {
@@ -504,14 +505,34 @@ export class LocalRunner extends EventEmitter {
   }
 
   /**
-   * Take a session's output into the tail and the stage.
+   * Take a session's output into the tail and the stage, and its usage onto the row.
    *
    * Shared by the session that brings the environment up and by one spawned only to
    * take it down: a teardown an operator is watching needs the same account of itself
    * as a bring-up, and a stop session whose output went nowhere would leave the panel
    * with nothing to say for the minute it takes.
    */
-  private absorb(session: AgentSession): void {
+  private absorb(session: AgentSession, runId: string): void {
+    // Cumulative, per session, held in this closure — which is exactly the scope the
+    // reading belongs to. The row accumulates across sessions (a teardown by a fresh
+    // session is a second one), so what it needs from each is the difference since
+    // that session's own last report; a field the runtime did not report stays null
+    // and adds nothing. A PTY session emits none of this and the run stays unmeasured.
+    let last: AgentUsage | null = null;
+    session.on('usage', (usage: AgentUsage) => {
+      const since = (now: number | null, before: number | null): number | null =>
+        now === null ? null : Math.max(0, now - (before ?? 0));
+      this.deps.store.addLocalRunUsage(runId, {
+        costUsd: since(usage.costUsd, last?.costUsd ?? null),
+        inputTokens: since(usage.inputTokens, last?.inputTokens ?? null),
+        outputTokens: since(usage.outputTokens, last?.outputTokens ?? null),
+        cacheReadTokens: since(usage.cacheReadTokens, last?.cacheReadTokens ?? null),
+        cacheCreationTokens: since(usage.cacheCreationTokens, last?.cacheCreationTokens ?? null),
+        numTurns: since(usage.numTurns, last?.numTurns ?? null),
+      });
+      last = usage;
+      this.emit('changed');
+    });
     session.on('output', (delta: string) => {
       for (const line of delta.split('\n')) {
         if (line.trim() === '') continue;
@@ -528,7 +549,7 @@ export class LocalRunner extends EventEmitter {
   }
 
   private wire(session: AgentSession, id: string): void {
-    this.absorb(session);
+    this.absorb(session, id);
     // The turn ending is the environment being up, which is the whole of what the
     // harness knows: `done` and `waiting` are both "it stopped talking and did not
     // fail", and neither means the process has gone.
