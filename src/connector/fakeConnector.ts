@@ -67,6 +67,10 @@ export class FakeConnector implements Connector, ActionSink {
     return this.composite.setIssueLabel(input);
   }
 
+  canSetWorkItemState(): boolean {
+    return this.composite.canSetWorkItemState();
+  }
+
   setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
     return this.composite.setWorkItemState(input);
   }

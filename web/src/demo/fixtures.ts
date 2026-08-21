@@ -233,6 +233,10 @@ export function buildDemoState(): DemoSeed {
       // The same four states, in workflow order rather than the colours' — the demo's
       // board is a real one, so the order has to be a judgement somebody made.
       boardStates: ['New', 'Ready', 'Active', 'Closed'],
+      // The demo drags for real: a board that looks draggable and is not would teach
+      // a visitor the wrong thing about the product.
+      canSetWorkItemState: true,
+      stateRules: { pickup: ['Ready', 'Active'], inProgress: 'Active', inReview: null, returnsTo: 'Ready' },
       // Cheapest first, as `rank` orders them — the demo's profile controls draw
       // this list in this order.
       profiles: [

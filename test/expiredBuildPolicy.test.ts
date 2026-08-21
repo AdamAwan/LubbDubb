@@ -194,6 +194,7 @@ function azureSink(evals: AzPolicyEvaluation[], requeue: RequeueScript): ActionS
     throw new Error(`${name} is not scripted in this test`);
   };
   return {
+    canSetWorkItemState: () => false,
     requeueCiCheck: (input) => integration.requeueCiCheck(input),
     createIssue: unused('createIssue'),
     postPrReply: unused('postPrReply'),

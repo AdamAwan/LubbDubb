@@ -633,6 +633,33 @@ interface CockpitConfig {
    * config file states.
    */
   boardStates: string[];
+  /**
+   * Whether the provider can write a work item's state — the board's drag, and
+   * nothing else, depends on it.
+   *
+   * A flag rather than left to the cockpit to infer from the provider name, for
+   * `canFileTickets`' reason: the one place that decides is the one the route asks.
+   * False means no card is draggable and the board says so once, above the columns,
+   * rather than every drag failing separately and teaching nothing each time.
+   */
+  canSetWorkItemState: boolean;
+  /**
+   * The state words the three work-item rules act on, so a column header can say
+   * what dropping there disturbs.
+   *
+   * `pickup` is the **effective** set (`effectivePickupStates`), which is what makes
+   * this a quotation of the dispatcher's gate rather than a second opinion about it:
+   * `issueInProgressState` is folded in there and deliberately not listed in
+   * `issuePickupStates`, so a board built from the raw key would warn that dropping
+   * onto the state work is *in* stops the fleet. `returnsTo` is where
+   * `work-item-back-to-pickup` sends an item — the first configured pickup state,
+   * read the way that rule reads it.
+   *
+   * Null when `issuePickupStates` is unset, because all three rules are switched out
+   * entirely by the registry's `workItemStates` condition then: there is nothing a
+   * drop can disturb, and an object of nulls would invite the board to imply there is.
+   */
+  stateRules: { pickup: string[]; inProgress: string | null; inReview: string | null; returnsTo: string | null } | null;
 }
 
 /** Account-level Claude usage: the rolling cost windows, plus real limits when captured. */

@@ -1041,9 +1041,20 @@ forgotten anything.
 Every item the tracker's assignment filter has returned since the harness first swept — worked or
 not, live or frozen — and, since the backlog was folded into it (#351), **the one surface triage
 happens on**. Where the [work tab](#the-work-tab) is the record of what the harness _did_, this is
-what it was **asked** to do, and what you are asking it to do next. It is drawn as a table because it
-is read as one: the tracker id, the ticket, the readings, the cost and the date, each row taking the
-list's tracks by subgrid so the columns line up however long one title runs.
+what it was **asked** to do, and what you are asking it to do next. It has two views — a table and a
+board of state columns — and the table is the default because it is what the tab has always been: the
+tracker id, the ticket, the readings, the cost and the date, each row taking the list's tracks by
+subgrid so the columns line up however long one title runs.
+
+**Two facts about state writes ride on the snapshot**, because neither is the cockpit's to infer.
+`canSetWorkItemState` is asked of the connector — `setWorkItemState` *throws* where no integration
+implements it, so a surface that wants to **offer** the operation rather than attempt it has no other
+way to find out, and inferring it from the provider name would be a second opinion about a capability.
+`stateRules` carries the state words the three work-item rules act on, with `pickup` as the
+**effective** set: `effectivePickupStates` folds `issueInProgressState` in, so a reader built from the
+raw key would report that the state work is *in* is one the harness will not work. It is null where
+`issuePickupStates` is unset, because all three rules are switched out entirely then — the same fact
+the dispatcher acts on, rather than an object of nulls inviting a reader to imply otherwise.
 
 **Why one surface and not two.** The backlog was open items grouped by watch bucket; this tab was the
 same items plus the closed ones, filtered by the same bucket. Two surfaces that can be told different

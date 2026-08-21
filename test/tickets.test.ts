@@ -798,3 +798,58 @@ test('a deployment that configures no board states ships an empty list, not a gu
   // inventing an order here would be a policy no file states.
   assert.deepEqual(body.config.boardStates, []);
 });
+
+test('the cockpit is told whether a state can be written, and which states the rules own', async () => {
+  const config = loadConfig({
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    agentMode: 'raw',
+    heartbeatIntervalMs: 999_999,
+    startPaused: true,
+    issuePickupStates: ['Ready', 'Queued'],
+    issueInProgressState: 'Doing',
+    issueInReviewState: 'In Review',
+  });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
+  await system.harness.runCycle('manual');
+  const { app } = await buildApp(system);
+  const body = (await app.inject({ method: 'GET', url: '/api/state' })).json() as CockpitState;
+
+  assert.equal(body.config.canSetWorkItemState, true, 'the fake issues provider can write states');
+  assert.deepEqual(body.config.stateRules, {
+    // The *effective* set, so the in-progress state is in it — the same list the
+    // dispatcher gates on, quoted rather than re-derived in the browser.
+    pickup: ['Ready', 'Queued', 'Doing'],
+    inProgress: 'Doing',
+    inReview: 'In Review',
+    // Where `work-item-back-to-pickup` returns an item: the first *configured*
+    // pickup state, which is the operator's own "start here".
+    returnsTo: 'Ready',
+  });
+});
+
+test('with no state gate configured there are no rules to report, and null says so', async () => {
+  const config = loadConfig({
+    auth: { enabled: false } as never,
+    dbPath: ':memory:',
+    agentMode: 'raw',
+    heartbeatIntervalMs: 999_999,
+    startPaused: true,
+  });
+  const system = buildSystem(config, {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: () => {},
+  });
+  await system.harness.runCycle('manual');
+  const { app } = await buildApp(system);
+  const body = (await app.inject({ method: 'GET', url: '/api/state' })).json() as CockpitState;
+  // Null rather than an object of nulls: without `issuePickupStates` all three
+  // work-item rules are switched out by the registry's `workItemStates` condition,
+  // so there is nothing for a drop to disturb. The same fact the dispatcher acts on.
+  assert.equal(body.config.stateRules, null);
+});
