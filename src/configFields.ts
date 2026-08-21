@@ -520,8 +520,14 @@ export function configField(path: string): ConfigField | undefined {
   return BY_PATH.get(path);
 }
 
-/** Read a dotted path out of a config object. `undefined` for an unset optional. */
-export function readPath(config: Config, path: string): unknown {
+/**
+ * Read a dotted path out of a config object. `undefined` for an unset optional.
+ *
+ * Takes a `Partial<Config>` because a *layer* is read through it too — the
+ * question "did the project's file set this key" is answered by walking the layer
+ * the file parsed to, and a resolved config cannot answer it.
+ */
+export function readPath(config: Partial<Config>, path: string): unknown {
   let cursor: unknown = config;
   for (const segment of path.split('.')) {
     if (typeof cursor !== 'object' || cursor === null) return undefined;

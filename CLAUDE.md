@@ -111,6 +111,12 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   `upstream`.** Both routes go through `system.upstream`, which defaults to the real `gh` CLI against
   **AdamAwan/LubbDubb** — so a test without `FakeUpstreamIssues` files a live issue on the project's
   own tracker, as whoever is logged in, and passes while doing it. → [15](docs/spec/15-integrations.md)
+- **A test that reads the project config layer injects `projectConfigFile`, or points `repoRoot` at a
+  temp directory.** `lubbdubb.project.json` is read from `repoRoot`, which defaults to
+  `process.cwd()` — and this repo is itself a LubbDubb target, so the day one is committed here every
+  test going through `loadConfigFromText` or `buildSystem`'s default starts merging it, silently and
+  differently from CI. Same hazard as `configFile`, and the same fix.
+  → [02](docs/spec/02-configuration.md#the-project-layer)
 - **A test builds its config with `loadConfig`, never `loadDeploymentConfig`.** Only the latter reads
   `lubbdubb.config.json` and the env overrides — which is the whole distinction: the suite runs in a
   working copy of this repo, so a test on the deployment loader picks up whatever config the
@@ -359,8 +365,14 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
   → [18](docs/spec/18-observability.md)
 - **No secret is ever a config key.** `GITHUB_TOKEN`, `AZURE_DEVOPS_PAT` and `LUBBDUBB_TOKEN` come
   from the environment, so `lubbdubb.config.json` stays safe to paste. Precedence is explicit
-  overrides → `lubbdubb.config.json` → defaults, with `PORT` / `LUBBDUBB_DB` / `LUBBDUBB_HOST` /
-  `LUBBDUBB_REPO_ROOT` env overrides. → [02](docs/spec/02-configuration.md)
+  overrides → env (`PORT` / `LUBBDUBB_DB` / `LUBBDUBB_HOST` / `LUBBDUBB_REPO_ROOT`) →
+  `lubbdubb.config.json` → the project's `lubbdubb.project.json` → defaults.
+  → [02](docs/spec/02-configuration.md)
+- **A config layer carries only what its file said.** `mergeLayers` never folds `DEFAULTS` in; that
+  happens once, at the bottom, in `mergeConfig`. A layer that arrives dense does not merge, it
+  replaces — so an operator's `{"planning": {"gitFetchIntervalMs": 0}}` would carry the default part
+  cap and shadow the one their team's `lubbdubb.project.json` set, leaving the harness running a
+  policy no file on the machine states. → [02](docs/spec/02-configuration.md#precedence)
 - **A route handler never reads the request.** It is wrapped in `checked(schemas, handler)`
   (`src/server/validation.ts`) and handed `{params, body, req, reply}` already parsed — never an `as`
   cast, and never its own `code(400)` for a malformed request. A refusal is a returned value and a

@@ -869,21 +869,24 @@ effect", and the honest answer is "at the next restart".
 ### `GET /api/config`
 
 The configuration this process resolved at boot, for the cockpit's config page
-([17](17-cockpit.md#configuration)): `{ groups, file, text, revision, pending, canRestart }`. Each group is a
+([17](17-cockpit.md#configuration)): `{ groups, file, projectFile, text, revision, pending, canRestart }`. Each group is a
 titled list of entries — dotted paths into the config object, with nested blocks expanded to leaves so
 one overridden member of `planning` does not make the other three read as chosen — carrying:
 
 | Field                | What it answers                                                                  |
 | -------------------- | -------------------------------------------------------------------------------- |
-| `value`, `isDefault` | what it is, and whether anybody chose it                                         |
+| `value`, `isDefault` | what it is, and whether *this operator* chose it — the baseline is the built-in default with the project layer folded in ([02](02-configuration.md#the-project-layer)) |
+| `fromProject`        | set when that baseline came from the project's shared config, so a row can name the file it came from and a reset can say what it falls back to |
 | `type`, `options`    | what widget draws it, from `CONFIG_FIELDS` ([02](02-configuration.md#fields))    |
 | `access`             | `plain`, `advanced` (behind the disclosure) or `fileOnly` (not offered)          |
 | `live`               | whether saving it takes effect now, because `configApply.ts` holds an arm for it |
 | `env`                | the environment variable currently beating the file, or null                     |
 | `why`, `ms`          | the one line under the key, and whether the number is a duration                 |
 
-`file` is the absolute path a save writes, and `text` is its current contents — what the raw editor edits
-and what the review step diffs against. `revision` fingerprints that file's current text and rides
+`file` is the absolute path a save writes, and `text` is its current contents. `projectFile` is the
+targeted project's shared config, or null when that repository carries none — read, never written: it
+belongs to the team and changes by a commit. `text` is what the raw editor edits and what the review
+step diffs against. `revision` fingerprints that file's current text and rides
 back on the save, which is what makes a stale one refusable. `pending` is what has reached the file and
 is waiting for a restart. `canRestart` says whether this process has a supervisor to hand off to.
 

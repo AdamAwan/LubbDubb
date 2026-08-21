@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type {
@@ -9,7 +10,7 @@ import type {
   RunningConfigPayload,
 } from '../../wire.js';
 import { describeCiPolicy } from '../../ci/describeCiPolicy.js';
-import { loadConfigFromText, type Config } from '../../config.js';
+import { loadConfigFromText, projectConfigLayer, type Config } from '../../config.js';
 import { diffConfig } from '../../configApply.js';
 import { configField, envOverride, fieldValueRefusal } from '../../configFields.js';
 import { configRevision, editConfigText, readConfigText, writeConfigText } from '../../configFile.js';
@@ -26,6 +27,28 @@ import type { RouteContext } from './context.js';
 export function register(app: FastifyInstance, { system, artifactSigner, attachmentSigner, hub }: RouteContext): void {
   const { config, errors, liveConfig, store, updates, agents, runtimeControl } = system;
   const filePath = system.configFile;
+  const projectPath = system.projectConfigFile;
+
+  /**
+   * What the targeted project's shared config is contributing, right now.
+   *
+   * Read per request rather than captured at boot because it is a file in a
+   * repository the operator pulls: a teammate's change lands while the harness is
+   * up, and the watcher applies it — a snapshot here would leave the settings page
+   * attributing values to a version of the file nobody is running.
+   *
+   * A broken file is recorded and read as empty rather than thrown: this is the
+   * page an operator opens *because* something looks wrong, and a 500 over a
+   * half-typed team config would take away the one surface that could tell them.
+   */
+  function projectLayer(): Partial<Config> {
+    try {
+      return projectConfigLayer(projectPath);
+    } catch (err) {
+      errors.record({ source: 'server', message: `Failed to read ${projectPath}: ${(err as Error).message}` });
+      return {};
+    }
+  }
 
   app.get('/api/state', async () => buildStateSnapshot(system, { artifactSigner, attachmentSigner }));
 
@@ -70,8 +93,9 @@ export function register(app: FastifyInstance, { system, artifactSigner, attachm
     '/api/config',
     async () =>
       ({
-        groups: describeRunningConfig(config),
+        groups: describeRunningConfig(config, projectLayer()),
         file: filePath,
+        projectFile: existsSync(projectPath) ? projectPath : null,
         text: readConfigText(filePath),
         revision: configRevision(readConfigText(filePath)),
         pending: liveConfig.pending(),

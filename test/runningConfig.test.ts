@@ -100,3 +100,42 @@ test('every group has a title and no group is empty', () => {
     assert.ok(group.entries.length > 0, `${group.title} is empty and should not have been emitted`);
   }
 });
+
+/**
+ * With a project config in play there are two ways a value can be one the
+ * operator did not choose, and a page that drew them the same way sends them to
+ * the wrong file to change it — or, worse, tells them a "reset" leads somewhere
+ * it does not.
+ */
+test('a value the project’s shared config sets reads as inherited, and says where from', () => {
+  const project = { defaultBranch: 'trunk', planning: { maxConcurrentPartsPerIssue: 5 } } as Partial<Config>;
+  const config = loadConfig(project);
+  const shown = describeRunningConfig(config, project).flatMap((group) => group.entries);
+  const branch = shown.find((e) => e.path === 'defaultBranch');
+  assert.equal(branch?.value, 'trunk');
+  assert.equal(branch?.isDefault, true, 'the operator did not choose it — clearing their file leaves it standing');
+  assert.equal(branch?.fromProject, true);
+
+  // Per leaf, inside a deep-merged block, exactly as an operator's own file is.
+  assert.equal(shown.find((e) => e.path === 'planning.maxConcurrentPartsPerIssue')?.fromProject, true);
+  assert.equal(shown.find((e) => e.path === 'planning.gitFetchIntervalMs')?.fromProject, undefined);
+  assert.equal(shown.find((e) => e.path === 'heartbeatIntervalMs')?.fromProject, undefined);
+});
+
+test('an operator overriding a project value is marked as having chosen it — and the origin stays named', () => {
+  const project = { defaultBranch: 'trunk' } as Partial<Config>;
+  const config = loadConfig({ ...project, defaultBranch: 'release' });
+  const branch = describeRunningConfig(config, project)
+    .flatMap((group) => group.entries)
+    .find((e) => e.path === 'defaultBranch');
+  assert.equal(branch?.value, 'release');
+  assert.equal(branch?.isDefault, false, 'this one is theirs');
+  assert.equal(branch?.fromProject, true, 'and what it falls back to is the team’s, not the build’s');
+});
+
+/** No project file is the common case, and it must read exactly as it did before. */
+test('with no project layer, nothing reads as coming from one', () => {
+  const shown = describeRunningConfig(loadConfig({ maxConcurrentAgents: 9 })).flatMap((group) => group.entries);
+  assert.equal(shown.filter((e) => e.fromProject !== undefined).length, 0);
+  assert.equal(shown.find((e) => e.path === 'maxConcurrentAgents')?.isDefault, false);
+});

@@ -1143,8 +1143,17 @@ export interface PromptsPayload {
  */
 export interface RunningConfigPayload {
   groups: RunningConfigGroup[];
-  /** Absolute path of the file a save writes. */
+  /** Absolute path of the file a save writes — the operator's own. */
   file: string;
+  /**
+   * Absolute path of the targeted project's shared config, or null when that
+   * repository carries none.
+   *
+   * A save never writes here: this file belongs to the team and is changed by
+   * committing to the project. It is on the payload so a cockpit showing a value
+   * an operator did not choose can name the file that did.
+   */
+  projectFile: string | null;
   /** The file's current text, for the raw editor and the review diff. */
   text: string;
   revision: string;

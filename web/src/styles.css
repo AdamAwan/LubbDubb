@@ -5104,6 +5104,14 @@ a.btn {
   border-color: var(--cn-blue-line-hi);
   background: var(--cn-blue-bg);
 }
+/* The team's layer: someone chose this, and it was not the operator reading it.
+   Neutral rather than a hue of its own — the row's point is that this value is
+   not theirs to change here, not that it is remarkable. */
+.cfg-src.project {
+  color: var(--cn-fg-dim);
+  border-color: var(--cn-line-hi);
+  background: var(--cn-panel-2);
+}
 .cfg-src.env {
   color: var(--cn-violet);
   border-color: var(--cn-violet-line);
