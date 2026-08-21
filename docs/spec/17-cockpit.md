@@ -253,6 +253,8 @@ once.
 | `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                         |
 | `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                   |
 | `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                               |
+| `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                       |
+| `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                      |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is

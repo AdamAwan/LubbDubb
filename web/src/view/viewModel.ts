@@ -95,6 +95,8 @@ export interface CockpitView {
   ticketFeature: number | 'none' | null;
   ticketGroup: 'feature' | 'flat';
   ticketOrder: TicketOrder;
+  ticketView: 'table' | 'card';
+  ticketColumns: string[];
 
   /** The agent whose drawer is open, if any. */
   selectedAgent: Agent | null;
@@ -252,6 +254,8 @@ interface ViewInputs {
   ticketFeature?: number | 'none' | null;
   ticketGroup?: 'feature' | 'flat';
   ticketOrder?: TicketOrder;
+  ticketView?: 'table' | 'card';
+  ticketColumns?: string[];
 }
 
 function groupByAgent<T extends { agentId: string }>(rows: readonly T[] | undefined): Map<string, T[]> {
@@ -311,6 +315,8 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     ticketFeature: input.ticketFeature ?? null,
     ticketGroup: input.ticketGroup ?? 'feature',
     ticketOrder: input.ticketOrder ?? 'added',
+    ticketView: input.ticketView ?? 'table',
+    ticketColumns: input.ticketColumns ?? [],
 
     selectedAgent: state.agents.find((a) => a.id === selected) ?? null,
     selectedOutput: selected ? input.liveOutput.get(selected) : undefined,

@@ -25,6 +25,9 @@ test('every place round-trips through the query string', () => {
     at({ tab: 'tickets', ticketTracking: 'frozen', ticketState: 'In Review' }),
     at({ tab: 'tickets', ticketFeature: 812, ticketGroup: 'flat', ticketOrder: 'changed' }),
     at({ tab: 'tickets', ticketFeature: 'none' }),
+    at({ tab: 'tickets', ticketView: 'card' }),
+    at({ tab: 'tickets', ticketView: 'card', ticketColumns: ['Closed', 'Removed'] }),
+    at({ tab: 'tickets', ticketColumns: ['Removed'] }),
     at({ tab: 'work' }),
     at({ goal: 'issue:142' }),
     at({ tab: 'tickets', goal: 'issue:142', agent: 'agent-7' }),
@@ -238,4 +241,34 @@ test('the tickets panel reads the widening back and offers the way out of it', (
   assert.match(panel, /widenedFor\(query\.state, query\.tracking, states\)/);
   assert.match(panel, /onQuery\(LIVE_WORK\)/);
   assert.match(panel, /className="tickets-widened"/);
+});
+
+test('the table is the default view, so it costs no query parameter', () => {
+  assert.equal(placeQuery(at({ tab: 'tickets' })), '?tab=tickets');
+  assert.equal(readPlace('?tab=tickets').ticketView, 'table');
+  // An unknown view resolves to the default rather than to nothing, like every other
+  // validated parameter here.
+  assert.equal(readPlace('?tab=tickets&view=kanban').ticketView, 'table');
+});
+
+test('hidden columns are the exception, so an untouched board is a bare URL', () => {
+  // Hidden rather than shown, for `collapsed`'s reason: the default is the empty
+  // list, and a state that appears in the tracker later shows up on its own rather
+  // than being invisibly excluded by a list written before it existed.
+  assert.equal(placeQuery(at({ tab: 'tickets', ticketView: 'card' })), '?tab=tickets&view=card');
+  assert.deepEqual(readPlace('?tab=tickets').ticketColumns, []);
+});
+
+test('hidden columns have one spelling, so hiding A then B is not a second place', () => {
+  const one = placeQuery(at({ tab: 'tickets', ticketColumns: ['Removed', 'Closed'] }));
+  const other = placeQuery(at({ tab: 'tickets', ticketColumns: ['Closed', 'Removed'] }));
+  assert.equal(one, other, 'sorted on the way out, or the two would push a history entry going nowhere');
+  assert.deepEqual(readPlace(one).ticketColumns, ['Closed', 'Removed']);
+});
+
+test('a blank entry in the hidden list is dropped rather than hiding a nameless column', () => {
+  // The separator is the one character a tracker's state word may not contain here.
+  // Encoding it would be a second grammar in the address bar; dropping the empty
+  // part is the same treatment every other junk value gets.
+  assert.deepEqual(readPlace('?tab=tickets&hide=Closed,,%20%20,Removed').ticketColumns, ['Closed', 'Removed']);
 });

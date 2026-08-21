@@ -305,6 +305,8 @@ export function useCockpit(): CockpitStatus {
       ticketFeature: place.ticketFeature,
       ticketGroup: place.ticketGroup,
       ticketOrder: place.ticketOrder,
+      ticketView: place.ticketView,
+      ticketColumns: place.ticketColumns,
     }),
   };
 }

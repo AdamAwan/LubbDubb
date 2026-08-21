@@ -218,7 +218,17 @@ export interface CockpitActions {
    */
   setTicketQuery(
     next: Partial<
-      Pick<Place, 'ticketWatch' | 'ticketTracking' | 'ticketState' | 'ticketFeature' | 'ticketGroup' | 'ticketOrder'>
+      Pick<
+        Place,
+        | 'ticketWatch'
+        | 'ticketTracking'
+        | 'ticketState'
+        | 'ticketFeature'
+        | 'ticketGroup'
+        | 'ticketOrder'
+        | 'ticketView'
+        | 'ticketColumns'
+      >
     >,
   ): void;
   /**
