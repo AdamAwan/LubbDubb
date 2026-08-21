@@ -135,6 +135,10 @@ Two consequences worth stating rather than discovering:
   team change that took effect only at the next restart would be a config the harness reads and does
   not run. Two watches on one apply path, for [the watcher](#the-watcher)'s reason.
 
+It is also what makes the first-run surface two questions rather than six: naming the repository is
+how the harness *finds* this file, so everything a team has already decided stops being something
+their next member is asked. → [26](26-setup.md)
+
 Not in `.lubbdubb/`, which holds worktrees, the database and attachments and which a team gitignores.
 And not the same *name* in a different place: `repoRoot` defaults to `process.cwd()`, so a harness
 pointed at its own checkout — the most common deployment there is — would have the two files collide.

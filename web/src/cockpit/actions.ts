@@ -50,6 +50,7 @@ export type ConsolePanel =
   | 'build'
   | 'pets'
   | 'localRun'
+  | 'setup'
   | { ask: string }
   | null;
 

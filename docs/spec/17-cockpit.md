@@ -2899,3 +2899,19 @@ between a goal and whichever tab the nav is on, all three tabs appearing in the 
 to `ConsoleTab` and forgotten there is a view nothing can reach), the work graph drawn by its own tab
 and no other, the recovery banner outside the situation area, a dropped socket drawing nothing at all,
 and the shell rendering the drawer the console only asks for — and no longer the work graph.
+
+## Setup
+
+Three surfaces lead to the first-run panel, and only one of them is permanent.
+
+The **Setup reading** in the top bar counts what is outstanding and is **absent at zero** — a reading
+that is always green is one nobody reads, so it earns its place by not being there most of the time.
+The **first-run card** on the Overview is drawn only while the harness has not been pointed anywhere,
+and is blue rather than amber: it is an offer about a harness that is working, not a warning about one
+that is not. The **panel** itself is on `Place` like every other panel, so it can be linked to.
+
+Its three steps are deliberately _not_ on `Place`. A step inside an unsaved edit is not somewhere to
+send somebody — restoring "review" on a reload would restore a review of answers the reload has
+already dropped. Same exception, and the same reason, as `ReviewWrite`'s on the config page.
+
+→ [26](26-setup.md)
