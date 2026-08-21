@@ -2,6 +2,12 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+// `fileURLToPath`, never `URL.pathname`: on Windows the latter yields
+// `/C:/…`, which `fs` reads as the relative path `C:\C:\…` — so every
+// structural guard in this file threw ENOENT rather than asserting, and a
+// violation of the rule it pins would have merged green on that platform.
+
 import * as React from 'react';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -83,7 +89,7 @@ function decode(html: string): string {
 }
 
 test('nothing under console/ imports the api module', () => {
-  const dir = new URL('../web/src/console/', import.meta.url).pathname;
+  const dir = fileURLToPath(new URL('../web/src/console/', import.meta.url));
   const walk = (d: string): string[] =>
     readdirSync(d).flatMap((n) => {
       const p = join(d, n);
@@ -97,7 +103,7 @@ test('nothing under console/ imports the api module', () => {
 });
 
 test('console.css never targets a shared component’s class', () => {
-  const css = readFileSync(new URL('../web/src/console/console.css', import.meta.url).pathname, 'utf8');
+  const css = readFileSync(fileURLToPath(new URL('../web/src/console/console.css', import.meta.url)), 'utf8');
   for (const cls of ['.escalation-card', '.recovery-panel', '.findings-panel', '.human-task-actions']) {
     assert.ok(!css.includes(cls), `console.css styles ${cls}; shared components restyle through tokens only`);
   }
@@ -603,6 +609,24 @@ function goalView(mutate: (state: CockpitView['state']) => void = () => {}, ref:
     tab: 'overview',
   });
 }
+
+/**
+ * The record on the goal page (the work tab's history, moved to where it is read).
+ *
+ * Asserted on the *page* rather than on the component, because the whole change is
+ * a placement: `WorkRecord` renders identically wherever it is mounted, and the
+ * defect this guards against is it quietly ceasing to be mounted here — which
+ * types, lints and every component test would go on passing through.
+ *
+ * The pre-fetch wording is what a static render shows, since effects do not run:
+ * that is also the honest first paint in the browser, so pinning it costs nothing
+ * and catches a card that renders an empty box while its route is in flight.
+ */
+test('a goal draws its own durable record, not only the live snapshot', () => {
+  const html = render(goalView());
+  assert.ok(html.includes('The record'), 'the goal page must carry the history the snapshot forgets');
+  assert.ok(html.includes('Reading the record'), 'the card must say it is fetching rather than draw an empty box');
+});
 
 /**
  * "More work" is how an operator says what they want done next, in words — and
@@ -1292,7 +1316,7 @@ test('the work graph is a nav destination, not a strip under the page', () => {
 });
 
 test('the shell renders the console, and the drawer that the console only asks for', () => {
-  const src = readFileSync(new URL('../web/src/App.tsx', import.meta.url).pathname, 'utf8');
+  const src = readFileSync(fileURLToPath(new URL('../web/src/App.tsx', import.meta.url)), 'utf8');
   assert.ok(src.includes('ConsoleRoot'), 'the shell must render the console');
   // The drawer is overlaid rather than placed, and which agent is open is cockpit
   // state — the subscription is tied to it. The console asks with
