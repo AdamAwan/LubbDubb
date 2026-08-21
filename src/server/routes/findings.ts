@@ -62,7 +62,18 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         // The operator may reword it before it runs; the derived text is only the default.
         const title = body.title ?? derived.title;
         const prompt = body.prompt ?? derived.prompt;
-        const job = store.createJob({ title, prompt, kind: body.kind });
+        // `ref` — the world item the finding is *about* — and never `originRef`,
+        // which names what the *reporting* agent was working on when it noticed.
+        // The promoted job stands in for the former; attributing it to the latter
+        // would file it under somebody else's work.
+        //
+        // Structural, not decorative: the work graph adopts a job by its origin,
+        // so a promotion without one is emitted parentless and stage 3 offers to
+        // file a tracker item for work `pr:31251` already accounts for. The ref
+        // was reaching the cockpit already — glued into the job's *title* by
+        // `findingJobRequest` — which is the shape of the bug: readable on screen,
+        // queryable by nothing.
+        const job = store.createJob({ title, prompt, kind: body.kind, originRef: finding.ref });
         // Resolve only after the job exists, so a failed create leaves the finding open.
         const resolved = store.resolveFinding(id, 'promoted', job.id);
         hub.broadcast({ type: 'world:changed' });

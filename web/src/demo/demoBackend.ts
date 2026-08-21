@@ -46,6 +46,7 @@ import type { WsClient } from '../api.js';
 import type { ValidationAct } from '../cockpit/actions.js';
 import { buildDemoState, demoPlanHistory } from './fixtures.js';
 import { isContainerType } from '../issueGroups.js';
+import { buildGoalPage } from '../view/goalPage.js';
 
 /** The demo's catalogue carries no rates, so every kind names the same empty one. */
 const ZERO_RATE = { dropChance: 0, pity: 0 };
@@ -2319,6 +2320,96 @@ function buildDemoTrend(): SpendTrend {
   };
 }
 
+/**
+ * The demo's answer for one goal's record.
+ *
+ * `getWorkRoots` above still returns an empty graph and this does not, because the
+ * two are asked different questions. The tab lists roots **nothing has claimed**,
+ * and a world rebuilt in the browser each load has none — empty is the honest
+ * answer there. The goal page asks what happened **under a goal that is on
+ * screen**, and answering "nothing is recorded" for a goal the demo is visibly
+ * working would misrepresent the surface rather than under-claim it. That is the
+ * ticket mirror's argument below, in the one other place a fetched-on-open panel
+ * would otherwise show a reader an empty box and call it a feature.
+ *
+ * **Derived, never authored**, through the same `buildGoalPage` the page itself
+ * uses — so the record cannot contradict the cards above it: the plan, its parts
+ * and the pull requests are the very ones already drawn. What it cannot show is
+ * the thing the record exists for, a merge the world has since forgotten, since
+ * this world has never forgotten anything.
+ */
+async function demoWorkSubtree(ref: string): Promise<{ nodes: WorkNodeView[]; refUrls: Record<string, string> }> {
+  const state = await getServer().getState();
+  const page = buildGoalPage(state, ref, []);
+  if (page === null) return { nodes: [], refUrls: {} };
+  const at = state.world.takenAt;
+  const seen = { firstSeenAt: at, lastSeenAt: at, provenance: null, baseRef: null };
+  const nodes: WorkNodeView[] = [
+    {
+      ...seen,
+      ref,
+      kind: 'issue',
+      parentRef: null,
+      title: page.issue.title,
+      status: page.issue.state,
+      terminal: page.issue.state === 'closed',
+    },
+  ];
+  if (page.plan !== null)
+    nodes.push({
+      ...seen,
+      ref: `${ref}:plan`,
+      kind: 'plan',
+      parentRef: ref,
+      title: page.plan.title,
+      status: page.plan.status,
+      terminal: page.plan.status === 'complete' || page.plan.status === 'abandoned',
+    });
+  const partOf = new Map<number, string>();
+  // `parts` are the page's view rows and `retiredParts` the plan rows themselves —
+  // unwrapped to one shape here so a retired part is on the record like any other.
+  for (const part of [...page.parts.map((p) => p.part), ...page.retiredParts]) {
+    const partRef = `${ref}:part:${part.slug}`;
+    if (part.prNumber !== null) partOf.set(part.prNumber, partRef);
+    nodes.push({
+      ...seen,
+      ref: partRef,
+      kind: 'part',
+      parentRef: ref,
+      title: part.title,
+      status: part.status,
+      terminal: part.status === 'merged' || part.status === 'retired',
+    });
+  }
+  for (const pr of page.openPullRequests)
+    nodes.push({
+      ...seen,
+      ref: `pr:${pr.number}`,
+      kind: 'pr',
+      parentRef: partOf.get(pr.number) ?? ref,
+      title: pr.title,
+      status: 'open',
+      terminal: false,
+    });
+  for (const pr of page.closedPullRequests)
+    nodes.push({
+      ...seen,
+      ref: `pr:${pr.number}`,
+      kind: 'pr',
+      parentRef: partOf.get(pr.number) ?? ref,
+      title: pr.title,
+      status: pr.merged === true ? 'merged' : 'closed',
+      terminal: true,
+      provenance: 'observed',
+    });
+  const refUrls: Record<string, string> = {};
+  for (const n of nodes) {
+    const url = state.refUrls[n.ref];
+    if (url !== undefined) refUrls[n.ref] = url;
+  }
+  return { nodes, refUrls };
+}
+
 export const demoApi = {
   getState: () => getServer().getState(),
   getTranscript: (agentId: string) => getServer().getTranscript(agentId),
@@ -2327,7 +2418,7 @@ export const demoApi = {
   // keep the two API shapes interchangeable.
   getWorkRoots: () =>
     Promise.resolve({ roots: [] as WorkNodeView[], unrecorded: [] as UnrecordedWorkView[], refUrls: {} }),
-  getWorkSubtree: (_ref: string) => Promise.resolve({ nodes: [] as WorkNodeView[], refUrls: {} }),
+  getWorkSubtree: (ref: string) => demoWorkSubtree(ref),
   // The ticket mirror, authored for `getSpend`'s reason: the demo's world is built
   // fresh in the browser each load, so there is no swept history to page through
   // and a fixture is the only way the tab shows what it is for. The filtering,

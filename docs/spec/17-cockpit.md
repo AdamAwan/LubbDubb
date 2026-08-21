@@ -901,9 +901,62 @@ roots, `/api/work/:ref` for a subtree — because `/api/state` comes round every
 the graph only ever grows; being a tab is what makes "on open" honest, since nothing fetches until the
 operator goes there. And **unrecorded work** stays at its head: what the harness did that nothing in
 the tracker accounts for, with `File a work item` and `Ignore` beside each row, since nobody outside
-can ever mark done what nothing records. → [16](16-http-api.md#get-apiwork)
+can ever mark done what nothing records.
+
+That list is only worth a reader's attention while it is **short and true**, and for a time it was
+neither: a job requeued after a crash, and a job promoted from a finding, both named the tracker item
+they stood in for and neither was adopted by it, so the panel filled with rows reading
+`Requeued: Plan issue #35699` — a tracker link on the face of the row and a filing button beside it.
+The predicate did not change; the fold's [third adoption arm](16-http-api.md#get-apiwork) did, and the
+rows cleared themselves on the next pulse. Worth stating because it is the failure mode a surface like
+this one has: a list of things that are owed is read exactly as long as everything on it is owed.
+→ [16](16-http-api.md#get-apiwork)
+
+**Goal roots are collapsed behind a disclosure**, because each is now drawn in full on its own goal
+page ([below](#the-record-on-the-goal-it-belongs-to)). Collapsed and not dropped: `Ref` is the only
+thing that knows whether a ref _has_ a page — a ticket the snapshot has forgotten does not — so
+hiding those rows would make their record unreachable rather than relocated. They stay, drawn as
+references, and the component picks the destination. What is left at full weight is what has nowhere
+else to be: operator jobs, and the work items filed for them.
 
 It is a **lens**: nothing here, and nothing in the dispatcher, decides anything from what it draws.
+
+### The record, on the goal it belongs to
+
+A goal's own subtree of the graph, drawn as a card on its page (`WorkRecord`), below **Pull
+requests**. The roots of the work graph _are_ `issue:<n>` nodes, so a goal page was already sitting on
+top of its own record without drawing it — the card is `GET /api/work/:ref` and nothing else.
+
+**It fills a hole the page already had.** Every other card there reads the snapshot, and
+`closedPullRequests` remembers a merge for `closedPrWindowMs` and then drops it — so a goal that
+shipped three pull requests a month ago draws "No pull request names this goal yet", on a page about
+work that demonstrably happened. It also carries what nothing else on the page keeps: the `inferred`
+chip on a merge the harness never watched, concerns raised and cleared, and the requeues, sitting
+under the part they redid.
+
+Three things it does deliberately:
+
+- **The root is dropped.** The route returns the root with its subtree, and the root here is the page
+  you are standing on. `depth`'s missing-parent arm then lands its children flush left on their own.
+- **A row draws a ref only for `issue:<n>` or `pr:<n>` exactly.** `refLabel` shortens a whole family
+  to its number, so `issue:395:plan` and `issue:395:part:api` both read `#395` — the number of their
+  _ancestor_, drawn four times over on a listing of that ancestor's subtree, each one a link back to
+  the page the reader is on. A dead end wearing the shape of a destination is the thing
+  [refs](#links) exists to prevent, so a sub-origin draws none: its identity is its title and its
+  indent, and both are already right.
+- **The row is one component** (`workTree.tsx`), shared with the tab. Two copies would drift where it
+  is least visible — `inferred` is a chip that says the harness never watched the merge it is
+  claiming, and a surface that quietly stopped drawing it reports a stronger fact than it holds.
+
+Both surfaces wrap it in `RefLinksExtended` with the **route's** `refUrls`, never the shell's: the
+shell's map is assembled from the world, and the graph's whole job is remembering what left it.
+
+The demo derives this from `buildGoalPage` rather than returning the empty graph `getWorkRoots` does.
+The two are asked different questions — the tab lists roots _nothing has claimed_, and a world rebuilt
+each load has none, but answering "nothing is recorded" for a goal the demo is visibly working
+misrepresents the surface rather than under-claiming it. It is derived so it cannot contradict the
+cards above it; what it cannot show is the one thing the record is _for_, since this world has never
+forgotten anything.
 
 ## The tickets tab
 

@@ -3,6 +3,8 @@ import { api } from '../api.js';
 import type { UnrecordedWorkView, WorkNodeView } from '../types.js';
 import { refLink, relTime } from './util.js';
 import { AsyncButton } from './AsyncButton.js';
+import { Ref, RefLinksExtended } from './refs.js';
+import { WorkRow } from './workTree.js';
 
 /**
  * The durable record of what the harness did for a work item — the one surface
@@ -24,6 +26,7 @@ export function WorkTreePanel({ now, canFileTickets }: { now: number; canFileTic
   const [rootUrls, setRootUrls] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<string | null>(null);
   const [showIgnored, setShowIgnored] = useState(false);
+  const [showGoals, setShowGoals] = useState(false);
   const [subtree, setSubtree] = useState<{ nodes: WorkNodeView[]; refUrls: Record<string, string> } | null>(null);
 
   const load = () =>
@@ -60,6 +63,12 @@ export function WorkTreePanel({ now, canFileTickets }: { now: number; canFileTic
   // still there to offer back under the tail.
   const live = unrecorded.filter((u) => !u.ignored);
   const ignored = unrecorded.filter((u) => u.ignored);
+  // A goal root is the one kind of record with somewhere better to be: its whole
+  // subtree is drawn on its goal page. What is left here is what has no page —
+  // operator jobs, and the work items filed for them — which is what this tab is
+  // for now that the history reads where the reader already is.
+  const goals = roots.filter((r) => r.ref.startsWith('issue:'));
+  const loose = roots.filter((r) => !r.ref.startsWith('issue:'));
   const row = (item: UnrecordedWorkView) => (
     <div className="work-unrecorded-row" key={item.ref}>
       <span className="work-title">{item.title}</span>
@@ -129,7 +138,39 @@ export function WorkTreePanel({ now, canFileTickets }: { now: number; canFileTic
           )}
         </div>
       )}
-      {roots.map((root) => (
+      {goals.length > 0 && (
+        <div className="work-goals">
+          {/* Collapsed, not dropped. A goal's record is on its goal page now, but
+              `Ref` is the only thing that knows whether this ref *has* one — a
+              ticket the snapshot has forgotten has no page, and hiding its root
+              here would make its record unreachable rather than relocated. So the
+              rows stay, drawn as references, and the component picks the
+              destination. */}
+          <button
+            type="button"
+            className="btn ghost work-goals-head"
+            onClick={() => setShowGoals(!showGoals)}
+            title="Each of these is drawn in full on its own goal page"
+          >
+            <span className="work-caret">{showGoals ? '▾' : '▸'}</span>
+            {goals.length} {goals.length === 1 ? 'goal' : 'goals'} — each on its own page
+          </button>
+          {showGoals && (
+            <RefLinksExtended refUrls={rootUrls}>
+              {goals.map((root) => (
+                <div className="work-goal-row" key={root.ref}>
+                  <span className="work-title">{root.title}</span>
+                  <span className={`chip small${root.terminal ? ' ok' : ''}`}>{root.status}</span>
+                  <span className="cn-refs">
+                    <Ref to={root.ref} />
+                  </span>
+                </div>
+              ))}
+            </RefLinksExtended>
+          )}
+        </div>
+      )}
+      {loose.map((root) => (
         <div className="work-root" key={root.ref}>
           <button
             type="button"
@@ -149,9 +190,11 @@ export function WorkTreePanel({ now, canFileTickets }: { now: number; canFileTic
               <p className="muted work-loading">Reading the record…</p>
             ) : (
               <div className="work-tree">
-                {subtree.nodes.map((node) => (
-                  <WorkRow key={node.ref} node={node} nodes={subtree.nodes} refUrls={subtree.refUrls} now={now} />
-                ))}
+                <RefLinksExtended refUrls={subtree.refUrls}>
+                  {subtree.nodes.map((node) => (
+                    <WorkRow key={node.ref} node={node} nodes={subtree.nodes} now={now} />
+                  ))}
+                </RefLinksExtended>
               </div>
             ))}
         </div>
@@ -159,67 +202,3 @@ export function WorkTreePanel({ now, canFileTickets }: { now: number; canFileTic
     </div>
   );
 }
-
-function WorkRow({
-  node,
-  nodes,
-  refUrls,
-  now,
-}: {
-  node: WorkNodeView;
-  nodes: WorkNodeView[];
-  refUrls: Record<string, string>;
-  now: number;
-}) {
-  return (
-    <div className={`work-node ${node.kind}`} style={{ marginLeft: `${depth(node, nodes) * 14}px` }}>
-      <span className="work-mark">{MARK[node.kind] ?? '·'}</span>
-      <span className="work-title">{node.title}</span>
-      <span className={`chip small${node.terminal ? ' ok' : ''}`}>{node.status}</span>
-      {/* Absence-means-merged is a deliberate fallback everywhere in the harness,
-          but a durable record has no business forgetting it *was* one. */}
-      {node.provenance === 'inferred' && (
-        <span className="chip small warn" title="No merge was ever observed — this PR simply left the world">
-          inferred
-        </span>
-      )}
-      {node.baseRef !== null && (
-        <span className="chip small" title="Stacked on this PR — a cross-link, not what caused the work">
-          on {refLink(node.baseRef, refUrls)}
-        </span>
-      )}
-      <span className="muted mono">{refLink(node.ref, refUrls)}</span>
-      <span className="muted work-seen" title={`First seen ${node.firstSeenAt}`}>
-        {relTime(node.lastSeenAt, now)}
-      </span>
-    </div>
-  );
-}
-
-/**
- * How deep a node sits, by walking `parentRef` within the subtree — so the indent
- * needs no ordering contract from the server, and a node whose parent is outside
- * the fetched subtree simply sits at the top rather than disappearing.
- */
-function depth(node: WorkNodeView, nodes: WorkNodeView[]): number {
-  let d = 0;
-  let cur = node.parentRef;
-  while (cur !== null && d < nodes.length) {
-    const parent = nodes.find((n) => n.ref === cur);
-    if (!parent) break;
-    d += 1;
-    cur = parent.parentRef;
-  }
-  return d;
-}
-
-/** What each kind is, at a glance. */
-const MARK: Record<string, string> = {
-  issue: '◆',
-  plan: '⌗',
-  part: '▪',
-  pr: '⇡',
-  concern: '!',
-  job: '▸',
-  assess: '?',
-};

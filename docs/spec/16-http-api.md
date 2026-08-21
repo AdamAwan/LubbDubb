@@ -655,9 +655,37 @@ refs the panel draws, resolved through the connector's own `resolveRefUrl` for t
 subtree route does (#199): this route ships no snapshot, and a PR the graph remembers merging left the
 world hours ago.
 
+**Unrecorded means parentless, and a job is adopted by three arms.** A dispatched code job with no
+parent is what the detector reports, so what counts as unrecorded is decided entirely by the fold's
+adoption: **A** — a job owns the pull request its own branch carries; **B** — a job is adopted by the
+issue its own PR names; **C** — a job is adopted by the origin it stands in for, resolved by walking
+`Job.originRef` down to the longest prefix the graph holds a node for, so `issue:41:retro` lands on
+`issue:41` while `issue:41:part:api` — itself a node — lands on itself.
+
+Arm C is what makes the list honest. Arms A and B can only adopt a job that produced a pull request,
+and a requeued assay, plan, retro or review-comment job opens none — so every one of them was
+parentless forever and the panel offered to file a second tracker item for work an existing one
+already named. Not a stale row that ages out: the condition is permanent until acted on, which is how
+the list came to be mostly `Requeued: Plan issue #35699` and read as noise.
+
+A prefix walk rather than a table of known suffixes, because an origin vocabulary the fold does not
+recognise must fail to the **visible** mistake — the row staying in the list, where an operator sees
+it — and a table would silently adopt the next origin added under whichever parent its author last
+thought about. The walk cannot invent an edge either: every candidate is a ref something emitted, or
+one `existing` already holds, so a closed issue the world no longer sweeps still adopts its own
+requeued work.
+
+Arm C runs last and **only ever fills a null**, so arm B's adoption and an operator's own filing both
+outrank it, and a job with no origin — the hand-launched one, which stands in for nothing — stays
+unrecorded. That is the case the detector was written for. → [14](14-persistence.md#work-graph)
+
 ### `GET /api/work/:ref`
 
-One subtree, walked from the given root by `parent_ref`. 404 when the ref names no node. Refs carry
+One subtree, walked from the given root by `parent_ref`. **Two consumers**: the work tab, for a root
+the operator expanded, and the goal page's record card, for `issue:<n>` — the goal it is drawn on.
+The second is why a 404 here is not a fault and is not recorded through `errors`: a goal picked up
+minutes ago, or one the harness never worked, has no node yet, and filing an error report for the
+ordinary case is worse than the empty state. 404 when the ref names no node. Refs carry
 colons (`issue:12`, `pr:41:ci`), so the route has to survive one in a path segment. Each node's URL is
 resolved through the connector's own `resolveRefUrl` rather than read off the snapshot's `refUrls` —
 that map is built from the world, and a PR the graph remembers merging left the world hours ago.
@@ -1398,7 +1426,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `world`                         | The snapshot, with `health`, `attention` and `ciVerdict` per open PR and `pickup`, `conclusion`, `shortfall`, `assay`, `completion` and `spend` per issue.                                                                    |
 | `retainedRuns`                  | Runs whose issue the world has forgotten (#203, #234), rebuilt from their stored snapshots by the same `retainedRunIssues` the dispatcher unions into its issue list, through the same per-issue enrichment a live one takes. |
 | `plans`, `planParts`            | The plan graph — the same rows the per-issue chip reads, with `statusCommentRef` as a canonical ref.                                                                                                                          |
-| `tasks`                         | Every task, **without prompts** — `TaskSummary`, not `Task`. See _Bulk text_ below.                                                                                                                                                                                                                   |
+| `tasks`                         | Every task, **without prompts** — `TaskSummary`, not `Task`. See _Bulk text_ below.                                                                                                                                           |
 | `jobs`                          | Operator jobs, newest first.                                                                                                                                                                                                  |
 | `schedules`                     | Recurring blueprints, oldest first — **every** one, paused included, since this is the only surface anywhere that says a paused one exists. What a firing produces is an ordinary entry in `jobs`.                            |
 | `agents`                        | Every agent row, including usage and the progress note.                                                                                                                                                                       |
@@ -1408,7 +1436,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `overlaps`                      | Paths two concurrently-live code agents wrote.                                                                                                                                                                                |
 | `humanTasks`                    | Work only a person can do — open ones and a settled tail, newest first. Beside `findings` rather than inside `escalations`: nobody is parked on one.                                                                          |
 | `findings`                      | Every finding.                                                                                                                                                                                                                |
-| `escalations`                   | The escalations still waiting on a person — **open only**. See _Bulk text_ below.                                                                                                                                                                                                             |
+| `escalations`                   | The escalations still waiting on a person — **open only**. See _Bulk text_ below.                                                                                                                                             |
 | `recovery`                      | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**.                                                   |
 | `decisions`                     | The last 100 decisions, each with `subjectRef` — the one external thing the act is about (`issue:13`, `pr:42`), or null.                                                                                                      |
 | `upcoming`                      | The last cycle's ranked queue with the headroom cut. Null until a cycle has run.                                                                                                                                              |
