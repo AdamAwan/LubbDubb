@@ -27,6 +27,7 @@ is about.
 | `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                            |
 | `routes/issues.ts`      | Watch, priority, conclusion, assay, delivered, shortfall, dismiss-run                         |
 | `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`               |
+| `routes/knowledge.ts`   | One claim's observations, and how far an operator says a claim carries                        |
 | `routes/plans.ts`       | Plan history, replan, acceptance ticks, part model pins                                       |
 | `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it        |
 | `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                            |
@@ -1197,6 +1198,40 @@ reports the ticket through `link_ticket` — see [11](11-mcp-tools.md).
 
 409 when absent or already resolved. Returns `{ ok: true, finding }`.
 
+### `GET /api/knowledge/facts/:id`
+
+One claim with the observations behind it, in the observers' own words — `{fact, corroborations}`.
+**404** when absent. Its own route rather than a field on the snapshot for the reason in
+[_Bulk text_](#bulk-text): the evidence for one claim runs to thousands of characters per
+observation, and the rows nobody opens should cost nothing per poll. The count on the `fact` is
+`distinctCorroborators`', never `corroborations.length` — two observations are one corroborator if
+they share a goal or a session, so the length is a different number wearing the same label.
+
+### `POST /api/knowledge/facts/:id/reach`
+
+How far an operator says a claim carries. Body `{reach}`, one of `lookup`, `injected` or `rejected`
+— the wire's `FactRuling`, narrowed out of `FactReach` so the route and the cockpit cannot drift.
+**404** when absent, **400** on any other reach, and **409** on a claim that was rejected, in the
+words that name the way back: a rejection is terminal, and what lifts the bar is an amendment naming
+the claim, filed by an agent. Broadcasts `dirty` — nothing in the world moved — and returns
+`{ ok: true, fact }`.
+
+Two members of `FactReach` are deliberately not accepted. Nothing restores `proposal` ("nobody has
+agreed with this" is not a state an operator can put a claim back into), and `committed` is a
+documentation pull request landing ([27](27-knowledge.md#committing-to-the-repository)) — setting the
+reach without opening one would take the claim out of every prompt while putting it nowhere.
+
+**Naming the reach a claim already has is a ruling rather than a no-op**, which is the one place this
+route differs from `POST /api/lessons/:id/promote`'s 409-on-a-settled-row discipline. `lookup` is both
+where two agents agreeing puts a claim and where an operator parks one that is true but not worth
+every agent's context, so the store stamps `ruled_at` on any operator move whether or not the reach
+changed — without it the cockpit's **Needs you** section would ask again forever, and the only way to
+empty it would be a decision the operator does not agree with.
+
+**These two are the whole write surface the cockpit has on this store.** Nothing here files a claim:
+agents propose through `knowledge_propose` on a scoped MCP credential ([11](11-mcp-tools.md)), which
+is the same split between an operator's arm and an agent's that the lessons store keeps.
+
 ### `POST /api/human-tasks`
 
 Body `{title, detail?, originRef?}`. The operator's own arm beside the `request_human_task` tool; the
@@ -1540,6 +1575,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `overlaps`                      | Paths two concurrently-live code agents wrote.                                                                                                                                                                                |
 | `humanTasks`                    | Work only a person can do — open ones and a settled tail, newest first. Beside `findings` rather than inside `escalations`: nobody is parked on one.                                                                          |
 | `findings`                      | Every finding.                                                                                                                                                                                                                |
+| `knowledge`                     | Every fact the fleet has written down, newest first, **the rejected ones included** — each with the corroborator count that promotes it. The evidence behind a claim is not here: see `GET /api/knowledge/facts/:id`.         |
 | `escalations`                   | The escalations still waiting on a person — **open only**. See _Bulk text_ below.                                                                                                                                             |
 | `recovery`                      | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**.                                                   |
 | `decisions`                     | The last 100 decisions, each with `subjectRef` — the one external thing the act is about (`issue:13`, `pr:42`), or null.                                                                                                      |
