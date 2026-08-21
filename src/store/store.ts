@@ -11,7 +11,7 @@ import { PriorityStore } from './priority.js';
 import { ProfileOverrideStore } from './profileOverrides.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { LessonStore } from './lessons.js';
-import { KnowledgeStore, type FactProposalOutcome, type FactQuery } from './knowledge.js';
+import { KnowledgeStore, KNOWLEDGE_COLUMNS, type FactProposalOutcome, type FactQuery } from './knowledge.js';
 import { RemedyStore } from './remedies.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
@@ -224,6 +224,7 @@ export class Store {
       TICKET_COLUMNS,
       PET_COLUMNS,
       LOCAL_RUN_COLUMNS,
+      KNOWLEDGE_COLUMNS,
     ]) {
       addedColumns.push(...ensureColumns(this.db, columns));
     }
@@ -491,6 +492,9 @@ export class Store {
   }
   listCorroborations(factId: string): KnowledgeCorroboration[] {
     return this.knowledge.listCorroborations(factId);
+  }
+  corroborationCounts(): Map<string, number> {
+    return this.knowledge.corroborationCounts();
   }
   askFacts(query: FactQuery): KnowledgeFact[] {
     return this.knowledge.askFacts(query);

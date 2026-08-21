@@ -45,6 +45,16 @@ export interface Place {
   hatch: string | null;
   /** The goal whose notepad is open, as an `issue:<n>` ref. */
   scratchpad: string | null;
+  /**
+   * The claim whose provenance is open on the Knowledge page, by fact id.
+   *
+   * A place rather than a `useState` in the panel for the reason every field here
+   * is one: "look at what these two agents actually saw" is a thing an operator
+   * sends someone a link to, and a row held open in component state works right up
+   * until the back button steps over it or a reload drops it.
+   * → `docs/spec/27-knowledge.md`
+   */
+  fact: string | null;
   /** Which section of the config page is in front. */
   configTab: ConfigTab;
   /** The config group the page is showing, or null for the first one. */
@@ -124,6 +134,7 @@ export const NOWHERE: Place = {
   retro: null,
   hatch: null,
   scratchpad: null,
+  fact: null,
   configTab: 'values',
   configGroup: null,
   insightsView: 'economics',
@@ -169,6 +180,7 @@ const TICKET_ORDER: readonly TicketOrder[] = ['added', 'changed', 'cost'];
 const PANEL_NAMES: Record<Exclude<ConsolePanel, null | { ask: string }>, true> = {
   findings: true,
   lessons: true,
+  knowledge: true,
   faults: true,
   launch: true,
   build: true,
@@ -216,6 +228,7 @@ export function readPlace(search: string): Place {
     retro: param(query, 'retro'),
     hatch: param(query, 'hatch'),
     scratchpad: param(query, 'pad'),
+    fact: param(query, 'fact'),
     configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
     // `keys`, not `group`: the tickets tab already owns `?group=` (its feature
     // heading mode), and two places reading one parameter is a place that opens
@@ -388,6 +401,7 @@ export function placeQuery(place: Place): string {
   if (place.retro !== null) query.set('retro', place.retro);
   if (place.hatch !== null) query.set('hatch', place.hatch);
   if (place.scratchpad !== null) query.set('pad', place.scratchpad);
+  if (place.fact !== null) query.set('fact', place.fact);
   if (place.configTab !== 'values') query.set('section', place.configTab);
   if (place.configGroup !== null) query.set('keys', place.configGroup);
   if (place.insightsView !== 'economics') query.set('view', place.insightsView);

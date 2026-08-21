@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import type { FastifyInstance } from 'fastify';
+import { buildApp } from '../src/server/app.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { Store } from '../src/store/store.js';
@@ -18,6 +20,9 @@ import {
   validateFactProposal,
   type FactProposal,
 } from '../src/knowledge/knowledge.js';
+import { buildViewModel } from '../web/src/view/viewModel.js';
+import { NOWHERE, placeQuery, readPlace } from '../web/src/cockpit/place.js';
+import type { AppState } from '../web/src/types.js';
 import type { Agent, FactObservation } from '../src/types.js';
 
 /**
@@ -516,6 +521,253 @@ test('knowledge_ask answers from the caller’s own scopes and says so when noth
   assert.deepEqual(none.facts, []);
   assert.match(none.note, /knowledge_propose/);
   system.store.close();
+});
+
+// -- the operator's arm: the routes and the page (phase 2) --------------------
+
+/**
+ * The reach transitions are the whole write surface the cockpit has on this
+ * store, and the properties worth asserting are again the negative ones: nothing
+ * here files a claim, nothing carries one past where an operator put it, and a
+ * rejection does not come back.
+ */
+
+async function serve(system: System): Promise<FastifyInstance> {
+  const { app } = await buildApp(system);
+  return app;
+}
+
+/** One reach request, as the status and whatever refusal came with it. */
+async function ask(app: FastifyInstance, id: string, reach: string): Promise<{ status: number; error: string }> {
+  const res = await app.inject({ method: 'POST', url: `/api/knowledge/facts/${id}/reach`, payload: { reach } });
+  return { status: res.statusCode, error: (res.json() as { error?: string }).error ?? '' };
+}
+
+test('an operator moves a claim as far as they say, and a rejection is terminal', async () => {
+  const system = build();
+  const app = await serve(system);
+  const filed = system.store.proposeFact(proposal(), seenOn('issue:41'));
+  assert.ok(filed.outcome !== 'barred');
+  const id = filed.fact.id;
+
+  // Straight to `injected` from one voice if the operator already knows: nothing
+  // auto-promotes, and the reason it does not is that this decision is theirs.
+  const injected = await app.inject({
+    method: 'POST',
+    url: `/api/knowledge/facts/${id}/reach`,
+    payload: { reach: 'injected' },
+  });
+  assert.equal(injected.statusCode, 200);
+  assert.equal(injected.json().fact.reach, 'injected');
+  assert.ok(injected.json().fact.ruledAt, 'a move an operator made is stamped as ruled');
+
+  const demoted = await app.inject({
+    method: 'POST',
+    url: `/api/knowledge/facts/${id}/reach`,
+    payload: { reach: 'lookup' },
+  });
+  assert.equal(demoted.json().fact.reach, 'lookup');
+
+  const rejected = await app.inject({
+    method: 'POST',
+    url: `/api/knowledge/facts/${id}/reach`,
+    payload: { reach: 'rejected' },
+  });
+  assert.equal(rejected.statusCode, 200);
+  // Terminal, and refused in the words that say what the way back is: there is no
+  // un-reject route, because that would lift the bar without the amendment that
+  // should have lifted it.
+  const again = await app.inject({
+    method: 'POST',
+    url: `/api/knowledge/facts/${id}/reach`,
+    payload: { reach: 'lookup' },
+  });
+  assert.equal(again.statusCode, 409);
+  assert.match(again.json().error, /amendment/);
+
+  await app.close();
+  system.store.close();
+});
+
+test('saying a corroborated claim belongs where it is rules on it, and takes it out of Needs you', async () => {
+  const system = build();
+  const app = await serve(system);
+  store2Goals(system);
+  const fact = system.store.listFacts()[0]!;
+  assert.equal(fact.reach, 'lookup');
+  assert.equal(fact.ruledAt, null, 'two agents agreeing is not an operator ruling');
+
+  // The one control that looks like a no-op and is not. Without it the page's
+  // Needs you section asks forever, and the only way to empty it is a decision
+  // the operator does not agree with.
+  const kept = await app.inject({
+    method: 'POST',
+    url: `/api/knowledge/facts/${fact.id}/reach`,
+    payload: { reach: 'lookup' },
+  });
+  assert.equal(kept.statusCode, 200);
+  assert.ok(kept.json().fact.ruledAt);
+  assert.equal(kept.json().fact.reach, 'lookup');
+
+  await app.close();
+  system.store.close();
+});
+
+test('the reach routes refuse an unknown fact and an unknown reach by name', async () => {
+  const system = build();
+  const app = await serve(system);
+  const missing = await app.inject({
+    method: 'POST',
+    url: '/api/knowledge/facts/fact_nothing/reach',
+    payload: { reach: 'injected' },
+  });
+  assert.equal(missing.statusCode, 404);
+  assert.equal((await app.inject({ method: 'GET', url: '/api/knowledge/facts/fact_nothing' })).statusCode, 404);
+
+  const filed = system.store.proposeFact(proposal(), seenOn('issue:41'));
+  assert.ok(filed.outcome !== 'barred');
+  // `proposal` and `committed` are absent from the body on purpose: nothing
+  // restores "nobody has agreed with this", and a fact leaves for the repository
+  // through a documentation pull request that does not exist yet.
+  for (const reach of ['proposal', 'committed', 'everywhere']) {
+    const refused = await ask(app, filed.fact.id, reach);
+    assert.equal(refused.status, 400, reach);
+    assert.match(refused.error, /reach must be one of/);
+  }
+
+  await app.close();
+  system.store.close();
+});
+
+test('one fact’s route answers the observers’ own words, counted the way the store counts them', async () => {
+  const system = build();
+  const app = await serve(system);
+  const filed = system.store.proposeFact(
+    proposal(),
+    seenOn('issue:41', { words: 'check went red on an unused export.' }),
+  );
+  assert.ok(filed.outcome !== 'barred');
+  // Two rows, one corroborator: the same goal seen twice is one observation, and
+  // the count on the payload has to be that rather than the number of rows.
+  system.store.proposeFact(proposal(), seenOn('issue:41', { words: 'and again on the same goal.' }));
+  const read = await app.inject({ method: 'GET', url: `/api/knowledge/facts/${filed.fact.id}` });
+  assert.equal(read.statusCode, 200);
+  const payload = read.json() as { fact: { corroborations: number }; corroborations: { words: string }[] };
+  assert.equal(payload.corroborations.length, 2);
+  assert.equal(payload.fact.corroborations, 1);
+  assert.equal(payload.corroborations[0]?.words, 'check went red on an unused export.');
+
+  await app.close();
+  system.store.close();
+});
+
+test('the snapshot carries every fact, the rejected ones included, with the count that promotes', async () => {
+  const system = build();
+  const app = await serve(system);
+  store2Goals(system);
+  const killed = system.store.proposeFact(proposal({ claim: 'A claim nobody should act on.' }), seenOn('issue:9'));
+  assert.ok(killed.outcome !== 'barred');
+  system.store.setFactReach(killed.fact.id, 'rejected');
+
+  const state = (await app.inject({ method: 'GET', url: '/api/state' })).json() as AppState;
+  const rejected = state.knowledge.find((f) => f.id === killed.fact.id);
+  // The page is the governance, so it draws what it stopped: a surface showing
+  // only what it let through cannot show that a claim was killed, and the bar is
+  // invisible everywhere else.
+  assert.ok(rejected, 'a rejected claim is on the snapshot, or nothing can show it was rejected');
+  assert.equal(rejected.reach, 'rejected');
+  assert.equal(state.knowledge.find((f) => f.reach === 'lookup')?.corroborations, 2);
+
+  await app.close();
+  system.store.close();
+});
+
+test('the cockpit hears a proposal when it is filed, not on the next pulse', async () => {
+  const system = build();
+  const heard: { filed: boolean; claim: string }[] = [];
+  system.agents.on('fact', (e) => heard.push({ filed: e.filed, claim: e.fact.claim }));
+  const first = spawnAgent(system, 'issue:12');
+  const claim = 'A route handler never reads the request; it is wrapped in checked(schemas, handler).';
+  await callTool(system, first, 'knowledge_propose', { claim, scope: 'fleet', evidence: 'saw it in routes.' });
+  const second = spawnAgent(system, 'issue:44');
+  await callTool(system, second, 'knowledge_propose', { claim, scope: 'fleet', evidence: 'again, in mine.' });
+  assert.deepEqual(
+    heard.map((h) => h.filed),
+    [true, false],
+    'the second call is agreement with a standing claim, not a second claim',
+  );
+
+  // A barred proposal wrote nothing, so it says nothing: an event there would put
+  // a claim an operator killed back in front of them as though it had just arrived.
+  const killed = system.store.listFacts()[0]!;
+  system.store.setFactReach(killed.id, 'rejected');
+  const third = spawnAgent(system, 'issue:77');
+  await callTool(system, third, 'knowledge_propose', { claim, scope: 'fleet', evidence: 'me too.' });
+  assert.equal(heard.length, 2);
+  system.store.close();
+});
+
+/** Two goals agreeing on one claim — the corroborated proposal the page asks about. */
+function store2Goals(system: System): void {
+  for (const goal of ['issue:41', 'issue:88']) system.store.proposeFact(proposal(), seenOn(goal));
+}
+
+// -- the page -----------------------------------------------------------------
+
+test('the knowledge page and the claim it has open are places, not component state', () => {
+  const place = { ...NOWHERE, panel: 'knowledge' as const, fact: 'fact_abc' };
+  // A row held open in a `useState` works right up until the back button steps
+  // over it, and a panel name `readPlace` does not know is parsed back to null —
+  // which is a control that opens nothing at all, with nothing red.
+  assert.deepEqual(readPlace(placeQuery(place)), place);
+  assert.equal(readPlace('?panel=knowledge&fact=').fact, null);
+});
+
+test('the Knowledge reading counts the corroborated claims nobody has ruled on', () => {
+  const facts = [
+    { id: 'a', reach: 'lookup', ruledAt: null },
+    { id: 'b', reach: 'lookup', ruledAt: '2026-01-01T00:00:00.000Z' },
+    { id: 'c', reach: 'proposal', ruledAt: null },
+    { id: 'd', reach: 'injected', ruledAt: '2026-01-01T00:00:00.000Z' },
+  ];
+  const view = buildViewModel({
+    state: {
+      knowledge: facts,
+      agents: [],
+      escalations: [],
+      world: { issues: [], pullRequests: [] },
+      config: { heartbeatIntervalMs: 60_000 },
+      control: { cap: 1, paused: false },
+      tasks: [],
+      parkedOnLimit: [],
+      stallParks: [],
+    } as unknown as AppState,
+    now: 1_000_000,
+    connected: true,
+    demo: false,
+    setup: null,
+    selected: null,
+    liveOutput: new Map(),
+    tails: new Map(),
+    lastPulseAt: 1_000_000,
+    viewingPlan: null,
+    viewingRetro: null,
+    hatching: null,
+    viewingScratchpad: null,
+    viewingFact: 'fact_abc',
+    insightsView: 'economics',
+    insightsWindow: '7d',
+    selectedGoal: null,
+    consolePanel: 'knowledge',
+    tab: 'overview',
+  });
+  // What wants the operator is the claim two agents already agreed on. A count
+  // that included one agent's unseconded note would never come down, and one that
+  // included what the operator already ruled on would climb on their own click.
+  assert.equal(view.factsNeedingYou, 1);
+  // The second leg of the round trip: a place the hook forwards nowhere draws its
+  // default however right the URL is.
+  assert.equal(view.viewingFact, 'fact_abc');
 });
 
 // -- what nothing does --------------------------------------------------------

@@ -101,6 +101,12 @@ export class Hub {
     // it), so a coarse dirty is the whole delivery for each.
     agents.on('scratch', () => this.broadcast({ type: 'dirty' }));
     agents.on('retrospective', () => this.broadcast({ type: 'dirty' }));
+    // An agent wrote down what it learned, or agreed with something already
+    // written. Coarse for the pad's reason: every fact the Knowledge page draws
+    // rides inside /api/state, so the refetch a `dirty` triggers is the whole
+    // delivery — and the point of hearing it here at all is that the page shows a
+    // proposal the moment it is filed rather than on the next pulse.
+    agents.on('fact', () => this.broadcast({ type: 'dirty' }));
     // The file-events hook recorded a written file; a coarse dirty repaints the
     // drawer's "files changed" list via the /api/state refetch (report-like ones
     // also arrive as an agent:flag above).

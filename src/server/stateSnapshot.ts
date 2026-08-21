@@ -123,6 +123,17 @@ export function buildStateSnapshot(
   // where that is visible, and the only one from which something can be retired
   // to make room.
   const inLessonBlock = new Set(renderLessonBlock(lessons, config.lessonBlockChars).rendered.map((l) => l.id));
+  // What the fleet knows about working this repository, every reach and the
+  // rejected tail included (issue #27 phase 2). Read here for lessons' reason
+  // twice over: each fact's `originRef` and its `goal:` scope both name a goal the
+  // world has usually dropped, and the page draws each as a way there.
+  //
+  // The count is taken here, from the store, and never in the browser: it is
+  // `distinctCorroborators`' answer — two observations are one corroborator if
+  // they share a goal or a session — and a `rows.length` in the view layer would
+  // be free to disagree with the count that actually promotes a claim.
+  const facts = store.listFacts();
+  const factCorroborations = store.corroborationCounts();
   // Work only a person can do. Read here rather than only in the panel for
   // findings' reason: each row's `originRef` names the work it belongs to, and the
   // panel links it through the same ref map as everything else.
@@ -332,6 +343,10 @@ export function buildStateSnapshot(
       // world lists by the time anyone reads the lesson, which is why it is
       // resolved here rather than borrowed.
       ...lessons.map((l) => l.originRef),
+      // The goal a fact was first observed on, and the goal a `goal:` scope names —
+      // both are refs the page draws as a way there, and both outlive the world.
+      ...facts.map((f) => f.originRef),
+      ...facts.map((f) => (f.scope.startsWith('goal:') ? f.scope.slice('goal:'.length) : null)),
       // Both halves of a raised bug: the story it came from, and the bug itself once
       // the filing agent reports it — the chip on the row links the latter.
       ...bugFilings.map((b) => b.originRef),
@@ -693,6 +708,11 @@ export function buildStateSnapshot(
     // fleet's system-prompt append, and `rendered` says which promoted ones the
     // cap actually let through.
     lessons: lessons.map((lesson) => ({ ...lesson, rendered: inLessonBlock.has(lesson.id) })),
+    // Every fact, the rejected ones included: the page is the governance, and a
+    // surface drawing only what it let through cannot show that a claim was
+    // killed. Nothing in the dispatcher reads one — a fact feeds prompts (phase 3)
+    // and this panel, and that is the whole of it.
+    knowledge: facts.map((fact) => ({ ...fact, corroborations: factCorroborations.get(fact.id) ?? 0 })),
     // Bugs raised from a story row: `filing` while the desk agent writes one, `filed`
     // with a ref once it exists. Several per story is the normal case, not an error —
     // a story can be wrong in more than one way.

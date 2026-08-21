@@ -1,5 +1,7 @@
 import type {
+  FactRuling,
   FilingTargetProbe,
+  KnowledgeFactPayload,
   InsightsWindow,
   IssueFiled,
   RecoveryVerdict,
@@ -45,6 +47,7 @@ export type ConfigTab = 'values' | 'raw' | 'ci' | 'prompts' | 'mcp' | 'notificat
 export type ConsolePanel =
   | 'findings'
   | 'lessons'
+  | 'knowledge'
   | 'faults'
   | 'launch'
   | 'build'
@@ -295,6 +298,30 @@ export interface CockpitActions {
   promoteLesson(id: string): Promise<void>;
   /** Prune one, from either live status. Terminal: there is no un-retire. */
   retireLesson(id: string): Promise<void>;
+
+  /**
+   * Where a claim stands, on the operator's say-so (#27 phase 2) — promote,
+   * demote, reject, or keep it exactly where it is.
+   *
+   * The whole write surface the Knowledge page has. Nothing here *files* a fact:
+   * agents propose through the tool channel, and a page that could file one would
+   * be filing a claim with no observation behind it. Naming the reach a fact
+   * already has is a ruling rather than a no-op — it is how an operator says a
+   * corroborated claim belongs where it is, and the only way the page's "Needs
+   * you" section ever empties.
+   */
+  setFactReach(id: string, reach: FactRuling): Promise<void>;
+  /**
+   * One claim with the observations behind it, in the observers' own words.
+   *
+   * A read, so it refetches nothing — and its own fetch rather than a field on the
+   * snapshot for the transcript tail's reason: the evidence behind a claim runs to
+   * thousands of characters, and a polled snapshot should not carry it for every
+   * row nobody has opened.
+   */
+  factDetail(id: string): Promise<KnowledgeFactPayload>;
+  /** Open one fact's provenance, or close it. A place, so a link to it lands on it. */
+  viewFact(id: string | null): void;
 
   /** `note` is required by the route on a close-out whose goal's validation is flagged. */
   completeHumanTask(id: string, note?: string): Promise<void>;
