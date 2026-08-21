@@ -1,3 +1,4 @@
+import { resolve as resolvePath } from 'node:path';
 import { projectConfigFilePath, projectConfigLayer, type Config } from '../config.js';
 import { watchLabelFor } from '../watchLabels.js';
 import { credentialVar, parseRemote, type RemoteTarget } from './remote.js';
@@ -14,6 +15,16 @@ import type { SetupProbes } from './probes.js';
  */
 export interface SetupResolution {
   repoRoot: string;
+  /**
+   * Whether {@link repoRoot} is LubbDubb's **own** checkout rather than a project
+   * it works on — the two coincide only when the harness is dogfooding itself.
+   *
+   * Reported rather than refused: dogfooding is how this repo is developed. What it
+   * costs is confidence, since `repoRoot` defaults to `process.cwd()` and so
+   * proposes this directory on every default start whether the operator meant it or
+   * not. → `docs/spec/26-setup.md#two-repositories`
+   */
+  repoRootIsSelf: boolean;
   /** Null when the directory is not a git worktree — every derivation below then fails with it. */
   originUrl: string | null;
   isRepo: boolean;
@@ -32,6 +43,13 @@ export interface SetupResolution {
    * A key the project layer already sets is **absent on purpose**: copying a team
    * value into an operator's own file freezes it at today's, and the next commit
    * that changed it would not reach them. The absence is the feature.
+   *
+   * **Every key is a config *leaf* path** — `integrations.issues`, never
+   * `integrations`. `POST /api/config` validates each one against `CONFIG_FIELDS`,
+   * which holds leaves only, so a nested object is refused at the preview with the
+   * operator's whole answer one field away from being written and nothing but a
+   * field name to explain it. `test/setupWrites.test.ts` holds this against that
+   * registry, because it is a contract between two modules that neither states.
    */
   writes: Record<string, unknown>;
 }
@@ -114,18 +132,24 @@ export async function resolveFromRepo(
   if (target !== null) {
     // Skipped when the team's file already selects them, for {@link SetupResolution.writes}' reason.
     if (projectLayer.integrations === undefined) {
-      writes.integrations = { sourceControl: target.provider, issues: target.provider };
+      writes['integrations.sourceControl'] = target.provider;
+      writes['integrations.issues'] = target.provider;
     }
     if (target.provider === 'github' && projectLayer.github === undefined) {
-      writes.github = { owner: target.parts[0], repo: target.parts[1] };
+      writes['github.owner'] = target.parts[0];
+      writes['github.repo'] = target.parts[1];
     }
     if (target.provider === 'azure' && projectLayer.azureDevOps === undefined) {
-      writes.azureDevOps = { organization: target.parts[0], project: target.parts[1], repository: target.parts[2] };
+      writes['azureDevOps.organization'] = target.parts[0];
+      writes['azureDevOps.project'] = target.parts[1];
+      writes['azureDevOps.repository'] = target.parts[2];
     }
   }
 
+  const install = probes.installRoot();
   return {
     repoRoot,
+    repoRootIsSelf: install !== null && resolvePath(install) === resolvePath(repoRoot),
     originUrl,
     isRepo,
     target,

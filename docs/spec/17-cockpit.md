@@ -3192,16 +3192,21 @@ only asks for — and no longer the work graph.
 
 ## Setup
 
-Three surfaces lead to the first-run panel, and only one of them is permanent.
+The harness's own configuration is **rows on the Needs you rail**, not a surface of its own. It used
+to be three: a reading in the top bar, a first-run card on the Overview, and a panel. All three are
+gone, and the reason is the failure they made together — the bar counted outstanding checks and
+opened a screen that showed none of them, while each check's remedy was a sentence with no control
+attached. A count that opens the wrong surface is worse than no count.
 
-The **Setup reading** in the top bar counts what is outstanding and is **absent at zero** — a reading
-that is always green is one nobody reads, so it earns its place by not being there most of the time.
-The **first-run card** on the Overview is drawn only while the harness has not been pointed anywhere,
-and is blue rather than amber: it is an offer about a harness that is working, not a warning about one
-that is not. The **panel** itself is on `Place` like every other panel, so it can be linked to.
+A config row is `config` (red) or `config_gap` (amber), always in `yours` rather than `blocking`
+(nothing is parked on a worktree, whatever else is stopped), and carries no age — the reading is
+fetched, not stamped. Its **body** is the control that opens the key on the config page; its **fix**
+sits in a strip beneath, because a control may not nest inside a control and the fix is a shortcut
+past the config page rather than the only road to it.
 
-Its three steps are deliberately _not_ on `Place`. A step inside an unsaved edit is not somewhere to
-send somebody — restoring "review" on a reload would restore a review of answers the reload has
-already dropped. Same exception, and the same reason, as `ReviewWrite`'s on the config page.
+The one screen left is the **confirm sheet** that points the fleet at a project, reached from the
+`pointed` row. It is a modal and deliberately _not_ on `Place`: restoring it on a reload would restore
+a review of answers the reload has already dropped. Same exception, and the same reason, as
+`ReviewWrite`'s on the config page.
 
 → [26](26-setup.md)

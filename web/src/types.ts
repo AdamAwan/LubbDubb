@@ -121,6 +121,7 @@ export type {
   RunningConfigEntry,
   RunningConfigPayload,
   SetupCheck,
+  SetupFix,
   SetupPayload,
   SetupResolvePayload,
   SetupVerdict,

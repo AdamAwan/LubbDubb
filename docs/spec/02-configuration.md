@@ -85,10 +85,10 @@ rather than the field inside it. The list:
 | `validation.desktop`, `validation.desktopSkill`                    | the channel and its skill are always on ([20](20-validation.md))                                     |
 | `reapMergedBranches`                                               | always on ([07](07-pull-requests.md#reaping-a-merged-branch))                                        |
 | `reviewReminderMs`                                                 | the cockpit ages every waiting PR, with no threshold                                                 |
-| `issuePickupRequireOwnLabel`                                       | follows `userId` ([below](#userid))                                                                  |
+| `issuePickupRequireOwnLabel`                                       | follows `ownWorkOnly` + `userId` ([below](#userid))                                                  |
 | `github.defaultAssignee`, `azureDevOps.defaultAssignee`            | follows `userId`                                                                                     |
-| `github.filters`, `azureDevOps.filters.prAuthor`                   | follows `userId`                                                                                     |
-| `azureDevOps.filters.workItemAssignedTo`                           | follows `userId`                                                                                     |
+| `github.filters`, `azureDevOps.filters.prAuthor`                   | follows `ownWorkOnly` + `userId`                                                                     |
+| `azureDevOps.filters.workItemAssignedTo`                           | follows `ownWorkOnly` + `userId`                                                                     |
 | `lessonBlockChars`                                                 | one block ships, and it is the knowledge base's ([27](27-knowledge.md#delivery-two-prompts-not-one)) |
 
 Both lists are permanent — a config written before a removal outlives the release that made it.
@@ -474,7 +474,8 @@ reading the file is not the same as knowing the policy.
 
 | Key                    | Type                     | Default                                                           | Behaviour                                                                                                                                                                                                                                |
 | ---------------------- | ------------------------ | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `userId`               | `string` (optional)      | unset                                                             | Who _you_ are to every provider — see [`userId`](#userid). Turns on the ownership gate, ticket assignment and the PR-author filter together. Unset, all three are off.                                                                   |
+| `userId`               | `string` (optional)      | unset                                                             | Who _you_ are to every provider — see [`userId`](#userid). Drives ticket assignment and branch naming, and is who the filters below narrow to. Unset, filed tickets go unassigned and nothing can be filtered.                           |
+| `ownWorkOnly`          | `boolean`                | `true`                                                            | Whether the world arrives filtered to `userId` — pickup needs a watch tag you added, and only pull requests you opened are surfaced. A team decision, so it belongs in the project layer. See [`ownWorkOnly`](#ownworkonly).             |
 | `labelPrefix`          | `string`                 | `"lubbdubb"`                                                      | Derives the one tag `${prefix}-watch`. Everything is opt-in: an item without it is left alone. An **empty** prefix turns the gate off.                                                                                                   |
 | `issuePriorityLabels`  | `Record<string, number>` | `{ 'priority:high': 3, 'priority:medium': 2, 'priority:low': 1 }` | Label → weight for pickup ordering. Replaced wholesale by an override.                                                                                                                                                                   |
 | `issueStateColours`    | `Record<string, string>` | `{}`                                                              | Tracker state → `#rrggbb` for its chip in the cockpit. Display only. Keys match on letters and digits, so `In Review` and `in-review` are one state. Replaced wholesale by an override; live.                                            |
@@ -819,17 +820,20 @@ having intervened.
 ### `userId`
 
 **Who you are, to every provider the harness talks to.** One string, and the only place the harness
-is told whose queue it works.
+is told whose name to act under.
 
 It replaced six keys that were all the same fact spelled per provider and per use —
 `issuePickupRequireOwnLabel`, both `defaultAssignee`s, both `filters.prAuthor`s, and
-`filters.workItemAssignedTo`. Setting it turns on three gates together, because they are one intent:
+`filters.workItemAssignedTo`. What it did **not** replace, and briefly did, is the decision of
+whether to filter by it. That is `ownWorkOnly`, and the line between the two is
+**attribution against filtering**.
 
-| Gate           | What it does                                                                                        |
-| -------------- | --------------------------------------------------------------------------------------------------- |
-| **Ownership**  | `${labelPrefix}-watch` only counts if **you** added it, so nobody else can tag work onto the fleet. |
-| **Assignment** | Tickets the harness _files_ are assigned to you.                                                    |
-| **Authorship** | Only pull requests you opened are surfaced — which is also what lets a merged branch be reaped.     |
+| Gate           | Key                          | What it does                                                                                        |
+| -------------- | ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| **Assignment** | `userId`                     | Tickets the harness _files_ are assigned to you.                                                    |
+| **Naming**     | `userId`                     | Branches it opens are named as yours.                                                               |
+| **Ownership**  | `ownWorkOnly` **+** `userId` | `${labelPrefix}-watch` only counts if **you** added it, so nobody else can tag work onto the fleet. |
+| **Authorship** | `ownWorkOnly` **+** `userId` | Only pull requests you opened are surfaced — which is also what lets a merged branch be reaped.     |
 
 **One string rather than one per provider**, though a GitHub login and an Azure UPN are different
 identities. One project is worked at a time and each project carries its own `lubbdubb.config.json`,
@@ -837,10 +841,54 @@ so the identity that is correct is whichever provider `integrations` selects: a 
 `github`, a UPN where it is `azure`. Only one is ever in force, so there is nothing for a second key
 to disagree with.
 
-**Unset, all three gates are off**: any tagger counts, filed tickets go unassigned, and every open
-pull request is surfaced. That is the first-run and test posture, and it is why the key is optional —
-the `fake` provider resolves no identity at all, and a harness that demanded one could not boot
-against it.
+**Unset, filed tickets go unassigned and nothing can be filtered to you** whatever `ownWorkOnly`
+says — a filter needs somebody to filter _to_. That is the `fake` provider's posture, which resolves
+no identity at all, and it is why the key is optional in the type rather than required: a harness that
+demanded one could not boot against the mock it ships with. Every real deployment is told about it
+instead, as one outstanding check on the Setup reading ([26](26-setup.md)) — where a missing identity
+is a row with the resolved login on a button, not a refusal to start.
+
+### `ownWorkOnly`
+
+**Whether the world arrives filtered to you.** A boolean, defaulting to `true`, and the other half of
+the identity split above.
+
+The two are separate because they answer different questions and belong to different people. Identity
+is personal and lives in an operator's own `lubbdubb.config.json`; whether a project filters by owner
+is a **team** decision and belongs in the `lubbdubb.project.json` they commit
+([the project layer](#the-project-layer)). Folded into one key — which is exactly what
+`userId !== undefined` was — a team could not state the policy without every member's login, and an
+operator could not say who they were without turning the filters on.
+
+Both halves are read together in one place, `filterToViewer` (`src/integrations/registry.ts`), which
+answers who the world is narrowed to at fetch time or `undefined` for nobody. Assignment and branch
+naming deliberately do not come through it: **if the harness files it, it is yours**, whatever the
+project chooses to show you.
+
+**The default is `true` so the split is invisible on upgrade.** A deployment carrying `userId` keeps
+the gates it already had; one without keeps them off, because a filter needs an identity. Neither
+changes behaviour on the boot somebody takes the build, which is the whole reason the default is not
+`false`.
+
+That default **is** the migration, and there is no other. Nothing is written into an operator's file
+to say so: an absent key already means `true`, so a rewrite would only add a line stating what was
+already the case — and a config migration that edits files is a migration that can be run twice, or
+half. `test/ownWorkOnly.test.ts` holds the claim against the pre-split file shapes rather than
+asserting it here, because "we chose a default that makes this a no-op" is only true while the
+default says so.
+
+**On with no identity is not refused at load.** It is a coherent thing to have written and an
+incoherent thing to run, but refusing it would make the shipped mock unbootable and would gate a
+harness that is otherwise fine — so it is said in the reading instead, in the operator's words. That
+is the same "an offer, never a gate" line [26](26-setup.md) draws for everything else about
+configuration.
+
+**Turning it off is also the escape hatch for a provider that cannot attribute labels.** The
+ownership gate reads `labelsAddedByViewer`, and a provider that never populates it resolves every
+issue's labels to `[]` — so nothing is ever picked up and nothing errors ([06](06-issue-pickup.md)).
+Before the split the only way out was unsetting `userId`, which silently gave up ticket assignment
+too. Now it is one key, and the Setup reading offers it as a fix on exactly the reading that detects
+it: watched items exist, and none of them are yours.
 
 #### How assignment reaches the ticket
 

@@ -340,38 +340,6 @@ function LocalRun({ view, actions }: { view: CockpitView; actions: CockpitAction
   );
 }
 
-/**
- * How many of the harness's own checks are outstanding — and **nothing at all**
- * once none are.
- *
- * A reading that is always green is one nobody reads, so this one earns its place
- * in the bar by not being there most of the time. It is also the reason the checks
- * outlive the first three minutes they were written for: this is how an operator
- * finds out on a Tuesday that a token expired, or that a repository nobody has
- * tagged anything in will keep the fleet idle and report nothing wrong.
- */
-function Setup({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element | null {
-  const setup = view.setup;
-  if (setup === null || setup.outstanding === 0) return null;
-  const worst = setup.checks.some((check) => check.verdict === 'bad');
-  const title = setup.pointed
-    ? `${setup.outstanding} thing(s) about this harness's own configuration need a look — open Setup`
-    : 'This harness is running the shipped mock and has not been pointed at any work — open Setup';
-  return (
-    <button
-      type="button"
-      className={`cn-read cn-act ${worst ? 'cn-setup-bad' : 'cn-setup-warn'}`}
-      onClick={() => actions.openPanel('setup')}
-      title={title}
-      aria-label={title}
-    >
-      <span>Setup</span>
-      <b>{setup.outstanding}</b>
-      <i className="cn-chev">›</i>
-    </button>
-  );
-}
-
 /** `issue:284` → 284. The panel and this both address a goal by its number. */
 function originIssueNumber(originRef: string): number | null {
   const m = /^issue:(\d+)$/.exec(originRef);
@@ -471,7 +439,6 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
           onOpen={() => actions.openPanel('launch')}
           title="Blueprints waiting for a free slot — open the launch desk"
         />
-        <Setup view={view} actions={actions} />
         <LocalRun view={view} actions={actions} />
         <Build view={view} actions={actions} />
         {/* The tail of the strip is the two ways-in that are not gauges. Every

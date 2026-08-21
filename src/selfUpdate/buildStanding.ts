@@ -67,6 +67,12 @@ const MAX_COMMITS = 10;
  *
  * Not exported: the only thing that should ever ask which directory the harness is
  * installed in is the reader below it, and a second caller would be a second answer.
+ * Exported for the Setup reading, which asks a different question of the same
+ * answer: whether the project an operator is about to point the fleet at is this
+ * checkout. The two repositories coincide only when LubbDubb is dogfooding, and
+ * the one time they are the same directory is the one time the cockpit has to say
+ * which it means. → `docs/spec/26-setup.md#two-repositories`
+ *
  * Walks up from this module's own file looking for a `.git`, rather than trusting
  * a fixed number of `..` segments: the same source runs from `src/` under `tsx`
  * and from an `outDir` after a build, and those sit at different depths. `.git`
@@ -74,7 +80,7 @@ const MAX_COMMITS = 10;
  * a git worktree has a `.git` file — which is exactly how this repo's own agents
  * run, so getting it wrong would make the feature invisible in development.
  */
-function installRoot(): string | null {
+export function installRoot(): string | null {
   let dir = dirname(fileURLToPath(import.meta.url));
   // Bounded rather than `while (true)`: a symlink loop or a root that never
   // matches must end the walk, not the process.
