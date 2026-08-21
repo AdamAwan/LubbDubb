@@ -107,9 +107,26 @@ export interface Place {
   /** Features as headings, or one flat list with a feature column. */
   ticketGroup: 'feature' | 'flat';
   ticketOrder: TicketOrder;
+  /**
+   * The table, or the board of state columns.
+   *
+   * A place rather than a `useState` for the reason every field here is one: a view
+   * switched and then stepped back out of has to come back, and a link somebody
+   * sends has to open on the view they were looking at. Defaults to the table, which
+   * is what the tab has always been.
+   */
+  ticketView: 'table' | 'card';
+  /**
+   * The board columns hidden from view — the **hidden** ones, not the shown ones.
+   *
+   * Inverted for `collapsed`'s reason: the default is the empty list and so a bare
+   * URL, and a state the tracker starts reporting later appears on its own instead
+   * of being excluded by a list written before it existed.
+   */
+  ticketColumns: string[];
 }
 
-const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets', 'insights', 'pets', 'config'];
+const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'insights', 'pets', 'config'];
 const INSIGHTS_VIEWS: readonly InsightsView[] = ['economics', 'reliability', 'causes', 'trend', 'mix'];
 /**
  * The windows the time bar offers, and what a bare Insights URL means.
@@ -146,6 +163,8 @@ export const NOWHERE: Place = {
   ticketFeature: null,
   ticketGroup: 'feature',
   ticketOrder: 'added',
+  ticketView: 'table',
+  ticketColumns: [],
 };
 
 const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'mcp', 'notifications', 'theme'];
@@ -156,12 +175,20 @@ const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'mc
  * and an unknown tab resolves to the overview, so without this every bookmark and
  * shared link to `?tab=backlog` would land somewhere else with nothing saying so.
  * An alias is one entry; a stranded link is a bug report.
+ *
+ * `work` is the second, and it lands on the same place for a weaker reason worth
+ * stating: the tickets tab is not a superset of the work tab. It has the half of
+ * it an operator *acted* on — the unrecorded-work call-out — while the record
+ * itself is the `record` panel now, reachable from the bar at every width. A tab
+ * alias cannot open a panel, and of the two halves this is the one a saved link to
+ * `?tab=work` was overwhelmingly about.
  */
-const TAB_ALIASES: Readonly<Record<string, ConsoleTab>> = { backlog: 'tickets' };
+const TAB_ALIASES: Readonly<Record<string, ConsoleTab>> = { backlog: 'tickets', work: 'tickets' };
 const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched'];
 const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
 const TICKET_GROUP = ['feature', 'flat'] as const;
 const TICKET_ORDER: readonly TicketOrder[] = ['added', 'changed', 'cost'];
+const TICKET_VIEW: readonly Place['ticketView'][] = ['table', 'card'];
 // Every member of `ConsolePanel` bar the ask, which carries its own parameter. A
 // panel missing from here is not merely unshareable: the place round-trips through
 // the query string, so an unlisted name is parsed straight back to null and the
@@ -187,6 +214,7 @@ const PANEL_NAMES: Record<Exclude<ConsolePanel, null | { ask: string }>, true> =
   pets: true,
   localRun: true,
   setup: true,
+  record: true,
 };
 
 const PANELS = Object.keys(PANEL_NAMES) as Exclude<ConsolePanel, null | { ask: string }>[];
@@ -245,6 +273,8 @@ export function readPlace(search: string): Place {
     ticketFeature: readFeature(param(query, 'feature')),
     ticketGroup: TICKET_GROUP.find((g) => g === param(query, 'group')) ?? 'feature',
     ticketOrder: TICKET_ORDER.find((o) => o === param(query, 'order')) ?? 'added',
+    ticketView: TICKET_VIEW.find((v) => v === param(query, 'view')) ?? 'table',
+    ticketColumns: readStrings(param(query, 'hide')),
   };
 }
 
@@ -363,6 +393,25 @@ function readFeature(value: string | null): number | 'none' | null {
 }
 
 /**
+ * A comma-separated list of tracker state words, validated the way every parameter
+ * here is: blanks are dropped rather than carried, because a hand-edited `?hide=` is
+ * an input an operator can type and an empty entry would hide a column that does not
+ * exist. Deduplicated and sorted, so one set of hidden columns has one spelling.
+ *
+ * A comma is therefore the one character a state word cannot contain here. Encoding
+ * one would be a second grammar in the address bar, for a case no tracker produces.
+ */
+function readStrings(value: string | null): string[] {
+  if (value === null) return [];
+  const seen = new Set<string>();
+  for (const part of value.split(',')) {
+    const state = part.trim();
+    if (state !== '') seen.add(state);
+  }
+  return [...seen].sort((a, b) => a.localeCompare(b));
+}
+
+/**
  * A comma-separated issue-number list, validated the way every other parameter
  * here is: anything that is not a positive integer is dropped rather than
  * carried, because a hand-edited `?collapsed=` is an input an operator can type
@@ -420,6 +469,12 @@ export function placeQuery(place: Place): string {
   if (place.ticketFeature !== null) query.set('feature', String(place.ticketFeature));
   if (place.ticketGroup !== 'feature') query.set('group', place.ticketGroup);
   if (place.ticketOrder !== 'added') query.set('order', place.ticketOrder);
+  if (place.ticketView !== 'table') query.set('view', place.ticketView);
+  // Sorted on the way out as on the way in, so hiding A then B and B then A are
+  // one place rather than two history entries.
+  if (place.ticketColumns.length > 0) {
+    query.set('hide', [...place.ticketColumns].sort((a, b) => a.localeCompare(b)).join(','));
+  }
   const encoded = query.toString();
   return encoded === '' ? '' : `?${encoded}`;
 }

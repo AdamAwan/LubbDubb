@@ -22,7 +22,7 @@ export function resolveExecutable(command: string, env: NodeJS.ProcessEnv = proc
     }
     throw new Error(`Agent command not found or not executable: ${command}`);
   }
-  for (const dir of (env.PATH ?? '').split(delimiter)) {
+  for (const dir of (envValue(env, 'PATH') ?? '').split(delimiter)) {
     if (!dir) continue;
     for (const candidate of withExecExtensions(join(dir, command), env)) {
       if (isExecutableFile(candidate)) return candidate;
@@ -43,12 +43,39 @@ export function resolveExecutable(command: string, env: NodeJS.ProcessEnv = proc
  */
 function withExecExtensions(base: string, env: NodeJS.ProcessEnv): string[] {
   if (process.platform !== 'win32') return [base];
-  const exts = (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD')
+  const exts = (envValue(env, 'PATHEXT') ?? '.COM;.EXE;.BAT;.CMD')
     .split(';')
     .map((e) => e.trim())
     .filter(Boolean);
   if (exts.some((e) => base.toLowerCase().endsWith(e.toLowerCase()))) return [base];
   return [base, ...exts.map((e) => base + e)];
+}
+
+/**
+ * Read an environment variable the way the *platform* would, not the way a plain
+ * object would.
+ *
+ * Why this exists: Windows environment variables are case-insensitive, and
+ * `process.env` models that with a proxy — but every caller here is handed a
+ * **spread copy** (`{...process.env, ...spec.env}`), which is an ordinary object
+ * with whatever casing the OS reported. A native Windows launcher (pwsh -> npm ->
+ * cmd -> node) reports `Path`, so `env.PATH` is `undefined` and PATH lookup walks
+ * an empty list — every dispatch fails with "not found on PATH" having never
+ * touched the disk. Launched from Git Bash the same variable arrives as `PATH`
+ * and it works, which is the whole reason this stayed hidden: the bug is a
+ * property of the shell the harness was started from, not of the machine.
+ *
+ * POSIX env vars really are case-sensitive, so the fallback scan is win32-only.
+ */
+function envValue(env: NodeJS.ProcessEnv, name: string): string | undefined {
+  const direct = env[name];
+  if (direct !== undefined) return direct;
+  if (process.platform !== 'win32') return undefined;
+  const lower = name.toLowerCase();
+  for (const key of Object.keys(env)) {
+    if (key.toLowerCase() === lower) return env[key];
+  }
+  return undefined;
 }
 
 function isExecutableFile(p: string): boolean {

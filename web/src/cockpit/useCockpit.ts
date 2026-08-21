@@ -275,6 +275,7 @@ export function useCockpit(): CockpitStatus {
       setPrWatched: (n, watched) => then(api.setPrWatched(n, watched)),
       setStackLanding: (ref, landing) => then(api.setStackLanding(ref, landing)),
       setIssueWatched: (n, watched) => then(api.setIssueWatched(n, watched)),
+      setIssueState: (n, state) => then(api.setIssueState(n, state)),
       setGoalPriority: (n, priority) => then(api.setGoalPriority(n, priority)),
       setIssueProfile: (n, profile) => then(api.setIssueProfile(n, profile)),
       setPartProfile: (planId, slug, profile) => then(api.setPartProfile(planId, slug, profile)),
@@ -340,6 +341,8 @@ export function useCockpit(): CockpitStatus {
       ticketFeature: place.ticketFeature,
       ticketGroup: place.ticketGroup,
       ticketOrder: place.ticketOrder,
+      ticketView: place.ticketView,
+      ticketColumns: place.ticketColumns,
     }),
   };
 }

@@ -25,7 +25,10 @@ test('every place round-trips through the query string', () => {
     at({ tab: 'tickets', ticketTracking: 'frozen', ticketState: 'In Review' }),
     at({ tab: 'tickets', ticketFeature: 812, ticketGroup: 'flat', ticketOrder: 'changed' }),
     at({ tab: 'tickets', ticketFeature: 'none' }),
-    at({ tab: 'work' }),
+    at({ tab: 'tickets', ticketView: 'card' }),
+    at({ tab: 'tickets', ticketView: 'card', ticketColumns: ['Closed', 'Removed'] }),
+    at({ tab: 'tickets', ticketColumns: ['Removed'] }),
+    at({ panel: 'record' }),
     at({ goal: 'issue:142' }),
     at({ tab: 'tickets', goal: 'issue:142', agent: 'agent-7' }),
     at({ panel: 'findings' }),
@@ -130,6 +133,20 @@ test('a link to the deleted backlog tab lands on the tickets tab', () => {
   assert.equal(readPlace('?tab=backlog').tab, 'tickets');
   assert.equal(readPlace('?tab=backlog&collapsed=3').collapsed[0], 3, 'and keeps the rest of the place');
   assert.equal(readPlace('?tab=nonsense').tab, 'overview', 'a tab that never existed is still the overview');
+});
+
+/**
+ * The work tab went the same way, and lands in the same place.
+ *
+ * It is the weaker of the two aliases and deliberately so: tickets is not a
+ * superset of the work tab, it has the half of it an operator *acted* on — the
+ * unrecorded-work call-out — while the record itself is a panel now. A tab alias
+ * cannot open a panel, and of the two halves this is the one a saved `?tab=work`
+ * was overwhelmingly about.
+ */
+test('a link to the retired work tab lands where its triage went', () => {
+  assert.equal(readPlace('?tab=work').tab, 'tickets');
+  assert.equal(readPlace('?tab=work&goal=issue:142').goal, 'issue:142', 'and keeps the rest of the place');
 });
 
 // The two coarse axes swapped meaning in #351: `state` is the tracker's own word
@@ -239,4 +256,34 @@ test('the tickets panel reads the widening back and offers the way out of it', (
   assert.match(panel, /widenedFor\(query\.state, query\.tracking, states\)/);
   assert.match(panel, /onQuery\(LIVE_WORK\)/);
   assert.match(panel, /className="tickets-widened"/);
+});
+
+test('the table is the default view, so it costs no query parameter', () => {
+  assert.equal(placeQuery(at({ tab: 'tickets' })), '?tab=tickets');
+  assert.equal(readPlace('?tab=tickets').ticketView, 'table');
+  // An unknown view resolves to the default rather than to nothing, like every other
+  // validated parameter here.
+  assert.equal(readPlace('?tab=tickets&view=kanban').ticketView, 'table');
+});
+
+test('hidden columns are the exception, so an untouched board is a bare URL', () => {
+  // Hidden rather than shown, for `collapsed`'s reason: the default is the empty
+  // list, and a state that appears in the tracker later shows up on its own rather
+  // than being invisibly excluded by a list written before it existed.
+  assert.equal(placeQuery(at({ tab: 'tickets', ticketView: 'card' })), '?tab=tickets&view=card');
+  assert.deepEqual(readPlace('?tab=tickets').ticketColumns, []);
+});
+
+test('hidden columns have one spelling, so hiding A then B is not a second place', () => {
+  const one = placeQuery(at({ tab: 'tickets', ticketColumns: ['Removed', 'Closed'] }));
+  const other = placeQuery(at({ tab: 'tickets', ticketColumns: ['Closed', 'Removed'] }));
+  assert.equal(one, other, 'sorted on the way out, or the two would push a history entry going nowhere');
+  assert.deepEqual(readPlace(one).ticketColumns, ['Closed', 'Removed']);
+});
+
+test('a blank entry in the hidden list is dropped rather than hiding a nameless column', () => {
+  // The separator is the one character a tracker's state word may not contain here.
+  // Encoding it would be a second grammar in the address bar; dropping the empty
+  // part is the same treatment every other junk value gets.
+  assert.deepEqual(readPlace('?tab=tickets&hide=Closed,,%20%20,Removed').ticketColumns, ['Closed', 'Removed']);
 });

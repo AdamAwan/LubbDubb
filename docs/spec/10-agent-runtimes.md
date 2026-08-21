@@ -153,6 +153,30 @@ Points that are load-bearing:
 `buildInitialMessage(task)` is the task prompt. `buildResumeMessage()` is the nudge typed into a
 resumed agent that was mid-work.
 
+### Resolving the command
+
+`resolveExecutable` (`src/agents/resolveCommand.ts`) turns `claudeCommand` into an absolute path
+before either transport spawns, because both fail *silently* on a missing binary: `node-pty` prints
+`execvp(3) failed` into the terminal and exits 1, and `child_process.spawn` emits an async `error`
+event. Resolving up front turns either into one clear message at spawn time, and hands the runtime a
+path so the child no longer depends on inheriting a correct `PATH`.
+
+A command with a separator in it is checked and returned as-is. A bare one is walked against `PATH`,
+each directory tried with the base name first and then each `PATHEXT` extension — Windows finds
+`claude.exe` from `claude` only that way.
+
+**The env it reads is a spread copy, so both variables are looked up case-insensitively on Windows.**
+Every caller hands it `{...process.env, ...spec.env}`, which is an ordinary object — `process.env`'s
+case-insensitive proxy does not survive the spread. Windows reports the variable as `Path` when the
+harness was launched down a native chain (`pwsh` → `npm` → `cmd` → `node`), so a plain `env.PATH` read
+is `undefined` there: the walk covers an empty list and **every** dispatch fails
+`Agent command 'claude' was not found on PATH` without a single filesystem check. Started from Git
+Bash the same variable arrives as `PATH` and everything works, which is what made this a property of
+the operator's shell rather than of their machine — the same build, the same config and the same
+install, working or dead by how the server was started. The fallback scan is win32-only: POSIX
+environment variables are genuinely case-sensitive, and a lower-cased `path` there is a different
+variable.
+
 ### The lesson block
 
 Since #355 phase 3 the appended system prompt carries a third part: the fleet's **promoted lessons**

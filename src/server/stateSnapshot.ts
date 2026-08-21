@@ -1,5 +1,6 @@
 import { existsSync } from 'node:fs';
 import type { System } from '../system.js';
+import type { Config } from '../config.js';
 import type {
   Issue,
   IssueAssay,
@@ -28,7 +29,12 @@ import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
 import { prHealth, prState } from '../prHealth.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
-import { issuePickupStatus, openPrForIssue, type IssuePickupContext } from '../dispatcher/issuePickup.js';
+import {
+  effectivePickupStates,
+  issuePickupStatus,
+  openPrForIssue,
+  type IssuePickupContext,
+} from '../dispatcher/issuePickup.js';
 import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusion.js';
 import { rollUpIssueSpend } from '../issueSpend.js';
 import { tallyRunOutcomes } from '../reliabilityInsights.js';
@@ -532,6 +538,12 @@ export function buildStateSnapshot(
       // decides is the one the route asks.
       canFileTickets: trackerCoordinates(config) !== null,
       stateColours: { ...config.issueStateColours },
+      boardStates: [...config.issueBoardStates],
+      // Asked of the connector, never inferred from the provider name: the one place
+      // that decides is the one the route asks. `setWorkItemState` throws when
+      // nothing implements it, so there is no other way to *offer* the operation.
+      canSetWorkItemState: connector.canSetWorkItemState(),
+      stateRules: workItemStateRules(config),
     },
     // When the world below was actually observed — null before the first cycle,
     // when there is no baseline and the lists are empty. Shipped because the
@@ -1067,4 +1079,31 @@ function localRunTargetViews(ctx: {
       runnable: choices.target !== null,
     };
   });
+}
+
+/**
+ * The state words the work-item rules act on, or null where they are all switched off.
+ *
+ * Pure and beside the snapshot rather than inline, so the one thing worth getting
+ * right is readable: `pickup` is the **effective** set the dispatcher gates on, which
+ * folds `issueInProgressState` in. Built from the raw key it would tell the board
+ * that dropping onto the in-progress state stops the fleet, which is the opposite of
+ * true — and the board's headers are the surface that says so out loud.
+ *
+ * `returnsTo` is the first *configured* pickup state rather than the first of the
+ * effective list, because that is how `workItemBackToPickup` reads it: the fold
+ * appends, so on a config listing nothing but an in-progress state the two differ.
+ */
+function workItemStateRules(config: Config): CockpitState['config']['stateRules'] {
+  const pickup = effectivePickupStates({
+    pickupStates: config.issuePickupStates,
+    inProgressState: config.issueInProgressState,
+  });
+  if (pickup === undefined || pickup.length === 0) return null;
+  return {
+    pickup,
+    inProgress: config.issueInProgressState ?? null,
+    inReview: config.issueInReviewState ?? null,
+    returnsTo: config.issuePickupStates?.[0] ?? null,
+  };
 }

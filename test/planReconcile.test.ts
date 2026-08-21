@@ -18,6 +18,7 @@ function recordingSink(): { sink: ActionSink; comments: IssueCommentInput[] } {
   return {
     comments,
     sink: {
+      canSetWorkItemState: () => false,
       postPrReply: unused,
       mergePr: unused,
       setPrLabel: unused,
