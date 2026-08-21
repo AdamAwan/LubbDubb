@@ -107,13 +107,22 @@ export function LocalRunPanel({
   const said = inFlight && phase === null ? (lines[lines.length - 1] ?? null) : null;
 
   const byNumber = new Map(targets.map((t) => [t.issueNumber, t]));
-  const rows = goals
-    .map((goal) => ({ goal, target: byNumber.get(goal.number) }))
-    .filter((row): row is { goal: Issue; target: LocalRunTargetView } => row.target !== undefined)
-    // Goals with a branch of their own first. Everything else resolves to the
-    // integration branch, which is one choice however many goals offer it.
-    .filter((row) => showAll || row.target.runnable);
-  const hidden = targets.filter((t) => !t.runnable).length;
+  // Everything that *could* be drawn: a goal the cockpit is showing, with somewhere
+  // for it to run. Both halves are needed — a target for a goal that is not in the
+  // list is not a row anything can reveal.
+  const candidates = goals.flatMap((goal) => {
+    const target = byNumber.get(goal.number);
+    return target === undefined ? [] : [{ goal, target }];
+  });
+  // Goals with a branch of their own by default. Everything else resolves to the
+  // integration branch, which is one choice however many goals offer it.
+  const rows = showAll ? candidates : candidates.filter((row) => row.target.runnable);
+  // Counted off the **same** population the rows come from, which is the whole point
+  // of doing it here: counting hidden *targets* instead let the checkbox and the
+  // empty state disagree, and in the case that matters they disagreed the wrong way —
+  // no rows drawn, nothing hidden by this list's reckoning, and so no control offered
+  // to reveal what the filter was holding back.
+  const holdingBack = candidates.length - rows.length;
   const chosen = picked === null ? null : (byNumber.get(picked.issueNumber) ?? null);
   const chosenFacts =
     chosen === null
@@ -183,7 +192,7 @@ export function LocalRunPanel({
       <div className="lrun-pick">
         <div className="lrun-pick-head">
           <h4>{run !== null && run.live ? 'Run a different goal' : 'Run a goal'}</h4>
-          {(hidden > 0 || showAll) && (
+          {(holdingBack > 0 || showAll) && (
             <label className="lrun-filter">
               <input type="checkbox" checked={showAll} onChange={(e) => setShowAll(e.target.checked)} />
               show every goal
@@ -192,12 +201,20 @@ export function LocalRunPanel({
         </div>
 
         {rows.length === 0 && (
-          // Which of the two empty states this is, said in words: a deployment with
-          // nothing started at all reads exactly like a filter hiding everything.
+          // Which of the two empty states this is, said in words: a filter hiding
+          // everything and a cockpit with no goals in it read identically otherwise,
+          // and only one of them has anything an operator can do about it.
+          //
+          // The two arms line up with the checkbox by construction, because both read
+          // `holdingBack`: the arm that says "tick it" is only ever drawn when it is
+          // there to tick, and the other one says why there is nothing instead of
+          // leaving somebody looking for a control that would not help.
           <p className="lrun-note">
-            {hidden > 0
-              ? `No goal has a branch of its own yet. ${String(hidden)} would run the integration branch — tick “show every goal” to pick one.`
-              : 'There are no goals to run.'}
+            {holdingBack > 0
+              ? `No goal has a branch of its own yet. ${String(holdingBack)} would run the integration branch — tick “show every goal” to pick one.`
+              : goals.length === 0
+                ? 'The cockpit is not drawing any goals yet, so there is nothing to run.'
+                : 'None of these goals has anywhere to run yet.'}
           </p>
         )}
 

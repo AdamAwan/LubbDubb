@@ -333,8 +333,17 @@ Two more rules the layout obeys:
   alone does not say which branch.
 
 By default the list shows only goals with a branch of their own. Everything else resolves to the
-integration branch, which is one choice however many goals offer it; `show every goal` reveals them,
-and the empty state names the filter rather than reading as "nothing to run". The selection, the
+integration branch, which is one choice however many goals offer it; `show every goal` reveals them.
+
+**The filter and the empty state are counted off one population**, and that is a fix rather than a
+tidiness: the count was taken over the *targets* while the rows were taken over the join of the goals
+on screen and their targets, so the two could disagree — and in the case that mattered they disagreed
+the wrong way round. Nothing drawn, nothing hidden by the count's reckoning, so no checkbox, under a
+message that said there was nothing to run. Both now read `holdingBack`, the difference between the
+candidates and the rows, so the arm that says "tick it" is only ever drawn when it is there to tick.
+The other arms tell the two remaining cases apart — no goals on screen at all, or goals with nowhere
+to run — because "nothing to run" reads as a hidden filter to anybody who has just been offered
+one. The selection, the
 expander and the filter are local state and not `Place`: which row is highlighted is not *where you
 are*, and the panel itself is the place.
 
