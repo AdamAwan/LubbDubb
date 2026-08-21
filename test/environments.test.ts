@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { rmSync } from 'node:fs';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -70,6 +72,22 @@ function twoPartGoal(): WorkNode[] {
     node({ ref: 'plan:12', kind: 'plan', parentRef: 'issue:12' }),
     node({ ref: 'pr:1', kind: 'pr', parentRef: 'plan:12', status: 'merged', terminal: true }),
     node({ ref: 'pr:2', kind: 'pr', parentRef: 'plan:12', status: 'merged', terminal: true }),
+  ];
+}
+
+/**
+ * The same goal as the work graph really holds a *planned* one: each part is a
+ * node of its own, and a part's pull request hangs off the part rather than off
+ * the issue two levels up (`prParent` in `src/graph/workGraph.ts` fills part-first
+ * on purpose — work lineage is what the parent means).
+ */
+function plannedGoal(): WorkNode[] {
+  return [
+    node({ ref: 'issue:12', kind: 'issue' }),
+    node({ ref: 'issue:12:part:api', kind: 'part', parentRef: 'issue:12' }),
+    node({ ref: 'issue:12:part:ui', kind: 'part', parentRef: 'issue:12' }),
+    node({ ref: 'pr:1', kind: 'pr', parentRef: 'issue:12:part:api', status: 'merged', terminal: true }),
+    node({ ref: 'pr:2', kind: 'pr', parentRef: 'issue:12:part:ui', status: 'merged', terminal: true }),
   ];
 }
 
@@ -146,6 +164,32 @@ test('merges the sweep could not attribute are counted from the graph, not the c
   assert.equal(unattributedMerges('issue:12', twoPartGoal(), new Set([1])), 1);
   assert.equal(unattributedMerges('issue:12', twoPartGoal(), new Set([1, 2])), 0);
   assert.equal(unattributedMerges('issue:12', twoPartGoal(), new Set()), 2);
+});
+
+test('a part’s merge is attributed to the goal, not to the part it hung off', () => {
+  // The walk used to stop on any ref starting with `issue:`, which a part is — so
+  // the landing was filed under `issue:12:part:api`, a ref nothing else asks
+  // about. `goalReach` then found no landings for `issue:12` and `allGoalReach`
+  // dropped it: no environment row at all, and no gate ever opened.
+  const found = unrecordedLandings({
+    world: world({ closedPullRequests: [mergedPr({ number: 1 }), mergedPr({ number: 2 })] }),
+    nodes: plannedGoal(),
+    landed: new Set(),
+  });
+  assert.deepEqual(found, [
+    { prNumber: 1, goalRef: 'issue:12', sha: 'sha1' },
+    { prNumber: 2, goalRef: 'issue:12', sha: 'sha2' },
+  ]);
+});
+
+test('a planned goal’s unattributed merges are counted against the goal, not its parts', () => {
+  assert.equal(unattributedMerges('issue:12', plannedGoal(), new Set()), 2);
+  assert.equal(unattributedMerges('issue:12', plannedGoal(), new Set([1])), 1);
+  assert.equal(
+    unattributedMerges('issue:12:part:api', plannedGoal(), new Set()),
+    0,
+    'a part is not a goal, and nothing may be counted against one',
+  );
 });
 
 // --- the roll-up -----------------------------------------------------------
@@ -643,4 +687,91 @@ test('a held goal says what it is waiting for, and a released one says nothing',
     }),
     null,
   );
+});
+
+// --- a planned goal, end to end ---------------------------------------------
+
+/**
+ * The whole path for a goal whose pull request hangs off a **part**: the sweep
+ * attributes it, the probe answers it, the arrival is recorded, and the gate it
+ * was holding opens. Every one of those reads the goal ref the sweep wrote, so
+ * one wrong ref at the top loses all four silently.
+ */
+test('a part’s merge lands under the goal, arrives as the goal, and opens the goal’s gate', async () => {
+  const environments: EnvironmentConfig[] = [
+    { name: 'testUk', at: 'unused', arrival: { opens: ['validate', 'close_out'], comment: true } },
+  ];
+  const store = new Store(':memory:');
+  const comments: IssueCommentInput[] = [];
+  const sink = {
+    async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
+      comments.push(input);
+      return { ok: true, ref: `comment_${comments.length}` };
+    },
+  } as unknown as ActionSink;
+  store.recordWorkGraph(plannedGoal());
+  const desk = new EnvironmentDesk({
+    store,
+    environments,
+    prober: new FakeEnvironmentProber({ testUk: ['head-testUk'] }),
+    git: new FakeGitObserver().setContains('head-testUk', 'sha1', true).setContains('head-testUk', 'sha2', true),
+    sink,
+    probeIntervalMs: 60_000,
+  });
+
+  await desk.run(world({ closedPullRequests: [mergedPr({ number: 1 }), mergedPr({ number: 2 })] }));
+
+  assert.deepEqual(
+    store.listGoalLandings().map((l) => l.goalRef),
+    ['issue:12', 'issue:12'],
+    'both parts’ merges are the goal’s landings',
+  );
+  const arrivals = store.listGoalArrivals();
+  assert.equal(arrivals.length, 1);
+  assert.equal(arrivals[0]?.goalRef, 'issue:12', 'the goal arrived, not one part of it');
+  // The failure this is really about: a part-ref arrival never satisfies a gate
+  // asked about the goal, so a delivered goal’s bench rows are held for good.
+  assert.equal(openedGoals('close_out', environments, arrivals, [])?.has('issue:12'), true);
+  assert.equal(openedGoals('validate', environments, arrivals, [])?.has('issue:12'), true);
+  assert.equal(comments[0]?.number, 12, 'and the line goes on the goal’s ticket');
+  store.close();
+});
+
+test('the rows a part ref was already filed under are repaired on the next boot', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-partref-'));
+  const path = join(dir, 'landings.db');
+  const before = new Store(path);
+  // Exactly what the old walk wrote: both of the goal's merges labelled with the
+  // part that opened them, and an arrival claiming one part of it is in testUk.
+  before.recordGoalLanding({ prNumber: 1, goalRef: 'issue:12:part:api', sha: 'sha1' });
+  before.recordGoalLanding({ prNumber: 2, goalRef: 'issue:12:part:ui', sha: 'sha2' });
+  before.recordGoalLanding({ prNumber: 3, goalRef: 'issue:99', sha: 'sha3' });
+  before.recordGoalArrival({ goalRef: 'issue:12:part:api', environment: 'testUk', arrivedAt: '2026-08-01' });
+  before.recordGoalArrival({ goalRef: 'issue:99', environment: 'testUk', arrivedAt: '2026-08-01' });
+  before.close();
+
+  const after = new Store(path);
+  assert.deepEqual(
+    after.listGoalLandings().map((l) => [l.prNumber, l.goalRef]),
+    [
+      [1, 'issue:12'],
+      [2, 'issue:12'],
+      [3, 'issue:99'],
+    ],
+    'the label is corrected and the fact — which commit which PR merged as — is untouched',
+  );
+  // The arrival is discarded rather than promoted: "one part of this is in testUk"
+  // is not "this goal arrived", and the row is what `openedGoals` reads to release
+  // a hold. The desk re-derives the real one once every landing is confirmed.
+  assert.deepEqual(
+    after.listGoalArrivals().map((a) => a.goalRef),
+    ['issue:99'],
+  );
+
+  // Idempotent, and permanently so: the fixed walk can never write a part ref again.
+  after.close();
+  const again = new Store(path);
+  assert.equal(again.listGoalLandings().length, 3);
+  again.close();
+  rmSync(dir, { recursive: true, force: true });
 });

@@ -48,12 +48,23 @@ draws identically to work that never shipped. Asking "which merged pull requests
 instead means any pulse inside `closedPrWindowMs` records it, and the first pulse after this feature
 ships back-fills every merge already in the window.
 
-The goal is resolved by walking `parentRef` from the PR's node in the **work graph** up to its
-`issue:` root, falling back to the world's own `issueForPr`. The graph is the primary source because
-it is the one that persists the edge: `closedPullRequests` forgets a merge after `closedPrWindowMs`
-and the graph does not. That is also why the desk runs **immediately below `graph.record(world)`** in
-the pulse — one line above it and every merge on the pulse it happened would read a graph one cycle
+The goal is resolved by walking `parentRef` from the PR's node in the **work graph** up to its goal
+root, falling back to the world's own `issueForPr`. The graph is the primary source because it is the
+one that persists the edge: `closedPullRequests` forgets a merge after `closedPrWindowMs` and the
+graph does not. That is also why the desk runs **immediately below `graph.record(world)`** in the
+pulse — one line above it and every merge on the pulse it happened would read a graph one cycle
 stale.
+
+**The walk stops on a bare `issue:<n>`, never on the `issue:` prefix.** A plan's parts are nodes of
+their own — `issue:35916:part:orc-bucket-config` — and a part's pull request hangs off the part, not
+off the issue two levels up ([08](08-planning.md)); the graph fills `prParent` part-first on purpose,
+because work lineage is what a parent means. A prefix test stops one node short, and every reader of
+these tables then asks about a ref nothing was filed under: `goalReach` finds no landings for the
+goal, `allGoalReach` drops it, and the goal gets **no environment row at all** — while `openedGoals`
+never opens a gate the goal is held on, so a delivered goal's bench rows wait for good. Both are the
+same silence in the same direction, on exactly the goals big enough to have been planned. Fixed in
+#472, together with a one-time repair of the rows already written
+([14](14-persistence.md#repairing-a-mis-attributed-goal-ref)).
 
 A merged pull request whose provider reported no merge commit produces **no landing at all**, rather
 than a row pointing at nothing.
