@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { api } from '../api.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import { boardColumns, type BoardColumn } from '../ticketBoard.js';
+import { boardColumns, dropWarning, type BoardColumn } from '../ticketBoard.js';
 import { stateColour } from '../stateColour.js';
 import type {
   Issue,
@@ -59,6 +59,45 @@ export function TicketsBoard({
   const { columns, unlisted } = boardColumns(boardStates, facets, stateRules?.pickup ?? []);
   const shown = columns.filter((column) => !hidden.includes(column.state));
 
+  // Held here rather than in a column, because the warnings are about *every* header
+  // at once: the whole board's consequences have to be readable before a choice is
+  // made rather than after it, which is the habit `stateWhy` and `cascadeNote` keep.
+  const [drag, setDrag] = useState<{ row: TicketRow; from: string } | null>(null);
+  /**
+   * Where the board believes the dragged card now is, and whether its write is still
+   * out.
+   *
+   * `placed` **outlives the write**, and that is the part worth stating: a column
+   * fetched its rows once and nothing refetches them on a world change, so dropping
+   * the placement the moment the write returned would snap the card back to whatever
+   * its column's stale page still said. It is one card, it is reconciled by number
+   * against every column's rows below, and it is cleared by the next drop — so it can
+   * only ever agree with the write that put it there.
+   */
+  const [placed, setPlaced] = useState<{ row: TicketRow; state: string } | null>(null);
+  const [writing, setWriting] = useState(false);
+  const [refused, setRefused] = useState<{ number: number; message: string } | null>(null);
+
+  const drop = async (column: BoardColumn): Promise<void> => {
+    const moving = drag;
+    setDrag(null);
+    if (moving === null || moving.from === column.state) return;
+    // Optimistic, because the write is a round trip to the tracker and a card that
+    // sits still for a second reads as a drop that missed.
+    setRefused(null);
+    setPlaced({ row: moving.row, state: column.state });
+    setWriting(true);
+    try {
+      await actions.setIssueState(moving.row.number, column.state);
+    } catch (err) {
+      // Back where it came from, with the provider's own words on it.
+      setPlaced(null);
+      setRefused({ number: moving.row.number, message: (err as Error).message });
+    } finally {
+      setWriting(false);
+    }
+  };
+
   return (
     <div className="tb">
       {/* Said once, above the columns, rather than discovered one failed drag at a
@@ -68,7 +107,22 @@ export function TicketsBoard({
       )}
       <div className="tb-cols">
         {shown.map((column) => (
-          <Column key={column.state} column={column} query={query} view={view} actions={actions} now={now} />
+          <Column
+            key={column.state}
+            column={column}
+            query={query}
+            view={view}
+            actions={actions}
+            now={now}
+            drag={drag}
+            placed={placed}
+            writing={writing}
+            refused={refused}
+            rules={stateRules}
+            draggable={canSetWorkItemState}
+            onDragStart={(row) => setDrag({ row, from: column.state })}
+            onDrop={drop}
+          />
         ))}
       </div>
       {unlisted.length > 0 && (
@@ -105,12 +159,30 @@ function Column({
   view,
   actions,
   now,
+  drag,
+  placed,
+  writing,
+  refused,
+  rules,
+  draggable,
+  onDragStart,
+  onDrop,
 }: {
   column: BoardColumn;
   query: BoardQuery;
   view: CockpitView;
   actions: CockpitActions;
   now: number;
+  /** The card in the air and the column it left, or null when nothing is being dragged. */
+  drag: { row: TicketRow; from: string } | null;
+  /** Where the board believes a just-dropped card is, which outlives its write. */
+  placed: { row: TicketRow; state: string } | null;
+  writing: boolean;
+  refused: { number: number; message: string } | null;
+  rules: CockpitView['state']['config']['stateRules'];
+  draggable: boolean;
+  onDragStart: (row: TicketRow) => void;
+  onDrop: (column: BoardColumn) => Promise<void>;
 }): JSX.Element {
   const [rows, setRows] = useState<TicketRow[]>([]);
   const [refUrls, setRefUrls] = useState<Record<string, string>>({});
@@ -177,18 +249,42 @@ function Column({
   const live = useMemo(() => new Map<number, Issue>(worldIssues.map((issue) => [issue.number, issue])), [worldIssues]);
   const colour = stateColour(view.state.config.stateColours, column.state);
 
+  // Only while something is in the air, and only where a write is possible at all —
+  // a drop target on a deployment that cannot write is a dead end nobody can explain.
+  const droppable = draggable && drag !== null;
+  const warning = drag === null ? null : dropWarning(column, drag.from, rules);
+  // The moving card is drawn in the column it was dropped on while the write is in
+  // flight, and out of the one it left, or it would appear in both at once.
+  // Reconciled by number, so a column whose own page already lists the card draws it
+  // once — the placement is an override of a stale page, never a second copy.
+  const shown =
+    placed === null
+      ? rows
+      : placed.state === column.state
+        ? [placed.row, ...rows.filter((row) => row.number !== placed.row.number)]
+        : rows.filter((row) => row.number !== placed.row.number);
+
   return (
-    <section className="tb-col">
+    <section
+      className={`tb-col${droppable ? ' droppable' : ''}`}
+      onDragOver={(e) => {
+        // Preventing the default is what marks this a valid target; without it the
+        // drop event never fires and the card silently springs back.
+        if (droppable) e.preventDefault();
+      }}
+      onDrop={() => void onDrop(column)}
+    >
       <header className="tb-head" style={colour === null ? undefined : { borderTopColor: colour }}>
         <b>{column.state}</b>
         {column.pickup && <i className="tickets-gate">▲</i>}
         <i className="tb-k">
           {rows.length} of {(total ?? column.count).toLocaleString()}
         </i>
+        {warning !== null && draggable && <span className={`tb-say ${warning.tone}`}>{warning.words}</span>}
       </header>
       <div className="tb-body">
         <RefLinksExtended refUrls={refUrls}>
-          {rows.map((row) => (
+          {shown.map((row) => (
             <TicketCard
               key={row.number}
               row={row}
@@ -196,13 +292,16 @@ function Column({
               view={view}
               actions={actions}
               now={now}
-              draggable={false}
+              draggable={draggable}
+              writing={writing && placed?.row.number === row.number ? placed.state : null}
+              refused={refused !== null && refused.number === row.number ? refused.message : null}
+              onDragStart={() => onDragStart(row)}
             />
           ))}
         </RefLinksExtended>
         <div className="tb-foot" ref={foot}>
           {loading && <span className="tickets-spin" aria-hidden="true" />}
-          {columnFoot({ loading, empty: rows.length === 0, column, tracking })}
+          {columnFoot({ loading, empty: shown.length === 0, column, tracking })}
         </div>
       </div>
     </section>

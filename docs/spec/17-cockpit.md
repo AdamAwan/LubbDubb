@@ -1220,6 +1220,52 @@ chips and counts, `aria-pressed` now meaning "drawn", the hidden ones in `Place.
 so** — the `widenedFor` band pointed the other way, with the way back restoring both the view and the
 narrowing. A control silently ignored is worse than one that moved and told you.
 
+### Dragging a card between columns
+
+A drop writes the tracker's state through `POST /api/issues/:number/state`
+([16](16-http-api.md#post-apiissuesnumberstate)) — the only place the cockpit writes one.
+
+**Every column is a drop target, and every header says what dropping there costs.** The alternative
+considered was refusing the columns the rules own, and it was rejected: it forbids the genuinely useful
+move of parking something in review by hand, and a dead drop target is the hardest thing on a board to
+explain. So the operator decides, and the board tells them first — the whole board at once, the moment
+a card is lifted, rather than one column at a time as the pointer finds it.
+
+`dropWarning` composes the sentence from independent clauses rather than picking a case, because a
+column can be outside the pickup gate *and* the one a rule writes *and* hold nothing live, and any
+enumeration would report whichever of the three the reader did not need. Three of its wordings are
+counter-intuitive and each is checked against the rule rather than against the config key:
+
+- **The in-progress state reads as a pickup state.** `effectivePickupStates` folds it in, so a warning
+  built from the raw `issuePickupStates` would say the fleet stops on exactly the column work is *in*.
+- **The review state names the condition on its bounce and never promises one.**
+  `work-item-back-to-pickup` fires only on an explicit `more_work` verdict — never on a missing PR,
+  which was changed deliberately after a merged PR bounced its ticket back to "Ready" and put a fresh
+  agent on merged work.
+- **A column with nothing live claims nothing about closing.** Whether a state maps to closed is the
+  tracker's workflow, which the harness has no reading of, so the clause states only what the State
+  tier already states.
+
+With no `issuePickupStates` at all there is no state gate and all three rules are switched out, so the
+board says the drop changes the tracker and nothing else. Warning about a mechanism that is not running
+would be worse than silence.
+
+**The card moves on release and says it is still writing**, because the write is a round trip and a
+card that sits still reads as a drop that missed. That placement **outlives the write**, and this is the
+part that is not obvious: a column fetches its page once and nothing refetches it on a world change, so
+releasing the placement when the write returned would snap the card back to whatever its column's stale
+page still said. The placement is one card, reconciled by number against every column's rows, and
+replaced by the next drop — so it can only ever agree with the write that put it there.
+
+A refusal puts the card back **and quotes the provider on it**. A snap-back with no sentence attached
+reads as the board being broken rather than as the tracker refusing a transition, which is why the drop
+handles its own rejection instead of routing the click through `AsyncButton` — that component folds a
+refusal into a tooltip, which is right for a button and wrong for a card that has just moved.
+
+**Where the provider cannot write states at all, nothing is draggable and the board says so once**,
+above the columns, off the `canSetWorkItemState` flag the snapshot ships. Letting each drop fail
+separately would teach the same thing five times and explain it none.
+
 ### The type is tinted by family, never by name
 
 A row's work-item type is drawn as a chip tinted by **family** — bug, story, debt, container, task —
