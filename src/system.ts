@@ -692,10 +692,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const watchLabel = watchLabelFor(config.labelPrefix);
   const issuePickup: IssuePickupPolicy = {
     watchLabel,
-    // The ownership gate follows the operator's identity: with `userId` set, only a
-    // watch tag *they* added counts. Unset — the fake provider, a first run — there
-    // is no identity to attribute a tag to, so any tagger counts.
-    requireOwnLabel: config.userId !== undefined,
+    // The ownership gate needs both halves of the identity split: a project that
+    // wants filtering (`ownWorkOnly`) and somebody to filter to (`userId`). Either
+    // missing — the fake provider, a first run, a team that works each other's
+    // queue — and any tagger counts.
+    requireOwnLabel: config.ownWorkOnly && config.userId !== undefined,
     priorityLabels: config.issuePriorityLabels,
     defaultPriority: config.issueDefaultPriority,
     pickupStates: config.issuePickupStates,
@@ -739,10 +740,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // ticket. Beside the plan reconciler because it is the same act — mechanical
   // bookkeeping through the same seam, not an action the executor gates.
   const assays = new AssayDesk({ store, sink: opts.sink ?? connector, errors });
-  // The naming convention's outbound half. `userId` being set is the operator's own
-  // answer to "which pull requests are mine", and both providers apply it at fetch
-  // time — so when it is set the world is already only theirs.
-  const prAuthorConfigured = config.userId !== undefined;
+  // The naming convention's outbound half, and it asks whether the world *arrives*
+  // filtered rather than who the operator is: both providers apply the author
+  // filter at fetch time, and only while `ownWorkOnly` is on. With it off the
+  // harness sees everyone's pull requests, so it may not assume one is its own.
+  const prAuthorConfigured = config.ownWorkOnly && config.userId !== undefined;
   const naming = new PrNamingDesk({
     sink: opts.sink ?? connector,
     defaultBranch: config.defaultBranch,

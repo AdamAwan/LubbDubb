@@ -3,6 +3,7 @@ import { existsSync, statSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { runGit } from '../git/gitCli.js';
 import { OctokitGitHubApi } from '../integrations/github/octokitGitHubApi.js';
+import { installRoot } from '../selfUpdate/buildStanding.js';
 import type { RemoteTarget } from './remote.js';
 
 const run = promisify(execFile);
@@ -41,6 +42,17 @@ export interface SetupProbes {
    * asked about a repository the harness is not pointed at yet.
    */
   viewerLogin(target: RemoteTarget, token: string): Promise<string | null>;
+  /**
+   * LubbDubb's **own** checkout — the directory the running build sits in,
+   * resolved from the running module and from nothing an operator can configure.
+   *
+   * Here so the reading can tell it from `repoRoot`, which is the *project the
+   * fleet works on*. `repoRoot` defaults to `process.cwd()`, so on a default start
+   * the prefill always proposes this directory — right for a harness dogfooding
+   * itself and wrong for every other deployment, and indistinguishable without
+   * this. Null when the walk found no `.git`.
+   */
+  installRoot(): string | null;
   /** One environment variable, read at the moment it is asked for. */
   env(name: string): string | undefined;
 }
@@ -115,6 +127,10 @@ export class RealSetupProbes implements SetupProbes {
     } catch {
       return null;
     }
+  }
+
+  installRoot(): string | null {
+    return installRoot();
   }
 
   env(name: string): string | undefined {

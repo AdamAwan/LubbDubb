@@ -1,4 +1,4 @@
-import type { AppState } from '../types.js';
+import type { AppState, SetupPayload } from '../types.js';
 import { buildNeedsYou, type NeedKind } from '../view/needsYou.js';
 
 /**
@@ -149,6 +149,8 @@ const AGENT_ENDINGS = new Set(['done', 'killed', 'interrupted', 'failed', 'crash
  * exactly as long as nobody read the notification carefully.
  */
 const NEED_KIND_LABEL: Record<NeedKind, string> = {
+  config: "This harness's own configuration is stopping it",
+  config_gap: "Something in this harness's configuration is hiding work",
   recovery: 'Runs orphaned by a restart',
   escalation: 'An agent is asking you',
   proposal: 'A decision is waiting on you',
@@ -163,9 +165,9 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
 };
 
 /** Reduce a snapshot to what {@link notifiableChanges} compares. */
-export function notifySnapshot(state: AppState): NotifySnapshot {
+export function notifySnapshot(state: AppState, setup: SetupPayload | null = null): NotifySnapshot {
   return {
-    needsYou: buildNeedsYou(state).map((r) => ({ id: r.id, kind: r.kind, title: r.title })),
+    needsYou: buildNeedsYou(state, setup).map((r) => ({ id: r.id, kind: r.kind, title: r.title })),
     errors: state.errors.map((e) => ({ id: e.id, message: e.message })),
     agents: state.agents.map((a) => ({ id: a.id, status: a.status })),
   };

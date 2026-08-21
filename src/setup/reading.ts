@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { resolve } from 'node:path';
 import type { Config } from '../config.js';
 import type { Store } from '../store/store.js';
 import { isWatched, watchLabelFor } from '../watchLabels.js';
@@ -17,6 +18,72 @@ import type { SetupProbes } from './probes.js';
  */
 export type SetupVerdict = 'ok' | 'warn' | 'bad' | 'unknown';
 
+/**
+ * The one-click version of a `remedy`, and the reason a check carries a value
+ * rather than a sentence about a value.
+ *
+ * A remedy that is only prose is a remedy the operator retypes somewhere else,
+ * and every one of these checks names something that is already silent — so the
+ * gap between reading the sentence and acting on it is where the whole surface
+ * used to be lost. Three kinds, and which one a check gets is the whole of what
+ * the harness is honestly able to do about it:
+ *
+ * - `config` — the fix *is* config leaves, so the harness applies them itself
+ *   through `POST /api/config`. The same single writer the config page uses: a
+ *   second one here would be a second opinion about what a save means.
+ * - `goto` — the fix is a decision only a person makes (which ticket to tag), so
+ *   this lands them on the surface that already exists.
+ * - `shell` — the fix is outside the harness entirely, and is **copied, never
+ *   run**. These are exactly the credential and billing checks; a button that
+ *   executed a shell string on the operator's behalf would put arbitrary
+ *   execution behind the most sensitive reading the cockpit draws.
+ *
+ * → `docs/spec/26-setup.md#the-fixes`
+ */
+export type SetupFix =
+  | {
+      kind: 'config';
+      /** The button's words, naming the value it would write. */
+      label: string;
+      /**
+       * Config **leaf** paths to their values, exactly as the config page's own
+       * save takes them. Never a nested object: `POST /api/config` validates every
+       * key against `CONFIG_FIELDS`, which holds leaves only, so an `integrations`
+       * here is refused with the operator's fix sitting one field away from
+       * working. `test/setupWrites.test.ts` holds every key here against that
+       * registry.
+       */
+      set: Record<string, unknown>;
+      /**
+       * Whether the value is a fact or a guess, which decides the control the
+       * cockpit draws: a `confirmed` value gets a one-click button, an `assumed`
+       * one gets the value in an editable field first. A check whose value could
+       * not be resolved at all offers no `config` fix — it degrades to `goto`.
+       */
+      confidence: 'confirmed' | 'assumed';
+      /** The key to open on the config page when the operator would rather look first. */
+      group: string;
+    }
+  | { kind: 'goto'; label: string; to: 'config' | 'tickets'; group?: string }
+  /**
+   * Open the confirm sheet — a repository, everything it implies, and the diff.
+   *
+   * Its own kind rather than a `config` fix with several keys, because what a
+   * repository implies is a table and a file, not a value on a button. It is also
+   * the only fix whose *input* can be wrong in a way the harness cannot see:
+   * `repoRoot` defaults to `process.cwd()`, so on a default start it proposes the
+   * harness's own checkout. → `docs/spec/26-setup.md#two-repositories`
+   */
+  | { kind: 'sheet'; label: string }
+  | {
+      kind: 'shell';
+      label: string;
+      /** Copied to the clipboard. Never executed — see above. */
+      command: string;
+      /** Why the harness cannot do this one itself, in the operator's terms. */
+      why: string;
+    };
+
 export interface SetupCheck {
   id: string;
   label: string;
@@ -25,25 +92,27 @@ export interface SetupCheck {
   detail: string;
   /** What to do about it, when there is something to do. */
   remedy?: string;
+  /** The one-click version, when the harness has one to offer. */
+  fix?: SetupFix;
 }
 
 export interface SetupReading {
-  /**
-   * Whether this deployment has been pointed anywhere — the config file exists
-   * *and* something other than the shipped mock is selected.
-   *
-   * Not the same question as "is everything green": a harness pointed at a real
-   * repository with an expired token is pointed, and needs the checks below
-   * rather than the two questions again.
-   */
-  pointed: boolean;
   configFile: string;
   configFileExists: boolean;
   /** What the two questions open with, so nobody types what the machine knows. */
-  prefill: { email: string | null; repoRoot: string };
+  prefill: {
+    email: string | null;
+    repoRoot: string;
+    /**
+     * Whether {@link prefill.repoRoot} is LubbDubb's **own** checkout rather than a
+     * project it works on. True is the default-start case and not an error — it is
+     * how LubbDubb works on itself — but it is the one case where the proposed
+     * value is the harness's own directory, so nothing about it may be stated
+     * confidently. → `docs/spec/26-setup.md#two-repositories`
+     */
+    repoRootIsSelf: boolean;
+  };
   checks: readonly SetupCheck[];
-  /** How many checks are not `ok`. What the top bar's reading counts, and it hides at zero. */
-  outstanding: number;
 }
 
 /**
@@ -57,9 +126,15 @@ export interface SetupReading {
  *
  * The checks outlive the first three minutes on purpose, which is the argument
  * for their being checks rather than wizard steps: `credential` is how an
- * operator finds out on a Tuesday that a token expired, and `watch` is how they
- * find out that a repository nobody has tagged anything in will keep the fleet
- * idle and report nothing wrong.
+ * operator finds out on a Tuesday that a token expired, and `eligibility` is how
+ * they find out that a filter of their own is hiding every tagged item.
+ *
+ * **A check earns a row when it names a discrepancy, never a quantity.** "You have
+ * no work queued" is a quantity — it is the resting state of a fleet that has
+ * cleared its backlog, and a standing row for it is a permanent scold for doing
+ * nothing wrong. "There is work and your config hides all of it" is a
+ * discrepancy, and it is always a fault. That line is why `watch` is two checks
+ * here rather than one. → `docs/spec/26-setup.md#the-checks`
  */
 export async function buildSetupReading(deps: {
   config: Config;
@@ -70,39 +145,51 @@ export async function buildSetupReading(deps: {
   const { config, store, probes, configFile } = deps;
   const configFileExists = existsSync(configFile);
   const onMock = config.integrations.issues === 'fake' && config.integrations.sourceControl === 'fake';
+  const install = probes.installRoot();
 
   const checks: SetupCheck[] = [
-    pointedCheck(config, onMock, configFileExists),
+    pointedCheck(config, onMock, configFileExists, install),
     credentialCheck(config, probes),
-    identityCheck(config),
-    watchCheck(config, store),
+    await identityCheck(config, probes),
+    ...watchChecks(config, store),
     await agentCheck(config, probes),
     billingCheck(probes),
   ];
 
   return {
-    pointed: configFileExists && !onMock,
     configFile,
     configFileExists,
     prefill: {
       email: await probes.gitEmail(config.repoRoot),
       repoRoot: config.repoRoot,
+      repoRootIsSelf: install !== null && resolve(install) === resolve(config.repoRoot),
     },
     checks,
-    outstanding: checks.filter((check) => check.verdict !== 'ok').length,
   };
 }
 
-function pointedCheck(config: Config, onMock: boolean, fileExists: boolean): SetupCheck {
+/**
+ * Whether this deployment has been pointed at anything real.
+ *
+ * The fix writes more than one key, so it is `goto`-shaped here and the cockpit
+ * opens the confirm sheet for it: what a repository implies is a table and a diff,
+ * not a value on a button. What this check *does* carry is which directory the
+ * sheet will open on, and whether that directory is the harness's own.
+ */
+function pointedCheck(config: Config, onMock: boolean, fileExists: boolean, install: string | null): SetupCheck {
   if (onMock) {
     return {
       id: 'pointed',
       label: 'Pointed at real work',
-      verdict: 'warn',
+      verdict: 'bad',
       detail: fileExists
-        ? 'Both capabilities are still the built-in fake provider — the world on the Overview is invented.'
+        ? 'Both capabilities are still the built-in fake provider — the backlog on the Overview is invented, not yours.'
         : 'No config file at all, so this is the shipped mock: a fake tracker and a fake agent.',
-      remedy: 'Answer the two questions and Setup will write the file.',
+      remedy:
+        install !== null && resolve(install) === resolve(config.repoRoot)
+          ? `Name the project the fleet should work on. It currently proposes ${config.repoRoot}, which is LubbDubb's own checkout.`
+          : 'Name the project the fleet should work on.',
+      fix: { kind: 'sheet', label: 'Point it at a project' },
     };
   }
   return {
@@ -145,64 +232,195 @@ function credentialCheck(config: Config, probes: SetupProbes): SetupCheck {
     // Named as the environment's rather than the file's, because that is the
     // whole reason no secret is a config key: the file stays safe to paste.
     remedy: `Export ${missing.join(' and ')} in the shell that starts the harness, then restart.`,
-  };
-}
-
-function identityCheck(config: Config): SetupCheck {
-  if (config.userId !== undefined && config.userId !== '') {
-    return { id: 'identity', label: 'Who you are', verdict: 'ok', detail: `userId is ${config.userId}` };
-  }
-  return {
-    id: 'identity',
-    label: 'Who you are',
-    verdict: 'warn',
-    detail:
-      'userId is unset, so all three ownership gates are off: any tagger counts, filed tickets go unassigned, and every open pull request is surfaced.',
-    remedy: 'Setup resolves it from your email against the provider.',
+    fix: {
+      kind: 'shell',
+      label: 'Copy',
+      command: missing.map((name) => `export ${name}=…`).join(' && '),
+      why: 'Nothing here can reach the environment of a process that is already running — and no secret is ever a config key, which is what keeps the file safe to paste.',
+    },
   };
 }
 
 /**
- * Whether anything at all has opted in.
+ * Whether anything says who this harness is.
  *
- * The quietest failure the harness has: everything is opt-in, so a repository
- * nobody has tagged leaves the fleet pulsing, deciding correctly that there is
- * nothing to do, and looking exactly like a fleet that is broken.
+ * `bad` rather than `warn`, and unconditionally: identity is what the harness
+ * signs its own work with, so a deployment without one files tickets into nobody's
+ * queue and opens branches nothing can attribute. That is true whatever
+ * `ownWorkOnly` says — the filtering half of the split is the *next* check's
+ * business, not this one's.
+ *
+ * No `config` fix is offered from here, because this reading has not been given an
+ * email to resolve a login from and a guess would be exactly the wrong thing to put
+ * on a confident button: the local part of an address is a plausible GitHub login
+ * and is right often enough to be dangerous. `POST /api/setup/resolve` is what
+ * turns an address into a login, and the cockpit asks it before drawing a value.
  */
-function watchCheck(config: Config, store: Store): SetupCheck {
+async function identityCheck(config: Config, probes: SetupProbes): Promise<SetupCheck> {
+  if (config.userId !== undefined && config.userId !== '') {
+    return { id: 'identity', label: 'Who you are', verdict: 'ok', detail: `userId is ${config.userId}` };
+  }
+  const base: SetupCheck = {
+    id: 'identity',
+    label: 'Who you are',
+    verdict: 'bad',
+    detail:
+      'Nothing says who this harness is. Tickets it files go unassigned, and its branches are not named as yours.',
+    remedy: 'It resolves from the credential, or from your email on a provider that identifies you by one.',
+    fix: { kind: 'goto', label: 'Open Config', to: 'config', group: 'Integrations' },
+  };
+
+  const provider =
+    config.integrations.issues === 'fake' ? config.integrations.sourceControl : config.integrations.issues;
+  if (provider === 'azure') {
+    // Azure identifies people by UPN, which *is* an email address — so there is a
+    // value to propose and nothing corroborating it. `assumed`, and the cockpit
+    // therefore puts it in a field before it puts it in the file.
+    const email = await probes.gitEmail(config.repoRoot);
+    if (email === null || email === '') return base;
+    return {
+      ...base,
+      remedy: 'Azure DevOps identifies you by the address itself, so nothing was asked. Check it before writing.',
+      fix: {
+        kind: 'config',
+        label: `Set userId to ${email}`,
+        set: { userId: email },
+        confidence: 'assumed',
+        group: 'Integrations',
+      },
+    };
+  }
+  if (provider !== 'github' || config.github === undefined) return base;
+  const token = probes.env('GITHUB_TOKEN');
+  if (token === undefined || token === '') {
+    // Nothing can be asked, so nothing is proposed — never a guess on a button.
+    // The local part of an address is a plausible GitHub login and is right often
+    // enough to be dangerous: a wrong `userId` is a fleet that picks nothing up
+    // and reports nothing wrong. → `docs/spec/06-issue-pickup.md`
+    return { ...base, remedy: 'GITHUB_TOKEN is not set, so nothing can be asked who you are.' };
+  }
+  const login = await probes.viewerLogin(
+    { provider: 'github', parts: [config.github.owner, config.github.repo], url: '' },
+    token,
+  );
+  if (login === null) return { ...base, remedy: 'The credential did not answer, so nothing could be resolved.' };
+  return {
+    ...base,
+    remedy: `GITHUB_TOKEN authenticates as ${login}.`,
+    fix: {
+      kind: 'config',
+      label: `Set userId to ${login}`,
+      set: { userId: login },
+      confidence: 'confirmed',
+      group: 'Integrations',
+    },
+  };
+}
+
+/**
+ * The two questions the watch tag actually raises, and they are not one question.
+ *
+ * The old single check fired whenever no open item carried the tag — which is the
+ * resting state of a healthy fleet that has cleared its backlog, so it settled into
+ * a permanent scold. Split by {@link buildSetupReading}'s discrepancy rule:
+ *
+ * - **`eligibility`** is a discrepancy and keeps its row forever. Tagged work
+ *   exists and none of it is eligible, because `ownWorkOnly` is on and none of it
+ *   is yours. The tracker and the config disagree, the fleet sits still, and
+ *   nothing anywhere says so. It cannot fire on an empty backlog: it needs tagged
+ *   items to exist before it has anything to compare.
+ * - **`wiring`** is the first-hour question — *has this ever picked anything up* —
+ *   and is gated on `issue_runs` being empty, the durable record of every goal this
+ *   harness has ever had a run at. One pickup and it is gone permanently. Not a
+ *   flag: a flag is a second opinion about a thing the database already states, and
+ *   the one that could disagree with reality is the one that would be wrong.
+ *
+ * Both are skipped entirely before the first cycle, where the honest verdict is
+ * `unknown` — there is no world to count yet, and "nothing is watched" would be a
+ * claim about a reading nobody has taken.
+ */
+function watchChecks(config: Config, store: Store): SetupCheck[] {
   const label = watchLabelFor(config.labelPrefix);
   if (config.labelPrefix === '') {
-    return {
-      id: 'watch',
-      label: 'Something to work',
-      verdict: 'warn',
-      detail: 'labelPrefix is empty, so the gate is off entirely and every open item is worked.',
-      remedy: 'Set a prefix unless you meant the whole backlog.',
-    };
+    return [
+      {
+        id: 'watch',
+        label: 'Something to work',
+        verdict: 'warn',
+        detail: 'labelPrefix is empty, so the gate is off entirely and every open item is worked.',
+        remedy: 'Set a prefix unless you meant the whole backlog.',
+        fix: {
+          kind: 'config',
+          label: 'Restore the default prefix',
+          set: { labelPrefix: 'lubbdubb' },
+          confidence: 'assumed',
+          group: 'Integrations',
+        },
+      },
+    ];
   }
   const world = store.getWorldBaseline();
   if (world === null) {
-    return {
-      id: 'watch',
-      label: 'Something to work',
-      verdict: 'unknown',
-      detail: 'no cycle has read the world yet, so there is nothing to count.',
-    };
+    return [
+      {
+        id: 'watch',
+        label: 'Something to work',
+        verdict: 'unknown',
+        detail: 'no cycle has read the world yet, so there is nothing to count.',
+      },
+    ];
   }
-  const watched =
-    world.issues.filter((issue) => isWatched(issue.labels, label)).length +
-    world.pullRequests.filter((pr) => isWatched(pr.labels, label)).length;
-  if (watched > 0) {
-    return { id: 'watch', label: 'Something to work', verdict: 'ok', detail: `${watched} item(s) carry ${label}` };
+
+  const taggedIssues = world.issues.filter((issue) => isWatched(issue.labels, label));
+  const tagged = taggedIssues.length + world.pullRequests.filter((pr) => isWatched(pr.labels, label)).length;
+  const gated = config.ownWorkOnly && config.userId !== undefined && config.userId !== '';
+
+  // The discrepancy. `labelsAddedByViewer` is what the gate reads, so an empty one
+  // on every tagged item is both "somebody else tagged these" and "this provider
+  // cannot report authorship at all" — indistinguishable from here, and the same
+  // fix serves both. → `docs/spec/06-issue-pickup.md`
+  // Issues only: it is issue *pickup* the ownership gate governs, and it is the
+  // issues provider that resolves `labelsAddedByViewer`. Pull requests are narrowed
+  // by author at fetch time instead, so one arriving at all is already the
+  // operator's — there is no second opinion here to have about it.
+  if (gated && taggedIssues.length > 0) {
+    const mine = taggedIssues.filter((issue) => isWatched(issue.labelsAddedByViewer ?? [], label)).length;
+    if (mine === 0) {
+      return [
+        {
+          id: 'eligibility',
+          label: 'Something to work',
+          verdict: 'warn',
+          detail: `${taggedIssues.length} open issue(s) carry ${label} and none of them were tagged by you. ownWorkOnly is on, so nothing is eligible.`,
+          remedy: `Tag one yourself, or work anyone's tags.`,
+          fix: {
+            kind: 'config',
+            label: `Work anyone's tags`,
+            set: { ownWorkOnly: false },
+            confidence: 'confirmed',
+            group: 'Integrations',
+          },
+        },
+      ];
+    }
   }
+
+  if (tagged > 0) return [];
+
+  // The first-hour question, and the only check here that expires on evidence
+  // rather than on being fixed.
+  if (store.listIssueRuns().length > 0) return [];
   const open = world.issues.length + world.pullRequests.length;
-  return {
-    id: 'watch',
-    label: 'Something to work',
-    verdict: 'warn',
-    detail: `none of the ${open} open item(s) carries ${label}, so nothing is eligible and the fleet will correctly do nothing.`,
-    remedy: `Tag something from the Tickets tab, or create ${label} on the tracker.`,
-  };
+  return [
+    {
+      id: 'wiring',
+      label: 'Something to work',
+      verdict: 'warn',
+      detail: `This harness has never picked anything up, and none of the ${open} open item(s) carries ${label}.`,
+      remedy: `Tag one thing to see the loop run. This says nothing once it has.`,
+      fix: { kind: 'goto', label: 'Open Tickets', to: 'tickets' },
+    },
+  ];
 }
 
 async function agentCheck(config: Config, probes: SetupProbes): Promise<SetupCheck> {
@@ -213,6 +431,13 @@ async function agentCheck(config: Config, probes: SetupProbes): Promise<SetupChe
       verdict: 'warn',
       detail: 'agentMode is raw, the mock — a dispatch writes a transcript and never calls a model.',
       remedy: 'Set agentMode to stream.',
+      fix: {
+        kind: 'config',
+        label: 'Set agentMode to stream',
+        set: { agentMode: 'stream' },
+        confidence: 'confirmed',
+        group: 'Agents',
+      },
     };
   }
   const version = await probes.agentVersion(config.claudeCommand);
@@ -223,6 +448,12 @@ async function agentCheck(config: Config, probes: SetupProbes): Promise<SetupChe
       verdict: 'bad',
       detail: `${config.claudeCommand} is not on this harness's PATH, so every dispatch will fail to launch.`,
       remedy: `Install it, or point claudeCommand at it.`,
+      fix: {
+        kind: 'shell',
+        label: 'Copy',
+        command: 'npm i -g @anthropic-ai/claude-code',
+        why: `Installed elsewhere already? Point claudeCommand at it in Config instead — nothing here can install onto this machine's PATH.`,
+      },
     };
   }
   return { id: 'agent', label: 'Agent runtime', verdict: 'ok', detail: `${config.agentMode} · ${version}` };
@@ -247,5 +478,11 @@ function billingCheck(probes: SetupProbes): SetupCheck {
     detail:
       'ANTHROPIC_API_KEY is set, and agents inherit it — in non-interactive mode the CLI uses the key whenever it is present, with no prompt, so every agent bills the API rather than the login.',
     remedy: 'Unset it in the shell that starts the harness unless that is what you meant.',
+    fix: {
+      kind: 'shell',
+      label: 'Copy',
+      command: 'unset ANTHROPIC_API_KEY',
+      why: 'Run it in the shell that starts the harness, then restart. Nothing here can reach the environment of a process that is already running.',
+    },
   };
 }

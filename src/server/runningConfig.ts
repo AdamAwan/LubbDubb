@@ -125,6 +125,7 @@ const GROUPS: readonly { title: string; keys: readonly (keyof Config)[] }[] = [
     keys: [
       'integrations',
       'userId',
+      'ownWorkOnly',
       'github',
       'azureDevOps',
       'labelPrefix',

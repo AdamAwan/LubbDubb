@@ -27,7 +27,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
       return new GitHubSourceControlIntegration({
         api,
         errors: ctx.errors,
-        prAuthor: ctx.config.userId,
+        prAuthor: filterToViewer(ctx),
         owner: gh.owner,
         repo: gh.repo,
         closedPrWindowMs: ctx.config.closedPrWindowMs,
@@ -38,7 +38,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
       return new AzureDevOpsSourceControlIntegration({
         api,
         errors: ctx.errors,
-        prAuthor: ctx.config.userId,
+        prAuthor: filterToViewer(ctx),
         organization: az.organization,
         project: az.project,
         repository: az.repository,
@@ -68,7 +68,7 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
         project: az.project,
         repository: az.repository,
         workItemTag: az.filters?.workItemTag,
-        assignedTo: ctx.config.userId,
+        assignedTo: filterToViewer(ctx),
         ownershipTag: ownershipLabel(ctx),
       });
     },
@@ -78,13 +78,32 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
 const CAPABILITIES = Object.keys(REGISTRY) as Capability[];
 
 /**
+ * Who the world is narrowed to at fetch time, or `undefined` for "narrow it to
+ * nobody" — the one place the two halves of the identity split are read together.
+ *
+ * A filter needs both: an identity to filter *to* (`userId`) and a project that
+ * wants filtering at all (`ownWorkOnly`). Either missing leaves the whole world
+ * arriving, which is the honest answer in both cases — with no identity there is
+ * nothing to compare against, and with the policy off the team has said they work
+ * each other's queue.
+ *
+ * Assignment and branch naming deliberately do *not* come through here: they read
+ * `config.userId` directly, because what the harness signs its own work with is
+ * not a thing a filtering policy has an opinion about.
+ * → `docs/spec/02-configuration.md#userid`
+ */
+function filterToViewer(ctx: IntegrationContext): string | undefined {
+  return ctx.config.ownWorkOnly ? ctx.config.userId : undefined;
+}
+
+/**
  * The label whose *authorship* the issues provider must resolve, or `undefined` when
  * it needn't bother. The gate label is the derived `${labelPrefix}-watch` tag, and it
- * is resolved only when `userId` says who "own" means. Without an identity there is
- * nothing to attribute a tag to, so the provider skips the history lookups entirely.
+ * is resolved only when {@link filterToViewer} says there is somebody to attribute a
+ * tag to; otherwise the provider skips the history lookups entirely.
  */
 function ownershipLabel(ctx: IntegrationContext): string | undefined {
-  return ctx.config.userId === undefined ? undefined : watchLabelFor(ctx.config.labelPrefix);
+  return filterToViewer(ctx) === undefined ? undefined : watchLabelFor(ctx.config.labelPrefix);
 }
 
 /**

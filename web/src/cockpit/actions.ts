@@ -218,6 +218,22 @@ export interface CockpitActions {
   /** Bring a full-surface panel in front, or dismiss it with null. */
   openPanel(panel: ConsolePanel): void;
   /**
+   * Write a configuration fix offered by the Setup reading.
+   *
+   * Straight through `POST /api/config`, exactly as a config-page edit — the same
+   * refusal ladder and the same surgical splice, so an operator's comments and key
+   * order survive a one-click fix as they survive a typed one. A second writer
+   * here would be a second opinion about what a save means.
+   *
+   * The previous value is captured first, so {@link undoConfigFix} can put it back
+   * — or clear the key when the operator's own file never set it.
+   */
+  applyConfigFix(checkId: string, set: Record<string, unknown>): Promise<void>;
+  /** Put back whatever {@link applyConfigFix} overwrote on this check. */
+  undoConfigFix(checkId: string): Promise<void>;
+  /** Clear a settled fix's row from the rail. Writes nothing. */
+  dismissConfigFix(checkId: string): void;
+  /**
    * Drive an upgrade of the harness's own build. `apply` takes this process down,
    * so the call it makes may never return a settled promise — the cockpit's
    * reconnect is what shows the new build, exactly as it does for any restart.
