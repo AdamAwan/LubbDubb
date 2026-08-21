@@ -18,7 +18,7 @@ import { FakeWorldStore } from '../src/integrations/fake/fakeWorld.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import type { HumanTask, Issue, IssueRun, Plan } from '../src/types.js';
+import type { EscalationSpan, HumanTask, Issue, IssueAssay, IssueRun, Plan } from '../src/types.js';
 
 /**
  * The runway lens.
@@ -111,11 +111,206 @@ function input(over: Partial<RunwayInput> = {}): RunwayInput {
     },
     runs: history(5),
     humanTasks: [],
+    escalations: [],
     cap: 3,
     standing: false,
     ...over,
   };
 }
+
+const START = Date.parse('2026-08-20T09:00:00.000Z');
+
+/** `n` minutes after every fixture run's start, as an ISO instant. */
+function at(minutes: number): string {
+  return new Date(START + minutes * 60_000).toISOString();
+}
+
+/**
+ * A hold on `originRef`, `from` minutes into its run and `mins` long — or still
+ * standing when `mins` is null.
+ *
+ * `close_out` by default because it is the least arguable of the kinds: the
+ * harness has said the goal is finished and filed the row itself, so nothing
+ * moves until a person acts.
+ */
+function hold(originRef: string, from: number, mins: number | null, over: Partial<HumanTask> = {}): HumanTask {
+  return task({
+    id: `ht_${originRef}_${from}`,
+    kind: 'close_out',
+    originRef,
+    createdAt: at(from),
+    resolvedAt: mins === null ? null : at(from + mins),
+    status: mins === null ? 'open' : 'done',
+    ...over,
+  });
+}
+
+function span(over: Partial<EscalationSpan> = {}): EscalationSpan {
+  return { createdAt: at(0), answeredAt: null, originRef: null, prNumber: null, open: true, ...over };
+}
+
+/** One completed run, so a case can state the calendar span it is subtracting from. */
+function one(originRef: string, minutes: number, over: Partial<IssueRun> = {}): IssueRun[] {
+  return [{ ...run(originRef, minutes), ...over }];
+}
+
+/** The policy that trusts a single run, so a case can be about one goal's arithmetic. */
+const ONE_RUN: RunwayPolicy = { ...DEFAULT_RUNWAY, minimumRuns: 1 };
+
+// --- fleet time ------------------------------------------------------------
+
+test('a hold is subtracted from the lead time — the median is fleet time, not calendar time', () => {
+  const r = readRunway(input({ policy: ONE_RUN, runs: one('issue:1', 100), humanTasks: [hold('issue:1', 20, 30)] }));
+  assert.equal(r.medianLeadMinutes, 70);
+  assert.equal(r.medianHeldMinutes, 30);
+});
+
+test('overlapping holds are unioned, never summed — over-subtracting is the same bug pointed the other way', () => {
+  // Forty minutes each and they overlap by twenty, so the goal waited an hour.
+  // Added up they would be eighty, and the goal would read as forty minutes of
+  // fleet time less than it was.
+  const r = readRunway(
+    input({
+      policy: ONE_RUN,
+      runs: one('issue:1', 100),
+      humanTasks: [hold('issue:1', 10, 40), hold('issue:1', 30, 40, { id: 'ht_b' })],
+    }),
+  );
+  assert.equal(r.medianHeldMinutes, 60);
+  assert.equal(r.medianLeadMinutes, 40);
+});
+
+test('a hold still standing runs to the end of the run and no further', () => {
+  // Filed forty minutes before the goal completed and never answered. The span
+  // inside the run is what the median loses; the weeks it has stood since are
+  // not part of a lead time at all.
+  const r = readRunway(input({ policy: ONE_RUN, runs: one('issue:1', 100), humanTasks: [hold('issue:1', 60, null)] }));
+  assert.equal(r.medianHeldMinutes, 40);
+  assert.equal(r.medianLeadMinutes, 60);
+});
+
+test('a goal whose whole span is one hold is dropped, not counted as zero work', () => {
+  // Four ordinary goals and one that never left the bench. Admitting it at zero
+  // would drag the median towards nothing and leave the deployment permanently
+  // thin; dropping it takes the history under `minimumRuns`, which is the honest
+  // answer — there are four goals' worth of evidence, not five.
+  const r = readRunway(
+    input({
+      issues: [issue(1)],
+      runs: [...history(4), run('issue:500', 40)],
+      humanTasks: [hold('issue:500', 0, 40)],
+    }),
+  );
+  assert.equal(r.completedRuns, 5);
+  assert.equal(r.medianLeadMinutes, null);
+  assert.equal(r.state, 'unknown');
+});
+
+test('a burn notice and a standalone ask are not holds — the fleet is working through both', () => {
+  // A burn notice kills nothing: the expensive agent carries straight on. A
+  // standalone ask blocks nothing either, by `HumanTask`'s own rule — only one
+  // that *is* a plan part is a node the reconciler holds work behind.
+  const r = readRunway(
+    input({
+      policy: ONE_RUN,
+      runs: one('issue:1', 100),
+      humanTasks: [
+        hold('issue:1', 0, 100, { id: 'ht_burn', kind: 'burn' }),
+        hold('issue:1', 0, 100, { id: 'ht_ask', kind: 'ask' }),
+      ],
+    }),
+  );
+  assert.equal(r.medianLeadMinutes, 100);
+  assert.equal(r.medianHeldMinutes, 0);
+
+  // The same ask, declared by a planner as a step for a person, does hold.
+  const part = readRunway(
+    input({
+      policy: ONE_RUN,
+      runs: one('issue:1', 100),
+      humanTasks: [hold('issue:1', 0, 100, { id: 'ht_part', kind: 'ask', partId: 'part_1' })],
+    }),
+  );
+  assert.equal(part.medianLeadMinutes, null);
+});
+
+test('an escalation reaches its goal through the pull request the run recorded', () => {
+  // The merge and reply arms carry `prNumber` and no ref at all, so `linkedPrNumber`
+  // is the only join there is — and without it the longest waits on the deployment
+  // would be the ones that went unsubtracted.
+  const r = readRunway(
+    input({
+      policy: ONE_RUN,
+      runs: one('issue:1', 100, { linkedPrNumber: 42 }),
+      escalations: [span({ prNumber: 42, createdAt: at(20), answeredAt: at(80), open: false })],
+    }),
+  );
+  assert.equal(r.medianHeldMinutes, 60);
+
+  // Dismissed without an answer: `dismissEscalation` stamps no time, so when the
+  // hold ended is recorded nowhere and counting it would subtract an afternoon
+  // nobody waited.
+  const dismissed = readRunway(
+    input({
+      policy: ONE_RUN,
+      runs: one('issue:1', 100, { linkedPrNumber: 42 }),
+      escalations: [span({ prNumber: 42, createdAt: at(20), answeredAt: null, open: false })],
+    }),
+  );
+  assert.equal(dismissed.medianHeldMinutes, 0);
+});
+
+test('the profile gate is a hold, and the runway row is never one', () => {
+  const assays = [
+    {
+      originRef: 'issue:1',
+      verdict: 'workable',
+      proposedProfile: 'deep',
+      decidedAt: at(10),
+      profileAnsweredAt: at(70),
+    },
+  ] as unknown as IssueAssay[];
+  const r = readRunway(
+    input({
+      policy: ONE_RUN,
+      runs: one('issue:1', 100),
+      pickup: { ...input().pickup, assays },
+      // A `supply` row carries no origin and could not attach to a goal anyway —
+      // asserted here because "the reading must not describe itself" is the rule,
+      // not the accident.
+      humanTasks: [task({ id: 'ht_s', kind: 'supply', originRef: 'issue:1', createdAt: at(0), resolvedAt: at(100) })],
+    }),
+  );
+  assert.equal(r.medianHeldMinutes, 60);
+  assert.equal(r.medianLeadMinutes, 40);
+});
+
+test('fleet time puts the warn band back in range — the same queue reads healthy on calendar time', () => {
+  // The shape of the operator's own deployment: five slots, goals that take a
+  // day of wall clock and two hours of fleet, because the rest of the day was a
+  // close-out nobody had got to. Two goals queued.
+  //
+  // On calendar time the warn band is unreachable — 2 x 1440 / 5 is nine and a
+  // half hours, and `thin` at an hour would need supply under a quarter of a
+  // goal. The whole hysteresis design is dead on that deployment. On fleet time
+  // the same queue is 48 minutes, which is what it is.
+  const runs = Array.from({ length: 5 }, (_, i) => run(`issue:${600 + i}`, 24 * 60));
+  const holds = runs.map((r, i) => hold(r.originRef, 60, 22 * 60, { id: `ht_${i}` }));
+  const queue = { issues: [issue(1), issue(2)], cap: 5, runs };
+
+  const fleet = readRunway(input({ ...queue, humanTasks: holds }));
+  assert.equal(fleet.medianLeadMinutes, 120);
+  assert.equal(fleet.medianHeldMinutes, 22 * 60);
+  assert.equal(fleet.runwayMinutes, 48);
+  assert.equal(fleet.state, 'thin');
+  assert.match(fleet.detail, /median goal of fleet time/);
+  assert.match(fleet.detail, /median calendar span is 24h/);
+
+  const calendar = readRunway(input({ ...queue, humanTasks: [] }));
+  assert.equal(calendar.medianLeadMinutes, 24 * 60);
+  assert.equal(calendar.runwayMinutes, 576);
+  assert.equal(calendar.state, 'healthy');
+});
 
 // --- the buckets -----------------------------------------------------------
 

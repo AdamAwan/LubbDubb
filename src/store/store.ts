@@ -61,6 +61,7 @@ import type {
   ErrorLogEntry,
   ErrorLogInput,
   Escalation,
+  EscalationSpan,
   Finding,
   FindingInput,
   FindingStatus,
@@ -452,8 +453,8 @@ export class Store {
   listHumanTasks(limit?: number): HumanTask[] {
     return this.humanTasks.listHumanTasks(limit);
   }
-  listOpenHumanTasks(): HumanTask[] {
-    return this.humanTasks.listOpenHumanTasks();
+  listAllHumanTasks(): HumanTask[] {
+    return this.humanTasks.listAllHumanTasks();
   }
   humanTaskLabels(ids: string[]): Map<string, string> {
     return this.humanTasks.humanTaskLabels(ids);
@@ -787,6 +788,9 @@ export class Store {
   }
   listEscalations(): Escalation[] {
     return this.escalations.listEscalations();
+  }
+  listEscalationSpans(): EscalationSpan[] {
+    return this.escalations.listEscalationSpans();
   }
   escalationLabels(ids: string[]): Map<string, string> {
     return this.escalations.escalationLabels(ids);

@@ -1,4 +1,4 @@
-import type { HumanTask, Issue, IssueRun } from '../types.js';
+import type { EscalationSpan, HumanTask, Issue, IssueRun } from '../types.js';
 import { issuePickupStatus, issueWatchGateReason, type IssuePickupContext } from '../dispatcher/issuePickup.js';
 import { assayHold } from '../intake/assay.js';
 import { liveParts } from '../plans/parts.js';
@@ -33,6 +33,39 @@ import { liveParts } from '../plans/parts.js';
  * threads, the assessment and the write-up that follow its pull request. Agent
  * durations would miss all of it and read a goal as twenty minutes of work when
  * it occupies the fleet for three hours.
+ *
+ * ## The lead time is fleet time, not calendar time
+ *
+ * That span is wall-clock, and wall-clock is the wrong quantity: it is padded
+ * with every hour the goal spent parked on a *person* — a close-out nobody got
+ * to, a validation waiting until Tuesday, a profile question asked at six on a
+ * Friday — plus the nights and weekends around them. A runway computed from it
+ * tells an operator who does nothing for sixty-four hours that the fleet has
+ * sixty-four hours of work, when the fleet runs dry long before that *because* he
+ * did nothing. The arithmetic is sound and the input is not.
+ *
+ * So each completed run's calendar span has its **human holds** subtracted:
+ * `close_out` and `validate` bench rows, an `ask` that *is* a plan part, the
+ * assay's profile gate, a standing delivery, and an escalation nobody answered.
+ * What is left is how long the goal occupied the fleet, which is what the drain
+ * is a drain of.
+ *
+ * **The tail stays in.** This subtracts human-wait, never work: a CI fix, a
+ * review thread and a write-up are all still inside the span, which is why agent
+ * durations are still not the substitute the paragraph above rejects.
+ *
+ * **The holds are unioned per goal before they are subtracted.** They overlap
+ * routinely — a delivery hold and the close-out it caused cover the same
+ * afternoon — and adding them up would over-subtract, which is this same bug
+ * pointed the other way.
+ *
+ * **What is not subtracted, and knowingly.** A plan awaiting approval is a hold
+ * with no start time to read: `plans` stamps `createdAt`/`updatedAt` and nothing
+ * for entering `awaiting_approval`, and by the time a run is complete its plan is
+ * `active` or `complete`, so the span is not recoverable from a finished goal at
+ * all. Nor are non-working hours, which would need a timezone and a schedule the
+ * harness does not have. Both leave a residual, and the residual is padding — the
+ * reading still errs long, never short.
  *
  * ## Why the drain is capacity and not the observed start rate
  *
@@ -174,8 +207,22 @@ export interface RunwayReading {
   latent: LatentSupply;
   /** Obligations that return nothing to the fleet. Named when they explain a starved one; never a threshold. */
   debt: number;
-  /** The median goal lead time in minutes, or null below `minimumRuns`. */
+  /**
+   * The median goal lead time in minutes — **fleet time**, with the spans a
+   * person was the next mover taken out. Null below `minimumRuns`.
+   */
   medianLeadMinutes: number | null;
+  /**
+   * The median goal's human wait, in minutes: what was taken out to get the
+   * figure above, over the same runs.
+   *
+   * Reported rather than merely subtracted because the two together are the
+   * answer to the objection that made this a duration worth trusting — "you say
+   * sixty-four hours and the fleet is dry by Tuesday" is answered by naming the
+   * calendar span *and* the part of it nobody was working. Zero is a real
+   * reading: no evidenced hold touched any of the runs in the median.
+   */
+  medianHeldMinutes: number | null;
   /** How many completed goals that median was taken over. */
   completedRuns: number;
   /** Slots doing nothing this instant. Zero while paused, which is not idleness. */
@@ -206,8 +253,31 @@ export interface RunwayInput {
   pickup: IssuePickupContext;
   /** Every run the floor holds — the completed ones are the median. */
   runs: readonly IssueRun[];
-  /** Open bench rows, for the debt count. `supply` rows are excluded — this must not describe itself. */
+  /**
+   * **Every** bench row the store holds, settled ones included — one list read
+   * two ways.
+   *
+   * The open ones are the debt count. The settled ones are how long each goal in
+   * the history spent waiting on a person, which is what the median lead time
+   * has taken out of it. `supply` rows count for neither: this reading must not
+   * describe itself.
+   *
+   * One list rather than an open one beside a closed one, on the rule above: two
+   * lists of the same table, either a subset of the other, is a caller free to
+   * report a debt that the history beside it does not contain.
+   */
   humanTasks: readonly HumanTask[];
+  /**
+   * When each escalation stood, and the two context keys a goal can be reached
+   * through — {@link EscalationSpan}.
+   *
+   * The projection rather than the rows for the reason `listEscalationSpans`
+   * states, and *raw* rather than resolved for the reason the pickup context is:
+   * deciding which escalation stopped which goal is this lens's judgement, and a
+   * caller that made it would be a caller free to attribute an afternoon of
+   * waiting to somebody else's goal.
+   */
+  escalations: readonly EscalationSpan[];
   /** The fleet's width, read by reference from `RuntimeControl` exactly as the pulse reads it. */
   cap: number;
   /**
@@ -288,7 +358,11 @@ export function readRunway(input: RunwayInput): RunwayReading {
     }
   }
 
-  const medianLeadMinutes = medianLead(input.runs, input.policy.minimumRuns);
+  const { lead: medianLeadMinutes, held: medianHeldMinutes } = medianLead(
+    input.runs,
+    input.policy.minimumRuns,
+    humanHolds(input),
+  );
   const completedRuns = input.runs.filter((r) => r.completedAt !== null).length;
   const supply = inflight + queued;
   const cap = Math.max(1, input.cap);
@@ -335,6 +409,7 @@ export function readRunway(input: RunwayInput): RunwayReading {
     latent,
     debt,
     medianLeadMinutes,
+    medianHeldMinutes,
     completedRuns,
     idleSlots,
   };
@@ -374,20 +449,171 @@ function resolveState(input: {
   return input.runwayMinutes < threshold ? 'thin' : 'healthy';
 }
 
-/** The median completed lead time in minutes, or null below `minimum` completed runs. */
-function medianLead(runs: readonly IssueRun[], minimum: number): number | null {
-  const spans = runs
+/**
+ * The median completed run, in minutes of **fleet time** and of the human wait
+ * taken out of it — both null below `minimum` readable runs.
+ *
+ * Two medians over one surviving set rather than two filters: they are quoted
+ * side by side in the sentence, and taken separately they would eventually be
+ * taken over different goals.
+ *
+ * A run whose whole calendar span is covered by holds is **dropped**, exactly as
+ * a run with an unreadable span is. Zero minutes of fleet time is not evidence
+ * about how long the fleet works — it is evidence that the hold rows are coarser
+ * than the run — and admitting it would drag the median towards zero and leave a
+ * deployment permanently `thin` over a queue that is fine.
+ */
+function medianLead(
+  runs: readonly IssueRun[],
+  minimum: number,
+  holds: Map<string, Hold[]>,
+): { lead: number | null; held: number | null } {
+  const pairs = runs
     .filter((r) => r.completedAt !== null)
-    .map((r) => Date.parse(r.completedAt as string) - Date.parse(r.startedAt))
+    .map((r) => {
+      const from = Date.parse(r.startedAt);
+      const to = Date.parse(r.completedAt as string);
+      const held = heldWithin(holds.get(r.originRef) ?? [], from, to);
+      return { work: to - from - held, held };
+    })
     // A clock that went backwards between two pulses, or a row written by an
     // older build, would otherwise put a negative span in the middle of the sort.
-    .filter((ms) => Number.isFinite(ms) && ms > 0)
-    .sort((a, b) => a - b);
-  if (spans.length < minimum) return null;
-  const mid = Math.floor(spans.length / 2);
+    .filter((p) => Number.isFinite(p.work) && p.work > 0);
+  if (pairs.length < minimum) return { lead: null, held: null };
+  return { lead: medianMinutes(pairs.map((p) => p.work)), held: medianMinutes(pairs.map((p) => p.held)) };
+}
+
+/** The median of a non-empty list of milliseconds, in whole minutes. */
+function medianMinutes(values: number[]): number {
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
   const ms =
-    spans.length % 2 === 1 ? (spans[mid] as number) : ((spans[mid - 1] as number) + (spans[mid] as number)) / 2;
+    sorted.length % 2 === 1 ? (sorted[mid] as number) : ((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2;
   return Math.round(ms / 60_000);
+}
+
+/**
+ * A span in which the fleet had stopped on one goal and a person was the next
+ * mover. `to` is null while it is still standing.
+ */
+interface Hold {
+  from: number;
+  to: number | null;
+}
+
+/**
+ * The goal a ref belongs to, as `issue:<n>` — or null for a ref that is not about
+ * one.
+ *
+ * A part's ref (`issue:12:part:api`) folds onto its goal deliberately: a person
+ * holding one part of a decomposition is holding the goal's progress, and the
+ * lead time being measured is the goal's.
+ */
+function goalOf(ref: string | null): string | null {
+  const m = ref === null ? null : /^issue:(\d+)(?::|$)/.exec(ref);
+  return m ? `issue:${m[1] as string}` : null;
+}
+
+/**
+ * Whether a bench row means the fleet has stopped, which is a narrower question
+ * than whether somebody owes something.
+ *
+ * - `close_out` and `validate` — yes. The harness has done what it can and filed
+ *   the row saying so; nothing moves until a person acts.
+ * - `ask` — **only when it is a plan part.** {@link HumanTask} states the rule
+ *   this reads: a standalone ask blocks nothing, because the agent that filed it
+ *   "gets on with, or concludes, what it can". Only `partId` makes one a
+ *   scheduling node the reconciler holds work behind.
+ * - `burn` — no, and this is the one worth stating. A burn notice kills nothing
+ *   (`src/spendBurn.ts`): the expensive agent carries straight on while the row
+ *   stands, so the fleet is working through every minute of it.
+ * - `supply` — no. This reading must not describe itself, the rule the debt count
+ *   already follows.
+ */
+function benchRowHolds(t: HumanTask): boolean {
+  if (t.kind === 'close_out' || t.kind === 'validate') return true;
+  return t.kind === 'ask' && t.partId !== null;
+}
+
+/**
+ * Every human hold the input can evidence, filed under the goal it stopped.
+ *
+ * Taken here, off the raw rows, rather than handed in already classified: which
+ * kinds of row mean "the fleet stopped" is the judgement the median is made of,
+ * and a caller free to make it differently is a caller free to disagree with the
+ * lens about its own reading — {@link RunwayInput}'s rule, one level down.
+ */
+function humanHolds(input: RunwayInput): Map<string, Hold[]> {
+  const held = new Map<string, Hold[]>();
+  const add = (ref: string | null, from: string, to: string | null): void => {
+    const goal = goalOf(ref);
+    const start = Date.parse(from);
+    if (goal === null || !Number.isFinite(start)) return;
+    const end = to === null ? NaN : Date.parse(to);
+    const list = held.get(goal) ?? [];
+    // A row whose end will not parse is read as still standing rather than
+    // dropped: an unreadable timestamp is a hold of unknown length, and the clamp
+    // below is what stops that meaning more than the run it sits in.
+    list.push({ from: start, to: Number.isFinite(end) ? end : null });
+    held.set(goal, list);
+  };
+
+  for (const t of input.humanTasks) if (benchRowHolds(t)) add(t.originRef, t.createdAt, t.resolvedAt);
+  // The assay's profile gate — the one hold the harness raises with no row of its
+  // own, and the same predicate `latent.profiles` counts the live ones by.
+  for (const a of input.pickup.assays ?? [])
+    if (a.proposedProfile !== null) add(a.originRef, a.decidedAt, a.profileAnsweredAt);
+  // A standing delivery: the harness believes it is finished and is waiting to be
+  // told otherwise. It has no end — it stops standing when the world moves, which
+  // is not an instant anything records — so it runs to the end of the run, which
+  // is where the clamp puts it.
+  for (const d of input.pickup.deliveries ?? []) add(d.originRef, d.decidedAt, null);
+  const byPr = prGoals(input.runs);
+  for (const e of input.escalations) {
+    // Answered, or open right now. A *dismissed* escalation was never answered
+    // and `dismissEscalation` stamps no time, so when its hold ended is recorded
+    // nowhere — counting it to the end of the run would subtract an afternoon
+    // nobody waited.
+    if (e.answeredAt === null && !e.open) continue;
+    // Two handles and neither is an origin column. `context.originRef` is what the
+    // goal-work arms carry; `prNumber` is all the merge and reply arms have, and
+    // the run's own `linkedPrNumber` is what turns one into a goal.
+    const ref = goalOf(e.originRef) ?? (e.prNumber === null ? null : (byPr.get(e.prNumber) ?? null));
+    if (ref !== null) add(ref, e.createdAt, e.answeredAt);
+  }
+  return held;
+}
+
+/** Pull request number → the goal it resolved, off the runs the lens already holds. */
+function prGoals(runs: readonly IssueRun[]): Map<number, string> {
+  const byPr = new Map<number, string>();
+  for (const r of runs) if (r.linkedPrNumber !== null) byPr.set(r.linkedPrNumber, r.originRef);
+  return byPr;
+}
+
+/**
+ * How much of `[from, to]` a person was the next mover for — the **union** of the
+ * holds, never their sum.
+ *
+ * Clamped to the run's own span first, so a close-out still standing three weeks
+ * after a goal finished subtracts the minutes inside the run and not the weeks
+ * after it.
+ */
+function heldWithin(holds: readonly Hold[], from: number, to: number): number {
+  const spans = holds
+    .map((h) => ({ from: Math.max(h.from, from), to: Math.min(h.to ?? to, to) }))
+    .filter((s) => s.to > s.from)
+    .sort((a, b) => a.from - b.from);
+  let total = 0;
+  let cursor = -Infinity;
+  for (const s of spans) {
+    const start = Math.max(s.from, cursor);
+    if (s.to > start) {
+      total += s.to - start;
+      cursor = s.to;
+    }
+  }
+  return total;
 }
 
 /** `50 minutes`, `1h 20m` — a duration a sentence can carry. */
@@ -462,8 +688,9 @@ function say(reading: Omit<RunwayReading, 'headline' | 'detail'>, cap: number): 
       headline: `About ${humanMinutes(reading.runwayMinutes)} of work queued`,
       detail: [
         `${reading.inflight} in flight, ${reading.queued} waiting. At ${cap} slot${cap === 1 ? '' : 's'} and a ` +
-          `${humanMinutes(reading.medianLeadMinutes ?? 0)} median goal, that is ` +
+          `${humanMinutes(reading.medianLeadMinutes ?? 0)} median goal of fleet time, that is ` +
           `${humanMinutes(reading.runwayMinutes)} before the fleet runs out.`,
+        heldClause(reading),
         reservoir === null ? null : `${capitalise(reservoir)}.`,
         latent,
       ]
@@ -488,6 +715,24 @@ function say(reading: Omit<RunwayReading, 'headline' | 'detail'>, cap: number): 
       reading.runwayMinutes === null ? 'Healthy' : `About ${humanMinutes(reading.runwayMinutes)} of work queued`,
     detail: `${reading.inflight} in flight, ${reading.queued} waiting.`,
   };
+}
+
+/**
+ * What "fleet time" cost the figure beside it, or null when no evidenced hold
+ * touched the history.
+ *
+ * The clause exists because the number moved: an operator who knew this reading
+ * as a calendar span and now sees a third of it must be told what left, in the
+ * same sentence, or the fix reads as the gauge having broken.
+ */
+function heldClause(reading: Omit<RunwayReading, 'headline' | 'detail'>): string | null {
+  const held = reading.medianHeldMinutes ?? 0;
+  const lead = reading.medianLeadMinutes ?? 0;
+  if (held <= 0) return null;
+  return (
+    `That goal's median calendar span is ${humanMinutes(lead + held)} — the ${humanMinutes(held)} of it ` +
+    `spent waiting on you is not the fleet's time and is not counted.`
+  );
 }
 
 /** What answering the standing decisions would put back in the fleet, or null when nothing is standing. */

@@ -2,7 +2,7 @@ import type { Store } from '../store/store.js';
 import { readRunway, runwayPass, type RunwayInput, type RunwayPolicy, type RunwayReading } from './runway.js';
 
 /** What the desk needs beyond its own store reads — the pulse's, handed in. */
-type DeskInput = Omit<RunwayInput, 'policy' | 'runs' | 'humanTasks' | 'standing'>;
+type DeskInput = Omit<RunwayInput, 'policy' | 'runs' | 'humanTasks' | 'escalations' | 'standing'>;
 
 /**
  * Where a thinning queue becomes something a person is told about, once a pulse.
@@ -34,7 +34,11 @@ export class RunwayDesk {
       ...input,
       policy: this.policy,
       runs: this.store.listIssueRuns(),
-      humanTasks: this.store.listOpenHumanTasks(),
+      // Every row, not the open ones: the debt clause reads those, and the
+      // median lead time reads the settled ones for the spans a person was the
+      // next mover. → `docs/spec/25-supply.md#the-lead-time-is-fleet-time`
+      humanTasks: this.store.listAllHumanTasks(),
+      escalations: this.store.listEscalationSpans(),
       // The hysteresis' only input, and the reason it needs no column: a row is
       // either standing or it is not, and which threshold applies follows from
       // that alone.
