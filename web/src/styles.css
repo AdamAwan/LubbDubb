@@ -1828,20 +1828,34 @@ a.btn {
 }
 
 /* ── Work graph ──────────────────────────────────────────────────────────
-   A shared component, drawn as the console's Work tab and styled only through the
-   tokens above — the console's own sheet never reaches in. No padding of its own:
-   the situation area supplies it, and the tab has no heading because the nav item
-   that opened it is the heading. */
-.work-panel {
-  padding: 0;
+   Two shared components, styled only through the tokens above — the console's own
+   sheet never reaches in. Neither has padding of its own: the panel body supplies
+   it for the record, and the tickets tab for the call-out.
+
+   The record has no heading of its own because the panel title that opened it is
+   the heading; the call-out carries one because it sits above somebody else's
+   list, where an unlabelled block of rows would read as part of it. */
+.work-unrecorded {
+  display: block;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--panel-2);
+  padding: 9px 12px 4px;
+  margin-bottom: 10px;
 }
-.work-panel h3 {
+.work-unrecorded h3 {
   font-size: 13px;
   color: var(--text);
-  margin: 12px 0 4px;
+  margin: 0 0 2px;
 }
-.work-panel p {
-  margin: 0 0 8px;
+.work-unrecorded p {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+/* The rows carry the call-out's own divider rather than the list's: inside a
+   bordered block the last row's bottom rule would double the border it sits on. */
+.work-unrecorded .work-unrecorded-row:last-child {
+  border-bottom: 0;
 }
 .work-root {
   border-bottom: 1px solid var(--border);
@@ -1940,8 +1954,8 @@ a.btn {
   padding-top: 0;
 }
 
-/* Goal roots on the work tab: collapsed, because each is drawn in full on its own
-   goal page. A row rather than an expander — the destination is the ref's. */
+/* Goal roots in the record panel: collapsed, because each is drawn in full on its
+   own goal page. A row rather than an expander — the destination is the ref's. */
 .work-goals {
   border-bottom: 1px solid var(--border);
   padding-bottom: 6px;

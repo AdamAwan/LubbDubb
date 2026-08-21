@@ -16,6 +16,7 @@ import { watchBucket } from '../worldBuckets.js';
 import type { CockpitView } from '../view/viewModel.js';
 import { stateColour } from '../stateColour.js';
 import { AsyncButton } from './AsyncButton.js';
+import { UnrecordedWork } from './UnrecordedWork.js';
 import { Ref, RefLinksExtended } from './refs.js';
 import { TicketsBoard } from './TicketsBoard.js';
 import { absDate, fmtUsd, relAge } from './util.js';
@@ -217,6 +218,16 @@ export function TicketsPanel({ query, onQuery, view, actions, now }: TicketsPane
           assay is the one intake reading that stops dispatch, and among a page of
           rows it reads as a detail rather than as the thing holding all the work. */}
       {held.length > 0 && <IntakeCallout held={held} actions={actions} />}
+
+      {/* Work nothing in the tracker accounts for, above the list of things it
+          does. It is here because `File a work item` / `Ignore` is a triage
+          decision and this is the surface triage happens on — and *below* intake,
+          which is the louder of the two: an unclear assay stops dispatch, while an
+          unrecorded job is a debt that costs nothing until somebody outside asks
+          what the harness has been doing. It draws its own fetch and nothing at
+          all when there is nothing outstanding.
+          → docs/spec/17-cockpit.md#unrecorded-work */}
+      <UnrecordedWork now={now} canFileTickets={view.state.config.canFileTickets} />
 
       <div className="tickets-filters">
         <Segment

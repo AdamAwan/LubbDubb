@@ -116,7 +116,7 @@ export interface Place {
   ticketColumns: string[];
 }
 
-const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets', 'insights', 'pets', 'config'];
+const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'insights', 'pets', 'config'];
 const INSIGHTS_VIEWS: readonly InsightsView[] = ['economics', 'reliability', 'causes', 'trend', 'mix'];
 /**
  * The windows the time bar offers, and what a bare Insights URL means.
@@ -164,8 +164,15 @@ const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'mc
  * and an unknown tab resolves to the overview, so without this every bookmark and
  * shared link to `?tab=backlog` would land somewhere else with nothing saying so.
  * An alias is one entry; a stranded link is a bug report.
+ *
+ * `work` is the second, and it lands on the same place for a weaker reason worth
+ * stating: the tickets tab is not a superset of the work tab. It has the half of
+ * it an operator *acted* on — the unrecorded-work call-out — while the record
+ * itself is the `record` panel now, reachable from the bar at every width. A tab
+ * alias cannot open a panel, and of the two halves this is the one a saved link to
+ * `?tab=work` was overwhelmingly about.
  */
-const TAB_ALIASES: Readonly<Record<string, ConsoleTab>> = { backlog: 'tickets' };
+const TAB_ALIASES: Readonly<Record<string, ConsoleTab>> = { backlog: 'tickets', work: 'tickets' };
 const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched'];
 const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
 const TICKET_GROUP = ['feature', 'flat'] as const;
@@ -195,6 +202,7 @@ const PANEL_NAMES: Record<Exclude<ConsolePanel, null | { ask: string }>, true> =
   pets: true,
   localRun: true,
   setup: true,
+  record: true,
 };
 
 const PANELS = Object.keys(PANEL_NAMES) as Exclude<ConsolePanel, null | { ask: string }>[];
