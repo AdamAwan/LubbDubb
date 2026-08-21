@@ -159,6 +159,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   validate: 'A delivered goal is ready to be validated',
   burn: 'A run is spending far more than usual',
   limit: 'An agent is out of account limit',
+  supply: 'The fleet is running out of work',
 };
 
 /** Reduce a snapshot to what {@link notifiableChanges} compares. */

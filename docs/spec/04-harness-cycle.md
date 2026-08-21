@@ -77,7 +77,8 @@ flowchart TD
         ANN --> HR["compute headroom — paused ? 0 : cap - live agents,<br/>both read by reference"]
         HR --> SPLIT["split the world for dispatch<br/>hide unwatched PRs · add the runs the tracker forgot"]
         SPLIT --> DEC["dispatcher.decide(ctx)"]
-        DEC --> UP["cache the Up next plan · reconcile priority overrides"]
+        DEC --> RW["take the runway reading — is there work left,<br/>and is the reason there is not upstream of the fleet"]
+        RW --> UP["cache the Up next plan · reconcile priority overrides"]
         UP --> RAT["record the rationale as a no_op decision — an idle cycle audits too"]
         RAT --> EXEC["executor.execute(cycleId, plan)"]
     end
@@ -160,16 +161,24 @@ flowchart TD
     **by reference** from `RuntimeControl` (never a copy taken at wiring time).
 11. **Split the PR world** — partition open PRs into the dispatch world and `unwatchedPrs` (below).
 12. **`dispatcher.decide(ctx)`** with the full `DispatchContext`.
-13. **Cache the Up next plan** — `plan.upcoming` becomes `harness.upcoming`, tagged with the cycle id
+13. **Take the runway reading** — `runway.run()` asks whether there is anything left for the fleet to
+    do, and whether the reason there is not is upstream of it ([25](25-supply.md)). Positioned
+    **below `decide`** for both neighbours: it needs every read `decide` needs — the plan funnel, the
+    verdicts, the decision window — so this is the first point in the pulse where they all exist, and
+    running it after the decision means a lens about supply can never delay a dispatch however long
+    its walk over the issues takes. It reads the pre-dispatch headroom, so a goal this pulse is about
+    to start still counts as queued; one pulse of lag, in the safe direction. Store-only, beside the
+    other bookkeeping and not in the dispatcher for `closeOuts`' reason.
+14. **Cache the Up next plan** — `plan.upcoming` becomes `harness.upcoming`, tagged with the cycle id
     and the world's `takenAt`. Null before the first cycle, since the plan is a per-pulse projection
     rather than a persisted queue. The operator priority overrides (issue #128) are then reconciled:
     `store.reconcilePriorityOverrides` refreshes every origin still queued in the plan or staffed by an
     active task and prunes any untracked longer than `upNextOverrideTtlMs`, so a stale override never
     lingers forever.
-14. **Record the rationale** — a `no_op` decision with outcome `skipped` and detail
+15. **Record the rationale** — a `no_op` decision with outcome `skipped` and detail
     `` `[${source}] ${plan.rationale}` ``, so even an idle cycle leaves an audit row.
-15. **`executor.execute(cycleId, plan)`**.
-16. **Emit `cycle:end`** with the report.
+16. **`executor.execute(cycleId, plan)`**.
+17. **Emit `cycle:end`** with the report.
 
 ## Failure handling
 

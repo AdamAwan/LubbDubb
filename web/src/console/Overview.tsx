@@ -1,7 +1,7 @@
 import { useState, type JSX } from 'react';
 import type { CockpitView, DeskRun } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { Agent, GoalArrival, Issue, QueueItem, WorldEvent } from '../types.js';
+import type { Agent, GoalArrival, Issue, QueueItem, SupplyState, WorldEvent } from '../types.js';
 import { buildGoalPage, buildGoalTrack, furthestEnvironment, goalOfPr, type GoalTrack } from '../view/goalPage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
@@ -91,9 +91,101 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
             ended.map((agent) => <AgentRow key={agent.id} agent={agent} view={view} actions={actions} />)
           ))}
       </div>
+      <RunwayBand view={view} />
     </section>
   );
 }
+
+/**
+ * What is behind the agents above — the fleet's runway, along the foot of the
+ * card the agents are on.
+ *
+ * **The placement is the sentence.** Who is out, then what is queued behind
+ * them, in that order and in one card: a fleet reading that leaves out "and then
+ * what" is the reading an operator has to assemble themselves, every time, from
+ * two cards that never agreed on what counted as work. The foot rather than the
+ * head because the agents are the card's subject and this is its consequence,
+ * and it costs nothing to reach — Fleet's rows are bounded by the agent cap, so
+ * this line never travels far down the page.
+ *
+ * **Nothing here re-decides what the server decided**, the rule the other five
+ * cards keep: the state, the wording and every count are quoted from
+ * `state.runway`, which is the same function's answer as the bench row's. The
+ * band draws no control for the same reason the row carries no button — the
+ * reading is a statement about the fleet, and a "watch something" shortcut here
+ * would make it a prompt for the quickest fix rather than the truest one.
+ *
+ * **And it always draws**, muted when healthy, on the empty-card rule: a band
+ * that vanished when the queue was full would be indistinguishable from one that
+ * broke, on exactly the deployment where nobody has seen it before.
+ */
+function RunwayBand({ view }: { view: CockpitView }): JSX.Element {
+  const r = view.state.runway;
+  // Paused is not idleness and must not wear the alarm: the fleet is stopped
+  // because somebody stopped it, and `idleSlots` is already zero for them.
+  const tone = view.state.control.paused ? 'grey' : RUNWAY_TONE[r.state];
+  const total = r.inflight + r.queued + r.reservoir;
+  return (
+    <div className={`cn-runway cn-t-${tone}`}>
+      <span className="cn-runway-read">{runwayReading(r)}</span>
+      <span className="cn-tag">{RUNWAY_LABEL[r.state]}</span>
+      <span className="cn-runway-say">{view.state.control.paused ? 'Dispatch is paused.' : r.headline}</span>
+      {/* The same four buckets whatever the state, so a glance across a week
+          reads as one shape changing rather than as several different bands. */}
+      <span className="cn-runway-bar" aria-hidden="true">
+        <i className="cn-seg-inflight" style={{ flexGrow: r.inflight }} />
+        <i className="cn-seg-queued" style={{ flexGrow: r.queued }} />
+        <i className="cn-seg-reservoir" style={{ flexGrow: r.reservoir }} />
+        {total === 0 && <i className="cn-seg-empty" style={{ flexGrow: 1 }} />}
+      </span>
+      <span className="cn-runway-legend">
+        {r.queued} queued · {r.reservoir} unwatched
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The reading itself, and it changes unit rather than lying.
+ *
+ * With nothing queued there is no runway to state — a duration would be a
+ * forecast about a queue that does not exist — so the band counts idle slots
+ * instead, which is the fact that has replaced it.
+ */
+function runwayReading(r: CockpitView['state']['runway']): string {
+  if (r.runwayMinutes !== null) return fmtRunway(r.runwayMinutes);
+  if (r.state === 'unknown') return '—';
+  return `${r.idleSlots} idle`;
+}
+
+/** `53m`, `3h 07m` — the band is one line, so the reading is as short as it can be and still be a duration. */
+function fmtRunway(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
+}
+
+/**
+ * Total over {@link SupplyState} for `KIND_TONE`'s reason: a state added to the
+ * lens fails the typecheck here rather than drawing in whatever the last rule in
+ * the sheet said. `unknown` is grey deliberately — it is not a mild warning, it
+ * is the absence of a reading.
+ */
+const RUNWAY_TONE: Record<SupplyState, 'green' | 'amber' | 'grey'> = {
+  healthy: 'green',
+  thin: 'amber',
+  dry: 'amber',
+  starved: 'amber',
+  unknown: 'grey',
+};
+
+/** One word per state, and the same words the spec uses, so a support answer and the glass agree. */
+const RUNWAY_LABEL: Record<SupplyState, string> = {
+  healthy: 'Healthy',
+  thin: 'Thin',
+  dry: 'Dry',
+  starved: 'Starved',
+  unknown: 'No history yet',
+};
 
 /**
  * One agent: what it is on, and the way to each of the things it names.

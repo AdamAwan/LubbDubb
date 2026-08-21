@@ -17,6 +17,7 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   validate: 'Validate',
   burn: 'Spend',
   limit: 'Usage limit',
+  supply: 'Runway',
 };
 
 /**
@@ -52,6 +53,11 @@ export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
   validate: 'green',
   burn: 'amber',
   limit: 'amber',
+  // A gate rather than a fault, on `permission`'s terms: nothing broke, and an
+  // empty queue is a fleet waiting on a decision only a person makes. Red here
+  // would put "you have not queued anything up" beside "a restart orphaned four
+  // runs", which is the reading the hue exists to keep apart.
+  supply: 'amber',
 };
 
 /**
@@ -77,6 +83,10 @@ export const KIND_SYMBOL: Record<NeedKind, string> = {
   validate: '\u2713',
   burn: '\u25b2',
   limit: '\u2016',
+  // Against the burn notice's upward triangle deliberately: one is spend
+  // climbing, the other is work draining, and they are the two readings a fleet
+  // takes about itself rather than about a piece of work.
+  supply: '\u25bd',
 };
 
 // The mockup's two railsub headings, in the order they're drawn — 'blocking'

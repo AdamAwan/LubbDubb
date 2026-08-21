@@ -119,6 +119,24 @@ export class HumanTaskStore {
   }
 
   /**
+   * Every open obligation, oldest first — what the runway lens counts as the
+   * debt a person still owes the fleet.
+   *
+   * Deliberately unbounded where {@link listHumanTasks} takes a limit, and the
+   * difference is the point: that one feeds a panel, where a cap hides the tail
+   * of a long list, and this one is a *count*, where a cap would silently report
+   * a hundred when the answer is two hundred — on precisely the deployments
+   * furthest behind. The set is bounded by what nobody has answered yet, which is
+   * the quantity being measured.
+   */
+  listOpenHumanTasks(): HumanTask[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM human_tasks WHERE status='open' ORDER BY created_at ASC, rowid ASC`)
+      .all() as HumanTaskRow[];
+    return rows.map(rowToHumanTask);
+  }
+
+  /**
    * The human tasks backing plan parts — what the reconciler reads to decide
    * whether a part a person owns is still waiting or has been refused.
    *
