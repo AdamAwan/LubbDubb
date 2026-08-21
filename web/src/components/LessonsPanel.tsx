@@ -20,12 +20,16 @@ import { Ref } from './refs.js';
  * believing*.
  *
  * **Promotion is the only thing that puts a claim in front of an agent**, and
- * since #355 phase 3 it does: promoted lessons are rendered into the fleet's
- * system-prompt append, newest-vouched first, up to a character cap. That is why
- * every promoted row says whether it is actually being sent. The agent is told
- * nothing about the cap — a partial list presented as whole is the failure the
- * cap exists to bound — so this panel is the only place a dropped claim is
- * visible, and the only place something can be retired to make room for it.
+ * since #27 phase 3 it does so through the knowledge base: a promoted lesson is
+ * mirrored in as an injected fleet claim, and *that* is what the fleet's
+ * system-prompt block renders, newest-vouched first, up to a character cap. One
+ * block is delivered, so the `sent to agents` chip below is the knowledge block's
+ * own answer read back through the fact this lesson became — never a second
+ * rendering of this table, which would be a chip about a row nobody sends.
+ *
+ * The drop is why the chip exists at all. It is visible here and on the Knowledge
+ * page and nowhere else; retiring a promoted lesson is one of the two ways to make
+ * room for one that is over the cap.
  */
 export function LessonsPanel({
   lessons,

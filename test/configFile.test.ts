@@ -56,13 +56,13 @@ test('key order, blank lines and inline objects are left exactly as they were', 
 
 test('a key the file does not carry is appended, and a nested one brings its block', () => {
   const next = editConfigText('{\n  "agentMode": "stream"\n}\n', {
-    set: { lessonBlockChars: 8000, 'planning.maxConcurrentPartsPerIssue': 4 },
+    set: { knowledgeBlockChars: 8000, 'planning.maxConcurrentPartsPerIssue': 4 },
   });
 
-  const parsed = JSON.parse(next) as { lessonBlockChars: number; planning: { maxConcurrentPartsPerIssue: number } };
-  assert.equal(parsed.lessonBlockChars, 8000);
+  const parsed = JSON.parse(next) as { knowledgeBlockChars: number; planning: { maxConcurrentPartsPerIssue: number } };
+  assert.equal(parsed.knowledgeBlockChars, 8000);
   assert.equal(parsed.planning.maxConcurrentPartsPerIssue, 4);
-  assert.match(next, /^ {2}"lessonBlockChars": 8000,?$/m, 'the inserted member copies the file’s own indent');
+  assert.match(next, /^ {2}"knowledgeBlockChars": 8000,?$/m, 'the inserted member copies the file’s own indent');
 });
 
 test('a nested key lands inside a block that already exists rather than replacing it', () => {

@@ -190,7 +190,7 @@ test('the block is evidence rather than instruction, and names what it dropped',
     updatedAt: `2026-01-0${i + 1}T00:00:00.000Z`,
   }));
   const note = priorCiRemediesNote(many, ['format:check']);
-  // The framing `lessonBlock` uses, for its reason: a block of assertions an
+  // The framing the knowledge block uses, for its reason: a block of assertions an
   // agent reads as orders makes every agent worse the moment one goes stale.
   assert.match(note, /evidence, not instruction/);
   assert.match(note, /authority/);

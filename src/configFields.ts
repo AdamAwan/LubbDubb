@@ -200,10 +200,10 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How many times a mid-run crash is re-attached before the run is failed.',
   },
   {
-    path: 'lessonBlockChars',
+    path: 'knowledgeBlockChars',
     type: 'number',
     access: 'plain',
-    why: 'Cap on the lesson block an agent is launched with. Read at every launch.',
+    why: 'Cap on the knowledge block an agent is launched with. Read at every launch.',
   },
   {
     path: 'whitelistedApprovals',

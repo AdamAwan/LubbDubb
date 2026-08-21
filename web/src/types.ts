@@ -60,6 +60,7 @@ export type {
   JobAttachmentInput,
   JobSchedule,
   KnowledgeCorroboration,
+  KnowledgeDeliveryView,
   KnowledgeFact,
   KnowledgeFactPayload,
   KnowledgeFactView,

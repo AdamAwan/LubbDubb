@@ -504,23 +504,24 @@ export interface Config {
    */
   agentResumeAttempts: number;
   /**
-   * How many characters of promoted lessons may ride in every agent's
-   * system-prompt append (issue #355 phase 3). `0` renders nothing at all.
+   * How many characters of the fleet's knowledge may ride in every agent's
+   * system-prompt append (issue #27 phase 3). `0` renders nothing at all.
    *
-   * Characters rather than a count of lessons, because the cost being bounded is
-   * **context** and a lesson runs from one line to 2,000 characters — ten of one
+   * Characters rather than a count of claims, because the cost being bounded is
+   * **context** and a claim runs from one line to 2,000 characters — ten of one
    * shape and ten of the other are not the same purchase. The block is a cached
    * prefix, identical across the fleet, so it is paid once rather than per
    * dispatch; the cap is what stops "paid once" turning into "unbounded and
    * unread".
    *
-   * Over it, whole lessons are dropped **oldest-vouched first** — never a
-   * truncated claim, which would be a claim nobody promoted. The agent is told
-   * nothing about the cap or the drop, because a partial list presented as whole
-   * is the failure this bound exists to prevent; the operator sees it per row in
-   * the cockpit's Lessons panel and retires something to make room.
+   * Over it, whole facts are dropped **oldest-vouched first** — never a truncated
+   * claim, which would be a claim nobody vouched for. Unlike the lesson block
+   * this replaced, the agent **is** told how many claims it is not carrying and
+   * which tool asks for them: a partial list presented as whole is the failure
+   * this bound exists to prevent, and `knowledge_ask` is the way past it. The
+   * operator sees the same drop per row on the cockpit's Knowledge page.
    */
-  lessonBlockChars: number;
+  knowledgeBlockChars: number;
   /** Command used to launch an agent session (overridable for tests). */
   claudeCommand: string;
   /** Extra args passed to the agent command. */
@@ -756,7 +757,7 @@ const DEFAULTS: Config = {
   agentStallParkMs: 300_000,
   agentStallExtendMs: 900_000,
   agentResumeAttempts: 3,
-  lessonBlockChars: 6_000,
+  knowledgeBlockChars: 6_000,
   claudeCommand: 'claude',
   claudeArgs: [],
   promptTemplatesDir: '.lubbdubb/prompts',
@@ -937,6 +938,8 @@ const RETIRED_KEYS: Readonly<Record<string, string>> = {
   issuePickupRequireOwnLabel: 'the ownership gate is "ownWorkOnly", and who "own" means is "userId"',
   'github.defaultAssignee': 'tickets the harness files are assigned to "userId"',
   'azureDevOps.defaultAssignee': 'tickets the harness files are assigned to "userId"',
+  lessonBlockChars:
+    'the system prompt carries one block and it is the knowledge base\'s — a promoted lesson is mirrored in as an injected fleet claim, so "knowledgeBlockChars" is the one cap on what every agent reads',
   'github.filters': 'pull requests are filtered to "userId"\'s while "ownWorkOnly" is on',
   'azureDevOps.filters.prAuthor': 'pull requests are filtered to "userId"\'s while "ownWorkOnly" is on',
   'azureDevOps.filters.workItemAssignedTo': 'work items are filtered to "userId"\'s while "ownWorkOnly" is on',

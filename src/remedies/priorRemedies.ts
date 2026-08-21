@@ -17,7 +17,7 @@ import { CAUSE_COPY } from './remedies.js';
  *
  * ## Evidence, never instruction
  *
- * The framing is `lessonBlock`'s, for its reason and with the same failure to
+ * The framing is the knowledge block's, for its reason and with the same failure to
  * avoid: a block of assertions an agent reads as orders makes every agent worse
  * the moment one goes stale, silently and with no test able to see it. So every
  * line is dated by position (most recent first), attributed to its pull request,
@@ -107,7 +107,7 @@ function renderNote(relevant: readonly Remedy[], lede: string): string {
   let cut = shown.length;
   for (const [i, r] of shown.entries()) {
     const line = renderRow(r);
-    // The prefix that fits, not the subset that fits — `renderLessonBlock`'s rule:
+    // The prefix that fits, not the subset that fits — `renderKnowledgeBlock`'s rule:
     // skipping an over-long entry to fit an older shorter one behind it quietly
     // inverts the ordering the whole block rests on.
     if (used + line.length > MAX_PRIOR_CHARS) {

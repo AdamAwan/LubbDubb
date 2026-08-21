@@ -5,13 +5,13 @@ import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildApp } from '../src/server/app.js';
+import type { Lesson } from '../src/types.js';
 import { buildClaudeArgs, buildClaudeStreamArgs } from '../src/agents/agentProtocol.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
-import type { Lesson } from '../src/types.js';
 import type { LessonView } from '../src/wire.js';
-import { renderLessonBlock } from '../src/lessonBlock.js';
+import { renderKnowledgeBlock } from '../src/knowledge/block.js';
 import type { StreamChild } from '../src/agents/streamJsonSession.js';
 import { failPlanningOpen } from './support/plans.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
@@ -28,10 +28,12 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
  * and with nothing promoted the launch arguments are byte-identical to a build
  * without the feature — as about what it does.
  *
- * Phase 3 (rendering, below) is the half the ticket was hedged against, so its
- * tests are the bounds rather than the feature: the cap drops whole claims
- * oldest-vouched first, the block is the same bytes on every dispatch, and the
- * drop is visible to the operator and to no agent.
+ * Delivery itself moved to the knowledge base in issue #27 phase 3: a promoted
+ * lesson is mirrored in as an injected fleet claim and rides *that* block, so the
+ * launch assertions below are end-to-end over the mirror — which is the half that
+ * must not break silently, since a lesson that stopped reaching agents would look
+ * exactly like one nobody promoted. The renderer's own bounds are
+ * `test/knowledgeBlock.test.ts`.
  */
 
 function testConfig() {
@@ -271,7 +273,7 @@ test('a promoted lesson rides in both runtimes\u2019 launch arguments; a retired
     // Provenance rides with it: what taught the claim and when are what let an
     // agent discount a stale one, and a bare block of assertions strips exactly
     // that.
-    assert.match(prompt, /learned on issue:41/, `${agentMode} must carry the lesson's provenance`);
+    assert.match(prompt, /first seen on issue:41/, `${agentMode} must carry the lesson's provenance`);
     assert.doesNotMatch(prompt, /devops lock/, `${agentMode} must not carry a retired lesson`);
     assert.doesNotMatch(prompt, /Unvouched claim\./, `${agentMode} must not carry a proposal`);
   }
@@ -301,59 +303,6 @@ test('the block is byte-identical between two dispatches', async () => {
   assert.ok(first!.includes('The suite wants a built bundle.'), 'and the block is actually in there');
 });
 
-test('the cap drops whole lessons, oldest-vouched first', () => {
-  // Pure, and with the promotion times written out, because that is exactly what
-  // the ordering turns on: promoted in one order, vouched for in another, so
-  // "newest promotion first" and "the oldest-vouched one is what goes" cannot
-  // both pass by accident.
-  const lessons = [
-    vouched('oldest', '2026-01-01T00:00:00.000Z'),
-    vouched('middle', '2026-02-01T00:00:00.000Z'),
-    vouched('newest', '2026-03-01T00:00:00.000Z'),
-  ];
-  const whole = renderLessonBlock(lessons, 6_000);
-  assert.deepEqual(whole.dropped, [], 'nothing is dropped under a cap everything fits inside');
-  assert.deepEqual(
-    whole.rendered.map((l) => l.id),
-    ['newest', 'middle', 'oldest'],
-  );
-
-  const capped = renderLessonBlock(lessons, whole.text.length - 1);
-  assert.deepEqual(
-    capped.dropped.map((l) => l.id),
-    ['oldest'],
-    'the oldest-vouched claim is the one dropped — it is the one most likely to have gone stale',
-  );
-  // Whole, never truncated: half a claim is a *different* claim, and one no
-  // operator ever vouched for. So the drop is the whole text and its provenance
-  // together, not a sentence of it.
-  assert.equal(capped.text.includes('oldest'), false);
-  assert.ok(capped.text.includes('middle') && capped.text.includes('newest'));
-
-  // Zero is the off switch, and off means byte-identical to a build without the
-  // feature — not an empty header.
-  assert.equal(renderLessonBlock(lessons, 0).text, '');
-  assert.equal(renderLessonBlock(lessons, 0).dropped.length, 3);
-  // And a proposal is never in the block whatever room there is: the gate is the
-  // only way in.
-  assert.equal(
-    renderLessonBlock([{ ...vouched('x', '2026-01-01T00:00:00.000Z'), status: 'proposed' }], 6_000).text,
-    '',
-  );
-});
-
-/** A lesson an operator vouched for at `at` — `updatedAt` is the promotion. */
-function vouched(id: string, at: string): Lesson {
-  return {
-    id,
-    text: `claim ${id} ${'x'.repeat(100)}`,
-    originRef: 'issue:41',
-    status: 'promoted',
-    createdAt: at,
-    updatedAt: at,
-  };
-}
-
 test('the cockpit is told which promoted lessons are actually reaching agents', async () => {
   const system = build();
   const older = system.store.proposeLesson({ text: 'a'.repeat(300), originRef: null });
@@ -361,7 +310,8 @@ test('the cockpit is told which promoted lessons are actually reaching agents', 
   system.store.promoteLesson(older.id);
   system.store.promoteLesson(newer.id);
   // A cap that fits one of the two, so the snapshot has a real drop to report.
-  system.config.lessonBlockChars = renderLessonBlock(system.store.listLessons(), 6_000).text.length - 1;
+  system.config.knowledgeBlockChars =
+    renderKnowledgeBlock(system.store.askFacts({ scopes: ['fleet'], limit: 500 }), 6_000).text.length - 1;
 
   const { app } = await buildApp(system);
   const snap = (await app.inject({ method: 'GET', url: '/api/state' })).json() as { lessons: LessonView[] };

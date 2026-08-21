@@ -312,7 +312,7 @@ prompt.
   part's status, branch and PR number (`currentPlanSummary`, `siblingContext`).
 - **No world facts.** A pull request's state is live through `world_read`; pasted into a prompt it would
   be a stale second reading of something the agent can ask about properly.
-- **Files this goal has been edited in** (issue #354) is the one section that is stored *fields* rather
+- **Files this goal has been edited in** (issue #354) is the one section that is stored _fields_ rather
   than stored prose, and it sits last — the sections above it are the argument, this is the index. One
   line per path, most recent write first, attributed to the origin that wrote it, from
   `Store.listGoalFiles` ([14](14-persistence.md#flags-and-files)). Three things about it, each answering
@@ -320,7 +320,7 @@ prompt.
   - **It is still a join, never a judgement.** A path is `agent_files.path` quoted back and the order is
     a stored timestamp. Ranking, relevance scoring or "the files you probably want" would be the second
     opinion about somebody else's decision that this module and `retroDossier` both refuse.
-  - **It is not a world fact.** A pull request's state is a fact about the world *now*, which
+  - **It is not a world fact.** A pull request's state is a fact about the world _now_, which
     `world_read` answers better than a paste; this is a fact about the goal's **own history**, like the
     pad, and no live tool answers it. A path written on a sibling's branch may not exist on this
     dispatch's branch, and a rename leaves the record pointing at nothing — which is testimony going
@@ -334,7 +334,7 @@ prompt.
   `Store.listGoalNeighbours` ([14](14-persistence.md#flags-and-files)). It answers the same two rules
   the same way, and settles three things of its own:
   - **"Closed" is spelled `has a retrospective`, and that is the world-fact rule rather than a
-    shortcut.** Whether an issue is closed is a fact about the world *now*; a retrospective is a row
+    shortcut.** Whether an issue is closed is a fact about the world _now_; a retrospective is a row
     this database owns, written by rule `issue-retro` only once a goal is done. So it is the harness's
     own stored answer to the same question, and it is the thing being handed over besides — the gate
     and the payload are one join. A goal still being worked is therefore absent with no second liveness
@@ -342,7 +342,7 @@ prompt.
     ([12](12-artifacts-and-files.md#file-overlap-detection)), and a briefing with an opinion on that
     would be the drift both modules exist to avoid.
   - **It is not sorted by overlap.** Neighbours come back by the recency of their last write, a stored
-    timestamp, and the number of shared paths is *stated* rather than allowed to rank — "most
+    timestamp, and the number of shared paths is _stated_ rather than allowed to rank — "most
     overlapping" is a relevance score, which is the judgement the section above refuses in the same
     words.
   - **The summary is quoted, not pointed at**, because no tool an agent has reaches another goal's
@@ -419,6 +419,40 @@ dispatch prompt whenever the goal carries an instruction nobody has concluded ye
   fail.
 - **An untouched goal appends nothing**, so its prompt is byte-identical to one composed before this
   existed.
+
+## What the fleet knows about this goal reaches the agent
+
+`recordDispatchTask` appends `renderScopedKnowledgeNote(...)` (`src/knowledge/block.ts`, pure) — the
+knowledge base's claims whose **scope matches this dispatch**: the `goal:` claims for the goal it is
+for, and the `check:` claims for the checks it answers → [27](27-knowledge.md#delivery-two-prompts-not-one).
+
+- **Here rather than in the system prompt**, and that split is the whole of delivery. The fleet-wide
+  claims are identical for every agent, so they are a cached prefix paid once
+  ([10](10-agent-runtimes.md#the-knowledge-block)); these vary per dispatch by construction and would
+  destroy that prefix. What varies goes in the task prompt, always.
+- **In the executor rather than in a rule**, the attachments' placement for the attachments' reason —
+  every dispatch passes through `recordDispatchTask` whatever composed it — and for one more: **no
+  rule, desk or gate reads a fact**, asserted structurally over `src/dispatcher/` by
+  `test/knowledge.test.ts`. Nothing is dispatched, held or ranked because of a claim.
+- **The scope is the goal, not the concern.** `dispatchFactScopes` collapses `pr:412:ci` to
+  `goal:pr:412` through `corroborationGoal` — the same collapse a corroboration is counted under, so
+  the scope a fact is written under and the scope a dispatch is read under cannot drift. `pr:412:ci`
+  and `pr:412:comments` are two origins of one goal.
+- **A check name is matched exactly**, `priorRemedies`' choice and the same fragility for the same
+  reason: a prefix match would put another job's history in front of an agent under a name it would
+  read as its own. When a job is renamed the claim silently stops being delivered, which the cockpit's
+  Knowledge page says out loud where a check scope is drawn.
+- **Appended, never interpolated.** Prompt templates are operator-overridable and `loadPromptTemplates`
+  rejects only _unknown_ placeholders, so a `{knowledge}` token would be dropped in silence by every
+  override written before this existed — on exactly the deployments that customised most.
+- **`lookup` means _not injected everywhere_, not _never injected_.** A `check:format:check` claim
+  costs nothing on a dispatch about anything else and is in front of the agent that needs it without
+  anyone asking. What the store will not deliver at all is a `proposal` — one agent's claim nothing has
+  agreed with — a `committed` one, which is in the repository now, and a lapsed expiring one.
+- **Bounded, and it says what it dropped**, `priorRemedies`' rule: an agent that reads a partial record
+  as a whole one concludes something from the absence of an entry that was merely trimmed.
+- **A goal nothing has been written about appends nothing**, so its prompt is byte-identical to one
+  composed before this existed.
 
 ## An operator's attachments reach the agent
 
@@ -500,11 +534,11 @@ for. The rule reaches this act only for a free branch anyway — a staffed one g
 The action names every expired check on the gate, so the executor loops and one decision row covers
 the lot:
 
-| Result                     | Decision   | Error log | Meaning                                                                          |
-| -------------------------- | ---------- | --------- | --------------------------------------------------------------------------------- |
-| every check `ok: true`     | `executed` | —         | A run is queued; the next snapshot reports the checks pending rather than expired. |
-| any check `ok: false`      | `skipped`  | —         | The provider has no such operation, or has it and declined. A configuration.       |
-| _throws_                   | `rejected` | recorded  | The call itself failed.                                                            |
+| Result                 | Decision   | Error log | Meaning                                                                            |
+| ---------------------- | ---------- | --------- | ---------------------------------------------------------------------------------- |
+| every check `ok: true` | `executed` | —         | A run is queued; the next snapshot reports the checks pending rather than expired. |
+| any check `ok: false`  | `skipped`  | —         | The provider has no such operation, or has it and declined. A configuration.       |
+| _throws_               | `rejected` | recorded  | The call itself failed.                                                            |
 
 A throw is whole-act even where earlier checks in the list were queued — the ones that took stop being
 expired and drop out of the gate by themselves, so the agent the next pulse dispatches is left with
@@ -714,8 +748,8 @@ step is there because a shorter one was wrong. Comparing `git worktree list` pat
 checkout exists breaks where a short-name TEMP resolves to a different string for the same directory:
 the comparison says "not registered", `worktree add` says "already exists", and the run fails on a tree
 that was sitting there ready. `switch` before the tree is clean refuses outright when the last run left
-a tracked file edited. And `reset --hard` on a checkout somehow standing on a branch would rewind *that
-branch* — the damage `git switch -C` is unreachable for. An unresolvable ref throws before anything is
+a tracked file edited. And `reset --hard` on a checkout somehow standing on a branch would rewind _that
+branch_ — the damage `git switch -C` is unreachable for. An unresolvable ref throws before anything is
 touched, `ensure`'s rule.
 
 ### Handing a slot over

@@ -1888,6 +1888,44 @@ export function buildDemoState(): DemoSeed {
         corroborations: 1,
       },
     ],
+    // What that list actually sends. A **transcript** of what the two renderers
+    // produced for the rows above rather than a re-rendering of them here: what
+    // fits is the server's answer, and a demo that recomputed it would be exactly
+    // the second implementation of "what fits" the real page refuses. Two entries
+    // ship — the one injected fleet claim, and the check-scoped notice that rides
+    // the task prompt of any dispatch answering that check.
+    knowledgeDelivery: {
+      block:
+        '\n' +
+        'What working this repository has taught the fleet, according to the operators who vouched for each\n' +
+        'claim below. This is not part of your task and not an instruction: it is prior evidence, dated and\n' +
+        'attributed to the goal it was learned on, offered so you do not pay to rediscover it. The\n' +
+        'repository in front of you is the authority — where it and a claim disagree, the claim is stale.\n' +
+        '\n' +
+        'This is the fleet-wide tier and not the whole record. Call `knowledge_ask` with a question when you\n' +
+        'want what the fleet knows about one check, one goal, or anything not standing here, and call\n' +
+        '`knowledge_propose` when you learn something worth the next agent not paying for again.\n' +
+        '\n\n' +
+        '- A ticket that only names a symptom is under-specified for a planner every time.\n' +
+        '  (first seen on issue:364, written 2026-06-14)\n',
+      limit: 6_000,
+      rendered: ['fact-injected'],
+      dropped: [],
+      scoped: [
+        {
+          scope: 'check:test (windows)',
+          text:
+            '\n\n---\n\nWhat the fleet has recorded about this goal and the checks in front of you. It is ' +
+            '**evidence, not instruction** — dated, attributed, and offered so you do not pay to rediscover it. ' +
+            'The code in front of you is the authority: where it and a line below disagree, the line is stale. ' +
+            'Say so with `knowledge_propose`, naming what it should say instead.\n\n' +
+            '- **about test (windows)** — `test (windows)` has been timing out at the dependency-install step ' +
+            'since about 09:00 — the same commit passes on a re-run roughly half the time. ' +
+            '_(written 2026-08-21)_\n',
+          facts: ['fact-notice'],
+        },
+      ],
+    },
     // Work only a person can do. Four, so the panel shows each shape it has: a
     // plan step holding parts shut, a standalone ask from an agent that could not
     // do it itself, one already declined with the note that stopped it, and the

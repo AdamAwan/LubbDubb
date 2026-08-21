@@ -62,7 +62,7 @@ model below, never by scraping output.
 Alongside the two sentinels it states one prohibition, because the commonest way an agent goes
 missing is not a forgotten sentinel: **do not end a turn waiting for something you started** — a
 build, a test run, a CI check, a long command. Nothing wakes an agent when one finishes, and the
-WAITING sentinel is for a *person*. A turn ending with neither sentinel is an
+WAITING sentinel is for a _person_. A turn ending with neither sentinel is an
 [unannounced stop](#the-unannounced-stop).
 
 ### The flag payload
@@ -81,7 +81,7 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 
 ```
 -p --input-format stream-json --output-format stream-json --verbose
---append-system-prompt <protocol [+ tool addendum] [+ promoted lessons]>
+--append-system-prompt <protocol [+ tool addendum] [+ injected knowledge]>
 (--session-id <id> | --resume <id>)
 [--settings <file-events + permissions fragments>]
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
@@ -93,7 +93,7 @@ of buffer or whitespace) so an echoed sentinel mid-token does not fire.
 **`buildClaudeArgs`** (PTY):
 
 ```
---append-system-prompt <protocol [+ tool addendum] [+ promoted lessons]>
+--append-system-prompt <protocol [+ tool addendum] [+ injected knowledge]>
 (--session-id <id> | --resume <id>)
 [--settings <merged status-line + file-events + permissions fragments>]
 [--mcp-config <path> --allowedTools <names> [--permission-prompt-tool <name>]]
@@ -156,7 +156,7 @@ resumed agent that was mid-work.
 ### Resolving the command
 
 `resolveExecutable` (`src/agents/resolveCommand.ts`) turns `claudeCommand` into an absolute path
-before either transport spawns, because both fail *silently* on a missing binary: `node-pty` prints
+before either transport spawns, because both fail _silently_ on a missing binary: `node-pty` prints
 `execvp(3) failed` into the terminal and exits 1, and `child_process.spawn` emits an async `error`
 event. Resolving up front turns either into one clear message at spawn time, and hands the runtime a
 path so the child no longer depends on inheriting a correct `PATH`.
@@ -177,43 +177,60 @@ install, working or dead by how the server was started. The fallback scan is win
 environment variables are genuinely case-sensitive, and a lower-cased `path` there is a different
 variable.
 
-### The lesson block
+### The knowledge block
 
-Since #355 phase 3 the appended system prompt carries a third part: the fleet's **promoted lessons**
-— what working past goals taught about working _this repository_ → [13](13-jobs-and-findings.md#lessons).
+Since #27 phase 3 the appended system prompt carries a third part: what the fleet **knows** about
+working this repository — the claims an operator has injected → [27](27-knowledge.md#delivery-two-prompts-not-one).
+
+It replaced the lesson block rather than joining it, and that is the one thing to know about this
+section's history: a promoted lesson is mirrored into the knowledge base as an injected fleet claim
+(`KnowledgeStore.adoptLessons`), so rendering both would have sent every promoted lesson to every
+agent **twice** — once as a lesson and once as its own mirror. One block ships, and a promoted lesson
+reaches agents as the fact it was adopted into.
 
 It goes here, and not in the task prompt, because of what the two cost. This block is **identical
 across every agent in the fleet**, so it is a cached prefix paid once; everything `recordDispatchTask`
 appends is per-goal and variable, so it is fresh input tokens on every dispatch. That is the placement
 rule for all future context, and it is the reason nothing per-dispatch may enter this block: no goal
 name, no branch, no agent id, no timestamp of "now". A block that churns is a block that never caches.
-Recomputing an identical string per launch is free; producing a _different_ one is the bug.
+Recomputing an identical string per launch is free; producing a _different_ one is the bug. The facts
+scoped to one goal or one check ride the **task** prompt for exactly that reason
+→ [09](09-execution.md#what-a-dispatch-prompt-carries).
 
-- **The seam is a string, not a store.** `src/lessonBlock.ts` renders it, `src/system.ts` calls that
-  renderer in its `ArgsBuilder`, and `agentProtocol.ts` receives a finished `lessonBlock` string and
-  appends it. So this module stays pure and can no more read the lesson store than the dispatcher can
-  — `test/lessons.test.ts` asserts structurally that `src/agents/` and `src/mcp/` never call
-  `listLessons` or `getLesson`, and passing a rendered string is what keeps that true. It carries the
-  same trap `--model` does: a builder that accepts the field and forgets to forward it type-checks
+- **The seam is a string, not a store.** `src/knowledge/block.ts` renders it, `src/system.ts` calls
+  that renderer in its `ArgsBuilder`, and `agentProtocol.ts` receives a finished `knowledgeBlock`
+  string and appends it. So this module stays pure and can no more read the knowledge store than the
+  dispatcher can — `test/knowledge.test.ts` asserts structurally that nothing under `src/dispatcher/`
+  reads a fact, and passing a rendered string is what keeps the launch path equally clean. It carries
+  the same trap `--model` does: a builder that accepts the field and forgets to forward it type-checks
   clean and silently drops the block on both runtimes.
-- **With no promoted lessons, nothing is appended at all** — not a header, not a newline. The argv is
-  byte-identical to a build without the feature, which is #355's own acceptance criterion and what
-  `test/lessons.test.ts` pins.
-- **Capped at `lessonBlockChars` (default 6,000), on characters rather than on a count**, since a
-  lesson runs from a line to 2,000 characters. Over the cap, whole lessons are dropped **oldest-vouched
-  first** — ordered by promotion time, descending, so what goes is the claim most likely to have gone
-  stale. Never a truncated claim: half a lesson is a different claim, and one nobody promoted. `0`
-  disables rendering entirely. → [02](02-configuration.md#agent-launch)
-- **The agent is never told the block is partial.** No count, no "…and 3 more", no mention of a cap: a
-  partial list presented as whole is the failure the cap exists to bound. The drop is shown to the
-  **operator**, per row, in the cockpit's Lessons panel → [17](17-cockpit.md#the-console).
-- **It is claims, not instructions.** Each lesson renders with the goal it was learned on and the date
+- **With nothing injected, nothing is appended at all** — not a header, not a newline. The argv is
+  byte-identical to a build without the feature, which is what `test/lessons.test.ts` and
+  `test/knowledgeBlock.test.ts` pin between them.
+- **Only an `injected` `fleet` claim is in it.** `lookup` is as far as two agents agreeing can carry
+  anything, so delivering one here would make corroboration an auto-promotion into every agent's
+  context — the arrival by the back door the whole reach machine exists to stop. A `check:` or `goal:`
+  claim an operator injects is not fleet-wide and rides the task prompt instead.
+- **Capped at `knowledgeBlockChars` (default 6,000), on characters rather than on a count**, since a
+  claim runs from a line to 2,000 characters. Over the cap, whole facts are dropped **newest-vouched
+  first surviving** — ordered by `ruledAt` descending, so what goes is the ruling most likely to have
+  gone stale. `ruledAt` and not `updatedAt`: the latter also moves for a corroboration, which would let
+  an agent agreeing with a claim reorder the fleet's block. Never a truncated claim: half a fact is a
+  different claim, and one nobody vouched for. `0` disables rendering entirely.
+  → [02](02-configuration.md#agent-launch)
+- **The agent _is_ told how many claims the block is not carrying**, and this reverses the lesson
+  block's stance deliberately. A partial list presented as whole is the failure the cap exists to
+  bound — an agent concludes something from the absence of an entry that was merely trimmed — and the
+  lesson block could only say so uselessly, because an agent told a count had no way to reach what was
+  missing. `knowledge_ask` is that way, so the count is actionable and the header names the tool. The
+  drop is shown to the **operator** as well, per row and against the budget, on the cockpit's
+  Knowledge page → [17](17-cockpit.md#the-console).
+- **It is claims, not instructions.** Each fact renders with the goal it was first seen on and the date
   it was written, under a header saying the repository in front of the agent is the authority. That is
   what lets an agent discount a stale one, and it is exactly what a bare block of assertions strips.
 - **The block is re-appended on every launch, `--resume` included**, exactly as the protocol prompt is.
-  So promoting or retiring a lesson reaches a running agent at its **next** launch, never mid-run — an
+  So injecting or demoting a claim reaches a running agent at its **next** launch, never mid-run — an
   agent already running keeps the block it started with until it is relaunched or resumed.
-
 
 ## Permission model (issue #130)
 
@@ -288,7 +305,7 @@ judged exactly as before.
 A turn that comes to rest with **neither** sentinel in it is the third case, and it is not a question.
 The runtime reports it as its own event — `stalled`, carrying the turn's text with the sentinels
 stripped — rather than as `waiting`, and the session status moves to `waiting` because the session
-really has stopped. What the stop *means* is `AgentManager`'s to decide, below.
+really has stopped. What the stop _means_ is `AgentManager`'s to decide, below.
 
 Treating it as a question is what it used to do, and the population is why that was wrong. Two things
 dominate it, and neither has anything for a person to answer:
@@ -303,7 +320,7 @@ dominate it, and neither has anything for a person to answer:
   at `pr-ci-failing` when it turns red ([05](05-dispatcher.md#the-rule-book)), so an agent holding a
   worktree lease to poll it is doing worse, for a scarce slot, what happens for free. The cockpit
   already draws that PR as `elsewhere` — "CI is still running" ([07](07-pull-requests.md)) — which is
-  the point: it is *visible*, and it is nobody's turn.
+  the point: it is _visible_, and it is nobody's turn.
 
 Both arrived in the inbox as one fixed sentence — "Agent ended its turn without finishing; awaiting
 direction" — which named neither the agent's situation nor which of the two it was, so answering one
@@ -312,13 +329,13 @@ and expensive to read, which is the ratio that makes an inbox stop being read.
 
 `PROTOCOL_SYSTEM_PROMPT` states the rule against the second case directly — never end a turn to wait:
 wait for what you started, finish for what is on the world's clock, and keep the WAITING sentinel for
-what a *person* must decide — and the two mechanisms below deal with the stops that happen anyway.
+what a _person_ must decide — and the two mechanisms below deal with the stops that happen anyway.
 
 #### The nudge
 
 `AgentManager.handleStalled` asks the agent before it asks the operator. Up to `agentStallNudges`
 times (default 2) it types `STALL_NUDGE` (`src/agents/agentProtocol.ts`) into the session, which
-states the three exits — you are done (a pushed PR waiting on CI or review included), a *person* is
+states the three exits — you are done (a pushed PR waiting on CI or review included), a _person_ is
 what you are blocked on, or you are still working and should go and check that build yourself — and
 picks none of them. Guessing is the thing the harness cannot do and the agent can: an agent told "carry on" that had
 genuinely finished invents work, and one told "you are done" that had not abandons it.
@@ -371,7 +388,7 @@ wrong in each direction and defaulting to the cheap one:
 So the countdown is the operator's window to _disagree_, not the harness's confidence, and it is short
 for exactly that reason: nothing about an idle agent gets surer with time. What they disagree with it
 in is **Extend** (`POST /api/agents/:id/extend-stall`), which adds `agentStallExtendMs` — a quarter of
-an hour — from *now* rather than from the deadline, because the operator is making a claim about their
+an hour — from _now_ rather than from the deadline, because the operator is making a claim about their
 own clock and not about the agent's. Two presses a minute apart are fifteen minutes from the second,
 not thirty from the first.
 
@@ -417,7 +434,7 @@ The raw event stream is never dumped. Each message's content blocks go through t
 - a `human` block renders injected/human messages.
 
 **Every labelled line is stamped** with a dim local `[HH:MM:SS]`: a tool call and a sent message
-carry it in front of the label, a result carries it *after* the label and before the count. That
+carry it in front of the label, a result carries it _after_ the label and before the count. That
 asymmetry is deliberate — the cockpit matches a result by `^  ↳` and folds everything past the label
 into the collapsed summary, so a stamp in front would break the match and be thrown away, while one
 behind it puts the moment a call was made and the moment it returned on the one line an operator

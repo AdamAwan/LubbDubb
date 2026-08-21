@@ -1,14 +1,14 @@
 # 27 — Knowledge
 
-> **Status: partly built — phases 3–7 outstanding.** The store, its three axes, the corroboration
+> **Status: partly built — phases 4–7 outstanding.** The store, its three axes, the corroboration
 > count, the rejection bar and `supersedes` are running; any agent can write to and read from them
-> (`knowledge_propose`, `knowledge_ask`); and the cockpit page is where an operator governs what
-> they carry. Nothing reaches an agent that did not ask — delivery is [phase 3](#the-phases) — and
-> the sections marked below describe behaviour that does not exist.
+> (`knowledge_propose`, `knowledge_ask`); delivery is wired, so an injected fleet claim is in every
+> agent's system prompt and a scope-matched one is in the task prompt of the dispatch it matches; and
+> the cockpit page is where an operator governs both. What is outstanding is notices, contradiction,
+> graduation and the cost reading — the sections marked below describe behaviour that does not exist.
 > [The phases](#the-phases) says what lands when. Per `docs/README.md`, a module that does not exist
-> yet is named in italics — _src/knowledge/block.ts_ — where a real one is backticked, and a phase
-> landing deletes its row and unmarks the part of this document it makes true. When the last row
-> goes, so does this banner.
+> yet is named in italics where a real one is backticked, and a phase landing deletes its row and
+> unmarks the part of this document it makes true. When the last row goes, so does this banner.
 
 Hundreds of agents work this repository and each one starts knowing nothing about it. What they learn
 — that `knip` runs every rule at `error`, that a route handler never reads the request, that
@@ -23,7 +23,7 @@ are five answers to one question that share no vocabulary and cannot be read aga
 
 | Today                  | Holds                                     | Reaches an agent                        |
 | ---------------------- | ----------------------------------------- | --------------------------------------- |
-| `lessons`              | Durable claims, operator-vouched          | System prompt, capped                   |
+| `lessons`              | Durable claims, operator-vouched          | Mirrored in; rides the block below      |
 | `findings` kind `docs` | "The repository does not say this"        | Nothing — until an operator makes a job |
 | `remedies`             | Why the fleet came back to a pull request | The next CI/review prompt, per check    |
 | `scratchpads`          | Notes between siblings on one goal        | The goal's own agents, on request       |
@@ -47,10 +47,10 @@ different animals and folding them together would lose the counts.
 
 **The promoted lessons are already here.** A promoted `lessons` row _is_ a fleet-scoped standing claim
 an operator vouched for that reaches every agent's system prompt — which is `injected`, exactly — so
-`KnowledgeStore.adoptLessons` mirrors it under an id derived from the lesson's. That runs on every
-boot rather than once, because `lessons` keeps its own surface until delivery moves
-([phase 3](#the-phases)): a lesson promoted between the two phases would otherwise be a claim that
-silently stopped reaching agents on the boot the operator took that build. The mirror runs backwards
+`KnowledgeStore.adoptLessons` mirrors it under an id derived from the lesson's. It runs on every boot
+**and** on the promote and retire routes themselves, because `lessons` keeps its own surface — a
+lesson vouched for now has to reach agents at the next launch rather than at the next restart, and a
+claim that silently stopped being delivered looks exactly like one nobody promoted. The mirror runs backwards
 too — a lesson retired after it was adopted takes its fact with it, unless something has since
 corroborated or amended it, at which point it is a fact in its own right and the lessons panel is not
 where it is governed.
@@ -185,7 +185,7 @@ operator reads to decide whether it should have.
 
 An agent that finds an injected fact contradicted by the code in front of it says so. This is the
 half `lessons` never had: today staleness rests on an agent mentioning it in a retrospective and a
-human noticing, which is why `src/lessonBlock.ts`'s header has to ask for it in prose.
+human noticing, which is why the lesson block's header had to ask for it in prose.
 
 **A contradiction demands an amendment.** The contradicting agent must say what the claim should say
 instead, and that amendment is filed as a new proposal linked to the original. Nothing is demoted by
@@ -236,7 +236,7 @@ A notice is fleet-visible within minutes, on two corroborations, with no operato
 the one path in this design where agents put text in front of the whole fleet by themselves, and
 everything below is about bounding what that can do.
 
-**A notice states an observation. It never states an instruction.** This is `src/lessonBlock.ts`'s
+**A notice states an observation. It never states an instruction.** This is `src/knowledge/block.ts`'s
 rule and it binds hardest here. _"This check went red and then green on the same commit twice
 today"_ is an observation. _"Do not chase the diff — re-run it"_ is an instruction, and it is the
 failure mode: an agent misreads a real defect as a flake, a second agrees, and for a day every agent
@@ -259,25 +259,28 @@ weakens it.
 
 ## Delivery: two prompts, not one
 
-> **Not yet built — [phase 3](#the-phases).** Nothing here reaches an agent that did not ask for it:
-> `knowledge_ask` is the whole of delivery today, and the system-prompt block still renders the
-> `lessons` table (`src/lessonBlock.ts`). What an ask can reach is already the rule below, though — a
-> `proposal` is unreachable, because answering with one would be auto-promotion arriving by the back
-> door, and a `committed` fact is unreachable because it is in the repository now and reading it out
-> of a tool pays context twice for one sentence.
-
 Reach and scope interact, and the interaction decides **which** prompt a fact rides.
 
-- **The system prompt** carries the notices and the globally-injected fleet facts. It is identical
-  for every agent on a dispatch kind, which is what keeps it a cached prefix — the entire reason
-  lessons live there rather than in the task prompt (`src/lessonBlock.ts`). Nothing in it varies per
-  run: no goal name, no branch, no agent id, and every date is the fact's own.
+- **The system prompt** carries the notices and the globally-injected fleet facts, rendered by
+  `renderKnowledgeBlock` (`src/knowledge/block.ts`) and threaded in by `src/system.ts`. It is
+  identical for every agent on every dispatch, which is what keeps it a cached prefix — the entire
+  reason this lives there rather than in the task prompt. Nothing in it varies per run: no goal name,
+  no branch, no agent id, and every date is the fact's own.
+
+  **It replaced the lesson block rather than joining it.** A promoted lesson is mirrored in as an
+  injected fleet claim, so rendering both would have sent every promoted lesson to every agent twice
+  — once as a lesson and once as its own mirror. One block ships
+  ([10](10-agent-runtimes.md#the-knowledge-block)), and the Lessons panel's per-row "sent to agents"
+  chip is that block's answer read back through the fact the lesson was adopted into.
+
 - **The task prompt** carries the facts whose scope matches _this_ dispatch — the `check:` facts for
   the checks that are red, the `goal:` facts for the goal. These vary per dispatch and would destroy
   the cache in the system prompt. They are **appended**, exactly as `priorRemedies` is appended
   today, and for its reason: prompt templates are operator-overridable and `loadPromptTemplates`
   rejects only _unknown_ placeholders, so a `{knowledge}` token would be silently dropped by every
-  override written before this existed.
+  override written before this existed. `recordDispatchTask` appends them
+  ([09](09-execution.md#what-the-fleet-knows-about-this-goal-reaches-the-agent)) rather than any rule,
+  which is what keeps "no rule, desk or gate reads a fact" true of a dispatch that carries one.
 
 The consequence is that `lookup` means _not injected everywhere_, not _never injected_. A
 `check:format:check` fact costs nothing on a dispatch about anything else and is in front of the agent
@@ -290,10 +293,20 @@ precisely because a tool named nowhere but in `tools/list` is a tool an agent fi
 The system-prompt block is bounded by `knowledgeBlockChars`, and whole facts are dropped at the bound,
 oldest-vouched first. Half a claim is a different claim.
 
+The ordering turns on `ruled_at`, not `updated_at`: the latter also moves when somebody corroborates a
+claim, which would let an agent agreeing with a fact reorder the fleet's block.
+
 **The block says out loud that it is partial**, names how many facts it is not carrying, and names the
-tool to ask with. `ciEvidenceNote` and `renderLessonBlock` both take this stance: an agent that reads
+tool to ask with. `ciEvidenceNote` and `priorRemedies` both take this stance: an agent that reads
 a partial record as a whole one concludes something from the absence of an entry that was merely
-trimmed, which is worse than having no record at all.
+trimmed, which is worse than having no record at all. It is the one place this reverses the lesson
+block's stance, and `knowledge_ask` is why: a count an agent can do nothing about is noise, and a
+count with a tool behind it is a way through.
+
+**What fits is returned by the renderer and never recomputed at a call site.** The block, the facts it
+carries and the facts it dropped come back together, and the cockpit's meter is projected from that
+same answer. A second implementation of "what fits" is free to disagree with the one that actually
+ran, and nothing is red when it does.
 
 ## What the fleet writes with
 
@@ -322,8 +335,8 @@ the same claim again tomorrow.
 
 > **Not yet built:** the proposal arm on the two tools below. `report_remedy` still proposes a
 > `lessons` row under an `undocumented` guard, and a `docs` finding is still only a finding. Both are
-> a small change once delivery has moved in [phase 3](#the-phases) — before that they would be writing
-> into a store nothing reads.
+> a small change now that delivery has moved, and neither was worth making before it: they would have
+> been writing into a store nothing read.
 
 `report_remedy` and `report_finding` keep their own jobs and gain a proposal arm: a remedy is still
 the event record, and a `docs` finding is still the thing that becomes a documentation pull request.
@@ -358,19 +371,22 @@ channel on a scoped MCP credential; the cockpit's bearer token reaches four verb
 reject, keep — and none of them is available to an agent. There is no un-reject: a rejection is
 terminal, and what comes back is an amendment naming the barred claim.
 
-**Promoted lessons are mirrored in, so the Lessons panel and this page show the same claims** until
-delivery moves in [phase 3](#the-phases). The page says so in as many words rather than leaving a
-reader to work out which surface is authoritative.
+**Promoted lessons are mirrored in, so the Lessons panel and this page show the same claims.** The
+page says so in as many words rather than leaving a reader to work out which surface is authoritative.
 
-> **Not yet built — [phase 3](#the-phases):** the Injected section's character budget drawn against
-> `knowledgeBlockChars`, and the second surface that renders **what an agent actually receives**, per
-> dispatch kind and per check, from the same function the launch uses — never a second reading of it.
-> Both wait on the renderer for the same reason: what fits is returned by the block renderer and never
-> recomputed at the call site (`renderLessonBlock` and `LessonsPanel` are the precedent), and a meter
-> drawn from a plain character count today would be exactly the second implementation of "what fits"
-> that rule exists to prevent. Until then the Injected section says plainly that nothing in it is
-> delivered yet. `LessonsPanel` already carries the second surface's idea in miniature ("is this claim
-> actually being sent"); a store this size cannot be governed without it.
+**The Injected section carries a character budget** drawn against `knowledgeBlockChars`, and marks the
+claims the cap left out, per row. And the page ends with a second surface: **what an agent actually
+receives** — the system-prompt block verbatim, and the task-prompt append for each `check:` and `goal:`
+scope holding anything deliverable, from the same two renderers the launch and the dispatch use.
+
+Per scope rather than per dispatch, because a dispatch matches its goal and every check it answers at
+once and the set of dispatches is not a list; an agent fixing CI on a goal with claims against both
+receives both entries, in one pass through the renderer.
+
+Both are **projected server-side from the renderer's own answer**, never a second reading of it. A
+meter drawn from a plain character count in the browser would be exactly the second implementation of
+"what fits" that rule exists to prevent. `LessonsPanel` carries the idea in miniature ("is this claim
+actually being sent"); a store this size cannot be governed without it.
 
 ## What nothing does
 
@@ -414,14 +430,14 @@ A fact leaves for one of two places, and they are not interchangeable.
 Ordered so each lands something usable and nothing before it is wasted. Every phase updates the part
 of this document it makes true.
 
-| #   | Lands                                                                                                                                                                                                       | Depends on |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| 3   | Delivery. _src/knowledge/block.ts_ renders the system-prompt block under `knowledgeBlockChars`; scope-matched facts append to the task prompt beside `priorRemedies`. The "what an agent receives" surface. | 1, 2       |
-| 4   | Notices. `knowledge_notice`, expiry, resolution conditions, the always-injected tier, and the harness-written notices for same-commit red→green and base-branch red.                                        | 3          |
-| 5   | Contradiction and amendment. `knowledge_contradict`, the amendment proposal, the contradiction ratio on the page.                                                                                           | 2, 3       |
-| 6   | Graduation. Committing a fact opens a documentation pull request through the `docs`-finding machinery, and the fact leaves every prompt when it lands.                                                      | 2          |
-| 7   | Cost and drift. Dollars per dispatch on the page; stale `check:` scopes surfaced; lookup ask-counts.                                                                                                        | 3          |
+| #   | Lands                                                                                                                                                                | Depends on |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| 4   | Notices. `knowledge_notice`, expiry, resolution conditions, the always-injected tier, and the harness-written notices for same-commit red→green and base-branch red. | 3          |
+| 5   | Contradiction and amendment. `knowledge_contradict`, the amendment proposal, the contradiction ratio on the page.                                                    | 2, 3       |
+| 6   | Graduation. Committing a fact opens a documentation pull request through the `docs`-finding machinery, and the fact leaves every prompt when it lands.               | 2          |
+| 7   | Cost and drift. Dollars per dispatch on the page; stale `check:` scopes surfaced; lookup ask-counts.                                                                 | 3          |
 
-Phases 1 and 2 — `src/store/knowledge.ts`, the axes, the bar, the two tools, and the page an operator
-governs them from — have landed. Phase 3 is the rest of the spine: until it lands nothing reaches an
-agent that did not ask. 4 through 7 are independent of each other and can land in any order.
+Phases 1 to 3 — `src/store/knowledge.ts`, the axes, the bar, the two tools, the page an operator
+governs them from, and `src/knowledge/block.ts` with the two prompts it renders — have landed. That is
+the whole spine: a claim can be written, ruled on and delivered. 4 through 7 are independent of each
+other and can land in any order.

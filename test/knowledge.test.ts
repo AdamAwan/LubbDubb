@@ -24,6 +24,10 @@ import { buildViewModel } from '../web/src/view/viewModel.js';
 import { NOWHERE, placeQuery, readPlace } from '../web/src/cockpit/place.js';
 import type { AppState } from '../web/src/types.js';
 import type { Agent, FactObservation } from '../src/types.js';
+import { EventEmitter } from 'node:events';
+import { PassThrough } from 'node:stream';
+import type { StreamChild } from '../src/agents/streamJsonSession.js';
+import { failPlanningOpen } from './support/plans.js';
 
 /**
  * Knowledge, phase 1 (docs/spec/27-knowledge.md): the store, the three axes, and
@@ -797,6 +801,7 @@ test('the page draws every reach, the rejected tail included', async () => {
       hasGoal: () => true,
       children: createElement(KnowledgePanel, {
         facts: state.knowledge,
+        delivery: state.knowledgeDelivery,
         now: Date.now(),
         refUrls: state.refUrls,
         viewingFact: null,
@@ -818,6 +823,156 @@ test('the page draws every reach, the rejected tail included', async () => {
   assert.ok(html.includes('goal <'), 'a goal scope is not drawn as a reference');
   // And the one thing an operator must not be able to do from here.
   assert.ok(!/>File a claim</.test(html), 'nothing on this page files a claim');
+});
+
+// -- delivery (phase 3) -------------------------------------------------------
+
+/** A launched agent that says nothing and exits when killed — the argv is the subject here. */
+class FakeStreamChild extends EventEmitter implements StreamChild {
+  readonly pid = 4242;
+  stdout = new PassThrough();
+  stderr = new PassThrough();
+  stdin = new PassThrough();
+  override on(event: 'exit', cb: (code: number | null) => void): this {
+    return super.on(event, cb);
+  }
+  kill(): void {
+    this.emit('exit', 143);
+  }
+}
+
+/**
+ * A real dispatch, and what it launched and was told with — the `buildSystem`
+ * seam rather than a hand-built call, because the thing most likely to break is
+ * the wiring. `src/system.ts` is the only module on the launch path that knows
+ * this store exists, and a builder that accepts the block and forgets to forward
+ * it type-checks clean and drops it in silence.
+ */
+async function dispatchFor(
+  issue: number,
+  seed: (system: System) => void,
+): Promise<{ launch: string[]; prompt: string }> {
+  const launches: string[][] = [];
+  const system = buildSystem(
+    { ...testConfig(), agentMode: 'stream' },
+    {
+      worktrees: new FakeWorktreeManager(),
+      backend: new FakePtyBackend(),
+      streamSpawner: (_command, args) => {
+        launches.push(args);
+        return new FakeStreamChild();
+      },
+      errorMirror: () => {},
+    },
+  );
+  seed(system);
+  system.connector.inject({ kind: 'new_issue', number: issue, title: `Add login ${issue}` });
+  failPlanningOpen(system.store, issue);
+  await system.harness.runCycle('manual');
+  const task = system.store.listTasks().find((t) => t.originRef?.startsWith(`issue:${issue}`));
+  assert.ok(task, 'nothing was dispatched, so there is no prompt to read');
+  const prompt = system.store.getTask(task.id)?.prompt ?? '';
+  system.store.close();
+  assert.equal(launches.length, 1, `expected one launch, saw ${launches.length}`);
+  return { launch: launches[0]!, prompt };
+}
+
+/** Carry a claim to `lookup` the way the fleet does — two agents, two goals. */
+function corroborated(system: System, over: Partial<FactProposal>): string {
+  const filed = system.store.proposeFact(proposal(over), seenOn('issue:900'));
+  assert.ok(filed.outcome !== 'barred');
+  system.store.proposeFact(proposal(over), seenOn('issue:901'));
+  return filed.fact.id;
+}
+
+test('an injected fleet claim rides the system prompt, and a corroborated one does not', async () => {
+  const { launch } = await dispatchFor(801, (system) => {
+    const vouched = corroborated(system, { claim: 'The suite wants a built web bundle before it runs.' });
+    system.store.setFactReach(vouched, 'injected');
+    // Two agents agreeing is exactly as far as agreement carries a claim. A block
+    // that delivered a `lookup` fact would make corroboration an auto-promotion to
+    // every agent's context — the one thing the reach machine exists to stop.
+    corroborated(system, { claim: 'The seed script leaves two orphan catalog rows behind.' });
+    // And one voice is not evidence at all.
+    system.store.proposeFact(proposal({ claim: 'Nothing has agreed with this claim yet.' }), seenOn('issue:902'));
+  });
+  const block = launch[launch.indexOf('--append-system-prompt') + 1] ?? '';
+  assert.match(block, /The suite wants a built web bundle before it runs\./);
+  assert.match(block, /first seen on issue:900/, 'provenance is what lets an agent discount a stale claim');
+  assert.doesNotMatch(block, /orphan catalog rows/, 'a lookup claim is not injected everywhere');
+  assert.doesNotMatch(block, /Nothing has agreed/, 'a proposal reaches nobody');
+});
+
+test('a claim scoped to the goal rides that goal’s task prompt, and no system prompt', async () => {
+  const { launch, prompt } = await dispatchFor(802, (system) => {
+    corroborated(system, {
+      scope: 'goal:issue:802',
+      claim: 'The login form posts to the old endpoint on this branch.',
+    });
+    corroborated(system, { scope: 'goal:issue:999', claim: 'A claim about somebody else’s goal entirely.' });
+  });
+  // `lookup` means *not injected everywhere*, not *never injected*: a claim about
+  // the goal in front of an agent is in front of it without anyone asking, and
+  // costs nothing on a dispatch about anything else.
+  assert.match(prompt, /The login form posts to the old endpoint on this branch\./);
+  assert.doesNotMatch(prompt, /somebody else’s goal/);
+  // And it stays out of the cached prefix: what varies per dispatch may not enter
+  // the system prompt, whatever its reach.
+  assert.doesNotMatch(launch[launch.indexOf('--append-system-prompt') + 1] ?? '', /login form posts/);
+});
+
+test('the page is told what is actually sent, from the renderers that send it', async () => {
+  const system = build();
+  const vouched = corroborated(system, { claim: 'A ticket naming only a symptom is under-specified every time.' });
+  system.store.setFactReach(vouched, 'injected');
+  corroborated(system, { scope: 'check:test (windows)', claim: 'The install step times out under four minutes.' });
+
+  const { app } = await buildApp(system);
+  const snap = (await app.inject({ method: 'GET', url: '/api/state' })).json() as {
+    knowledgeDelivery: {
+      block: string;
+      limit: number;
+      rendered: string[];
+      dropped: string[];
+      scoped: { scope: string; text: string }[];
+    };
+  };
+  const delivery = snap.knowledgeDelivery;
+  // The text itself, not a description of it: what an operator reads here has to
+  // be the bytes the launch carries, or the surface is a second opinion about
+  // delivery and nothing is red when the two disagree.
+  assert.deepEqual(delivery.rendered, [vouched]);
+  assert.deepEqual(delivery.dropped, []);
+  assert.equal(delivery.limit, system.config.knowledgeBlockChars);
+  assert.match(delivery.block, /under-specified every time/);
+  assert.deepEqual(
+    delivery.scoped.map((s) => s.scope),
+    ['check:test (windows)'],
+  );
+  assert.match(delivery.scoped[0]!.text, /times out under four minutes/);
+  await app.close();
+});
+
+test('a promoted lesson still reaches agents, as the fact it is mirrored into', async () => {
+  // Delivery moved in phase 3 and the lessons table stopped being rendered in its
+  // own right — so this is the crossing that must not break silently: a lesson
+  // vouched for is a claim that reaches agents, and one that quietly stopped
+  // would look exactly like one nobody promoted.
+  const system = build();
+  const lesson = system.store.proposeLesson({ text: 'Take the devops lock before deploying.', originRef: 'issue:41' });
+  system.store.promoteLesson(lesson.id);
+
+  const { app } = await buildApp(system);
+  const snap = (await app.inject({ method: 'GET', url: '/api/state' })).json() as {
+    knowledgeDelivery: { block: string };
+    lessons: { id: string; rendered: boolean }[];
+  };
+  assert.match(snap.knowledgeDelivery.block, /Take the devops lock before deploying\./);
+  // And the Lessons panel's chip is that same answer read back, never a second
+  // rendering of the lessons table — one block ships, so both panels have to be
+  // describing it.
+  assert.equal(snap.lessons.find((l) => l.id === lesson.id)?.rendered, true);
+  await app.close();
 });
 
 // -- what nothing does --------------------------------------------------------

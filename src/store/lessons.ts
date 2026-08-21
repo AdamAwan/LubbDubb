@@ -11,12 +11,15 @@ import type { StoreContext } from './context.js';
  * a second gate for the same problem is how two gates come to disagree about
  * what "an operator decided" means.
  *
- * **A promoted lesson has exactly one reader outside the cockpit**, as of #355
- * phase 3: `renderLessonBlock` (`src/lessonBlock.ts`), which puts the vouched-for
- * claims into every agent's system-prompt append, capped and dated. No dispatcher
- * rule consults this table, no dispatch prompt renders one, and nothing on the
- * launch path may reach the store itself — `src/system.ts` reads it and hands the
- * runtimes a finished string. The two *verdicts* below stay operator-driven,
+ * **A promoted lesson has exactly one reader outside the cockpit**, and since
+ * issue #27 phase 3 it is the knowledge base: `KnowledgeStore.adoptLessons`
+ * mirrors a promoted row in as an injected fleet claim, and
+ * `renderKnowledgeBlock` (`src/knowledge/block.ts`) puts *that* into every
+ * agent's system-prompt append, capped and dated. Rendering both blocks would
+ * have sent every promoted lesson twice, so delivery moved rather than doubling.
+ * No dispatcher rule consults this table, no dispatch prompt renders one, and
+ * nothing on the launch path may reach either store itself — `src/system.ts`
+ * reads and hands the runtimes a finished string. The two *verdicts* below stay operator-driven,
  * exactly as every finding transition is: what phase 2 changed is who may
  * propose, and what phase 3 changed is what promotion is worth — never who may
  * promote.
