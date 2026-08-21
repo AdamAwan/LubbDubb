@@ -37,6 +37,7 @@ function build(state: AppState, over: Partial<Parameters<typeof buildViewModel>[
     now: 1_000_000,
     connected: true,
     demo: false,
+    setup: null,
     selected: null,
     liveOutput: new Map(),
     tails: new Map(),

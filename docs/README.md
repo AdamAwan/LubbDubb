@@ -101,7 +101,8 @@ deliberately left unchecked, and why, is in
 | [23](spec/23-local-runs.md)          | Local runs                 | The machine's one dev environment: which goal is in it, the process, the panel        |
 | [24](spec/24-environments.md)        | Environments               | Where landed work has got to: merge attribution, the probe, the three verdicts, the lens  |
 | [25](spec/25-supply.md)              | Supply and the runway      | Whether there is work left for the fleet, and whether the reason there is not is you      |
-| [26](spec/26-knowledge.md)           | Knowledge                  | What the fleet knows about this repository: scope, reach, corroboration, and delivery     |
+| [26](spec/26-setup.md)               | First run and setup        | Detecting an unconfigured harness, the two questions it asks, and the preflight behind them |
+| [27](spec/27-knowledge.md)           | Knowledge                  | What the fleet knows about this repository: scope, reach, corroboration, and delivery     |
 
 ## Conventions used throughout
 

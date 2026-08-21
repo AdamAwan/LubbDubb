@@ -13,7 +13,7 @@ differ, and which is a thing you may find yourself sent to implement. The [READM
 what LubbDubb _is_ and how to run it.
 
 **When you change behaviour, update the spec document that owns it in the same change.** That is the
-repo's one documentation rule; [`docs/README.md`](docs/README.md) indexes the twenty-six documents and
+repo's one documentation rule; [`docs/README.md`](docs/README.md) indexes the twenty-seven documents and
 says which owns what.
 
 ## Making a change
@@ -388,7 +388,7 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
 
 ## Where to read further
 
-[`docs/README.md`](docs/README.md) is the index: twenty-six specs, one per subsystem, numbered by the
+[`docs/README.md`](docs/README.md) is the index: twenty-seven specs, one per subsystem, numbered by the
 order they build on each other. Start there rather than grepping — each document states the
 invariants of its area and the reasoning behind them, which is what stops a change re-litigating a
 settled decision badly.

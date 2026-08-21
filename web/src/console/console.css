@@ -1859,3 +1859,232 @@ button.cn-grow {
   color: var(--cn-fg-dim);
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- setup ----------
+   The first-run surface and the two readings that lead to it. Every colour here
+   is a `--cn-*` token: a literal at a use site is a surface no theme can reach,
+   and the failure only ever shows up on a theme nobody tested. */
+.cn-setup-warn {
+  border-color: var(--cn-amber-line-hi);
+  background: var(--cn-amber-bg);
+}
+.cn-setup-warn b {
+  color: var(--cn-amber);
+}
+.cn-setup-bad {
+  border-color: var(--cn-red-line);
+  background: var(--cn-red-bg);
+}
+.cn-setup-bad b {
+  color: var(--cn-red);
+}
+
+.cn-setup {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+/* The body scrolls, not the panel: the head carries an exit and the foot carries
+   the only control that writes anything, and neither may scroll out of reach. */
+.cn-setup-body {
+  overflow: auto;
+  padding: 14px 16px;
+  display: grid;
+  gap: 16px;
+  min-height: 0;
+}
+.cn-setup-sub {
+  margin: 0;
+  padding: 9px 16px;
+  border-bottom: 1px solid var(--cn-line);
+  font: 11.5px var(--cn-mono);
+  color: var(--cn-fg-faint);
+}
+.cn-setup-sub b {
+  color: var(--cn-fg-dim);
+  font-weight: 600;
+}
+.cn-setup-note {
+  margin: 0;
+  padding: 11px 16px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  background: var(--cn-panel-2);
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--cn-fg-faint);
+}
+.cn-setup-note code,
+.cn-setup-why code {
+  font: 11px var(--cn-mono);
+  color: var(--cn-fg-dim);
+}
+.cn-setup-field {
+  display: grid;
+  gap: 7px;
+}
+.cn-setup-label {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--cn-fg);
+}
+.cn-setup-in {
+  background: var(--cn-bg);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  color: var(--cn-fg);
+  font: 12px var(--cn-mono);
+  padding: 7px 9px;
+  width: 100%;
+}
+.cn-setup-in:focus {
+  outline: none;
+  border-color: var(--cn-blue-line-hi);
+}
+.cn-setup-why {
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--cn-fg-faint);
+}
+.cn-setup-tbl {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11.5px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+}
+.cn-setup-tbl th {
+  text-align: left;
+  font: 600 10.5px var(--cn-mono);
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--cn-line);
+}
+.cn-setup-tbl td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--cn-line-soft);
+  color: var(--cn-fg-dim);
+  vertical-align: top;
+  line-height: 1.5;
+}
+.cn-setup-tbl tr:last-child td {
+  border-bottom: 0;
+}
+.cn-setup-val {
+  font: 11.5px var(--cn-mono);
+  color: var(--cn-fg);
+}
+/* A value the reading could not resolve. Its own colour rather than an absence,
+   because "unresolved" and "empty" read identically in a table otherwise. */
+.cn-setup-val.cn-bad {
+  color: var(--cn-red-ink);
+}
+.cn-setup-from {
+  color: var(--cn-fg-faint);
+}
+.cn-setup-checks {
+  display: grid;
+  gap: 8px;
+}
+.cn-setup-checks h4 {
+  margin: 0;
+  font: 600 10.5px var(--cn-mono);
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--cn-fg-faint);
+}
+.cn-setup-check {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 9px 12px;
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  background: var(--cn-panel-2);
+  font-size: 11.5px;
+  line-height: 1.55;
+  color: var(--cn-fg-dim);
+}
+.cn-setup-check.cn-warn {
+  border-color: var(--cn-amber-line);
+  background: var(--cn-amber-fill);
+}
+.cn-setup-check.cn-bad {
+  border-color: var(--cn-red-line);
+  background: var(--cn-red-fill);
+}
+.cn-setup-check.cn-ok {
+  border-color: var(--cn-green-line);
+  background: var(--cn-green-fill);
+}
+.cn-setup-remedy {
+  color: var(--cn-fg-faint);
+  font-style: normal;
+}
+.cn-setup-pre {
+  margin: 0;
+  padding: 12px 13px;
+  background: var(--cn-bg);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  font: 11.5px/1.7 var(--cn-mono);
+  color: var(--cn-fg-dim);
+  overflow: auto;
+  max-height: 320px;
+}
+.cn-setup-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--cn-line);
+  background: var(--cn-panel-2);
+  flex: none;
+}
+.cn-setup-hint {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+  text-align: right;
+}
+.cn-setup-err {
+  margin: 0;
+  padding: 10px 16px;
+  border-top: 1px solid var(--cn-red-line);
+  background: var(--cn-red-fill);
+  color: var(--cn-red-ink);
+  font-size: 12px;
+}
+
+/* The first-run card. Blue rather than amber: it is an offer about a harness that
+   is working, not a warning about one that is not. */
+.cn-firstrun {
+  border-color: var(--cn-blue-line-hi);
+  background: var(--cn-blue-bg);
+}
+.cn-firstrun > h3 {
+  color: var(--cn-blue-ink);
+  border-bottom-color: var(--cn-blue-line);
+}
+.cn-firstrun-body {
+  padding: 12px 13px 0;
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--cn-fg-dim);
+}
+.cn-firstrun-body p {
+  margin: 0;
+  max-width: 70ch;
+}
+.cn-firstrun-quiet {
+  color: var(--cn-fg-faint);
+  font-size: 11.5px;
+}
+.cn-firstrun-acts {
+  padding: 12px 13px;
+  display: flex;
+  gap: 8px;
+}

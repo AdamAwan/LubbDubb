@@ -28,6 +28,7 @@ import { productionReading } from '../view/production.js';
 export function Overview({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   return (
     <div className="cn-grid">
+      <FirstRun view={view} actions={actions} />
       <Fleet view={view} actions={actions} />
       <GoalsInFlight view={view} actions={actions} />
       <Rack view={view} actions={actions} />
@@ -35,6 +36,46 @@ export function Overview({ view, actions }: { view: CockpitView; actions: Cockpi
       <Rate view={view} actions={actions} />
       <WorldSignals view={view} />
     </div>
+  );
+}
+
+/**
+ * The one thing a cockpit that has never been pointed anywhere should say.
+ *
+ * Drawn only while the harness is on the shipped mock, and it is an **offer**: a
+ * fleet running against a fake tracker is doing exactly what it was asked to,
+ * and a first-run card that read as a fault would be lying about a supported
+ * posture. What it fixes is the other reading — an Overview whose every panel is
+ * legitimately empty is indistinguishable from one that is broken, and nothing on
+ * it currently says which.
+ *
+ * It disappears the moment the config file names a real provider, and does not
+ * come back: the top bar's Setup reading is what persists, because that one is
+ * still worth having six months later.
+ */
+function FirstRun({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element | null {
+  const setup = view.setup;
+  if (setup === null || setup.pointed) return null;
+  return (
+    <section className="cn-card cn-span2 cn-firstrun">
+      <h3>Point LubbDubb at your work</h3>
+      <div className="cn-firstrun-body">
+        <p>
+          Two questions — your email, and where the project is. The provider, the target repository, your login on it
+          and your team’s shared config are all read off the repository you name, and each is checked against the real
+          thing before anything is written.
+        </p>
+        <p className="cn-firstrun-quiet">
+          Nothing here is required. Everything on this page is real and working — it is working on a world the harness
+          made up.
+        </p>
+      </div>
+      <div className="cn-firstrun-acts">
+        <button type="button" className="cn-btn cn-primary" onClick={() => actions.openPanel('setup')}>
+          Start
+        </button>
+      </div>
+    </section>
   );
 }
 

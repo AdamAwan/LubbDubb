@@ -174,6 +174,7 @@ const PANEL_NAMES: Record<Exclude<ConsolePanel, null | { ask: string }>, true> =
   build: true,
   pets: true,
   localRun: true,
+  setup: true,
 };
 
 const PANELS = Object.keys(PANEL_NAMES) as Exclude<ConsolePanel, null | { ask: string }>[];

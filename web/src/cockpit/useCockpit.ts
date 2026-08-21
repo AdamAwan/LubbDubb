@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, connectWs, isDemo, UnauthorizedError } from '../api.js';
 import type { WsClient } from '../api.js';
-import type { AppState } from '../types.js';
+import type { AppState, SetupPayload } from '../types.js';
 import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
 import { useNavigation } from './useNavigation.js';
@@ -31,6 +31,12 @@ export function useCockpit(): CockpitStatus {
   const [state, setState] = useState<AppState | null>(null);
   const [denied, setDenied] = useState<UnauthorizedError | null>(null);
   const [connected, setConnected] = useState(false);
+  // What the harness says about its own configuration. Fetched rather than polled:
+  // the reading shells out to git and to the agent binary server-side, which is not
+  // a thing to do on a heartbeat, and it can only move when the config file does or
+  // when a cycle has read the world. So it is re-read on `config:changed` and on
+  // each snapshot the first time the world arrives — never on the second.
+  const [setup, setSetup] = useState<SetupPayload | null>(null);
   // Where the operator is, held in the address bar rather than in a state each —
   // see `useNavigation`. Everything below reads off it; nothing else moves it.
   const { place, go } = useNavigation();
@@ -162,6 +168,26 @@ export function useCockpit(): CockpitStatus {
     return () => ws.unsubscribe(selected);
   }, [selected]);
 
+  // The setup reading, on open and whenever the file moves. The same event the
+  // config page listens on, for the same reason: an edit made in an editor, a save
+  // from another cockpit and this cockpit's own write all land on one apply path,
+  // so one signal is the whole of keeping this honest.
+  const readSetup = useCallback(() => {
+    void api
+      .getSetup()
+      .then(setSetup)
+      // Recorded nowhere and drawn as nothing. A reading the harness could not take
+      // is not a fault to put in front of an operator — the surface it feeds simply
+      // does not appear, which is also what a fully-configured harness looks like.
+      .catch(() => setSetup(null));
+  }, []);
+  useEffect(() => {
+    readSetup();
+    const onChanged = (): void => readSetup();
+    window.addEventListener('lubbdubb:config-changed', onChanged);
+    return () => window.removeEventListener('lubbdubb:config-changed', onChanged);
+  }, [readSetup]);
+
   const actions = useMemo<CockpitActions>(() => {
     const then = <T>(p: Promise<T>) => p.then(() => refresh());
     return {
@@ -285,6 +311,7 @@ export function useCockpit(): CockpitStatus {
       now,
       connected,
       demo: isDemo,
+      setup,
       selected,
       liveOutput: liveOutput.current,
       tails: tails.current,

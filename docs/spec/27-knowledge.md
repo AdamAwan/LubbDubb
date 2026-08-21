@@ -1,4 +1,4 @@
-# 26 — Knowledge
+# 27 — Knowledge
 
 > **Status: not yet built — all seven phases outstanding.** Everything below describes behaviour this
 > subsystem is meant to have, none of which exists yet; [The phases](#the-phases) says what lands
