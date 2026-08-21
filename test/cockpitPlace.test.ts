@@ -30,7 +30,6 @@ test('every place round-trips through the query string', () => {
     at({ tab: 'tickets', goal: 'issue:142', agent: 'agent-7' }),
     at({ panel: 'findings' }),
     at({ panel: 'faults' }),
-    at({ panel: 'output' }),
     at({ panel: 'launch' }),
     at({ panel: { ask: 'esc-9' } }),
     at({ plan: 'plan-395' }),
@@ -40,7 +39,9 @@ test('every place round-trips through the query string', () => {
     at({ panel: 'pets', hatch: 'pet_7f2a1c' }),
     at({ tab: 'config' }),
     at({ tab: 'config', configTab: 'prompts', configGroup: 'Agents' }),
-    at({ spend: true, reliability: true }),
+    at({ tab: 'insights' }),
+    at({ tab: 'insights', insightsView: 'causes', insightsWindow: '24h' }),
+    at({ tab: 'insights', insightsWindow: 'all' }),
   ];
   for (const place of places) assert.deepEqual(readPlace(placeQuery(place)), place, placeQuery(place));
 });
@@ -108,7 +109,7 @@ test('an empty parameter is an absent one', () => {
 // The push in `useNavigation` is skipped when the query is unchanged, so two
 // spellings of one place would be a history entry that goes nowhere.
 test('a place has exactly one spelling', () => {
-  const place = at({ tab: 'work', goal: 'issue:142', spend: true });
+  const place = at({ tab: 'insights', goal: 'issue:142', insightsView: 'trend' });
   assert.equal(placeQuery(readPlace(placeQuery(place))), placeQuery(place));
 });
 

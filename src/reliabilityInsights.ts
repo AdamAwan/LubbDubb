@@ -2,6 +2,16 @@ import type { Agent, AgentStatus, TaskSummary, UsageEvent, WorldEvent } from './
 import { prNodeRefOf, roundUsd } from './issueSpend.js';
 import { phaseLabel, phaseOf, type SpendPhase } from './spendInsights.js';
 import { ciStatusOf } from './world/worldDiff.js';
+import {
+  bucketIndexIn,
+  inWindow,
+  runInstant,
+  timelineSpan,
+  windowView,
+  type InsightsWindowView,
+  type ResolvedWindow,
+  type TimelineSpan,
+} from './insightsWindow.js';
 
 /**
  * The reliability breakdown: does the work the fleet starts finish, and does what
@@ -48,10 +58,6 @@ import { ciStatusOf } from './world/worldDiff.js';
  * which anything prunes. A table of pre-summed reliability would be a copy that
  * goes stale the moment an agent exits.
  */
-
-/** How far back the CI half reaches, and at what resolution — the spend trend's window. */
-const WINDOW_DAYS = 14;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** How many rows the two rankings carry. Both are rankings, and both say the cap out loud. */
 const TOP_ROWS = 10;
@@ -264,20 +270,27 @@ export interface CiHealth {
 
 export interface ReliabilityInsights {
   generatedAt: string;
-  /** The CI half's window, and the timelines' span. Stated rather than assumed by the panel. */
-  windowDays: number;
+  /**
+   * The stretch both halves were measured over. One window for the runs and the
+   * CI alike, which is the change: the run half used to be all-time and the CI
+   * half a fortnight, so a completion rate and a red rate drawn side by side
+   * described different stretches of the fleet's life and nothing said so.
+   */
+  window: InsightsWindowView;
   runs: RunHealth;
   ci: CiHealth;
 }
 
 interface ReliabilityInput {
-  /** Every agent the harness has ever run — the run half is all-time. */
+  /** Every agent the harness has ever run. Cut to the window here, once, below. */
   agents: readonly Agent[];
   tasks: readonly TaskSummary[];
   /** `pr_ci` rows inside the window, oldest first (`listWorldEventsOfKindsSince`). */
   ciEvents: readonly WorldEvent[];
   /** Dated cost deltas inside the same window, for the landing figure. */
   usageEvents: readonly UsageEvent[];
+  /** The stretch to measure — both halves obey it. */
+  window: ResolvedWindow;
   now: number;
 }
 
@@ -297,12 +310,6 @@ function median(samples: readonly number[]): number | null {
 function prNumberOf(ref: string): number | null {
   const found = /^pr:(\d+)$/.exec(ref)?.[1];
   return found === undefined ? null : Number(found);
-}
-
-/** Which bucket an instant falls in, or null when it predates the window. */
-function bucketIndex(at: number, start: number): number | null {
-  if (Number.isNaN(at) || at < start) return null;
-  return Math.min(WINDOW_DAYS - 1, Math.floor((at - start) / DAY_MS));
 }
 
 /**
@@ -327,24 +334,38 @@ export function tallyRunOutcomes(agents: readonly Agent[]): RunTally {
 }
 
 export function buildReliabilityInsights(input: ReliabilityInput): ReliabilityInsights {
-  const { now } = input;
+  const { now, window } = input;
+  // Cut once, at the door, so both halves fold the same population. The run half
+  // was all-time before this and the CI half a fortnight, which is exactly the
+  // kind of disagreement a reader cannot see: two rates on one surface, over two
+  // different stretches, both rendered as though they were about the same fleet.
+  const windowed: ReliabilityInput = {
+    ...input,
+    agents: input.agents.filter((agent) => inWindow(window, runInstant(agent))),
+  };
+  const span = timelineSpan(
+    window,
+    windowed.agents.reduce<number | null>((oldest, agent) => {
+      const at = runInstant(agent);
+      return Number.isNaN(at) ? oldest : oldest === null || at < oldest ? at : oldest;
+    }, null),
+  );
   return {
     generatedAt: new Date(now).toISOString(),
-    windowDays: WINDOW_DAYS,
-    runs: buildRunHealth(input),
-    ci: buildCiHealth(input),
+    window: windowView(window, span),
+    runs: buildRunHealth(windowed, span),
+    ci: buildCiHealth(windowed, span),
   };
 }
 
-function buildRunHealth({ agents, tasks, now }: ReliabilityInput): RunHealth {
+function buildRunHealth({ agents, tasks }: ReliabilityInput, span: TimelineSpan): RunHealth {
   const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
   const titleOfTask = new Map(tasks.map((t) => [t.id, t.title]));
-  const start = now - WINDOW_DAYS * DAY_MS;
 
   const health: RunHealth = {
-    // The headline counts come from the fold the snapshot uses, never from the
-    // loop below: the panel must open agreeing with the gauge it was clicked
-    // from, and agreement by construction is the only kind that holds.
+    // The headline counts come from the fold that owns the question, never from
+    // the loop below: two counts of one population, written a hundred lines
+    // apart, is the disagreement this reading is least able to survive.
     ...tallyRunOutcomes(agents),
     costUsd: 0,
     lostCostUsd: 0,
@@ -354,10 +375,10 @@ function buildRunHealth({ agents, tasks, now }: ReliabilityInput): RunHealth {
     repeats: [],
     repeatedOrigins: 0,
     timeline: {
-      bucketMs: DAY_MS,
-      startsAt: new Date(start).toISOString(),
-      buckets: Array.from({ length: WINDOW_DAYS }, (_, i) => ({
-        startsAt: new Date(start + i * DAY_MS).toISOString(),
+      bucketMs: span.bucketMs,
+      startsAt: new Date(span.startMs).toISOString(),
+      buckets: Array.from({ length: span.buckets }, (_, i) => ({
+        startsAt: new Date(span.startMs + i * span.bucketMs).toISOString(),
         settled: 0,
         lost: 0,
       })),
@@ -434,7 +455,7 @@ function buildRunHealth({ agents, tasks, now }: ReliabilityInput): RunHealth {
       repeats.set(originRef, seen);
     }
 
-    const index = bucketIndex(Date.parse(agent.endedAt ?? agent.startedAt), start);
+    const index = bucketIndexIn(span, runInstant(agent));
     const bucket = index === null ? undefined : health.timeline.buckets[index];
     if (bucket) {
       bucket.settled += 1;
@@ -456,10 +477,9 @@ function buildRunHealth({ agents, tasks, now }: ReliabilityInput): RunHealth {
   return health;
 }
 
-function buildCiHealth({ agents, tasks, ciEvents, usageEvents, now }: ReliabilityInput): CiHealth {
-  const start = now - WINDOW_DAYS * DAY_MS;
-  const buckets: CiBucket[] = Array.from({ length: WINDOW_DAYS }, (_, i) => ({
-    startsAt: new Date(start + i * DAY_MS).toISOString(),
+function buildCiHealth({ agents, tasks, ciEvents, usageEvents, now }: ReliabilityInput, span: TimelineSpan): CiHealth {
+  const buckets: CiBucket[] = Array.from({ length: span.buckets }, (_, i) => ({
+    startsAt: new Date(span.startMs + i * span.bucketMs).toISOString(),
     red: 0,
     green: 0,
   }));
@@ -493,7 +513,7 @@ function buildCiHealth({ agents, tasks, ciEvents, usageEvents, now }: Reliabilit
     if (status === 'failing') {
       reds += 1;
       subject.reds += 1;
-      const bucket = buckets[bucketIndex(at, start) ?? -1];
+      const bucket = buckets[bucketIndexIn(span, at) ?? -1];
       if (bucket) bucket.red += 1;
       // A second failure while already red — a rerun that failed again — is
       // another red, and it does not restart the clock. The pull request has been
@@ -502,7 +522,7 @@ function buildCiHealth({ agents, tasks, ciEvents, usageEvents, now }: Reliabilit
     } else {
       greens += 1;
       subject.greens += 1;
-      const bucket = buckets[bucketIndex(at, start) ?? -1];
+      const bucket = buckets[bucketIndexIn(span, at) ?? -1];
       if (bucket) bucket.green += 1;
       const since = redSince.get(event.ref);
       if (since !== undefined) {
@@ -540,7 +560,7 @@ function buildCiHealth({ agents, tasks, ciEvents, usageEvents, now }: Reliabilit
   let landingCostUsd = 0;
   for (const event of usageEvents) {
     const run = prRuns.get(event.agentId);
-    if (run === undefined || Date.parse(event.at) < start) continue;
+    if (run === undefined || Date.parse(event.at) < span.startMs) continue;
     if (run.phase === 'landing') {
       landingCostUsd = roundUsd(landingCostUsd + event.costUsd);
       continue;
@@ -567,11 +587,6 @@ function buildCiHealth({ agents, tasks, ciEvents, usageEvents, now }: Reliabilit
     flakiest: ranked.filter((s) => s.reds > 0).slice(0, TOP_ROWS),
     ciCostUsd,
     landingCostUsd,
-    timeline: { bucketMs: DAY_MS, startsAt: new Date(start).toISOString(), buckets },
+    timeline: { bucketMs: span.bucketMs, startsAt: new Date(span.startMs).toISOString(), buckets },
   };
-}
-
-/** How far back {@link buildReliabilityInsights} wants dated rows — the route's `since`. */
-export function reliabilityWindowSince(now: number): string {
-  return new Date(now - WINDOW_DAYS * DAY_MS).toISOString();
 }

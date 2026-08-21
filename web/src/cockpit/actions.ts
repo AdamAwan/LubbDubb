@@ -1,4 +1,11 @@
-import type { FilingTargetProbe, IssueFiled, RecoveryVerdict, UpgradeAction, WorkNodeView } from '../types.js';
+import type {
+  FilingTargetProbe,
+  InsightsWindow,
+  IssueFiled,
+  RecoveryVerdict,
+  UpgradeAction,
+  WorkNodeView,
+} from '../types.js';
 import type { Place } from './place.js';
 
 /**
@@ -39,7 +46,6 @@ export type ConsolePanel =
   | 'findings'
   | 'lessons'
   | 'faults'
-  | 'output'
   | 'launch'
   | 'build'
   | 'pets'
@@ -57,7 +63,17 @@ export type ConsolePanel =
  * A selected goal outranks all three, so this says where the nav last was, never
  * what is drawn.
  */
-export type ConsoleTab = 'overview' | 'work' | 'tickets' | 'pets' | 'config';
+export type ConsoleTab = 'overview' | 'work' | 'tickets' | 'insights' | 'pets' | 'config';
+
+/**
+ * Which reading the Insights page is showing.
+ *
+ * On `Place` rather than a `useState` in the page, for the tickets query's
+ * reason: "why did the fleet keep coming back last week" is a thing an operator
+ * sends someone a link to, and a tab held in component state works right up
+ * until the back button steps over it or a reload drops it.
+ */
+export type InsightsView = 'economics' | 'reliability' | 'causes' | 'trend' | 'mix';
 
 /**
  * Every mutation the cockpit can perform, pre-bound and refetching on completion.
@@ -170,19 +186,16 @@ export interface CockpitActions {
   /** Which section of the config page is in front, and which group it is scrolled to. */
   openConfig(where: { configTab?: ConfigTab; configGroup?: string | null }): void;
   /**
-   * Open or close the spend breakdown — where the money on the Power gauge went.
-   * On the seam for `openSettings`' reason exactly: the panel reaches `/api/spend`,
-   * which `console/` may not do, while the gauge that opens it sits in the top
-   * bar and *is* the reading it explains.
+   * Move about the Insights page: which reading is showing, and the window every
+   * reading on it obeys.
+   *
+   * One method taking a partial rather than two, for `setTicketQuery`'s reason —
+   * a tab and a window are one place, and two calls would push two history
+   * entries for one move. The window is here at all rather than in the page
+   * because it is the page's whole subject: a link to "the causes tab over the
+   * last 24 hours" has to carry both halves or it is a link to neither.
    */
-  openSpend(open: boolean): void;
-  /**
-   * Open or close the reliability breakdown — whether the work the Yield gauge
-   * counts actually finished, and whether CI went green. On the seam for
-   * `openSpend`'s reason exactly, and beside it: the two panels are the same
-   * funnel read for cost and for outcome.
-   */
-  openReliability(open: boolean): void;
+  openInsights(where: { view?: InsightsView; window?: InsightsWindow }): void;
   /** Open a goal's page, or return to the overview with null. */
   selectGoal(ref: string | null): void;
   /** Bring a full-surface panel in front, or dismiss it with null. */

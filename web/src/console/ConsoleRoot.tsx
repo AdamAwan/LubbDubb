@@ -21,12 +21,12 @@ import { PetsPage } from '../components/PetsPage.js';
 import { Vivarium } from './Vivarium.js';
 import { BuildPanel } from '../components/BuildPanel.js';
 import { LocalRunPanel } from '../components/LocalRunPanel.js';
+import { InsightsPage } from '../components/InsightsPage.js';
 import { SchedulePanel } from '../components/SchedulePanel.js';
 import { InjectPanel } from '../components/InjectPanel.js';
 import { ConfirmButton } from '../components/ConfirmButton.js';
 import { relTime } from '../components/util.js';
 import { Ref } from '../components/refs.js';
-import { axisScale, productionReading, type ProductionReading, type SeriesKey } from '../view/production.js';
 
 /**
  * The console's placement, and what each full-surface panel contains: what a
@@ -118,6 +118,13 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
   switch (tab) {
     case 'overview':
       return <Overview view={view} actions={actions} />;
+    case 'insights':
+      // Embedded exactly as the tickets tab is, and for the same reason: it
+      // reaches its own routes, which `console/` may not, but rendering a
+      // component that does is not reaching — the import ban is on `api.js` and
+      // still holds. The window and the open reading are handed in from `Place`
+      // rather than held inside it, so a link to one carries both.
+      return <InsightsPage view={view.insightsView} window={view.insightsWindow} actions={actions} />;
     case 'tickets':
       // Embedded exactly as the work tree is, and for the same reason: it reaches
       // its own route, which `console/` may not, but rendering a component that
@@ -211,7 +218,6 @@ const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string>
   findings: 'Findings',
   lessons: 'Lessons',
   faults: 'Faults',
-  output: 'Output',
   launch: 'Launch',
   build: 'Build',
   pets: 'Vivarium',
@@ -343,17 +349,6 @@ function panelBody(
       );
     case 'faults':
       return <FaultLog view={view} actions={actions} />;
-    case 'output':
-      return (
-        <OutputGraph
-          reading={productionReading({
-            decisions: state.decisions,
-            worldEvents: state.worldEvents,
-            fiveHourCostUsd: state.usage.windows.fiveHourCostUsd,
-            now: view.now,
-          })}
-        />
-      );
     case 'localRun':
       return (
         <LocalRunPanel
@@ -450,122 +445,5 @@ function FaultLog({ view, actions }: { view: CockpitView; actions: CockpitAction
         {errors.length > FAULT_ROWS && <p className="cn-empty">…{errors.length - FAULT_ROWS} older</p>}
       </div>
     </>
-  );
-}
-
-const SERIES_COLOR: Record<SeriesKey, string> = {
-  dispatches: 'var(--cn-accent)',
-  merges: 'var(--cn-green)',
-  escalations: 'var(--cn-red)',
-};
-
-const PLOT = { left: 38, right: 608, top: 12, bottom: 176 };
-
-function pointsPath(points: readonly number[], peak: number): string {
-  const span = points.length > 1 ? (PLOT.right - PLOT.left) / (points.length - 1) : 0;
-  const height = PLOT.bottom - PLOT.top;
-  return points
-    .map(
-      (v, i) =>
-        `${i === 0 ? 'M' : 'L'}${(PLOT.left + i * span).toFixed(1)} ${(PLOT.bottom - (v / peak) * height).toFixed(1)}`,
-    )
-    .join(' ');
-}
-
-/**
- * The production graph: the one panel that reads against *time*, which is the
- * only way to answer whether the harness is producing rather than merely busy.
- *
- * The churn ratio under it is the point of the whole panel — dispatches are
- * effort and merges are output, and a rising first line over a flat second one is
- * a fleet spinning. The truncation note is not decoration either: a rate that
- * silently under-reports is worse than no rate.
- */
-function OutputGraph({ reading }: { reading: ProductionReading }): JSX.Element {
-  const hours = Math.round(reading.windowMs / 3_600_000);
-  const { max: peak, lines: gridLines } = axisScale(reading.peak);
-  const label = reading.series.map((s) => `${s.label} ${s.perHour.toFixed(1)} per hour`).join('; ');
-
-  return (
-    <div className="cn-prod">
-      <svg viewBox="0 0 620 200" role="img" aria-label={label}>
-        <g stroke="var(--cn-line)" strokeWidth="1">
-          {gridLines.map((f) => {
-            const y = PLOT.top + f * (PLOT.bottom - PLOT.top);
-            return <path key={f} d={`M${PLOT.left} ${y}H${PLOT.right}`} />;
-          })}
-        </g>
-        <g textAnchor="end">
-          {gridLines.map((f) => {
-            const y = PLOT.top + f * (PLOT.bottom - PLOT.top);
-            return (
-              <text key={f} x={PLOT.left - 8} y={y + 3}>
-                {Math.round(peak * (1 - f))}
-              </text>
-            );
-          })}
-        </g>
-        <g textAnchor="middle">
-          <text x={PLOT.left} y="194">
-            {hours}h ago
-          </text>
-          <text x={PLOT.right} y="194">
-            now
-          </text>
-        </g>
-        {reading.series.map((s) => (
-          <path
-            key={s.key}
-            d={pointsPath(s.points, peak)}
-            fill="none"
-            stroke={SERIES_COLOR[s.key]}
-            strokeWidth={s.key === 'escalations' ? 1.8 : 2}
-            strokeDasharray={s.key === 'escalations' ? '4 3' : undefined}
-            strokeLinejoin="round"
-          />
-        ))}
-      </svg>
-
-      <div className="cn-rows">
-        {reading.series.map((s) => (
-          <div className="cn-row" key={s.key}>
-            <i className="cn-sw" style={{ background: SERIES_COLOR[s.key] }} />
-            <span className="cn-grow">
-              <b className="cn-name">{s.label}</b>
-              {/* The first half being empty is not a 0% change — there is nothing
-                  to have changed from, and an arrow there would be invented. */}
-              <span className="cn-sub">
-                {s.deltaPct === null
-                  ? 'nothing in the first half to compare against'
-                  : `${s.deltaPct > 0 ? '+' : ''}${s.deltaPct}% against the first half of the window`}
-              </span>
-            </span>
-            <span className="cn-num">{s.perHour.toFixed(1)}/h</span>
-          </div>
-        ))}
-        {reading.costPerHour !== null && (
-          <div className="cn-row">
-            <i className="cn-sw" style={{ background: 'var(--cn-violet)' }} />
-            <span className="cn-grow">
-              <b className="cn-name">Spend</b>
-              {/* No delta: the 5h window is one total, not a series, so there are
-                  no halves to compare and an arrow here would be invented. */}
-              <span className="cn-sub">averaged over the rolling 5h window</span>
-            </span>
-            <span className="cn-num">${reading.costPerHour.toFixed(2)}/h</span>
-          </div>
-        )}
-      </div>
-      <p className="cn-empty">
-        {reading.churnRatio === null
-          ? `Nothing has merged in ${hours}h — every dispatch so far is effort without output.`
-          : `${reading.churnRatio.toFixed(1)} dispatches per merge — the number that separates producing from churning.`}
-      </p>
-      {reading.truncated && (
-        <p className="cn-empty">
-          The decision log does not reach back {hours}h, so the dispatch and escalation rates are a floor.
-        </p>
-      )}
-    </div>
   );
 }

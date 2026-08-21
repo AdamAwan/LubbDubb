@@ -1,5 +1,6 @@
-import type { ConfigTab, ConsolePanel, ConsoleTab } from './actions.js';
+import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsView } from './actions.js';
 import type {
+  InsightsWindow,
   TicketOrder,
   TicketStateFacet,
   TicketStateFilter,
@@ -48,8 +49,19 @@ export interface Place {
   configTab: ConfigTab;
   /** The config group the page is showing, or null for the first one. */
   configGroup: string | null;
-  spend: boolean;
-  reliability: boolean;
+  /**
+   * Which reading the Insights page is showing, and the stretch of time every
+   * reading on it is measured over.
+   *
+   * Two fields rather than the three booleans they replaced (`spend`,
+   * `reliability` and the `output` panel). Those were independent, so
+   * `?spend=1&reliability=1&panel=output` was a representable place that drew
+   * all three at once — which is precisely the shape {@link ConsolePanel} is one
+   * value to rule out, and these two escaped it by being modals rather than
+   * panels. A destination cannot be in front of itself.
+   */
+  insightsView: InsightsView;
+  insightsWindow: InsightsWindow;
   /**
    * The tickets tab's feature headings that are **collapsed**, by issue number.
    *
@@ -87,6 +99,21 @@ export interface Place {
   ticketOrder: TicketOrder;
 }
 
+const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets', 'insights', 'pets', 'config'];
+const INSIGHTS_VIEWS: readonly InsightsView[] = ['economics', 'reliability', 'causes', 'trend', 'mix'];
+/**
+ * The windows the time bar offers, and what a bare Insights URL means.
+ *
+ * Spelled here rather than imported from the server module that owns them,
+ * because `web/src/` may name nothing but `src/wire.ts` — so this list and
+ * `INSIGHTS_WINDOWS` are two statements of one set, held together by
+ * `InsightsWindow` itself: dropping a member server-side turns the unused entry
+ * here into a type error rather than a window the page offers and the route
+ * refuses.
+ */
+const INSIGHTS_WINDOWS: readonly InsightsWindow[] = ['6h', '24h', '7d', '30d', 'all'];
+const DEFAULT_INSIGHTS_WINDOW: InsightsWindow = '7d';
+
 /** The cockpit with nothing open: the overview, which is what a bare URL means. */
 export const NOWHERE: Place = {
   tab: 'overview',
@@ -99,8 +126,8 @@ export const NOWHERE: Place = {
   scratchpad: null,
   configTab: 'values',
   configGroup: null,
-  spend: false,
-  reliability: false,
+  insightsView: 'economics',
+  insightsWindow: DEFAULT_INSIGHTS_WINDOW,
   collapsed: [],
   ticketWatch: 'any',
   ticketTracking: 'live',
@@ -110,7 +137,6 @@ export const NOWHERE: Place = {
   ticketOrder: 'added',
 };
 
-const TABS: readonly ConsoleTab[] = ['overview', 'work', 'tickets', 'pets', 'config'];
 const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'mcp', 'notifications', 'theme'];
 /**
  * Tabs that no longer exist, and where they went.
@@ -144,7 +170,6 @@ const PANEL_NAMES: Record<Exclude<ConsolePanel, null | { ask: string }>, true> =
   findings: true,
   lessons: true,
   faults: true,
-  output: true,
   launch: true,
   build: true,
   pets: true,
@@ -196,8 +221,8 @@ export function readPlace(search: string): Place {
     // heading mode), and two places reading one parameter is a place that opens
     // showing whatever the other one was set to.
     configGroup: param(query, 'keys'),
-    spend: query.has('spend'),
-    reliability: query.has('reliability'),
+    insightsView: INSIGHTS_VIEWS.find((v) => v === param(query, 'view')) ?? 'economics',
+    insightsWindow: INSIGHTS_WINDOWS.find((w) => w === param(query, 'win')) ?? DEFAULT_INSIGHTS_WINDOW,
     collapsed: readNumbers(param(query, 'collapsed')),
     // Validated back into their types like every other parameter here, and for
     // the same reason: these are the ones an operator is most likely to hand-edit,
@@ -365,8 +390,8 @@ export function placeQuery(place: Place): string {
   if (place.scratchpad !== null) query.set('pad', place.scratchpad);
   if (place.configTab !== 'values') query.set('section', place.configTab);
   if (place.configGroup !== null) query.set('keys', place.configGroup);
-  if (place.spend) query.set('spend', '1');
-  if (place.reliability) query.set('reliability', '1');
+  if (place.insightsView !== 'economics') query.set('view', place.insightsView);
+  if (place.insightsWindow !== DEFAULT_INSIGHTS_WINDOW) query.set('win', place.insightsWindow);
   // Sorted on the way out as on the way in, so folding A then B and folding B
   // then A are one place rather than two history entries.
   if (place.collapsed.length > 0) {

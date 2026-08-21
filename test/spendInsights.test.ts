@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { buildSpendInsights } from '../src/spendInsights.js';
-import type { Agent, CostDelta, Issue, IssueRun, LocalRun, Task, WorkNode } from '../src/types.js';
+import type { Agent, CostDelta, Issue, IssueRun, LocalRun, Task, WorkNode, WorldEvent } from '../src/types.js';
+import { resolveWindow, type InsightsWindow } from '../src/insightsWindow.js';
 
 /**
  * The breakdown behind the cost indicators. What it has to get right is not the
@@ -123,15 +124,19 @@ function localRun(id: string, originRef: string, over: Partial<LocalRun> = {}): 
   };
 }
 
-function build(over: {
-  agents?: Agent[];
-  tasks?: Task[];
-  nodes?: WorkNode[];
-  issues?: Issue[];
-  runs?: IssueRun[];
-  localRuns?: LocalRun[];
-  costDeltas?: CostDelta[];
-}) {
+function build(
+  over: {
+    agents?: Agent[];
+    tasks?: Task[];
+    nodes?: WorkNode[];
+    issues?: Issue[];
+    runs?: IssueRun[];
+    localRuns?: LocalRun[];
+    costDeltas?: CostDelta[];
+    mergeEvents?: WorldEvent[];
+  },
+  key: InsightsWindow = '30d',
+) {
   return buildSpendInsights({
     agents: over.agents ?? [],
     localRuns: over.localRuns ?? [],
@@ -140,8 +145,8 @@ function build(over: {
     issues: over.issues ?? [],
     runs: over.runs ?? [],
     costDeltas: over.costDeltas ?? [],
-    fiveHourCostUsd: 0,
-    sevenDayCostUsd: 0,
+    mergeEvents: over.mergeEvents ?? [],
+    window: resolveWindow(key, NOW),
     now: NOW,
   });
 }
@@ -412,9 +417,14 @@ test('the timeline buckets dated deltas and drops what falls outside the window'
   });
 
   const { buckets } = insights.timeline;
-  assert.equal(buckets.length, 14);
-  assert.equal(buckets[13]?.costUsd, 1.75, 'two deltas in the last day sum into one bucket');
-  assert.equal(buckets[11]?.costUsd, 4, 'three days back lands three buckets back from the last');
+  // Counted off the payload rather than pinned to a number: the resolution is the
+  // window's now, so a test naming 14 would be asserting a constant that moved.
+  assert.equal(buckets.length, insights.window.buckets);
+  const last = buckets.length - 1;
+  assert.equal(buckets[last]?.costUsd, 1.75, 'two deltas in the last day sum into one bucket');
+  // Three days back, and the last bucket is the one still filling — so it lands
+  // two before it, not three. The off-by-one is the whole reason this is asserted.
+  assert.equal(buckets[last - 2]?.costUsd, 4, 'a delta three days old lands in the bucket that covers it');
   assert.equal(
     buckets.reduce((a, b) => a + b.costUsd, 0),
     5.75,
@@ -452,4 +462,115 @@ test('a goal older than the run record keeps its row and no title', () => {
   });
   assert.equal(insights.goals.length, 1);
   assert.equal(insights.goals[0]?.title, null);
+});
+
+/**
+ * The window is the page's one control, and this is what makes it mean anything:
+ * a run outside it is in no figure at all — not the total, not its phase's row,
+ * not its goal's, not the ranking.
+ *
+ * It is asserted across all four because the cut is made **once**, at the top of
+ * the fold, and everything below reads the list it produces. A version that
+ * filtered per split would pass three of these assertions and fail the fourth —
+ * and what that looks like on the glass is a phase table whose costs do not add
+ * to the total above it.
+ */
+test('a run outside the window is in no figure, not a smaller one', () => {
+  const day = 24 * 60 * 60 * 1000;
+  const inside = agent('a1', { costUsd: 3, startedAt: T, endedAt: new Date(NOW - 60_000).toISOString() });
+  const outside = agent('a2', { costUsd: 99, startedAt: T, endedAt: new Date(NOW - 40 * day).toISOString() });
+
+  const insights = build({
+    agents: [inside, outside],
+    tasks: [task('a1', 'issue:7:part:one'), task('a2', 'issue:7:part:two')],
+  });
+
+  assert.equal(insights.totals.costUsd, 3);
+  assert.equal(insights.totals.measuredRuns, 1);
+  assert.equal(insights.phases.reduce((n, p) => n + p.costUsd, 0), 3, 'the phases must still sum to the total'); // prettier-ignore
+  assert.equal(insights.goals[0]?.costUsd, 3, 'a goal is the money it cost inside the window');
+  assert.equal(insights.runs.length, 1);
+  assert.equal(insights.rankedFrom, 1);
+});
+
+/**
+ * A run that opened before the window and finished inside it spent its money
+ * inside it. Counting it at its start would leave the nine-hour agent out of the
+ * six-hour window it in fact dominated — which is the reading an operator opened
+ * a six-hour window to get.
+ */
+test('a long run counts in the window it finished in', () => {
+  const hour = 60 * 60 * 1000;
+  const straddling = agent('a1', {
+    costUsd: 12,
+    startedAt: new Date(NOW - 9 * hour).toISOString(),
+    endedAt: new Date(NOW - 20 * 60_000).toISOString(),
+  });
+  const insights = build({ agents: [straddling], tasks: [task('a1', 'issue:7:part:one')] }, '6h');
+  assert.equal(insights.totals.costUsd, 12);
+});
+
+/**
+ * The two figures the ratio headline needs beside the total, and they ride on
+ * this payload rather than the reliability one: "$26 of $118 never landed" is one
+ * sentence, and fetching its two halves from two routes is how they end up
+ * describing two windows.
+ */
+test('landed counts merges, and what never landed counts faults only', () => {
+  const merged = (n: number): WorldEvent => ({
+    id: `we_${n}`,
+    kind: 'pr_merged',
+    ref: `pr:${n}`,
+    summary: `PR #${n} merged`,
+    createdAt: T,
+  });
+  const insights = build({
+    agents: [
+      agent('a1', { status: 'done', costUsd: 4 }),
+      agent('a2', { status: 'failed', costUsd: 3 }),
+      agent('a3', { status: 'crashed', costUsd: 2 }),
+      // A killed run is a steer, not a fault. Counting an operator's own change of
+      // mind as waste is what makes every steered fleet look broken.
+      agent('a4', { status: 'killed', costUsd: 5 }),
+    ],
+    tasks: ['a1', 'a2', 'a3', 'a4'].map((id) => task(id, 'issue:7:part:one')),
+    mergeEvents: [merged(1), merged(2)],
+  });
+
+  assert.equal(insights.landed, 2);
+  assert.equal(insights.lostCostUsd, 5, 'failed and crashed only — a killed run cost what it cost and is not waste');
+  assert.equal(insights.totals.costUsd, 14, 'every run is still in the total, whatever it was doing');
+});
+
+/**
+ * The window cuts both spenders, and by the same rule.
+ *
+ * A local run is a session that held the dev environment for as long as somebody
+ * was looking at it, so it belongs to the window it *finished* in exactly as an
+ * agent does. Cutting only the agents would leave a preview from last month in
+ * this morning's total — and it would show up as the `local` phase row failing to
+ * add up against a bar drawn from the same figure.
+ */
+test('a local run obeys the window the agents do', () => {
+  const day = 24 * 60 * 60 * 1000;
+  const nodes = [node('issue:9', null)];
+  const inside = localRun('lr1', 'issue:9', {
+    costUsd: 2,
+    startedAt: new Date(NOW - 2 * day).toISOString(),
+    endedAt: new Date(NOW - 2 * day).toISOString(),
+  });
+  const outside = localRun('lr2', 'issue:9', {
+    costUsd: 40,
+    startedAt: new Date(NOW - 40 * day).toISOString(),
+    endedAt: new Date(NOW - 40 * day).toISOString(),
+  });
+
+  const month = build({ localRuns: [inside, outside], nodes });
+  assert.equal(month.totals.costUsd, 2);
+  assert.equal(month.phases.find((p) => p.phase === 'local')?.costUsd, 2);
+  assert.equal(month.goals.find((g) => g.issueNumber === 9)?.byPhase.local, 2);
+
+  const all = build({ localRuns: [inside, outside], nodes }, 'all');
+  assert.equal(all.totals.costUsd, 42);
+  assert.equal(all.phases.find((p) => p.phase === 'local')?.costUsd, 42);
 });

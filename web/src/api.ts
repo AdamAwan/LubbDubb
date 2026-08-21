@@ -2,6 +2,7 @@ import type {
   AppState,
   BugFiling,
   BuildReading,
+  InsightsWindow,
   JobAttachmentInput,
   LocalRunView,
   RecoveryVerdict,
@@ -179,16 +180,21 @@ const realApi = {
   // The snapshot already carries what the *indicators* need — the rolling windows
   // and each goal's own total — and this is the reading behind them: every agent
   // the harness has run, split by phase, by goal and over a fortnight.
-  getSpend: () => authFetch('/api/spend').then((r) => json<SpendPayload>(r)),
-  // The trend behind the breakdown, fetched when its tab is first opened rather
-  // than with the panel: it reads two months of world events on top of the same
-  // agent walk, and the tab an operator never opens should cost nothing.
-  getSpendTrend: () => authFetch('/api/spend/trend').then((r) => json<SpendTrendPayload>(r)),
-  // What the spending bought, fetched when the Yield panel opens. Same stance as
-  // the spend breakdown and for the same reason: the *gauge* is derived from the
-  // agent rows already on the snapshot, and this is every run the harness has
-  // settled plus a fortnight of CI transitions behind it.
-  getReliability: () => authFetch('/api/reliability').then((r) => json<ReliabilityPayload>(r)),
+  // The three Insights fetches, each carrying the page's window. It is a
+  // parameter rather than a constant on the server for the reason the page has
+  // one control: a route that picked its own span would put two tabs of one page
+  // over two different stretches, which is the arrangement this replaced.
+  getSpend: (window: InsightsWindow) => authFetch(`/api/spend?window=${window}`).then((r) => json<SpendPayload>(r)),
+  // The trend, fetched when its tab is first opened rather than with the rest:
+  // it reads *eight* windows of world events on top of the same agent walk, and
+  // the tab an operator never opens should cost nothing.
+  getSpendTrend: (window: InsightsWindow) =>
+    authFetch(`/api/spend/trend?window=${window}`).then((r) => json<SpendTrendPayload>(r)),
+  // What the spending bought. Same stance and the same window as the breakdown:
+  // the two are read a tab apart and must describe one stretch of the fleet's
+  // life, which they did not when one fold was all-time and the other a fortnight.
+  getReliability: (window: InsightsWindow) =>
+    authFetch(`/api/reliability?window=${window}`).then((r) => json<ReliabilityPayload>(r)),
   // The prompt book, fetched on open for the opposite reason to the work graph:
   // it is read once at boot, so polling it would be paying for a constant.
   /**

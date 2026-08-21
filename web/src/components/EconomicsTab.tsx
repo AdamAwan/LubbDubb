@@ -1,228 +1,39 @@
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
-import type {
-  ChecksSpend,
-  SpendGoal,
-  SpendInsights,
-  SpendPhase,
-  SpendPhaseTotal,
-  SpendRun,
-  SpendTrend,
-  TaskTypeSpend,
-} from '../types.js';
-import { api } from '../api.js';
-import { Downloads, toCsv } from './Downloads.js';
-import { SpendTrendTab } from './SpendTrendTab.js';
+import type { JSX } from 'react';
+import type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun, SpendTrend } from '../types.js';
 import { fmtTokens, fmtUsd, relTime } from './util.js';
+import { fmtShare, localPhaseCostUsd, share, PLOT } from './insightsFormat.js';
 import { Ref } from './refs.js';
+import { toCsv } from './Downloads.js';
 
 /**
- * The spend breakdown: where the money on the cost gauges actually went.
+ * Economics: is the fleet worth what it costs?
  *
- * The gauges answer *how much* and cannot answer *where* — that is the whole
- * reason this panel exists, and why it opens from the Power gauge rather than
- * standing as a way in of its own. A reading and the reading behind it are one
- * subject, and the bar's rule is that a subject is stated once.
+ * The Insights page opens here, and this tab is the answer to the question the
+ * three panels it replaced each held a third of. Spend answered *how much*,
+ * Output answered *how fast*, Yield answered *how much of it survived* — and
+ * they were the numerator, the denominator and the leakage of a single ratio,
+ * drawn on three surfaces over five different windows.
  *
- * **It lives here rather than under `console/` because it fetches.** The console
- * may not reach `api.js` — every capability it has is enumerated on `CockpitActions`,
- * asserted structurally in `test/console.test.ts` — so the sanctioned route is the
- * one the retrospective, the notepad and the settings modal all take: the reading
- * is console-side, the panel hangs off the shell, and `openSpend` on the seam is
- * the whole of what passes between them.
+ * **The ratio is the headline**, read left to right as one sentence: what the
+ * window cost, what landed in it, what one landed change therefore cost, and how
+ * much of the spend never landed at all. Every figure in it comes from one
+ * payload over one window, which is what stops the sentence being a comparison
+ * between two different fortnights.
  *
- * Four pictures, in the order the questions arrive. **Phases** first, because it
- * is the one split no other surface in the cockpit can show: a goal's card folds
- * its planner and its parts into a single figure on purpose, so "half the budget
- * went on deciding what to build" is invisible everywhere else. Then the
- * **trend**, which is the only reading here that is dated. Then **goals**, the
- * per-issue totals the cards already carry, ranked and with the phase split
- * inside each row. Then the **costliest runs**, because at some point the answer
- * to "where did it go" is one agent.
+ * Under it, the same four readings the spend panel carried — where the money
+ * went, when it went, which goal it went on, and which runs were dearest — with
+ * the outcome columns folded into the phase table rather than repeated in a
+ * second one on another tab.
  *
- * Fetched on open, three states, and the third is the point — a fetch that failed
- * must not render as a fleet that has spent nothing. `$0.00` is a real answer here
- * (a fresh harness, or one that has only ever run PTY agents), so it cannot also
- * be the failure mode.
+ * **Nothing here is derived in the browser.** The server ships the splits, for
+ * `PrAttention`'s reason: a cockpit-side re-derivation of which goal a pull
+ * request's money belongs to would be a second opinion about a decision made
+ * elsewhere, drawn inches from the first. What the cockpit owns is presentation
+ * — the phase colours, which live in the stylesheet as `--sp-<phase>`.
  *
- * **Two tabs since the trend arrived.** The breakdown answers *where the money
- * went*; the trend answers *is what I did working*, which the breakdown cannot,
- * being all-time. A tab rather than a second panel because they are one subject
- * read two ways, and the bar's rule is that a subject is stated once — the same
- * argument that put the breakdown behind the Power gauge rather than beside it.
- * The trend fetches on its **first visit** and both stay mounted after, which is
- * the settings modal's stance: a tab an operator never opens should cost nothing,
- * and switching back should cost nothing twice.
- *
- * Phase colour lives in the stylesheet as `--sp-<phase>`, not here: this component
- * names a phase and the sheet decides what that looks like, which is the division
- * the rest of the cockpit keeps.
+ * → docs/spec/17-cockpit.md#economics
  */
-type TabId = 'breakdown' | 'trend';
-
-const TABS: readonly { id: TabId; label: string }[] = [
-  { id: 'breakdown', label: 'Breakdown' },
-  { id: 'trend', label: 'Trend' },
-];
-
-export function SpendModal({ onClose }: { onClose: () => void }): JSX.Element {
-  const [insights, setInsights] = useState<SpendInsights | null>(null);
-  const [state, setState] = useState<'loading' | 'ready' | 'failed'>('loading');
-  const [tab, setTab] = useState<TabId>('breakdown');
-  const [trend, setTrend] = useState<SpendTrend | null>(null);
-  const [trendState, setTrendState] = useState<'idle' | 'loading' | 'ready' | 'failed'>('idle');
-  // The modal, not the breakdown inside it: the body is three different elements
-  // across loading, failure and the all-unmeasured case, and a ref that is null
-  // on two of them is a button that silently does nothing. The chrome it brings
-  // along — the head, the close — is dropped by the print sheet's own rules.
-  const modal = useRef<HTMLDivElement>(null);
-  // The trend is fetched from a click rather than an effect, so it has no cleanup
-  // to hang a `live` flag on. This is that flag: a panel closed mid-fetch must not
-  // come back to set state on a component that is gone.
-  const alive = useRef(true);
-  useEffect(() => () => void (alive.current = false), []);
-
-  // Escape closes, as it does on every other panel that covers the cockpit: a
-  // thing this large must not have exactly one exit.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  useEffect(() => {
-    let live = true;
-    api
-      .getSpend()
-      .then((res) => {
-        if (!live) return;
-        setInsights(res.insights);
-        setState('ready');
-      })
-      .catch(() => {
-        if (live) setState('failed');
-      });
-    return () => {
-      live = false;
-    };
-  }, []);
-
-  // The trend's own fetch, on the tab's first visit and never again. `idle` is
-  // the state that makes that a fact rather than an intention: a second visit
-  // finds it `ready` or `failed` and asks for nothing.
-  const openTab = useCallback(
-    (id: TabId) => {
-      setTab(id);
-      if (id !== 'trend' || trendState !== 'idle') return;
-      setTrendState('loading');
-      api
-        .getSpendTrend()
-        .then((res) => {
-          if (!alive.current) return;
-          setTrend(res.trend);
-          setTrendState('ready');
-        })
-        .catch(() => {
-          if (alive.current) setTrendState('failed');
-        });
-    },
-    [trendState],
-  );
-
-  return (
-    <div className="read-backdrop" onClick={onClose}>
-      <div
-        ref={modal}
-        className="read-modal"
-        role="dialog"
-        aria-modal="true"
-        aria-label="Spend"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="pm-head">
-          <span className="pm-title">Spend</span>
-          <span className="sp-note">the same money, split three ways</span>
-          {/* Only once there is something to take. The control is drawn from the
-              same `insights` the body is, so a failed fetch cannot offer a file
-              of zeroes — which is the panel's own rule about `$0.00` applied to
-              the one artefact that leaves the browser and outlives the tab. */}
-          {insights !== null && (
-            <Downloads
-              name="lubbdubb-spend"
-              files={[
-                {
-                  format: 'csv',
-                  title:
-                    'Every table on this panel, in the order it is drawn — totals, phases, days, task types, checks, ' +
-                    'goals, runs, and the weekly trend once its tab has been opened',
-                  build: () => spendCsv(insights, trend),
-                },
-                {
-                  format: 'json',
-                  title: 'The exact payload this panel drew, unrounded',
-                  build: () => JSON.stringify(trend === null ? insights : { insights, trend }, null, 2),
-                },
-              ]}
-              sheet={{
-                heading: 'Spend',
-                title: 'This panel as it stands, through the browser’s own print — choose “Save as PDF”',
-                node: () => modal.current,
-              }}
-            />
-          )}
-          <button className="btn ghost small pm-close" onClick={onClose}>
-            close
-          </button>
-        </div>
-        <div className="settings-tabs" role="tablist">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              role="tab"
-              aria-selected={tab === t.id}
-              className={`btn ghost settings-tab${tab === t.id ? ' active' : ''}`}
-              onClick={() => openTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-        {/* Hidden rather than unmounted, so a breakdown scrolled to the goal table
-            is where it was left on the way back — and so the trend pays for its
-            fetch once. */}
-        <div hidden={tab !== 'breakdown'} role="tabpanel">
-          <Body insights={insights} state={state} />
-        </div>
-        <div hidden={tab !== 'trend'} role="tabpanel">
-          <TrendBody trend={trend} state={trendState} />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/** The trend tab's four states, kept out of the tab itself so it draws one thing. */
-function TrendBody({
-  trend,
-  state,
-}: {
-  trend: SpendTrend | null;
-  state: 'idle' | 'loading' | 'ready' | 'failed';
-}): JSX.Element {
-  if (state === 'loading' || state === 'idle') return <p className="empty">Reading eight weeks…</p>;
-  // A failed fetch must not draw as a fleet that has closed nothing, for the
-  // reason `$0.00` cannot be the breakdown's failure mode: "no goals closed" is a
-  // real and reportable answer here.
-  if (state === 'failed' || trend === null) return <p className="empty">Could not read the trend.</p>;
-  return <SpendTrendTab trend={trend} />;
-}
-
-/** Everything below the head, so the three states are one readable switch. */
-function Body({ insights, state }: { insights: SpendInsights | null; state: 'loading' | 'ready' | 'failed' }) {
-  if (state === 'loading') return <p className="empty">Reading the meter…</p>;
-  if (state === 'failed' || !insights) return <p className="empty">Could not read the spend log.</p>;
-
+export function EconomicsTab({ insights }: { insights: SpendInsights }): JSX.Element {
   const { totals } = insights;
   // Nothing measured is a real state and not an empty one: a fleet run entirely
   // in PTY mode reports no usage at all, and every figure below would be a zero
@@ -231,16 +42,16 @@ function Body({ insights, state }: { insights: SpendInsights | null; state: 'loa
     return (
       <p className="empty">
         {totals.unmeasuredRuns === 0
-          ? 'No agent has run yet, so there is nothing to break down.'
-          : `${totals.unmeasuredRuns} run${totals.unmeasuredRuns === 1 ? '' : 's'}, none of which reported any usage — ` +
-            'PTY agents report none. Nothing here is zero; it is unmeasured.'}
+          ? `No agent ran in this window, so there is nothing to break down.`
+          : `${totals.unmeasuredRuns} run${totals.unmeasuredRuns === 1 ? '' : 's'} in this window, none of which ` +
+            'reported any usage — PTY agents report none. Nothing here is zero; it is unmeasured.'}
       </p>
     );
   }
 
   return (
     <div className="sp">
-      <Tiles insights={insights} />
+      <Ratio insights={insights} />
       <div className="sp-cols">
         <section className="sp-col">
           <p className="sp-sub">Where it went</p>
@@ -248,24 +59,13 @@ function Body({ insights, state }: { insights: SpendInsights | null; state: 'loa
           <PhaseKey phases={insights.phases} total={totals.costUsd} />
         </section>
         <section className="sp-col">
-          <p className="sp-sub">Last {insights.timeline.buckets.length} days</p>
+          <p className="sp-sub">Cost over the window</p>
           <Timeline insights={insights} />
           {/* The method note rides under the graph rather than at the foot of the
-              panel. The phase table beside it is the tallest thing here, so this
+              page. The phase table beside it is the tallest thing here, so this
               column has the room — and the caveats are worth more level with the
               figures they qualify than three screens below them. */}
           <Method insights={insights} />
-        </section>
-      </div>
-
-      <div className="sp-cols">
-        <section className="sp-col">
-          <p className="sp-sub">By task type</p>
-          <TaskTypes types={insights.taskTypes} total={totals.costUsd} localCostUsd={localPhaseCostUsd(insights)} />
-        </section>
-        <section className="sp-col">
-          <p className="sp-sub">By failing check</p>
-          <Checks checks={insights.checks} />
         </section>
       </div>
 
@@ -274,6 +74,83 @@ function Body({ insights, state }: { insights: SpendInsights | null; state: 'loa
 
       <p className="sp-sub">Costliest runs</p>
       <Runs runs={insights.runs} rankedFrom={insights.rankedFrom} />
+    </div>
+  );
+}
+
+/**
+ * The one sentence the page exists to say: **spent ÷ landed = per landed
+ * change**, with what never landed beside it.
+ *
+ * Four tiles rather than four unrelated figures, and the operators between them
+ * are drawn because they are the reading — a page that put "$118" and "71" in
+ * separate boxes would leave the division to the reader, which is exactly what
+ * three separate panels used to do.
+ *
+ * **A window with nothing landed in it draws no ratio at all.** Dividing by zero
+ * gives `Infinity`, and a fleet that spent forty dollars and landed nothing is
+ * the single most important state this tile has to render honestly — as the
+ * sentence it is, not as a symbol.
+ */
+function Ratio({ insights }: { insights: SpendInsights }): JSX.Element {
+  const { totals, landed, lostCostUsd } = insights;
+  const perLanded = landed > 0 ? totals.costUsd / landed : null;
+  return (
+    <div className="sp-tiles sp-ratio">
+      <div className="sp-tile sp-well">
+        <span className="lb">Spent</span>
+        <span className="vl">{fmtUsd(totals.costUsd)}</span>
+        <span className="sb">
+          {totals.measuredRuns} run{totals.measuredRuns === 1 ? '' : 's'} measured
+        </span>
+      </div>
+      <div className="sp-op" aria-hidden="true">
+        ÷
+      </div>
+      <div className="sp-tile sp-well">
+        <span className="lb">Landed</span>
+        <span className="vl">{landed}</span>
+        <span className="sb">pull requests merged in this window</span>
+      </div>
+      <div className="sp-op" aria-hidden="true">
+        =
+      </div>
+      <div className="sp-tile sp-well sp-key">
+        <span className="lb">Per landed change</span>
+        <span className="vl">{perLanded === null ? '—' : fmtUsd(perLanded)}</span>
+        <span className="sb">
+          {perLanded === null ? 'nothing landed in this window' : 'what one merged change cost the fleet'}
+        </span>
+      </div>
+      <div className="sp-tile sp-well sp-leak">
+        <span className="lb">Never landed</span>
+        <span className="vl">{fmtUsd(lostCostUsd)}</span>
+        <span className="sb">
+          {fmtShare(lostCostUsd, totals.costUsd)} of it — runs that failed or crashed. A killed run is a steer and is
+          not counted here.
+        </span>
+      </div>
+      <div className="sp-tile sp-well">
+        <span className="lb">Tokens</span>
+        <span className="vl">
+          {fmtTokens(totals.inputTokens)}
+          <small>→</small>
+          {fmtTokens(totals.outputTokens)}
+        </span>
+        {/* The cached share of the input, not a rate per Mtok. Both move when
+            caching does, but this one says so directly: the rate was only ever a
+            proxy — cost already has the discount in it, so a warm fleet made the
+            rate read cheap and left the reader to infer why. Denominator is the
+            input of runs that reported a breakdown, never the fleet's whole
+            input. See the note at the foot. */}
+        <span className="sb">
+          {totals.cacheMeasuredInputTokens > 0
+            ? `${fmtShare(totals.cacheReadTokens, totals.cacheMeasuredInputTokens)} of input from cache`
+            : totals.inputTokens > 0
+              ? 'cache share unmeasured'
+              : 'no input measured'}
+        </span>
+      </div>
     </div>
   );
 }
@@ -298,16 +175,21 @@ function Body({ insights, state }: { insights: SpendInsights | null; state: 'loa
  * arriving as a complete-looking file.
  */
 export function spendCsv(insights: SpendInsights, trend: SpendTrend | null = null): string {
-  const { totals, windows, phases, goals, runs, timeline, taskTypes, checks } = insights;
+  const { totals, phases, goals, runs, timeline, taskTypes, checks } = insights;
   const order = phases.map((p) => p.phase);
   const localCost = localPhaseCostUsd(insights);
 
   return toCsv([
     ['Totals'],
     ['Measure', 'Value'],
-    ['All-time cost (USD)', totals.costUsd],
-    ['Last 5h cost (USD)', windows.fiveHourCostUsd],
-    ['Last 7d cost (USD)', windows.sevenDayCostUsd],
+    // The window leads, because without it every figure under it is a number
+    // with no denominator: a file read six months from now has no time bar
+    // beside it to say what stretch it was taken over.
+    ['Window', insights.window.label],
+    ['Window opened (ISO)', insights.window.since ?? 'no lower bound — all time'],
+    ['Cost in window (USD)', totals.costUsd],
+    ['Pull requests landed in window', insights.landed],
+    ['Cost of runs that failed or crashed (USD)', insights.lostCostUsd],
     ['Input tokens', totals.inputTokens],
     ['Output tokens', totals.outputTokens],
     ['Cache read tokens', totals.cacheReadTokens],
@@ -515,73 +397,6 @@ function trendCsv(trend: SpendTrend, order: readonly SpendPhase[]): (string | nu
   ];
 }
 
-/** A share of the whole, as a percentage — the reading every bar here is drawn from. */
-function share(part: number, whole: number): number {
-  return whole > 0 ? (part / whole) * 100 : 0;
-}
-
-/** `12%`, and `<1%` rather than `0%` for a slice that is small but not absent. */
-function fmtShare(part: number, whole: number): string {
-  const pct = share(part, whole);
-  if (pct === 0) return '0%';
-  return pct < 1 ? '<1%' : `${Math.round(pct)}%`;
-}
-
-/**
- * The four headline figures.
- *
- * The two windows restate exactly what the gauge an operator just clicked says,
- * and they are here for that reason rather than for their own: a panel opened
- * from a chip must begin by agreeing with it, or the first thing it does is raise
- * a question about itself.
- */
-function Tiles({ insights }: { insights: SpendInsights }): JSX.Element {
-  const { totals, windows } = insights;
-  const perRun = totals.costUsd / totals.measuredRuns;
-  return (
-    <div className="sp-tiles">
-      <div className="sp-tile sp-well">
-        <span className="lb">All time</span>
-        <span className="vl">{fmtUsd(totals.costUsd)}</span>
-        <span className="sb">
-          {totals.measuredRuns} run{totals.measuredRuns === 1 ? '' : 's'} · {fmtUsd(perRun)} each
-        </span>
-      </div>
-      <div className="sp-tile sp-well">
-        <span className="lb">Last 5h</span>
-        <span className="vl">{fmtUsd(windows.fiveHourCostUsd)}</span>
-        <span className="sb">{fmtUsd(windows.fiveHourCostUsd / 5)} an hour</span>
-      </div>
-      <div className="sp-tile sp-well">
-        <span className="lb">Last 7d</span>
-        <span className="vl">{fmtUsd(windows.sevenDayCostUsd)}</span>
-        <span className="sb">{fmtUsd(windows.sevenDayCostUsd / 7)} a day</span>
-      </div>
-      <div className="sp-tile sp-well">
-        <span className="lb">Tokens</span>
-        <span className="vl">
-          {fmtTokens(totals.inputTokens)}
-          <small>→</small>
-          {fmtTokens(totals.outputTokens)}
-        </span>
-        {/* The cached share of the input, not a rate per Mtok. Both move when
-            caching does, but this one says so directly: the rate was only ever a
-            proxy — cost already has the discount in it, so a warm fleet made the
-            rate read cheap and left the reader to infer why. Denominator is the
-            input of runs that reported a breakdown, never the fleet's whole
-            input. See the note at the foot. */}
-        <span className="sb">
-          {totals.cacheMeasuredInputTokens > 0
-            ? `${fmtShare(totals.cacheReadTokens, totals.cacheMeasuredInputTokens)} of input from cache`
-            : totals.inputTokens > 0
-              ? 'cache share unmeasured'
-              : 'no input measured'}
-        </span>
-      </div>
-    </div>
-  );
-}
-
 /** The whole fleet's spend as one bar, in funnel order. */
 function PhaseBar({ phases, total }: { phases: readonly SpendPhaseTotal[]; total: number }): JSX.Element {
   // A phase that cost nothing still has runs behind it (an agent that reported
@@ -637,8 +452,6 @@ function PhaseKey({ phases, total }: { phases: readonly SpendPhaseTotal[]; total
     </table>
   );
 }
-
-const PLOT = { left: 34, right: 596, top: 10, bottom: 152 };
 
 /**
  * Daily spend, as bars rather than the production graph's lines.
@@ -797,145 +610,6 @@ function Goals({
         )}
       </tbody>
     </table>
-  );
-}
-
-/**
- * Cost per kind of work — the grain below the phase bar.
- *
- * A phase folds every pull-request concern into two rows; this is where review
- * comments, a base update and a merge each get a number of their own. The labels
- * are the dispatch registry's, shipped by the server, so a row here is named
- * exactly as the rule that produced it is named everywhere else in the cockpit.
- */
-function TaskTypes({
-  types,
-  total,
-  localCostUsd,
-}: {
-  types: readonly TaskTypeSpend[];
-  total: number;
-  localCostUsd: number;
-}): JSX.Element {
-  if (types.length === 0) return <p className="empty">Nothing has been measured yet.</p>;
-  return (
-    <>
-      <table className="sp-tbl">
-        <thead>
-          <tr>
-            <th>Task type</th>
-            <th className="n">Cost</th>
-            <th className="n">Share</th>
-            <th className="n">Runs</th>
-            <th className="n">Each</th>
-          </tr>
-        </thead>
-        <tbody>
-          {types.map((t) => (
-            <tr key={t.rule ?? '—'}>
-              <td>
-                <span className="nm" title={t.description ?? undefined}>
-                  {t.label}
-                </span>
-                {t.rule !== null && <span className="bl mono">{t.rule}</span>}
-              </td>
-              <td className="n b">{fmtUsd(t.costUsd)}</td>
-              <td className="n">{fmtShare(t.costUsd, total)}</td>
-              <td className="n">{t.runs}</td>
-              <td className="n">{fmtUsd(t.perRunUsd)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {/* Every other table here says what it does not hold. This one cannot hold a
-          local run at all: the rows are keyed on the dispatch rule that sent the
-          agent, and nothing dispatched a local run. */}
-      {localCostUsd > 0 && (
-        <p className="empty">
-          A further {fmtUsd(localCostUsd)} went on local runs, which have no dispatch rule and are in none of the rows
-          above.
-        </p>
-      )}
-    </>
-  );
-}
-
-/**
- * What local runs came to — the `local` phase's own figure, read off the phase
- * table rather than summed again, so the two cannot disagree.
- */
-function localPhaseCostUsd(insights: SpendInsights): number {
-  return insights.phases.find((p) => p.phase === 'local')?.costUsd ?? 0;
-}
-
-/**
- * What each failing check costs to answer.
- *
- * The one table in the cockpit that names `dotnet test` and `Qodana`, and the
- * reason the dispatcher records check names as data at all. **`Each` is the
- * column to read** — a check that goes red twice a week and takes an agent an
- * hour every time is a bigger bill than one that fails constantly and is fixed
- * in a turn, and only the per-dispatch figure says so.
- *
- * The shared-cost caveat rides in the footer rather than a tooltip, because it
- * qualifies every number in the table: an agent sent at three red checks at once
- * splits its cost three ways, and nothing in the harness knows which of them it
- * actually worked on.
- */
-function Checks({ checks }: { checks: ChecksSpend }): JSX.Element {
-  const { checks: rows, seen, attributedCostUsd, unnamedCostUsd } = checks;
-  if (rows.length === 0) {
-    return (
-      <p className="empty">
-        {unnamedCostUsd > 0
-          ? `${fmtUsd(unnamedCostUsd)} went on CI, but no run named the checks it was answering — the provider ` +
-            'reports no per-check detail.'
-          : 'No CI agent has run yet, so no check has cost anything.'}
-      </p>
-    );
-  }
-  return (
-    <>
-      <table className="sp-tbl">
-        <thead>
-          <tr>
-            <th>Check</th>
-            <th className="n">Cost</th>
-            <th className="n">Share</th>
-            <th className="n">Runs</th>
-            <th className="n">Each</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((c) => (
-            <tr key={c.name}>
-              <td>
-                <span className="nm mono">{c.name}</span>
-                {/* Named alone on every dispatch means the cost is unshared and
-                    the row is exact — worth saying, since it is the difference
-                    between a figure and an estimate. */}
-                <span className="bl">
-                  {c.soleRuns === c.runs
-                    ? 'always the only check red — unshared'
-                    : `${c.soleRuns} of ${c.runs} runs were about this check alone`}
-                </span>
-              </td>
-              <td className="n b">{fmtUsd(c.costUsd)}</td>
-              <td className="n">{fmtShare(c.costUsd, attributedCostUsd)}</td>
-              <td className="n">{c.runs}</td>
-              <td className="n">{fmtUsd(c.perRunUsd)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="empty">
-        A run sent at several red checks splits its cost evenly between them — nothing records which one it actually
-        worked on, so these are shares, not receipts.
-        {seen > rows.length && ` The ${rows.length} costliest of ${seen} checks.`}
-        {unnamedCostUsd > 0 &&
-          ` A further ${fmtUsd(unnamedCostUsd)} went on CI runs that named no check, and is in none of the rows above.`}
-      </p>
-    </>
   );
 }
 

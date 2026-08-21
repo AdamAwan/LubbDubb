@@ -12,12 +12,13 @@ import type {
   TicketStateFilter,
   TicketTrackingFilter,
   TicketWatchFilter,
+  InsightsWindow,
 } from '../types.js';
 import { buildNeedsYou } from './needsYou.js';
 import type { NeedRow } from './needsYou.js';
 import { buildGoalPage } from './goalPage.js';
 import type { GoalPageView } from './goalPage.js';
-import type { ConfigTab, ConsolePanel, ConsoleTab } from '../cockpit/actions.js';
+import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsView } from '../cockpit/actions.js';
 
 /**
  * Everything the console draws, derived once per render and handed over as plain data.
@@ -169,11 +170,10 @@ export interface CockpitView {
   hatching: string | null;
   /** The goal whose shared scratchpad is open, as an `issue:<n>` ref. */
   viewingScratchpad: string | null;
-  /** Whether the settings modal is open. */
-  /** Whether the spend breakdown is open. */
-  spendOpen: boolean;
-  /** Whether the reliability breakdown is open. */
-  reliabilityOpen: boolean;
+  /** Which reading the Insights page is showing. */
+  insightsView: InsightsView;
+  /** The stretch of time every reading on that page is measured over. */
+  insightsWindow: InsightsWindow;
 }
 
 const LIVE_STATUSES = ['starting', 'running', 'waiting'];
@@ -244,11 +244,10 @@ interface ViewInputs {
   hatching: string | null;
   /** The goal whose shared scratchpad is open, as an `issue:<n>` ref. */
   viewingScratchpad: string | null;
-  /** Whether the settings modal is open. */
-  /** Whether the spend breakdown is open. */
-  spendOpen: boolean;
-  /** Whether the reliability breakdown is open. */
-  reliabilityOpen: boolean;
+  /** Which reading the Insights page is showing. */
+  insightsView: InsightsView;
+  /** The stretch of time every reading on that page is measured over. */
+  insightsWindow: InsightsWindow;
   /** The goal whose page is open, as `issue:<n>`. */
   selectedGoal: string | null;
   /** Which full-surface panel is in front. */
@@ -321,6 +320,8 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     goalPage: input.selectedGoal ? buildGoalPage(state, input.selectedGoal, needsYou) : null,
     consolePanel: input.consolePanel,
     tab: input.tab,
+    insightsView: input.insightsView,
+    insightsWindow: input.insightsWindow,
     collapsedFeatures: new Set(input.collapsed ?? []),
     configTab: input.configTab ?? 'values',
     configGroup: input.configGroup ?? null,
@@ -354,7 +355,5 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     viewingRetro: input.viewingRetro,
     hatching: input.hatching,
     viewingScratchpad: input.viewingScratchpad,
-    spendOpen: input.spendOpen,
-    reliabilityOpen: input.reliabilityOpen,
   };
 }
