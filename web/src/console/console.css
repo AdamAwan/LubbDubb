@@ -517,6 +517,134 @@
 .cn-qmeta .cn-hold {
   color: var(--cn-tone);
 }
+/* ---------- a config row's fix strip ----------
+   The row body is the control that opens the key on the config page, so the fix
+   cannot live inside it: one click may not have two destinations. It gets its own
+   strip under the body, inside the same card and the same tone. */
+.cn-qbody {
+  border: none;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  padding: 0;
+  width: 100%;
+  cursor: pointer;
+}
+.cn-qbody:hover .cn-qtitle {
+  color: var(--cn-tone-ink);
+}
+.cn-fix {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 12px;
+  border-top: 1px solid var(--cn-line);
+  background: var(--cn-panel);
+}
+.cn-fixwhy {
+  font-size: 11.5px;
+  color: var(--cn-fg-faint);
+  flex: 1 1 150px;
+  min-width: 0;
+}
+.cn-fixline {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.cn-fixedit {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--cn-fg-dim);
+}
+/* Amber, because an editable value is one the harness could not confirm — the
+   border is the difference between a fact and a guess, said in the same channel
+   the rest of the cockpit says it in. */
+.cn-inline {
+  border: 1px solid var(--cn-amber-line-hi);
+  border-radius: var(--cn-r-sm);
+  background: var(--cn-bg);
+  color: var(--cn-amber-ink);
+  font: 12.5px var(--cn-mono);
+  padding: 6px 8px;
+  width: 22ch;
+  max-width: 100%;
+}
+.cn-inline:focus {
+  outline: 2px solid var(--cn-accent);
+  outline-offset: 1px;
+}
+/* A shell fix is copied, never run: these are the credential and billing checks,
+   and a button that executed a shell string would put arbitrary execution behind
+   the most sensitive reading the cockpit draws. */
+.cn-shell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 100%;
+  min-width: 0;
+  font: 12px var(--cn-mono);
+  background: var(--cn-bg);
+  border: 1px solid var(--cn-line);
+  border-radius: var(--cn-r-sm);
+  padding: 7px 9px;
+}
+.cn-shell > span {
+  color: var(--cn-fg-faint);
+}
+.cn-shell code {
+  color: var(--cn-green-ink);
+  overflow-x: auto;
+  white-space: nowrap;
+}
+.cn-copy {
+  margin-left: auto;
+  flex: none;
+  font: 600 10.5px/1 var(--cn-mono);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  border: 1px solid var(--cn-line-hi);
+  border-radius: 4px;
+  background: var(--cn-panel-2);
+  color: var(--cn-fg-dim);
+  padding: 5px 7px;
+  cursor: pointer;
+}
+.cn-copy:hover {
+  color: var(--cn-fg);
+  border-color: var(--cn-fg-faint);
+}
+.cn-copy.cn-copied {
+  color: var(--cn-green);
+  border-color: var(--cn-green-line);
+}
+/* An applied fix settles rather than vanishing. The reading re-fetches the moment
+   the file lands, so without this the row a fix was applied from disappears under
+   the click that applied it — and a write nobody saw is a write nobody can check. */
+.cn-fix.cn-settled {
+  background: var(--cn-green-fill);
+  border-top-color: var(--cn-green-line);
+}
+.cn-settled-what {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 150px;
+  min-width: 0;
+  font-size: 12px;
+  color: var(--cn-green-ink);
+}
+.cn-settled-file {
+  font: 11px var(--cn-mono);
+  color: var(--cn-fg-faint);
+  font-style: normal;
+}
+
 .cn-railsub {
   padding: 10px 14px 4px;
   font-size: 11px;
@@ -1861,24 +1989,11 @@ button.cn-grow {
 }
 
 /* ---------- setup ----------
-   The first-run surface and the two readings that lead to it. Every colour here
-   is a `--cn-*` token: a literal at a use site is a surface no theme can reach,
-   and the failure only ever shows up on a theme nobody tested. */
-.cn-setup-warn {
-  border-color: var(--cn-amber-line-hi);
-  background: var(--cn-amber-bg);
-}
-.cn-setup-warn b {
-  color: var(--cn-amber);
-}
-.cn-setup-bad {
-  border-color: var(--cn-red-line);
-  background: var(--cn-red-bg);
-}
-.cn-setup-bad b {
-  color: var(--cn-red);
-}
-
+   The confirm sheet that points the fleet at a project. Every colour here is a
+   `--cn-*` token: a literal at a use site is a surface no theme can reach, and the
+   failure only ever shows up on a theme nobody tested. The outstanding checks
+   themselves are rows on the rail now (`.cn-fix` below), not a reading of their
+   own. */
 .cn-setup {
   display: flex;
   flex-direction: column;
@@ -1983,44 +2098,28 @@ button.cn-grow {
 .cn-setup-from {
   color: var(--cn-fg-faint);
 }
-.cn-setup-checks {
+.cn-setup-ins {
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
-.cn-setup-checks h4 {
+@media (min-width: 620px) {
+  .cn-setup-ins {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+/* Said in amber rather than refused: pointing the fleet at LubbDubb's own checkout
+   is how LubbDubb is developed. What it is not is a thing to do by accident, and
+   `repoRoot` defaulting to the working directory means it is exactly what a default
+   start proposes. */
+.cn-setup-warnline {
   margin: 0;
-  font: 600 10.5px var(--cn-mono);
-  letter-spacing: 0.8px;
-  text-transform: uppercase;
-  color: var(--cn-fg-faint);
-}
-.cn-setup-check {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  padding: 9px 12px;
-  border: 1px solid var(--cn-line);
+  padding: 9px 11px;
+  border: 1px solid var(--cn-amber-line);
   border-radius: var(--cn-r-sm);
-  background: var(--cn-panel-2);
-  font-size: 11.5px;
+  background: var(--cn-amber-bg);
+  color: var(--cn-amber-ink);
+  font-size: 12px;
   line-height: 1.55;
-  color: var(--cn-fg-dim);
-}
-.cn-setup-check.cn-warn {
-  border-color: var(--cn-amber-line);
-  background: var(--cn-amber-fill);
-}
-.cn-setup-check.cn-bad {
-  border-color: var(--cn-red-line);
-  background: var(--cn-red-fill);
-}
-.cn-setup-check.cn-ok {
-  border-color: var(--cn-green-line);
-  background: var(--cn-green-fill);
-}
-.cn-setup-remedy {
-  color: var(--cn-fg-faint);
-  font-style: normal;
 }
 .cn-setup-pre {
   margin: 0;
@@ -2057,34 +2156,3 @@ button.cn-grow {
   font-size: 12px;
 }
 
-/* The first-run card. Blue rather than amber: it is an offer about a harness that
-   is working, not a warning about one that is not. */
-.cn-firstrun {
-  border-color: var(--cn-blue-line-hi);
-  background: var(--cn-blue-bg);
-}
-.cn-firstrun > h3 {
-  color: var(--cn-blue-ink);
-  border-bottom-color: var(--cn-blue-line);
-}
-.cn-firstrun-body {
-  padding: 12px 13px 0;
-  display: grid;
-  gap: 7px;
-  font-size: 12px;
-  line-height: 1.6;
-  color: var(--cn-fg-dim);
-}
-.cn-firstrun-body p {
-  margin: 0;
-  max-width: 70ch;
-}
-.cn-firstrun-quiet {
-  color: var(--cn-fg-faint);
-  font-size: 11.5px;
-}
-.cn-firstrun-acts {
-  padding: 12px 13px;
-  display: flex;
-  gap: 8px;
-}

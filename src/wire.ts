@@ -1294,7 +1294,7 @@ export type SetupPayload = SetupReading;
 export type SetupResolvePayload = SetupResolution;
 
 /** Re-exported so the cockpit names one module for the whole setup contract. */
-export type { SetupCheck, SetupVerdict } from './setup/reading.js';
+export type { SetupCheck, SetupFix, SetupVerdict } from './setup/reading.js';
 export type { RemoteTarget } from './setup/remote.js';
 
 export interface RunningConfigPayload {

@@ -861,6 +861,7 @@ vanishes when quiet is indistinguishable from one that broke.
   that page obeys a control, and deliberately: this card answers "what is happening", and a window an
   operator has to set before the answer means anything is not that question. It says the span out loud
   for the same reason, and carries the one way through to the money behind the rates.
+
 - **Goals in flight** carries the **furthest environment** holding a goal whole, where any is —
   last-declared in the operator's list, since that list is the order the work travels in. `partial`
   gets no chip: a row reading `liveUs` for half a feature is the boolean rollup the reach fold refuses
@@ -1389,7 +1390,7 @@ the URL should be able to send you.
 **Spend, Yield and Output are not on this bar.** They were three readings of one subject — what the
 fleet cost, what it landed, how much of that survived — and each of the three had grown a version of the
 other two on the panel behind it. They are the [Insights](#insights) destination now, which is in the
-nav: a reading you go to and come back from rather than a number you glance at, and one whose *window* an
+nav: a reading you go to and come back from rather than a number you glance at, and one whose _window_ an
 operator changes rather than accepts. What is left here is what a glance can actually settle — counts of
 things waiting on a person, and the state of this build.
 
@@ -1991,7 +1992,7 @@ shape of a wrong seam.
   requests, the phase health and the repeats.
 - **Causes** — what keeps sending the fleet back? The guard split, both cause tables, and Lately.
 - **Trend** — is what I changed working? The eight-period cohort view.
-- **Work mix** — why does *this kind* of work cost what it does? By task type, and by failing check.
+- **Work mix** — why does _this kind_ of work cost what it does? By task type, and by failing check.
 
 Every table the three panels drew lands in exactly one of these, and the duplicates collapse on the way
 in: there is one phase table rather than two, and one completion rate rather than the reliability fold's
@@ -2032,7 +2033,7 @@ graph, five and seven days for the spend tiles, a fortnight for the spend timeli
 for CI, eight weeks for the trend — and all-time for the run half and the spend totals. Two figures side
 by side on one surface described different stretches of the fleet's life with nothing saying so.
 
-**The Trend tab obeys it too**, by showing the last eight windows *of the length the operator picked*:
+**The Trend tab obeys it too**, by showing the last eight windows _of the length the operator picked_:
 `7d` gives eight weeks, `24h` gives eight days ([18](18-observability.md#the-spend-trend)). That is what
 keeps one control meaningful on a tab that is inherently about change, and it has a second payoff — the
 comparison a headline draws against "the previous window" is literally the last two bars of that chart,
@@ -2042,7 +2043,7 @@ rather than a second notion of "before" for a reader to reconcile.
 
 **The ratio is the headline**, read left to right as one sentence: what the window cost, what landed in
 it, what one landed change therefore cost, and how much of the spend never landed at all. The operators
-between the tiles are drawn because they *are* the reading — four unrelated boxes would leave the
+between the tiles are drawn because they _are_ the reading — four unrelated boxes would leave the
 division to the reader, which is what three separate panels did.
 
 - **Landed is pull requests merged**, not goals closed. A goal closes when a person says it is done,
@@ -2075,7 +2076,7 @@ seven hues that read apart at swatch size, so `--sp-local` is a `color-mix` of t
 literal — a hex at a use site is a swatch that stays put when somebody switches theme
 ([tokens](#tokens)).
 
-**Fetched on open, three states, and the third is the point.** Loading, the reading, and a *failure* —
+**Fetched on open, three states, and the third is the point.** Loading, the reading, and a _failure_ —
 because a fetch that failed must not render as a fleet that has spent nothing. `$0.00` is a real answer
 here (a fresh harness, or one run entirely in PTY mode), so it cannot also be the failure mode. The
 all-unmeasured case gets its own sentence rather than a table of zeroes: **unmeasured is not free**.
@@ -2094,7 +2095,7 @@ saying: a rate over a short window is a rate over few runs, and the reader decid
 
 The outcome **colours** live in the stylesheet as `--rl-<outcome>` and differ in kind from the phase
 palette on purpose — a phase is a category whose colours only have to read apart, while an outcome is a
-*verdict* and carries the alarm vocabulary. Grey is doing real work in it: a killed run is not a fault.
+_verdict_ and carries the alarm vocabulary. Grey is doing real work in it: a killed run is not a fault.
 
 A fleet with runs still out and none settled gets its own sentence rather than a table of zeroes —
 **not yet is not perfect**.
@@ -2102,7 +2103,7 @@ A fleet with runs still out and none settled gets its own sentence rather than a
 ### Causes
 
 Drawn on a tab of its own rather than as the third block of the reliability panel, and it is the section
-that gained most from the move: three tables and a quotation list read *below* two other readings is
+that gained most from the move: three tables and a quotation list read _below_ two other readings is
 where an operator stops scrolling, and this is the one surface on the page that shows the taxonomy is
 being used rather than guessed at ([18](18-observability.md#causes-why-the-fleet-came-back)).
 
@@ -2110,7 +2111,7 @@ The guard split leads it as one bar and a legend, ordered by what acting on each
 tables follow, one per kind, ranked by accounts with the empty causes kept at the foot — "nothing was a
 flake this window" is a reading, and a table that dropped its own zero rows could not make it. Then
 **Lately**: the most recent accounts in the agents' own words. The section's caveat is drawn with its
-total rather than in a footnote — every share in it is a share of what was *reported*, and
+total rather than in a footnote — every share in it is a share of what was _reported_, and
 `unaccounted` is what says how much that is.
 
 ### The Trend tab
@@ -2145,7 +2146,7 @@ the tab says so rather than drawing a percentage off one period of goals.
 operator never opens should cost nothing. The window is part of that key rather than a boolean beside
 it, because a window change invalidates the trend — holding "already fetched" as a boolean is how the
 trend ends up drawn over one stretch while everything above it describes another. The fetch hangs off
-the *place* rather than the click that changed it, so arriving on `?view=trend` from a shared link is a
+the _place_ rather than the click that changed it, so arriving on `?view=trend` from a shared link is a
 first visit too.
 
 ### Work mix
@@ -2902,16 +2903,21 @@ and the shell rendering the drawer the console only asks for — and no longer t
 
 ## Setup
 
-Three surfaces lead to the first-run panel, and only one of them is permanent.
+The harness's own configuration is **rows on the Needs you rail**, not a surface of its own. It used
+to be three: a reading in the top bar, a first-run card on the Overview, and a panel. All three are
+gone, and the reason is the failure they made together — the bar counted outstanding checks and
+opened a screen that showed none of them, while each check's remedy was a sentence with no control
+attached. A count that opens the wrong surface is worse than no count.
 
-The **Setup reading** in the top bar counts what is outstanding and is **absent at zero** — a reading
-that is always green is one nobody reads, so it earns its place by not being there most of the time.
-The **first-run card** on the Overview is drawn only while the harness has not been pointed anywhere,
-and is blue rather than amber: it is an offer about a harness that is working, not a warning about one
-that is not. The **panel** itself is on `Place` like every other panel, so it can be linked to.
+A config row is `config` (red) or `config_gap` (amber), always in `yours` rather than `blocking`
+(nothing is parked on a worktree, whatever else is stopped), and carries no age — the reading is
+fetched, not stamped. Its **body** is the control that opens the key on the config page; its **fix**
+sits in a strip beneath, because a control may not nest inside a control and the fix is a shortcut
+past the config page rather than the only road to it.
 
-Its three steps are deliberately _not_ on `Place`. A step inside an unsaved edit is not somewhere to
-send somebody — restoring "review" on a reload would restore a review of answers the reload has
-already dropped. Same exception, and the same reason, as `ReviewWrite`'s on the config page.
+The one screen left is the **confirm sheet** that points the fleet at a project, reached from the
+`pointed` row. It is a modal and deliberately _not_ on `Place`: restoring it on a reload would restore
+a review of answers the reload has already dropped. Same exception, and the same reason, as
+`ReviewWrite`'s on the config page.
 
 → [26](26-setup.md)

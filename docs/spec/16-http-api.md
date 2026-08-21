@@ -1713,7 +1713,7 @@ writes `lubbdubb.config.json`, with one refusal ladder and one surgical splice b
 
 | Route                     | Answers                                                                           |
 | ------------------------- | --------------------------------------------------------------------------------- |
-| `GET /api/setup`          | `SetupPayload` — `pointed`, the six checks, `outstanding`, and the two prefills   |
+| `GET /api/setup`          | `SetupPayload` — the checks with their fixes, and the two prefills                |
 | `POST /api/setup/resolve` | `SetupResolvePayload` — an email and a directory, read into everything they imply |
 
 `resolve` is a `POST` for a read because its answers are a body rather than a path, and because it

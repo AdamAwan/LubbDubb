@@ -1,12 +1,15 @@
-import { Fragment, type JSX } from 'react';
+import { Fragment, useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { NeedGroup, NeedKind, NeedRow } from '../view/needsYou.js';
+import type { AppliedFix, NeedGroup, NeedKind, NeedRow } from '../view/needsYou.js';
+import type { SetupCheck, SetupFix } from '../types.js';
 import { relTime } from '../components/util.js';
 import { refLabel } from '../components/refs.js';
 
 /** One word per kind, shared with the goal page so a row and the band it opens name the ask the same. */
 export const KIND_LABEL: Record<NeedKind, string> = {
+  config: 'Config',
+  config_gap: 'Config gap',
   recovery: 'Recovery',
   escalation: 'Escalation',
   permission: 'Permission',
@@ -43,6 +46,11 @@ export const KIND_LABEL: Record<NeedKind, string> = {
  * @public shared with the needs band, which dresses the same ask in the same tone
  */
 export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
+  // Red for a harness that cannot work or is spending money it should not; amber
+  // for one that works while something of the operator's own hides work from it.
+  // Two kinds rather than a per-row tone, so this stays total — see `NeedKind`.
+  config: 'red',
+  config_gap: 'amber',
   recovery: 'red',
   escalation: 'red',
   permission: 'amber',
@@ -73,6 +81,11 @@ export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
  * @public shared with the needs band and the ask panel, which name the ask the same
  */
 export const KIND_SYMBOL: Record<NeedKind, string> = {
+  config: '\u2699',
+  // A gear with a bite out of it rather than a second gear: the two kinds are one
+  // subject at two severities, and the glyph is the one channel that has to tell
+  // a fault this harness cannot work through from a gate it merely works around.
+  config_gap: '\u2296',
   recovery: '\u21ba',
   escalation: '?',
   permission: '\u2298',
@@ -213,6 +226,46 @@ function Row({
   if (row.opens === null) {
     return <div className={cls}>{inner}</div>;
   }
+
+  // A config row carries a fix, and a control may not nest inside a control: one
+  // click cannot have two destinations. So the card becomes a container, its body
+  // stays the button that opens the key on the config page, and the fix sits in a
+  // strip of its own beneath it — the same shape a row carrying both a name and
+  // refs already takes.
+  if (row.check !== undefined) {
+    const fix = row.check.fix;
+    const group = fix?.kind === 'config' ? fix.group : fix?.kind === 'goto' ? fix.group : undefined;
+    return (
+      <div className={cls}>
+        <i className="cn-stripe" />
+        <button
+          type="button"
+          className="cn-qbody"
+          onClick={() => actions.openConfig({ configTab: 'values', configGroup: group ?? null })}
+        >
+          <div className="cn-qin">
+            <div className="cn-qkind">
+              <i className="cn-tag">
+                <span className="cn-sym" aria-hidden="true">
+                  {KIND_SYMBOL[row.kind]}
+                </span>
+                {KIND_LABEL[row.kind]}
+              </i>
+            </div>
+            <p className="cn-qtitle">{row.title}</p>
+            {row.check.remedy !== undefined && <div className="cn-qmeta">{row.check.remedy}</div>}
+          </div>
+        </button>
+        <i className="cn-stripe" />
+        {row.applied === undefined ? (
+          <ConfigFix check={row.check} actions={actions} />
+        ) : (
+          <SettledFix applied={row.applied} actions={actions} />
+        )}
+      </div>
+    );
+  }
+
   const ref = row.goalRef;
   const open =
     row.opens === 'goal' && ref !== null ? () => actions.selectGoal(ref) : () => actions.openPanel({ ask: row.id });
@@ -220,6 +273,144 @@ function Row({
     <button type="button" className={cls} onClick={open} aria-current={current ? 'true' : undefined}>
       {inner}
     </button>
+  );
+}
+
+/**
+ * The control strip under a config row — the whole of "offer to fix it for me".
+ *
+ * Which control is drawn is the check's own `fix`, and the three kinds are three
+ * honest positions ({@link SetupFix}): the harness writes it, the operator decides
+ * it somewhere that already exists, or it is outside the harness entirely and gets
+ * copied. **A `shell` command is never run**: these are the credential and billing
+ * checks, and a button here that executed a shell string would put arbitrary
+ * execution behind the most sensitive reading the cockpit draws.
+ *
+ * A `config` fix whose value is `assumed` rather than `confirmed` draws the value
+ * in an editable field first. That is the answer to "what if the suggestion is
+ * wrong": the values that could be wrong never get the one-click button, and the
+ * one that can be wrong most expensively — `userId`, which gates pickup — is
+ * resolved against the credential before anything offers to write it.
+ */
+function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActions }): JSX.Element | null {
+  const fix: SetupFix | undefined = check.fix;
+  const [value, setValue] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [busy, setBusy] = useState(false);
+  if (fix === undefined) return null;
+
+  if (fix.kind === 'shell') {
+    return (
+      <div className="cn-fix">
+        <div className="cn-shell">
+          <span aria-hidden="true">$</span>
+          <code>{fix.command}</code>
+          <button
+            type="button"
+            className={copied ? 'cn-copy cn-copied' : 'cn-copy'}
+            onClick={() => {
+              void navigator.clipboard?.writeText(fix.command).catch(() => undefined);
+              setCopied(true);
+            }}
+          >
+            {copied ? 'Copied' : fix.label}
+          </button>
+        </div>
+        <span className="cn-fixwhy">{fix.why}</span>
+      </div>
+    );
+  }
+
+  if (fix.kind === 'sheet') {
+    return (
+      <div className="cn-fix">
+        <button type="button" className="cn-btn cn-primary" onClick={() => actions.openPanel('setup')}>
+          {fix.label}
+        </button>
+        {check.remedy !== undefined && <span className="cn-fixwhy">{check.remedy}</span>}
+      </div>
+    );
+  }
+
+  if (fix.kind === 'goto') {
+    return (
+      <div className="cn-fix">
+        <button
+          type="button"
+          className="cn-btn cn-primary"
+          onClick={() =>
+            fix.to === 'tickets'
+              ? actions.openTab('tickets')
+              : actions.openConfig({ configTab: 'values', configGroup: fix.group ?? null })
+          }
+        >
+          {fix.label}
+        </button>
+      </div>
+    );
+  }
+
+  const paths = Object.keys(fix.set);
+  const only = paths[0];
+  // Editable only where there is one value to edit and it is a guess. A fix
+  // writing several keys is the confirm sheet's business, not a text box's.
+  const editable = fix.confidence === 'assumed' && paths.length === 1 && only !== undefined;
+  const typed = value ?? (editable ? String(fix.set[only as string]) : '');
+  const write = (): void => {
+    setBusy(true);
+    const set = editable ? { [only as string]: coerce(typed, fix.set[only as string]) } : fix.set;
+    void actions.applyConfigFix(check.id, set).finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="cn-fix">
+      {editable ? (
+        <div className="cn-fixline">
+          <label className="cn-fixedit">
+            Set <code>{only}</code> to
+            <input className="cn-inline" value={typed} onChange={(e) => setValue(e.target.value)} aria-label={only} />
+          </label>
+          <button type="button" className="cn-btn" disabled={busy} onClick={write}>
+            Write it
+          </button>
+        </div>
+      ) : (
+        <button type="button" className="cn-btn cn-primary" disabled={busy} onClick={write}>
+          {fix.label}
+        </button>
+      )}
+      {check.remedy !== undefined && !editable && <span className="cn-fixwhy">{check.remedy}</span>}
+    </div>
+  );
+}
+
+/**
+ * The typed value behind an edited field. The field is text, the key is not: a
+ * boolean written as `"false"` is a truthy string, and the config loader would
+ * take it — so the shape of the value the check proposed decides how the operator's
+ * edit is read back.
+ */
+function coerce(text: string, like: unknown): unknown {
+  if (typeof like === 'boolean') return text === 'true';
+  if (typeof like === 'number') return Number(text);
+  return text;
+}
+
+/** The strip a fixed row wears until it is dismissed — what was written, and the way back. */
+function SettledFix({ applied, actions }: { applied: AppliedFix; actions: CockpitActions }): JSX.Element {
+  return (
+    <div className="cn-fix cn-settled">
+      <span className="cn-settled-what">
+        <b>{applied.summary}</b>
+        <i className="cn-settled-file">→ {applied.file}</i>
+      </span>
+      <button type="button" className="cn-btn" onClick={() => void actions.undoConfigFix(applied.checkId)}>
+        Undo
+      </button>
+      <button type="button" className="cn-btn" onClick={() => actions.dismissConfigFix(applied.checkId)}>
+        Dismiss
+      </button>
+    </div>
   );
 }
 

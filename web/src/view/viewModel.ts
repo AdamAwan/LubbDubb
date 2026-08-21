@@ -15,7 +15,7 @@ import type {
   InsightsWindow,
 } from '../types.js';
 import { buildNeedsYou } from './needsYou.js';
-import type { NeedRow } from './needsYou.js';
+import type { AppliedFix, NeedRow } from './needsYou.js';
 import { buildGoalPage } from './goalPage.js';
 import type { GoalPageView } from './goalPage.js';
 import type { ConfigTab, ConsolePanel, ConsoleTab, InsightsView } from '../cockpit/actions.js';
@@ -231,6 +231,8 @@ interface ViewInputs {
   connected: boolean;
   demo: boolean;
   setup: SetupPayload | null;
+  /** Config fixes written from the rail this session — see `AppliedFix`. */
+  appliedFixes?: readonly AppliedFix[];
   selected: string | null;
   liveOutput: ReadonlyMap<string, string>;
   tails: ReadonlyMap<string, string>;
@@ -296,7 +298,7 @@ export function buildViewModel(input: ViewInputs): CockpitView {
   const interval = state.config.heartbeatIntervalMs;
   const sincePulse = now - input.lastPulseAt;
 
-  const needsYou = buildNeedsYou(state);
+  const needsYou = buildNeedsYou(state, input.setup, input.appliedFixes ?? []);
 
   return {
     state,

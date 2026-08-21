@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, connectWs, isDemo, UnauthorizedError } from '../api.js';
 import type { WsClient } from '../api.js';
 import type { AppState, SetupPayload } from '../types.js';
+import type { AppliedFix } from '../view/needsYou.js';
 import { useNow } from '../hooks.js';
 import { buildViewModel, type CockpitView } from '../view/viewModel.js';
 import { useNavigation } from './useNavigation.js';
@@ -37,6 +38,11 @@ export function useCockpit(): CockpitStatus {
   // when a cycle has read the world. So it is re-read on `config:changed` and on
   // each snapshot the first time the world arrives — never on the second.
   const [setup, setSetup] = useState<SetupPayload | null>(null);
+  // Fixes written from the rail this session, and how to take each one back. The
+  // rows stay until dismissed: the reading re-fetches as soon as the file lands,
+  // so a fixed row would otherwise vanish under the click that fixed it.
+  const [appliedFixes, setAppliedFixes] = useState<AppliedFix[]>([]);
+  const undoable = useRef(new Map<string, { set?: Record<string, unknown>; clear?: string[] }>());
   // Where the operator is, held in the address bar rather than in a state each —
   // see `useNavigation`. Everything below reads off it; nothing else moves it.
   const { place, go } = useNavigation();
@@ -152,13 +158,13 @@ export function useCockpit(): CockpitStatus {
 
   useEffect(() => {
     if (!state) return;
-    const next = notifySnapshot(state);
+    const next = notifySnapshot(state, setup);
     // Read the preference per fire rather than holding it: Settings writes it to
     // `localStorage` directly, and a copy captured at mount would go on notifying
     // for the rest of the session after the operator switched it off.
     fireNotifications(notifiableChanges(notified.current, next), loadNotifyPrefs());
     notified.current = next;
-  }, [state]);
+  }, [state, setup]);
 
   // Subscribe to full output only while a drawer is open; unsubscribe on close/switch.
   useEffect(() => {
@@ -294,6 +300,46 @@ export function useCockpit(): CockpitStatus {
       },
       dismissRun: (n, note) => then(api.dismissRun(n, note)),
 
+      applyConfigFix: async (checkId, set) => {
+        const config = await api.getConfig();
+        // What the file said before, so the undo is a real restore rather than a
+        // guess: a key the operator's own file never set is cleared back out, not
+        // written with the default they were already getting.
+        const paths = Object.keys(set);
+        const previous: Record<string, unknown> = {};
+        const clear: string[] = [];
+        for (const path of paths) {
+          const entry = config.groups.flatMap((group) => group.entries).find((e) => e.path === path);
+          if (entry === undefined || entry.isDefault) clear.push(path);
+          else previous[path] = entry.value;
+        }
+        await api.saveConfig({ set, baseline: config.revision });
+        undoable.current.set(checkId, {
+          ...(Object.keys(previous).length > 0 ? { set: previous } : {}),
+          ...(clear.length > 0 ? { clear } : {}),
+        });
+        setAppliedFixes((rows) => [
+          ...rows.filter((row) => row.checkId !== checkId),
+          {
+            checkId,
+            summary: paths.map((path) => `${path} = ${JSON.stringify(set[path])}`).join(', '),
+            file: config.file,
+          },
+        ]);
+      },
+      undoConfigFix: async (checkId) => {
+        const edits = undoable.current.get(checkId);
+        if (edits === undefined) return;
+        const config = await api.getConfig();
+        await api.saveConfig({ ...edits, baseline: config.revision });
+        undoable.current.delete(checkId);
+        setAppliedFixes((rows) => rows.filter((row) => row.checkId !== checkId));
+      },
+      dismissConfigFix: (checkId) => {
+        undoable.current.delete(checkId);
+        setAppliedFixes((rows) => rows.filter((row) => row.checkId !== checkId));
+      },
+
       // A read, so no refetch: the work graph rides its own route precisely
       // because it must not be pulled along by the state poll.
       fetchWorkSubtree: (ref) => api.getWorkSubtree(ref),
@@ -312,6 +358,7 @@ export function useCockpit(): CockpitStatus {
       connected,
       demo: isDemo,
       setup,
+      appliedFixes,
       selected,
       liveOutput: liveOutput.current,
       tails: tails.current,

@@ -1,4 +1,13 @@
-import type { AppState, Escalation, HumanTask, PlanPart, Proposal } from '../types.js';
+import type {
+  AppState,
+  Escalation,
+  HumanTask,
+  PlanPart,
+  Proposal,
+  SetupCheck,
+  SetupPayload,
+  SetupVerdict,
+} from '../types.js';
 import { goalIssue, goalOfPr } from './goalPage.js';
 
 /**
@@ -8,7 +17,19 @@ import { goalIssue, goalOfPr } from './goalPage.js';
  * free text. Drawing them as one kind is how a surface ends up offering the
  * wrong control.
  */
+/**
+ * `config` and `config_gap` are the harness's own configuration, read by
+ * `src/setup/reading.ts` and merged in here rather than drawn on a surface of
+ * their own. Two kinds rather than one with a per-row tone: `KIND_TONE` is total
+ * over this union, which is what makes a new kind fail the typecheck instead of
+ * rendering untinted — and a row's severity has to be legible, since "your token
+ * expired" and "a gate is off" are not the same news. `config` is red (the fleet
+ * cannot work, or is spending money it should not), `config_gap` amber (it works,
+ * but something of yours is hiding work from it).
+ */
 export type NeedKind =
+  | 'config'
+  | 'config_gap'
   | 'recovery'
   | 'escalation'
   | 'permission'
@@ -45,7 +66,9 @@ export type NeedGroup = 'blocking' | 'yours';
 
 /**
  * What clicking a row opens. `goal` is the goal's page, where the ask is read
- * next to what it is about; `ask` is the ask on its own, for a row whose origin
+ * next to what it is about; `config` is the config page at the group owning the
+ * key a config row is about — the row body is a way *there*, and the fix beside it
+ * is a shortcut past it rather than the only road to it; `ask` is the ask on its own, for a row whose origin
  * is not a goal the console can draw — an escalation raised on a pull request, a
  * bench task with no ticket, a goal the world no longer carries. `null` is the
  * recovery hold alone, which is answered on the banner above the console.
@@ -55,7 +78,7 @@ export type NeedGroup = 'blocking' | 'yours';
  * instead draws a row whose click lands nowhere — which is indistinguishable, to
  * the operator, from a console that is broken.
  */
-type NeedDestination = 'goal' | 'ask' | null;
+type NeedDestination = 'goal' | 'ask' | 'config' | null;
 
 /** One row of the merged queue. */
 export interface NeedRow {
@@ -102,6 +125,31 @@ export interface NeedRow {
   /** Live plan parts this ask is holding. Zero when it genuinely holds nothing. */
   holding: number;
   raisedAt: string;
+  /**
+   * The configuration check behind a `config` / `config_gap` row, carrying its
+   * verdict, its remedy and the fix the rail draws a control for. Absent on every
+   * other kind — nothing else in the queue has a one-click answer, because an
+   * escalation's answer is words only a person has.
+   */
+  check?: SetupCheck;
+  /** Set once a fix on this row has been written, until the operator dismisses it. */
+  applied?: AppliedFix;
+}
+
+/**
+ * A config fix that has been written, held until the operator dismisses it.
+ *
+ * Deliberately not a verdict the reading could carry: the reading is a fresh look
+ * at the file every time, and this is a fact about *this cockpit session* — what
+ * you just did, so you can see it and take it back. Held in `useCockpit` beside
+ * the reading rather than in it. → `docs/spec/26-setup.md#applying-a-fix`
+ */
+export interface AppliedFix {
+  checkId: string;
+  /** `userId = AdamAwan`, in the settled strip's own words. */
+  summary: string;
+  /** The file it landed in, so the operator can go and look. */
+  file: string;
 }
 
 /**
@@ -198,6 +246,67 @@ function opensAt(goalRef: string | null, state: AppState): NeedDestination {
   return goalRef !== null && goalIssue(state, goalRef) !== undefined ? 'goal' : 'ask';
 }
 
+/**
+ * The harness's own configuration, as rows.
+ *
+ * **An `ok` or `unknown` check draws nothing.** `unknown` is not folded into
+ * `bad` here — it is the check saying it could not ask, and a surface that turned
+ * that into a row would state a fault the harness has no evidence for. Saying
+ * nothing is the honest rendering of "I could not tell", and it is what the empty
+ * rail already says in words.
+ *
+ * **Always `yours`, never `blocking`.** Tempting for a missing credential, since
+ * with one the fleet reads nothing at all — but the group is strictly about a
+ * *held slot*, and nothing here is parked on a worktree. Widening it for how much
+ * is stopped would cost the group the only thing it means.
+ *
+ * Null while no reading has been taken, which is also what a fully-configured
+ * harness looks like: the fetch failed, or every check is `ok`. Both draw nothing,
+ * and neither is a fault to put in front of an operator.
+ */
+const KIND_FOR_VERDICT: Record<SetupVerdict, NeedKind | null> = {
+  bad: 'config',
+  warn: 'config_gap',
+  // Neither draws a row, and `unknown` is not folded into `bad` on the way past:
+  // it is the check saying it could not ask, and a row for it would state a fault
+  // nothing has evidence for. Total over the verdict so a fourth one fails the
+  // typecheck here rather than silently drawing as a fault.
+  ok: null,
+  unknown: null,
+};
+
+function configRows(setup: SetupPayload | null, applied: readonly AppliedFix[]): NeedRow[] {
+  if (setup === null) return [];
+  return setup.checks
+    .filter((check) => {
+      if (KIND_FOR_VERDICT[check.verdict] !== null) return true;
+      // A check the operator just fixed keeps its row until they dismiss it. The
+      // reading re-fetches the moment the file lands, so without this the row a
+      // fix was applied from vanishes mid-click — and a write nobody saw is a
+      // write nobody can check. It settles instead, says what it wrote and where,
+      // and offers the undo.
+      return applied.some((entry) => entry.checkId === check.id);
+    })
+    .map((check) => ({
+      id: `setup:${check.id}`,
+      kind: KIND_FOR_VERDICT[check.verdict] ?? 'config_gap',
+      group: 'yours' as const,
+      title: check.detail,
+      goalRef: null,
+      originRef: null,
+      opens: 'config' as const,
+      agentId: null,
+      agentLabel: null,
+      holding: 0,
+      // The reading is fetched, not stamped: there is no instant at which a
+      // credential started being missing. An empty string already draws no age,
+      // which is the honest answer rather than "now" on every re-fetch.
+      raisedAt: '',
+      check,
+      applied: applied.find((entry) => entry.checkId === check.id),
+    }));
+}
+
 const GROUP_RANK: Record<NeedGroup, number> = { blocking: 0, yours: 1 };
 
 /**
@@ -205,10 +314,16 @@ const GROUP_RANK: Record<NeedGroup, number> = { blocking: 0, yours: 1 };
  * at all, so every other row is waiting on it whether or not it says so. Then
  * blocking before yours, then whatever holds the most work, then oldest first.
  */
-export function buildNeedsYou(state: AppState): NeedRow[] {
+export function buildNeedsYou(
+  state: AppState,
+  setup: SetupPayload | null = null,
+  applied: readonly AppliedFix[] = [],
+): NeedRow[] {
   const parts = state.planParts ?? [];
   const proposals = state.proposals ?? [];
   const rows: NeedRow[] = [];
+
+  rows.push(...configRows(setup, applied));
 
   if ((state.recovery ?? []).length > 0) {
     rows.push({

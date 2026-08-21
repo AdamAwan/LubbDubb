@@ -25,6 +25,7 @@ function probes(over: Partial<SetupProbes> = {}): SetupProbes {
     remoteHead: () => Promise.resolve('main'),
     agentVersion: () => Promise.resolve('2.1.4'),
     viewerLogin: () => Promise.resolve('adamawan'),
+    installRoot: () => '/srv/lubbdubb',
     env: () => undefined,
     ...over,
   };
@@ -80,8 +81,15 @@ test('the two answers derive the provider, the target and the branch without bei
   assert.equal(resolved.defaultBranch?.name, 'main');
   assert.equal(resolved.identity.userId, 'adamawan');
   assert.equal(resolved.identity.confidence, 'confirmed');
-  assert.deepEqual(resolved.writes.integrations, { sourceControl: 'github', issues: 'github' });
-  assert.deepEqual(resolved.writes.github, { owner: 'acme', repo: 'app' });
+  // Leaf paths, never nested objects. `POST /api/config` validates every key
+  // against `CONFIG_FIELDS`, which holds leaves only, so an `integrations` here is
+  // refused at the preview with the operator's whole answer one field away from
+  // being written — see `test/setupWrites.test.ts`, which holds this against the
+  // registry rather than against a literal.
+  assert.equal(resolved.writes['integrations.sourceControl'], 'github');
+  assert.equal(resolved.writes['integrations.issues'], 'github');
+  assert.equal(resolved.writes['github.owner'], 'acme');
+  assert.equal(resolved.writes['github.repo'], 'app');
   // Setup's starting posture, not the fleet's default of three.
   assert.equal(resolved.writes.maxConcurrentAgents, 1);
   assert.equal(resolved.writes.agentMode, 'stream');
@@ -127,11 +135,9 @@ test('the reading says the harness is on the mock, and stops saying so once it i
     probes: probes(),
     configFile: join(mkdtempSync(join(tmpdir(), 'lubbdubb-setup-')), 'lubbdubb.config.json'),
   });
-  assert.equal(onMock.pointed, false);
-  assert.equal(onMock.checks.find((c) => c.id === 'pointed')?.verdict, 'warn');
+  assert.equal(onMock.checks.find((c) => c.id === 'pointed')?.verdict, 'bad');
   // The fake provider needs no credential, so that check must not go red for it.
   assert.equal(onMock.checks.find((c) => c.id === 'credential')?.verdict, 'ok');
-  assert.ok(onMock.outstanding > 0);
 });
 
 test('a credential the environment does not hold is bad, and the fleet’s own key is bad for a different reason', async () => {

@@ -3113,12 +3113,16 @@ function demoSetupReading(): SetupPayload {
         },
       ];
   return {
-    pointed: demoSetupWritten,
     configFile: '/Users/you/code/LubbDubb/lubbdubb.config.json',
     configFileExists: demoSetupWritten,
-    prefill: { email: 'you@example.com', repoRoot: '/Users/you/code/LubbDubb' },
+    prefill: {
+      email: 'you@example.com',
+      repoRoot: '/Users/you/code/LubbDubb',
+      // The demo's harness and the repository it works on are two directories, as
+      // they are in every deployment that is not dogfooding.
+      repoRootIsSelf: false,
+    },
     checks,
-    outstanding: checks.filter((check) => check.verdict !== 'ok').length,
   };
 }
 
@@ -3130,6 +3134,7 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
   if (!found) {
     return {
       repoRoot: answers.repoRoot,
+      repoRootIsSelf: false,
       originUrl: null,
       isRepo: false,
       target: null,
@@ -3149,6 +3154,7 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
   const login = answers.email.split('@')[0] || 'you';
   return {
     repoRoot: DEMO_REPO_ROOT,
+    repoRootIsSelf: false,
     originUrl: DEMO_ORIGIN,
     isRepo: true,
     target: { provider: 'github', parts: ['example', 'markdown-magpie'], url: DEMO_ORIGIN },
@@ -3172,9 +3178,13 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
       defaultBranch: 'main',
       userId: login,
       // Written, unlike `labelPrefix` and the rest below, because the project
-      // file does not select a provider — only the remote does.
-      integrations: { sourceControl: 'github', issues: 'github' },
-      github: { owner: 'example', repo: 'markdown-magpie' },
+      // file does not select a provider — only the remote does. Leaf paths, as
+      // the real resolver emits them: `POST /api/config` validates every key
+      // against a registry of leaves, so a nested object here would be refused.
+      'integrations.sourceControl': 'github',
+      'integrations.issues': 'github',
+      'github.owner': 'example',
+      'github.repo': 'markdown-magpie',
     },
   };
 }
