@@ -4,13 +4,16 @@ import type { IntegrationSelection } from './integrations/integration.js';
 import { DEFAULT_CONTAINER_TYPES } from './issueRelations.js';
 import { DEFAULT_PLANNING, type PlanningPolicy } from './plans/planning.js';
 import { DEFAULT_BURN, validateBurnPolicy, type BurnPolicy } from './spendBurn.js';
+import { DEFAULT_RUNWAY, validateRunwayPolicy, type RunwayPolicy } from './supply/runway.js';
 import type { SelfUpdatePolicy } from './selfUpdate/upgradePlan.js';
 import { DEFAULT_VALIDATION, type ValidationPolicy } from './validation/policy.js';
+import { DEFAULT_LOCAL_RUN, type LocalRunPolicy } from './localRun/policy.js';
 import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
 import { validateAgentModels, type AgentModels } from './agents/modelPolicy.js';
 import { DEFAULT_FILING_TYPES } from './ticketTypes.js';
 import type { PetPolicy } from './pets/keeper.js';
+import { validateEnvironments, type EnvironmentConfig } from './environments/policy.js';
 
 /**
  * Central configuration. Everything the operator can tune lives here.
@@ -187,12 +190,12 @@ export interface Config {
    */
   issueBugType?: string;
   /**
-   * The planning funnel for multi-PR issues. **On by default**: every watched open
-   * issue gets a planning agent before any implementation work, and its verdict —
-   * one PR or several — is put to you before any agent is spent (`requireApproval`). Off
-   * leaves it out entirely — rule `issue-pickup` un-narrowed, no planner ever dispatched,
-   * behaviour exactly what it is without plans. Deep-merged, so one field can be
-   * set alone. Only the `rule` dispatcher implements the funnel.
+   * The planning funnel for multi-PR issues. Every watched open issue gets a
+   * planning agent before any implementation work, and its verdict — one PR or
+   * several — is put to you before any agent is spent. Neither of those is a
+   * choice: what is left here is how fast the funnel runs, not whether it does.
+   * Deep-merged, so one field can be set alone. Only the `rule` dispatcher
+   * implements the funnel.
    */
   planning: PlanningPolicy;
   /**
@@ -203,6 +206,14 @@ export interface Config {
    * one field can be set alone.
    */
   spendBurn: BurnPolicy;
+  /**
+   * The runway watch (`src/supply/runway.ts`) — how thin the queue of work may
+   * get before somebody is told the fleet is about to run out of things to do.
+   * **On by default**, on the burn watch's terms: it spends no agent and gates
+   * nothing, filing a `supply` obligation and settling it when the queue
+   * recovers. Deep-merged, so one field can be set alone.
+   */
+  runway: RunwayPolicy;
   /**
    * The vivarium (`src/pets/`) — creatures that hatch from what the operator does,
    * fed on beats converted from what the fleet has already spent.
@@ -245,6 +256,13 @@ export interface Config {
    */
   validation: ValidationPolicy;
   /**
+   * The local run (`src/localRun/`) — the one dev environment on the operator's
+   * machine, which goal's code is in it, and how it is brought up. Deep-merged.
+   * With `instruction` empty nothing is startable and the cockpit says so, which
+   * is the whole of the off switch.
+   */
+  localRun: LocalRunPolicy;
+  /**
    * How far back a provider looks for pull requests that have *left* the open set,
    * so a merged or abandoned PR is observed rather than inferred from its
    * disappearance. Feeds `WorldSnapshot.closedPullRequests`, which drives the
@@ -257,6 +275,30 @@ export interface Config {
    * every consumer falls back to the older "absence means merged" reading.
    */
   closedPrWindowMs: number;
+  /**
+   * The environments a goal's landed work travels to after it merges, and how to
+   * ask each one whether it has a given commit.
+   *
+   * **Empty by default, and empty turns the whole feature off** — no probes run and
+   * the cockpit draws no environment row at all, rather than a row of question marks
+   * on every deployment that never configured one.
+   *
+   * `fileOnly` in {@link CONFIG_FIELDS}, for `whitelistedApprovals`' reason: each
+   * entry is a shell command the harness runs on a schedule, which is a thing to
+   * write deliberately in a file rather than to fill in beside twenty other rows.
+   * → `docs/spec/24-environments.md#configuring-an-environment`
+   */
+  environments: EnvironmentConfig[];
+  /**
+   * How often a landing that has not been confirmed in an environment is asked
+   * about again. Every probe is a process spawn, so this is what keeps the cost of
+   * the feature off the heartbeat; a confirmed landing is never re-asked at all.
+   *
+   * It is also the precision of every "arrived at" the cockpit shows, which is why
+   * it defaults to five minutes rather than something larger: an interval nobody
+   * would call fresh makes a timestamp nobody should quote.
+   */
+  environmentProbeIntervalMs: number;
   /**
    * Per-check CI policy: what the harness does about *which* check went red
    * (`src/ci/ciPolicy.ts`). Rules are ordered and matched by glob against the
@@ -439,21 +481,6 @@ export interface Config {
   promptTemplatesDir: string;
   /** Root under which the pool of worktree slot directories lives. */
   worktreeRoot: string;
-  /**
-   * How many worktree directories the pool may hold at once (issue #352).
-   *
-   * Unset — the default — derives it from the **live** agent cap plus slack, so the
-   * cap raised through `POST /api/control` raises the pool's ceiling with it. Set it
-   * only to pin that: a deployment on a small disk wanting fewer full checkouts.
-   * Pinning it *below* the cap is a real choice with a real cost — the bound and the
-   * cap are two limits over one fleet and the lower one wins.
-   *
-   * It is a **hard bound**, and exhaustion rejects the dispatch rather than blocking
-   * it — the executor already settles a rejected dispatch and the next cycle tries
-   * again, whereas waiting on a directory would hold the pulse. Growing the ceiling
-   * mints nothing: a slot is created only when a dispatch needs one.
-   */
-  worktreePoolSize?: number;
   /** Root under which desk (no-code) scratch dirs are created. */
   deskRoot: string;
   /**
@@ -486,6 +513,20 @@ export interface Config {
    * attachments already make.
    */
   validationRoot: string;
+  /**
+   * The one checkout the local run's application is started in — a real worktree,
+   * kept warm and **deliberately outside `worktreeRoot`**.
+   *
+   * Outside because the pool's `slots()` counts every *registered* worktree under
+   * its root whatever the directory is called, so a preview checkout in there
+   * would count toward the bound and be handed to an agent, wiped
+   * `git clean -ffdx` on the way. Which is also why this is not a pool slot in the
+   * first place: a slot handed a different ref loses its ignored files, so every
+   * swap between goals would pay a cold dependency install — the opposite of a
+   * checkout that is ready to go.
+   * → [09](docs/spec/09-execution.md#the-checkout-a-local-run-uses)
+   */
+  localRunRoot: string;
   /** The git repo the harness operates on (worktrees are cut from here). */
   repoRoot: string;
   /**
@@ -599,13 +640,18 @@ const DEFAULTS: Config = {
   // for an *omitted* policy is a separate answer (off) and lives with the rules.
   planning: DEFAULT_PLANNING,
   spendBurn: DEFAULT_BURN,
+  runway: DEFAULT_RUNWAY,
   // One switch and no rates. Everything a pet costs lives in `src/pets/rules.ts`
   // as a constant, because each of those numbers was also a way of writing a pet
   // into existence without doing anything.
   pets: { enabled: true, visible: true },
   selfUpdate: { enabled: true, remote: 'origin', branch: 'main', checkIntervalMs: 60 * 60 * 1000 },
   validation: DEFAULT_VALIDATION,
+  localRun: DEFAULT_LOCAL_RUN,
   closedPrWindowMs: 6 * 60 * 60 * 1000,
+  // Empty is the off switch, not an empty list of something switched on.
+  environments: [],
+  environmentProbeIntervalMs: 5 * 60 * 1000,
   ci: { checks: [] },
   upNextOverrideTtlMs: 7 * 24 * 60 * 60 * 1000,
   agentMode: 'stream',
@@ -637,6 +683,7 @@ const DEFAULTS: Config = {
   deskRoot: '.lubbdubb/desk',
   attachmentRoot: '.lubbdubb/attachments',
   validationRoot: '.lubbdubb/validation',
+  localRunRoot: '.lubbdubb/local-run',
   repoRoot: process.cwd(),
   defaultBranch: 'main',
   dbPath: '.lubbdubb/lubbdubb.sqlite',
@@ -678,10 +725,60 @@ function resolveRootPaths(merged: Config): void {
   // And validation resources for both of those reasons at once: an agent's prompt
   // names the absolute path, and the launch grants read access to it.
   merged.validationRoot = resolve(merged.repoRoot, merged.validationRoot);
+  // The local run's checkout is cut from `repoRoot`, so it resolves against it for
+  // `worktreeRoot`'s reason exactly — and must land somewhere that is not under
+  // `worktreeRoot`, or the pool counts it as one of its own slots.
+  merged.localRunRoot = resolve(merged.repoRoot, merged.localRunRoot);
 
   // Prompt overrides belong to the repo being operated on, like the worktree
   // roots above — resolve relative to repoRoot, honour an absolute override.
   merged.promptTemplatesDir = resolve(merged.repoRoot, merged.promptTemplatesDir);
+}
+
+/**
+ * Defaults plus one layer, deep-merged and path-resolved — everything
+ * {@link loadConfig} does, short of the refusals.
+ *
+ * Its own function because the running-config viewer needs a **baseline**: the
+ * config an operator would be running if their own file said nothing — which,
+ * with a project layer in play, is the defaults plus whatever their team's file
+ * sets. That baseline must not throw, and a project layer read on its own can
+ * fail a check the operator's layer above it settles. So the refusals stay in
+ * {@link loadConfig}, where a layer is only ever judged with everything above it
+ * already folded in.
+ */
+function mergeConfig(overrides: Partial<Config> = {}): Config {
+  const merged = { ...DEFAULTS, ...overrides };
+  resolveRootPaths(merged);
+  merged.integrations = { ...DEFAULTS.integrations, ...overrides.integrations };
+  merged.planning = { ...DEFAULTS.planning, ...overrides.planning };
+  merged.pets = { ...DEFAULTS.pets, ...overrides.pets };
+  merged.spendBurn = { ...DEFAULTS.spendBurn, ...overrides.spendBurn };
+  merged.runway = { ...DEFAULTS.runway, ...overrides.runway };
+  merged.selfUpdate = { ...DEFAULTS.selfUpdate, ...overrides.selfUpdate };
+  merged.validation = { ...DEFAULTS.validation, ...overrides.validation };
+  merged.localRun = { ...DEFAULTS.localRun, ...overrides.localRun };
+  merged.auth = { ...DEFAULTS.auth, ...overrides.auth };
+  // The CI check rules are an ordered list, so this is a replace and not a merge:
+  // there is no sensible way to deep-merge two orderings, and a caller that sets
+  // `ci` means the list it wrote.
+  merged.ci = { checks: overrides.ci?.checks ?? DEFAULTS.ci.checks };
+  // A list, so it replaces rather than merges, for `ci.checks`' reason. The
+  // fallback is not defensive: an override naming the key with nothing under it
+  // means "no environments".
+  merged.environments = overrides.environments ?? DEFAULTS.environments;
+  return merged;
+}
+
+/**
+ * The baseline an operator's own file is read against: the built-in defaults
+ * with the **project** layer folded in, so a value their team set reads as
+ * inherited rather than as theirs — and, since clearing a key from their file
+ * falls back to exactly this, so the cockpit's "reset" tells the truth about
+ * what it would leave behind.
+ */
+export function baselineConfig(project: Partial<Config> = {}): Config {
+  return mergeConfig(project);
 }
 
 /**
@@ -693,9 +790,7 @@ function resolveRootPaths(merged: Config): void {
  * raw literals would make four path fields read as chosen everywhere.
  */
 export function defaultConfig(): Config {
-  const base: Config = { ...DEFAULTS };
-  resolveRootPaths(base);
-  return base;
+  return mergeConfig();
 }
 
 /**
@@ -739,6 +834,10 @@ const REMOVED_KEYS: Readonly<Record<string, string>> = {
  */
 const RETIRED_KEYS: Readonly<Record<string, string>> = {
   'planning.enabled': 'the planning funnel is always on — every goal is planned',
+  'planning.requireApproval':
+    'a plan is always put to you before anything is scheduled from it — the undo for a plan that started itself is a replan, which is strictly worse than not starting',
+  worktreePoolSize:
+    'the worktree pool is the live agent cap plus slack, so "maxConcurrentAgents" is the fleet\'s one size knob — a second bound could only sit above the cap (disk nothing can lease) or below it (the fleet\'s real limit, with nothing saying so)',
   'validation.enabled': 'validation plans are always on',
   'validation.desktop':
     'the desktop channel is always on — the cockpit offers a desktop prompt on every unrun check, so a harness that was not listening was a dead end with nothing to say so',
@@ -788,37 +887,54 @@ function refuseRemovedKeys(fromFile: object, filePath: string): void {
   }
 }
 
+/** The nested policy blocks, which merge field by field where everything else replaces. */
+const DEEP_MERGED_BLOCKS = [
+  'integrations',
+  'planning',
+  'pets',
+  'spendBurn',
+  'runway',
+  'selfUpdate',
+  'validation',
+  'localRun',
+  'auth',
+] as const;
+
 /**
  * Deep-merge one config layer over another, the way {@link loadConfig} merges a
  * layer over {@link DEFAULTS}: the nested policy blocks merge field by field,
  * everything else is last-writer-wins.
  *
- * Only {@link loadDeploymentConfig} needs this — it has three layers (file, env,
- * explicit) to fold into the one `overrides` argument `loadConfig` takes, and a
- * shallow fold would let an explicit `{planning: {enabled: true}}` drop the
- * `planning` fields the operator's file set.
+ * Only {@link deploymentLayers} needs this — it has four layers (project, file,
+ * env, explicit) to fold into the one `overrides` argument `loadConfig` takes,
+ * and a shallow fold would let an explicit `{planning: {enabled: true}}` drop the
+ * `planning` fields the operator's file set. It is what makes the project layer
+ * worth having on a nested block: a team's `planning` and an operator's are one
+ * merged block, not whichever of the two files was read last.
  */
 function mergeLayers(lower: Partial<Config>, upper: Partial<Config>): Partial<Config> {
   const merged: Partial<Config> = { ...lower, ...upper };
-  if (lower.integrations ?? upper.integrations)
-    merged.integrations = { ...DEFAULTS.integrations, ...lower.integrations, ...upper.integrations };
-  if (lower.planning ?? upper.planning)
-    merged.planning = { ...DEFAULTS.planning, ...lower.planning, ...upper.planning };
-  if (lower.pets ?? upper.pets) merged.pets = { ...DEFAULTS.pets, ...lower.pets, ...upper.pets };
-  if (lower.spendBurn ?? upper.spendBurn)
-    merged.spendBurn = { ...DEFAULTS.spendBurn, ...lower.spendBurn, ...upper.spendBurn };
-  if (lower.selfUpdate ?? upper.selfUpdate)
-    merged.selfUpdate = { ...DEFAULTS.selfUpdate, ...lower.selfUpdate, ...upper.selfUpdate };
-  if (lower.validation ?? upper.validation)
-    merged.validation = { ...DEFAULTS.validation, ...lower.validation, ...upper.validation };
-  if (lower.auth ?? upper.auth) merged.auth = { ...DEFAULTS.auth, ...lower.auth, ...upper.auth };
+  for (const key of DEEP_MERGED_BLOCKS) {
+    if (lower[key] === undefined && upper[key] === undefined) continue;
+    // What each layer *said*, and nothing else. The defaults are folded once, at
+    // the bottom, by `mergeConfig` — folding them here as well would make every
+    // layer **dense**: each block arriving with all of its fields present, the
+    // ones the file set and the defaults for the rest. And a dense layer does not
+    // merge, it replaces. With two layers that was invisible, since the only thing
+    // underneath was the defaults it had copied. With three it is the whole
+    // feature failing silently: an operator's `{"planning": {"gitFetchIntervalMs":
+    // 0}}` would arrive carrying the default part cap and shadow the one their
+    // team set, and the harness would run a policy no file on the machine states.
+    (merged as Record<string, unknown>)[key] = { ...lower[key], ...upper[key] };
+  }
   return merged;
 }
 
 /**
- * The config a *deployment* runs on: {@link loadConfig} plus the two ambient
- * layers — a `lubbdubb.config.json` in the launch directory and the handful of
- * env overrides — folded in underneath the explicit ones.
+ * The config a *deployment* runs on: {@link loadConfig} plus the three ambient
+ * layers — the targeted project's `lubbdubb.project.json`, a
+ * `lubbdubb.config.json` in the launch directory, and the handful of env
+ * overrides — folded in underneath the explicit ones.
  *
  * **This, not `loadConfig`, is what a process entry point calls.** The ambient
  * layers live here rather than in `loadConfig` because they make the config a
@@ -831,12 +947,83 @@ function mergeLayers(lower: Partial<Config>, upper: Partial<Config>): Partial<Co
 export function loadDeploymentConfig(overrides: Partial<Config> = {}): Config {
   const filePath = configFilePath();
   const fromFile = existsSync(filePath) ? readFileLayer(readFileSync(filePath, 'utf8'), filePath) : {};
-  return loadConfig(mergeLayers(mergeLayers(fromFile, envLayer()), overrides));
+  return loadConfig(deploymentLayers(fromFile, overrides));
 }
 
 /** Where a deployment's config file lives. One answer, so nothing looks elsewhere. */
 export function configFilePath(): string {
   return resolve(process.cwd(), 'lubbdubb.config.json');
+}
+
+/**
+ * Where the **targeted project's** shared config lives: the root of the repo the
+ * harness works on, where a contributor would look for it — not inside
+ * `.lubbdubb/`, the directory holding worktrees, the database and attachments,
+ * which a team gitignores. This file is the opposite: it is committed, and it is
+ * how a team shares one CI policy and one set of environments.
+ *
+ * A different name from `lubbdubb.config.json` and not the same file in a
+ * different place, because the two collide the moment a harness is pointed at its
+ * own checkout — `repoRoot` is `process.cwd()` by default, which is the single
+ * most common deployment there is.
+ */
+export function projectConfigFilePath(repoRoot: string): string {
+  return resolve(repoRoot, 'lubbdubb.project.json');
+}
+
+/**
+ * The layer the targeted project contributes, or nothing.
+ *
+ * It gets the same reading as an operator's own file — a removed key is refused
+ * by name, a retired one warns and is dropped — because it is the same kind of
+ * file, and because the alternative is a team's config being held to a different
+ * standard than the one each member's own is.
+ *
+ * One key is refused here that is legal there: `repoRoot`. The file was found
+ * *because* `repoRoot` already resolved, so a value here could only describe the
+ * search that found it — honouring it would mean re-reading the file from
+ * somewhere else, and ignoring it would leave the fleet pointed at a repository
+ * the file in front of the operator disagrees with. Every other key is fair game;
+ * a personal file simply beats it.
+ *
+ * Takes the **path** rather than the repo root, so that the one thing a caller
+ * can be handed — `System.projectConfigFile` — is the one thing that decides
+ * which file is read. Deriving it here from a running config as well would leave
+ * a test that injected the path reading one file and reporting another.
+ */
+export function projectConfigLayer(filePath: string): Partial<Config> {
+  if (!existsSync(filePath)) return {};
+  const layer = readFileLayer(readFileSync(filePath, 'utf8'), filePath);
+  if (Object.hasOwn(layer, 'repoRoot')) {
+    throw new Error(
+      `Refusing to start: ${filePath} sets "repoRoot", which is the one key a project config cannot set — ` +
+        `this file was read because repoRoot had already resolved, so a value here could only describe the ` +
+        `search that found it. Point the harness with lubbdubb.config.json or LUBBDUBB_REPO_ROOT instead, and delete the key.`,
+    );
+  }
+  return layer;
+}
+
+/**
+ * The four ambient layers a deployment folds, in one place: the targeted
+ * project's shared config underneath the operator's own file, the environment,
+ * and the caller's explicit overrides.
+ *
+ * The order the project layer is resolved in is the whole of it. `repoRoot` is
+ * settled from the operator's layers **alone** and before anything is read from
+ * the project, because the project's file lives at `repoRoot` — a layer cannot be
+ * consulted about where to find itself. That is also why {@link projectConfigLayer}
+ * refuses the key rather than merging it into nothing.
+ *
+ * Shared by {@link loadDeploymentConfig} and {@link loadConfigFromText} rather
+ * than written twice, for the reason {@link envLayer} is its own function: two
+ * copies of a layering is how a cockpit comes to validate a save against a
+ * different config from the one the next boot will build.
+ */
+function deploymentLayers(fromFile: Partial<Config>, overrides: Partial<Config>): Partial<Config> {
+  const operator = mergeLayers(mergeLayers(fromFile, envLayer()), overrides);
+  const repoRoot = resolve(process.cwd(), operator.repoRoot ?? DEFAULTS.repoRoot);
+  return mergeLayers(projectConfigLayer(projectConfigFilePath(repoRoot)), operator);
 }
 
 /**
@@ -874,8 +1061,11 @@ function readFileLayer(text: string, filePath: string): Partial<Config> {
 }
 
 /**
- * The config a given file text *would* produce on this machine — the same three
- * layers `loadDeploymentConfig` folds, from text rather than from disk.
+ * The config a given file text *would* produce on this machine — the same layers
+ * `loadDeploymentConfig` folds, from text rather than from disk. The project
+ * layer is read from the `repoRoot` the *candidate* text resolves to, so a save
+ * that repoints the harness is validated against the config it would actually
+ * boot on.
  *
  * This is how a save is validated: build the config the candidate file would
  * produce and let it throw. That reuses every check `loadConfig` already runs —
@@ -884,7 +1074,7 @@ function readFileLayer(text: string, filePath: string): Partial<Config> {
  * write a config the next boot would reject.
  */
 export function loadConfigFromText(text: string, filePath = configFilePath()): Config {
-  return loadConfig(mergeLayers(readFileLayer(text, filePath), envLayer()));
+  return loadConfig(deploymentLayers(readFileLayer(text, filePath), {}));
 }
 
 /**
@@ -894,35 +1084,11 @@ export function loadConfigFromText(text: string, filePath = configFilePath()): C
  * adds the operator's file and environment on top.
  */
 export function loadConfig(overrides: Partial<Config> = {}): Config {
-  const merged = { ...DEFAULTS, ...overrides };
+  // Defaults, the deep merges and the path resolution — every nested policy block
+  // merged field by field, so `{"spendBurn": {"multiple": 6}}` keeps the default
+  // floor rather than leaving it undefined. What is left here is the judging.
+  const merged = mergeConfig(overrides);
 
-  resolveRootPaths(merged);
-
-  // integrations is a nested per-capability map: deep-merge it, so an override
-  // can swap just one capability's provider without having to re-list the
-  // defaults for the others.
-  merged.integrations = { ...DEFAULTS.integrations, ...overrides.integrations };
-
-  // planning is nested too — deep-merge so `{"requireApproval": true}` alone keeps
-  // the default part-concurrency cap instead of leaving it undefined.
-  merged.planning = { ...DEFAULTS.planning, ...overrides.planning };
-  // And the burn watch, so `{"spendBurn": {"multiple": 6}}` keeps the default
-  // floor and run minimum rather than leaving them undefined — which would read
-  // as a watch that fires on any run above six times nothing.
-  merged.spendBurn = { ...DEFAULTS.spendBurn, ...overrides.spendBurn };
-  // And the self-update watch, so `{"selfUpdate": {"enabled": false}}` keeps the
-  // remote and branch rather than blanking them — a disabled watch that is later
-  // re-enabled must not come back pointed at nothing.
-  merged.selfUpdate = { ...DEFAULTS.selfUpdate, ...overrides.selfUpdate };
-  merged.validation = { ...DEFAULTS.validation, ...overrides.validation };
-
-  // And for auth, so `{"auth": {"tokenFile": "..."}}` doesn't silently disable it.
-  merged.auth = { ...DEFAULTS.auth, ...overrides.auth };
-
-  // The CI check rules are an ordered list, so this is a replace and not a merge:
-  // there is no sensible way to deep-merge two orderings, and a caller that sets
-  // `ci` means the list it wrote.
-  merged.ci = { checks: overrides.ci?.checks ?? DEFAULTS.ci.checks };
   validateCiPolicy(merged.ci);
 
   // A typo'd policy kind would otherwise be silently ignored, and the operator
@@ -938,6 +1104,16 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   // minimum of no runs, leaves a watch that is on, files constantly and teaches
   // the operator to stop reading it.
   validateBurnPolicy(merged.spendBurn);
+
+  // And the runway watch, for the burn watch's reason with one addition: a clear
+  // threshold at or below the warn threshold does not fail, it oscillates — a
+  // notice filed and settled on alternate pulses, which is the one outcome worse
+  // than never warning at all.
+  validateRunwayPolicy(merged.runway);
+
+  // A nameless entry, a duplicate name or an empty command each turn the feature
+  // into a confident wrong answer rather than an error.
+  validateEnvironments(merged.environments);
 
   // The one configuration that is never what anyone means. Turning auth off is a
   // supported local choice (it is how the test suite runs); binding a routable

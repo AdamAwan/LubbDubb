@@ -55,11 +55,12 @@ type LiveArm = (next: Config, deps: LiveConfigDeps) => void;
  *
  * Deliberately short. Every arm is a second place a value lives and so a place
  * two copies can disagree; a key nobody changes twice a year is better left
- * restart-only than made live for the sake of it. Four earn it: the cap because
+ * restart-only than made live for the sake of it. Five earn it: the cap because
  * an operator changes it while watching the fleet, the lesson cap because it is
  * already read at every launch, the CI policy because it is the one rule set an
- * operator tunes against a red pull request in front of them, and the state
- * colours because they are picked while looking at the chips they change.
+ * operator tunes against a red pull request in front of them, the state
+ * colours because they are picked while looking at the chips they change, and the
+ * local run's instruction because it is corrected while a start is failing.
  */
 const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
   // Already live by construction: `RuntimeControl` is read by reference each
@@ -82,6 +83,18 @@ const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
   // this could disagree with.
   issueStateColours: (next, deps) => {
     deps.running.issueStateColours = next.issueStateColours;
+  },
+  // The runner reads `config.localRun` by reference at every start, and the
+  // snapshot reads it at every poll — so assigning the object onto the running
+  // config *is* the arm. Live because this is the one field an operator edits
+  // while a start has just failed in front of them: restart-only here would mean
+  // bouncing the harness to correct a typo in a command, with the fleet's agents
+  // going down with it. The whole reason it is a config key and not a prompt.
+  'localRun.instruction': (next, deps) => {
+    deps.running.localRun = next.localRun;
+  },
+  'localRun.url': (next, deps) => {
+    deps.running.localRun = next.localRun;
   },
   // `PetKeeper` closed over `config.pets` at construction and reads
   // `policy.visible` on every `state()`, so the field is assigned onto the object

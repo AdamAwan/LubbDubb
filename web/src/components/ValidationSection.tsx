@@ -5,6 +5,20 @@ import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { renderMarkdown } from './markdown.js';
 
 /**
+ * Whether a resource's absence is worth drawing.
+ *
+ * `present` is the file fact — `existsSync` on the path the name resolves to
+ * under the goal's validation directory — and for an `access` resource there was
+ * never going to be a file: it names a login or an environment, which is a
+ * precondition the check's own `do` carries. Warned about, it is a chip that says
+ * "missing" on every draw for the life of the goal, and a sheet whose warnings
+ * mean nothing is a sheet whose real one is not read.
+ */
+function isMissingFile(resource: ValidationResourceView): boolean {
+  return !resource.present && resource.kind !== 'access';
+}
+
+/**
  * The validation plan: how anyone checks the *goal* was met, and what anybody
  * concluded from running each check.
  *
@@ -106,12 +120,12 @@ export function ValidationSection({
           {resources.map((resource) => (
             <span
               key={resource.name}
-              className={`chip small${resource.present ? '' : ' warn'}`}
+              className={`chip small${isMissingFile(resource) ? ' warn' : ''}`}
               title={`${resource.path}${resource.note === null ? '' : `\n\n${resource.note}`}`}
             >
               {resource.name}
               {resource.kind !== null && <i className="k">{resource.kind}</i>}
-              {!resource.present && <i className="k">missing</i>}
+              {isMissingFile(resource) && <i className="k">missing</i>}
             </span>
           ))}
         </div>
@@ -396,11 +410,11 @@ function CheckBlock({
                 {resources.map((resource) => (
                   <span
                     key={resource.name}
-                    className={`chip small${resource.present ? '' : ' warn'}`}
+                    className={`chip small${isMissingFile(resource) ? ' warn' : ''}`}
                     title={resource.path}
                   >
                     {resource.name}
-                    {!resource.present && <i className="k">missing</i>}
+                    {isMissingFile(resource) && <i className="k">missing</i>}
                   </span>
                 ))}
               </div>

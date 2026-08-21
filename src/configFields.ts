@@ -17,7 +17,16 @@ import { defaultConfig, type Config } from './config.js';
  * and wrong the day someone hoists `config.heartbeatIntervalMs` into a const,
  * with nothing red. → `docs/spec/02-configuration.md#liveness`
  */
-export type ConfigFieldType = 'number' | 'boolean' | 'string' | 'enum' | 'stringList' | 'json' | 'colourMap';
+/**
+ * `text` is `string` with room to breathe — the same value, drawn as a textarea.
+ *
+ * Its own member rather than a flag on `string` because the form switches on this
+ * union and a widget hint that some string fields ignore is a third state to keep
+ * straight. What earns it: `localRun.instruction` is several sentences an operator
+ * writes while trying to get their environment up, and a single-line input for it
+ * is a field they cannot read back what they typed into.
+ */
+export type ConfigFieldType = 'number' | 'boolean' | 'string' | 'text' | 'enum' | 'stringList' | 'json' | 'colourMap';
 
 /**
  * How far an operator has to reach to edit a field.
@@ -31,7 +40,7 @@ export type ConfigFieldType = 'number' | 'boolean' | 'string' | 'enum' | 'string
 export type ConfigFieldAccess = 'plain' | 'advanced' | 'fileOnly';
 
 interface ConfigField {
-  /** Dotted path into the config object, e.g. `planning.requireApproval`. */
+  /** Dotted path into the config object, e.g. `planning.maxConcurrentPartsPerIssue`. */
   path: string;
   type: ConfigFieldType;
   /** The members, for an `enum`. */
@@ -85,6 +94,23 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     ms: true,
     access: 'plain',
     why: 'How far back a provider looks for pull requests that have left the open set.',
+  },
+  {
+    path: 'environments',
+    type: 'json',
+    // `fileOnly` for `whitelistedApprovals`' reason and not because the shape is
+    // awkward: each entry is a shell command the harness runs on a schedule, which
+    // is a thing to write deliberately in a file rather than to fill in beside
+    // twenty other rows.
+    access: 'fileOnly',
+    why: 'Where landed work travels, and the command that says whether a commit has got there.',
+  },
+  {
+    path: 'environmentProbeIntervalMs',
+    type: 'number',
+    ms: true,
+    access: 'plain',
+    why: 'How often an unconfirmed landing is asked about again — and the precision of every “arrived at”.',
   },
   {
     path: 'upNextOverrideTtlMs',
@@ -307,12 +333,6 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How many parts of one plan may have agents at once.',
   },
   {
-    path: 'planning.requireApproval',
-    type: 'boolean',
-    access: 'plain',
-    why: 'Put a planner’s verdict to you before anything is scheduled from it.',
-  },
-  {
     path: 'planning.gitFetchIntervalMs',
     type: 'number',
     ms: true,
@@ -324,6 +344,18 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     type: 'number',
     access: 'plain',
     why: 'How long a claimed validation check is held before it is offered again.',
+  },
+  {
+    path: 'localRun.instruction',
+    type: 'text',
+    access: 'plain',
+    why: 'How this project’s application is started on your machine. Empty means nothing is startable.',
+  },
+  {
+    path: 'localRun.url',
+    type: 'string',
+    access: 'plain',
+    why: 'Where the application lands once it is up, drawn as a link beside the run.',
   },
   {
     path: 'validation.desktopSocketPath',
@@ -361,6 +393,30 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     type: 'number',
     access: 'plain',
     why: 'Spend above which a run is flagged whatever its comparables say.',
+  },
+  {
+    path: 'runway.enabled',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Say when the queue of work is running out.',
+  },
+  {
+    path: 'runway.warnHours',
+    type: 'number',
+    access: 'plain',
+    why: 'Hours of queued work below which you are told.',
+  },
+  {
+    path: 'runway.clearHours',
+    type: 'number',
+    access: 'plain',
+    why: 'Hours the queue must be back above before the notice clears. Must be above warnHours.',
+  },
+  {
+    path: 'runway.minimumRuns',
+    type: 'number',
+    access: 'plain',
+    why: 'How many finished goals are needed before a typical goal length is known.',
   },
   // The two pets keys there are, and both are switches. The rates used to sit
   // here too, and each of them was a way of hatching a pet without doing anything
@@ -410,15 +466,15 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'The integration branch. Not auto-detected.',
   },
   { path: 'worktreeRoot', type: 'string', access: 'advanced', why: 'Root for the pool of worktree slot directories.' },
-  {
-    path: 'worktreePoolSize',
-    type: 'number',
-    access: 'advanced',
-    why: 'How many worktree slots the pool grows to. Unset, it follows the live agent cap.',
-  },
   { path: 'deskRoot', type: 'string', access: 'advanced', why: 'Scratch root for desk agents.' },
   { path: 'attachmentRoot', type: 'string', access: 'advanced', why: 'Where blueprint attachments are written.' },
   { path: 'validationRoot', type: 'string', access: 'advanced', why: 'Where validation resources are written.' },
+  {
+    path: 'localRunRoot',
+    type: 'string',
+    access: 'advanced',
+    why: 'The local run’s own checkout. Must not be under worktreeRoot — the pool would claim it as a slot.',
+  },
   { path: 'promptTemplatesDir', type: 'string', access: 'advanced', why: 'Where prompt-book overrides are read from.' },
   {
     path: 'docsFolderPrefix',
@@ -464,8 +520,14 @@ export function configField(path: string): ConfigField | undefined {
   return BY_PATH.get(path);
 }
 
-/** Read a dotted path out of a config object. `undefined` for an unset optional. */
-export function readPath(config: Config, path: string): unknown {
+/**
+ * Read a dotted path out of a config object. `undefined` for an unset optional.
+ *
+ * Takes a `Partial<Config>` because a *layer* is read through it too — the
+ * question "did the project's file set this key" is answered by walking the layer
+ * the file parsed to, and a resolved config cannot answer it.
+ */
+export function readPath(config: Partial<Config>, path: string): unknown {
   let cursor: unknown = config;
   for (const segment of path.split('.')) {
     if (typeof cursor !== 'object' || cursor === null) return undefined;
@@ -507,7 +569,12 @@ export function fieldValueRefusal(field: ConfigField, value: unknown): string | 
       return typeof value === 'number' && Number.isFinite(value) ? null : `${field.path} must be a number`;
     case 'boolean':
       return typeof value === 'boolean' ? null : `${field.path} must be true or false`;
+    // `text` is a string all the way to the file — the union member only tells the
+    // form to draw a textarea, so there is nothing extra to refuse. One arm for
+    // both rather than two identical ones: two would be two places for the same
+    // rule to drift.
     case 'string':
+    case 'text':
       return typeof value === 'string' ? null : `${field.path} must be a string`;
     case 'enum':
       return typeof value === 'string' && field.options?.includes(value)

@@ -3,6 +3,7 @@ import type {
   BugFiling,
   BuildReading,
   JobAttachmentInput,
+  LocalRunView,
   RecoveryVerdict,
   StackLanding,
   UpgradeAction,
@@ -305,6 +306,11 @@ const realApi = {
   // gets them onto the ticket. 409 when nothing is standing to overrule.
   overruleShortfall: (issueNumber: number, text: string) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/shortfall/overrule`, { text }),
+  // Stop waiting on an environment for this goal, or put it back to waiting. The
+  // note is required on the release and refused without one: it is the only
+  // account of why a goal was closed out with no environment ever confirming it.
+  releaseEnvironmentGate: (issueNumber: number, released: boolean, note?: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/environment-gate`, { released, note }),
   // Take one back. Withdrawing the last one clears the `more_work` it wrote with
   // it, so the goal is not bounced back to pickup for words nobody will read.
   withdrawInstruction: (issueNumber: number, id: string) =>
@@ -340,7 +346,11 @@ const realApi = {
   // End the harness's run at a goal (issues #203, #234). A run is retained so its
   // report stays reachable; this is the one thing that ends it, it
   // persists across a restart, and it stops the dispatcher acting on the goal.
-  dismissRun: (issueNumber: number) => post<{ ok: true }>(`/api/issues/${issueNumber}/dismiss-run`),
+  // The note rides along for the same reason it does on a close-out: this refuses
+  // without one while the goal's validation plan is flagged, and it is kept on the
+  // run, so what the goal owed and what was said about it survive together.
+  dismissRun: (issueNumber: number, note?: string) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/dismiss-run`, note === undefined ? undefined : { note }),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
   // A plan's revisions and the last amendment as a diff, fetched when the sheet is
   // opened. Not polled, for the retrospective's reason: every revision carries a
@@ -377,6 +387,11 @@ const realApi = {
   // Re-order the "Up next" queue (issue #128): the operator's desired priority
   // order of candidate origins, which the dispatcher reads back into its ranking.
   reorderUpNext: (origins: string[]) => post<{ ok: true }>('/api/upnext/order', { origins }),
+  // Price one queued row: which profile the next dispatch on this
+  // origin runs on. `null` clears the override and the row goes back to its
+  // goal's pin, or its rule's own entry.
+  setUpNextProfile: (origin: string, profile: string | null) =>
+    post<{ ok: true }>('/api/upnext/profile', { origin, profile: profile ?? '' }),
   // `attachments` carry base64 image bytes (issue #249), which is why this one
   // route may send megabytes: the server's per-route bodyLimit is what bounds it,
   // and the size/format bounds are the server's alone — the composer refuses early
@@ -427,7 +442,11 @@ const realApi = {
   // Work only a person can do. `done` settles it and concludes any plan step it
   // backs, which releases whatever was waiting; `decline` settles it the other way
   // and deliberately does not conclude the step, so nothing downstream starts.
-  completeHumanTask: (id: string) => post<{ ok: true }>(`/api/human-tasks/${id}/done`),
+  // `note` where the route asks for one: a `close_out` on a goal whose validation
+  // is flagged is refused without it. Omitted rather than sent empty — the route
+  // reads absence, and `''` would be the same absence spelled a second way.
+  completeHumanTask: (id: string, note?: string) =>
+    post<{ ok: true }>(`/api/human-tasks/${id}/done`, note === undefined ? undefined : { note }),
   declineHumanTask: (id: string, note: string) => post<{ ok: true }>(`/api/human-tasks/${id}/decline`, { note }),
   // Off the bench. Settled rows only — it says nothing about the work, so it is
   // not a third verdict and settles nothing.
@@ -445,6 +464,14 @@ const realApi = {
   checkBuild: () => post<{ ok: true; build: BuildReading }>('/api/upgrade/check'),
   upgrade: (action: UpgradeAction, opts?: { interrupt?: boolean }) =>
     post<{ ok: true; build: BuildReading }>('/api/upgrade', { action, ...opts }),
+  // The machine's one dev environment. `startLocalRun` is also the swap: there is
+  // one environment, so starting another goal's is stopping this one — and the
+  // server is where that transition lives, not in two calls from here.
+  startLocalRun: (issue: number) => post<{ ok: true; run: LocalRunView }>('/api/local-run', { issue }),
+  stopLocalRun: () => post('/api/local-run/stop'),
+  // Its own fetch rather than a field on the snapshot: two hundred lines on every
+  // heartbeat is a log nobody has open, paid for forever.
+  localRunOutput: () => authFetch('/api/local-run/output').then((r) => json<{ lines: string[] }>(r)),
   killAgent: (id: string) => post(`/api/agents/${id}/kill`),
   completeAgent: (id: string) => post(`/api/agents/${id}/complete`),
   interruptAgent: (id: string) => post(`/api/agents/${id}/interrupt`),

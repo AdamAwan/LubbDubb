@@ -7,6 +7,12 @@ import { dispatchVerdict, type CooldownPolicy, type DispatchVerdict } from '../d
  * **Always on**: every watched issue is planned, and there is no deployment in
  * which one is not.
  *
+ * Approval is the same: a plan lands as `awaiting_approval`, rule `plan-approval`
+ * puts it to the operator once, and nothing is scheduled until they accept. It was
+ * a `requireApproval` flag once — a deployment could let a planner's verdict start
+ * itself, which is the one decision in the funnel worth a human, whatever the
+ * plan's size. Approve-before is the undo, and there is no second shape of it.
+ *
  * There is no second shape. A plan that is one pull request is a plan with one
  * part, scheduled by rule `plan-part` on `issue/<n>/<slug>` exactly as a plan with
  * eight parts is. That used to be a whole separate arm — a `single` verdict
@@ -21,23 +27,6 @@ export interface PlanningPolicy {
    * agents do not. Threaded now; the part scheduler consumes it.
    */
   maxConcurrentPartsPerIssue: number;
-  /**
-   * Put a planner's verdict to a human before anything is scheduled from it
-   * (issue #109 phase 3). **On by default.** The funnel itself is not a choice —
-   * every goal is planned — so the thing being defaulted is only whether a
-   * planner's decision about how an issue is worked starts itself.
-   *
-   * On, ingestion persists the plan as `awaiting_approval`, rule `plan-approval`
-   * puts it to the operator once, and nothing is scheduled until they accept —
-   * approve-before rather than replan-after, which is the undo we built in place
-   * of this gate.
-   *
-   * **Every plan, whatever its size.** A one-part plan is put to the operator on
-   * exactly the terms an eight-part one is: it is the same decision about the same
-   * thing — whether this work, as described, should happen — and the part count is
-   * not what makes it worth asking about.
-   */
-  requireApproval: boolean;
   /**
    * Minimum gap between the `git fetch`es plan reconciliation runs before reading
    * branch reality.
@@ -54,7 +43,6 @@ export interface PlanningPolicy {
 
 export const DEFAULT_PLANNING: PlanningPolicy = {
   maxConcurrentPartsPerIssue: 2,
-  requireApproval: true,
   gitFetchIntervalMs: 60_000,
 };
 
@@ -112,7 +100,7 @@ export function planBranch(issueNumber: number): string {
  * - `parts`  — planned; the part scheduler owns it, whether the plan has one part
  *   or eight. Pickup stays off.
  * - `awaiting_approval` — the plan is written, but it is a proposal a human has
- *   not answered yet (`planning.requireApproval`). Pickup stays off exactly as for
+ *   not answered yet. Pickup stays off exactly as for
  *   `parts`, and the part scheduler queues the parts without dispatching any.
  * - `planning` — a planner is still owed, either dispatchable now or cooling down.
  * - `unplanned` — **the fail-open arm, and the only thing rule `issue-pickup` now

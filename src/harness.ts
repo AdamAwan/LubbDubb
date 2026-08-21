@@ -25,7 +25,11 @@ import type { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import type { ValidationAskDesk } from './validation/askDesk.js';
 import type { ValidationReadyDesk } from './validation/readyDesk.js';
 import type { SpendBurnDesk } from './spendBurnDesk.js';
+import type { RunwayDesk } from './supply/runwayDesk.js';
+import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
+import { DEFAULT_COOLDOWN } from './dispatcher/dispatchCooldown.js';
 import type { BranchReapDesk } from './branchReapDesk.js';
+import type { EnvironmentDesk } from './environments/environmentDesk.js';
 import type { ScheduleDesk } from './schedules/scheduleDesk.js';
 import type { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import type { Action, WorldEvent, WorldSnapshot } from './types.js';
@@ -108,8 +112,29 @@ interface HarnessDeps {
    * no dispatch, and stops nothing.
    */
   burn?: SpendBurnDesk;
+  /**
+   * Says when the queue of work is running out. Absent = no runway watch (tests
+   * that do not care). It writes `human_tasks` rows, decides no dispatch and
+   * holds nothing — and it needs {@link HarnessDeps.issuePickup} to read the same
+   * gate the dispatcher reads.
+   */
+  runway?: RunwayDesk;
+  /**
+   * The pickup gate's own policy, so the runway watch can ask
+   * `issuePickupStatus` the question rule `issue-pickup` asks. Read here rather
+   * than off the dispatcher because {@link Dispatcher} is an interface and only
+   * one implementation happens to carry a policy — a lens reaching through it
+   * would be reading a private field of one dispatcher.
+   */
+  issuePickup?: IssuePickupPolicy;
   /** Deletes the branch behind a merged pull request. Absent = `reapMergedBranches` is off. */
   branchReaps?: BranchReapDesk;
+  /**
+   * Attributes each merge to the goal it was for, and asks the configured
+   * environments where those commits have got to. Absent = tests that do not care;
+   * with no `environments` configured it records landings and probes nothing.
+   */
+  environments?: EnvironmentDesk;
   /**
    * Queues the job behind every recurrence that has come due. Absent = no
    * schedules (tests that do not care). It writes `jobs` rows through the same
@@ -286,23 +311,29 @@ export class Harness extends EventEmitter {
       // items; it decides no dispatch, and it deliberately does not rebuild the
       // stack model to do it (see `src/stacks/landing.ts`).
       this.deps.landings?.settle(world);
+      // What a delivered goal owes a person: the fixtures and accounts its
+      // validation plan says it needs and could not produce. Beside the close-out
+      // below and against the same gate — a check runs against the delivered goal,
+      // so this is the first pulse on which the ask is one anybody can act on. It
+      // writes `human_tasks` rows and nothing else.
+      this.deps.validationAsks?.run();
+      // And the obligation those resources are for: a delivered goal with checks a
+      // person still has to run says so on the bench, where the rest of their work
+      // is, rather than only on a sheet somebody has to think to open. It writes
+      // `human_tasks` rows, blocks nothing, and settles itself as the results are
+      // recorded.
+      this.deps.validationReady?.run(world);
       // The step after the launch: a delivered goal whose ticket is still open owes
       // a person one close, and the tracker is where that is observed. Beside the
       // other bookkeeping rather than in the dispatcher, because it is not a
       // dispatch — nothing here staffs anything, and no rule reads what it writes.
+      //
+      // **Below the validation desk, and that ordering is load-bearing.** The
+      // close-out waits on the goal's `validate` row being settled, so run above
+      // this line it would read a bench that has not been filed yet and ask for the
+      // close on the very pulse the delivery landed — the two rows arriving
+      // together, which is the thing the sequence exists to stop.
       this.deps.closeOuts?.run(world);
-      // The other thing a delivered goal owes a person: the fixtures and accounts
-      // its validation plan says it needs and could not produce. Beside the
-      // close-out for the same reason and against the same gate — a check runs
-      // against the delivered goal, so this is the first pulse on which the ask is
-      // one anybody can act on. It writes `human_tasks` rows and nothing else.
-      this.deps.validationAsks?.run();
-      // And the obligation those resources are for: a delivered goal with checks a
-      // person still has to run says so on the bench, where the rest of their work
-      // is, rather than only on a sheet somebody has to think to open. Same gate,
-      // same register — it writes `human_tasks` rows, blocks nothing, and settles
-      // itself as the results are recorded.
-      this.deps.validationReady?.run(world);
       // The operator's standing "every weekday at 09:00": a recurrence that has
       // come due queues its job here, a few lines above the `listQueuedJobs` the
       // dispatcher decides from — so a firing is dispatched on the pulse it fires
@@ -323,6 +354,18 @@ export class Harness extends EventEmitter {
       // it. Never deleting is the point: `closedPullRequests` forgets a merge after
       // `closedPrWindowMs` and the graph must not.
       this.deps.graph?.record(world);
+      // Where that work has actually got to: the commit each merged pull request
+      // landed as, attributed to the goal it was for, and what the operator's
+      // environment probes say about those commits.
+      //
+      // **Immediately below the graph record, and that ordering is load-bearing.**
+      // Attribution walks `parentRef` from a PR node up to its goal, so run above
+      // this line it would read a graph one pulse stale and fall back to the
+      // world's own `issueForPr` for every merge on the pulse it happened —
+      // which resolves nothing for a pull request whose issue the tracker has
+      // already closed. Beside the other bookkeeping and not in the dispatcher for
+      // `closeOuts`' reason: it staffs nothing and no rule reads what it writes.
+      await this.deps.environments?.run(world);
       // An agent parked because the *account* ran out is resumed once the window
       // `claude` named has turned over — the one park with a known end, so the
       // ordinary case needs no operator (issue #318). Beside the other bookkeeping
@@ -463,6 +506,11 @@ export class Harness extends EventEmitter {
       // reconciled with the tracked origins below — a flagged goal waiting on a
       // human is queueing nothing, and that is exactly when the flag must survive.
       const goalPriorities = store.listGoalPriorities();
+      // What the operator has said one queued row should *run on*, keyed on the
+      // same origin. Read here rather than in the dispatcher so the pin chain has
+      // one input per level and the cycle stays the only thing that touches the
+      // store.
+      const profileOverrides = store.listProfileOverrides();
       // While paused, advertise zero headroom so the dispatcher plans no new
       // dispatches; the executor also hard-defers them (belt and braces).
       const headroom = this.deps.runtime.paused ? 0 : Math.max(0, this.deps.runtime.cap - store.countLiveAgents());
@@ -534,6 +582,7 @@ export class Harness extends EventEmitter {
         rejectionSignals,
         priorityOverrides,
         goalPriorities,
+        profileOverrides,
         // The goal tags and the profiles they may name, so a dispatch on a pinned
         // issue is priced by the pin rather than by its rule.
         modelPins: this.deps.modelPins,
@@ -550,6 +599,52 @@ export class Harness extends EventEmitter {
       const trackedOrigins = new Set<string>((plan.upcoming ?? []).map((i) => i.origin));
       for (const t of tasks) if (isActiveTask(t) && t.originRef) trackedOrigins.add(t.originRef);
       store.reconcilePriorityOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
+      // The same sweep, for the same reason and off the same set: an override
+      // naming an origin nothing tracks any more prices no dispatch, and a
+      // profile pin that outlives its row is one nobody can see to take off.
+      store.reconcileProfileOverrides([...trackedOrigins], this.deps.upNextOverrideTtlMs);
+
+      // Whether there is anything left for the fleet to do, and whether the reason
+      // there is not is upstream of it. Beside the other bookkeeping and not in the
+      // dispatcher for `closeOuts`' reason — it staffs nobody, holds nothing and no
+      // rule reads what it writes.
+      //
+      // **Below `decide` rather than above it**, and for both neighbours. It needs
+      // every read `decide` needs — the plan funnel, the verdicts, the decision
+      // window — so this is the first point in the pulse where they all exist; and
+      // running it after the decision means a lens about supply can never delay a
+      // dispatch, however long its walk over the issues takes.
+      //
+      // It reads the *pre-dispatch* headroom, so a goal this pulse is about to
+      // start still counts as queued rather than in flight. One pulse of lag, the
+      // same lag the retarget and the reap accept, and in the safe direction: it
+      // over-reports supply for a beat rather than announcing a drought that the
+      // dispatch happening milliseconds later has already answered.
+      if (this.deps.runway && this.deps.issuePickup)
+        this.deps.runway.run({
+          issues: world.issues,
+          pickup: {
+            policy: this.deps.issuePickup,
+            cooldown: DEFAULT_COOLDOWN,
+            now: world.takenAt,
+            tasks,
+            recentDecisions,
+            // Unfiltered, exactly as the gate itself takes it: an unwatched PR is
+            // hidden from dispatch but is still an open PR, and one read as gone
+            // would have its goal counted as unstarted supply.
+            openPrs: world.pullRequests,
+            plans,
+            planParts,
+            deliveries,
+            deliverySignals,
+            assays,
+            assaySignals,
+            runs: store.listIssueRuns(),
+            headroom,
+            paused: this.deps.runtime.paused,
+          },
+          cap: this.deps.runtime.cap,
+        });
 
       // The dispatcher's reasoning is itself an audit record — prefixed, when any
       // provider served a fallback slice, with the fact that it was reasoning about

@@ -829,7 +829,7 @@ interface HumanTask {
   detail: string | null; // what to do and how to know it is done, markdown
   originRef: string | null; // the work it belongs to: "issue:12", "issue:12:part:schema", "pr:42"
   partId: string | null; // the plan part this task *is*, when a planner declared a step for a person
-  kind: 'ask' | 'close_out' | 'burn' | 'validate'; // who it is for the harness — see below
+  kind: 'ask' | 'close_out' | 'burn' | 'validate' | 'supply'; // who it is for the harness — see below
   agentId: string | null; // the requesting agent, from the credential; null when nobody individual asked
   taskId: string | null;
   status: 'open' | 'done' | 'declined';
@@ -889,8 +889,7 @@ on `part_id`; and from there the existing graph does the work:
 
 **A standalone human task blocks nothing.** It is a visible obligation, not a gate. That line is what
 keeps the capability an agent gains to "ask a person" rather than "stop the fleet": the blocking half
-only ever arrives through a plan, and a plan is already gated by `planning.requireApproval`, on by
-default.
+only ever arrives through a plan, and a plan is already gated by an operator's approval.
 
 ### Declining is a settlement, not a failure
 
@@ -922,6 +921,24 @@ settles it, and nothing says on Thursday that it never happened.
 every goal with a standing delivery whose tracker item is still open. It is **standalone** — no
 `part_id` — so it blocks nothing, and the rule above holds: only a plan-declared part ever holds work
 off the fleet.
+
+**Two things hold the filing back, and neither holds the settling.**
+
+The first is the goal's own validation. The close is not asked for while the goal's `validate` row is
+still open, because the bench asks for one thing at a time: filed together, the two rows say "run
+these checks" and "close this ticket" in the same breath, and the second is an invitation to skip the
+first. It is read off the **bench** rather than off the verdict — a `flagged` verdict would hold the
+close for good on a goal with one failing check, and the operator's way of saying "I am done with
+this" is the row, marked done or declined. That is also why `ValidationReadyDesk` runs above this desk
+in the pulse. → [24](24-environments.md#the-bench-asks-for-one-thing-at-a-time)
+
+The second is an environment gate, where one is configured: with `arrival.opens` naming `close_out`,
+the row waits until the goal's work has actually reached somewhere a person can look at it. Nothing
+gates it on a deployment that configured no environment, which is the default.
+→ [24](24-environments.md#what-an-arrival-means)
+
+Both hold the **file** arm only. Everything that settles a row still runs, so a ticket closed by hand
+while a goal is held still discharges an obligation filed before the hold began.
 
 **Why this one may settle itself.** Every other human task is settled by a person clicking Done,
 because the harness cannot observe a console switch being flipped. This one names an item the harness
@@ -999,7 +1016,7 @@ against whatever is delivered next. Settled `declined`, with that as the note.
 
 Tests: `test/validationReady.test.ts`.
 
-### The five arms that file one
+### The six arms that file one
 
 - **`request_human_task`**, the MCP tool: `{title, detail?}` and nothing that names work. Identity is
   structural, as for every write tool. It queues nothing and blocks nothing, and the response says so
@@ -1013,6 +1030,12 @@ Tests: `test/validationReady.test.ts`.
   agent that _asked_ but the agent the row is _about_ — a live run spending far past what its kind of
   work costs. It settles itself when that run ends, for the close-out's reason. It holds nothing and
   stops nothing; what it buys is that somebody looks. → [18](18-observability.md#the-burn-watch)
+- **The runway watch**, the harness's newest: `kind: 'supply'`, a null `agentId` and a **null
+  `originRef`** — it is the one row that is about the fleet rather than about a piece of work, so an
+  origin here would file it onto whichever goal happened to be last in the world. Exactly one is ever
+  open: a change of state settles the standing row and files the new wording, which is also what
+  gives the notification chain one banner per transition rather than one per pulse. It holds nothing
+  and stops nothing. → [25](25-supply.md#what-it-files)
 - **`POST /api/human-tasks`**, the operator's own: the same row with no agent behind it, which is
   exactly what a null `agentId` means. There is no `requestedBy` column, so nothing can disagree with
   the ids beside it. Both arms validate through the same pure `validateHumanTask`

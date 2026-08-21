@@ -1,6 +1,6 @@
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { configFilePath, type Config } from './config.js';
+import { configFilePath, projectConfigFilePath, type Config } from './config.js';
 import { Store } from './store/store.js';
 import { CompositeConnector } from './integrations/compositeConnector.js';
 import { buildIntegrations } from './integrations/registry.js';
@@ -44,7 +44,10 @@ import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import { ValidationAskDesk } from './validation/askDesk.js';
 import { ValidationReadyDesk } from './validation/readyDesk.js';
 import { SpendBurnDesk } from './spendBurnDesk.js';
+import { RunwayDesk } from './supply/runwayDesk.js';
 import { BranchReapDesk } from './branchReapDesk.js';
+import { EnvironmentDesk } from './environments/environmentDesk.js';
+import { CommandEnvironmentProber, type EnvironmentProber } from './environments/prober.js';
 import { PrWatchDesk } from './prWatchDesk.js';
 import { PrWorkItemDesk } from './prWorkItemDesk.js';
 import { ScheduleDesk } from './schedules/scheduleDesk.js';
@@ -64,6 +67,8 @@ import { orderedProfiles } from './agents/modelPolicy.js';
 import { Harness } from './harness.js';
 import { RuntimeControl } from './runtimeControl.js';
 import { PetKeeper } from './pets/keeper.js';
+import { LocalRunner } from './localRun/runner.js';
+import { localRunRef } from './localRun/ref.js';
 import { LiveConfig } from './configApply.js';
 import { ErrorLog } from './errorLog.js';
 import type { ErrorLogEntry } from './types.js';
@@ -142,6 +147,15 @@ export interface System {
    */
   pets: PetKeeper;
   /**
+   * The machine's one dev environment (`src/localRun/`): which goal's code is in it,
+   * and the process holding it up. Always constructed, `pets`' reason — with no
+   * `localRun.instruction` every start refuses with that as the reason, which is a
+   * surface that says why rather than one that is quietly missing. Exposed because
+   * it is route- and tool-driven rather than a pass on the pulse: an operator
+   * clicks, or their own Claude asks, and nothing about it happens on a cycle.
+   */
+  localRun: LocalRunner;
+  /**
    * Applies a reloaded config to this running process, and holds what is waiting
    * for a restart. The one apply path a cockpit save and a hand edit to
    * `lubbdubb.config.json` both go through.
@@ -211,6 +225,16 @@ export interface System {
    * inject a temp path.
    */
   configFile: string;
+  /**
+   * The **targeted project's** shared config, at `<repoRoot>/lubbdubb.project.json`
+   * — the team's layer, underneath the operator's own file.
+   *
+   * Held here for `configFile`'s reason exactly: `config.repoRoot` defaults to
+   * `process.cwd()`, so a test that read this path off the running config would
+   * read whatever project config the checkout the suite runs in happens to carry
+   * — and pass or fail by machine on a file nobody wrote for it.
+   */
+  projectConfigFile: string;
 }
 
 interface BuildOptions {
@@ -247,6 +271,13 @@ interface BuildOptions {
    * dispatch is rejected instead.
    */
   worktrees?: Worktrees;
+  /**
+   * Override how an environment is asked whether it holds a commit (tests inject
+   * `FakeEnvironmentProber`). Without it the real prober runs the operator's
+   * configured shell command — which a test has none of, and which would spawn a
+   * shell on the developer's machine if it did.
+   */
+  environmentProber?: EnvironmentProber;
   /** Override where recorded errors are mirrored (tests silence the default stderr echo). */
   errorMirror?: (entry: ErrorLogEntry) => void;
   /**
@@ -255,6 +286,11 @@ interface BuildOptions {
    * of whatever checkout the suite is running in — see {@link System.configFile}.
    */
   configFile?: string;
+  /**
+   * Override the targeted project's shared config path (tests point it at a temp
+   * file, or at one that does not exist) — see {@link System.projectConfigFile}.
+   */
+  projectConfigFile?: string;
   /**
    * Override how a report about LubbDubb itself is filed (tests inject
    * `FakeUpstreamIssues`). Without it the two collection-level issue routes spawn
@@ -311,12 +347,14 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
         // and the lower wins: read once at boot, a cap raised in the cockpit would
         // dispatch past the pool and be rejected for want of a directory forever,
         // which presents as a full queue and an idle fleet with nothing red.
-        // Explicit `worktreePoolSize` still wins, for a disk that cannot hold more.
+        // The cap is the fleet's one size knob: the pool is sized off it and there
+        // is nothing else to set.
         get size() {
-          return config.worktreePoolSize ?? defaultPoolSize(runtimeControl.cap);
+          return defaultPoolSize(runtimeControl.cap);
         },
         held: (branch) => store.findActiveTaskByBranch(branch) !== null,
       },
+      config.localRunRoot,
       errors,
     );
   // Branch reality for plan reconciliation — read-only, and the seam a test swaps
@@ -500,7 +538,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     agents: (): AgentManager => agents,
     configDir: defaultConfigDir(),
     socketPath: defaultSocketPath(),
-    requirePlanApproval: config.planning.requireApproval,
     // What the assayer is offered when it proposes a profile for a goal.
     profiles: orderedProfiles(config.agentModels),
     // Lazy for the same reason as `agents`: the desk is built after this server
@@ -540,10 +577,9 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     store,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,
-    templates: prompts,
-    defaultBranch: config.defaultBranch,
-    worktreeRoot: config.worktreeRoot,
-    requirePlanApproval: config.planning.requireApproval,
+    // Lazily, for `proposals`' reason: the runner is built further down, and both
+    // this channel and the cockpit's panel must start *the same* run.
+    localRun: (): LocalRunner => localRun,
     // Lazy for the fleet deps' reason a few lines above: `plan_amend` withdraws
     // the superseded approval card and puts the fresh one up, and both the desk
     // and the harness are built below this.
@@ -591,7 +627,6 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     mcp,
     // The `plan.json` transport's half of the approval gate — the tool transport
     // gets the same flag above, so a verdict lands identically either way.
-    requirePlanApproval: config.planning.requireApproval,
     errors,
   });
   const escalations = new EscalationInbox(store, agents);
@@ -752,11 +787,31 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     errors,
   });
 
+  // Where a goal's landed work has got to. The prober is the operator's own
+  // command, so the desk is built whether or not any environment is configured:
+  // the attribution half has to run regardless, because a merge SHA is only on
+  // offer while its pull request is inside `closedPrWindowMs` and is unrecoverable
+  // afterwards — a deployment that configures its first environment later still
+  // wants today's landings on record when it does.
+  const environments = new EnvironmentDesk({
+    store,
+    environments: config.environments,
+    prober: opts.environmentProber ?? new CommandEnvironmentProber(config.repoRoot),
+    // The clone answers "is this landing in what the environment named", which is
+    // what keeps the probe to one spawn per environment however many goals are in
+    // flight. The same observer the plan reconciler fetches for, so the objects
+    // this asks about are as fresh as `planning.gitFetchIntervalMs`.
+    git: gitObserver,
+    sink: opts.sink ?? connector,
+    probeIntervalMs: config.environmentProbeIntervalMs,
+    errors,
+  });
+
   // The step after the launch, and the one station on the floor a person staffs:
   // a delivered goal whose ticket is still open owes a close. Store-only — it
   // files and settles a `human_tasks` row and touches no sink, because closing
   // the item is precisely the part the harness is not doing.
-  const closeOuts = new DeliveryCloseOutDesk(store);
+  const closeOuts = new DeliveryCloseOutDesk(store, config.environments);
 
   // The other ask a delivered goal owes: the fixtures and accounts its validation
   // plan could not produce. Store-only on the close-out desk's terms, and gated on
@@ -768,12 +823,18 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // desk's terms and gated on the same delivery — and beside it deliberately: a
   // goal is delivered, and the two things it then owes a person are a close and a
   // validation.
-  const validationReady = new ValidationReadyDesk(store);
+  const validationReady = new ValidationReadyDesk(store, config.environments);
 
   // The one cost reading taken while the money is still being spent. Store-only
   // for the close-out desk's reason and one more: an expensive run is not a wrong
   // run, so the verdict is a visible obligation and never a kill.
   const burn = new SpendBurnDesk(store, config.spendBurn);
+
+  // The other reading taken while nothing is wrong: whether there is anything
+  // left for the fleet to do. Store-only on the burn watch's terms — it files a
+  // visible obligation and settles it when the queue recovers, and it is the one
+  // desk whose subject is the *pipeline* rather than a piece of work in it.
+  const runway = new RunwayDesk(store, config.runway);
 
   // Where a recurrence becomes a queued job. Store-only, like the close-out desk:
   // it writes the same `jobs` row the launch route writes and leaves every
@@ -819,7 +880,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     validationAsks,
     validationReady,
     burn,
+    runway,
+    // The gate the runway watch reads supply through — the same policy object the
+    // dispatcher carries, so the lens and rule `issue-pickup` cannot come to
+    // different answers about one issue.
+    issuePickup,
     branchReaps,
+    environments,
     prWatch,
     prWorkItems,
     schedules,
@@ -941,6 +1008,41 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     }
   });
 
+  // The machine's one dev environment. Constructed unconditionally — with no
+  // `localRun.instruction` every start refuses with that as its reason, which is a
+  // surface that says why rather than one that is quietly absent.
+  const localRun = new LocalRunner({
+    store,
+    worktrees,
+    // The same factory the fleet's agents come from, already narrowed by
+    // `agentMode` — so a test's fake runtime holds the environment up too, and this
+    // module never learns that a real `claude` exists.
+    sessions: agentSetup.factory,
+    // By reference, so an instruction corrected in the cockpit reaches the next
+    // start: `LIVE_ARMS` assigns a new object onto the running config.
+    policy: () => config.localRun,
+    claudeCommand: config.claudeCommand,
+    claudeArgs: config.claudeArgs,
+    permissionMode: config.agentPermissionMode,
+    defaultBranch: config.defaultBranch,
+    refFor: (originRef) => {
+      const plan = store.getPlanByOrigin(originRef);
+      return plan ? localRunRef(store.listPlanParts(plan.id)) : null;
+    },
+    reap: reapTree,
+    errors,
+  });
+  // A row saying `running` after a restart describes a process this harness never
+  // spawned — the pid belongs to something dead, or to whatever has since been
+  // given that number. Settled at boot rather than trusted, the same refusal a
+  // stale desktop claim gets.
+  const stale = store.endStaleLocalRuns('the harness restarted; this run did not survive it');
+  if (stale > 0)
+    errors.record({
+      source: 'cycle',
+      message: `Marked ${stale} local run(s) stopped: a restart does not carry a dev environment with it.`,
+    });
+
   return {
     config,
     store,
@@ -961,8 +1063,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     updates,
     runtimeControl,
     pets,
+    localRun,
     liveConfig,
     configFile: opts.configFile ?? configFilePath(),
+    projectConfigFile: opts.projectConfigFile ?? projectConfigFilePath(config.repoRoot),
     issuePickup,
     prompts,
     rateLimits,

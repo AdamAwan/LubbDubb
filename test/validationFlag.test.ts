@@ -135,6 +135,8 @@ function filed(over: Partial<Parameters<typeof closeOutPass>[0]> = {}): { detail
     shortfalls: [],
     existing: [] as HumanTask[],
     validation: new Map(),
+    opened: null,
+    validating: new Set<string>(),
     ...over,
   });
   const file = steps.find((s) => s.kind === 'file');

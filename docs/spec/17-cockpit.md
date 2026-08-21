@@ -541,6 +541,11 @@ Order on the page, top to bottom:
    through `renderRichText` because the body is the _tracker's_ prose and Azure DevOps writes it as
    HTML ([Tracker-authored prose](#tracker-authored-prose)).
 6. **Pull requests for this goal**, open and closed, with the court chip and the CI ladder.
+7. **Environments** — what a delivered goal still owes ([Environments](#environments)).
+8. **The record** — this goal's own subtree of the durable work graph, last because it is the only
+   card in the column that asks nothing of the reader: the five above it are the live reading and
+   what is still owed, and this is what is left of the same work once the snapshot has forgotten it
+   ([The record](#the-record-on-the-goal-it-belongs-to)).
 
 At ≥1500px a right-hand column carries **On this goal** (who is working it now), **Spend** and **The
 tail**. Below that, the two stacks are one column.
@@ -584,7 +589,9 @@ run.
 - **End the run** is keyed on the run **existing and not yet ended**, never on anything else the page
   is showing — the lesson `planId` and `retroRef` learned. It is how a retained run is ended, so it
   has to be reachable for exactly as long as the harness still holds one
-  ([16](16-http-api.md#post-apiissuesnumberdismiss-run)).
+  ([16](16-http-api.md#post-apiissuesnumberdismiss-run)). On a goal whose validation plan is flagged
+  it reads `End the run…` and opens `EndRunModal`, because the route refuses a dismissal with no note
+  while it is — [below](#saying-the-sentence-a-refusal-asks-for).
 
 ### The bands
 
@@ -596,6 +603,25 @@ the goal page for the same reason the others are: the page and the rail's panel 
 the write between them. Embedded, never redrawn: a second wiring is a second way to answer a proposal with free text on one surface only.
 `buttonClass` is the one seam the console passes, so the shared buttons wear the console's face without
 the console reaching into their class.
+
+#### Saying the sentence a refusal asks for
+
+A route that refuses for a reason the operator can act on needs two things on the glass, and for a
+while had neither. **The reason** — every route refuses with `{error}` and `api.ts` rethrows it as
+the `Error`'s message, and `useAsyncAction` used to drop it in a bare `catch`, leaving a red ring
+that faded in two seconds as the whole account of what happened. It is now kept until the next run,
+hung off the button's own `title` (which costs no layout, so every `AsyncButton` in the cockpit gains
+it) and handed to `onRefused` for the stations with room to draw it — `HumanTaskActions` and the goal
+header both draw it as a `.launch-error` line, the same one the composer uses, because a refusal is
+one thing wherever it lands.
+
+**And somewhere to answer it.** The two controls a flagged validation plan refuses
+([20](20-validation.md#where-it-lands)) posted no note and offered no box to type one in, so the
+refusal was not merely invisible — it was unsatisfiable, and the control could not work at all. The
+bench verdict's Done reads `Done…` on a `close_out` whose goal is flagged and opens the note box
+Decline already had; `End the run` opens `EndRunModal` on the same condition and stays one click on
+every other goal. The condition is mirrored, the counts are not: they are `issue.validation`, folded
+once on the server, and the row's own detail already lists what is outstanding.
 
 **A band whose source has left the snapshot draws nothing at all.** A header over an empty box would
 claim something is waiting while offering no way to answer it.
@@ -775,6 +801,28 @@ that nothing has run — "not reached yet" is a fact about the goal worth seeing
 The write-up and the notepad carry a way in, each keyed on the document **existing** and on nothing the
 page is doing.
 
+### Environments
+
+Under the pull requests, one row per configured environment: what it holds of this goal, the count on
+every row that is not whole (`0/3` and `2/3` are the difference between work that has not started
+moving and work that is halfway there), and the verdict as a chip. `partial` takes the _attention_
+tone rather than a success one, because half a feature in production is the state most likely to want
+somebody. The card is absent entirely when nothing is configured — a row of question marks on every
+deployment that never set one up would be a feature announcing itself as broken.
+
+A row that **opens** something says so, on the row that would do the opening: an operator reading a
+held goal asks "waiting for what" exactly once, and the answer is configuration they may not remember
+writing.
+
+**A held goal says it is held**, in `gateHold`'s own sentence, with the release control beside it.
+This is the one place it is said: nothing is filed while a gate holds, so without the line a delivered
+goal with an empty bench is indistinguishable from a finished one. It is deliberately **not** a
+"Needs you" row — with a gate on the first environment every delivered goal is held for as long as a
+deploy takes, and a rail carrying all of them would bury the asks somebody can answer. The release
+takes a required note through a modal, on `InstructionModal`'s reason: it is prose the operator has to
+compose, and every other control on this page is a verdict.
+→ [24](24-environments.md#what-an-arrival-means)
+
 ### What the goal page deliberately does not draw
 
 **This goal's slice of the decision log.** `buildGoalPage` computes `decisions` — the rows whose
@@ -788,13 +836,19 @@ from.
 ## The overview
 
 What the situation area shows when no goal is selected: five cards, rows rather than pictures, in
-reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **World signals**.
+reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **World signals**. The
+fleet's **runway** is a band along the foot of the first of them rather than a sixth card, because
+"who is out" and "what is behind them" are one thought.
 
 Two rules run through all five. **Nothing here re-decides what the server decided**: a PR's court is
 `attention.status`, its checks are `ciVerdict`, a queued item's hold is the queue's own sentence, and a
 goal's state is its `pickup.status`. And **an empty card still draws**, muted, because a surface that
 vanishes when quiet is indistinguishable from one that broke.
 
+- **Goals in flight** carries the **furthest environment** holding a goal whole, where any is —
+  last-declared in the operator's list, since that list is the order the work travels in. `partial`
+  gets no chip: a row reading `liveUs` for half a feature is the boolean rollup the reach fold refuses
+  to make, one layer up. → [24](24-environments.md#in-the-cockpit)
 - **Fleet** — who is out, what they are on, and what it has cost. The lamp reads red off
   `escalationByAgent`, not off `status === 'waiting'`: an agent can be parked with nothing asked of the
   operator, the two disagree in exactly that case, and the ask wins. **Ended shifts are behind a
@@ -814,6 +868,14 @@ vanishes when quiet is indistinguishable from one that broke.
   that origin is a pull request some ticket owns, the goal behind it, resolved through `goalOfPr`. The
   card used to name both in text and offer a way to neither, so the two questions a fleet row raises —
   what is it working on, and what is that — could only be answered somewhere else.
+  Along the card's **foot** is the **runway band** ([25](25-supply.md#in-the-cockpit)): who is out,
+  then what is queued behind them, in that order and in one card. The foot rather than the head
+  because the agents are the card's subject and this is its consequence, and it costs nothing to
+  reach — Fleet's rows are bounded by the agent cap, so the band never travels far down the page. It
+  quotes `state.runway` and re-decides nothing, draws **no control** (the reading is a statement about
+  the fleet, and a "watch something" shortcut would make it a prompt for the quickest fix rather than
+  the truest one), always draws — muted when healthy, grey while paused — and **changes unit rather
+  than lying**: with nothing queued there is no runway to state, so it counts idle slots instead.
 - **Goals in flight** — every goal whose `pickup.status` says the harness has it in hand now
   (`active` / `has_pr` / `planning` / `delivered`). Read off the dispatcher's own word rather than
   re-inferred from agents, plans and pull requests, which are three inputs the server has already
@@ -844,12 +906,28 @@ vanishes when quiet is indistinguishable from one that broke.
   `QueueItem.expedited`: the flag is set on a goal and the row names an origin, so without it a
   flagged goal's parts sit at the top of the panel with nothing anywhere connecting the order to the
   click that caused it.
-- **World signals** — `worldEvents` grouped by `(kind, ref)` with a count, ten rows. Three review
-  comments on one pull request are one signal, not three unrelated rows. **The server's order (newest
-  first) is kept**: re-sorting by count would move the row an operator is watching the moment it moves
-  again. The row draws **the goal behind the signal** beside the sentence and never the pull request:
-  the summary's own `#412` already links out, so repeating it would be one ref twice, and what a signal
-  never offers is the way onto a goal's page.
+  Each row ends in the **`ProfilePicker`**, drawn from `QueueItem.profile` / `profileSource` /
+  `override`: the queue is the one surface that says what a dispatch will run on _before_ it
+  runs, and the one place the judgement is available — an operator who reads "resolve the conflict on
+  `issue/390/watcher`" knows it is mechanical work, and the row is in front of them. The empty option
+  names what the row resolves to unpriced ("Auto (standard)", or "Pinned (deep)" where a goal tag or
+  a part profile already answered), so the panel states the profile whether or not anybody has
+  touched it; with an override standing it reads plain "Auto", because `profile` is then the override
+  itself and naming it as the fallback would promise that clearing the control changes nothing. The
+  control draws nothing at all on a deployment with no `agentModels` — `ProfilePicker`'s own rule,
+  not a second one here.
+- **World signals** — `worldEvents` grouped by `(kind, ref)` with a count, ten rows, **plus the
+  environment arrivals** of the last week. Three review comments on one pull request are one signal,
+  not three unrelated rows; two environments reaching one goal are two things that happened, so
+  arrivals are one row each. The row draws **the goal behind the signal** beside the sentence and
+  never the pull request: the summary's own `#412` already links out, so repeating it would be one ref
+  twice, and what a signal never offers is the way onto a goal's page.
+
+  The arrivals are merged **here**, at render time, rather than carried in `worldEvents`. A world
+  event is derived by diffing consecutive snapshots, and a standing delivery verdict is expired by any
+  world event on its issue ref — so an arrival written as one would lift the delivery park on the goal
+  it announced and hand the work straight back to the fleet.
+  → [24](24-environments.md#in-the-cockpit)
 
 ### The keyboard entry
 
@@ -1519,11 +1597,20 @@ the form says so **per row** rather than the surface claiming one answer for fif
 per row all come from the server for `isDefault`'s reason — a browser that decided them would be a
 second copy free to drift:
 
-| Drawn from                  | Decided by                                                            |
-| --------------------------- | --------------------------------------------------------------------- |
-| the widget                  | `entry.type` — `configFields.ts` ([02](02-configuration.md#fields))   |
-| applies now / needs restart | `entry.live` — true only where `configApply.ts` holds an arm          |
-| not editable                | `entry.env` (the environment beats the file), or `access: 'fileOnly'` |
+| Drawn from                  | Decided by                                                                 |
+| --------------------------- | -------------------------------------------------------------------------- |
+| the widget                  | `entry.type` — `configFields.ts` ([02](02-configuration.md#fields))        |
+| applies now / needs restart | `entry.live` — true only where `configApply.ts` holds an arm               |
+| not editable                | `entry.env` (the environment beats the file), or `access: 'fileOnly'`      |
+| where the value came from   | `entry.env`, `entry.isDefault` and `entry.fromProject` — one of four words |
+
+**Four words, because there are four layers.** `env`, `file`, `project` and `default`: a harness
+pointed at a repository carrying a `lubbdubb.project.json` is running a config assembled from two
+files, and only one of them is the one this page writes ([02](02-configuration.md#the-project-layer)).
+A team's value drawn as `default` would send an operator looking for a key their own file does not
+have — and a row cleared while the project sets it says it will fall back to the project's value,
+because it will. `isDefault` is therefore _what you would have without your own file_, which is the
+same question as "what does clearing this leave", since the form writes one file and nothing else.
 
 A `colourMap` is the one `entry.type` that draws more than a field: `issueStateColours` becomes a
 swatch per state over a `datalist` of the state words the tracker is currently reporting, read off the
@@ -1540,8 +1627,11 @@ still the caller's: a state colour is `#rrggbb` only, a theme token admits three
 digits. `test/console.test.ts` asserts no second colour input exists anywhere under `components/`,
 because writing one is a one-line temptation and only one of the two would get the next fix.
 
-Saving writes `lubbdubb.config.json` and nothing else; the file stays the source of truth and editing it
-by hand lands on the same apply path ([02](02-configuration.md#the-watcher)). A **reset clears the key**
+Saving writes `lubbdubb.config.json` and nothing else — never the project's file, which belongs to the
+team and changes by a commit — and the files stay the source of truth: editing either by hand lands on
+the same apply path ([02](02-configuration.md#the-watcher)). The project's path is named in the page
+header when there is one, so an operator whose harness is behaving unlike their config says can see
+that a second file is in play at all. A **reset clears the key**
 rather than writing the default back — the browser is never told what a default _is_, only `isDefault`.
 Staged edits are counted in a save bar and nothing reaches the file until the write; a save whose
 baseline has moved is refused with "reload" rather than clobbering whoever moved it.
@@ -1660,6 +1750,17 @@ tasks, plan approvals and recovery, the three that arrive as one coarse `dirty` 
 themselves; diffing the queue covers every kind by construction and stays true when a ninth is
 added. Agents notify on the **transition** into a terminal status rather than on appearing, since an
 agent is in the list from the moment it spawns and a dead one stays there.
+
+**One notification per category per batch.** The diff is per subject, and that is the right record of
+what is new — it is not the right number of interruptions. A cascade records thirty errors inside one
+pulse and a restart fills the queue rail in one go, so an operator got thirty desktop banners for one
+event and ten for one glance's worth of work, every one of them saying the same thing: go and look at
+the cockpit ([#458](https://github.com/AdamAwan/LubbDubb/issues/458)). `coalesce` folds a batch to a
+single notification per category — three subjects named, the rest counted — because what each row _is_
+lives in the queue rail and the error list, which is where it gets answered. A batch of one is left
+exactly as it was, tag and all. The summary's tag is the first subject's plus the batch size: stable
+for the same batch, so a re-render replaces rather than repeats, and different for the next one, so a
+second burst stacks beside the first instead of overwriting its count with a smaller number.
 
 **A null previous snapshot yields nothing.** The first state after a load, a reconnect or a token
 entry seeds the comparison. Without it every row already waiting announces itself at once — a storm on
@@ -2331,6 +2432,23 @@ there are entries, so an empty trail on screen means the fetch and the snapshot 
 plan and retrospective documents, which are written to be read as documents. A pad note is one agent's
 testimony, and rendering it would let a stray backtick or hash change what that testimony looks like.
 
+## Running locally
+
+A **Local** reading in the top bar's `cn-reads` row, quiet when nothing is up and carrying the goal's
+number when something is, opening the running-locally panel
+([23](23-local-runs.md#the-cockpit)).
+
+A reading rather than a nav tab, and the distinction is the one `TABS` is built on: the nav is the
+surfaces work happens on, and this is a state of the operator's own machine. The **number** is the
+value because that is the question — "running" alone leaves somebody opening the panel to find out
+whether it is the goal they are looking at, which is the only thing they wanted to know.
+
+`'localRun'` is a member of `ConsolePanel`, so the panel is a **place**: it survives a reload and the
+back button steps out of it, exactly as every other panel does. It draws one state and a picker rather
+than a table of runs — a list would imply two environments could be up, which is the one thing the
+store refuses — and its start button says, where the control is, that starting stops what is running
+now.
+
 ## Links
 
 A surface that _names_ another thing and gives no way there is the cockpit's most repeated bug. It kept
@@ -2599,8 +2717,8 @@ from a reader that broke, and because each of these is a decision rather than an
   acts on. The fold is pure and tested (`test/issueGroups.test.ts`) and is what a hierarchy view would
   be built from.
 - **`reorderUpNext`, `dismissHumanTask` and `fetchWorkSubtree` have no caller either.** The overview's
-  Up next is a reading rather than a control; the rail carries only `open` human tasks, so there is no
-  settled tail to dismiss from; and the work tab embeds the shared panel, which reaches its own route
+  Up next carries one control — the profile picker — and no drag handle; the rail carries only
+  `open` human tasks, so there is no settled tail to dismiss from; and the work tab embeds the shared panel, which reaches its own route
   directly — the seam keeps the method for the reason it keeps `setStackLanding`.
 - **`tailByAgent` is folded and drawn nowhere.** `agent:tail` frames still arrive and still cost
   nothing to keep — they are one line per agent — but the fleet row draws the agent's `note`

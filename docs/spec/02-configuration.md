@@ -8,9 +8,10 @@ loaders. There is no other configuration mechanism.
 - **`loadConfig(overrides)`** — `DEFAULTS` + the caller's overrides, then path resolution and
   validation. It reads **no file and no environment variable**, so the same arguments give the same
   config on any machine. This is what tests and embedders call.
-- **`loadDeploymentConfig(overrides)`** — the two ambient layers (`lubbdubb.config.json` and the env
-  overrides) folded in underneath the explicit ones, then `loadConfig`. This is what a process entry
-  point calls; `src/server/main.ts` is the only one.
+- **`loadDeploymentConfig(overrides)`** — the three ambient layers (the targeted project's
+  `lubbdubb.project.json`, `lubbdubb.config.json` and the env overrides) folded in underneath the
+  explicit ones, then `loadConfig`. This is what a process entry point calls; `src/server/main.ts` is
+  the only one.
 
 The split exists because the ambient layers make the config a function of the machine it loads on.
 The suite runs in a working copy of this repo, so an operator's own `lubbdubb.config.json` sitting
@@ -24,19 +25,30 @@ environment. `scripts/smoke.ts` builds a hermetic scenario against a throwaway r
 Values are merged in this order, later winning:
 
 1. `DEFAULTS` (in `src/config.ts`)
-2. `lubbdubb.config.json`, read from `process.cwd()` — absent is fine; unparseable throws with the
-   file path and the parse error
-3. Environment overrides: `PORT` → `port`, `LUBBDUBB_HOST` → `host`, `LUBBDUBB_DB` → `dbPath`,
+2. `lubbdubb.project.json`, read from `repoRoot` — the [project layer](#the-project-layer), shared by
+   a team through the repository the harness works on
+3. `lubbdubb.config.json`, read from `process.cwd()` — the operator's own; absent is fine,
+   unparseable throws with the file path and the parse error
+4. Environment overrides: `PORT` → `port`, `LUBBDUBB_HOST` → `host`, `LUBBDUBB_DB` → `dbPath`,
    `LUBBDUBB_REPO_ROOT` → `repoRoot`
-4. Explicit `overrides` passed to the loader (tests, embedding)
+5. Explicit `overrides` passed to the loader (tests, embedding)
 
-Layers 2 and 3 exist only under `loadDeploymentConfig`; `loadConfig` sees 1 and 4.
+Layers 2, 3 and 4 exist only under `loadDeploymentConfig`; `loadConfig` sees 1 and 5.
 
-Six keys are **deep-merged** rather than replaced, so a config file can set one field of them
-without dropping the rest: `integrations`, `planning`, `spendBurn`, `selfUpdate`, `validation`, `auth`. The deep merge holds
-_between_ layers as well — an explicit `{planning: {requireApproval: true}}` keeps the other
-`planning` fields the operator's file set. Everything else — including `issuePriorityLabels` and
-`ci.checks` — is replaced wholesale.
+Nine keys are **deep-merged** rather than replaced, so a config file can set one field of them
+without dropping the rest: `integrations`, `planning`, `pets`, `spendBurn`, `runway`, `selfUpdate`,
+`validation`, `localRun`, `auth`. The deep merge holds _between_ layers as well — an explicit
+`{planning: {maxConcurrentPartsPerIssue: 4}}` keeps the other `planning` fields the operator's file
+set, and an operator's `planning` block keeps the fields their team's set. Everything else —
+including `issuePriorityLabels` and `ci.checks` — is replaced wholesale.
+
+A layer carries **only what its file said**. The defaults are folded once, at the bottom, by
+`mergeConfig`; `mergeLayers` never folds them in. That is not tidiness — a layer that arrived dense
+(every field of a block present, the ones its file set and the defaults for the rest) does not merge,
+it replaces. With two layers nothing showed, because the only thing underneath a dense layer was the
+defaults it had copied. With three, it is the feature failing silently: an operator's
+`{"planning": {"gitFetchIntervalMs": 0}}` would arrive carrying the default part cap and shadow the
+one their team set, and the harness would run a policy no file on the machine states.
 
 ### Retired keys
 
@@ -89,6 +101,59 @@ network. A warning would scroll past in a boot log, so it is refused instead.
 
 No secret is ever a config key. The GitHub token comes from `GITHUB_TOKEN`, and the cockpit token
 from `LUBBDUBB_TOKEN` or a minted 0600 file, so `lubbdubb.config.json` stays safe to paste.
+
+## The project layer
+
+`lubbdubb.project.json`, at the root of the repository the harness works on, is the layer a **team**
+shares. It is committed. Everything about a project that is the same for everyone working on it —
+which branch is integrated onto, what each CI check means, where landed work travels, which tracker
+states count as pickup — belongs in one file in the repository rather than in each member's copy of a
+config, drifting apart from the day it is pasted.
+
+Each member's `lubbdubb.config.json` sits above it and wins: who they are, which models they
+dispatch on, how many agents their machine runs, where their database lives. Nobody has to choose
+between sharing a config and having their own.
+
+**Any key may appear in it, with one exception: `repoRoot`.** That file was read *because* `repoRoot`
+already resolved, so a value in it could only describe the search that found it — honouring it would
+mean re-reading from somewhere else, and dropping it would leave the fleet pointed at a repository
+the file in front of the operator disagrees with. It is refused by name, like a removed key. Where
+the harness points is settled by `lubbdubb.config.json` or `LUBBDUBB_REPO_ROOT`, from the operator's
+layers alone and *before* the project's file is looked for: a layer cannot be consulted about where to
+find itself.
+
+Two consequences worth stating rather than discovering:
+
+- **The file is read, not trusted less.** It gets exactly the reading an operator's own file gets — a
+  removed key is refused by name, a retired one warns and is dropped — and it may carry
+  `environments` and `localRun`, which are shell commands the harness runs on the operator's machine.
+  That is not a new exposure being opened: a harness pointed at a repository already dispatches agents
+  with write access into worktrees of it and runs its scripts. The file is read from the **checked-out
+  working tree** at `repoRoot`, so a branch — a pull request from anywhere — does not reach it before
+  somebody merges and the operator pulls.
+- **It is watched like the operator's own.** It arrives by `git pull` rather than by an edit, and a
+  team change that took effect only at the next restart would be a config the harness reads and does
+  not run. Two watches on one apply path, for [the watcher](#the-watcher)'s reason.
+
+Not in `.lubbdubb/`, which holds worktrees, the database and attachments and which a team gitignores.
+And not the same *name* in a different place: `repoRoot` defaults to `process.cwd()`, so a harness
+pointed at its own checkout — the most common deployment there is — would have the two files collide.
+
+### In the cockpit
+
+Two files means a new way to be silently confused: a value the operator did not write, in a config
+page that only writes one of them. So the running-config view is handed the project's **layer**
+(not a config — once merged, a team value equal to the default is indistinguishable from no value at
+all) and every row says which of the four it came from: `env`, `file`, `project`, `default`.
+
+`isDefault` therefore means *what the operator would have without their own file* — defaults with the
+project folded in — rather than the built-in default. Those are the same question: the form writes
+`lubbdubb.config.json` and nothing else, so "did I choose this" and "what does clearing it leave" have
+one answer. A row cleared while the project sets it says it will fall back to the project's value,
+because it will.
+
+A save is never written to the project's file. It belongs to the team, and it is changed by committing
+to the project.
 
 ## Fields
 
@@ -143,7 +208,7 @@ failure this repo catalogues. `test/configFields.test.ts` asserts the classifica
 in both directions; `test/configApply.test.ts` asserts each arm through its _effect_, never through the
 flag, so an arm that stops doing anything fails rather than passing.
 
-Five keys have arms, and the shortness is deliberate — every arm is a second place a value lives, and
+Six keys have arms, and the shortness is deliberate — every arm is a second place a value lives, and
 so a place two copies can disagree:
 
 | Key                   | The arm                                                                                                                                                                                                                                                                                                                                                          |
@@ -152,6 +217,7 @@ so a place two copies can disagree:
 | `lessonBlockChars`    | Assign. `system.ts` renders the lesson block through a closure at every launch, so the object _is_ the late reader.                                                                                                                                                                                                                                              |
 | `issueStateColours`   | Assign. `buildStateSnapshot` reads the running config by reference at every poll and ships the colours to the cockpit, so the chips are recoloured a heartbeat later. Nothing in the harness reads a colour, so there is no consumer to re-seat.                                                                                                                 |
 | `pets.visible`        | Assign **onto `running.pets`**, never over it: `PetKeeper` closed over that object and reads `visible` on every `state()`, so replacing the policy would leave the keeper on the old one while the config page said the change had applied. Live because it is pure presentation — nothing it reaches hatches, feeds or clears. → [22](22-pets.md#configuration) |
+| `localRun.*`          | Assign **onto `running.localRun`**. The runner reads the policy by reference at every start and the snapshot at every poll, so the object _is_ the late reader. Live because this is the one field an operator corrects while a start is failing in front of them: restart-only would mean bouncing the harness — and the fleet's agents with it — to fix a typo in a command. → [23](23-local-runs.md#the-instruction-is-config-not-a-prompt) |
 | `ci.checks`           | Assign, and hand `RuleDispatcher` a new policy — it took `{checks}` at construction, so assignment alone would leave the cockpit drawing one policy while the dispatcher ran another.                                                                                                                                                                            |
 
 Everything else is restart-only, including the ones that could be made live. A key nobody changes twice
@@ -185,8 +251,8 @@ and asserts the comments, the key order and every unchanged line survive.
 
 ## The watcher
 
-`lubbdubb.config.json` is watched, and a change on disk lands on the **same** `LiveConfig.apply` a
-cockpit save lands on: live keys through their arms, everything else held as pending and reported to
+`lubbdubb.config.json` is watched — and so is the project's `lubbdubb.project.json` — and a change on
+disk lands on the **same** `LiveConfig.apply` a cockpit save lands on: live keys through their arms, everything else held as pending and reported to
 every open cockpit. That is the whole of keeping the file first-class — one apply path means a hand
 edit and a form save cannot produce different outcomes.
 
@@ -200,10 +266,14 @@ A parse failure or a validation throw is **recorded through `errors.record` and 
 running config is left exactly as it was. A half-typed file is a normal thing to observe — the operator
 is mid-keystroke — and a watcher that applied one would take the fleet down over a missing brace.
 
+Two watches rather than one over both paths: each holds the bytes it last saw, and the reload folds
+every layer either way, so the file that moved is the only thing the two of them differ about.
+
 Wired in `src/server/main.ts` rather than `buildSystem`, for `loadDeploymentConfig`'s reason: only a
-deployment has an ambient file to watch. `System.configFile` is the path, injectable in tests — without
-that a test exercising the save rewrites the `lubbdubb.config.json` of whatever checkout the suite is
-running in.
+deployment has an ambient file to watch. `System.configFile` and `System.projectConfigFile` are the
+paths, injectable in tests — without that a test exercising the save rewrites the
+`lubbdubb.config.json` of whatever checkout the suite is running in, and a test reading the project
+layer picks up whatever `lubbdubb.project.json` that checkout happens to carry.
 
 ## Path resolution at load
 
@@ -211,7 +281,7 @@ running in.
 resolve them against the wrong directory:
 
 - `repoRoot` is resolved against `process.cwd()`.
-- `worktreeRoot`, `deskRoot`, `attachmentRoot`, `validationRoot` and `promptTemplatesDir` are resolved against **`repoRoot`** (not the
+- `worktreeRoot`, `deskRoot`, `attachmentRoot`, `validationRoot`, `localRunRoot` and `promptTemplatesDir` are resolved against **`repoRoot`** (not the
   launch directory), so running LubbDubb from its own folder against a repo elsewhere does not
   scatter that repo's worktree slots into the app's directory. An absolute override is honoured as-is.
 - Each entry of `claudeArgs` that is relative **and names an existing file** is made absolute.
@@ -224,7 +294,7 @@ resolve them against the wrong directory:
 | Key                   | Type      | Default                     | Behaviour                                                                                                                                            |
 | --------------------- | --------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `heartbeatIntervalMs` | `number`  | `300000`                    | Gap between timer-driven cycles.                                                                                                                     |
-| `maxConcurrentAgents` | `number`  | `3`                         | Seeds the runtime cap. Live changes go through `POST /api/control` and are **not** persisted.                                                        |
+| `maxConcurrentAgents` | `number`  | `3`                         | Seeds the runtime cap. Live changes go through `POST /api/control` and are **not** persisted. It is also the fleet's **only** size knob: the worktree pool is the live cap plus a slack of two, read on every acquire, so raising the cap raises the pool with it. → [09](09-execution.md#exhaustion) |
 | `startPaused`         | `boolean` | `false`                     | Seeds the runtime pause flag. The only config-level pause knob; live pause/resume is ephemeral, so a restart reverts to this.                        |
 | `port`                | `number`  | `4300`                      | HTTP/WS port. Overridable via `PORT`.                                                                                                                |
 | `host`                | `string`  | `127.0.0.1`                 | Bind address. Loopback by default; `"0.0.0.0"` exposes the cockpit on the network and then requires `auth.enabled`. Overridable via `LUBBDUBB_HOST`. |
@@ -236,13 +306,22 @@ resolve them against the wrong directory:
 
 | Key                | Type     | Default                 | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | ------------------ | -------- | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `repoRoot`         | `string` | `process.cwd()`         | The git repository worktrees are cut from. Overridable via `LUBBDUBB_REPO_ROOT`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `repoRoot`         | `string` | `process.cwd()`         | The git repository worktrees are cut from — and where the team's `lubbdubb.project.json` is read from ([the project layer](#the-project-layer)). Overridable via `LUBBDUBB_REPO_ROOT`; never settable from the project's own file.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | `defaultBranch`    | `string` | `"main"`                | The integration branch. A new agent branch is cut from it, and a PR targeting anything else is treated as stacked. Not auto-detected.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 | `worktreeRoot`     | `string` | `.lubbdubb/worktrees`   | Root for the pool of worktree slot directories (`slot-0`, `slot-1`, …).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| `worktreePoolSize` | `number` | live cap `+ 2`          | Hard bound on how many worktree directories the pool may hold. Unset, it follows the **live** agent cap — read on every acquire, not once at boot, because the bound and the cap are two limits over one fleet and the lower wins: a frozen bound turns a cap raised in the cockpit into a permanent stream of rejections, presenting as a full queue and an idle fleet with nothing red. Set it to **pin** that, for a small disk wanting fewer full checkouts; pinned below the cap it is then the real limit. Growing the ceiling mints nothing — a slot is created only when a dispatch needs one. It is also the number of branches whose warm trees survive at once — `ensure` mints before it evicts, so even a quiet deployment reaches the bound and the slots past the ones in use are the last few branches worked. Exhaustion **rejects** the dispatch (recorded, retried next cycle) rather than blocking the pulse, and only after reclaiming what it can. → [09](09-execution.md#exhaustion) |
 | `deskRoot`         | `string` | `.lubbdubb/desk`        | Root for desk-task scratch directories (one per task id).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `attachmentRoot`   | `string` | `.lubbdubb/attachments` | Root for images attached to a blueprint (issue #249) — deliberately outside every worktree, so a screenshot cannot be committed onto a branch. Every agent launch is granted read access to this whole root via `permissions.additionalDirectories`, which is a real widening: an agent working one goal can read another goal's attachments. See [09](09-execution.md) and [10](10-agent-runtimes.md).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
+| `localRunRoot`     | `string` | `.lubbdubb/local-run`   | The local run's one checkout, kept warm between goals. **Must not be under `worktreeRoot`**: the pool counts every registered worktree under its root whatever the directory is called, so a preview checkout in there would count toward the bound and be handed to an agent. → [23](23-local-runs.md#the-checkout) |
 | `validationRoot`   | `string` | `.lubbdubb/validation`  | Root for a goal's validation resources — fixtures, reference material, sample data — one directory per goal (`<root>/issue-284/`). `attachmentRoot`'s storage rule, argument for argument: outside every worktree, canonical rather than copied per dispatch, and granted to every agent launch through `permissions.additionalDirectories`. Granted on every launch, so an agent's readable set does not depend on a policy flag it cannot see. → [20](20-validation.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
+
+
+There is no key for how many worktree slots the pool holds. It is the **live** agent cap plus a slack
+of two, read on every acquire — so `maxConcurrentAgents`, raised in the cockpit or in this file,
+raises the pool's ceiling with it. `worktreePoolSize` used to pin it and could only be wrong in one of
+two directions: below the cap it silently became the fleet's real limit (every dispatch above it
+refused for want of a directory, presenting as a full queue and an idle fleet with nothing red), and
+above it, it was disk nothing could lease. A deployment that cannot hold that many checkouts lowers
+the cap instead. → [09](09-execution.md#exhaustion)
 
 ### Dispatch behaviour
 
@@ -250,6 +329,8 @@ resolve them against the wrong directory:
 | --------------------- | --------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- |
 | `promptTemplatesDir`  | `string`        | `.lubbdubb/prompts` | Directory of `<prompt-id>.md` overrides, read once at boot. Absent directory = all built-in defaults.                                                                                                                                                   |     |
 | `closedPrWindowMs`    | `number`        | `21600000` (6h)     | How far back providers look for PRs that left the open set. `0` disables the lookup entirely.                                                                                                                                                           |     |
+| `environments`        | `list`          | `[]`                | Where landed work travels — `{name, at, arrival?}` per entry: a command printing the commit the environment is **at**, and optionally what arriving there opens on the bench and whether it is said on the ticket. Empty is the off switch. `fileOnly`: each entry is a shell command the harness runs. → [24](24-environments.md#configuring-an-environment) |     |
+| `environmentProbeIntervalMs` | `number` | `300000` (5m)       | How long an unconfirmed landing rests before its environment is asked where it is again — and the precision of every "arrived at" the cockpit shows. A confirmed landing is never re-asked, an environment with nothing pending is not asked at all, and it also bounds which arrivals are fresh enough to announce.                                                                                     |     |
 | `upNextOverrideTtlMs` | `number`        | `604800000` (7d)    | How long an operator "Up next" priority override (issue #128) survives after its origin stops being tracked. `0` disables pruning.                                                                                                                      |     |
 | `ci.checks`           | `CiCheckRule[]` | `[]`                | Per-check CI policy: what rule `pr-ci-failing` does about _which_ check went red. Ordered, first match wins, replaced wholesale by an override. Empty — and any check matching no rule — is the pre-policy behaviour: dispatch a code agent. See below. |     |
 
@@ -426,16 +507,21 @@ Both transitions need a provider that can write the state back (Azure). GitHub i
 | Key                                   | Type             | Default                              | Behaviour                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | ------------------------------------- | ---------------- | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `planning.maxConcurrentPartsPerIssue` | `number`         | `2`                                  | How many parts of one plan may have live agents at once.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| `planning.requireApproval`            | `boolean`        | `true`                               | Put a plan to a human before anything is scheduled from it: approve-before rather than replan-after. On, ingestion persists it as `awaiting_approval` and rule `plan-approval` proposes it once, and its ready parts are queued as `unapproved` by rule `plan-part` until you accept. One part or eight — the part count has no bearing on any of it. Rejecting sends the plan back to a planner with your reason, retiring the parts nothing was started for. Off leaves the funnel byte-for-byte as it was: the plan commits the moment the planner writes it. |
 | `planning.gitFetchIntervalMs`         | `number`         | `60000`                              | Floor on how often plan reconciliation runs `git fetch`. `0` = every pulse.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | `validation.desktopClaimMinutes`      | `number`         | `60`                                 | How long a desktop claim holds a check unreleased. A claim normally goes when the session's socket closes or the check is reported; neither survives a harness killed in between, and a stale claim blocks the fleet from a check nobody is running.                                                                                                                                                                                                                                                                                                             |
 | `validation.desktopSocketPath`        | `string`         | `<tmpdir>/lubbdubb/mcp-desktop.sock` | Where the desktop bridge connects. **Stable, not per-pid** — that is what lets the MCP server be registered in Claude Code once instead of per run. The cost is that two harnesses on one machine want the same path, so the channel refuses a _live_ socket rather than unlinking it the way the fleet's does — and since the channel is unconditional, the second harness on a machine is the case this key exists for. → [11](11-mcp-tools.md#transport)                                                                                                      |
 | `validation.desktopCredentialPath`    | `string`         | `~/.lubbdubb/desktop.json`           | Where the credential is written, `0600`. A **path**, not a secret — the token inside is minted at every start, which is the point: it keeps the token out of the registration an operator pastes, and out of `ps`.                                                                                                                                                                                                                                                                                                                                               |
 | `validation.desktopSkillPath`         | `string`         | `~/.claude/skills/lubbdubb/SKILL.md` | Where the skill is installed. Rewritten from scratch on every start, on every deployment — there is no setting that keeps a hand-edited copy, and the file says so in its own body.                                                                                                                                                                                                                                                                                                                                                                              |
+| `localRun.instruction`                | `text`           | `''`                                 | What the session bringing the machine's dev environment up is told, verbatim — the command, how long it takes, where it lands. **Empty means nothing is startable**, and the panel says so rather than offering a control that refuses. Free text rather than a command because the machine that can start a deployment is the one with the operator's own tooling on it: `/dev-environment start` is a Claude Code command, not a shell one. **Live** — an edit applies to the next start, which is the whole reason it is a config field and not a prompt override. → [23](23-local-runs.md#the-instruction-is-config-not-a-prompt) |
+| `localRun.url`                        | `string`         | `''`                                 | Where the application lands once it is up, drawn as a link beside the run. Declared rather than detected: matching a URL in output whose shape is every framework's own is wrong often enough that a dead link beside a working run is the likelier outcome. Frozen onto the row at each start, so a later edit does not rewrite what a past run reported. **Live.** |
 | `spendBurn.enabled`                   | `boolean`        | `true`                               | The live burn watch. On by default because it spends no agent and gates nothing. Off files nothing and **still settles rows already standing**, so turning it off drains the bench.                                                                                                                                                                                                                                                                                                                                                                              |
 | `spendBurn.multiple`                  | `number`         | `4`                                  | How many times its bucket's median a live run may reach before it surfaces. Must be above `1`. Generous on purpose: the spread inside one rule-and-profile bucket is real work, not noise.                                                                                                                                                                                                                                                                                                                                                                       |
 | `spendBurn.minimumRuns`               | `number`         | `5`                                  | Settled, measured runs a bucket needs before its median is trusted at all. Below it the bucket is silent rather than guessed at.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `spendBurn.floorUsd`                  | `number`         | `1`                                  | Absolute money a run must **also** have spent, so four times the median of a rule that costs pennies is not an alarm.                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| `runway.enabled`                      | `boolean`        | `true`                               | The runway watch (`src/supply/runway.ts`). On by default on the burn watch's terms: it spends no agent and gates nothing. Off files nothing and **still settles rows already standing**, so turning it off drains the bench. → [25](25-supply.md)                                                                                                                                                                                                       |
+| `runway.warnHours`                    | `number`         | `1`                                  | Hours of queued work below which a `supply` row is filed. Roughly one goal on a three-wide fleet: late enough that a fleet dipping between goals never trips it, early enough to triage before a slot goes empty.                                                                                                                                                                                                                                       |
+| `runway.clearHours`                   | `number`         | `3`                                  | Hours a standing row must be back **above** before it settles. Must exceed `warnHours`, and the loader refuses anything else: at or below it the notice does not fail, it flaps — filed and settled on alternate pulses.                                                                                                                                                                                                                                |
+| `runway.minimumRuns`                  | `number`         | `5`                                  | Completed goals before their median lead time is trusted. Below it the reading is `unknown` rather than guessed at — but only on the arms that need a duration: `starved` and `dry` are observations about right now and report on a deployment with no history at all.                                                                                                                                                                                 |
 | `spendBurn.ceilingUsd`                | `number \| null` | `null`                               | A flat per-run ceiling that fires with no history whatever — the arm for a deployment where the first runaway is also the first run. `null` = no such arm, because the right number is a property of your work and nothing here can guess it.                                                                                                                                                                                                                                                                                                                    |
 
 | `selfUpdate.enabled` | `boolean` | `true` | Whether the harness checks its **own** build for updates. Off means no check, no gauge and no upgrade route — the behaviour before this existed. |
@@ -840,4 +926,14 @@ committed:
 
 ## Example
 
-`lubbdubb.config.example.json` at the repo root is a complete, commented example of every key.
+`lubbdubb.config.example.json` at the repo root is a complete, commented example of every key. The
+same keys are legal in a project's `lubbdubb.project.json` (all but `repoRoot`), so there is one
+example rather than two — what differs between the files is who they belong to, not what they may
+say.
+
+It is laid out in the **same six sections the cockpit's Settings tab draws** — Dispatch, Agents,
+Integrations, Features, Paths, Server, in that order, from the `GROUPS` list in
+`src/server/runningConfig.ts` — with a `"// ===== SECTION ====="` banner between them. One order for
+the file and the form, because they are two ways at the same file: a key found in the tab is where
+the tab said it was when the operator goes to hand-edit it. A key added to `GROUPS` in a different
+place belongs in the same place here.

@@ -10,6 +10,7 @@ import type {
   PetStage,
   PetState,
 } from '../types.js';
+import { PET_STAGES, speciesSeen } from '../pets/reveal.js';
 import { SpeciesSprite } from './SpeciesSprite.js';
 import { absDate } from './util.js';
 
@@ -18,8 +19,12 @@ import { absDate } from './util.js';
  * turns up — the part of the vivarium you can read *before* you have the animal.
  *
  * **A species you have not hatched is withheld, not hidden.** Its rate, its cost
- * and the actions that draw it are all drawn; its name, its two grown forms and
- * its colours are not. That is the whole shape of the surface: a page that showed
+ * and the actions that draw it are all drawn; its name, its forms and its colours
+ * are not — and a form is given up one at a time, as a pet of yours reaches it.
+ * An egg you have not opened gives up nothing at all: the animal in it is decided
+ * and withheld, so a shell in the vivarium is not a species you have met.
+ *
+ * That is the whole shape of the surface: a page that showed
  * everything would spend the reveal the sprites are built around — every tier
  * shares one egg precisely so that finding out *what you got* is worth waiting
  * for — and a page that showed nothing would answer none of the questions an
@@ -55,9 +60,20 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
     };
   }, []);
 
-  // A blended pet still counts: its record stays, and so does the fact that you
-  // once had one. Finding is about having seen the animal, not about owning it now.
-  const found = useMemo(() => new Set(pets.pets.map((pet) => pet.species)), [pets.pets]);
+  // What the collection has actually shown, form by form — an unopened shell has
+  // shown nothing at all, and a stage nobody has raised one to is a form nobody has
+  // seen. A blended pet still counts: its record stays, and so does the fact that
+  // you once had one. Finding is about having seen the animal, not about owning it
+  // now. → `web/src/pets/reveal.ts`
+  const seen = useMemo(() => speciesSeen(pets.pets), [pets.pets]);
+  // Found is the juvenile's to give, exactly as `speciesKnown` has it for a single
+  // pet: the hatchling is the tier's own form and says nothing about which animal
+  // is inside it. A page that named a species off a hatchling would spend the
+  // reveal the panel is careful to keep.
+  const found = useMemo(
+    () => new Set([...seen].filter(([, stages]) => stages.has('juvenile')).map(([species]) => species)),
+    [seen],
+  );
 
   if (failed) return <p className="muted">The catalogue did not load. It returns by itself when the link does.</p>;
   if (catalogue === null) return <p className="muted">Reading the catalogue…</p>;
@@ -93,7 +109,8 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
         </p>
         <p className="muted small">
           You have found <b>{found.size}</b> of {species.length}. A pet you have not found keeps its rate and its
-          sources, and withholds its name, its grown forms and its colours.
+          sources, and withholds its name, its forms and its colours. An egg you have not opened counts for none of
+          them, and each age appears once one of yours has reached it.
         </p>
         {/* The one thing on this page that is about *this* deployment rather than
             about the tables. Every rate above is a claim about what an action is
@@ -201,7 +218,7 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
                   key={entry.species}
                   entry={entry}
                   known={found.has(entry.species)}
-                  eggSeen={members.some((sibling) => found.has(sibling.species))}
+                  seen={seen.get(entry.species) ?? EMPTY}
                   rules={rules}
                   everyKind={everyKind}
                   meanDrop={meanDrop}
@@ -229,8 +246,8 @@ export function PetsPage({ pets }: { pets: PetState }): JSX.Element {
         A pet&rsquo;s share of drops assumes you do all seven actions about equally often, and weighs each action by its
         own drop chance — so an upgrade counts for more of the catalogue than a job launch does. The two tables are
         exact per action. Every pet of a tier hatches as the same egg, so you find out what you got at the juvenile
-        stage. ☾ marks a pet that can only drop in certain hours, going by the time of the action rather than the time
-        you look.
+        stage — and each age is drawn once a pet of yours has grown that far. ☾ marks a pet that can only drop in
+        certain hours, going by the time of the action rather than the time you look.
       </p>
     </div>
   );
@@ -249,16 +266,16 @@ function Odd({ label, value, why }: { label: string; value: string; why: string 
 function SpeciesCard({
   entry,
   known,
-  eggSeen,
+  seen,
   rules,
   everyKind,
   meanDrop,
 }: {
   entry: PetCatalogueEntry;
-  /** Whether this species is in the collection, which is what decides the reveal. */
+  /** Whether the collection has named this species, which is what decides the reveal. */
   known: boolean;
-  /** Whether any pet of this tier has been found — the egg is shared, so one is all it takes. */
-  eggSeen: boolean;
+  /** The forms of it the collection has actually shown, which is what decides each age. */
+  seen: ReadonlySet<PetStage>;
   rules: PetCatalogue['rules'];
   /** How many actions there are in total, which is what makes the list collapsible. */
   everyKind: number;
@@ -288,10 +305,14 @@ function SpeciesCard({
       </div>
 
       <div className="species-ages">
-        {STAGES.map((stage) => {
-          const hidden = stage === 'hatchling' ? !eggSeen : !known;
+        {PET_STAGES.map((stage) => {
+          // Both, and neither is the other: a species is named at the juvenile, and
+          // a form is drawn once one of yours has reached it. Gating the ages on
+          // `seen` alone would light this card's hatchling — and only this card's —
+          // for a hatchling whose species you are not supposed to know yet.
+          const hidden = !known || !seen.has(stage);
           return (
-            <div key={stage} className="species-age" title={ageNote(entry, stage, hidden)}>
+            <div key={stage} className="species-age" title={ageNote(entry, stage, known, hidden)}>
               <span className="species-art">
                 <SpeciesSprite
                   species={entry.species}
@@ -439,7 +460,8 @@ function SourceTable({
   );
 }
 
-const STAGES: readonly PetStage[] = ['hatchling', 'juvenile', 'adult'];
+/** The stages a species nobody has met has seen none of. */
+const EMPTY: ReadonlySet<PetStage> = new Set();
 
 /**
  * Four actions, so four palettes of one animal.
@@ -484,8 +506,12 @@ function clock(hour: number): string {
   return `${String(hour).padStart(2, '0')}:00`;
 }
 
-function ageNote(entry: PetCatalogueEntry, stage: PetStage, hidden: boolean): string {
-  if (hidden) return 'Find one to see this form.';
+function ageNote(entry: PetCatalogueEntry, stage: PetStage, known: boolean, hidden: boolean): string {
+  if (!known) return 'Find one to see this form.';
+  // Known but unreached: the cost is the answer, since it is the thing standing
+  // between the operator and the drawing.
+  if (hidden)
+    return `Raise one this far to see this form — ${(stage === 'juvenile' ? entry.juvenileAt : entry.adultAt).toLocaleString()} beats.`;
   if (stage === 'hatchling')
     return `Every ${entry.rarity} hatches as this same egg. You find out what you got at the juvenile stage.`;
   return `${(stage === 'juvenile' ? entry.juvenileAt : entry.adultAt).toLocaleString()} beats fed.`;
@@ -498,7 +524,7 @@ function ageNote(entry: PetCatalogueEntry, stage: PetStage, hidden: boolean): st
  * windows gets a vaguer label rather than a confidently wrong one — the chip says
  * "some hours" and the numbers stay on the wire where they are right.
  *
- * @public — read by `test/petsPage.test.ts`, which is where the wrap is checked.
+ * @public — read by `test/petCatalogue.test.ts`, which is where the wrap is checked.
  */
 export function hourWindow(hours: readonly number[]): { from: number; to: number } | null {
   if (hours.length === 0 || hours.length >= 24) return null;

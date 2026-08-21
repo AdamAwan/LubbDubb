@@ -119,6 +119,31 @@ export class HumanTaskStore {
   }
 
   /**
+   * Every obligation the bench has ever held, oldest first — the runway lens's
+   * whole view of what a person owes the fleet, and of what they used to.
+   *
+   * Deliberately unbounded where {@link listHumanTasks} takes a limit, and the
+   * difference is the point: that one feeds a panel, where a cap hides the tail
+   * of a long list, and this one feeds a *count* and a *median*, where a cap
+   * would silently report a hundred when the answer is two hundred — on
+   * precisely the deployments furthest behind.
+   *
+   * **Settled rows are in it, and that is not laxity.** The debt count reads the
+   * open ones; the lead time reads the closed ones, because a hold that has
+   * ended is exactly the span the median must not have counted as work
+   * (`docs/spec/25-supply.md#the-lead-time-is-fleet-time`). One read rather than
+   * an open list beside a closed one, on {@link RunwayInput}'s rule: two lists of
+   * one table, either a subset of the other, is a caller free to pair a debt with
+   * somebody else's history.
+   */
+  listAllHumanTasks(): HumanTask[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM human_tasks ORDER BY created_at ASC, rowid ASC`)
+      .all() as HumanTaskRow[];
+    return rows.map(rowToHumanTask);
+  }
+
+  /**
    * The human tasks backing plan parts — what the reconciler reads to decide
    * whether a part a person owns is still waiting or has been refused.
    *

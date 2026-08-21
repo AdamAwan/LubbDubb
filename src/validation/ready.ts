@@ -47,6 +47,18 @@ interface ValidationReadyInput {
   existing: readonly HumanTask[];
   /** Each goal's checks, keyed on its `originRef`. Absent is a goal that declared none. */
   checks: ReadonlyMap<string, readonly ValidationCheck[]>;
+  /**
+   * The goals an environment gate has opened, or **null when no environment
+   * declares one**. Null is not an empty set: it is "nothing gates this", which
+   * is every deployment that has not configured a post-merge state.
+   *
+   * The delivery is when a check becomes *meaningful*; with a gate configured it
+   * is not yet when one becomes **runnable** — a check against a build nobody can
+   * open is a row asking for work that cannot be done, which is the failure this
+   * whole file exists to end, one step earlier.
+   * → `docs/spec/24-environments.md#what-an-arrival-means`
+   */
+  opened: ReadonlySet<string> | null;
 }
 
 /**
@@ -97,6 +109,9 @@ export function validationReadyPass(input: ValidationReadyInput): ValidationRead
       continue;
     }
     if (existing && existing.status !== 'open') continue;
+    // Held, not dropped. The settle arms above still run, so a check ticked off
+    // early still closes a row that was filed before the gate was configured.
+    if (input.opened !== null && !input.opened.has(originRef) && !existing) continue;
     steps.push({
       kind: 'file',
       originRef,

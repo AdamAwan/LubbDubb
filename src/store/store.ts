@@ -8,6 +8,7 @@ import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
 import { PriorityStore } from './priority.js';
+import { ProfileOverrideStore } from './profileOverrides.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { LessonStore } from './lessons.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
@@ -23,6 +24,8 @@ import { TranscriptStore } from './transcripts.js';
 import { EscalationStore } from './escalations.js';
 import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
+import { EnvironmentStore } from './environments.js';
+import { LocalRunStore } from './localRuns.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
 import { ReviewWaitStore } from './reviewWaits.js';
@@ -49,10 +52,16 @@ import type {
   AgentFlagInput,
   AgentUsage,
   Decision,
+  EnvironmentReachStatus,
+  EnvironmentGateRelease,
+  EnvironmentReading,
+  GoalArrival,
+  GoalLanding,
   IssueAssay,
   ErrorLogEntry,
   ErrorLogInput,
   Escalation,
+  EscalationSpan,
   Finding,
   FindingInput,
   FindingStatus,
@@ -71,6 +80,8 @@ import type {
   JobSchedule,
   Lesson,
   LessonInput,
+  LocalRun,
+  LocalRunStatus,
   Pet,
   PetAction,
   PetActionKind,
@@ -86,6 +97,7 @@ import type {
   GoalPriority,
   PlanStatus,
   PriorityOverride,
+  ProfileOverride,
   Proposal,
   StackLanding,
   StackLandingStatus,
@@ -136,6 +148,7 @@ export class Store {
   private readonly jobs: JobStore;
   private readonly schedules: JobScheduleStore;
   private readonly priority: PriorityStore;
+  private readonly profileOverrides: ProfileOverrideStore;
   private readonly findings: FindingStore;
   private readonly lessons: LessonStore;
   private readonly humanTasks: HumanTaskStore;
@@ -149,6 +162,8 @@ export class Store {
   private readonly escalations: EscalationStore;
   private readonly landings: StackLandingStore;
   private readonly branchReaps: BranchReapStore;
+  private readonly environments: EnvironmentStore;
+  private readonly localRuns: LocalRunStore;
   private readonly prWatchSeeds: PrWatchSeedStore;
   private readonly workItemLinks: WorkItemLinkStore;
   private readonly reviewWaitStore: ReviewWaitStore;
@@ -217,6 +232,7 @@ export class Store {
     this.jobs = new JobStore(ctx);
     this.schedules = new JobScheduleStore(ctx);
     this.priority = new PriorityStore(ctx);
+    this.profileOverrides = new ProfileOverrideStore(ctx);
     this.findings = new FindingStore(ctx);
     this.lessons = new LessonStore(ctx);
     this.humanTasks = new HumanTaskStore(ctx);
@@ -230,6 +246,8 @@ export class Store {
     this.escalations = new EscalationStore(ctx);
     this.landings = new StackLandingStore(ctx);
     this.branchReaps = new BranchReapStore(ctx);
+    this.environments = new EnvironmentStore(ctx);
+    this.localRuns = new LocalRunStore(ctx);
     this.prWatchSeeds = new PrWatchSeedStore(ctx);
     this.workItemLinks = new WorkItemLinkStore(ctx);
     this.reviewWaitStore = new ReviewWaitStore(ctx);
@@ -352,6 +370,18 @@ export class Store {
     this.priority.reconcilePriorityOverrides(trackedOrigins, ttlMs);
   }
 
+  // -- Profile overrides (operator "run this queued row on X") --
+
+  setProfileOverride(origin: string, profile: string | null): void {
+    this.profileOverrides.setProfileOverride(origin, profile);
+  }
+  listProfileOverrides(): ProfileOverride[] {
+    return this.profileOverrides.listProfileOverrides();
+  }
+  reconcileProfileOverrides(trackedOrigins: readonly string[], ttlMs: number): void {
+    this.profileOverrides.reconcileProfileOverrides(trackedOrigins, ttlMs);
+  }
+
   // -- Goal priority (the operator's "this goal first, and everything under it") --
 
   setGoalPriority(originRef: string, priority: boolean): void {
@@ -422,6 +452,9 @@ export class Store {
   }
   listHumanTasks(limit?: number): HumanTask[] {
     return this.humanTasks.listHumanTasks(limit);
+  }
+  listAllHumanTasks(): HumanTask[] {
+    return this.humanTasks.listAllHumanTasks();
   }
   humanTaskLabels(ids: string[]): Map<string, string> {
     return this.humanTasks.humanTaskLabels(ids);
@@ -756,6 +789,9 @@ export class Store {
   listEscalations(): Escalation[] {
     return this.escalations.listEscalations();
   }
+  listEscalationSpans(): EscalationSpan[] {
+    return this.escalations.listEscalationSpans();
+  }
   escalationLabels(ids: string[]): Map<string, string> {
     return this.escalations.escalationLabels(ids);
   }
@@ -815,6 +851,68 @@ export class Store {
   }
   reapedPrs(): ReadonlySet<number> {
     return this.branchReaps.reapedPrs();
+  }
+
+  // -- Environments (where a goal's landed work has got to) -----------------
+
+  recordGoalLanding(input: { prNumber: number; goalRef: string; sha: string }): void {
+    this.environments.recordGoalLanding(input);
+  }
+  listGoalLandings(): GoalLanding[] {
+    return this.environments.listGoalLandings();
+  }
+  landedPrs(): ReadonlySet<number> {
+    return this.environments.landedPrs();
+  }
+  recordEnvironmentReach(input: {
+    sha: string;
+    environment: string;
+    status: EnvironmentReachStatus;
+    detail: string | null;
+  }): void {
+    this.environments.recordEnvironmentReach(input);
+  }
+  listEnvironmentReach(): EnvironmentReading[] {
+    return this.environments.listEnvironmentReach();
+  }
+  recordGoalArrival(input: { goalRef: string; environment: string; arrivedAt: string }): void {
+    this.environments.recordGoalArrival(input);
+  }
+  listGoalArrivals(): GoalArrival[] {
+    return this.environments.listGoalArrivals();
+  }
+  markArrivalAnnounced(goalRef: string, environment: string): void {
+    this.environments.markArrivalAnnounced(goalRef, environment);
+  }
+  releaseEnvironmentGate(goalRef: string, note: string): EnvironmentGateRelease {
+    return this.environments.releaseEnvironmentGate(goalRef, note);
+  }
+  clearEnvironmentGateRelease(goalRef: string): void {
+    this.environments.clearEnvironmentGateRelease(goalRef);
+  }
+  listEnvironmentGateReleases(): EnvironmentGateRelease[] {
+    return this.environments.listEnvironmentGateReleases();
+  }
+
+  // -- The local run (the machine's one dev environment) --------------------
+
+  beginLocalRun(input: { originRef: string; ref: string; dir: string; url: string | null }): LocalRun {
+    return this.localRuns.beginLocalRun(input);
+  }
+  markLocalRunPid(id: string, pid: number | null): void {
+    this.localRuns.markLocalRunPid(id, pid);
+  }
+  setLocalRunStatus(id: string, status: LocalRunStatus, note?: string): void {
+    this.localRuns.setLocalRunStatus(id, status, note);
+  }
+  liveLocalRun(): LocalRun | null {
+    return this.localRuns.liveLocalRun();
+  }
+  currentLocalRun(): LocalRun | null {
+    return this.localRuns.currentLocalRun();
+  }
+  endStaleLocalRuns(note: string): number {
+    return this.localRuns.endStaleLocalRuns(note);
   }
 
   // -- PR watch seeds (the harness's own PRs, already tagged) ---------------

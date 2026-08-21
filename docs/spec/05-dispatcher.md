@@ -89,7 +89,7 @@ unconditional.
 | `issue-assess`             | Issue may be finished                | `assessment`         | A watched issue — open, **or a retained run** — has had work, has nothing in flight and no open PR.                                                                         |
 | `issue-shortfall`          | Assessment says the goal was missed  | —                    | An assessment recorded that a watched open issue was worked and its goal is still not reached. Claims no headroom.                                                          |
 | `issue-retro`              | Delivered goal needs a retrospective | `retrospective`      | A goal the harness parked as delivered, with nothing in flight under it and no write-up yet, gets one desk agent to write the run up. Retained runs included.               |
-| `plan-approval`            | Plan needs your approval             | `planning`           | With `planning.requireApproval` on, a planner's verdict — either arm — is `awaiting_approval` and no verdict is pending.                                                    |
+| `plan-approval`            | Plan needs your approval             | `planning`           | A planner's verdict — either arm — is `awaiting_approval` and no verdict is pending.                                                                                        |
 | `plan-blocked`             | Approved plan is going nowhere       | `planning`           | Every live part of a released plan is blocked, so nothing will be dispatched for it. Asks a human once; dispatches nobody.                                                  |
 | `plan-part`                | Plan part ready                      | `planning`           | A part of an active plan is `ready` and unstaffed.                                                                                                                          |
 | `issue-pickup`             | Open issue without a PR              | —                    | An eligible open issue has no **open** PR and no agent on it, and the funnel **failed open** on it (route `unplanned`). Never a retained run.                               |
@@ -427,6 +427,40 @@ independently of position. Overriding a hold _into_ dispatch is a different feat
 
 An override is written by `POST /api/upnext/order` (replace-all) and pruned once its origin stops
 being tracked — see [16](16-http-api.md) and [14](14-persistence.md).
+
+### Pricing one queued row
+
+Every queued row carries the profile it would launch on: `QueueItem.profile`, the name resolved by
+`resolveAgentProfile` from the same two inputs the dispatch itself is stamped from, with
+`profileSource` saying which level of the chain answered (`pin`, `rule`, `default`). It is resolved
+in the cut walk, so a `held` or `waiting` row is priced as well as a dispatching one — "what will
+this cost when it finally runs" is precisely the question being asked of a row nobody has started.
+It is `null` where a run would carry no `--model` flag at all: no `agentModels`, or a rule with no
+entry and no `default`.
+
+The operator can change it from the row. That writes a **profile override keyed on the candidate's
+origin** — the same key and the same lifecycle a priority override has: stored in
+`profile_overrides`, reaching the dispatcher as `DispatchContext.profileOverrides`, pruned by the
+same `upNextOverrideTtlMs` sweep once the harness stops tracking the origin. Two tables rather than
+two columns on one, because "do this sooner" and "do this cheaper" are independent statements and an
+operator who makes one has made nothing of the other.
+
+It is the **narrowest and highest-precedence level of the pin chain**, ahead of the plan's part
+profile and the goal's tag ([02](02-configuration.md#pinning-one-goal-to-a-profile)): those are
+standing statements about work, this is a person reading the queue as it stands now. The chain is
+applied in one place — `StageContext.pinFor`, where a candidate becomes a dispatched action — and
+the override is consulted _outside_ `pinnedProfileFor` because it is keyed on the whole origin
+rather than on the `issue:<n>` subtree. That is what makes the lever reach a `pr:<n>:ci` or a
+`pr:<n>:comments` row, which has no goal tag and no part to carry one, and which is the row an
+operator most often recognises as mechanical.
+
+It is **standing, not one-shot**: nothing consumes it at dispatch, so the pin chain stays a pure
+function of the origin and a retry of the run it priced runs on the same profile. And it **prices
+only** — an override never un-holds a held candidate and never lifts one over the headroom cut, the
+same way a priority override only orders.
+
+Written by `POST /api/upnext/profile` — see [16](16-http-api.md#post-apiupnextprofile) — and drawn
+as the `ProfilePicker` on each Up next row ([17](17-cockpit.md)).
 
 ### Marking a goal a priority
 
@@ -1027,7 +1061,9 @@ Not every entry is a prompt. `pr-title` is rendered straight onto a pull request
 rather than an instruction to an agent.
 
 **Retired ids stay in the book.** `work-item-ticket` and `blueprint-ticket` are no longer rendered —
-[#394](13-jobs-and-findings.md#filing-a-ticket) replaced the desk agents they were sent to — but
+[#394](13-jobs-and-findings.md#filing-a-ticket) replaced the desk agents they were sent to — and
+neither is `local-run`, whose instruction moved to the `localRun.instruction` config field so an
+operator could edit it in the cockpit without a restart ([23](23-local-runs.md#the-instruction-is-config-not-a-prompt)). But
 deleting them would make `loadPromptTemplates` throw on a deployment that had overridden one, which is
 a harness that will not boot over a file it no longer reads. They carry `retired: true` instead, which
 `describe()` ships to the Prompts panel, so an override that is no longer sent says so rather than

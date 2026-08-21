@@ -38,6 +38,7 @@
 import type { FilingTarget } from './sink/actionSink.js';
 import type { PlanDiff } from './plans/planDiff.js';
 import type { AcceptanceCriterion } from './plans/parts.js';
+import type { RunwayReading } from './supply/runway.js';
 import type { PlanningPolicy } from './plans/planning.js';
 import type { PetRules } from './pets/rules.js';
 import type { CiPolicyDescription } from './ci/describeCiPolicy.js';
@@ -69,10 +70,13 @@ import type {
   ConclusionAuthor,
   Decision,
   DeliveryAuthor,
+  EnvironmentGateRelease,
   ErrorLogEntry,
   Escalation,
   Finding,
+  GoalArrival,
   GoalAssayVerdict,
+  GoalEnvironmentReach,
   HumanTask,
   IssueConclusionVerdict,
   IssueInstruction,
@@ -92,6 +96,7 @@ import type {
   PetWallet,
   JobSchedule,
   Lesson,
+  LocalRun,
   Plan,
   PlanPart,
   PlanRevision,
@@ -327,6 +332,22 @@ export interface LessonView extends Lesson {
   rendered: boolean;
 }
 
+/**
+ * The local run as the cockpit reads it.
+ *
+ * `LocalRun` plus the one derived fact, and the derivation is here rather than in
+ * the cockpit for the reason every reading is: "is this going" is a rule about which
+ * statuses count as live, and a cockpit re-deriving it would be a second opinion
+ * able to disagree with the runner about whether to draw a Stop button.
+ *
+ * **The output is not here.** The tail is up to two hundred lines and the snapshot
+ * is polled; it has its own route, fetched when the panel opens, on the same
+ * argument that keeps the work graph and the prompt book off the snapshot.
+ */
+export interface LocalRunView extends LocalRun {
+  live: boolean;
+}
+
 export interface PlanPartView extends PlanPart {
   /**
    * How deep in the stack this part sits — `partDepth`, the longest path to a part
@@ -470,6 +491,16 @@ interface CockpitConfig {
    */
   desktopFolder: string;
   /**
+   * `localRun.instruction` is set to something, so a start has something to run.
+   *
+   * The **fact**, not the text: the instruction is several sentences of operator
+   * prose that only the session needs, and the cockpit's whole question is whether
+   * to offer a start or to say what is missing. It is here rather than on
+   * {@link LocalRunView} because a deployment that has never started anything has no
+   * run to hang it off, and that is exactly when it matters.
+   */
+  localRunConfigured: boolean;
+  /**
    * `issueContainerTypes` — the work-item types that hold work rather than being
    * it. Shipped because the backlog draws a container as a *heading* over its
    * children rather than as a row beside them, and that is a decision about the
@@ -559,6 +590,20 @@ export interface CockpitState {
    * updates on the same socket as the queue above it.
    */
   pets: PetState | null;
+  /**
+   * The machine's one dev environment (`docs/spec/23-local-runs.md`), or **null**
+   * when nothing has ever been started — which the cockpit draws as a quiet
+   * indicator rather than as nothing, because "no environment is up" is the reading
+   * an operator opens this to get.
+   *
+   * The **last** run rides here once it has ended, not only a live one: a start that
+   * failed is the case somebody actually hits, and its reason has to be somewhere to
+   * read after the process is gone.
+   *
+   * On the snapshot rather than a route of its own for `pets`' reason — the
+   * indicator sits in the same reads row as the rest and updates on the same socket.
+   */
+  localRun: LocalRunView | null;
   planParts: PlanPartView[];
   /**
    * Every plan's validation checks and the resources they name, keyed to a plan
@@ -587,6 +632,27 @@ export interface CockpitState {
    * same terms as one a plan produced.
    */
   stacks: Stack[];
+  /**
+   * Where each goal's landed work has got to, one entry per goal that has landed
+   * anything or has a merge nothing could attribute. Empty whenever no environment
+   * is configured, which is what the cockpit reads to draw no environment row at
+   * all — rather than a row of question marks on a deployment that never asked for
+   * one. → `docs/spec/24-environments.md#the-lens`
+   */
+  environmentReach: GoalReachView[];
+  /**
+   * The goals whose whole work has arrived somewhere, newest first — the
+   * environments half of the Activity feed, capped like every other feed on this
+   * surface.
+   *
+   * **Not a {@link WorldEvent}, deliberately.** Those are derived by diffing
+   * consecutive world snapshots, and a delivered goal's standing hold is expired
+   * by *any* world event on its issue ref (`deliveryHold`) — so an arrival written
+   * as one would lift the delivery park on the goal it announced and hand the work
+   * straight back to the fleet to do again. Its own list has no such reader.
+   * → `docs/spec/24-environments.md#in-the-cockpit`
+   */
+  environmentArrivals: GoalArrival[];
   /**
    * One entry per chain in {@link stacks}: whether "land the stack" may be
    * offered, and the operator's standing intent over it if there is one.
@@ -700,6 +766,17 @@ export interface CockpitState {
    * persisted FIFO.
    */
   upcoming: UpcomingPlan | null;
+  /**
+   * Whether there is work left for the fleet, and whether the reason there is not
+   * is upstream of it — the band under Fleet.
+   *
+   * A domain type shipped whole rather than a widened copy: the pulse's desk and
+   * this take the same reading through the same function, and a wire shape that
+   * dropped a field would let the card and the bench row describe one fleet
+   * differently. Never null — an empty card still draws, and `unknown` is the
+   * reading for a deployment with no history rather than an absence.
+   */
+  runway: RunwayReading;
   worldEvents: WorldEvent[];
   /** Recorded failures, newest first — the Errors panel. */
   errors: ErrorLogEntry[];
@@ -733,6 +810,36 @@ export interface CockpitState {
  * shipping the forest on every poll would be the wrong shape: the roots are read
  * once on mount and a subtree when one is opened.
  */
+/**
+ * One goal's standing across every configured environment, in the order the
+ * operator declared them.
+ *
+ * Keyed on the goal ref rather than joined onto {@link Issue}, because the goals
+ * with landings and the goals in the world are different sets: work lands, its
+ * ticket closes, and the tracker stops listing it long before the release carrying
+ * it reaches production. Folded into the issue, a goal's environment row would
+ * vanish at exactly the point somebody wants to know where it went.
+ */
+export interface GoalReachView {
+  /** The goal, as `issue:<n>`. */
+  goalRef: string;
+  environments: GoalEnvironmentReach[];
+  /**
+   * Why this goal's `validate` and `close_out` rows are being withheld, or null
+   * when nothing is withholding them.
+   *
+   * Non-null **only for a goal that is delivered and gated right now**, so the
+   * cockpit can read it as "the harness is waiting, and here is what for" without
+   * re-deriving a verdict the server already made. A hold is otherwise the
+   * quietest thing here: nothing is filed, so a delivered goal with an empty
+   * bench looks exactly like a finished one.
+   * → `docs/spec/24-environments.md#what-an-arrival-means`
+   */
+  gateHold: string | null;
+  /** The operator's "this one is not waiting on an environment", when they have said so. */
+  released: EnvironmentGateRelease | null;
+}
+
 export interface WorkRootsPayload {
   roots: WorkNode[];
   unrecorded: UnrecordedWork[];
@@ -1036,8 +1143,17 @@ export interface PromptsPayload {
  */
 export interface RunningConfigPayload {
   groups: RunningConfigGroup[];
-  /** Absolute path of the file a save writes. */
+  /** Absolute path of the file a save writes — the operator's own. */
   file: string;
+  /**
+   * Absolute path of the targeted project's shared config, or null when that
+   * repository carries none.
+   *
+   * A save never writes here: this file belongs to the team and is changed by
+   * committing to the project. It is on the payload so a cockpit showing a value
+   * an operator did not choose can name the file that did.
+   */
+  projectFile: string | null;
   /** The file's current text, for the raw editor and the review diff. */
   text: string;
   revision: string;
@@ -1101,9 +1217,14 @@ export type {
   AgentFlag,
   BugFiling,
   Decision,
+  EnvironmentGate,
+  EnvironmentGateRelease,
   ErrorLogEntry,
   Escalation,
   Finding,
+  GoalArrival,
+  GoalEnvironmentReach,
+  GoalReachStatus,
   HumanTask,
   IssueRelative,
   IssueSpend,
@@ -1174,6 +1295,7 @@ export type { ChecksSpend, TaskTypeSpend } from './taskTypeSpend.js';
 export type { Stack } from './stacks/stack.js';
 export type { PlanDiff } from './plans/planDiff.js';
 export type { AcceptanceCriterion } from './plans/parts.js';
+export type { SupplyState } from './supply/runway.js';
 export type { PlanningPolicy } from './plans/planning.js';
 export type { PetRules } from './pets/rules.js';
 export type { ValidationPolicy } from './validation/policy.js';

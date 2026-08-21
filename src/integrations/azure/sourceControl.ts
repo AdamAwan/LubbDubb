@@ -334,6 +334,7 @@ export function mapClosedPull(p: AzClosedPull): PullRequest {
     state: p.merged ? 'merged' : 'closed',
     merged: p.merged,
     closedAt: p.closedAt,
+    ...(p.mergeCommitSha === null ? {} : { mergeCommitSha: p.mergeCommitSha }),
     url: p.url,
   };
 }

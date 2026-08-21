@@ -441,11 +441,36 @@ a.btn {
   line-height: 1;
 }
 /* The server's refusal, in its own words. Sized like body text rather than a
-   toast: it names a file and a bound, which is a sentence to read, not a flash. */
+   toast: it names a file and a bound, which is a sentence to read, not a flash.
+   Shared by every station that draws one — the composer, the modals, the bench
+   verdict — because a refusal is one thing wherever it lands. */
 .launch-error {
   margin: 0;
   color: var(--red);
   font-size: 12px;
+}
+
+/* The shared bench verdict (`HumanTaskActions`). No colour of its own — the
+   station's `buttonClass` carries that, which is the whole seam — only the
+   placement both its stations need: the note it asks for and the refusal it
+   reports take a line of their own under the buttons rather than a column
+   squeezed beside them, which is what they get as bare children of the console's
+   flex row of actions. */
+.human-task-decline,
+.human-task-refusal {
+  flex-basis: 100%;
+  width: 100%;
+}
+.human-task-note {
+  width: 100%;
+  box-sizing: border-box;
+}
+/* The reason the note is being asked for, above the box that answers it. */
+.human-task-owed {
+  margin: 0 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
 }
 /* The picker itself is never drawn — the visible control is a cockpit button that
    clicks it, so the composer keeps one button vocabulary. */
@@ -4665,6 +4690,81 @@ a.btn {
 /* -- The build panel ------------------------------------------------------ */
 /* Tokens only, like every shared component: the console sheet must not reach in
    here, so this reads the same on any theme the console later takes. */
+/* The local run panel. One environment, so one state and a picker — see
+   LocalRunPanel. Every colour is a token: a hex here is a surface that stays dark
+   when somebody switches to Light, which `test/cockpitTheme.test.ts` is the only
+   thing in `check` that would catch. */
+.lrun {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.lrun-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lrun-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.lrun-meta {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.lrun-meta code {
+  font-family: var(--font-mono);
+  color: var(--link-ink);
+}
+.lrun-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+.lrun-swap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+  font-size: 12px;
+}
+/* The same chrome `.launch-kind select` gives its picker. A native select against a
+   dark theme keeps the user agent's white box otherwise, which is the one surface on
+   this panel that would not follow a theme. */
+.lrun-swap select {
+  min-width: 0;
+  max-width: 320px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--r-md);
+  padding: 6px 8px;
+  font: inherit;
+}
+.lrun-hint {
+  color: var(--muted);
+}
+/* The session's own words. Scrolls rather than growing the panel: the tail is up
+   to two hundred lines and the interesting end is the bottom. */
+.lrun-log {
+  margin: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: var(--muted);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .build-panel {
   display: flex;
   flex-direction: column;
@@ -5045,6 +5145,14 @@ a.btn {
   color: var(--cn-accent);
   border-color: var(--cn-blue-line-hi);
   background: var(--cn-blue-bg);
+}
+/* The team's layer: someone chose this, and it was not the operator reading it.
+   Neutral rather than a hue of its own — the row's point is that this value is
+   not theirs to change here, not that it is remarkable. */
+.cfg-src.project {
+  color: var(--cn-fg-dim);
+  border-color: var(--cn-line-hi);
+  background: var(--cn-panel-2);
 }
 .cfg-src.env {
   color: var(--cn-violet);

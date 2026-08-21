@@ -171,6 +171,16 @@ export interface PullRequest {
   /** When the PR left the open set (ISO). Only set on a closed/merged PR. */
   closedAt?: string;
   /**
+   * The commit the merge produced on the base branch. Only ever set on a *merged*
+   * PR, and only by a provider that reports it.
+   *
+   * Read once, into a {@link GoalLanding}, because git cannot recover it: a squash
+   * merge leaves the branch with no ancestry link to its base, so every later
+   * question about where this work has got to is asked of this SHA rather than of
+   * the branch. → `docs/spec/24-environments.md#recording-a-landing`
+   */
+  mergeCommitSha?: string;
+  /**
    * Labels/tags on the PR. Drives the provider-agnostic exclusion gate: a PR
    * carrying `config.prExclusionLabel` is left alone by the dispatcher. Absent when
    * the PR carries no labels (or the provider/persisted row predates this field) —
@@ -787,6 +797,38 @@ export interface PriorityOverride {
 }
 
 /**
+ * An operator override of which model profile one queued dispatch runs on
+ * Keyed on the same stable `origin` {@link PriorityOverride} uses,
+ * and for the same reason: the queue is a per-pulse projection with nothing in it
+ * to mutate, so a statement about a queued row has to be written against what the
+ * row *names*.
+ *
+ * The two are separate statements about one row because they answer different
+ * questions — one is "do this sooner", the other "do this cheaper" — and an
+ * operator who says one has said nothing about the other.
+ *
+ * **Standing, not one-shot.** It is not consumed by the dispatch it changes: the
+ * pin chain is a pure function of the origin, so a retry of the run it priced
+ * runs the same profile it did. It is cleared by the operator, or pruned once its
+ * origin stops being tracked — the same `upNextOverrideTtlMs` that prunes a
+ * priority override, and the same reasoning.
+ *
+ * It wins over the goal's tag and the plan's part profile. Those are standing
+ * statements about work; this is a person looking at the queue as it is now, and
+ * the later, narrower reading is the one to act on.
+ */
+export interface ProfileOverride {
+  origin: string;
+  /**
+   * The profile's name. A plain string on {@link PlanPart.profile}'s terms — the
+   * route refuses a name this deployment does not configure, but config moves
+   * under a stored row, and `resolveAgentProfile` falls through to the rule for a
+   * name it cannot resolve rather than launching on nothing.
+   */
+  profile: string;
+}
+
+/**
  * A goal the operator has marked a priority: everything the harness dispatches
  * under `issue:<n>` — and against the pull requests that goal's branches opened —
  * is ranked ahead of the natural cross-rule order until the flag is cleared.
@@ -1204,7 +1246,7 @@ export type HumanTaskStatus = 'open' | 'done' | 'declined';
  * sentence it wrote — parsing prose the harness composed, which is the failure
  * mode `signalPolarity` and the reason plates already refuse.
  */
-export type HumanTaskKind = 'ask' | 'close_out' | 'burn' | 'validate';
+export type HumanTaskKind = 'ask' | 'close_out' | 'burn' | 'validate' | 'supply';
 
 /**
  * A unit of work only a person can do: flipping a setting in a console nobody
@@ -1736,8 +1778,8 @@ export interface IssueShortfall {
  * comment.
  *
  * - `planning` — a verdict is still being worked out (a replan in flight).
- * - `awaiting_approval` — the planner has spoken and `planning.requireApproval` is
- *   on, so a human has been asked to authorize the verdict (issue #109 phase 3) —
+ * - `awaiting_approval` — the planner has spoken, so a human has been asked to
+ *   authorize the verdict (issue #109 phase 3) —
  *   a decomposition, or the decision to work the issue as one PR. Nothing is
  *   scheduled from it: this status *is* the gate, which is why release is a
  *   one-way move rather than a verdict re-read every pulse. It releases to
@@ -2492,6 +2534,38 @@ interface PermissionRequest {
   summary: string;
 }
 
+/**
+ * When one escalation stood, and the only two handles there are on what it stood
+ * *about* — the projection the runway lens measures a hold from.
+ *
+ * A projection rather than the row because `listEscalations` is all-time and
+ * carries every settled item's `recentOutput` transcript tail with it, and the
+ * runway is re-read on every cockpit refresh. This is four columns and no JSON
+ * body.
+ *
+ * Deliberately raw. There is no `originRef: string` here resolved to a goal,
+ * because {@link EscalationContext} populates a different subset per escalation
+ * type — a merge approval carries `prNumber` and no ref at all — and deciding
+ * which of the two reaches which goal is the lens's judgement to make, not a
+ * caller's. → `docs/spec/25-supply.md#the-lead-time-is-fleet-time`
+ */
+export interface EscalationSpan {
+  createdAt: string;
+  /**
+   * When a person answered, or null. Null covers two different things and the
+   * lens has to tell them apart: an item still open (the hold is running now)
+   * and one dismissed without an answer (`dismissEscalation` stamps no time, so
+   * when that hold ended is not recorded anywhere) — which is what {@link open}
+   * is for.
+   */
+  answeredAt: string | null;
+  /** `context.originRef`, verbatim: `issue:12`, `pr:42:ci`, or absent. */
+  originRef: string | null;
+  /** `context.prNumber`, verbatim — the only handle the merge and reply arms carry. */
+  prNumber: number | null;
+  open: boolean;
+}
+
 export interface Escalation {
   id: string;
   type: EscalationType;
@@ -2888,4 +2962,192 @@ export interface PetReset {
   at: string;
   /** How many pets it released. Nothing reads it; it is the record of what went. */
   cleared: number;
+}
+
+// ---------------------------------------------------------------------------
+// Environments — where a goal's landed work has actually got to
+// ---------------------------------------------------------------------------
+
+/**
+ * A goal's work arriving on the integration branch: the commit one of its pull
+ * requests landed as, recorded against the goal it belonged to.
+ *
+ * **The SHA is a provider fact and cannot be recovered later.** `merge_pr` squashes,
+ * and a squash-merged branch has no ancestry link to its base — so the branch tip
+ * answers "is this in production" with a permanent no. What a downstream check has
+ * to be handed is the commit the merge *created*, which only the provider reports
+ * ({@link PullRequest.mergeCommitSha}).
+ *
+ * Keyed on the pull request, for {@link BranchReapStore}'s reason: a branch name is
+ * reusable, and a goal can land more than once.
+ */
+export interface GoalLanding {
+  /** The pull request that landed. */
+  prNumber: number;
+  /** The goal it was work for, `issue:<n>` — the key every verdict on a goal is written against. */
+  goalRef: string;
+  /** The commit the merge produced on the base branch. */
+  sha: string;
+  recordedAt: string;
+}
+
+/**
+ * Whether a commit has got to an environment.
+ *
+ * Three values and not two. A probe that cannot answer — the command is missing, it
+ * timed out, the cluster credentials expired — must not be readable as "not
+ * deployed": that is the same word the true answer uses, and the operator has no
+ * way to tell which one they are looking at. `unknown` is asked again; `absent` is
+ * asked again too, and only `reached` is ever final.
+ * → `docs/spec/24-environments.md#the-three-verdicts`
+ */
+export type EnvironmentReachStatus = 'reached' | 'absent' | 'unknown';
+
+/** One probe's answer about one commit, kept so the next pulse need not re-ask it. */
+export interface EnvironmentReading {
+  sha: string;
+  /** The environment's name as the operator configured it. */
+  environment: string;
+  status: EnvironmentReachStatus;
+  /** Why, for an `unknown` — the exit code, the signal, or the stderr's first line. */
+  detail: string | null;
+  observedAt: string;
+}
+
+/**
+ * A whole goal's standing in one environment, folded from its landings.
+ *
+ * `partial` is the reading this exists for: a goal is several pull requests, they
+ * land separately, and a release cut between two of them puts half a feature in
+ * production. Folded to a boolean that reads as "shipped", which is the wrong
+ * answer in the expensive direction.
+ */
+export type GoalReachStatus = 'reached' | 'partial' | 'absent' | 'unknown';
+
+export interface GoalEnvironmentReach {
+  environment: string;
+  status: GoalReachStatus;
+  /** How many of the goal's landings this environment has, and how many it has in total. */
+  landed: number;
+  total: number;
+  /**
+   * When the environment was first seen holding the goal's *last* landing — the
+   * moment the whole goal was there. Null unless `status` is `reached`, and only
+   * ever as precise as the probe interval.
+   */
+  at: string | null;
+  /**
+   * Which delivered-goal obligations arriving here opens, from the operator's own
+   * list. Shipped on the row rather than looked up beside it so the cockpit can
+   * say *why* a goal's bench rows are waiting on this environment without holding
+   * a second copy of the configuration.
+   */
+  opens: EnvironmentGate[];
+}
+
+/**
+ * The obligations an arrival at an environment opens. Both name a
+ * {@link HumanTaskKind} the harness already files on a delivered goal — what a
+ * gate changes is *when*: at the delivery, or once the work is somewhere a person
+ * can act on it. → `docs/spec/24-environments.md#what-an-arrival-means`
+ */
+export type EnvironmentGate = 'validate' | 'close_out';
+
+/**
+ * A whole goal's work confirmed in one environment, the first time it was.
+ *
+ * Stored rather than folded on demand, and that is the only reason the table
+ * exists: {@link goalReach} can say a goal *is* somewhere on every pulse, but not
+ * that it has just **got** there — and an arrival is a moment. Something has to
+ * be written down for the comment to go out once rather than every five minutes,
+ * and for the signal to read as an event rather than as a status.
+ *
+ * `OR IGNORE` on the write, for {@link GoalLanding}'s reason: the goal arriving is
+ * a settled fact, and a goal that grows another pull request and arrives again is
+ * the same arrival, not a second one.
+ */
+export interface GoalArrival {
+  /** The goal, `issue:<n>`. */
+  goalRef: string;
+  /** The environment's name as the operator configured it. */
+  environment: string;
+  /** The reading that confirmed the goal's last landing — as precise as the probe interval. */
+  arrivedAt: string;
+  /**
+   * When the arrival went through the announce pass, or null while it has not.
+   *
+   * Stamped whether or not there was anything to say, which is what keeps an
+   * environment that grows `arrival.comment` later from commenting on its whole
+   * history on the boot after. → `docs/spec/24-environments.md#announcing-an-arrival`
+   */
+  announcedAt: string | null;
+}
+
+/**
+ * The operator's answer to a goal that is never going to reach the environment
+ * its obligations are gated on — a docs change, a config change, work whose
+ * deployment nothing here can see.
+ *
+ * A row rather than a per-goal config key, and cleared by deletion, for
+ * `IssueDelivery`'s reason: "not released" then keeps exactly one representation.
+ * It lifts every gate on that goal at once — the case it exists for is work that
+ * does not ship at all, not work that ships to three environments out of four.
+ */
+export interface EnvironmentGateRelease {
+  /** The goal, `issue:<n>`. */
+  goalRef: string;
+  /** Why it is not waiting. Required — a release with no account of itself is the thing being avoided. */
+  note: string;
+  releasedAt: string;
+}
+
+/**
+ * How a local run is going. Four states and no more, because the harness only
+ * knows three things: that it asked, that the session finished asking, and that
+ * something ended.
+ *
+ * `running` is **presumed, not probed** — it means the session that was told to
+ * bring the environment up finished its turn without failing, and its process is
+ * still alive holding whatever it started. Nothing here opens a socket to check,
+ * which is why the panel draws the URL as a link to try rather than as a reading.
+ * A readiness probe is the honest way to close that gap and is a separate change.
+ */
+export type LocalRunStatus = 'starting' | 'running' | 'stopped' | 'failed';
+
+/**
+ * The one local run: which goal's code is in the machine's dev environment right
+ * now, or was last.
+ *
+ * **One row at a time is the whole feature**, and it is the operator's own
+ * constraint rather than a limit invented here — there is one dev environment on
+ * the machine, exactly as there is one working copy behind the validation claim.
+ * A second run started while one is live stops the first; the store write is what
+ * makes that true rather than a check the caller is trusted to make.
+ *
+ * The row **outlives the run**, so a start that failed leaves its reason somewhere
+ * to read. That is the difference between a panel that says `failed` and a panel
+ * that says nothing, which is the case an operator actually hits.
+ */
+export interface LocalRun {
+  id: string;
+  /** The goal whose code this is, as `issue:<n>`. */
+  originRef: string;
+  /** The git ref the checkout was pointed at — a part's branch, or the integration branch. */
+  ref: string;
+  /** The checkout it is running in. `localRunRoot`, and never a pool slot. */
+  dir: string;
+  /**
+   * The session process holding the environment up, or null once it is gone.
+   *
+   * Recorded because stopping the run means reaping *this* pid's whole subtree: the
+   * dev server is its descendant, not the process itself.
+   */
+  pid: number | null;
+  status: LocalRunStatus;
+  /** `localRun.url` as it stood when the run started, so a later config edit does not rewrite history. */
+  url: string | null;
+  /** Why it stopped or failed, or what the session said when it came up. Null while starting. */
+  note: string | null;
+  startedAt: string;
+  endedAt: string | null;
 }

@@ -219,6 +219,10 @@ export function buildDemoState(): DemoSeed {
       // rather than one pointing at nothing. It opens whatever the visitor has —
       // which is the honest demonstration: the control hands off to their machine.
       desktopFolder: '/Users/you/code/demo-shop',
+      // Configured, so the demo shows the panel that can start and swap rather than
+      // the one explaining what is missing. Both are worth seeing and only one can
+      // be the default; this is the state an operator who has set it up is in.
+      localRunConfigured: true,
       // The demo tracker's own vocabulary, coloured — the setting is invisible
       // until a deployment has used it, and the demo is where it is looked at.
       stateColours: { New: '#8a93a0', Ready: '#7fb3ff', Active: '#63d297', Closed: '#666b73' },
@@ -238,10 +242,8 @@ export function buildDemoState(): DemoSeed {
       canFileTickets: false,
     },
     control: { cap: 3, paused: false },
-    // What the plan sheet's approval bar states: verdicts are proposals, and two
-    // of a plan's parts run at once.
+    // What the plan sheet's approval bar states: two of a plan's parts run at once.
     planning: {
-      requireApproval: true,
       maxConcurrentPartsPerIssue: 2,
       gitFetchIntervalMs: 60_000,
     },
@@ -922,6 +924,70 @@ export function buildDemoState(): DemoSeed {
     // Withheld, because rung #414 is red — the state worth having in the demo, since
     // "why can't I click it" is the question the control has to answer on its own.
     stackLandings: [{ ref: 'stack:413', offer: false, blockedBy: '#414 CI failing', landing: null, landed: 0 }],
+    // The two arrivals behind the reach rows below — what the signals list draws
+    // for an environment, and what the ticket comments were posted off.
+    environmentArrivals: [
+      {
+        goalRef: 'issue:390',
+        environment: 'staging',
+        arrivedAt: '2026-08-19T09:12:00.000Z',
+        announcedAt: '2026-08-19T09:12:04.000Z',
+      },
+    ],
+    // One goal in each of the readings worth drawing: whole, half, and unanswerable.
+    // `staging` opens both obligations, so the second goal also draws the hold —
+    // delivered, and its bench rows waiting on an environment it has not reached.
+    environmentReach: [
+      {
+        goalRef: 'issue:390',
+        environments: [
+          {
+            environment: 'staging',
+            status: 'reached',
+            landed: 2,
+            total: 2,
+            at: '2026-08-19T09:12:00.000Z',
+            opens: ['validate', 'close_out'],
+          },
+          { environment: 'prod', status: 'partial', landed: 1, total: 2, at: null, opens: [] },
+        ],
+        gateHold: null,
+        released: null,
+      },
+      {
+        goalRef: 'issue:376',
+        environments: [
+          {
+            environment: 'staging',
+            status: 'unknown',
+            landed: 0,
+            total: 1,
+            at: null,
+            opens: ['validate', 'close_out'],
+          },
+          { environment: 'prod', status: 'unknown', landed: 0, total: 1, at: null, opens: [] },
+        ],
+        gateHold: 'the validation checks and the close-out are waiting for this work to reach staging.',
+        released: null,
+      },
+    ],
+    // An environment that is up, on the goal whose plan is waiting for approval —
+    // so the indicator reads `running` and the panel has something to swap away
+    // from. A demo with nothing running would show only the empty state, which is
+    // the half that needs no explaining.
+    localRun: {
+      id: 'run-1',
+      originRef: 'issue:395',
+      ref: 'issue/395/route',
+      dir: '/Users/you/code/demo-shop/.lubbdubb/local-run',
+      pid: 48211,
+      status: 'running',
+      url: 'http://localhost:5173',
+      note: 'Up on :5173. Seeded the sample invoices — the instruction did not mention that step.',
+      startedAt: ago(18),
+      endedAt: null,
+      live: true,
+    },
     // A vivarium with something in it, because an empty one is indistinguishable
     // from the feature being broken — and the demo is where somebody decides
     // whether they want it at all. Four species, four stages, one of each rarity.
@@ -2106,6 +2172,27 @@ export function buildDemoState(): DemoSeed {
     // The dispatcher's ranked pickup plan from the "last pulse": cap 3 with two
     // live agents leaves headroom 1, so the top candidate dispatches and the
     // rest sit below the cut.
+    // A fleet with more work than slots — the state the harness is *for*, so the
+    // demo shows the band at rest rather than mid-alarm. The queued figure is
+    // above the reservoir deliberately: a demo whose headline reading is a
+    // warning teaches the warning as the normal case.
+    runway: {
+      state: 'healthy',
+      runwayMinutes: 187,
+      inflight: 3,
+      queued: 11,
+      reservoir: 4,
+      reservoirContainers: 1,
+      held: 2,
+      latent: { plans: 0, profiles: 0, escalated: 0, parts: 0 },
+      debt: 2,
+      medianLeadMinutes: 40,
+      medianHeldMinutes: 95,
+      completedRuns: 47,
+      idleSlots: 0,
+      headline: 'About 3h 7m of work queued',
+      detail: '3 in flight, 11 waiting.',
+    },
     upcoming: {
       cycleId: 'cycle-103',
       at: ago(0),
@@ -2118,6 +2205,11 @@ export function buildDemoState(): DemoSeed {
           branch: 'issue/341',
           status: 'dispatching',
           reason: 'Open issue #341 has no linked PR and no agent is on it.',
+          // What the row will launch on, resolved from `agentModels.byRule` — the
+          // ordinary case, and the one the panel has to state for the queue to
+          // answer "which profile" at all.
+          profile: 'standard',
+          profileSource: 'rule',
         },
         {
           // Held by the plan's own concurrency cap rather than by fleet headroom —
@@ -2131,6 +2223,12 @@ export function buildDemoState(): DemoSeed {
           status: 'capped',
           reason:
             'Part "watcher" of issue #390 is ready and stacks on issue/390/validate. Held: issue #390 is already at its 2-part concurrency cap.',
+          // Priced by the operator from this very panel: mechanical work they
+          // could see was mechanical. A held row is priced too — "what will it
+          // cost when it runs" is exactly the question being asked of it.
+          profile: 'fast',
+          profileSource: 'pin',
+          override: 'fast',
         },
         {
           // Queued but held, same as `watcher` above — this time by the plan's own
@@ -2143,6 +2241,10 @@ export function buildDemoState(): DemoSeed {
           status: 'unapproved',
           reason:
             'Part "signer" of issue #395 is ready and has no agent. Held: the plan for issue #395 is awaiting your approval — nothing is scheduled until you accept it.',
+          // The plan named this part deep, and nothing has overridden it: the
+          // picker reads "Pinned (deep)" rather than offering the fleet default.
+          profile: 'deep',
+          profileSource: 'pin',
         },
         {
           origin: 'issue:395:part:route',
@@ -2153,6 +2255,8 @@ export function buildDemoState(): DemoSeed {
           status: 'unapproved',
           reason:
             'Part "route" of issue #395 is ready and stacks on issue/395/signer. Held: the plan for issue #395 is awaiting your approval — nothing is scheduled until you accept it.',
+          profile: 'standard',
+          profileSource: 'default',
         },
       ],
     },

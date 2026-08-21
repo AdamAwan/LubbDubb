@@ -11,7 +11,7 @@ spec does not say, that is a bug in one of them. The [README](README.md) covers 
 and how to run it.
 
 **When you change behaviour, update the spec document that owns it in the same change.** That is the
-repo's one documentation rule; [`docs/README.md`](docs/README.md) indexes the nineteen documents and
+repo's one documentation rule; [`docs/README.md`](docs/README.md) indexes the twenty-five documents and
 says which owns what.
 
 ## Making a change
@@ -111,6 +111,12 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   `upstream`.** Both routes go through `system.upstream`, which defaults to the real `gh` CLI against
   **AdamAwan/LubbDubb** — so a test without `FakeUpstreamIssues` files a live issue on the project's
   own tracker, as whoever is logged in, and passes while doing it. → [15](docs/spec/15-integrations.md)
+- **A test that reads the project config layer injects `projectConfigFile`, or points `repoRoot` at a
+  temp directory.** `lubbdubb.project.json` is read from `repoRoot`, which defaults to
+  `process.cwd()` — and this repo is itself a LubbDubb target, so the day one is committed here every
+  test going through `loadConfigFromText` or `buildSystem`'s default starts merging it, silently and
+  differently from CI. Same hazard as `configFile`, and the same fix.
+  → [02](docs/spec/02-configuration.md#the-project-layer)
 - **A test builds its config with `loadConfig`, never `loadDeploymentConfig`.** Only the latter reads
   `lubbdubb.config.json` and the env overrides — which is the whole distinction: the suite runs in a
   working copy of this repo, so a test on the deployment loader picks up whatever config the
@@ -298,20 +304,58 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
   `WorktreeManager.ensure`, and anything that frees one goes through `remove` / `deleteBranch` — a
   path that picks a directory itself puts two agents in one tree on different branches.
   → [09](docs/spec/09-execution.md#the-lease)
-- **The pool bound and the agent cap are two limits over one fleet, and the lower one wins.** The
-  bound is `worktreePoolSize` or, unset, the **live** `RuntimeControl.cap` plus slack — read by
-  reference on every `ensure`, exactly as `harness.ts` reads the cap. Snapshot it at boot (or pin
-  `worktreePoolSize` under the cap) and every dispatch above the lower number is refused for want of
-  a directory and retried forever: a full "Up next" queue, an idle fleet, nothing paused and nothing
+- **The pool bound is the agent cap plus slack, and it must stay a live read of it.** The bound is
+  `RuntimeControl.cap` plus slack, read by reference on every `ensure`, exactly as `harness.ts` reads
+  the cap. Snapshot it at boot — or reintroduce a setting that can sit under the cap — and the bound
+  is the fleet's real limit: every dispatch above the lower number is refused for want of a directory
+  and retried forever, which is a full "Up next" queue, an idle fleet, nothing paused and nothing
   red. A slot stranded carrying uncommitted changes is reclaimed the same way it is refused — only at
   `acquire`'s dead end, only when nothing holds it, and only by stashing the work to
   `refs/lubbdubb/salvage/…` first. Anything that reclaims on a schedule instead pays `git status`
   across every checkout in the pool per pulse; anything that wipes instead of stashing destroys the
   one copy of an agent's work, and the slot looks identically clean either way.
   → [09](docs/spec/09-execution.md#exhaustion)
+- **The local run's checkout must stay outside `worktreeRoot`.** The pool's `slots()` counts every
+  _registered_ worktree under that root whatever the directory is called — so a preview checkout in
+  there is a pool slot: counted toward the bound, handed to an agent, and wiped `git clean -ffdx` with
+  the operator's warm dependencies in it. `localRunRoot` is a separate root for that reason, and
+  `ensurePreview` is the only thing that touches it. → [23](docs/spec/23-local-runs.md#the-checkout)
 - **`resolveCommit` prefers `origin/<ref>` over the local ref** and returns a SHA, because the
   harness's clone never checks the integration branch out. New `GitObserver` methods stay read-only
   and fetch-free.
+
+### Environments
+
+- **A reach verdict is three-valued, and a new reader must not fold `unknown` into `absent`.** An
+  expired credential, a missing binary, a commit this clone never fetched and one that genuinely has
+  not shipped all fail the same way, and only the last is about deployment — read as `absent` they
+  are indistinguishable on the glass, and the cockpit states in the operator's words that the work
+  has not shipped for a reason that has nothing to do with shipping. `GitObserver.contains` answers
+  `boolean | null` for that reason, and a probe that could not say makes **every** landing of that
+  environment `unknown`. → [24](docs/spec/24-environments.md#the-three-verdicts)
+- **An arrival must never be written as a `WorldEvent`.** It is the obvious way to get it into the
+  activity feed, and `deliveryHold` expires a standing delivery verdict on **any** world event
+  matching the goal's issue ref — so an arrival written as one un-parks the goal it just announced
+  and hands delivered work back to the fleet to do again. Nothing errors; a re-dispatch of finished
+  work looks like the harness deciding there is more to do. Arrivals have their own table and their
+  own wire list, and the cockpit merges them at the feed's door.
+  → [24](docs/spec/24-environments.md#in-the-cockpit)
+- **An arrival is announced only if its reading is fresh, and stamped either way.** The freshness
+  window is what separates an arrival this harness watched from one it discovered on the first pulse
+  after a build; the stamp is what stops an environment that grows `arrival.comment` later from
+  commenting on its whole history. Drop either and the deployment that takes the build puts a comment
+  on every ticket that ever shipped. → [24](docs/spec/24-environments.md#announcing-an-arrival)
+- **`DeliveryCloseOutDesk` runs below `ValidationReadyDesk` in the pulse**, because it holds the
+  close while the goal's `validate` row is open. Above it, it reads a bench that row has not been
+  filed onto yet and both arrive together — which is the sequence gone, with nothing red.
+  → [24](docs/spec/24-environments.md#the-bench-asks-for-one-thing-at-a-time)
+- **A landing is recorded by sweeping for unattributed merges, never on the merge itself.** The merge
+  SHA is a provider fact with a `closedPrWindowMs` shelf life and no way to recover it — a squash
+  leaves no ancestry link — so a hook on the transition loses the landing to any restart that
+  straddles it, or to a person merging in the web UI between two pulses. Nothing errors, and a goal
+  whose commit was never caught looks exactly like one that never shipped. The desk also runs
+  **immediately below `graph.record`** in the pulse, because attribution walks the graph's
+  `parentRef` chain. → [24](docs/spec/24-environments.md#recording-a-landing)
 
 ### Errors and config
 
@@ -321,8 +365,14 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
   → [18](docs/spec/18-observability.md)
 - **No secret is ever a config key.** `GITHUB_TOKEN`, `AZURE_DEVOPS_PAT` and `LUBBDUBB_TOKEN` come
   from the environment, so `lubbdubb.config.json` stays safe to paste. Precedence is explicit
-  overrides → `lubbdubb.config.json` → defaults, with `PORT` / `LUBBDUBB_DB` / `LUBBDUBB_HOST` /
-  `LUBBDUBB_REPO_ROOT` env overrides. → [02](docs/spec/02-configuration.md)
+  overrides → env (`PORT` / `LUBBDUBB_DB` / `LUBBDUBB_HOST` / `LUBBDUBB_REPO_ROOT`) →
+  `lubbdubb.config.json` → the project's `lubbdubb.project.json` → defaults.
+  → [02](docs/spec/02-configuration.md)
+- **A config layer carries only what its file said.** `mergeLayers` never folds `DEFAULTS` in; that
+  happens once, at the bottom, in `mergeConfig`. A layer that arrives dense does not merge, it
+  replaces — so an operator's `{"planning": {"gitFetchIntervalMs": 0}}` would carry the default part
+  cap and shadow the one their team's `lubbdubb.project.json` set, leaving the harness running a
+  policy no file on the machine states. → [02](docs/spec/02-configuration.md#precedence)
 - **A route handler never reads the request.** It is wrapped in `checked(schemas, handler)`
   (`src/server/validation.ts`) and handed `{params, body, req, reply}` already parsed — never an `as`
   cast, and never its own `code(400)` for a malformed request. A refusal is a returned value and a
@@ -336,7 +386,7 @@ running and does the wrong thing. → [10](docs/spec/10-agent-runtimes.md#sharp-
 
 ## Where to read further
 
-[`docs/README.md`](docs/README.md) is the index: nineteen specs, one per subsystem, numbered by the
+[`docs/README.md`](docs/README.md) is the index: twenty-five specs, one per subsystem, numbered by the
 order they build on each other. Start there rather than grepping — each document states the
 invariants of its area and the reasoning behind them, which is what stops a change re-litigating a
 settled decision badly.

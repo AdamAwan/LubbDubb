@@ -5,12 +5,13 @@ import type {
   IssueAssay,
   IssueDelivery,
   IssueInstruction,
+  LocalRun,
   PlanPart,
   Retrospective,
   ScratchPadSummary,
   WorldSnapshot,
 } from '../types.js';
-import type { CockpitState, PlanPartView, ValidationResourceView } from '../wire.js';
+import type { CockpitState, GoalReachView, LocalRunView, PlanPartView, ValidationResourceView } from '../wire.js';
 import { buildRefUrls, decisionSubjectRef, issueCommentRef } from './refUrls.js';
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
@@ -22,6 +23,7 @@ import { rollUpIssueSpend } from '../issueSpend.js';
 import { tallyRunOutcomes } from '../reliabilityInsights.js';
 import { retainedRunIssues } from '../floor/runs.js';
 import { DEFAULT_COOLDOWN } from '../dispatcher/dispatchCooldown.js';
+import { readRunway } from '../supply/runway.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { trackerCoordinates } from '../mcp/findings.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
@@ -33,9 +35,13 @@ import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
 import { assaySignalQuery } from '../intake/assay.js';
 import { classifyCiFailures } from '../ci/ciPolicy.js';
 import { validationVerdict } from '../validation/verdict.js';
+import { localRunIsLive } from '../store/localRuns.js';
 import { validationResourcePath } from '../validation/resources.js';
 import { withLiveClaim } from '../validation/desktop.js';
 import { watchLabelFor } from '../watchLabels.js';
+import { allGoalReach } from '../environments/reach.js';
+import { environmentGateHold } from '../environments/arrival.js';
+import type { EnvironmentConfig } from '../environments/policy.js';
 import { resolveModelTag } from '../modelLabels.js';
 import { orderedProfiles } from '../agents/modelPolicy.js';
 
@@ -453,6 +459,9 @@ export function buildStateSnapshot(
       // `repoRoot` is otherwise only reachable through the running-config route,
       // which is a settings page the plan sheet does not read.
       desktopFolder: config.repoRoot,
+      // The fact rather than the text: the instruction is prose only the session
+      // needs, and the cockpit's question is whether it can offer a start at all.
+      localRunConfigured: config.localRun.instruction.trim() !== '',
       // The container policy itself, because the backlog draws a container as a
       // heading over its children rather than as a row beside them — a question
       // about the item's type that no per-item verdict answers.
@@ -534,6 +543,11 @@ export function buildStateSnapshot(
     // Null when the feature is off, so the cockpit draws nothing at all rather
     // than an empty enclosure that reads as a deployment nobody has used.
     pets: system.pets.state(),
+    // The live run, or the last one that ended — the panel asks one question and
+    // "nothing is up, the last attempt failed like this" is an answer to it. `live`
+    // is derived here rather than in the cockpit so which statuses count is decided
+    // once, by the thing that sets them.
+    localRun: localRunView(system.localRun.current()),
     // The validation plan beside the plan graph it hangs off — the checks whole,
     // superseded ones included, because "this check was withdrawn" is a thing the
     // sheet has to be able to say.
@@ -548,6 +562,16 @@ export function buildStateSnapshot(
     // same terms as one a plan produced. The unfiltered open list, for the reason
     // `inheritedCiFailure` takes it — an -ignore'd rung would hole the chain.
     stacks,
+    // Where each goal's landed work has got to. Built from the store and not the
+    // world, deliberately: a goal whose ticket closed weeks ago is still travelling
+    // to production, and it is exactly then that somebody asks. Empty with no
+    // environment configured, which the cockpit draws as no row rather than as a
+    // row of unknowns.
+    environmentReach: buildEnvironmentReach(store, config.environments),
+    // Off the same table the comments are posted from, capped like every other
+    // feed here. Empty with nothing configured, so the cockpit's signals list is
+    // untouched on a deployment that never set an environment up.
+    environmentArrivals: config.environments.length === 0 ? [] : store.listGoalArrivals().slice(0, 50),
     // The "land the stack" control, one entry per chain above: whether the click
     // may be offered, and the operator's standing intent over it. Joined to a
     // stack by rung membership rather than by ref — see `landingFor`.
@@ -643,6 +667,33 @@ export function buildStateSnapshot(
     // headroom cut (issue #69). A per-pulse projection — null until a cycle
     // has run, or when the active dispatcher doesn't materialise a plan.
     upcoming: harness.upcoming,
+    // The band under Fleet. Taken here rather than cached off the pulse's own
+    // desk because a snapshot is served far more often than a cycle runs, and a
+    // reading a pulse old would show a queue the operator has just topped up as
+    // still empty — on exactly the surface they topped it up from. The same
+    // function the desk calls, over this route's own pickup context, so what the
+    // band says and what the bench row says cannot disagree about the gate.
+    //
+    // `standing` is read off the bench rather than assumed: the hysteresis band
+    // the card draws has to be the one the desk is actually applying, or the card
+    // reports `healthy` for a queue whose notice is still standing.
+    runway: readRunway({
+      policy: config.runway,
+      issues: world.issues,
+      pickup: pickupCtx,
+      runs: issueRuns,
+      // Every row, not the panel's capped feed above: the debt clause is a
+      // count, and a hundred-row cap would report "100" to the deployment
+      // furthest behind and to the one exactly at the cap alike — and the
+      // settled rows are the human holds the median lead time subtracts.
+      humanTasks: store.listAllHumanTasks(),
+      // The projection, never `listEscalations`: that read is all-time and
+      // carries every settled item's transcript tail, and this one is taken on
+      // every cockpit refresh.
+      escalations: store.listEscalationSpans(),
+      cap: control.cap,
+      standing: humanTasks.some((t) => t.kind === 'supply' && t.status === 'open'),
+    }),
     worldEvents,
     // Recorded failures (cycle exceptions, provider outages, agent crashes,
     // route 500s) for the cockpit's Errors panel.
@@ -793,4 +844,54 @@ function buildUsage(system: System, unattributedCostUsd: number) {
     rateLimits: system.rateLimits?.readLatest() ?? null,
     unattributedCostUsd,
   };
+}
+
+/**
+ * Every goal anything is known about, and where each has got to.
+ *
+ * The goal set comes from the **landings and the work graph**, never from the
+ * world: a goal is at its most interesting to this panel once its ticket has
+ * closed, which is precisely when the world stops listing it. It is also why a
+ * goal with only unattributable merges appears here at all — it has an answer,
+ * and the answer is that nobody can say.
+ *
+ * Empty when nothing is configured, so the cockpit draws no row rather than a row
+ * of unknowns on a deployment that never asked for one.
+ */
+function buildEnvironmentReach(store: System['store'], environments: EnvironmentConfig[]): GoalReachView[] {
+  if (environments.length === 0) return [];
+  const arrivals = store.listGoalArrivals();
+  const releases = store.listEnvironmentGateReleases();
+  const released = new Map(releases.map((r) => [r.goalRef, r]));
+  // A hold is only a hold on a goal that is *delivered*: everything else is
+  // simply work in progress, and a sentence saying its close-out is waiting on
+  // testUk would be the harness announcing a queue it is not in yet.
+  const delivered = new Set(store.listDeliveries().map((d) => d.originRef));
+  const shortfalls = new Set(store.listShortfalls().map((sf) => sf.originRef));
+  return allGoalReach({
+    landings: store.listGoalLandings(),
+    readings: store.listEnvironmentReach(),
+    nodes: store.listWorkNodes(),
+    landed: store.landedPrs(),
+    environments,
+  }).map((goal) => ({
+    ...goal,
+    gateHold:
+      delivered.has(goal.goalRef) && !shortfalls.has(goal.goalRef)
+        ? environmentGateHold({ goalRef: goal.goalRef, environments, arrivals, releases })
+        : null,
+    released: released.get(goal.goalRef) ?? null,
+  }));
+}
+
+/**
+ * The run as the cockpit reads it, or null when nothing has ever been started.
+ *
+ * `live` is the only thing added, and adding it here is the point: which statuses
+ * count as a running environment is one rule, and it belongs beside the writer that
+ * sets them rather than in a component deciding whether to draw a Stop button.
+ */
+function localRunView(run: LocalRun | null): LocalRunView | null {
+  if (run === null) return null;
+  return { ...run, live: localRunIsLive(run) };
 }

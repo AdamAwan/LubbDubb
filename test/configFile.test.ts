@@ -56,12 +56,12 @@ test('key order, blank lines and inline objects are left exactly as they were', 
 
 test('a key the file does not carry is appended, and a nested one brings its block', () => {
   const next = editConfigText('{\n  "agentMode": "stream"\n}\n', {
-    set: { lessonBlockChars: 8000, 'planning.requireApproval': false },
+    set: { lessonBlockChars: 8000, 'planning.maxConcurrentPartsPerIssue': 4 },
   });
 
-  const parsed = JSON.parse(next) as { lessonBlockChars: number; planning: { requireApproval: boolean } };
+  const parsed = JSON.parse(next) as { lessonBlockChars: number; planning: { maxConcurrentPartsPerIssue: number } };
   assert.equal(parsed.lessonBlockChars, 8000);
-  assert.equal(parsed.planning.requireApproval, false);
+  assert.equal(parsed.planning.maxConcurrentPartsPerIssue, 4);
   assert.match(next, /^ {2}"lessonBlockChars": 8000,?$/m, 'the inserted member copies the file’s own indent');
 });
 
@@ -84,7 +84,10 @@ test('clearing a key removes it and exactly one comma — first, middle and last
 });
 
 test('clearing a key the file does not carry changes nothing', () => {
-  assert.equal(editConfigText('{\n  "a": 1\n}\n', { clear: ['b', 'planning.requireApproval'] }), '{\n  "a": 1\n}\n');
+  assert.equal(
+    editConfigText('{\n  "a": 1\n}\n', { clear: ['b', 'planning.maxConcurrentPartsPerIssue'] }),
+    '{\n  "a": 1\n}\n',
+  );
 });
 
 test('an object or list value is written whole, indented under its key', () => {

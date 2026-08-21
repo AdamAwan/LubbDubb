@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { loadConfig } from '../src/config.js';
 import { configField, CONFIG_FIELDS, fieldValueRefusal, topSegment } from '../src/configFields.js';
 import { isLiveField, liveFieldPaths } from '../src/configApply.js';
-import { describeRunningConfig } from '../src/server/runningConfig.js';
+import { describeRunningConfig, groupedTopLevelKeys } from '../src/server/runningConfig.js';
 import { declaredTopLevelKeys, configTopLevelKeys } from '../src/configFields.js';
 
 /**
@@ -102,4 +102,18 @@ test('no field offers a credential', () => {
     assert.doesNotMatch(field.path, /token$|password|secret|\bpat\b|apiKey/i, `${field.path} reads like a credential`);
   }
   assert.equal(topSegment('auth.tokenFile'), 'auth');
+});
+
+test('every declared key is claimed by a group, so a new one cannot be invisible', () => {
+  // `GROUPS` is a hand-written key list per group, and the "Other" fallback
+  // deliberately skips anything `CONFIG_FIELDS` *declares* — so a declared key
+  // nobody grouped is drawn nowhere at all. It validates, it applies, and the page
+  // it was declared for never shows it: nothing red, and a field reachable only by
+  // hand-editing the file. (An *unset* optional key legitimately draws no row —
+  // `entryFor` returns null on `undefined` — which is why this asserts the grouping
+  // rather than the rendered rows.)
+  const grouped = groupedTopLevelKeys();
+  const ungrouped = [...declaredTopLevelKeys()].filter((key) => !grouped.has(key));
+
+  assert.deepEqual(ungrouped, [], `declared but in no group: ${ungrouped.join(', ')}`);
 });

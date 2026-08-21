@@ -93,6 +93,98 @@ test('an unhappy ending says which', () => {
   assert.equal(items[0]!.title, 'Agent crashed');
 });
 
+/**
+ * Coalescing, which is the answer to issue #458: an operator with thirty
+ * recorded errors got thirty desktop banners, and every one of them said the
+ * same thing — go and look at the cockpit.
+ */
+test('a burst of needs-you rows is one notification that says how many', () => {
+  const rows = Array.from({ length: 10 }, (_, i) => ({
+    id: `esc_${i}`,
+    kind: 'escalation' as const,
+    title: `Question ${i}`,
+  }));
+  const items = notifiableChanges(snap(), snap({ needsYou: rows }));
+  assert.equal(items.length, 1);
+  assert.equal(items[0]!.title, '10 things need you');
+  // Three named, the rest counted. What each one *is* lives in the queue rail,
+  // which is where it is answered anyway.
+  assert.equal(items[0]!.body, 'Question 0 · Question 1 · Question 2 · +7 more');
+});
+
+test('a cascade of errors is one notification, not one each', () => {
+  const errors = Array.from({ length: 30 }, (_, i) => ({ id: `e${i}`, message: `boom ${i}` }));
+  const items = notifiableChanges(snap(), snap({ errors }));
+  assert.equal(items.length, 1);
+  assert.equal(items[0]!.title, '30 errors recorded');
+});
+
+test('a batch is folded per category, not across them', () => {
+  const items = notifiableChanges(
+    snap({
+      agents: [
+        { id: 'a1', status: 'running' },
+        { id: 'a2', status: 'running' },
+      ],
+    }),
+    snap({
+      errors: [
+        { id: 'e1', message: 'one' },
+        { id: 'e2', message: 'two' },
+      ],
+      agents: [
+        { id: 'a1', status: 'done' },
+        { id: 'a2', status: 'crashed' },
+      ],
+    }),
+  );
+  assert.deepEqual(
+    items.map((i) => [i.category, i.title]),
+    [
+      ['errors', '2 errors recorded'],
+      ['agents', '2 runs ended'],
+    ],
+  );
+});
+
+test("a summary's tag is stable for the same batch and different for the next", () => {
+  const two = notifiableChanges(
+    snap(),
+    snap({
+      errors: [
+        { id: 'e1', message: 'one' },
+        { id: 'e2', message: 'two' },
+      ],
+    }),
+  );
+  const again = notifiableChanges(
+    snap(),
+    snap({
+      errors: [
+        { id: 'e1', message: 'one' },
+        { id: 'e2', message: 'two' },
+      ],
+    }),
+  );
+  // Same batch, same tag: a re-render replaces rather than repeats, exactly as a
+  // per-subject tag does.
+  assert.equal(two[0]!.tag, again[0]!.tag);
+
+  // A second burst carries a different count, so it stacks beside the first
+  // rather than silently overwriting it with a smaller number.
+  const three = notifiableChanges(
+    snap(),
+    snap({
+      errors: [
+        { id: 'e1', message: 'one' },
+        { id: 'e2', message: 'two' },
+        { id: 'e3', message: 'three' },
+      ],
+    }),
+  );
+  assert.notEqual(two[0]!.tag, three[0]!.tag);
+});
+
 /** One notification the stubbed engine was asked to raise. */
 interface Raised {
   title: string;

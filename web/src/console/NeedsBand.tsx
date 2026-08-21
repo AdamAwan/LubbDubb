@@ -2,6 +2,7 @@ import type { JSX, ReactNode } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedRow } from '../view/needsYou.js';
+import type { HumanTask } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { EscalationCard } from '../components/EscalationCard.js';
 import { HumanTaskActions } from '../components/HumanTaskActions.js';
@@ -68,6 +69,27 @@ export function NeedsBand({
 }
 
 /**
+ * Why marking this row done costs a sentence, or null when it costs nothing.
+ *
+ * The route's own guard, mirrored: `POST /api/human-tasks/:id/done` refuses a
+ * `close_out` on a goal whose validation plan is flagged unless a note comes with
+ * it ([20](../../../docs/spec/20-validation.md#where-it-lands)). Mirrored here for
+ * `HumanTaskActions`' Decline reason — the box that answers a rule belongs beside
+ * the click, not behind a 400 the operator has to provoke first — and mirrored
+ * only in its *condition*: the counts stay the server's, folded once into
+ * `issue.validation` and stated in the row's own detail above these buttons.
+ *
+ * The server stays the authority. A plan flagged between this draw and the click
+ * refuses there, and the refusal is drawn where it lands.
+ */
+function noteOwedOnDone(task: HumanTask, view: CockpitView): string | null {
+  if (task.kind !== 'close_out' || task.status !== 'open' || task.originRef === null) return null;
+  const issue = goalIssue(view.state, task.originRef);
+  if (issue?.validation?.state !== 'flagged') return null;
+  return 'Validation is not clear on this goal — the checks listed above are outstanding. Closing it out is still yours to do; what it costs is a sentence saying what you are doing about them, or waiving them first.';
+}
+
+/**
  * What answers this ask — the shared component that owns its verdict, wired the
  * way the stamp desk and the bench wire it. `buttonClass` is the one seam a
  * station passes, so the console's buttons and a modal's are one component
@@ -84,7 +106,13 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
   // with a reason — because that is all it ever asks for: it holds nothing, and
   // the run it names carries on either way. What differs is only where the
   // operator goes next, and the row's own agent id is what says that.
-  if (row.kind === 'bench' || row.kind === 'close_out' || row.kind === 'burn' || row.kind === 'validate') {
+  if (
+    row.kind === 'bench' ||
+    row.kind === 'close_out' ||
+    row.kind === 'burn' ||
+    row.kind === 'validate' ||
+    row.kind === 'supply'
+  ) {
     const task = (view.state.humanTasks ?? []).find((t) => t.id === row.id);
     if (!task) return null;
     return (
@@ -95,7 +123,8 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
           <HumanTaskActions
             task={task}
             buttonClass="cn-btn"
-            onDone={(id) => actions.completeHumanTask(id)}
+            noteOnDone={noteOwedOnDone(task, view)}
+            onDone={(id, note) => actions.completeHumanTask(id, note)}
             onDecline={(id, note) => actions.declineHumanTask(id, note)}
           />
         </div>

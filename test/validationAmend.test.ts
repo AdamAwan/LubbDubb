@@ -412,21 +412,23 @@ test('an amendment adds resources and removes none, and an unprovided one is ask
   );
 
   const res = await callTool(system, spawnAgent(system, 'issue:12'), 'validation_amend', {
-    note: 'the new check needs a login',
-    resources: [{ name: 'staging login', kind: 'access', provided: false }],
+    note: 'the new check needs a scrubbed dump of real orders',
+    resources: [{ name: 'orders-dump.sql', kind: 'data', provided: false }],
     // Names the resource the *planner* declared, not one this amendment carries:
     // pruning `uses` against the amendment alone would drop a live reference.
-    checks: [check({ id: 'login-works', title: 'A staging login still works', uses: ['seed.sql', 'staging login'] })],
+    checks: [
+      check({ id: 'orders-import', title: 'A week of real orders imports', uses: ['seed.sql', 'orders-dump.sql'] }),
+    ],
   });
   assert.equal(res.isError, false);
 
   const names = system.store.listValidationResources(plan).map((r) => r.name);
-  assert.deepEqual(names.sort(), ['seed.sql', 'staging login']);
-  assert.deepEqual(byId(system, plan, 'login-works').uses.sort(), ['seed.sql', 'staging login']);
+  assert.deepEqual(names.sort(), ['orders-dump.sql', 'seed.sql']);
+  assert.deepEqual(byId(system, plan, 'orders-import').uses.sort(), ['orders-dump.sql', 'seed.sql']);
 
   // An ask rather than a check that mysteriously never runs — but not before there
   // is a delivered goal to run it against.
-  const asks = () => system.store.listHumanTasks().filter((t) => t.title.includes('staging login'));
+  const asks = () => system.store.listHumanTasks().filter((t) => t.title.includes('orders-dump.sql'));
   const desk = new ValidationAskDesk(system.store);
   desk.run();
   assert.equal(asks().length, 0, 'nothing is delivered yet');
@@ -439,15 +441,15 @@ test('an amendment adds resources and removes none, and an unprovided one is ask
 
 test('an amendment saying it can produce the resource after all withdraws the ask', async () => {
   const system = build();
-  const plan = planWith(system, [check()], [{ name: 'staging login', kind: 'access', provided: false }]);
+  const plan = planWith(system, [check()], [{ name: 'orders-dump.sql', kind: 'data', provided: false }]);
   system.store.recordDelivery({ originRef: plan, summary: 'delivered', by: 'assessor' });
   new ValidationAskDesk(system.store).run();
   const [filed] = system.store.listHumanTasks();
   assert.equal(filed?.status, 'open');
 
   const res = await callTool(system, spawnAgent(system, 'issue:12'), 'validation_amend', {
-    note: 'I seeded the account myself while building this',
-    resources: [{ name: 'staging login', kind: 'access', provided: true }],
+    note: 'I scrubbed and committed the dump myself while building this',
+    resources: [{ name: 'orders-dump.sql', kind: 'data', provided: true }],
     // An amendment must name a check, so this one re-declares the plan's word for
     // word — which changes nothing about the check and everything about the ask.
     checks: [check()],

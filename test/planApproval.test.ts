@@ -9,8 +9,7 @@ import { buildSystem, type System } from '../src/system.js';
 import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
-import { DEFAULT_PLANNING, resolvePlanRoute } from '../src/plans/planning.js';
-import { ingestedPlanStatus } from '../src/plans/parts.js';
+import { resolvePlanRoute } from '../src/plans/planning.js';
 import { describeProposedParts, planApprovalDetail, planApprovalNote } from '../src/plans/planApproval.js';
 import { planApprovalWarnings, planIsWedged, wedgedPlanPrompt } from '../src/plans/planWedge.js';
 import { refCollisionReason } from '../src/plans/planReconciler.js';
@@ -23,15 +22,6 @@ import type { Agent, Plan, PlanPart, Proposal } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
 
 // -- the pure half -----------------------------------------------------------
-
-test('the gate is the status and nothing else — the part count has no say in it', () => {
-  // Off, a plan is `active` the moment it lands. On, it is a proposal instead.
-  // Neither reading asks how many parts there are, which is the whole point: a
-  // one-part plan is put to the operator on exactly an eight-part plan's terms.
-  assert.equal(ingestedPlanStatus(), 'active');
-  assert.equal(ingestedPlanStatus(false), 'active');
-  assert.equal(ingestedPlanStatus(true), 'awaiting_approval');
-});
 
 test('the ask says what each answer does, in one paragraph for every plan', () => {
   // Appended, not templated: an override that never learned a `{settlement}`
@@ -64,17 +54,6 @@ test('the ask leads with what the plan does, and falls back to the shape justifi
   // Said nothing at all: an absent block, not an empty labelled one.
   assert.equal(planApprovalDetail({ diagnosis: null, approach: null, reason: null }), null);
   assert.equal(planApprovalDetail({ diagnosis: '  ', approach: '', reason: ' ' }), null);
-});
-
-test('approval is on by default, in both places that default it', () => {
-  // Two sites default this and they must agree: the config loader is what a
-  // deployment gets, `DEFAULT_PLANNING` is what a `RuleDispatcher` constructed
-  // without one gets. A drift between them is a gate that is on for the harness
-  // and off for the dispatcher, which reads as "the rule never fires".
-  assert.equal(DEFAULT_PLANNING.requireApproval, true);
-  assert.equal(loadConfig().planning.requireApproval, true);
-  // Off is still reachable and still means what it meant.
-  assert.equal(loadConfig({ planning: { requireApproval: false } as never }).planning.requireApproval, false);
 });
 
 test('the funnel names the awaiting arm, so the chip and the rules read one verdict', () => {
@@ -172,29 +151,36 @@ test('the ask carries the shape of the split, not just a count', () => {
 
 // -- ingestion ---------------------------------------------------------------
 
-test('ingestion persists a parts verdict as work by default and as a proposal when asked', () => {
+test('ingestion persists every verdict as a proposal, and the part count has no say in it', () => {
   const store = new Store(':memory:');
-  const doc = parsePlanDocument(
-    JSON.stringify({
-      version: 1,
-      reason: 'Schema first.',
-      parts: [{ slug: 'schema', title: 'Schema', scope: 'src/store', dependsOn: [] }],
-    }),
-  );
-  assert.ok(doc.ok);
+  const plan = (slugs: string[]) => {
+    const doc = parsePlanDocument(
+      JSON.stringify({
+        version: 1,
+        reason: 'Schema first.',
+        parts: slugs.map((slug) => ({ slug, title: slug, scope: `src/${slug}/`, dependsOn: [] })),
+      }),
+    );
+    assert.ok(doc.ok);
+    return doc.document;
+  };
 
-  const off = ingestPlanDocument(store, { doc: doc.document, originRef: 'issue:12', title: 'Big thing' });
-  assert.equal(off.status, 'active');
-
-  const on = ingestPlanDocument(store, {
-    doc: doc.document,
+  // Ingestion takes no policy at all: there is no argument here that could have
+  // landed this as work, and none a transport could pass differently.
+  const one = ingestPlanDocument(store, { doc: plan(['schema']), originRef: 'issue:12', title: 'Big thing' });
+  assert.equal(one.status, 'awaiting_approval');
+  // A one-part plan is put to the operator on exactly an eight-part plan's terms:
+  // the decision is whether this work should happen, and the split is not what
+  // makes it worth asking about.
+  const many = ingestPlanDocument(store, {
+    doc: plan(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']),
     originRef: 'issue:13',
     title: 'Other thing',
-    requireApproval: true,
   });
-  assert.equal(on.status, 'awaiting_approval');
+  assert.equal(many.status, 'awaiting_approval');
   // Both wrote their parts: the gate holds scheduling, not the record of the verdict.
-  assert.equal(store.listPlanParts(on.plan.id).length, 1);
+  assert.equal(store.listPlanParts(one.plan.id).length, 1);
+  assert.equal(store.listPlanParts(many.plan.id).length, 8);
   store.close();
 });
 
@@ -209,7 +195,6 @@ test('both transports honour the gate, so a verdict lands the same way whichever
       agentMode: 'raw',
       deskRoot: join(dir, 'desk'),
       worktreeRoot: join(dir, 'wt'),
-      planning: { requireApproval: true } as never,
       heartbeatIntervalMs: 999_999,
     }),
     { backend: new FakePtyBackend(), errorMirror: () => {} },
@@ -241,21 +226,6 @@ test('both transports honour the gate, so a verdict lands the same way whichever
 });
 
 // -- end to end --------------------------------------------------------------
-
-test('with approval off, a parts verdict schedules exactly as it did, and proposes nothing', async () => {
-  const { system } = plannedSystem({ requireApproval: false });
-  await system.harness.runCycle('manual');
-
-  const parts = system.store.listPlanParts(system.store.getPlanByOrigin('issue:12')!.id);
-  assert.deepEqual(
-    parts.map((p) => p.status),
-    ['dispatched', 'dispatched'],
-    'the default path commits the decomposition the moment the planner writes it',
-  );
-  assert.deepEqual(system.store.listProposals(), [], 'no gate means no rows');
-  assert.deepEqual(system.store.listOpenEscalations(), []);
-  system.store.close();
-});
 
 test('with approval on, the verdict lands, one proposal is pending, and nothing is dispatched', async () => {
   const { system } = plannedSystem();
@@ -381,10 +351,15 @@ test('rejecting schedules nothing and leaves the issue a route rather than parki
   system.store.close();
 });
 
-test('with approval off, a one-part plan schedules its part and proposes nothing', async () => {
-  const { system } = plannedSystem({ requireApproval: false, slugs: ['whole'] });
-  const ingested = system.store.getPlanByOrigin('issue:12')!;
-  assert.equal(ingested.status, 'active');
+test('a one-part plan is asked about on the same terms, and schedules its part once approved', async () => {
+  const { system } = plannedSystem({ slugs: ['whole'] });
+  assert.equal(system.store.getPlanByOrigin('issue:12')!.status, 'awaiting_approval');
+  await system.harness.runCycle('manual');
+
+  const proposal = system.store.listProposals()[0]!;
+  assert.equal(proposal.ref, 'issue:12:plan', 'one part is still a verdict somebody is asked about');
+  assert.equal(system.store.listTasks().length, 0);
+  await system.proposals.accept(proposal.id, 'fine');
   await system.harness.runCycle('manual');
 
   // The part, on the part branch, through rule `plan-part` — not the issue on the
@@ -393,10 +368,7 @@ test('with approval off, a one-part plan schedules its part and proposes nothing
   assert.deepEqual(
     system.store.listTasks().map((t) => [t.originRef, t.branch]),
     [['issue:12:part:whole', 'issue/12/whole']],
-    'the flag off is the pre-gate path: the plan commits the moment the planner writes it',
   );
-  assert.deepEqual(system.store.listProposals(), [], 'no gate means no rows');
-  assert.deepEqual(system.store.listOpenEscalations(), []);
   system.store.close();
 });
 
@@ -626,7 +598,7 @@ function plannerAgent(system: System, originRef: string): Agent {
 }
 
 /** An issue that has already been planned — into two independent parts, or as one PR. */
-function plannedSystem(opts: { requireApproval?: boolean; slugs?: string[] } = {}): {
+function plannedSystem(opts: { slugs?: string[] } = {}): {
   system: System;
   repoRoot: string;
 } {
@@ -641,7 +613,6 @@ function plannedSystem(opts: { requireApproval?: boolean; slugs?: string[] } = {
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
     repoRoot,
-    planning: { requireApproval: opts.requireApproval ?? true } as never,
     heartbeatIntervalMs: 999_999,
     maxConcurrentAgents: 3,
   });
@@ -667,12 +638,7 @@ function submitPlan(system: System, originRef: string, slugs: string[]): void {
     }),
   );
   assert.ok(doc.ok);
-  ingestPlanDocument(system.store, {
-    doc: doc.document,
-    originRef,
-    title: 'Big thing',
-    requireApproval: system.config.planning.requireApproval,
-  });
+  ingestPlanDocument(system.store, { doc: doc.document, originRef, title: 'Big thing' });
 }
 
 // -- the wedge: a plan approved onto a branch its parts cannot sit beneath -----

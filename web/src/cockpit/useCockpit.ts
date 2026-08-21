@@ -185,6 +185,8 @@ export function useCockpit(): CockpitStatus {
         then(verdict === 'accept' ? api.acceptProposal(id, note) : api.rejectProposal(id, note)),
       overruleShortfall: (issueNumber, proposalId, text) =>
         then(api.overruleShortfall(issueNumber, text).then(() => api.rejectProposal(proposalId, text))),
+      releaseEnvironmentGate: (issueNumber, released, note) =>
+        then(api.releaseEnvironmentGate(issueNumber, released, note)),
       decidePermission: (id, allow, note) => then(api.decidePermission(id, allow, note)),
       decideRecovery: (taskId, verdict) => then(api.decideRecovery(taskId, verdict)),
 
@@ -211,9 +213,16 @@ export function useCockpit(): CockpitStatus {
             : current.collapsed.filter((n) => n !== issueNumber),
         })),
       reorderUpNext: (origins) => then(api.reorderUpNext(origins)),
+      setUpNextProfile: (origin, profile) => then(api.setUpNextProfile(origin, profile)),
 
       upgrade: (action, opts) => then(api.upgrade(action, opts)),
       checkBuild: () => then(api.checkBuild()),
+      startLocalRun: (issueNumber) => then(api.startLocalRun(issueNumber)),
+      stopLocalRun: () => then(api.stopLocalRun()),
+      // Not wrapped in `then`: this one is a read, and refetching the whole
+      // snapshot to draw a log tail would make opening the panel cost what a pulse
+      // costs.
+      localRunOutput: () => api.localRunOutput().then((r) => r.lines),
 
       openPet: (id) => then(api.openPet(id)),
       feedPet: (id, beats) => then(api.feedPet(id, beats)),
@@ -226,7 +235,7 @@ export function useCockpit(): CockpitStatus {
       proposeLesson: (text, originRef) => then(api.proposeLesson(text, originRef)),
       promoteLesson: (id) => then(api.promoteLesson(id)),
       retireLesson: (id) => then(api.retireLesson(id)),
-      completeHumanTask: (id) => then(api.completeHumanTask(id)),
+      completeHumanTask: (id, note) => then(api.completeHumanTask(id, note)),
       declineHumanTask: (id, note) => then(api.declineHumanTask(id, note)),
       dismissHumanTask: (id) => then(api.dismissHumanTask(id)),
 
@@ -255,7 +264,7 @@ export function useCockpit(): CockpitStatus {
         await refresh();
         return filed;
       },
-      dismissRun: (n) => then(api.dismissRun(n)),
+      dismissRun: (n, note) => then(api.dismissRun(n, note)),
 
       // A read, so no refetch: the work graph rides its own route precisely
       // because it must not be pulled along by the state poll.

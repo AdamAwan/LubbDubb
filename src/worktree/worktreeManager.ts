@@ -10,9 +10,11 @@ import { runGit, resolveCommit } from '../git/gitCli.js';
  * dispatched a code agent cut a real branch in whatever checkout `repoRoot`
  * happened to name (`process.cwd()` by default) and never deleted it.
  *
- * Deliberately four methods: `ensure`/`ensureReadOnly`/`remove`/`deleteBranch` is the
+ * Deliberately narrow: `ensure`/`ensureReadOnly`/`remove`/`deleteBranch` is the
  * whole of what {@link ActionExecutor} and the reap in `system.ts` ask for, and a
  * seam wider than its consumer is a fake with behaviour nobody checks.
+ * {@link Worktrees.ensurePreview} is the one addition, and it is here rather than
+ * anywhere else because this class is the only thing that hands out a directory.
  */
 export interface Worktrees {
   /**
@@ -39,6 +41,30 @@ export interface Worktrees {
    * name for, without a name in `refs/heads`.
    */
   ensureReadOnly(key: string, of: string): Promise<string>;
+  /**
+   * The **local run's** one checkout, detached at whatever `ref` resolves to.
+   *
+   * Not a pool slot, and the three differences are the whole reason it is its own
+   * method rather than an `ensureReadOnly` call:
+   *
+   * - **One fixed directory, under `localRunRoot`** — outside `worktreeRoot`,
+   *   because `slots()` counts every registered worktree under that root whatever
+   *   it is called, so a preview checkout in there would count toward the bound and
+   *   be handed to an agent.
+   * - **Ignored files survive a change of ref.** A pool slot handed a different ref
+   *   is wiped `git clean -ffdx`, which is right for an agent's branch and wrong
+   *   here: it would make every swap between goals pay a cold dependency install,
+   *   which is the whole thing a kept checkout is for. This cleans `-fd` and leaves
+   *   `node_modules` and build output standing.
+   * - **No lease.** The lease exists to keep two agents out of one directory; there
+   *   is exactly one local run, and the store row is what makes that true.
+   *
+   * Nothing is ever committed here — it is detached, and the run is a server being
+   * looked at rather than work. An unresolvable `ref` throws rather than falling
+   * back to HEAD, `ensure`'s rule: silently running a different goal's code than
+   * the one asked for is the failure this refuses to have.
+   */
+  ensurePreview(ref: string): Promise<string>;
   /**
    * Release the lease `ensure` or {@link ensureReadOnly} took. **The directory
    * stays**, still on the branch (or at the commit) and with everything git ignores
@@ -124,7 +150,6 @@ export class WorktreeManager implements Worktrees {
        * lower of them wins: a cap raised in the cockpit past a bound frozen at boot
        * turns every dispatch above the old number into a rejection, forever, and
        * that presents as a full queue and an idle fleet with nothing red anywhere.
-       * `worktreePoolSize` still pins it, for a disk that cannot hold more.
        */
       readonly size: number;
       /**
@@ -142,6 +167,14 @@ export class WorktreeManager implements Worktrees {
        */
       held: (branch: string) => boolean;
     },
+    /**
+     * `localRunRoot` — the local run's one checkout, and **not** a directory under
+     * `worktreeRoot`. Required rather than optional so a deployment cannot reach
+     * {@link ensurePreview} through a manager that was never told where to put it:
+     * the alternative is a throw at the first start, which is a wiring mistake
+     * discovered by an operator rather than by the compiler.
+     */
+    private readonly previewRoot: string,
     /**
      * Where a {@link salvage} reports what it moved and what it could not — the
      * only part of the pool that acts on a slot nobody asked about, so the only
@@ -177,6 +210,46 @@ export class WorktreeManager implements Worktrees {
    */
   ensureReadOnly(key: string, of: string): Promise<string> {
     return this.acquire({ readOnly: true, name: key, of });
+  }
+
+  /**
+   * The local run's one checkout, detached at `ref` — see
+   * {@link Worktrees.ensurePreview}.
+   *
+   * Outside {@link acquire} entirely, which is the point: no slot survey, no
+   * lease, no eviction, and no `-x` on the clean. The commit is resolved **before**
+   * the directory is touched, `switchOnto`'s rule, so an unresolvable ref leaves
+   * the checkout exactly as it was rather than reset and pointed at nothing.
+   */
+  async ensurePreview(ref: string): Promise<string> {
+    const commit = await this.startPoint('the local run', ref);
+    const dir = resolve(this.previewRoot);
+    // Whether the directory is there, not whether `git worktree list` names it.
+    // Comparing paths would be the obvious test and is a trap: git reports the
+    // canonical path, and on Windows a root under a short-name TEMP resolves to a
+    // different string for the same directory — so the comparison says "not
+    // registered", `worktree add` says "already exists", and the run fails on a
+    // checkout that was sitting there ready. A directory that exists but is not a
+    // worktree fails loudly at `switch`, which is the honest outcome.
+    if (!existsSync(dir)) {
+      mkdirSync(dirname(dir), { recursive: true });
+      await this.git(['worktree', 'add', '--detach', dir, commit]);
+      return dir;
+    }
+    // Detach **before** the reset, and reset rather than switch. Three orderings
+    // were wrong here and each failed differently: `switch` first refuses outright
+    // when the last run left a tracked file edited, and `reset --hard` on a checkout
+    // that is somehow on a branch would rewind *that branch* — the damage
+    // `git switch -C` is banned for. Detaching first makes the reset move nothing
+    // but this checkout's own HEAD, and it is a no-op on the detached tree this
+    // always creates.
+    await runGit(dir, ['checkout', '--quiet', '--detach']);
+    await runGit(dir, ['reset', '--hard', '--quiet', commit]);
+    // The missing `-x` is the whole feature: untracked junk from the last run goes,
+    // and `node_modules` — ignored, and what makes the next start warm rather than a
+    // cold install — stays exactly where it is.
+    await runGit(dir, ['clean', '-fd']);
+    return dir;
   }
 
   /**
@@ -711,8 +784,8 @@ export class WorktreeManager implements Worktrees {
       (salvage.notes.length > 0 ? `Reclaim: ${salvage.notes.join('; ')}. ` : '') +
       'A slot is held while the harness has work in flight on the branch checked out in it, and a slot carrying ' +
       'uncommitted changes is stashed onto a salvage ref and reclaimed — so one still named above is one the ' +
-      'stash itself refused. The bound follows the live agent cap, so raising the cap raises it too, unless ' +
-      '`worktreePoolSize` pins the number of checkouts; the dispatch is retried next cycle either way.' +
+      'stash itself refused. The bound follows the live agent cap, so raising the cap raises it too; the ' +
+      'dispatch is retried next cycle either way.' +
       (strays.length === 0
         ? ''
         : ` Costing disk but not slots: ${strays.length} ${strays.length === 1 ? 'directory' : 'directories'} ` +
@@ -829,17 +902,18 @@ export function slotDirName(index: number): string {
  * The cap bounds how many agents are *running*, and slots are held slightly longer
  * than that: from `ensure` until the agent's process is actually reaped, and for as
  * long as a slot a failed run left dirty takes to be salvaged. Sized to absorb that
- * rather than to hide a leak — a pool that needs more than this is a deployment that
- * should say so through `worktreePoolSize`.
+ * rather than to hide a leak — a pool that needed more than this would be a fleet
+ * leaking slots, which is a bug to fix rather than a number to raise.
  */
 const POOL_SLACK = 2;
 
 /**
- * The pool bound a deployment that does not configure one runs on, derived from the
- * **live** cap rather than the configured one: the two are limits over one fleet and
- * the lower wins, so a bound frozen at boot turns every dispatch above it into a
- * permanent rejection the moment an operator raises the cap. Called on every acquire
- * (see the constructor's `pool.size`), so it stays a pure function of the cap.
+ * The pool bound, derived from the **live** cap — the fleet's one size knob. There
+ * is no separate setting: a pool below the cap starves the fleet it exists to serve
+ * (every dispatch above the lower number rejected for want of a directory, which
+ * presents as a full queue and an idle fleet with nothing red), and a pool above it
+ * is disk nothing can lease. Called on every acquire (see the constructor's
+ * `pool.size`), so it stays a pure function of the cap.
  */
 export function defaultPoolSize(cap: number): number {
   return Math.max(1, cap) + POOL_SLACK;

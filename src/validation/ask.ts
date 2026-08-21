@@ -12,9 +12,23 @@ import type { Store } from '../store/store.js';
 const WITHDRAWN_RESOURCE_RESOLUTION = 'The validation plan no longer needs this.';
 
 /**
+ * The one declared kind that is not a file, and so is never an errand.
+ *
+ * A resource is the name of something that goes in the goal's validation
+ * directory — which is why `ValidationResourceSchema` refuses a name carrying a
+ * separator. An account is not that, and the ask filed for one said so out loud:
+ * "put it where the harness keeps validation resources for this goal", about a
+ * login. Access a check needs is a **precondition**, stated in the check's `do`
+ * where the person running it reads it at the moment they need it, and the
+ * planner is told so in as many words. Filed as an ask it is a row nobody can
+ * settle by handing anything over, sitting in the bench beside the ones they can.
+ */
+const PRECONDITION_KIND = 'access';
+
+/**
  * File the bench row for every resource a **delivered** goal's validation block
- * says it needs and cannot produce — a seeded fixture, a reference screenshot, an
- * account on an environment.
+ * says it needs and cannot produce — a seeded fixture, a reference screenshot, a
+ * dump of real data.
  *
  * **Filed against the delivery, not against the plan.** A resource exists to make
  * a check runnable, and a check is executed against the delivered goal — rule
@@ -39,7 +53,7 @@ const WITHDRAWN_RESOURCE_RESOLUTION = 'The validation plan no longer needs this.
  */
 export function fileResourceAsks(store: Store, originRef: string): void {
   for (const resource of store.listValidationResources(originRef)) {
-    if (resource.provided) continue;
+    if (resource.provided || resource.kind === PRECONDITION_KIND) continue;
     const { task } = store.recordHumanTask({
       title: `Provide "${resource.name}" for validating ${originRef}`,
       detail: resourceAskDetail(resource.name, resource.note),

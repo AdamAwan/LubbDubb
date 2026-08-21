@@ -175,7 +175,14 @@ export function ConfigValues({
           </h3>
           <p className="cfg-hint">
             Editing a row stages a change to <code>{payload.file}</code> — nothing else stores it. A value in{' '}
-            <b>bold</b> is one the file sets; the rest are built-in defaults, shown as they resolve.
+            <b>bold</b> is one the file sets; the rest are inherited, shown as they resolve.
+            {payload.projectFile !== null && (
+              <>
+                {' '}
+                Rows marked <span className="cfg-src project">project</span> come from{' '}
+                <code>{payload.projectFile}</code>, which your team commits — saving here overrides one for you alone.
+              </>
+            )}
           </p>
           {(shown?.entries ?? [])
             .filter((entry) => entry.access !== 'advanced')
@@ -364,7 +371,12 @@ function Row({
 
       <div className="cfg-inwrap">
         {staged === 'cleared' ? (
-          <span className="muted">will fall back to its default</span>
+          // Naming the layer rather than saying "default", because with a project
+          // config in play those are two different values and only one of them is
+          // what clearing leaves behind.
+          <span className="muted">
+            {entry.fromProject ? 'will fall back to the project’s value' : 'will fall back to its default'}
+          </span>
         ) : (
           <Widget entry={entry} raw={raw} locked={locked} states={states} onEdit={onEdit} />
         )}
@@ -375,12 +387,18 @@ function Row({
       </div>
 
       <div>
+        {/* Four layers, four words. "project" is the one an operator cannot act
+            on from here — it is committed in the repository the fleet works on —
+            so a row that drew it as "default" would send them looking for a key
+            their own file does not have. */}
         {entry.env !== null ? (
           <span className="cfg-src env">env {entry.env}</span>
-        ) : entry.isDefault ? (
-          <span className="cfg-src">default</span>
-        ) : (
+        ) : !entry.isDefault ? (
           <span className="cfg-src file">file</span>
+        ) : entry.fromProject ? (
+          <span className="cfg-src project">project</span>
+        ) : (
+          <span className="cfg-src">default</span>
         )}
         <div className={`cfg-effect${entry.live ? ' now' : ''}`}>
           {entry.access === 'fileOnly'
@@ -451,12 +469,16 @@ function Widget({
       </select>
     );
   }
-  if (entry.type === 'stringList' || entry.type === 'json' || entry.type === 'colourMap') {
+  // `text` joins the textarea cases rather than the input one, and is otherwise a
+  // plain string all the way down: no parse on the way in, no serialise on the way
+  // out. It is here because several sentences in a one-line input is a field an
+  // operator cannot read back what they typed into.
+  if (entry.type === 'stringList' || entry.type === 'json' || entry.type === 'colourMap' || entry.type === 'text') {
     return (
       <textarea
         className="cfg-in cfg-in-tall"
         value={raw}
-        rows={entry.type === 'json' ? 4 : 3}
+        rows={entry.type === 'json' || entry.type === 'text' ? 4 : 3}
         onChange={(e) => onEdit(e.target.value)}
       />
     );

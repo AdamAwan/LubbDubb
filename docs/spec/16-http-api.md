@@ -26,7 +26,7 @@ is about.
 | `routes/findings.ts`    | Promote / file / dismiss                                                                      |
 | `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                            |
 | `routes/issues.ts`      | Watch, priority, conclusion, assay, delivered, shortfall, dismiss-run                         |
-| `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`                                      |
+| `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`               |
 | `routes/plans.ts`       | Plan history, replan, acceptance ticks, part model pins                                       |
 | `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it        |
 | `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                            |
@@ -462,6 +462,25 @@ harness's own park, which gates pickup and nothing else (see
 exactly one representation. Like the conclusion route it writes the harness's own record and **never
 touches the tracker**: `closed` stays the human's.
 
+### `POST /api/issues/:number/environment-gate`
+
+Body `{released: boolean, note?: string}`. The operator saying this goal is **not waiting on an
+environment** — a docs change, a config change, work whose deployment nothing here can see — or
+putting it back to waiting. It lifts every gate on that goal at once, so its `validate` and
+`close_out` rows are filed on the next pulse, which the route runs itself rather than leaving to the
+next beat. `false` **clears** the row, a delete so that "not released" has one representation.
+
+`note` is **required** when `released` is true, and that is the schema's own `.refine` — `GateReleaseBody`
+in **`src/environments/arrival.ts`**, beside the rule it encodes rather than in the route, for
+`ShortfallBody`'s reason. Every other operator verdict's summary is optional because it records a
+judgement about the work; this one records a decision to stop waiting for evidence, on a goal that
+will then read as closed-out with nothing on the glass to say no environment ever confirmed it. 400
+on a release with no note, or a non-integer issue number.
+
+The escape hatch has to exist wherever a gate does: without it a goal that is never going to reach an
+environment sits delivered with an empty bench for good, which is the harness losing an obligation
+rather than holding one. → [24](24-environments.md#lifting-the-hold)
+
 ### `POST /api/issues/:number/shortfall`
 
 Body `{cause: 'plan'|'part'|'goal'|null, part?: string, summary?: string}`. The operator's arm of the
@@ -878,21 +897,24 @@ effect", and the honest answer is "at the next restart".
 ### `GET /api/config`
 
 The configuration this process resolved at boot, for the cockpit's config page
-([17](17-cockpit.md#configuration)): `{ groups, file, text, revision, pending, canRestart }`. Each group is a
+([17](17-cockpit.md#configuration)): `{ groups, file, projectFile, text, revision, pending, canRestart }`. Each group is a
 titled list of entries — dotted paths into the config object, with nested blocks expanded to leaves so
 one overridden member of `planning` does not make the other three read as chosen — carrying:
 
 | Field                | What it answers                                                                  |
 | -------------------- | -------------------------------------------------------------------------------- |
-| `value`, `isDefault` | what it is, and whether anybody chose it                                         |
+| `value`, `isDefault` | what it is, and whether *this operator* chose it — the baseline is the built-in default with the project layer folded in ([02](02-configuration.md#the-project-layer)) |
+| `fromProject`        | set when that baseline came from the project's shared config, so a row can name the file it came from and a reset can say what it falls back to |
 | `type`, `options`    | what widget draws it, from `CONFIG_FIELDS` ([02](02-configuration.md#fields))    |
 | `access`             | `plain`, `advanced` (behind the disclosure) or `fileOnly` (not offered)          |
 | `live`               | whether saving it takes effect now, because `configApply.ts` holds an arm for it |
 | `env`                | the environment variable currently beating the file, or null                     |
 | `why`, `ms`          | the one line under the key, and whether the number is a duration                 |
 
-`file` is the absolute path a save writes, and `text` is its current contents — what the raw editor edits
-and what the review step diffs against. `revision` fingerprints that file's current text and rides
+`file` is the absolute path a save writes, and `text` is its current contents. `projectFile` is the
+targeted project's shared config, or null when that repository carries none — read, never written: it
+belongs to the team and changes by a commit. `text` is what the raw editor edits and what the review
+step diffs against. `revision` fingerprints that file's current text and rides
 back on the save, which is what makes a stale one refusable. `pending` is what has reached the file and
 is waiting for a restart. `canRestart` says whether this process has a supervisor to hand off to.
 
@@ -1070,6 +1092,26 @@ priority order of candidate origins. **400** when `origins` is not an array of s
 duplicate. Replaces the whole override set (ranked `0..n-1`), broadcasts `world:changed`, and runs a
 cycle so the new order takes effect immediately. It only re-orders — it never un-holds a held item,
 and `manual-job` items stay first regardless — so this is safe to run inline. Returns `{ ok: true, report }`.
+
+### `POST /api/upnext/profile`
+
+Price one queued row. Body `{origin: string, profile?: string}` — which `agentModels`
+profile the next dispatch on that origin runs on. Absent or empty **clears** the override, which is
+the state a row starts in rather than a third value; the row goes back to its plan's part profile,
+its goal's tag, or its rule's own entry.
+
+**400** when `origin` is missing or empty, and when `profile` names one this deployment does not
+configure — refused by name at the boundary exactly as the goal pin is, because a control that can
+only send what the server sent it is reachable with a bad name only from a stale tab or a hand-rolled
+request, and either way a profile that resolves to nothing would price nothing while reading as a
+decision taken.
+
+It prices and nothing else: the override never un-holds a held row and never lifts one over the
+headroom cut, so like `/api/upnext/order` it is safe to broadcast `world:changed` and run a cycle
+inline — which it does, so the queue redraws with the new price and a row that was about to dispatch
+takes it. The override is standing rather than one-shot, and is pruned by the same
+`upNextOverrideTtlMs` sweep once its origin stops being tracked
+([05](05-dispatcher.md#pricing-one-queued-row)). Returns `{ok: true, profile, report}`.
 
 #### `POST /api/jobs/:id/cancel`
 
@@ -1367,6 +1409,25 @@ are different situations with different next steps.
 
 `POST /api/agents/:id/kill` stays available on a park — it is the only other verdict — and settles it
 the way it settles any other agent.
+
+### `POST /api/local-run`
+
+`{issue}` — start the machine's one dev environment on that goal's code, stopping whatever was running.
+**Start is also swap**: one environment, so there is no separate route and no second name for one
+transition. Refuses with a 400 and the reason when nothing is configured to start or the checkout will
+not prepare. → [23](23-local-runs.md#routes)
+
+### `POST /api/local-run/stop`
+
+No body and no id. There is one run, and "stop whatever is running" is the whole request — an id would
+let a stale panel stop a run that had already been swapped out from under it, and would mean the same
+thing whenever it was right.
+
+### `GET /api/local-run/output`
+
+The session's last lines. Fetched rather than shipped on the snapshot: the tail is up to two hundred
+lines and the snapshot goes out on every heartbeat and every `dirty`, so putting it there would pay for
+a log nobody has open — the argument that keeps the work graph and the prompt book off it too.
 
 ### Static SPA
 

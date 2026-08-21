@@ -1,12 +1,13 @@
 import { useState, type JSX } from 'react';
 import type { CockpitView, DeskRun } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
-import type { Agent, Issue, QueueItem, WorldEvent } from '../types.js';
-import { buildGoalPage, buildGoalTrack, goalOfPr, type GoalTrack } from '../view/goalPage.js';
+import type { Agent, GoalArrival, Issue, QueueItem, SupplyState, WorldEvent } from '../types.js';
+import { buildGoalPage, buildGoalTrack, furthestEnvironment, goalOfPr, type GoalTrack } from '../view/goalPage.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { elapsed, fmtUsd, relTime } from '../components/util.js';
 import { Ref, RefText, refLabel } from '../components/refs.js';
 import { CiLadder, CourtChip } from './GoalPage.js';
+import { ProfilePicker } from '../components/ProfilePicker.js';
 
 /**
  * What is shown when no goal is selected: five cards, rows rather than pictures.
@@ -29,7 +30,7 @@ export function Overview({ view, actions }: { view: CockpitView; actions: Cockpi
       <Fleet view={view} actions={actions} />
       <GoalsInFlight view={view} actions={actions} />
       <Rack view={view} actions={actions} />
-      <UpNext view={view} />
+      <UpNext view={view} actions={actions} />
       <WorldSignals view={view} />
     </div>
   );
@@ -90,9 +91,127 @@ function Fleet({ view, actions }: { view: CockpitView; actions: CockpitActions }
             ended.map((agent) => <AgentRow key={agent.id} agent={agent} view={view} actions={actions} />)
           ))}
       </div>
+      <RunwayBand view={view} />
     </section>
   );
 }
+
+/**
+ * What is behind the agents above — the fleet's runway, along the foot of the
+ * card the agents are on.
+ *
+ * **The placement is the sentence.** Who is out, then what is queued behind
+ * them, in that order and in one card: a fleet reading that leaves out "and then
+ * what" is the reading an operator has to assemble themselves, every time, from
+ * two cards that never agreed on what counted as work. The foot rather than the
+ * head because the agents are the card's subject and this is its consequence,
+ * and it costs nothing to reach — Fleet's rows are bounded by the agent cap, so
+ * this line never travels far down the page.
+ *
+ * **Nothing here re-decides what the server decided**, the rule the other five
+ * cards keep: the state, the wording and every count are quoted from
+ * `state.runway`, which is the same function's answer as the bench row's. The
+ * band draws no control for the same reason the row carries no button — the
+ * reading is a statement about the fleet, and a "watch something" shortcut here
+ * would make it a prompt for the quickest fix rather than the truest one.
+ *
+ * **And it always draws**, muted when healthy, on the empty-card rule: a band
+ * that vanished when the queue was full would be indistinguishable from one that
+ * broke, on exactly the deployment where nobody has seen it before.
+ */
+function RunwayBand({ view }: { view: CockpitView }): JSX.Element {
+  const r = view.state.runway;
+  // Paused is not idleness and must not wear the alarm: the fleet is stopped
+  // because somebody stopped it, and `idleSlots` is already zero for them.
+  const tone = view.state.control.paused ? 'grey' : RUNWAY_TONE[r.state];
+  const total = r.inflight + r.queued + r.reservoir;
+  return (
+    <div className={`cn-runway cn-t-${tone}`}>
+      <span className="cn-runway-read" title={runwayTitle(r)}>
+        {runwayReading(r)}
+      </span>
+      <span className="cn-tag">{RUNWAY_LABEL[r.state]}</span>
+      <span className="cn-runway-say">{view.state.control.paused ? 'Dispatch is paused.' : r.headline}</span>
+      {/* The same four buckets whatever the state, so a glance across a week
+          reads as one shape changing rather than as several different bands. */}
+      <span className="cn-runway-bar" aria-hidden="true">
+        <i className="cn-seg-inflight" style={{ flexGrow: r.inflight }} />
+        <i className="cn-seg-queued" style={{ flexGrow: r.queued }} />
+        <i className="cn-seg-reservoir" style={{ flexGrow: r.reservoir }} />
+        {total === 0 && <i className="cn-seg-empty" style={{ flexGrow: 1 }} />}
+      </span>
+      <span className="cn-runway-legend">
+        {r.queued} queued · {r.reservoir} unwatched
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The reading itself, and it changes unit rather than lying.
+ *
+ * With nothing queued there is no runway to state — a duration would be a
+ * forecast about a queue that does not exist — so the band counts idle slots
+ * instead, which is the fact that has replaced it.
+ *
+ * The duration is **fleet time**: the hours a person was the next mover are out
+ * of the median it is built from
+ * ([25](../../../docs/spec/25-supply.md#the-lead-time-is-fleet-time)). The band
+ * is one line and cannot say so, which is what {@link runwayTitle} is for — the
+ * bench row and its notification carry it in the sentence.
+ */
+function runwayReading(r: CockpitView['state']['runway']): string {
+  if (r.runwayMinutes !== null) return fmtRunway(r.runwayMinutes);
+  if (r.state === 'unknown') return '—';
+  return `${r.idleSlots} idle`;
+}
+
+/**
+ * What the one-line reading had to leave out, on hover: which quantity it is, and
+ * the calendar span it came from.
+ *
+ * A tooltip rather than a second line because the band's whole placement argument
+ * is that it costs nothing to reach; a figure that dropped by two thirds with no
+ * account of why anywhere on the card reads as a gauge that broke, though.
+ * Composed here from quoted figures only — the sentence itself stays the server's.
+ */
+function runwayTitle(r: CockpitView['state']['runway']): string | undefined {
+  if (r.runwayMinutes === null || r.medianLeadMinutes === null) return undefined;
+  const held = r.medianHeldMinutes ?? 0;
+  const fleet = `Fleet time: a ${fmtRunway(r.medianLeadMinutes)} median goal across ${r.inflight + r.queued} goals.`;
+  return held <= 0
+    ? fleet
+    : `${fleet} Its median calendar span is ${fmtRunway(r.medianLeadMinutes + held)} — the ${fmtRunway(held)} spent waiting on you is not counted.`;
+}
+
+/** `53m`, `3h 07m` — the band is one line, so the reading is as short as it can be and still be a duration. */
+function fmtRunway(minutes: number): string {
+  if (minutes < 60) return `${minutes}m`;
+  return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, '0')}m`;
+}
+
+/**
+ * Total over {@link SupplyState} for `KIND_TONE`'s reason: a state added to the
+ * lens fails the typecheck here rather than drawing in whatever the last rule in
+ * the sheet said. `unknown` is grey deliberately — it is not a mild warning, it
+ * is the absence of a reading.
+ */
+const RUNWAY_TONE: Record<SupplyState, 'green' | 'amber' | 'grey'> = {
+  healthy: 'green',
+  thin: 'amber',
+  dry: 'amber',
+  starved: 'amber',
+  unknown: 'grey',
+};
+
+/** One word per state, and the same words the spec uses, so a support answer and the glass agree. */
+const RUNWAY_LABEL: Record<SupplyState, string> = {
+  healthy: 'Healthy',
+  thin: 'Thin',
+  dry: 'Dry',
+  starved: 'Starved',
+  unknown: 'No history yet',
+};
 
 /**
  * One agent: what it is on, and the way to each of the things it names.
@@ -274,6 +393,7 @@ function GoalRow({ issue, view, actions }: { issue: Issue; view: CockpitView; ac
   const page = buildGoalPage(view.state, ref, view.needsYou);
   const track = page === null ? null : buildGoalTrack(page.parts);
   const asks = view.needsYou.filter((n) => n.goalRef === ref).length;
+  const furthest = furthestEnvironment(view.state, ref);
 
   return (
     <button type="button" className="cn-row cn-goal-row" onClick={() => actions.selectGoal(ref)}>
@@ -288,6 +408,11 @@ function GoalRow({ issue, view, actions }: { issue: Issue; view: CockpitView; ac
         </span>
       </span>
       {track !== null && <Track track={track} />}
+      {/* Where the work actually got to, on the row rather than a page deeper.
+          Only ever drawn for an environment holding the goal *whole* — `partial`
+          has no furthest anything, and a chip claiming one would be the boolean
+          rollup the reach fold exists to refuse. */}
+      {furthest !== null && <i className="cn-chip cn-ok">{furthest}</i>}
       <i className={`cn-chip ${asks > 0 ? 'cn-you' : 'cn-harness'}`}>{asks > 0 ? 'You' : 'Harness'}</i>
     </button>
   );
@@ -398,7 +523,7 @@ function Rack({ view, actions }: { view: CockpitView; actions: CockpitActions })
  * line, and nothing here re-words it. A held item is toned amber off `status`,
  * which is a fact the same sentence already states in words.
  */
-function UpNext({ view }: { view: CockpitView }): JSX.Element {
+function UpNext({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const items = view.state.upcoming?.items ?? [];
   return (
     <section className="cn-card">
@@ -408,7 +533,7 @@ function UpNext({ view }: { view: CockpitView }): JSX.Element {
       <div className="cn-rows">
         {items.length === 0 && <p className="cn-empty">Nothing is queued.</p>}
         {items.map((item) => (
-          <QueueRow key={`${item.origin}|${item.rule}`} item={item} />
+          <QueueRow key={`${item.origin}|${item.rule}`} item={item} view={view} actions={actions} />
         ))}
       </div>
     </section>
@@ -421,7 +546,16 @@ function UpNext({ view }: { view: CockpitView }): JSX.Element {
  * provider unconditionally, and the reason it quotes carries `#n` mentions of its
  * own.
  */
-function QueueRow({ item }: { item: QueueItem }): JSX.Element {
+function QueueRow({
+  item,
+  view,
+  actions,
+}: {
+  item: QueueItem;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element {
+  const config = view.state.config;
   return (
     <div className="cn-row">
       <span className="cn-grow">
@@ -440,6 +574,24 @@ function QueueRow({ item }: { item: QueueItem }): JSX.Element {
           <RefText text={item.reason} />
         </span>
       </span>
+      {/* What this row will run on, and the one place it can be changed before it
+          runs. The queue is where the judgement is available — an operator
+          reading "resolve the conflict on issue/390/watcher" knows it is
+          mechanical work, and the row is in front of them; the goal's ticket is
+          two clicks away and says nothing about which of its origins is the cheap
+          one. The empty option names what the row resolves to without an
+          override, so the panel answers "which profile" whether or not anyone has
+          touched it. */}
+      <ProfilePicker
+        profiles={config.profiles}
+        value={item.override ?? null}
+        // Only meaningful while nothing is overridden: with an override standing,
+        // `item.profile` *is* the override, and naming it as the fallback would
+        // promise that clearing the control changes nothing.
+        defaultProfile={item.override === undefined ? (item.profile ?? null) : null}
+        inheritLabel={item.profileSource === 'pin' && item.override === undefined ? 'Pinned' : 'Auto'}
+        onPick={(profile) => void actions.setUpNextProfile(item.origin, profile)}
+      />
     </div>
   );
 }
@@ -451,7 +603,14 @@ function QueueRow({ item }: { item: QueueItem }): JSX.Element {
  * an operator is watching the moment it moves again.
  */
 function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
-  const rows = groupSignals(view.state.worldEvents).slice(0, 10);
+  // Both halves of "what has happened", newest first: the world's own transitions
+  // and the environments the work has arrived in.
+  const rows = [
+    ...groupSignals(view.state.worldEvents),
+    ...arrivalSignals(view.state.environmentArrivals ?? [], view.now),
+  ]
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 10);
   return (
     <section className="cn-card">
       <h3>
@@ -459,14 +618,14 @@ function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
       </h3>
       <div className="cn-rows">
         {rows.length === 0 && <p className="cn-empty">The world has not moved.</p>}
-        {rows.map(({ key, event, count }) => (
-          <div className="cn-row" key={key}>
+        {rows.map((row) => (
+          <div className="cn-row" key={row.key}>
             <span className="cn-grow">
               <b className="cn-name">
-                <RefText text={event.summary} />
+                <RefText text={row.summary} />
               </b>
               <span className="cn-sub">
-                {event.kind} · {relTime(event.createdAt, view.now)}
+                {row.kind} · {relTime(row.createdAt, view.now)}
               </span>
             </span>
             {/* The goal behind the signal, beside the sentence rather than inside
@@ -474,9 +633,9 @@ function WorldSignals({ view }: { view: CockpitView }): JSX.Element {
                 repeating the pull request here would be one ref twice — what a
                 signal never offers is the way onto the goal page. */}
             <span className="cn-refs">
-              <Ref to={goalBehind(view, event.ref)} />
+              <Ref to={goalBehind(view, row.ref)} />
             </span>
-            {count > 1 && <span className="cn-num">×{count}</span>}
+            {row.count > 1 && <span className="cn-num">×{row.count}</span>}
           </div>
         ))}
       </div>
@@ -496,10 +655,23 @@ function goalBehind(view: CockpitView, ref: string | null): string | null {
   return pr ? goalOfPr(view.state, Number(pr[1])) : null;
 }
 
+/**
+ * One row of the feed, flattened off whatever produced it.
+ *
+ * Flat rather than "a `WorldEvent` and a count" because the card draws two
+ * different things now — the world's own transitions, and the environments a
+ * goal's work has arrived in — and an arrival is deliberately not a world event
+ * ({@link arrivalSignals}). Carrying one as the other would need a `kind` the
+ * union does not have, cast into it at the one place the row then prints it.
+ */
 interface Signal {
   key: string;
-  /** The newest event of its group — the server sends newest first, so it is the first seen. */
-  event: WorldEvent;
+  /** What kind of thing happened, as the row prints it. */
+  kind: string;
+  /** The world object it concerns, for the goal link beside the sentence. */
+  ref: string | null;
+  summary: string;
+  createdAt: string;
   count: number;
 }
 
@@ -508,8 +680,54 @@ function groupSignals(events: readonly WorldEvent[]): Signal[] {
   for (const event of events) {
     const key = `${event.kind}|${event.ref ?? ''}`;
     const seen = rows.get(key);
+    // The newest of its group — the server sends newest first, so it is the first seen.
     if (seen) seen.count += 1;
-    else rows.set(key, { key, event, count: 1 });
+    else
+      rows.set(key, {
+        key,
+        kind: event.kind,
+        ref: event.ref,
+        summary: event.summary,
+        createdAt: event.createdAt,
+        count: 1,
+      });
   }
   return [...rows.values()];
 }
+
+/**
+ * The environment arrivals, as signals — merged into the feed here rather than
+ * carried in `worldEvents` from the server.
+ *
+ * **An arrival is deliberately not a `WorldEvent`.** Those are derived by diffing
+ * consecutive world snapshots, and a standing delivery verdict is expired by
+ * *any* world event on its issue ref (`deliveryHold`) — so an arrival written as
+ * one would lift the delivery park on the very goal it announced and hand the
+ * work back to the fleet to do again. Adapting it at the feed's own door costs
+ * one function and has no such reader.
+ *
+ * One row per arrival rather than one per `(kind, ref)`: two environments
+ * reaching one goal is two things that happened, and rolling them together would
+ * hide the second under a count of the first.
+ */
+function arrivalSignals(arrivals: readonly GoalArrival[], now: number): Signal[] {
+  const cutoff = now - SIGNAL_WINDOW_MS;
+  return arrivals
+    .filter((a) => Date.parse(a.arrivedAt) >= cutoff)
+    .map((a) => ({
+      key: `arrival|${a.goalRef}|${a.environment}`,
+      kind: 'environment',
+      ref: a.goalRef,
+      summary: `${refLabel(a.goalRef)} reached ${a.environment}`,
+      createdAt: a.arrivedAt,
+      count: 1,
+    }));
+}
+
+/**
+ * How far back an arrival stays in the feed. The world events beside it are
+ * capped at 100 rows by the server and thin out on their own; arrivals are rare
+ * enough that a deployment with four environments would otherwise keep last
+ * spring's on the card.
+ */
+const SIGNAL_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;

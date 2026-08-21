@@ -172,13 +172,14 @@ differently; the right column is how that answer is expressed.
 | Intake                   | which tickets are in scope at all               | the watch tag, tracker workflow states                          |
 | Enough information       | how strict the bar is, and who sets it          | on/off, plus an operator verdict that overrides it              |
 | Plan                     | whether work is decomposed before it starts     | on/off                                                          |
-| Plan accepted            | whether a human sees it first                   | on/off; approval is the default when planning is on             |
+| Plan accepted            | whether a human sees it first                   | a proposal a human settles — in LubbDubb, always, with no switch |
 | Work kind                | what a deliverable may be                       | the terminal an agent declares when it finishes                 |
 | Quality gates            | which checks exist and what each failure means  | a per-check rule set, as in the table above                     |
 | Human review             | whether a reply goes out unattended             | a confidence threshold plus an allow-list, else a human accepts |
 | Readiness to merge into  | what must be true of the target before landing  | a check on the pull request, held by its rule until it clears   |
 | Merge                    | when a pull request is allowed to land          | health predicates plus the stack rules                          |
 | Report and ticket update | what a finished piece of work must leave behind | prompts, which are operator-overridable files                   |
+| After the merge          | where work travels once it lands, and what arriving somewhere means | a list of environments, each naming the commit it is at, and optionally what its arrival opens |
 
 The pattern across the rows is the same one: **the harness owns the loop, the operator owns the
 verdicts.** Where a stage needs judgement — is this goal clear, is this plan right, is this failure
@@ -235,7 +236,10 @@ rule that holds on it is the same rule that holds on any red check nobody here c
 - **Close the ticket.** The harness never closes it. A delivered goal whose item is still open files
   a `close_out` human task instead — a standing obligation with a person's name on it, which settles
   itself once the tracker stops listing the item open
-  ([13](spec/13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)).
+  ([13](spec/13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)). It is asked for after
+  the validation rather than beside it, and — where a deployment has configured an environment that
+  opens it — only once the work has actually arrived somewhere a person can look at
+  ([24](spec/24-environments.md#what-an-arrival-means)).
 
 One stage in this document — the self-review step — the harness has no mechanism for, and it is named
 as such above. Everything else is built, in full or in the narrower form stated.

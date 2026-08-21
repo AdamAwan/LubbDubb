@@ -53,19 +53,32 @@ function configText(dir: string, extra: Record<string, unknown> = {}): string {
  * moment anything reloaded, which is a property of the fixture and not of the
  * code under test.
  */
-function fixture(extra: Record<string, unknown> = {}): { system: System; file: string; text: string; dir: string } {
+function fixture(
+  extra: Record<string, unknown> = {},
+  project?: Record<string, unknown>,
+): { system: System; file: string; projectFile: string; text: string; dir: string } {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-cfgroute-'));
   const file = join(dir, 'lubbdubb.config.json');
+  // The team's layer lives at `repoRoot`, so a fixture that wants one points the
+  // harness at the temp dir. Injected either way: without it the route reads the
+  // `lubbdubb.project.json` of whatever checkout the suite is running in, which is
+  // `configFile`'s hazard with a second file.
+  const projectFile = join(dir, 'lubbdubb.project.json');
+  if (project) writeFileSync(projectFile, JSON.stringify(project), 'utf8');
   // A relative tokenFile would mint into the checkout the suite is running in.
-  const text = configText(dir, extra).replace('"TOKENFILE"', JSON.stringify(join(dir, 'token')));
+  const text = configText(dir, project ? { repoRoot: dir, ...extra } : extra).replace(
+    '"TOKENFILE"',
+    JSON.stringify(join(dir, 'token')),
+  );
   assert.doesNotMatch(text, /"TOKENFILE"/);
   writeFileSync(file, text, 'utf8');
   const system = buildSystem(loadConfigFromText(text, file), {
     worktrees: new FakeWorktreeManager(),
     backend: new FakePtyBackend(),
     configFile: file,
+    projectConfigFile: projectFile,
   });
-  return { system, file, text, dir };
+  return { system, file, projectFile, text, dir };
 }
 
 /** The bearer this app is running with, for the one fixture that has auth on. */
@@ -333,6 +346,75 @@ test('a save that names no field is refused rather than rewriting the file for n
 
   assert.equal(res.status, 400);
   assert.match(res.body.error ?? '', /nothing to save/);
+
+  system.store.close();
+});
+
+/**
+ * Two files, and only one of them is the one this route writes. A row that drew
+ * the team's value as a built-in default would send an operator looking for a key
+ * their own file does not have — and would promise a reset that goes somewhere
+ * else than it goes.
+ */
+test('GET /api/config names the project’s file and marks what came from it', async () => {
+  const { system, projectFile } = fixture({}, { defaultBranch: 'trunk', closedPrWindowMs: 1000 });
+
+  const payload = await read(system);
+  assert.equal(payload.projectFile, projectFile);
+
+  const shown = payload.groups.flatMap((group) => group.entries);
+  const branch = shown.find((entry) => entry.path === 'defaultBranch');
+  assert.equal(branch?.value, 'trunk', 'the team’s value is what the harness runs on');
+  assert.equal(branch?.isDefault, true, 'the operator did not choose it');
+  assert.equal(branch?.fromProject, true, 'and the row says which file did');
+
+  // The operator's own file still reads as theirs, over the same payload.
+  const cap = shown.find((entry) => entry.path === 'maxConcurrentAgents');
+  assert.equal(cap?.isDefault, false);
+  assert.equal(cap?.fromProject, undefined);
+
+  system.store.close();
+});
+
+test('a harness whose project carries no config says so rather than guessing', async () => {
+  const { system } = fixture();
+  const payload = await read(system);
+  assert.equal(payload.projectFile, null);
+  assert.equal(
+    payload.groups.flatMap((group) => group.entries).filter((entry) => entry.fromProject !== undefined).length,
+    0,
+  );
+  system.store.close();
+});
+
+/**
+ * The operator's own file wins, and saving is how they take it — the point of two
+ * layers rather than one. The write goes to `lubbdubb.config.json`; the project's
+ * file is not touched, because it belongs to the team.
+ */
+test('a save overrides a project value locally and leaves the project’s file alone', async () => {
+  const { system, file, projectFile } = fixture({}, { lessonBlockChars: 1000 });
+  const before = readFileSync(projectFile, 'utf8');
+
+  const shownFirst = (await read(system)).groups
+    .flatMap((group) => group.entries)
+    .find((entry) => entry.path === 'lessonBlockChars');
+  assert.equal(shownFirst?.value, 1000, 'the team’s value is what the harness booted on');
+  assert.equal(shownFirst?.isDefault, true);
+
+  const revision = (await read(system)).revision;
+  const saved = await save(system, { set: { lessonBlockChars: 2000 }, baseline: revision });
+  assert.equal(saved.status, 200);
+
+  assert.match(readFileSync(file, 'utf8'), /"lessonBlockChars": 2000/);
+  assert.equal(readFileSync(projectFile, 'utf8'), before, 'the team’s file is read, never written');
+
+  const shown = (await read(system)).groups
+    .flatMap((group) => group.entries)
+    .find((entry) => entry.path === 'lessonBlockChars');
+  assert.equal(shown?.value, 2000, 'a live key, so the override is in force now');
+  assert.equal(shown?.isDefault, false, 'this one is theirs');
+  assert.equal(shown?.fromProject, true, 'and clearing it would leave the team’s value, not the built-in one');
 
   system.store.close();
 });

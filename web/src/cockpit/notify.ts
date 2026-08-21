@@ -159,6 +159,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   validate: 'A delivered goal is ready to be validated',
   burn: 'A run is spending far more than usual',
   limit: 'An agent is out of account limit',
+  supply: 'The fleet is running out of work',
 };
 
 /** Reduce a snapshot to what {@link notifiableChanges} compares. */
@@ -219,7 +220,58 @@ export function notifiableChanges(prev: NotifySnapshot | null, next: NotifySnaps
     });
   }
 
-  return items;
+  return coalesce(items);
+}
+
+/** The most subjects a coalesced notification spells out before it counts the rest. */
+const SUMMARY_BODIES = 3;
+
+/** How a batch of more than one reads in a title. */
+const SUMMARY_TITLE: Record<NotifyCategory, (n: number) => string> = {
+  needsYou: (n) => `${n} things need you`,
+  errors: (n) => `${n} errors recorded`,
+  agents: (n) => `${n} runs ended`,
+};
+
+/**
+ * Fold a batch to **at most one notification per category**.
+ *
+ * The diff above is per subject, and that is the right record of what is new —
+ * but it is not the right number of interruptions. A cascade records thirty
+ * errors inside one pulse and a restart fills the queue rail in one go, so the
+ * operator got thirty desktop banners for one event and ten for one glance's
+ * worth of work. Every one of them said the same thing: *go and look at the
+ * cockpit*. Past the first, they are not information, they are a denial of
+ * service on the person the feature exists to reach.
+ *
+ * So a batch says it once and says how many. What each row **is** stays in the
+ * queue rail and the error list, which is where it is answered anyway — a
+ * notification's whole job is to get somebody there.
+ *
+ * The tag is built from the batch's first subject and its size, so it is stable
+ * for the same batch (a re-render replaces rather than repeats, exactly as a
+ * per-subject tag does) and different for the next one (a second burst stacks
+ * beside the first rather than silently overwriting its count).
+ */
+function coalesce(items: readonly NotifyItem[]): NotifyItem[] {
+  const out: NotifyItem[] = [];
+  for (const { id } of NOTIFY_CATEGORIES) {
+    const batch = items.filter((i) => i.category === id);
+    if (batch.length === 0) continue;
+    if (batch.length === 1) {
+      out.push(batch[0]!);
+      continue;
+    }
+    const named = batch.slice(0, SUMMARY_BODIES).map((i) => i.body);
+    const rest = batch.length - named.length;
+    out.push({
+      category: id,
+      tag: `${batch[0]!.tag}+${batch.length - 1}`,
+      title: SUMMARY_TITLE[id](batch.length),
+      body: [...named, ...(rest > 0 ? [`+${rest} more`] : [])].join(' · '),
+    });
+  }
+  return out;
 }
 
 /**

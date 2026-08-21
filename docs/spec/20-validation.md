@@ -22,7 +22,7 @@ re-litigated:
 | A test suite        | `npm run check` runs on every branch. This is the layer above: checks needing a running harness, a real environment, a browser, or a person. |
 | Acceptance criteria | Those are per **part**, ticked by a reviewer reading a diff ([08](08-planning.md)). A check is executed against the delivered goal.          |
 | CI                  | Nothing here gates a merge, and **no result is ever inferred from a build**.                                                                 |
-| A credential store  | `validationRoot` holds fixtures and reference material. Which account a check needs is a note; the account stays where it is.                |
+| A credential store  | `validationRoot` holds fixtures and reference material. Which account a check needs is a line in its `do`; the account stays where it is.   |
 | A blocker           | Nothing a check says holds a dispatch, a merge, a conclusion or a close. It changes what closing a goal _looks like_, and nothing else.      |
 
 ## The bar
@@ -58,12 +58,43 @@ refactor whose whole claim is that behaviour did not change has nothing left onc
 Its per-goal reading is null — nothing was declared — which is a third fact and not a synonym for
 clear ([The flag](#the-flag)). Nothing counts checks and nothing rewards a longer list.
 
-**Nothing enforces this.** It is stated where the writing happens — the `issue-plan` and
-`issue-replan` prompts, and the `validation_amend` tool's description — and not in `ValidationSchema`,
-because a schema that recognised a test-suite check by its words would refuse the legitimate one that
-runs a suite _inside a fixture repository_ — the shape of the example in
-[The document block](#the-document-block). The bar is about what is worth writing, and worth is not a
-thing zod can parse.
+### One run is one check
+
+Those six are ways of looking, not six checks. Everything a **single run of the delivered goal**
+settles belongs to the one check that performs it — the screen it drew, the rows it wrote, the line in
+the log, the file it left behind — and `expect` carries the list. "The new page renders" and "the row
+is written" are one check, because the setup is the expensive part of both: split, it is written twice
+and **performed** twice, to look at one run from two angles. A second check earns its place only when
+the second look needs a genuinely different run: another environment, a fresh database, a restart, a
+second person.
+
+This is the same cost the bar is about, arriving by a different route. A check that fails the bar
+wastes a trip; a journey cut into six checks wastes five setups and reads, on the sheet, as six
+obligations — and the sheet is read as the list of what somebody still has to do. So most goals get
+one check, two is ordinary, and three wants a reason.
+
+### A precondition is not an ask
+
+**What a check needs in order to be runnable is stated in its `do`, in the words that let the reader
+go and get it** — "you need read access to the staging database (connection string in the team
+vault)". It is read by the person running the check, at the moment they need it.
+
+The alternative is what a resource declared `provided: false` does: it files a `human_tasks` row
+([Resources](#resources)), which is a different person, a different queue and a different day. That is
+right for a **file** somebody has to produce and hand over, and wrong for everything else — a login,
+an environment, an account, a flag someone has to turn on. Filed as asks, a delivered goal opens by
+asking four people for four things before anybody has looked at it, and none of those rows can be
+settled by putting anything in the goal's validation directory, which is what the ask tells its reader
+to do.
+
+**Nothing enforces any of the three.** They are stated where the writing happens — the `issue-plan`
+and `issue-replan` prompts, and the `validation_amend` tool's description — and not in
+`ValidationSchema`, because a schema that recognised a test-suite check by its words would refuse the
+legitimate one that runs a suite _inside a fixture repository_ — the shape of the example in
+[The document block](#the-document-block). A grouping rule is less parseable still: no schema can see
+that two checks share a setup. The bar is about what is worth writing, and worth is not a thing zod can
+parse. The one half the harness does enforce is the one it can name: an `access` resource files no ask,
+whatever `provided` says.
 
 ## The check
 
@@ -131,17 +162,16 @@ much as a decomposed one.
 {
   "validation": {
     "resources": [
-      { "name": "fixture-repo.tar.gz", "kind": "fixture", "note": "seeded repo, one PR by another author" },
-      { "name": "test-env login", "kind": "access", "provided": false }
+      { "name": "fixture-repo.tar.gz", "kind": "fixture", "note": "seeded repo, one PR by another author" }
     ],
     "checks": [
       {
-        "id": "merged-branch-gone",
-        "title": "A squash-merged part branch is gone on both sides",
-        "do": "Run the harness against the fixture repo, merge the seeded PR…",
-        "expect": "No issue/284/reap ref, locally or on the remote.",
+        "id": "reap-merged-branch",
+        "title": "A squash-merged part branch is reaped, everywhere it shows",
+        "do": "Needs git and a checkout — no login and no browser. Unpack the fixture repo, point a local harness at it, merge the seeded PR, and let one pulse run.",
+        "expect": "No issue/284/reap ref locally or on the remote; the part reads merged on the goal page; one \"reaped\" line in the log and no error record.",
         "uses": ["fixture-repo.tar.gz"],
-        "covers": ["reap-writer"],
+        "covers": ["reap-writer", "reap-desk"],
         "fleetCandidate": true,
         "why": "reads the repo and runs git; needs no login and no browser"
       }
@@ -149,6 +179,11 @@ much as a decomposed one.
   }
 }
 ```
+
+One run, and `expect` lists everything that run has to satisfy — the ref, the screen and the log, which
+were three checks before the rule in [One run is one check](#one-run-is-one-check). What the check needs
+in order to be runnable opens `do`, rather than being declared as an `access` resource that would file an
+ask against it.
 
 `ValidationSchema` is reached by **both** transports exactly as `PlanDocumentSchema` is — the
 `plan.json` drain and the `plan_submit` tool must accept and reject the same documents.
@@ -217,6 +252,17 @@ every pulse, so the bench row and the obligation beneath it cannot disagree abou
 dispatch, no merge, no conclusion and no close, and no rule reads it. What changes is that running
 the checks is an obligation with a place to sit rather than a thing somebody remembers.
 
+What can hold the row is an **environment gate**, where a deployment configured one: with
+`arrival.opens` naming `validate`, the row waits until the goal's work has reached the environment
+that opens it. The delivery is when a check becomes _meaningful_; with a gate it is not yet when one
+becomes **runnable**, and a check against a build nobody can open is the row-asking-for-impossible-work
+this desk exists to end, one step earlier. Nothing gates it on a deployment that configured no
+environment, which is the default — and the gate holds the file arm only, so results recorded against
+an already-filed row still settle it. → [24](24-environments.md#what-an-arrival-means)
+
+The close-out is the step **after** this one: the `close_out` row is not filed while this one is open.
+→ [24](24-environments.md#the-bench-asks-for-one-thing-at-a-time)
+
 A check handed to the fleet is **not** on it — rule `validate-check` is about to dispatch that one —
 and a hand-back puts it straight back, carrying the agent's reason. The row settles itself the moment
 nothing is left for a person, on the close-out's asymmetry: these are rows the harness reads every
@@ -248,10 +294,23 @@ for the life of the launch, because a grant that came and went with a policy fla
 agent's readable set depend on config it cannot see. That is a real widening, and it is the same one
 attachments already make.
 
-A resource declared `"provided": false` is the planner saying it needs something it cannot produce: a
-reference screenshot, an account, a sample file from a colleague. A `human_tasks` row asks for it
-([13](13-jobs-and-findings.md)), so a missing resource is an ask rather than a check that mysteriously
+**A resource is a file**, which is what makes the rest of this section coherent: a name resolved under
+a directory, present or missing, servable to the cockpit and readable by an agent. A resource declared
+`"provided": false` is the planner saying it needs a file it cannot produce — a reference screenshot,
+a dump of real data, a sample from a colleague. A `human_tasks` row asks for it
+([13](13-jobs-and-findings.md)), so a missing fixture is an ask rather than a check that mysteriously
 never runs.
+
+**`kind: 'access'` is the exception, and files nothing.** It names a login or an environment, which is
+a precondition and belongs in the check's `do` ([A precondition is not an ask](#a-precondition-is-not-an-ask));
+`fileResourceAsks` skips it whatever `provided` says. The ask it used to file told its reader to "put
+it where the harness keeps validation resources for this goal" about an account — a row nobody could
+settle by handing anything over, and one the operator could not get rid of. The word stays **parseable**
+rather than being dropped from the enum, on the rule every post-v1 field follows: an older plan, and an
+operator override that never learned the new wording, must keep validating rather than having the whole
+document refused over one chip. The cockpit draws it as a plain chip too — `present` is a file fact, and
+warning "missing" about a file that was never going to exist is a warning that means nothing on every
+draw for the life of the goal.
 
 **The ask is filed against the delivery, not against the plan.** `ValidationAskDesk`
 (`src/validation/askDesk.ts`) files it once a pulse for every goal parked as delivered, beside the
@@ -622,47 +681,22 @@ machine the operator is sitting at.
 ### Getting the application up
 
 A check that says "open the page and click the thing" is unrunnable until somebody knows how to get
-the page up, and nothing in this document told them. The procedure is written by a planner reading
-the repository, which is the one thing in the deployment that cannot know the answer — so the check
-arrived at the machine that has the browser and the login, and stalled on the one fact nobody had
-written down.
+the page up, and nothing in this document told them. The procedure is written by a planner reading the
+repository, which is the one thing in the deployment that cannot know the answer — so the check
+arrived at the machine with the browser and the login and stalled on the one fact nobody had written
+down.
 
-`local_run` is that fact. It answers with the **`local-run` prompt, rendered** — a prompt id like any
-other ([05](05-dispatcher.md#prompt-templates)), whose built-in body says "work it out from the
-repository: the README, the scripts, a compose file" and which a deployment **overrides with its own
-command**. That is the whole of why it is a template rather than a config key: how a project starts is
-the operator's opinion, not the harness's, which is the same argument that puts `finding-ticket` and
-`docs-change` in the prompt book. The cost is the prompt book's cost — an override is a file drop and
-takes effect at the next restart, where a config key would have been editable in the cockpit.
+That is [23 — Local runs](23-local-runs.md), and it is a subsystem rather than a paragraph here
+because the harness **owns the environment**: one dev environment on the machine, one goal's code in
+it at a time, started and stopped from the cockpit or from a session, with a record of which. What
+this document needs from it is two sentences.
 
-Three properties, asserted in `test/validationDesktop.test.ts`:
-
-- **It is not a field on `validation_read`.** That tool refuses a goal with no checks, deliberately
-  and with a reason worth keeping — and a goal with no checks is exactly the goal somebody wants to
-  look at. `local_run` answers for a goal with no plan, and for no goal at all.
-- **The goal's parts come back as data, not as placeholders.** Each part's slug, branch, pull request
-  and status ride beside the rendered body, and the template declares **no placeholders**. A `{branch}`
-  token would be dropped in silence by exactly the overrides that customised most — the sharp edge
-  appending exists to avoid ([09](09-execution.md)) — and a branch nobody can see is a session
-  looking at the wrong code.
-- **The caution comes from the harness, not the body**, because it is not the operator's to override:
-  they are writing down a start command, not reasoning about the worktree pool. It carries the two
-  ways a session at this keyboard breaks the fleet silently. Nothing may be left running inside
-  `worktreeRoot` — a process holding a leased slot open stops it ever being cleaned or handed on, and
-  on Windows every later dispatch onto that branch fails `EBUSY`
-  ([09](09-execution.md#handing-a-slot-over)). And **no branch is checked out in `repoRoot`**: that is
-  the clone the pool cuts its worktrees from, `WorktreeManager.findExisting` reads
-  `git worktree list`, which includes the main working tree — so a branch checked out there is a
-  branch the pool answers for with the operator's own checkout. A goal whose parts have merged needs
-  no checkout at all, which is the common case; anything else is a question for the operator.
-
-The cockpit's half is **run it locally** in the validation card's header, `/lubbdubb run <n>` through
-the same deep link — `localRunPrompt` in `web/src/cockpit/desktopLink.ts`. It is drawn on every goal
-with nothing checked first, because the prompt always has a body: a control offered only where
-somebody had already configured one is the dead end you find by walking into it, which is the
-argument that made this whole channel unconditional. The skill then puts the run **before** the
-checks and claims nothing until the operator picks one — they opened it to look at the thing, and a
-claim taken on their behalf locks a check away from the fleet while they do.
+`local_run` on the desktop channel reports what is running and, given a goal, starts it — so a session
+carrying out a check asks for the application rather than starting one itself, and the thing it asks
+is the same thing the cockpit's own control asks. And **`running` is not a reading**: it means the
+session that brought the environment up did not fail, not that anything answered on the port. The
+tool's reply says so in as many words, because a check reported `passed` on the strength of a status
+is precisely the outcome this whole channel exists to prevent.
 
 ## Deferral and waiving
 
@@ -714,6 +748,15 @@ changes five readings:
 - **`POST /api/issues/:number/dismiss-run` refuses without a note**, kept on the run as
   `dismissNote`. The sharper of the two, because this is the button that ends the harness's run at a
   goal and it is one-way.
+- **Both controls ask for the sentence before they post**, which is what makes the two refusals above
+  something other than a control that does nothing. Neither used to: Done sent no note and had
+  nowhere to type one, End the run sent none either, and the 400 reached a `catch` that dropped it
+  and an unhandled rejection — so a rule stated as "it costs a sentence" arrived as a button that
+  swallowed clicks. The bench's Done reads `Done…` and opens the same box Decline uses; End the run
+  opens `EndRunModal`. Both mirror the route in its **condition only** — `close_out` on a goal whose
+  `validation` is `flagged` — and never in its counts, which stay the server's fold; and the route
+  stays the authority, so a plan flagged between the draw and the click refuses there and the refusal
+  is drawn where it lands. → [17](17-cockpit.md#saying-the-sentence-a-refusal-asks-for)
 - **The bench row** that says the goal is ready to be validated lists the same outstanding checks,
   from the moment of the delivery rather than at the point of closing —
   [above](#saying-so-on-the-bench).
@@ -830,7 +873,10 @@ should not be the one reading that goes nowhere.
 `test/validation.test.ts` (the schema's refusals, letters, what an amendment may do to a check
 somebody has run, and the resource ask: that it waits for the delivery, that a replan which stops
 needing the resource withdraws it, and that a withdrawal never overwrites the operator's own answer), `test/validationFlag.test.ts` (the verdict, the close-out obligation, the two
-notes, and that a flagged goal still blocks nothing), `test/validationAmend.test.ts` (the
+notes, and that a flagged goal still blocks nothing), `test/validationNote.test.ts` (the cockpit's
+half of those two notes: that both controls ask for the sentence on a flagged goal and neither does
+on a clear one, that the note reaches each route as the route reads it, and that a refusal arrives at
+the caller in the server's own words), `test/validationAmend.test.ts` (the
 tool: who may amend, that an amendment withdraws nothing by omission, what a rewording costs, and
 the band), `test/validationFleet.test.ts` (the hand-over: the rule's gates and its position in
 the pipeline, who may report, what a hand-back does not write, and what withdraws a hand-over),

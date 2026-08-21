@@ -99,6 +99,15 @@ export function ConfigPage({ view, actions }: { view: CockpitView; actions: Cock
           <h1 className="cfg-title">Config</h1>
           <span className="cfg-where">
             <b>{payload.file}</b> · read at boot
+            {/* The team's file, named here rather than only on the rows it sets:
+                an operator whose harness is behaving unlike their config says has
+                to be able to see that a second file is in play at all. */}
+            {payload.projectFile !== null && (
+              <>
+                {' · under '}
+                <b>{payload.projectFile}</b>
+              </>
+            )}
           </span>
         </div>
         <div className="cfg-headacts">

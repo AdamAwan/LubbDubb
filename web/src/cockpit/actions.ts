@@ -43,6 +43,7 @@ export type ConsolePanel =
   | 'launch'
   | 'build'
   | 'pets'
+  | 'localRun'
   | { ask: string }
   | null;
 
@@ -101,6 +102,15 @@ export interface CockpitActions {
    * with a stale card, rather than a settled card with the loop still running.
    */
   overruleShortfall(issueNumber: number, proposalId: string, text: string): Promise<void>;
+  /**
+   * Stop this goal waiting on an environment, or put it back to waiting.
+   *
+   * The escape an environment gate has to have: a goal whose work is never going
+   * to reach the environment its obligations are gated on — a docs change, a
+   * config change — would otherwise sit delivered with an empty bench for good.
+   * Refetches, because what it changes is which rows the bench holds.
+   */
+  releaseEnvironmentGate(issueNumber: number, released: boolean, note?: string): Promise<void>;
   decidePermission(id: string, allow: boolean, note?: string): Promise<void>;
   /** Keyed on the task: orphaned work may never have had an agent. */
   decideRecovery(taskId: string, verdict: RecoveryVerdict): Promise<void>;
@@ -175,6 +185,22 @@ export interface CockpitActions {
   upgrade(action: UpgradeAction, opts?: { interrupt?: boolean }): Promise<void>;
   /** Take a fresh reading of the build, rather than waiting for the pulse's. */
   checkBuild(): Promise<void>;
+  /**
+   * Start `issueNumber`'s work in the machine's one dev environment — **and stop
+   * whatever was in it**, because there is only one. One method rather than a start
+   * and a swap: two names for one transition are two things to keep in step, and
+   * the server is where the transition lives either way.
+   */
+  startLocalRun(issueNumber: number): Promise<void>;
+  stopLocalRun(): Promise<void>;
+  /**
+   * The last lines the session holding the environment up has printed.
+   *
+   * Fetched rather than read off the snapshot — two hundred lines on every
+   * heartbeat is a log nobody has open — so unlike every other action this one
+   * *returns* something, and the panel asks again when the run changes.
+   */
+  localRunOutput(): Promise<string[]>;
   /** Move the nav to a destination. A selected goal still outranks it. */
   openTab(tab: ConsoleTab): void;
   /**
@@ -199,6 +225,13 @@ export interface CockpitActions {
    */
   collapseFeature(issueNumber: number, collapsed: boolean): void;
   reorderUpNext(origins: string[]): Promise<void>;
+  /**
+   * Override which model profile the next dispatch on one queued origin runs on,
+   * or clear it with `null`. Standing until cleared, so a retry of
+   * the run it priced is priced the same way — and pruned once the harness stops
+   * tracking that origin.
+   */
+  setUpNextProfile(origin: string, profile: string | null): Promise<void>;
 
   /**
    * The vivarium (`docs/spec/22-pets.md`). Opening a shell, and then three acts:
@@ -236,7 +269,8 @@ export interface CockpitActions {
   /** Prune one, from either live status. Terminal: there is no un-retire. */
   retireLesson(id: string): Promise<void>;
 
-  completeHumanTask(id: string): Promise<void>;
+  /** `note` is required by the route on a close-out whose goal's validation is flagged. */
+  completeHumanTask(id: string, note?: string): Promise<void>;
   declineHumanTask(id: string, note: string): Promise<void>;
   /** Clear a settled task off the bench. Settled only — it answers nothing. */
   dismissHumanTask(id: string): Promise<void>;
@@ -357,7 +391,7 @@ export interface CockpitActions {
    * #234 it also stops the dispatcher. On the seam for every mutation's reason:
    * `console/` may not reach `api.js`.
    */
-  dismissRun(issueNumber: number): Promise<void>;
+  dismissRun(issueNumber: number, note?: string): Promise<void>;
 
   /**
    * One work item's durable subtree (`GET /api/work/:ref`), fetched on demand.

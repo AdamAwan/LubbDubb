@@ -1,5 +1,5 @@
 import { prState } from '../prHealth.js';
-import type { PartOutcomeKind, Plan, PlanPart, PlanStatus, PullRequest } from '../types.js';
+import type { PartOutcomeKind, Plan, PlanPart, PullRequest } from '../types.js';
 
 /**
  * Scheduling a multi-PR plan's parts, as pure functions over the part rows.
@@ -286,25 +286,6 @@ export function partHasWork(part: PlanPart): boolean {
 export function partsToRetire(existing: PlanPart[], declared: string[]): PlanPart[] {
   const keep = new Set(declared);
   return existing.filter((p) => !keep.has(p.slug) && p.status !== 'retired' && !partHasWork(p));
-}
-
-/**
- * The status an ingested (or amended) plan resolves to — `active`, or
- * `awaiting_approval` when the operator asked to approve plans before anything is
- * scheduled from them (issue #109 phase 3). That is the whole implementation of
- * the gate on the write side: the status *is* the plan's standing, so releasing it
- * is a one-way transition on this row rather than a proposal lookup that could
- * expire or be re-read wrongly.
- *
- * **It does not ask how many parts there are**, and that is the point. This
- * function used to take the submitted verdict and the surviving parts, because a
- * `single` verdict meant *zero* parts and could be overruled by a part already
- * carrying a branch — a whole arm of shape arithmetic, on the write path, for a
- * plan that is one pull request. A plan is a plan: one part or eight, it lands the
- * same way and is put to the operator on the same terms.
- */
-export function ingestedPlanStatus(requireApproval = false): PlanStatus {
-  return requireApproval ? 'awaiting_approval' : 'active';
 }
 
 /**

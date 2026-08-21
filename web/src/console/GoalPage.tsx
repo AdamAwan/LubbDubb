@@ -2,11 +2,21 @@ import { useState, type JSX } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView, PartGroup } from '../view/goalPage.js';
-import type { Issue, OpenPullRequest, PlanPart, PullRequest } from '../types.js';
+import type {
+  EnvironmentGate,
+  GoalReachStatus,
+  Issue,
+  OpenPullRequest,
+  PlanPart,
+  PullRequest,
+  ValidationVerdict,
+} from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { ProfilePicker } from '../components/ProfilePicker.js';
 import { RaiseBugModal } from '../components/RaiseBugModal.js';
 import { InstructionModal } from '../components/InstructionModal.js';
+import { GateReleaseModal } from '../components/GateReleaseModal.js';
+import { EndRunModal } from '../components/EndRunModal.js';
 import { renderRichText } from '../components/richText.js';
 import { issueTypeTone } from '../issueGroups.js';
 import { fmtUsd, relTime } from '../components/util.js';
@@ -75,12 +85,14 @@ export function GoalPage({
           <Instructions issue={page.issue} actions={actions} />
           <Ticket issue={page.issue} refUrls={view.state.refUrls} />
           <PullRequests page={page} view={view} />
+          <Environments page={page} actions={actions} now={view.now} />
           {/* Embedded exactly as the work tree and the launch desk are: it reaches
               its own route, which `console/` may not, but rendering a component
               that does is not reaching — the import ban is on `api.js` and still
-              holds. Below `PullRequests` on purpose: that card is the live
-              reading, and this is what is left of the same work once the snapshot
-              has forgotten it. */}
+              holds. Last in the column, and below `PullRequests` and
+              `Environments` on purpose: both of those are the live reading and
+              something the goal still owes, and this is what is left of the same
+              work once the snapshot has forgotten it. Nothing here is owed. */}
           <section className="cn-card">
             <WorkRecord goalRef={`issue:${page.issue.number}`} now={view.now} />
           </section>
@@ -124,6 +136,14 @@ function Header({
   // verdict is what makes there be an agent to read it.
   const moreWork = issue.conclusion.verdict === 'more_work';
   const [instructing, setInstructing] = useState(false);
+  const [endingRun, setEndingRun] = useState(false);
+  const [runRefusal, setRunRefusal] = useState<string | null>(null);
+  // What ending the run costs, or null when it costs nothing: the route refuses a
+  // dismissal with no note while the plan is flagged
+  // ([20](../../../docs/spec/20-validation.md#where-it-lands)), and the button
+  // posting none was a control that could not work — the 400 went to an unhandled
+  // rejection, so the click did nothing and said nothing.
+  const owed = issue.validation !== null && issue.validation.state === 'flagged' ? issue.validation : null;
   const standing = issue.instructions.length;
   const merged = page.parts.filter((p) => p.group === 'merged').length;
   const url = issue.url ?? refUrls[`#${issue.number}`];
@@ -277,16 +297,35 @@ function Header({
             Open ticket ↗
           </a>
         )}
-        {retained && (
-          <button
-            type="button"
-            className="cn-tgl"
-            onClick={() => void actions.dismissRun(issue.number)}
-            title="End the harness's run at this goal. One way, and terminal for the dispatcher — the report stays readable."
-          >
-            End the run
-          </button>
-        )}
+        {/* A flagged plan asks for the sentence first, so that arm opens a modal
+            rather than posting; a clear one is left the one click the route leaves
+            it, through the button that can at least say when it is refused. */}
+        {retained &&
+          (owed !== null ? (
+            <button
+              type="button"
+              className="cn-tgl"
+              onClick={() => {
+                setRunRefusal(null);
+                setEndingRun(true);
+              }}
+              title="End the harness's run at this goal. One way, and terminal for the dispatcher — and this goal's validation plan is not clear, so it asks what you are doing about that."
+            >
+              End the run…
+            </button>
+          ) : (
+            <AsyncButton
+              className="cn-tgl"
+              onClick={() => {
+                setRunRefusal(null);
+                return actions.dismissRun(issue.number);
+              }}
+              onRefused={setRunRefusal}
+              title="End the harness's run at this goal. One way, and terminal for the dispatcher — the report stays readable."
+            >
+              End the run
+            </AsyncButton>
+          ))}
       </div>
       {instructing && (
         <InstructionModal
@@ -294,6 +333,23 @@ function Header({
           issueTitle={issue.title}
           onSubmit={(text) => actions.addInstruction(issue.number, text)}
           onClose={() => setInstructing(false)}
+        />
+      )}
+      {/* Whatever the route said about the last click in this row, verbatim and
+          under it. The header's controls are one-click verdicts, so a refused one
+          has nowhere else to appear — and appeared nowhere. */}
+      {runRefusal !== null && (
+        <p className="launch-error" role="alert">
+          {runRefusal}
+        </p>
+      )}
+      {endingRun && owed !== null && (
+        <EndRunModal
+          issueNumber={issue.number}
+          issueTitle={issue.title}
+          outstanding={outstanding(owed)}
+          onSubmit={(note) => actions.dismissRun(issue.number, note)}
+          onClose={() => setEndingRun(false)}
         />
       )}
       {raisingBug && (
@@ -329,6 +385,16 @@ function Header({
  * this passes `cn-btn` so they wear the console's chrome, the seam
  * `HumanTaskActions` already takes.
  */
+/**
+ * What the plan still owes, in the header chip's own words rather than a second
+ * wording of them — the counts are the server's fold (`issue.validation`), and
+ * two surfaces reading one verdict two ways is the thing that fold exists to
+ * prevent.
+ */
+function outstanding(verdict: ValidationVerdict): string {
+  return `Its validation plan is not clear — ${verdict.failed} failed, ${verdict.unrun} never run, ${verdict.deferred} deferred, of ${verdict.total}.`;
+}
+
 /**
  * The goal's tracker state, in the colour the operator gave it.
  *
@@ -685,6 +751,121 @@ function PullRequests({ page, view }: { page: GoalPageView; view: CockpitView })
     </section>
   );
 }
+
+/**
+ * Where this goal's landed work has got to, one chip per configured environment.
+ *
+ * Drawn under the pull requests because it is the sentence after them: these
+ * merged, and this is where they went. Absent entirely when no environment is
+ * configured — a row of question marks on every deployment that never set one up
+ * would be a feature announcing itself as broken.
+ *
+ * The counts are on every chip that is not whole, including `absent`, because
+ * "0/3" and "2/3" are the difference between work that has not started moving and
+ * work that is halfway there — and the word alone says neither.
+ */
+function Environments({
+  page,
+  actions,
+  now,
+}: {
+  page: GoalPageView;
+  actions: CockpitActions;
+  now: number;
+}): JSX.Element | null {
+  const [releasing, setReleasing] = useState(false);
+  if (page.environments.length === 0) return null;
+  const number = page.issue.number;
+  return (
+    <section className="cn-card">
+      <h3>Environments</h3>
+      <div className="cn-rows">
+        {page.environments.map((env) => (
+          <div className="cn-row" key={env.environment}>
+            <span className="cn-grow">
+              <b className="cn-name">{env.environment}</b>
+              <span className="cn-sub">
+                {REACH_SAID[env.status]}
+                {/* What arriving here does, on the row that would do it. An
+                    operator reading a held goal asks "waiting for what" exactly
+                    once, and the answer is configuration they wrote weeks ago. */}
+                {env.opens.length > 0 && ` · opens ${env.opens.map((g) => GATE_SAID[g]).join(' and ')}`}
+              </span>
+            </span>
+            {env.status !== 'reached' && (
+              <i className="cn-n">
+                {env.landed}/{env.total}
+              </i>
+            )}
+            <i className={`cn-chip ${REACH_TONE[env.status]}`}>{env.status}</i>
+          </div>
+        ))}
+      </div>
+      {/* The hold, said out loud. Nothing is filed while a gate holds, so without
+          this line a delivered goal with an empty bench is indistinguishable from
+          a finished one — and the harness would be waiting where nobody could see
+          it. The control beside it is the escape for work that is never going to
+          reach an environment at all. */}
+      {page.gateHold !== null && (
+        <div className="cn-criteria">
+          <p>{page.gateHold}</p>
+          <button className="btn ghost" onClick={() => setReleasing(true)}>
+            not waiting on an environment
+          </button>
+        </div>
+      )}
+      {page.gateRelease !== null && (
+        <div className="cn-criteria">
+          <p>
+            Not waiting on an environment — “{page.gateRelease.note}”
+            <span className="cn-sub"> · {relTime(page.gateRelease.releasedAt, now)}</span>
+          </p>
+          <button className="btn ghost" onClick={() => void actions.releaseEnvironmentGate(number, false)}>
+            wait for one after all
+          </button>
+        </div>
+      )}
+      {releasing && page.gateHold !== null && (
+        <GateReleaseModal
+          issueNumber={number}
+          issueTitle={page.issue.title}
+          hold={page.gateHold}
+          onSubmit={(note) => actions.releaseEnvironmentGate(number, true, note)}
+          onClose={() => setReleasing(false)}
+        />
+      )}
+    </section>
+  );
+}
+
+/** What each gate holds, in the words the card's own rows use for it. */
+const GATE_SAID: Record<EnvironmentGate, string> = {
+  validate: 'the validation checks',
+  close_out: 'the close-out',
+};
+
+/**
+ * No new colours: every tone here is one the cockpit already draws, so the strip
+ * follows a theme switch without the token layer having to learn about it.
+ *
+ * `partial` takes the attention tone rather than a success one deliberately — half
+ * a feature in production is the state on this panel most likely to want somebody,
+ * and drawing it green is the mistake the whole tri-state exists to avoid.
+ */
+const REACH_TONE: Record<GoalReachStatus, string> = {
+  reached: 'cn-ok',
+  partial: 'cn-you',
+  unknown: 'cn-stall',
+  absent: '',
+};
+
+/** What each verdict means, in the words an operator would use asking about it. */
+const REACH_SAID: Record<GoalReachStatus, string> = {
+  reached: 'all of this goal’s merges are here',
+  partial: 'some of this goal’s merges are here',
+  absent: 'none of this goal’s merges are here yet',
+  unknown: 'nothing here could be confirmed — check the probe, not the deploy',
+};
 
 const COURT_TONE: Record<string, string> = {
   you: 'cn-you',

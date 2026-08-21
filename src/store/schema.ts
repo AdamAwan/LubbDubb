@@ -101,6 +101,21 @@ CREATE TABLE IF NOT EXISTS priority_overrides (
 -- standing statement about a goal, and a goal with nothing queued — waiting on a
 -- human, on a review, on a base — is exactly when it must survive. It is cleared
 -- by the operator and by nothing else.
+-- Operator overrides of which model profile a queued dispatch runs on. One row
+-- per candidate origin, on exactly the terms priority_overrides is
+-- kept on: keyed on the stable origin because the queue is a per-pulse
+-- projection, and pruned by the same last_seen_at sweep once the harness stops
+-- tracking that origin. A separate table rather than a column on
+-- priority_overrides because the two statements are independent — an operator who
+-- re-orders a row has said nothing about what it should run on, and one row
+-- carrying both would make clearing either one a read-modify-write.
+CREATE TABLE IF NOT EXISTS profile_overrides (
+  origin       TEXT PRIMARY KEY,
+  profile      TEXT NOT NULL,
+  updated_at   TEXT NOT NULL,
+  last_seen_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS goal_priorities (
   origin     TEXT PRIMARY KEY,
   created_at TEXT NOT NULL
@@ -558,6 +573,52 @@ CREATE TABLE IF NOT EXISTS branch_reaps (
   at        TEXT NOT NULL
 );
 
+-- The commit each of a goal's pull requests landed as (see EnvironmentStore). Stored
+-- because it cannot be recovered: a squash merge leaves the branch with no ancestry
+-- link to its base, and the provider only offers the merge SHA for as long as the PR
+-- stays inside the closed-PR window. Keyed on the pull request, for branch_reaps'
+-- reason -- a branch name is reusable, and a goal can land more than once.
+CREATE TABLE IF NOT EXISTS goal_landings (
+  pr_number   INTEGER PRIMARY KEY,
+  goal_ref    TEXT NOT NULL,      -- issue:<n>
+  sha         TEXT NOT NULL,
+  recorded_at TEXT NOT NULL
+);
+
+-- What an environment probe said about one landed commit (see EnvironmentStore).
+-- Stored so the cost of the feature is not a process spawn per landing per
+-- environment per pulse: a reached verdict is never re-asked, and the rest are.
+CREATE TABLE IF NOT EXISTS environment_reach (
+  sha         TEXT NOT NULL,
+  environment TEXT NOT NULL,
+  status      TEXT NOT NULL,      -- reached | absent | unknown
+  detail      TEXT,               -- why, for an unknown
+  observed_at TEXT NOT NULL,
+  PRIMARY KEY (sha, environment)
+);
+
+-- A whole goal's work confirmed in one environment, the first time it was (see
+-- EnvironmentStore). Stored because an arrival is a *moment* and reach is a
+-- status: without a row, the comment goes out every pulse and the signal reads as
+-- a state rather than as something that happened.
+CREATE TABLE IF NOT EXISTS goal_arrivals (
+  goal_ref     TEXT NOT NULL,      -- issue:<n>
+  environment  TEXT NOT NULL,
+  arrived_at   TEXT NOT NULL,      -- the reading that confirmed the goal's last landing
+  recorded_at  TEXT NOT NULL,
+  announced_at TEXT,               -- NULL while the announce pass has not seen it
+  PRIMARY KEY (goal_ref, environment)
+);
+
+-- Goals the operator has said are not waiting on an environment: a docs change, a
+-- config change, work whose deployment nothing here can see. Lifts every gate on
+-- that goal, and is cleared by deleting the row so "not released" has one shape.
+CREATE TABLE IF NOT EXISTS environment_gate_releases (
+  goal_ref    TEXT PRIMARY KEY,    -- issue:<n>
+  note        TEXT NOT NULL,
+  released_at TEXT NOT NULL
+);
+
 -- Pull requests the harness has already tagged with the watch label because it
 -- opened them (see PrWatchSeedStore). Stored because the live labels cannot answer
 -- it: a pull request an operator has un-watched looks exactly like one never
@@ -962,6 +1023,26 @@ CREATE TABLE IF NOT EXISTS pet_vivarium (
   started_at TEXT NOT NULL  -- actions stamped before this are recorded and roll nothing
 );
 
+-- The local run (see LocalRunStore): which goal's code is in the machine's one dev
+-- environment. One row per run and the row outlives the run, so a start that failed
+-- has its reason somewhere to read; the *live* one is whichever row is 'starting' or
+-- 'running', and there is only ever one because the writer ends the last before it
+-- writes a new one. The table is new, so it needs no ColumnMigrations entry — but
+-- a table being new once does not keep it exempt, and a column added later will.
+CREATE TABLE IF NOT EXISTS local_runs (
+  id         TEXT PRIMARY KEY,
+  origin_ref TEXT NOT NULL,
+  ref        TEXT NOT NULL,     -- the git ref the checkout was pointed at
+  dir        TEXT NOT NULL,
+  pid        INTEGER,           -- the session whose *subtree* a stop has to reap
+  status     TEXT NOT NULL,
+  url        TEXT,              -- as configured when the run started, not as it reads now
+  note       TEXT,
+  started_at TEXT NOT NULL,
+  ended_at   TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_local_runs_status ON local_runs(status);
 CREATE INDEX IF NOT EXISTS idx_agent_flags_agent ON agent_flags(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agent_files_agent ON agent_files(agent_id);
 CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status);

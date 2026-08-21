@@ -131,6 +131,16 @@ every route needs that token, because the cockpit can queue a job — and a job 
 write access to your repo. The token is minted into `.lubbdubb/cockpit-token` (0600, gitignored) and
 reused across restarts.
 
+### Sharing a config with your team
+
+`lubbdubb.config.json` is yours and is gitignored. A **`lubbdubb.project.json` committed at the root of
+the repository the harness works on** is the team's: everyone pointed at that repo picks it up, and
+each person's own file wins over it key by key. So the CI routing, the environments, the integration
+branch and the tracker's state names are written once in the project, while who you are (`userId`),
+which models you dispatch on (`agentModels`) and how many agents your machine runs stay local. Every
+key is legal in it except `repoRoot` — the file is found _through_ `repoRoot`, so it cannot be the
+thing that sets it. → [docs/spec/02](docs/spec/02-configuration.md#the-project-layer)
+
 Then: use **Inject event** to simulate the world moving (a CI failure, a review comment) and watch the
 harness react; click an agent to see its live transcript and type into it; answer items in **Needs
 you**; use **New job** to launch an ad-hoc prompt, or **New schedule** to have one queued on a cron

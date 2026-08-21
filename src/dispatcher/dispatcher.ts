@@ -11,6 +11,7 @@ import type {
   Plan,
   PlanPart,
   PriorityOverride,
+  ProfileOverride,
   Proposal,
   PullRequest,
   TaskSummary,
@@ -18,7 +19,7 @@ import type {
   WorldEvent,
   WorldSnapshot,
 } from '../types.js';
-import type { AgentModels } from '../agents/modelPolicy.js';
+import type { AgentModels, ProfileSource } from '../agents/modelPolicy.js';
 import type { ParseResult } from './actions.js';
 import type { QueueStatus } from './admission.js';
 import type { DispatchRuleId } from './rules.js';
@@ -114,6 +115,18 @@ export interface DispatchContext {
    * anything else's. Absent/empty means the natural ranking stands.
    */
   goalPriorities?: GoalPriority[];
+  /**
+   * The operator's per-origin answer to "run this one on that profile"
+   * read from the queue rather than from a ticket. Highest
+   * precedence in the pin chain: it beats the goal's tag and the plan's part
+   * profile, because it is the narrowest and latest statement — somebody looking
+   * at this row, now.
+   *
+   * Pricing only, exactly as the two above are ordering only: an override never
+   * un-holds a held candidate and never lifts one over the headroom cut.
+   * Absent/empty means every dispatch resolves on its pin or its rule.
+   */
+  profileOverrides?: ProfileOverride[];
   /**
    * Standing "is this issue finished" verdicts, keyed on the `issue:<n>` origin —
    * declared by the agent that worked the issue (`conclude_work`) or toggled by
@@ -226,6 +239,36 @@ export interface QueueItem {
    * was before goal priority existed.
    */
   expedited?: boolean;
+  /**
+   * The `agentModels` profile this candidate would launch on, resolved by the
+   * same chain the dispatch itself is stamped from — so the queue names what will
+   * actually run rather than a second opinion about it.
+   *
+   * Null on a deployment with no `agentModels`, and on a rule with no entry and no
+   * `default`: both are "no `--model` flag at all", which is a fact about the run
+   * and not a profile. The cockpit draws no control where there is nothing to
+   * choose between.
+   */
+  profile?: string | null;
+  /**
+   * Which level of the chain named {@link QueueItem.profile}. Shipped rather than
+   * re-derived in the browser for the reason `expedited` is: the row is the only
+   * place an operator can see that this dispatch is priced by something other
+   * than its rule, and a pin that reads as ordinary policy is the invisible half
+   * of the feature.
+   */
+  profileSource?: ProfileSource;
+  /**
+   * The operator's own standing override for this origin, when there is one — the
+   * value the cockpit's picker binds to, and the only one of the three pin levels
+   * a click on this row can clear.
+   *
+   * Separate from {@link QueueItem.profile} because they answer different
+   * questions: that one is "what will run", which an override may not even win
+   * (a name config no longer configures falls through to the rule). This one is
+   * "what did I say", which the control has to show to be clearable at all.
+   */
+  override?: string;
 }
 
 export interface DispatchResult extends ParseResult {

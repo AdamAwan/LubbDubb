@@ -8,6 +8,7 @@
 // `VITE_DEMO` branch in api.ts is statically false there, so Rollup drops it.
 import type {
   TicketRow,
+  QueueItem,
   TicketsPayload,
   AppState,
   BuildReading,
@@ -17,6 +18,7 @@ import type {
   Issue,
   IssueFiled,
   Job,
+  LocalRunView,
   JobSchedule,
   LessonStatus,
   McpChannelPayload,
@@ -156,6 +158,8 @@ class DemoServer {
   private chatterTimer: ReturnType<typeof setInterval> | null = null;
   private beatTimer: ReturnType<typeof setInterval> | null = null;
   private chatterIdx = 0;
+  /** What the local run's session has 'printed', for the panel's tail. */
+  private lines: string[] = ['> starting the dev environment for #395', '> up on http://localhost:5173'];
   private deskBeats = 0;
   private seq = 1000;
 
@@ -422,6 +426,23 @@ class DemoServer {
    * demo that deleted it separately would draw a control whose effects do not come
    * from where the real one's come from.
    */
+  /**
+   * Stop a goal waiting on an environment, or put it back — the demo's own arm of
+   * the escape hatch. It rewrites the reach row rather than a table of its own,
+   * because the row *is* what the card draws: a release that left `gateHold`
+   * standing would draw a control that changes nothing.
+   */
+  async releaseEnvironmentGate(issueNumber: number, released: boolean, note?: string): Promise<{ ok: true }> {
+    const reach = (this.state.environmentReach ?? []).find((r) => r.goalRef === `issue:${issueNumber}`);
+    if (reach) {
+      reach.released = released
+        ? { goalRef: reach.goalRef, note: note ?? '', releasedAt: new Date().toISOString() }
+        : null;
+      if (released) reach.gateHold = null;
+    }
+    return { ok: true };
+  }
+
   async overruleShortfall(issueNumber: number, text: string): Promise<{ ok: true }> {
     const issue = this.state.world.issues.find((i) => i.number === issueNumber);
     if (issue?.shortfall) {
@@ -512,8 +533,12 @@ class DemoServer {
    * End a run — the demo mirror of the one way a goal leaves the console (#203,
    * #234). Marks the run dismissed wherever it rides (a still-present issue, or a
    * forgotten-issue entry in `retainedRuns`), which is what the console filters on.
+   *
+   * The note the route requires while the goal's validation plan is flagged goes
+   * into the decision line, which is the demo's only record of what happened —
+   * dropping it would show a run ended with no account of what was said.
    */
-  async dismissRun(issueNumber: number): Promise<{ ok: true }> {
+  async dismissRun(issueNumber: number, note?: string): Promise<{ ok: true }> {
     const present = this.state.world.issues.find((i) => i.number === issueNumber);
     const forgotten = (this.state.retainedRuns ?? []).find((i) => i.number === issueNumber);
     const target = present ?? forgotten;
@@ -522,7 +547,7 @@ class DemoServer {
       this.addDecision(
         'no_op',
         'executed',
-        `issue #${issueNumber} run dismissed`,
+        `issue #${issueNumber} run dismissed${note === undefined ? '' : ` — ${note}`}`,
         undefined,
         undefined,
         undefined,
@@ -883,9 +908,14 @@ class DemoServer {
     return { ok: true };
   }
 
-  /** Settle a human task (demo mirror of POST /api/human-tasks/:id/done). */
-  async completeHumanTask(id: string): Promise<{ ok: true }> {
-    return this.settleHumanTask(id, 'done', null);
+  /**
+   * Settle a human task (demo mirror of POST /api/human-tasks/:id/done). The note
+   * is what the route requires on a close-out whose goal's validation is flagged,
+   * and it is kept for the same reason the route keeps it: the settled row is the
+   * only account of what was decided about the checks nobody ran.
+   */
+  async completeHumanTask(id: string, note?: string): Promise<{ ok: true }> {
+    return this.settleHumanTask(id, 'done', note ?? null);
   }
 
   /** Decline one, with the note the route requires (POST /api/human-tasks/:id/decline). */
@@ -968,6 +998,49 @@ class DemoServer {
       esc.response = `${status === 'accepted' ? 'Accepted' : 'Rejected'}${proposal.note ? `: ${proposal.note}` : '.'}`;
       esc.answeredAt = proposal.decidedAt;
     }
+  }
+
+  /**
+   * Start the local run on another goal, which is also the swap: one environment, so
+   * the old row ends as the new one begins — the same transaction the real store
+   * does in one write.
+   */
+  startLocalRun(issue: number): Promise<{ ok: true; run: LocalRunView }> {
+    const now = new Date().toISOString();
+    const run: LocalRunView = {
+      id: `run-${String(this.state.localRun === null ? 2 : Number(this.state.localRun.id.split('-')[1] ?? 1) + 1)}`,
+      originRef: `issue:${String(issue)}`,
+      // The demo has no git, so the ref is the shape a part's branch takes rather
+      // than one resolved from a plan. Naming it after the goal is the honest half.
+      ref: `issue/${String(issue)}/local`,
+      dir: '/Users/you/code/demo-shop/.lubbdubb/local-run',
+      pid: 48000 + issue,
+      status: 'running',
+      url: 'http://localhost:5173',
+      note: null,
+      startedAt: now,
+      endedAt: null,
+      live: true,
+    };
+    this.state.localRun = run;
+    this.lines = [`> starting the dev environment for #${String(issue)}`, '> up on http://localhost:5173'];
+    return Promise.resolve({ ok: true as const, run });
+  }
+
+  stopLocalRun(): Promise<{ ok: true }> {
+    if (this.state.localRun !== null)
+      this.state.localRun = {
+        ...this.state.localRun,
+        status: 'stopped',
+        live: false,
+        endedAt: new Date().toISOString(),
+        note: 'stopped from the cockpit',
+      };
+    return Promise.resolve({ ok: true as const });
+  }
+
+  localRunOutput(): string[] {
+    return [...this.lines];
   }
 
   async killAgent(id: string): Promise<{ ok: true }> {
@@ -1339,6 +1412,50 @@ class DemoServer {
     }
     return { ok: true };
   }
+
+  /**
+   * Price one queued row (demo mirror of POST /api/upnext/profile). The real
+   * dispatcher re-resolves the whole pin chain on the next pulse; here the row
+   * carries the answer, so the override and the profile it resolves to are set
+   * together — which is the same two facts, and the demo has no rule table to
+   * fall back through when the override is cleared.
+   */
+  async setUpNextProfile(origin: string, profile: string | null): Promise<{ ok: true }> {
+    const item = this.state.upcoming?.items.find((i) => i.origin === origin);
+    if (item) {
+      if (profile === null) {
+        // Both halves go back, not just the name: a row restored to its rule's
+        // own profile while still reading `pin` would draw "Pinned (standard)"
+        // over a row nothing pins — the price would be right and the sentence
+        // beside it wrong.
+        const inherited = this.inheritedProfile.get(origin);
+        delete item.override;
+        item.profile = inherited?.profile ?? null;
+        item.profileSource = inherited?.source;
+      } else {
+        if (item.override === undefined)
+          this.inheritedProfile.set(origin, { profile: item.profile ?? null, source: item.profileSource });
+        item.override = profile;
+        item.profile = profile;
+        item.profileSource = 'pin';
+      }
+      this.addDecision(
+        'no_op',
+        'executed',
+        profile === null ? `cleared the profile override on ${origin}` : `${origin} will run on "${profile}"`,
+      );
+      this.dirty();
+    }
+    return { ok: true };
+  }
+
+  /**
+   * What each overridden row resolved to before the operator priced it, so
+   * clearing the override puts the row back rather than blanking it. The real
+   * harness needs no such memory — it re-derives the answer from the world every
+   * pulse.
+   */
+  private readonly inheritedProfile = new Map<string, { profile: string | null; source: QueueItem['profileSource'] }>();
 
   private applyInjection(ev: Record<string, unknown>): void {
     const kind = String(ev.kind ?? '');
@@ -2506,6 +2623,7 @@ export const demoApi = {
     Promise.resolve({
       groups: [] as RunningConfigGroup[],
       file: 'lubbdubb.config.json',
+      projectFile: null,
       text: '{}\n',
       revision: 'demo',
       pending: [],
@@ -2569,8 +2687,10 @@ export const demoApi = {
     getServer().setIssueAssay(issueNumber, verdict),
   addInstruction: (issueNumber: number, text: string) => getServer().addInstruction(issueNumber, text),
   overruleShortfall: (issueNumber: number, text: string) => getServer().overruleShortfall(issueNumber, text),
+  releaseEnvironmentGate: (issueNumber: number, released: boolean, note?: string) =>
+    getServer().releaseEnvironmentGate(issueNumber, released, note),
   withdrawInstruction: (issueNumber: number, id: string) => getServer().withdrawInstruction(issueNumber, id),
-  dismissRun: (issueNumber: number) => getServer().dismissRun(issueNumber),
+  dismissRun: (issueNumber: number, note?: string) => getServer().dismissRun(issueNumber, note),
   replan: (planId: string) => getServer().replan(planId),
   // The demo's plans have one revision each — no replan has landed in a browser
   // session — so the history is that single revision and a null diff, which is
@@ -2581,6 +2701,7 @@ export const demoApi = {
   setValidation: (issueNumber: number, checkId: string, act: ValidationAct) =>
     getServer().setValidation(issueNumber, checkId, act),
   reorderUpNext: (origins: string[]) => getServer().reorderUpNext(origins),
+  setUpNextProfile: (origin: string, profile: string | null) => getServer().setUpNextProfile(origin, profile),
   launchJob: (job: { prompt: string; title?: string; kind?: string; branch?: string | null }) =>
     getServer().launchJob(job),
   cancelJob: (id: string) => getServer().cancelJob(id),
@@ -2603,7 +2724,7 @@ export const demoApi = {
   proposeLesson: (text: string, originRef: string | null) => getServer().proposeLesson(text, originRef),
   promoteLesson: (id: string) => getServer().promoteLesson(id),
   retireLesson: (id: string) => getServer().retireLesson(id),
-  completeHumanTask: (id: string) => getServer().completeHumanTask(id),
+  completeHumanTask: (id: string, note?: string) => getServer().completeHumanTask(id, note),
   declineHumanTask: (id: string, note: string) => getServer().declineHumanTask(id, note),
   dismissHumanTask: (id: string) => getServer().dismissHumanTask(id),
   acceptProposal: (id: string, note?: string) => getServer().acceptProposal(id, note),
@@ -2618,6 +2739,14 @@ export const demoApi = {
   checkBuild: () => Promise.resolve({ ok: true as const, build: getServer().getBuild() }),
   upgrade: (_action: string, _opts?: { interrupt?: boolean }) =>
     Promise.resolve({ ok: true as const, build: getServer().getBuild() }),
+  // The local run, which the demo can model honestly because the *state* is the
+  // whole feature and the process is not: starting moves the row onto another goal
+  // and stopping ends it, exactly as the panel would see it live. What a visitor
+  // cannot get here is a server on a port, and nothing here pretends otherwise —
+  // the URL is the fixture's, and it will not answer.
+  startLocalRun: (issue: number) => getServer().startLocalRun(issue),
+  stopLocalRun: () => getServer().stopLocalRun(),
+  localRunOutput: () => Promise.resolve({ lines: getServer().localRunOutput() }),
   killAgent: (id: string) => getServer().killAgent(id),
   completeAgent: (id: string) => getServer().completeAgent(id),
   interruptAgent: (id: string) => getServer().interruptAgent(id),
