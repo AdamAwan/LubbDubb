@@ -1,13 +1,30 @@
 # LubbDubb documentation
 
-This folder is the **specification of LubbDubb as it is**. Every statement in `spec/` describes
-behaviour the application has today, in the present tense. If the code does something other than
-what a spec says, that is a **bug** — in the code or in the spec, and the discrepancy must be
-resolved rather than tolerated.
+This folder is the **specification of the product LubbDubb is meant to be**. Every statement in
+`spec/` describes behaviour the application is supposed to have, in the present tense. If the code
+does something other than what a spec says, one of the two is wrong and the discrepancy must be
+resolved rather than tolerated — **unless the spec has marked that behaviour as not yet built**,
+which is the one honest reason for the two to differ.
 
-What the specs are not: a roadmap, a proposal, or a wish list. Nothing here is written as "will",
-"should eventually", or "planned". Behaviour that does not exist is not described; behaviour that is
-off by default is described as off by default, and what turning it on does.
+That marking is the whole discipline. A specification that may describe unbuilt work is worth more
+than one that may not — the design is argued with in the place it will be maintained, rather than in
+a proposal that ages out of the tree the moment the code moves — but it is worth that only while a
+reader can tell the two apart at a glance. So:
+
+- **Unbuilt behaviour is marked where it is described**, at the top of the document or the section
+  that carries it, saying plainly what is outstanding. An unmarked statement is a claim about
+  running code, and being wrong about that is a bug.
+- **A path that does not exist yet is written in italics** — _src/knowledge/facts.ts_ — where a real
+  one is backticked. `test/docsReferences.test.ts` asserts that every backticked repo path exists,
+  so the two forms stay separated mechanically rather than by good intentions.
+- **A marker is removed by the change that makes it true**, in that change and not later. A spec
+  still marked unbuilt after its code has landed is the failure this convention has instead of the
+  one it replaced.
+
+What the specs are still not: a roadmap or a wish list. "Not yet built" is not a licence to describe
+things nobody intends to do — a spec earns its place by being what the next change is written
+against, and behaviour that is off by default is still described as off by default, and what turning
+it on does.
 
 ## Layout
 
@@ -85,13 +102,16 @@ deliberately left unchecked, and why, is in
 | [24](spec/24-environments.md)        | Environments               | Where landed work has got to: merge attribution, the probe, the three verdicts, the lens  |
 | [25](spec/25-supply.md)              | Supply and the runway      | Whether there is work left for the fleet, and whether the reason there is not is you      |
 | [26](spec/26-setup.md)               | First run and setup        | Detecting an unconfigured harness, the two questions it asks, and the preflight behind them |
+| [27](spec/27-knowledge.md)           | Knowledge                  | What the fleet knows about this repository: scope, reach, corroboration, and delivery     |
 
 ## Conventions used throughout
 
-- **Present tense, indicative mood.** "The dispatcher ranks candidates", not "should rank".
+- **Present tense, indicative mood.** "The dispatcher ranks candidates", not "should rank". This
+  holds for unbuilt behaviour too — the marker says it is unbuilt, so the prose does not have to
+  hedge, and a section written in "will" has to be rewritten to become true rather than unmarked.
 - **Defaults are stated explicitly** wherever a behaviour is configurable.
 - **Identifiers are exact.** File paths, config keys, table names, rule ids, tool names and event
-  names are written as they appear in the code.
+  names are written as they appear in the code — backticked once they exist, italic until then.
 - **"Pure"** means a function with no I/O, no clock and no store access — testable in isolation.
 - **A "seam"** is an interface with more than one implementation, at least one of which is a test
   fake.
