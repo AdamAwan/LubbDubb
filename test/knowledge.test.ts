@@ -770,6 +770,56 @@ test('the Knowledge reading counts the corroborated claims nobody has ruled on',
   assert.equal(view.viewingFact, 'fact_abc');
 });
 
+/**
+ * The page as the shell mounts it, over the demo fixtures.
+ *
+ * Rendered rather than asserted about, because the two failures worth catching
+ * here cannot be seen in a view model: a claim drawn under the wrong heading, and
+ * a `<Ref>` outside `RefLinks`, which throws rather than quietly drawing a number
+ * with no way there. `test/console.test.ts`'s shape, including the `React` global
+ * — `tsx` compiles JSX with the classic runtime while the bundle uses the
+ * automatic one.
+ */
+test('the page draws every reach, the rejected tail included', async () => {
+  const React = await import('react');
+  (globalThis as { React?: unknown }).React = React;
+  const { createElement } = React;
+  const { renderToStaticMarkup } = await import('react-dom/server');
+  const { buildDemoState } = await import('../web/src/demo/fixtures.js');
+  const { KnowledgePanel } = await import('../web/src/components/KnowledgePanel.js');
+  const { RefLinks } = await import('../web/src/components/refs.js');
+
+  const state = buildDemoState().state;
+  const html = renderToStaticMarkup(
+    createElement(RefLinks, {
+      refUrls: state.refUrls,
+      openGoal: () => undefined,
+      hasGoal: () => true,
+      children: createElement(KnowledgePanel, {
+        facts: state.knowledge,
+        now: Date.now(),
+        refUrls: state.refUrls,
+        viewingFact: null,
+        onReach: () => undefined,
+        onDetail: () => Promise.resolve({ corroborations: [] }),
+        onViewFact: () => undefined,
+      }),
+    }),
+  );
+
+  for (const heading of ['Live notices', 'Needs you', 'Injected', 'On lookup', 'One voice', 'Rejected']) {
+    assert.ok(html.includes(heading), `the page draws no ${heading} section`);
+  }
+  // The claim an operator killed is on the page. A governance surface that drew
+  // only what it let through could not show that anything was stopped, and the
+  // bar that keeps it from being re-proposed is invisible everywhere else.
+  assert.ok(html.includes('The dispatcher reads the lessons table'), 'a rejected claim is not drawn');
+  // A scope is a place a reader can go, not a label.
+  assert.ok(html.includes('goal <'), 'a goal scope is not drawn as a reference');
+  // And the one thing an operator must not be able to do from here.
+  assert.ok(!/>File a claim</.test(html), 'nothing on this page files a claim');
+});
+
 // -- what nothing does --------------------------------------------------------
 
 test('no rule, desk or gate reads a fact', () => {
