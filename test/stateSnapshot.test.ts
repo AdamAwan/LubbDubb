@@ -250,3 +250,72 @@ test('buildStateSnapshot with no baseline ships an empty world, not a live fetch
   assert.equal(reads, 0, 'the empty case fell back to the provider');
   system.store.close();
 });
+
+/**
+ * Where the local run could be pointed, and — the whole discipline of the view —
+ * what has happened on **that ref** and nothing else.
+ *
+ * A pull request is a fact about a branch, not about a goal. This goal has two on
+ * two branches, and the tempting fold ("show the goal's PR") is how a panel comes to
+ * report a passing build for a branch nothing has built.
+ */
+test('buildStateSnapshot ships the local run’s targets, matched by branch', async () => {
+  const system = buildSystem(testConfig(), { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend() });
+  system.connector.inject({ kind: 'new_issue', number: 21, title: 'Stacked goal' });
+  system.connector.inject({ kind: 'new_issue', number: 22, title: 'Nothing started' });
+  failPlanningOpen(system.store, 21);
+  failPlanningOpen(system.store, 22);
+  const plan = system.store.upsertPlan({
+    originRef: 'issue:21',
+    title: 'Stacked goal',
+    status: 'active',
+    reason: 'Two rungs.',
+  });
+  system.store.upsertPlanParts(
+    plan.id,
+    ['first', 'second'].map((slug, i) => ({
+      slug,
+      seq: i + 1,
+      title: `Part ${String(i + 1)}`,
+      scope: 'src/',
+      dependsOn: [],
+      rationale: null,
+      acceptance: null,
+      touches: [],
+      size: null,
+      expectedKind: 'code' as const,
+    })),
+  );
+  const parts = system.store.listPlanParts(plan.id);
+  system.store.updatePlanPart(parts[0]?.id ?? '', { status: 'merged', branch: 'issue/21/first', prNumber: 61 });
+  system.store.updatePlanPart(parts[1]?.id ?? '', { status: 'in_review', branch: 'issue/21/second', prNumber: 62 });
+  system.connector.inject({ kind: 'new_pr', number: 61, title: '[1/2]', branch: 'issue/21/first' });
+  system.connector.inject({ kind: 'new_pr', number: 62, title: '[2/2]', branch: 'issue/21/second' });
+  system.store.setWorldBaseline(await system.connector.getState());
+
+  const snap = await buildStateSnapshot(system);
+  const stacked = snap.localRunTargets.find((t) => t.issueNumber === 21);
+
+  // The tip, not the first unmerged part: the whole stack is what somebody asking to
+  // see this goal means.
+  assert.equal(stacked?.target.ref, 'issue/21/second');
+  assert.equal(stacked?.target.pr?.number, 62, 'the pull request is the one on that branch');
+  assert.equal(stacked?.target.part?.seq, 2);
+  assert.equal(stacked?.target.part?.total, 2);
+  assert.equal(stacked?.runnable, true);
+  // The merged part stays on offer, carrying its own pull request rather than the tip's.
+  const earlier = stacked?.options.find((o) => o.option.ref === 'issue/21/first');
+  assert.equal(earlier?.option.part?.status, 'merged');
+  assert.equal(earlier?.facts.pr?.number, 61);
+
+  // A goal nothing has started resolves to the integration branch — the same answer
+  // every such goal gives, which is why it is not offered as a choice. Its facts say
+  // so rather than borrowing anything: no pull request of its own, nothing merged.
+  const bare = snap.localRunTargets.find((t) => t.issueNumber === 22);
+  assert.equal(bare?.runnable, false);
+  assert.equal(bare?.target.isDefaultBranch, true);
+  assert.equal(bare?.target.pr, null);
+  assert.equal(bare?.target.mergedParts, 0);
+  assert.deepEqual(bare?.options, []);
+  system.store.close();
+});

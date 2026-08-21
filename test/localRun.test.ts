@@ -8,7 +8,7 @@ import { WorktreeManager } from '../src/worktree/worktreeManager.js';
 import { gitRepo } from './support/gitRepo.js';
 import { Store } from '../src/store/store.js';
 import { LocalRunner } from '../src/localRun/runner.js';
-import { localRunRef } from '../src/localRun/ref.js';
+import { localRunChoices } from '../src/localRun/ref.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { AgentSession, AgentSessionSpec, AgentSessionStatus } from '../src/agents/session.js';
 import type { PlanPart } from '../src/types.js';
@@ -61,8 +61,20 @@ interface Harness {
   reaped: number[];
 }
 
-function build(over: { instruction?: string; url?: string; ref?: string | null } = {}): Harness {
-  const store = new Store(':memory:');
+function build(
+  over: {
+    instruction?: string;
+    /** Blank by default, so a stop takes the unconfigured path and needs no turn. */
+    stopInstruction?: string;
+    stopTimeoutMs?: number;
+    url?: string;
+    ref?: string | null;
+    parts?: PlanPart[];
+    /** A second runner over the same database — a restart, where the row is live and nothing holds it. */
+    store?: Store;
+  } = {},
+): Harness {
+  const store = over.store ?? new Store(':memory:');
   const worktrees = new FakeWorktreeManager();
   const sessions: FakeSession[] = [];
   const reaped: number[] = [];
@@ -74,12 +86,18 @@ function build(over: { instruction?: string; url?: string; ref?: string | null }
       sessions.push(session);
       return session;
     },
-    policy: () => ({ instruction: over.instruction ?? 'Run the dev server.', url: over.url ?? '' }),
+    policy: () => ({
+      instruction: over.instruction ?? 'Run the dev server.',
+      stopInstruction: over.stopInstruction ?? '',
+      url: over.url ?? '',
+    }),
     claudeCommand: 'claude',
     claudeArgs: [],
     permissionMode: 'acceptEdits',
     defaultBranch: 'main',
-    refFor: () => over.ref ?? null,
+    stopTimeoutMs: over.stopTimeoutMs,
+    choicesFor: () =>
+      localRunChoices(over.parts ?? (over.ref == null ? [] : [part({ slug: 'x', seq: 1, branch: over.ref })])),
     reap: (pid) => {
       reaped.push(pid);
       // Recorded on the session too, so the *ordering* against `kill` is assertable
@@ -152,6 +170,53 @@ test('the turn ending means the environment is up, not that the run is over', as
   store.close();
 });
 
+test('the newest phase line is the stage, and the output between them leaves it standing', async () => {
+  const { runner, store, sessions } = build();
+  await runner.start('issue:284');
+  const session = sessions[0];
+  assert.equal(runner.phase(), null, 'nothing has been said yet');
+
+  session?.emit('output', 'phase: starting the containers\n');
+  assert.equal(runner.phase(), 'starting the containers');
+
+  // A page of that phase's own output is not a new stage: "starting the containers"
+  // is still the true answer for as long as the containers are starting. This is the
+  // whole reason the line is *asked for* rather than inferred from the last thing
+  // the session said.
+  session?.emit('output', 'postgres ready\nredis ready\n');
+  assert.equal(runner.phase(), 'starting the containers');
+
+  // Decoration is the common case rather than the odd one — what comes back is a
+  // model's prose, and a bullet or a bolded label is how the line usually arrives.
+  session?.emit('output', '- **phase:** building the services\n');
+  assert.equal(runner.phase(), 'building the services');
+
+  // And every line is still in the tail. The stage is a caption on the output, not
+  // a replacement for it.
+  assert.equal(runner.output().length, 4);
+  store.close();
+});
+
+test('the stage goes when the environment comes up, and when the run is stopped', async () => {
+  const { runner, store, sessions } = build();
+  await runner.start('issue:284');
+  sessions[0]?.emit('output', 'phase: starting the web app\n');
+  assert.equal(runner.phase(), 'starting the web app');
+
+  // The turn ending is the environment being up, so there is nothing in flight to
+  // caption. Left standing, the last step of a bring-up would describe a finished
+  // one for as long as it ran.
+  sessions[0]?.emit('done');
+  assert.equal(runner.phase(), null);
+
+  await runner.start('issue:285');
+  assert.equal(runner.phase(), null, 'a new run starts with nothing said about it');
+  sessions[1]?.emit('output', 'phase: starting the containers\n');
+  await runner.stop();
+  assert.equal(runner.phase(), null, 'a stopped environment is not doing anything');
+  store.close();
+});
+
 test('a session that fails settles the run with what it last said', async () => {
   const { runner, store, sessions } = build();
   await runner.start('issue:284');
@@ -167,10 +232,149 @@ test('a session that fails settles the run with what it last said', async () => 
   store.close();
 });
 
+/**
+ * **A dev environment is not a process tree**, which is the whole reason a stop is a
+ * turn. Reaping the session's subtree is right and cannot touch a Docker container —
+ * it belongs to the daemon — so the row read `stopped` while the containers ran on.
+ */
+test('a stop runs the stop instruction, then reaps', async () => {
+  const { runner, store, sessions } = build({ stopInstruction: 'Run /dev-environment stop.' });
+  await runner.start('issue:284');
+  const session = sessions[0];
+
+  const stopping = runner.stop();
+  // Told to, before anything is killed: the session that started it is the one that
+  // knows what it started, and it is still alive to be asked.
+  const told = session?.sent[1] ?? '';
+  assert.match(told, /^Run \/dev-environment stop\./);
+  assert.match(told, /Stop everything that start brought up/);
+  assert.equal(store.currentLocalRun()?.status, 'stopping', 'and the run says so while it happens');
+  assert.deepEqual(session?.log, ['start'], 'nothing is killed until the instruction has run');
+
+  session?.emit('output', 'stopped 6 containers; port 5173 is free\n');
+  session?.emit('done');
+  await stopping;
+
+  // The reap is after the instruction and still before the kill.
+  assert.deepEqual(session?.log, ['start', 'reap', 'kill']);
+  const run = store.currentLocalRun();
+  assert.equal(run?.status, 'stopped');
+  assert.match(run?.note ?? '', /6 containers/, 'what it said it stopped is the record of the stop');
+  store.close();
+});
+
+test('a stop with nothing configured says what it could not do', async () => {
+  const { runner, store, sessions } = build();
+  await runner.start('issue:284');
+  await runner.stop();
+
+  // The session is killed, which is all a signal can do — and the row says so rather
+  // than claiming an environment came down. Blank is a supported state: plenty of
+  // projects are one process, where the reap *is* the whole story.
+  assert.deepEqual(sessions[0]?.log, ['start', 'reap', 'kill']);
+  assert.equal(sessions[0]?.sent.length, 1, 'nothing was asked of it');
+  const note = store.currentLocalRun()?.note ?? '';
+  assert.match(note, /may still be running/);
+  assert.match(note, /localRun\.stopInstruction/, 'and names the field that fixes it');
+  store.close();
+});
+
+test('a stop that never finishes is killed anyway, and says it was not confirmed', async () => {
+  const { runner, store, sessions } = build({ stopInstruction: 'Run /dev-environment stop.', stopTimeoutMs: 5 });
+  await runner.start('issue:284');
+  // Nothing is emitted: the session takes the instruction and never comes back. A
+  // harness that waited for ever here could never start anything again, because a
+  // swap waits for the stop.
+  await runner.stop();
+
+  assert.deepEqual(sessions[0]?.log, ['start', 'reap', 'kill']);
+  assert.match(store.currentLocalRun()?.note ?? '', /did not finish within/);
+  store.close();
+});
+
+test('a stop with no session left spawns one in the run’s own checkout', async () => {
+  const first = build({ stopInstruction: 'Run /dev-environment stop.' });
+  await first.runner.start('issue:284');
+  const dir = first.store.liveLocalRun()?.dir ?? '';
+
+  // A second runner over the same database: the row is live and nothing in memory
+  // holds it, which is exactly the state a restart leaves behind. This is the case
+  // that hurt most — the containers are up, the harness knows of nothing holding
+  // them, and a swap would have started a second stack on the same ports.
+  const after = build({ store: first.store, stopInstruction: 'Run /dev-environment stop.' });
+  const stopping = after.runner.stop();
+  const spawned = after.sessions[0];
+  assert.ok(spawned, 'a session was spawned to do the stopping');
+  assert.equal(spawned.spec.cwd, dir, 'in the checkout the run was using');
+  // Told outright that it did not start this: left to infer it, a session finds
+  // nothing of its own running and reasonably reports there is nothing to do.
+  assert.match(spawned.sent[0] ?? '', /You did not start this/);
+
+  spawned.emit('done');
+  await stopping;
+  assert.deepEqual(spawned.log, ['start', 'reap', 'kill'], 'and it is closed again afterwards');
+  assert.equal(after.store.liveLocalRun(), null);
+  first.store.close();
+});
+
+test('a swap waits for the stop before it touches the checkout', async () => {
+  const { runner, store, worktrees, sessions } = build({ stopInstruction: 'Run /dev-environment stop.' });
+  await runner.start('issue:284');
+  assert.deepEqual(worktrees.previewed, ['main']);
+
+  const swapping = runner.start('issue:285');
+  // The stop is in flight and the checkout has **not** been re-pointed. The order is
+  // load-bearing: the stop instruction runs in this checkout, and `ensurePreview` is
+  // a `reset --hard` and a `clean -fd` on the same directory — preparing first pulls
+  // the compose file out from under the session being asked to shut it down.
+  assert.deepEqual(worktrees.previewed, ['main'], 'nothing is prepared while the old one is coming down');
+  assert.equal(store.currentLocalRun()?.status, 'stopping');
+
+  sessions[0]?.emit('done');
+  const result = await swapping;
+  assert.ok(result.ok, result.ok ? '' : result.error);
+  assert.deepEqual(worktrees.previewed, ['main', 'main']);
+  assert.equal(sessions.length, 2, 'the new run got its own session');
+  store.close();
+});
+
+test('a stopping run is live: nothing may begin beside it, and a restart settles it', async () => {
+  const { runner, store, sessions } = build({ stopInstruction: 'Run /dev-environment stop.' });
+  await runner.start('issue:284');
+  const stopping = runner.stop();
+  const live = store.liveLocalRun();
+  assert.equal(live?.status, 'stopping', 'a run coming down still holds the environment');
+
+  // The store's own rule, not the runner's: `stopping` has to be in the live set in
+  // every statement that reads it, or a second run begins beside one being torn down.
+  const settled = store.endStaleLocalRuns('the harness restarted');
+  assert.equal(settled, 1, 'a stopping row is one a restart cannot vouch for either');
+
+  sessions[0]?.emit('done');
+  await stopping;
+  store.close();
+});
+
+test('the shutdown path kills without a turn, and records that it did', async () => {
+  const { runner, store, sessions } = build({ stopInstruction: 'Run /dev-environment stop.' });
+  await runner.start('issue:284');
+  runner.stopFast('the harness shut down');
+
+  // No turn: Ctrl-C and the upgrade handoff are the two paths that must not hang, and
+  // an upgrade is a restart. The cost is a container that outlives the harness, which
+  // the note is what makes visible on the next boot.
+  assert.equal(sessions[0]?.sent.length, 1, 'the stop instruction was not run');
+  assert.deepEqual(sessions[0]?.log, ['start', 'reap', 'kill']);
+  const note = store.currentLocalRun()?.note ?? '';
+  assert.match(note, /the harness shut down/);
+  assert.match(note, /may still be running/);
+  store.close();
+});
+
 test('stopping reaps the subtree before it signals the child', async () => {
   const { runner, store, sessions, reaped } = build();
   await runner.start('issue:284');
-  runner.stop();
+  await runner.stop();
 
   assert.deepEqual(reaped, [4242]);
   // The order is the assertion, not the pair. Descendants are resolved through the
@@ -240,32 +444,83 @@ function part(over: Partial<PlanPart> & { slug: string; seq: number }): PlanPart
   };
 }
 
-test('the ref is the first unmerged part with a branch, in plan order', () => {
-  // Plan order rather than newest: a stack's later part is built on its earlier one,
-  // so the first unmerged one is the furthest back anybody would want to look.
-  assert.equal(
-    localRunRef([part({ slug: 'b', seq: 2, branch: 'issue/1/b' }), part({ slug: 'a', seq: 1, branch: 'issue/1/a' })]),
-    'issue/1/a',
+test('the default ref is the tip of the stack, not the first unmerged part', () => {
+  // The whole stack rather than a section of it: a part is cut from its
+  // predecessor's branch, so the last unmerged one contains everything behind it.
+  // The old rule returned the *first*, which showed the least of the goal's work and
+  // said nothing about doing so.
+  const choices = localRunChoices([
+    part({ slug: 'b', seq: 2, branch: 'issue/1/b' }),
+    part({ slug: 'a', seq: 1, branch: 'issue/1/a' }),
+  ]);
+  assert.equal(choices.target, 'issue/1/b');
+  // And plan order, not the order the rows arrived in: the options are what the
+  // panel draws under the tip.
+  assert.deepEqual(
+    choices.options.map((o) => o.ref),
+    ['issue/1/a', 'issue/1/b'],
   );
 });
 
-test('merged, retired and concluded parts are skipped, and all of them means null', () => {
+test('merged, retired and concluded parts are never the tip, but stay on offer', () => {
   // Merged code is in the integration branch already, and a retired or concluded
   // part can still carry a branch from before it got there — which is exactly the
-  // stale checkout this avoids.
-  assert.equal(
-    localRunRef([
-      part({ slug: 'a', seq: 1, branch: 'issue/1/a', status: 'merged' }),
-      part({ slug: 'b', seq: 2, branch: 'issue/1/b', status: 'retired' }),
-      part({ slug: 'c', seq: 3, branch: 'issue/1/c', status: 'concluded' }),
-      part({ slug: 'd', seq: 4, branch: 'issue/1/d', status: 'in_review' }),
-    ]),
-    'issue/1/d',
-  );
-  assert.equal(localRunRef([part({ slug: 'a', seq: 1, branch: 'issue/1/a', status: 'merged' })]), null);
+  // stale checkout the default avoids. They stay in `options`, labelled by status:
+  // looking at what a merged part delivered is a legitimate thing to ask for.
+  const choices = localRunChoices([
+    part({ slug: 'a', seq: 1, branch: 'issue/1/a', status: 'merged' }),
+    part({ slug: 'b', seq: 2, branch: 'issue/1/b', status: 'retired' }),
+    part({ slug: 'c', seq: 3, branch: 'issue/1/c', status: 'concluded' }),
+    part({ slug: 'd', seq: 4, branch: 'issue/1/d', status: 'in_review' }),
+  ]);
+  assert.equal(choices.target, 'issue/1/d');
+  assert.equal(choices.options.length, 4);
+  assert.equal(choices.parts.merged, 1);
+
+  const allMerged = localRunChoices([part({ slug: 'a', seq: 1, branch: 'issue/1/a', status: 'merged' })]);
+  assert.equal(allMerged.target, null, 'a goal whose parts have all merged *is* the integration branch');
   // A part nothing has dispatched has no branch to run, which is not the same as
-  // having one — null sends the caller to the integration branch.
-  assert.equal(localRunRef([part({ slug: 'a', seq: 1 })]), null);
+  // having one — null sends the caller to the integration branch, and it is not an
+  // option either.
+  const undispatched = localRunChoices([part({ slug: 'a', seq: 1 })]);
+  assert.equal(undispatched.target, null);
+  assert.deepEqual(undispatched.options, []);
+});
+
+test('a goal nobody decomposed runs on its own branch, not the integration branch', () => {
+  // The common simple case, and the one this could not see at all: no plan parts
+  // meant no candidate branch, so a goal with an open pull request in front of you
+  // started on the integration branch and said nothing about it — and the panel
+  // filtered the row out, because a goal that resolves to the integration branch is
+  // not offering a choice.
+  const own = localRunChoices([], 'issue/284');
+  assert.equal(own.target, 'issue/284');
+  assert.deepEqual(own.options, [{ ref: 'issue/284', part: null }]);
+
+  // A goal that *has* been decomposed has its current work on its parts, so the tip
+  // outranks the goal's own branch — which is left on offer.
+  const both = localRunChoices([part({ slug: 'a', seq: 1, branch: 'issue/284/a' })], 'issue/284');
+  assert.equal(both.target, 'issue/284/a');
+  assert.deepEqual(
+    both.options.map((o) => o.ref),
+    ['issue/284', 'issue/284/a'],
+  );
+});
+
+test('an override runs an earlier part, and only a branch of that goal', async () => {
+  const parts = [part({ slug: 'a', seq: 1, branch: 'issue/1/a' }), part({ slug: 'b', seq: 2, branch: 'issue/1/b' })];
+  const { runner, store, worktrees } = build({ parts });
+
+  await runner.start('issue:284', 'issue/1/a');
+  assert.deepEqual(worktrees.previewed, ['issue/1/a'], 'the override is what gets checked out');
+
+  // Not an allow-list and this route is a way to check out anything in the
+  // repository. The refusal names the goal, because that is what makes it fixable.
+  const refused = await runner.start('issue:284', 'refs/heads/somebody-elses-branch');
+  assert.equal(refused.ok, false);
+  assert.match(refused.ok ? '' : refused.error, /issue:284/);
+  assert.deepEqual(worktrees.previewed, ['issue/1/a'], 'and nothing was prepared for it');
+  store.close();
 });
 
 // -- the checkout the run uses -----------------------------------------------

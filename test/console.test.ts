@@ -1208,6 +1208,27 @@ test('a reading opens the panel behind it, in front of the console', () => {
   }
 });
 
+/**
+ * The picker's whole job is that you can see the choice before you make it: which
+ * branch a goal would run, and what has happened on **that** branch. A row that
+ * named only the goal is the thing this replaced — the ref was resolved server-side
+ * at start time, so the first you knew of it was after the environment came up on
+ * it.
+ */
+test('the local run panel names the ref each goal would run', () => {
+  const v = view({ consolePanel: 'localRun' });
+  const runnable = v.state.localRunTargets.filter((t) => t.runnable);
+  assert.ok(runnable.length > 0, 'the demo fixtures must carry a goal with a branch of its own');
+  const html = decode(render(v));
+  for (const target of runnable) assert.ok(html.includes(target.target.ref), `no row names ${target.target.ref}`);
+
+  // A ref with no pull request of its own says so. Silence reads as a row that
+  // forgot to say, and one glance at another goal's PR number answers a question
+  // nobody asked.
+  const orphan = runnable.find((t) => t.target.pr === null);
+  if (orphan) assert.ok(html.includes('no pull request of its own'));
+});
+
 test('the lessons panel draws the retired ones too', () => {
   // The load-bearing half of the prune surface (#355): a lesson that vanished on
   // being retired would leave no way to tell a list you have finished with from

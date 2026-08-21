@@ -60,7 +60,7 @@ import { ActionExecutor } from './executor/actionExecutor.js';
 import { RuleDispatcher } from './dispatcher/ruleDispatcher.js';
 import { loadPromptTemplates, type PromptTemplates } from './dispatcher/promptTemplates.js';
 import type { Dispatcher } from './dispatcher/dispatcher.js';
-import type { IssuePickupPolicy } from './dispatcher/issuePickup.js';
+import { openPrForIssue, type IssuePickupPolicy } from './dispatcher/issuePickup.js';
 import { watchLabelFor } from './watchLabels.js';
 import { resolveModelTag } from './modelLabels.js';
 import { orderedProfiles } from './agents/modelPolicy.js';
@@ -68,7 +68,8 @@ import { Harness } from './harness.js';
 import { RuntimeControl } from './runtimeControl.js';
 import { PetKeeper } from './pets/keeper.js';
 import { LocalRunner } from './localRun/runner.js';
-import { localRunRef } from './localRun/ref.js';
+import { localRunChoices } from './localRun/ref.js';
+import { planIssueNumber } from './plans/parts.js';
 import { LiveConfig } from './configApply.js';
 import { ErrorLog } from './errorLog.js';
 import type { ErrorLogEntry } from './types.js';
@@ -1025,9 +1026,18 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     claudeArgs: config.claudeArgs,
     permissionMode: config.agentPermissionMode,
     defaultBranch: config.defaultBranch,
-    refFor: (originRef) => {
+    choicesFor: (originRef) => {
       const plan = store.getPlanByOrigin(originRef);
-      return plan ? localRunRef(store.listPlanParts(plan.id)) : null;
+      // The goal's own branch as well as its parts', through the same
+      // `openPrForIssue` the pickup verdict uses: a goal nobody decomposed has its
+      // work on one pull request, and it is the whole answer for that goal. Read off
+      // the baseline rather than the provider, like everything else that asks the
+      // world a question outside a pulse.
+      const number = planIssueNumber(originRef);
+      const world = store.getWorldBaseline();
+      const issue = number === null ? undefined : world?.issues.find((i) => i.number === number);
+      const own = issue ? (openPrForIssue(issue, world?.pullRequests ?? [])?.branch ?? null) : null;
+      return localRunChoices(plan ? store.listPlanParts(plan.id) : [], own);
     },
     reap: reapTree,
     errors,

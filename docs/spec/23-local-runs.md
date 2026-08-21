@@ -39,8 +39,9 @@ limit invented here — the same one the validation claim is built on
 
 ## The instruction is config, not a prompt
 
-`localRun.instruction` — free text, what the session bringing the environment up is told — and
-`localRun.url`, where the application lands. Both are **live fields**
+`localRun.instruction` — free text, what the session bringing the environment up is told —
+`localRun.stopInstruction`, what the session taking it back down is told, and `localRun.url`, where the
+application lands. All three are **live fields**
 ([02](02-configuration.md#liveness)): an edit on the Config page applies to the next start with no
 restart. They sit under **Features** there, beside the other policy objects, and `localRunRoot` under
 **Paths** — which is a thing `GROUPS` in `src/server/runningConfig.ts` has to be told: a declared key
@@ -90,12 +91,39 @@ tracked file edited; and `reset --hard` on a checkout somehow standing on a bran
 branch*, the damage `git switch -C` is banned for. So: existence check, `checkout --detach`,
 `reset --hard <commit>`, `clean -fd`. An unresolvable ref throws before anything is touched.
 
-Which ref: `localRunRef` (`src/localRun/ref.ts`, pure) takes the **first unmerged part with a branch,
-in plan order**, or null for the integration branch. A goal whose parts have merged *is* the
-integration branch, and a stack's later part is built on its earlier one — so the first unmerged part
-is the furthest back anybody would want to look. `merged`, `retired` and `concluded` parts are
-skipped: each can still carry a branch from before it got there, which is exactly the stale checkout
-this avoids.
+## Which ref, and what else is on offer
+
+`localRunChoices` (`src/localRun/ref.ts`, pure) answers it: the **default**, everything else the goal
+could be run at, and how much of the plan has landed.
+
+The default is the **tip of the stack** — the furthest-along part with a branch, `merged`, `retired`
+and `concluded` skipped. Plan order *is* stacking order, since a part is cut from its predecessor's
+branch, so the last unmerged one contains everything behind it.
+
+Failing that, the goal's **own** branch, resolved by the same `openPrForIssue` the pickup verdict uses
+— its conventional `issue/<n>` or whatever its linked pull request is on. A goal nobody decomposed has
+its whole work on one pull request, and this feature could not see those goals *at all*: no parts meant
+no candidate, so a goal with an open PR in front of the operator resolved to the integration branch,
+started there, and said nothing about it. On the panel it was worse than silent — the row was filtered
+out, because a goal that resolves to the integration branch is not offering a choice.
+
+With neither, null: a goal whose parts have all merged **is** the integration branch, and so is one
+nothing has started.
+
+It was the **first** unmerged part until the picker was rewritten, on the argument that the furthest
+back is the furthest anybody would want to look. That is the wrong end: what somebody asking to see a
+goal means is the goal, and the first unmerged part of a three-part stack is a third of it. Nothing
+said so — the environment came up on a real branch of the right goal, one section short, and the
+panel named neither the branch nor the part.
+
+The skipped statuses stay **on offer**, labelled: each can still carry a branch from before it got
+there, so none of them is a sane *default*, and looking at what a merged part delivered is a
+perfectly sane thing to ask for. Which makes the list the **allow-list** as well as the thing the
+panel draws — `start(originRef, at)` checks an override against it, so the route is a way to run this
+goal's own work and not a way to check out an arbitrary ref. One function for all three questions
+(what runs, what may run, what to draw), because two implementations of "which one is the tip" would
+be free to disagree about the branch an operator is looking at — and because the panel offering a
+branch the runner would refuse is a dead control with nothing red about it.
 
 ## The process
 
@@ -111,18 +139,63 @@ alive while stdin is open, and that is what holds the server's parent open. So:
 - **The turn ending is the environment being up, not the run being over.** `done` and `waiting` both
   mean "it stopped talking and did not fail", and the status goes to `running`. Nothing is killed —
   a runner that treated `done` as terminal would kill the thing the run exists to hold.
-- **Four rules are appended to the instruction, never interpolated into it** — the prompt templates'
+- **Five rules are appended to the instruction, never interpolated into it** — the prompt templates'
   rule for their reason. Start it in the background and stay; do not stop it; do not commit (the
-  checkout is detached at somebody else's commit); say where it landed. An operator writing down how
-  their project starts has no way to know any of them, and an instruction that had to remember them
-  would be one edit from dropping one.
-- **A stop reaps the subtree _before_ it signals the child.** The dev server is a descendant, and
-  descendants resolve through the root pid — so reaping after the process dies finds nothing, leaving
-  the port held and, on Windows, the checkout unremovable
+  checkout is detached at somebody else's commit); say where it landed; say each step before taking
+  it. An operator writing down how their project starts has no way to know any of them, and an
+  instruction that had to remember them would be one edit from dropping one.
+- **A stop reaps the subtree _before_ it signals the child**, and after it has asked for the
+  environment to come down (see below). Descendants resolve through the root pid, so reaping after the
+  process dies finds nothing, leaving the port held and, on Windows, the checkout unremovable
   ([10](10-agent-runtimes.md#reaping-the-process-subtree)).
 - **It is not an agent row and not against the cap.** A run holding one of `maxConcurrentAgents`
   would starve the fleet for as long as the environment is up. The cost is one short turn at startup;
   an idle stream session spends nothing while no turn is in flight.
+
+## Stopping is a turn, not a signal
+
+`localRun.stopInstruction`, and a `stopping` status while it runs.
+
+**A dev environment is not a process tree.** Reaping the session's subtree is right and does what it
+says — it takes the session and its own children — and it cannot touch a Docker container, which
+belongs to the daemon, or anything a start handed to a service. No signal the harness can send reaches
+those. So the reap was never going to be a stop, and the row said `stopped` anyway: an outcome nothing
+had checked, with the containers running on behind it. A project that can be started at all tends to
+have a command for stopping, for exactly this reason.
+
+So a stop is the mirror of a start, in this order:
+
+1. The row goes to **`stopping`**, which is a *live* status: a run being taken down still holds the
+   environment, so nothing may begin beside it and the panel must not offer to.
+2. The stop instruction is carried out **in a session** — the one that brought it up if it is still
+   there, since it knows what it started and is already warm; otherwise a **fresh** one in the run's
+   own checkout. That second arm is the case that hurt most: after a restart the containers are up and
+   the harness holds nothing, so a swap would have started a second stack on the same ports. It is told
+   outright that it did not start this, because a session left to infer it finds nothing of its own
+   running and reasonably reports there is nothing to do.
+3. **Bounded.** `STOP_TIMEOUT_MS` (two minutes, injectable for tests). A stop that never finishes would
+   otherwise leave a harness that can never start anything again, since a swap waits for one.
+4. **Then** the reap and the kill, always — whether the instruction worked, failed or timed out. The
+   session and its own children are the harness's to clean up either way.
+5. The row settles `stopped` with a note saying which of four things happened: what the session said it
+   stopped, that the stop was not confirmed in time, that the session failed, or that **no stop
+   instruction is configured** — in which case the session was killed and whatever it started may still
+   be running. Blank is a supported state, not a broken one: plenty of projects are one process, where
+   the reap is the whole story. The panel says which of the two a deployment is.
+
+**One stop at a time.** The runner holds the promise, so a second click, a swap and the desktop tool
+all wait on one teardown rather than racing two.
+
+**A swap stops before it prepares the checkout**, and that order is load-bearing: the stop instruction
+runs *in* the checkout — `docker compose down` reads the compose file that is in it — and
+`ensurePreview` is a `reset --hard` and a `clean -fd` on the same directory. Preparing first pulls the
+project out from under the session being asked to shut it down. The cost is that a checkout which
+cannot be prepared now fails with the previous environment already gone, so that refusal says so.
+
+**The stop turn is not the run coming up.** The bring-up's handlers are keyed on the run id, and the
+stop's turn ends in a `done` like any other — which `up()` would read as "the environment is up".
+Dropping the id as the stop begins is the one switch that keeps the two apart; without it a stop
+writes `running` on its way out.
 
 **A restart settles every live row.** A row saying `running` after a restart describes a process this
 harness never spawned — the pid belongs to something dead, or to whatever has since been given that
@@ -130,6 +203,46 @@ number. `endStaleLocalRuns` runs at boot and records how many it settled. The ru
 the harness rather than being interrupted like an agent's work: an agent's conversation is worth
 restoring and a dev environment is not, and left running it would be an orphan holding a port and the
 checkout with a row claiming it is live ([21](21-self-update.md#the-drain)).
+
+Shutdown takes the **fast path** deliberately — `stopFast`, which reaps, kills and settles without a
+turn. Ctrl-C and the upgrade handoff are the two paths that must not hang, and an upgrade is a restart.
+The cost is a container that can outlive the harness; the note is what makes that a thing the panel
+states on the next boot rather than a mystery.
+
+## Saying what it is doing
+
+A bring-up is minutes of work inside **one turn** — containers, builds, a seed, a dev server — and
+until that turn ends the only two things the harness knows are that it started and what the session
+has printed. Both used to arrive too late to be any use: nothing subscribed to the runner's `changed`
+event, so the status, the log and everything derived from them moved no sooner than the next
+heartbeat. A start that was working and a start that had hung looked identical for a whole pulse at a
+time, and the panel's word for both of them was "Starting".
+
+Three things close that, and the order they are in matters:
+
+- **The session is asked to narrate.** A fifth appended rule: print one line beginning `phase:` before
+  each step. `LocalRunner` keeps the newest such line, and `phaseOf` tolerates the bullet or the bold
+  a model puts in front of it. What it will not do is **guess** — a line that does not say `phase` is
+  output. A stage inferred from whatever the session last happened to print would be a caption the
+  harness made up, unfalsifiable from the glass and wrong exactly when the run is going badly.
+- **The phase is not durable, and is cleared twice.** It ships on `LocalRunView`, derived from the
+  runner rather than the row, because it describes work in flight and only the process doing the work
+  can vouch for it — so a restart correctly has none. It is dropped when the turn ends **and** when the
+  run settles: an environment that is up, still captioned with the last step of its own start,
+  re-creates the failure this section exists to end.
+- **The hub coalesces.** `changed` fires per line of output, and every `dirty` costs every connected
+  cockpit a whole snapshot, so 400ms of events become one refetch
+  ([16](16-http-api.md#the-tail)).
+
+**What none of this makes faster.** The panel now says what is happening; the clock is unchanged, and
+deliberately so. The harness's own share of a start is a commit resolution, the checkout's
+`reset`/`clean` and a process spawn — a few seconds against a bring-up of minutes, and measuring the
+git half on a large repository put `status` and `clean` at about a second each. A fast path that
+skipped the prepare when the checkout already stood at the right commit would have to ask `status`
+whether the tree was clean, which costs what the `clean` it saves does, and skipping the `reset`
+instead trades away the one guarantee that a tracked file the last run edited is put back. The lever
+that is worth pulling is `localRun.instruction` itself — a stack that starts fewer things, named as a
+command rather than as an interactive skill with a phase per turn — and it belongs to the operator.
 
 ## Two triggers, one owner
 
@@ -154,9 +267,18 @@ strength of a status is the one outcome the validation channel exists to prevent
 
 | Route                       | Does                                                                  |
 | --------------------------- | --------------------------------------------------------------------- |
-| `POST /api/local-run`       | `{issue}` — start it on that goal, stopping whatever was running.      |
-| `POST /api/local-run/stop`  | No body and no id: there is one run, and stopping it is the request.   |
+| `POST /api/local-run`       | `{issue, ref?}` — start it on that goal, stopping whatever was running. |
+| `POST /api/local-run/stop`  | No body and no id: there is one run, and stopping it is the request. Answers as soon as the teardown has begun. |
 | `GET /api/local-run/output` | The session's last lines.                                             |
+
+Stopping **answers before it has finished**, because it is a session's turn: the run goes to
+`stopping` and the runner's own `changed` events carry the rest. Awaiting the turn in the handler would
+hold a request open for up to two minutes.
+
+`ref` runs an earlier part of the goal instead of the tip of its stack. The schema checks its
+*shape*, and the runner checks that it is one of **that goal's** part branches — a question about the
+plan, so it is asked where the plan is. A schema that took any string and a runner that trusted it
+would make this route a way to check out anything in the repository.
 
 The output has its own route rather than riding the state snapshot: the tail is up to two hundred
 lines and the snapshot ships on every heartbeat and every `dirty` — which includes every file an agent
@@ -177,23 +299,102 @@ The panel (`web/src/components/LocalRunPanel.tsx`) is `'localRun'` on `ConsolePa
 would imply two could be up. What is running, since when, the URL as a link *to try*, the session's
 output, and Stop plus a goal picker whose button says it stops what is running now.
 
+### The picker
+
+Rows, not a `<select>`. What a row has to say does not fit in an option's label, and a choice you
+cannot see was what this panel got wrong first: the ref was resolved server-side at start time, so
+the first anybody learned of it was after the environment had come up on it.
+
+**A row describes the ref it would check out, and nothing else.** A pull request is a fact about a
+branch, not about a goal: work can sit on an integration branch that combines several parts and is
+never opened as a PR, and a goal can carry three PRs none of which describes the branch about to be
+started. So a ref with no pull request of its own **says so**, beside the count of what did land in
+the integration branch — which is a different statement from silence, and from a number borrowed off a
+sibling. That is why `LocalRunRefFacts` is derived per ref in `stateSnapshot.ts`: the cockpit could
+match a branch to a PR itself, but deciding *which of a goal's PRs speaks for a ref* is the mistake
+the type exists to make unrepeatable.
+
+Each row carries the branch, the part's position, that ref's PR with the CI policy's own verdict, and
+whether an agent is on the branch **now** — because then what a run shows is a moving target. There is
+no per-check dot ladder: `CiLadder` is the one thing allowed to classify a check, it lives in the
+console layer, and nothing under `web/src/components/` reaches into that layer. So the server ships
+the classification it has already made and the row draws it in words.
+
+Rows with more than one option get an expander for the parts behind the tip. **Freshness is agent
+activity, never a commit date**: the snapshot is synchronous and git is not on that path, so the row
+says "last agent activity" and means it.
+
+Two more rules the layout obeys:
+
+- **A ref never goes inside the row's button.** The row is clickable to select, so its `<Ref>`s sit in
+  a group beside it — one click cannot have two destinations ([17](17-cockpit.md#links)).
+- **Clicking selects; a labelled button starts.** `Start #402` names what it will do, and the ref sits
+  beside it, because a mis-selection costs a warm environment and several minutes. The goal number
+  alone does not say which branch.
+
+By default the list shows only goals with a branch of their own. Everything else resolves to the
+integration branch, which is one choice however many goals offer it; `show every goal` reveals them,
+and the empty state names the filter rather than reading as "nothing to run". The selection, the
+expander and the filter are local state and not `Place`: which row is highlighted is not *where you
+are*, and the panel itself is the place.
+
+Three details are about the minutes a start takes rather than the state it ends in:
+
+- **The elapsed time is a clock, not "3m ago".** Rounded relative time sits on one value for ninety
+  seconds, which on the one surface an operator is watching reads as a frozen screen. `stopping` gets
+  no clock: the only timestamp on the row is when the *run* started, and "Stopping · 18:04" reads as a
+  teardown that has been going for eighteen minutes.
+- **The stage line, under the header**, while starting **or** stopping — both are a session's turn with
+  somebody watching, and a teardown that says nothing for a minute is the same failure at the other end
+  of the run. It is the phase, or, if the session never named one, its last line
+  of output drawn in the mono face. The fallback is not dressed as a caption on purpose: an
+  instruction can be overridden and a rule can be ignored, and a stray line of install output
+  presented in the voice of a milestone invents the one thing this row is for. Drawn only while
+  `starting`, for the reason the phase is cleared at the same moment.
+- **The tail is polled while the run is live**, on a tick derived from the cockpit's own clock. It is
+  off the snapshot, so nothing else would ever refetch it. The prop that fetches it is also a fresh
+  closure per render and so polls incidentally — the explicit tick is there because a `useCallback`
+  upstream is a reasonable thing for somebody to add and would silently freeze the log.
+
 ## Persistence
 
 `local_runs`, one row per run, `src/store/localRuns.ts`. `id`, `origin_ref`, `ref`, `dir`, `pid`,
-`status`, `url`, `note`, `started_at`, `ended_at`. A brand-new table needs no `ColumnMigrations`
+`status`, `url`, `note`, `started_at`, `ended_at`. Which statuses count as **live** is declared once,
+in `LIVE`, and the SQL derives its `IN` clause from it — it used to be written out as
+`('starting', 'running')` in three statements with `LIVE` read by nobody, and adding a status to three
+of the four is silent in both directions: missed by `liveLocalRun` the store lets a second run begin
+beside a live one, and missed by `endStaleLocalRuns` a row stays live across every restart for ever.
+`describeRun` in `src/mcp/desktopTools.ts` had a fifth copy and now calls `localRunIsLive`.
+A brand-new table needs no `ColumnMigrations`
 entry — but a table being new *once* does not keep it exempt
 ([14](14-persistence.md#migrations)). `url` is frozen as configured when the run started, so a later
 config edit does not rewrite what a past run reported.
 
 ## Tests
 
-`test/localRun.test.ts`: the refusal names the field that fixes it; a start prepares the checkout,
+`test/localRun.test.ts`: a stop runs the instruction and only then reaps; a stop with nothing configured
+says what it could not do and names the field; a stop that never finishes is killed at the bound and
+says it was not confirmed; a stop with no session left spawns one in the run's own checkout; a swap does
+not touch the checkout until the stop has settled; a `stopping` row is live and a restart settles it;
+the shutdown path runs no turn and records that it did not. Then: the default is the **tip** and the options are in plan order; a merged,
+retired or concluded part is never the tip but stays on offer; an override runs an earlier part and one
+that is not the goal's is refused with the goal named; the refusal names the field that fixes it; a start prepares the checkout,
 writes the row and appends the rules; a merged goal runs from the integration branch; the turn ending
 is the environment up and kills nothing; a failure keeps what the session last said; a stop reaps
 before it signals, asserted as an **order** rather than as a pair; a second goal supersedes the first;
-a restart settles what it cannot vouch for; `localRunRef`'s two arms; and — against a real repository
-— that a change of ref keeps ignored files and drops everything else, and that an unresolvable ref
-leaves the checkout untouched.
+a restart settles what it cannot vouch for; the newest `phase:` line is the stage and the output
+between two of them leaves it standing; the stage goes when the environment comes up and when the run
+is stopped; `localRunRef`'s two arms; and — against a real repository — that a change of ref keeps
+ignored files and drops everything else, and that an unresolvable ref leaves the checkout untouched.
+
+`test/stateSnapshot.test.ts` covers the rows: a goal with two pull requests on two branches gets the
+one **on the ref**, the tip is the later part, the merged part keeps its own PR in `options`, and a
+goal nothing has started is `runnable: false` with a null PR. `test/console.test.ts` asserts the panel
+names every ref it offers.
+
+`test/hub.test.ts` covers the wiring from the other side: fifty `changed` events produce **one**
+refetch, and none of them inside the window. That anything is subscribed at all is half of what it
+asserts — nothing was, and nothing about it was red.
 
 `test/validationDesktop.test.ts` covers the tool: what it reports, that starting a second goal stops
 the first, and that a deployment with no instruction is refused with the field named.

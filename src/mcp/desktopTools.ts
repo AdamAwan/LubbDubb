@@ -6,6 +6,7 @@ import { planProposalRef } from '../proposals/proposals.js';
 import type { ProposalDesk } from '../proposals/proposalDesk.js';
 import type { Store } from '../store/store.js';
 import type { LocalRunner } from '../localRun/runner.js';
+import { localRunIsLive } from '../store/localRuns.js';
 import type { Plan } from '../types.js';
 import {
   claimStaleBefore,
@@ -584,7 +585,10 @@ function describeRun(runner: LocalRunner): Record<string, unknown> {
       note: 'Nothing has been started locally on this machine.',
     };
   return {
-    running: run.status === 'starting' || run.status === 'running',
+    // Through `localRunIsLive`, not a fifth hand-written copy of which statuses count
+    // — and `stopping` is one of them, so a session asking during a teardown is told
+    // the environment is still up rather than that it is free to start another.
+    running: localRunIsLive(run),
     goal: run.originRef,
     ref: run.ref,
     dir: run.dir,

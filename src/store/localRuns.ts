@@ -2,8 +2,22 @@ import { randomUUID } from 'node:crypto';
 import type { StoreContext } from './context.js';
 import type { LocalRun, LocalRunStatus } from '../types.js';
 
-/** Live means the harness believes a process is holding an environment up. */
-const LIVE: LocalRunStatus[] = ['starting', 'running'];
+/**
+ * Live means the harness believes something is holding an environment up — including
+ * `stopping`, which is a run being taken down and therefore still in the way.
+ */
+const LIVE: LocalRunStatus[] = ['starting', 'running', 'stopping'];
+
+/**
+ * The same set as a SQL fragment, **derived** so it cannot drift from {@link LIVE}.
+ *
+ * It was written out as `('starting', 'running')` in three separate statements here,
+ * with `LIVE` beside them read by nobody. Adding a status to three of the four is
+ * silent in both directions: missed by `liveLocalRun` the store lets a second run
+ * begin beside a live one, and missed by `endStaleLocalRuns` a row stays live across
+ * every restart for ever. Neither errors, and both look like the feature working.
+ */
+const LIVE_SQL = `(${LIVE.map((s) => `'${s}'`).join(', ')})`;
 
 /**
  * The `local_runs` table: the one dev environment on the operator's machine, and
@@ -50,7 +64,7 @@ export class LocalRunStore {
       this.ctx.db
         .prepare(
           `UPDATE local_runs SET status = 'stopped', ended_at = ?, note = COALESCE(note, ?)
-             WHERE status IN ('starting', 'running')`,
+             WHERE status IN ${LIVE_SQL}`,
         )
         .run(now, 'superseded by a run of another goal');
       this.ctx.db
@@ -83,7 +97,7 @@ export class LocalRunStore {
   /** The live run, or null. At most one row can match — {@link beginLocalRun} is what makes that true. */
   liveLocalRun(): LocalRun | null {
     const row = this.ctx.db
-      .prepare(`SELECT * FROM local_runs WHERE status IN ('starting', 'running') ORDER BY started_at DESC LIMIT 1`)
+      .prepare(`SELECT * FROM local_runs WHERE status IN ${LIVE_SQL} ORDER BY started_at DESC LIMIT 1`)
       .get() as LocalRunRow | undefined;
     return row ? toLocalRun(row) : null;
   }
@@ -115,7 +129,7 @@ export class LocalRunStore {
     const result = this.ctx.db
       .prepare(
         `UPDATE local_runs SET status = 'stopped', ended_at = ?, note = COALESCE(note, ?)
-           WHERE status IN ('starting', 'running')`,
+           WHERE status IN ${LIVE_SQL}`,
       )
       .run(this.ctx.now(), note);
     return result.changes;

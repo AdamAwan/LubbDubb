@@ -217,7 +217,7 @@ export function useCockpit(): CockpitStatus {
 
       upgrade: (action, opts) => then(api.upgrade(action, opts)),
       checkBuild: () => then(api.checkBuild()),
-      startLocalRun: (issueNumber) => then(api.startLocalRun(issueNumber)),
+      startLocalRun: (issueNumber, ref) => then(api.startLocalRun(issueNumber, ref)),
       stopLocalRun: () => then(api.stopLocalRun()),
       // Not wrapped in `then`: this one is a read, and refetching the whole
       // snapshot to draw a log tail would make opening the panel cost what a pulse

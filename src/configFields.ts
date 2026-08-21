@@ -352,6 +352,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How this project’s application is started on your machine. Empty means nothing is startable.',
   },
   {
+    path: 'localRun.stopInstruction',
+    type: 'text',
+    access: 'plain',
+    why: 'How it is stopped again. Empty means a stop kills the session but not what it started.',
+  },
+  {
     path: 'localRun.url',
     type: 'string',
     access: 'plain',

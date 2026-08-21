@@ -7,6 +7,10 @@ import type { RouteContext } from './context.js';
  * The machine's one dev environment: start it on a goal, stop it, and read what the
  * session holding it up has said.
  *
+ * **Stopping is asynchronous**, and that is the one thing about this module that is
+ * not obvious: it runs the project's own stop instruction in a session, so the reply
+ * says "started stopping" and the run sits in `stopping` until the turn ends.
+ *
  * **Start is also swap.** There is no separate route for "run a different goal
  * instead", because there is nothing else it could mean: one environment, so
  * starting the second thing is stopping the first. A `swap` route beside `start`
@@ -32,12 +36,21 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       })
       .int()
       .positive(),
+    /**
+     * Run an earlier part of the goal rather than the tip of its stack.
+     *
+     * Its shape is all this schema can check — that it is one of *this goal's* part
+     * branches is a question about the plan, so the runner asks it. A schema that
+     * accepted any string and a runner that trusted it would make this route a way
+     * to check out anything in the repository.
+     */
+    ref: z.string().min(1).optional(),
   });
 
   app.post(
     '/api/local-run',
     checked({ body: StartBody }, async ({ body, reply }) => {
-      const result = await localRun.start(`issue:${body.issue}`);
+      const result = await localRun.start(`issue:${body.issue}`, body.ref);
       // A refusal here is an operator-shaped problem — nothing configured, or a
       // checkout that would not prepare — so it is a returned 400 carrying the
       // reason, never a throw. `setErrorHandler` means *unanticipated*.
@@ -53,7 +66,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/local-run/stop',
     checked({}, async () => {
-      localRun.stop();
+      // Started, not awaited. A stop is a session's turn now — the project's own stop
+      // command, because a dev environment is not a process tree — so awaiting it here
+      // would hold a request open for up to two minutes. The run goes to `stopping`,
+      // which is a live status, and the runner's own `changed` events carry the rest.
+      void localRun.stop();
       hub.broadcast({ type: 'dirty' });
       return { ok: true };
     }),

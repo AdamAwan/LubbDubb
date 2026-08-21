@@ -150,6 +150,30 @@ function injectedIssue(
   };
 }
 
+/**
+ * A bring-up as the panel sees one: a phase, then the output of that phase.
+ *
+ * Scripted rather than instant, because "it takes minutes and says nothing" was the
+ * complaint this answers — a demo that came up the moment it was asked to would
+ * show none of it.
+ */
+const BRINGUP: readonly { phase: string; lines: readonly string[] }[] = [
+  { phase: 'starting the containers', lines: ['> docker compose up -d', '> postgres ready', '> redis ready'] },
+  { phase: 'building the services', lines: ['> build api      ok', '> build worker   ok'] },
+  { phase: 'seeding the sample data', lines: ['> 240 invoices, 18 suppliers'] },
+  { phase: 'starting the web app', lines: ['> vite ready in 1204 ms'] },
+];
+
+/**
+ * And the teardown, which is a turn of its own: the project's stop command, because
+ * a dev environment is not a process tree — the containers a start brought up belong
+ * to the Docker daemon and no signal the harness can send reaches them.
+ */
+const TEARDOWN: readonly { phase: string; lines: readonly string[] }[] = [
+  { phase: 'stopping the web app and the services', lines: ['> vite     stopped', '> api      stopped'] },
+  { phase: 'taking the containers down', lines: ['> docker compose down', '> 6 containers stopped'] },
+];
+
 class DemoServer {
   private seed = buildDemoState();
   private state: AppState = this.seed.state;
@@ -160,6 +184,10 @@ class DemoServer {
   private chatterIdx = 0;
   /** What the local run's session has 'printed', for the panel's tail. */
   private lines: string[] = ['> starting the dev environment for #395', '> up on http://localhost:5173'];
+  /** Which step of {@link BRINGUP} is next. Past the end: the fixture is already up. */
+  private bringUp = BRINGUP.length;
+  /** Which step of {@link TEARDOWN} is next. */
+  private teardown = TEARDOWN.length;
   private deskBeats = 0;
   private seq = 1000;
 
@@ -1005,41 +1033,106 @@ class DemoServer {
    * the old row ends as the new one begins — the same transaction the real store
    * does in one write.
    */
-  startLocalRun(issue: number): Promise<{ ok: true; run: LocalRunView }> {
+  startLocalRun(issue: number, ref?: string): Promise<{ ok: true; run: LocalRunView }> {
     const now = new Date().toISOString();
-    const run: LocalRunView = {
+    // Where this goal runs, and what has happened there — read off the same rows the
+    // panel drew, so the header after a start says what the row said before it.
+    const target = this.state.localRunTargets.find((t) => t.issueNumber === issue) ?? null;
+    const chosen = ref === undefined ? null : (target?.options.find((o) => o.option.ref === ref) ?? null);
+    const facts = chosen?.facts ?? target?.target ?? null;
+    const starting: LocalRunView = {
       id: `run-${String(this.state.localRun === null ? 2 : Number(this.state.localRun.id.split('-')[1] ?? 1) + 1)}`,
       originRef: `issue:${String(issue)}`,
-      // The demo has no git, so the ref is the shape a part's branch takes rather
-      // than one resolved from a plan. Naming it after the goal is the honest half.
-      ref: `issue/${String(issue)}/local`,
+      ref: ref ?? facts?.ref ?? 'main',
       dir: '/Users/you/code/demo-shop/.lubbdubb/local-run',
       pid: 48000 + issue,
-      status: 'running',
+      // `starting`, not `running`, because that is the state an operator spends the
+      // minutes in and the one the panel had nothing to say about. The scripted
+      // bring-up below walks out of it.
+      status: 'starting',
       url: 'http://localhost:5173',
       note: null,
       startedAt: now,
       endedAt: null,
       live: true,
+      phase: null,
+      refFacts: facts,
     };
-    this.state.localRun = run;
-    this.lines = [`> starting the dev environment for #${String(issue)}`, '> up on http://localhost:5173'];
-    return Promise.resolve({ ok: true as const, run });
+    this.state.localRun = starting;
+    this.lines = [`> starting the dev environment for #${String(issue)}`];
+    this.bringUp = 0;
+    // The first phase now rather than on the next poll, so the panel never draws a
+    // start with nothing under it.
+    this.advanceBringUp();
+    return Promise.resolve({ ok: true as const, run: this.state.localRun ?? starting });
   }
 
+  /**
+   * One step of the scripted bring-up: the phase, then that phase's output.
+   *
+   * Driven by {@link localRunOutput} rather than a timer, because the panel polls
+   * that while a run is live — which is the cadence the real runner's own output
+   * arrives at anyway, and a timer here would be one more thing to start, stop and
+   * clean up for the same effect.
+   */
+  private advanceBringUp(): void {
+    const run = this.state.localRun;
+    if (run === null || run.status !== 'starting') return;
+    const step = BRINGUP[this.bringUp];
+    if (step === undefined) {
+      // The turn ending is the environment being up — the real runner's rule, and
+      // the reason `running` here carries no phase: nothing is in flight.
+      this.state.localRun = { ...run, status: 'running', phase: null, note: 'Up on http://localhost:5173.' };
+      this.dirty();
+      return;
+    }
+    this.bringUp += 1;
+    this.lines = [...this.lines, `phase: ${step.phase}`, ...step.lines];
+    this.state.localRun = { ...run, phase: step.phase };
+    this.dirty();
+  }
+
+  /**
+   * Start the teardown. Not finish it — stopping is a session's turn, because a dev
+   * environment is not a process tree and no signal reaches a container, so
+   * `stopping` is a live state the panel sits in for a while.
+   */
   stopLocalRun(): Promise<{ ok: true }> {
-    if (this.state.localRun !== null)
-      this.state.localRun = {
-        ...this.state.localRun,
-        status: 'stopped',
-        live: false,
-        endedAt: new Date().toISOString(),
-        note: 'stopped from the cockpit',
-      };
+    if (this.state.localRun !== null) {
+      this.state.localRun = { ...this.state.localRun, status: 'stopping', phase: null };
+      this.lines = [...this.lines, 'phase: stopping the containers'];
+      this.teardown = 0;
+      this.dirty();
+    }
     return Promise.resolve({ ok: true as const });
   }
 
+  /** The teardown, one step per look, exactly as {@link advanceBringUp} runs. */
+  private advanceTeardown(): void {
+    const run = this.state.localRun;
+    if (run === null || run.status !== 'stopping') return;
+    const step = TEARDOWN[this.teardown];
+    if (step === undefined) {
+      this.state.localRun = {
+        ...run,
+        status: 'stopped',
+        live: false,
+        phase: null,
+        endedAt: new Date().toISOString(),
+        note: 'stopped from the cockpit — 6 containers stopped, :5173 is free',
+      };
+      this.dirty();
+      return;
+    }
+    this.teardown += 1;
+    this.lines = [...this.lines, `phase: ${step.phase}`, ...step.lines];
+    this.state.localRun = { ...run, phase: step.phase };
+    this.dirty();
+  }
+
   localRunOutput(): string[] {
+    this.advanceBringUp();
+    this.advanceTeardown();
     return [...this.lines];
   }
 
@@ -2744,7 +2837,7 @@ export const demoApi = {
   // and stopping ends it, exactly as the panel would see it live. What a visitor
   // cannot get here is a server on a port, and nothing here pretends otherwise —
   // the URL is the fixture's, and it will not answer.
-  startLocalRun: (issue: number) => getServer().startLocalRun(issue),
+  startLocalRun: (issue: number, ref?: string) => getServer().startLocalRun(issue, ref),
   stopLocalRun: () => getServer().stopLocalRun(),
   localRunOutput: () => Promise.resolve({ lines: getServer().localRunOutput() }),
   killAgent: (id: string) => getServer().killAgent(id),
