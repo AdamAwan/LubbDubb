@@ -4739,7 +4739,19 @@ a.btn {
 .tb-body {
   overflow-y: auto;
   min-height: 60px;
-  padding: 8px;
+  /* Vertical only. The horizontal inset is the cards' own margin, which puts the
+     scrollbar flush against the column's edge instead of inside the padding — where
+     it ate fifteen pixels off the right of any column long enough to scroll and
+     nothing off a short one. Reserving a gutter on both edges instead made every
+     column's sides three times its top. */
+  padding: 8px 0 0;
+  /* The gap belongs to the container, not to the cards: a `margin-bottom` on each one
+     is also below the *last* one, where it stacked with the foot and the padding into
+     a bottom inset near three times the top's. No bottom padding here because the
+     gap and the sentinel below already come to 8 — the same as the top. */
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 .tb-card {
   position: relative;
@@ -4747,8 +4759,12 @@ a.btn {
   border: 1px solid var(--cn-line);
   border-radius: 5px;
   padding: 7px 9px 7px 11px;
-  margin-bottom: 6px;
   overflow: hidden;
+  /* A flex item with no explicit basis shrinks to fit a full column; the cards are
+     content-sized and the column scrolls instead. */
+  flex: 0 0 auto;
+  /* The column's horizontal inset lives here, not on its scroll box — see `.tb-body`. */
+  margin: 0 8px;
 }
 /* Closed is a fact about the item, not a shade of its state — the table's frozen row
    says it the same way. */
@@ -4872,8 +4888,14 @@ a.btn {
   line-height: 1.4;
   color: var(--cn-red-ink);
 }
+/* The paging sentinel, and the column's own last word. No padding of its own — the
+   container's gap already separates it — but a floor, because it has to have a box for
+   the observer to intersect even when it says nothing. Two pixels rather than one so
+   the box is unambiguous, and with the 6px gap above it that is the column's whole
+   bottom inset: 8, matching the top. */
 .tb-foot {
-  padding: 4px 2px;
+  min-height: 2px;
+  margin: 0 8px;
   font-size: 10.5px;
   line-height: 1.4;
   color: var(--cn-fg-faint);
