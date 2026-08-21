@@ -197,10 +197,17 @@ The intent is cleared once this has run, so a second restart restores nothing.
 
 The shutdown path stops the machine's dev environment rather than interrupting it, which is the
 opposite of what it does to an agent — and the asymmetry is deliberate. An agent's conversation is
-worth restoring, and the next boot offers it. A dev environment is not: the server is a descendant of
-a session going down with this process, so nothing of it survives either way. Left running it would be
-an orphan holding a port and the preview checkout, with a row claiming it is live and nothing left to
-kill it. → [23](23-local-runs.md#the-process)
+worth restoring, and the next boot offers it. A dev environment is not: the session holding it is going
+down with this process, so a row claiming it is live would be a claim about nothing.
+→ [23](23-local-runs.md#the-process)
+
+**It takes the fast path, not the project's own stop.** Stopping a local run is a session's turn now —
+the project's `stop` command, because a dev environment is not a process tree and no signal reaches a
+container ([23](23-local-runs.md#stopping-is-a-turn-not-a-signal)). Waiting for a turn here would hang
+the two paths that must not hang: a Ctrl-C, and this one, which is a restart. So `stopFast` reaps the
+session's subtree, kills it, and settles the row with a note saying the stop instruction was not run —
+which is what turns a container that outlived the harness into something the panel states on the next
+boot rather than a mystery an operator finds in `docker ps`.
 
 An upgrade takes the same path — it exits through the same `shutdown`, with `UPGRADE_EXIT_CODE` — so
 the environment goes down for an upgrade too, and the operator starts it again on the new build.

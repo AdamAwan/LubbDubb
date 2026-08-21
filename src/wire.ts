@@ -60,6 +60,7 @@ import type { ReliabilityInsights, RunTally } from './reliabilityInsights.js';
 import type { SpendInsights } from './spendInsights.js';
 import type { SpendTrend } from './spendTrend.js';
 import type { Stack } from './stacks/stack.js';
+import type { LocalRunOption } from './localRun/ref.js';
 import type {
   AccountRateLimits,
   Agent,
@@ -67,6 +68,7 @@ import type {
   AgentFlag,
   AssayAuthor,
   BugFiling,
+  CiStatus,
   ConclusionAuthor,
   Decision,
   DeliveryAuthor,
@@ -101,6 +103,7 @@ import type {
   PlanPart,
   PlanRevision,
   Proposal,
+  PrState,
   PullRequest as WorldPullRequest,
   Retrospective,
   ScratchEntry,
@@ -344,8 +347,96 @@ export interface LessonView extends Lesson {
  * is polled; it has its own route, fetched when the panel opens, on the same
  * argument that keeps the work graph and the prompt book off the snapshot.
  */
+/**
+ * What has happened on **one ref** — the branch a local run is on, or the branch a
+ * candidate would be run at.
+ *
+ * The whole point of the type is the word *one*. A pull request is a fact about a
+ * branch and not about a goal: a goal's work can sit on an integration branch that
+ * combines several parts and is itself never opened as a PR, and a goal can have
+ * three PRs none of which describe the ref you are about to check out. So `pr` is
+ * the pull request **on this ref** or null, and a null is drawn as "no pull request
+ * of its own" beside what *did* land there — never filled in from a sibling.
+ *
+ * Derived server-side, from the world baseline and the plan the harness holds. The
+ * cockpit could match a branch to a PR itself; what it could not do is decide which
+ * of a goal's PRs describes a ref, which is the mistake this type exists to make
+ * impossible to make twice.
+ */
+export interface LocalRunRefFacts {
+  ref: string;
+  /** This is the integration branch, because the goal had no part branch to offer. */
+  isDefaultBranch: boolean;
+  /** The plan part whose branch this is, and where it sits. Null for the integration branch. */
+  part: { slug: string; title: string; seq: number; total: number; status: PlanPart['status'] } | null;
+  /** The pull request **on this branch**, or null — see the note above. */
+  pr: {
+    number: number;
+    state: PrState;
+    ciStatus: CiStatus;
+    /** Named checks the CI policy classified as failing — its verdict, not a second reading of it. */
+    failing: string[];
+    approved: boolean;
+    unresolved: number;
+  } | null;
+  /** How many of the goal's parts have merged, which is what "in the integration branch" means. */
+  mergedParts: number;
+  /**
+   * An agent is working on this branch **now** — so what a run of it shows is a
+   * moving target, and the panel says so rather than leaving it to be discovered.
+   */
+  agentOnIt: boolean;
+  /**
+   * When the harness last did anything on this branch: the newest task row's
+   * `updatedAt`, or null if no task has ever named it.
+   *
+   * Task activity and **not** a commit date, which is what it would be if there
+   * were a cheap way to ask: the snapshot is built synchronously on every `dirty`,
+   * and git is not on that path. Drawn in those words, because "last commit 3d ago"
+   * would be a claim about the branch that nothing here checked.
+   */
+  lastActivityAt: string | null;
+}
+
+/**
+ * One goal the local run could be pointed at: where it would run, and what else it
+ * could run instead.
+ *
+ * Keyed on `originRef` rather than joined onto {@link WorldIssue} for
+ * {@link GoalReachView}'s reason — and the title is deliberately *not* here, because
+ * the panel already draws the goal list and a second copy of a title is a second
+ * thing to keep in step.
+ */
+export interface LocalRunTargetView {
+  originRef: string;
+  issueNumber: number;
+  /** Where a start with no override goes: the tip of the stack. */
+  target: LocalRunRefFacts;
+  /** Every branch this goal may be run at, in plan order — the panel's expander, and the allow-list. */
+  options: { option: LocalRunOption; facts: LocalRunRefFacts }[];
+  /**
+   * This goal has a branch of its own to look at.
+   *
+   * What the panel's default filter keeps. A goal nothing has started resolves to
+   * the integration branch, which is the same thing every other such goal resolves
+   * to — a list of them is a list of one choice repeated.
+   */
+  runnable: boolean;
+}
+
 export interface LocalRunView extends LocalRun {
   live: boolean;
+  /** What has happened on the branch that is up. Null when nothing has ever run. */
+  refFacts: LocalRunRefFacts | null;
+  /**
+   * What the session last said it was doing — its newest `phase:` line — or null
+   * before it has said, and once the run has settled.
+   *
+   * Here rather than left for the cockpit to find in the tail for `live`'s reason:
+   * which of a session's lines counts as a stage is one rule, and a component
+   * re-deriving it could caption the panel with something its own log contradicts.
+   */
+  phase: string | null;
 }
 
 export interface PlanPartView extends PlanPart {
@@ -501,6 +592,16 @@ interface CockpitConfig {
    */
   localRunConfigured: boolean;
   /**
+   * `localRun.stopInstruction` is set, so a stop can actually take the environment
+   * down rather than only killing the session that started it.
+   *
+   * Its own flag beside {@link CockpitConfig.localRunConfigured} because the two fail
+   * differently and the panel says different things: with no start instruction there
+   * is nothing to offer, and with no stop instruction there is a Stop button that
+   * works and does less than it looks like it does.
+   */
+  localRunStopConfigured: boolean;
+  /**
    * `issueContainerTypes` — the work-item types that hold work rather than being
    * it. Shipped because the backlog draws a container as a *heading* over its
    * children rather than as a row beside them, and that is a decision about the
@@ -604,6 +705,14 @@ export interface CockpitState {
    * indicator sits in the same reads row as the rest and updates on the same socket.
    */
   localRun: LocalRunView | null;
+  /**
+   * What the local run could be pointed at, one entry per goal in the world.
+   *
+   * Beside {@link CockpitState.localRun} rather than inside it, because it describes
+   * what is *not* running: the panel draws it whether an environment is up or not,
+   * and it stands when `localRun` is null.
+   */
+  localRunTargets: LocalRunTargetView[];
   planParts: PlanPartView[];
   /**
    * Every plan's validation checks and the resources they name, keyed to a plan
@@ -1299,6 +1408,7 @@ export type { SupplyState } from './supply/runway.js';
 export type { PlanningPolicy } from './plans/planning.js';
 export type { PetRules } from './pets/rules.js';
 export type { ValidationPolicy } from './validation/policy.js';
+export type { LocalRunOption } from './localRun/ref.js';
 
 /**
  * One pet as the cockpit draws it: the stored record, plus everything about it

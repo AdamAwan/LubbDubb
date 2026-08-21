@@ -31,6 +31,22 @@ export interface LocalRunPolicy {
    */
   instruction: string;
   /**
+   * What the session taking the environment **down** is told, verbatim.
+   *
+   * A second field rather than a signal, because a dev environment is not a process
+   * tree. Killing the session's subtree is right and takes the session and its own
+   * children with it — and it cannot touch a Docker container, which belongs to the
+   * daemon, or anything else a start handed off to a service. Nothing the harness
+   * can send stops those, which is why a project that can be started at all tends
+   * to have a dedicated command for stopping.
+   *
+   * **Empty means a stop kills the session and no more**, and the panel says so
+   * rather than implying it took the environment with it. Blank is a supported
+   * state, not a broken one: plenty of projects are a single process, where the
+   * reap is the whole story.
+   */
+  stopInstruction: string;
+  /**
    * Where the application lands, once it is up — drawn as a link in the panel.
    *
    * Declared rather than detected. Reading it out of the log would mean matching a
@@ -42,5 +58,6 @@ export interface LocalRunPolicy {
 
 export const DEFAULT_LOCAL_RUN: LocalRunPolicy = {
   instruction: '',
+  stopInstruction: '',
   url: '',
 };

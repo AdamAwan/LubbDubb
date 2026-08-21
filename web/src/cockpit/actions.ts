@@ -190,8 +190,12 @@ export interface CockpitActions {
    * whatever was in it**, because there is only one. One method rather than a start
    * and a swap: two names for one transition are two things to keep in step, and
    * the server is where the transition lives either way.
+   *
+   * `ref` runs an earlier part of the goal instead of the tip of its stack. The
+   * server checks it against that goal's own part branches, so the panel can offer
+   * a choice without this being a way to check out an arbitrary ref.
    */
-  startLocalRun(issueNumber: number): Promise<void>;
+  startLocalRun(issueNumber: number, ref?: string): Promise<void>;
   stopLocalRun(): Promise<void>;
   /**
    * The last lines the session holding the environment up has printed.

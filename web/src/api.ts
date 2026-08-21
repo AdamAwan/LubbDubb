@@ -467,7 +467,8 @@ const realApi = {
   // The machine's one dev environment. `startLocalRun` is also the swap: there is
   // one environment, so starting another goal's is stopping this one — and the
   // server is where that transition lives, not in two calls from here.
-  startLocalRun: (issue: number) => post<{ ok: true; run: LocalRunView }>('/api/local-run', { issue }),
+  startLocalRun: (issue: number, ref?: string) =>
+    post<{ ok: true; run: LocalRunView }>('/api/local-run', { issue, ...(ref === undefined ? {} : { ref }) }),
   stopLocalRun: () => post('/api/local-run/stop'),
   // Its own fetch rather than a field on the snapshot: two hundred lines on every
   // heartbeat is a log nobody has open, paid for forever.

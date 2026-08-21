@@ -7,16 +7,18 @@ import type { WebSocket } from 'ws';
 
 const OPEN = 1;
 
-/** Minimal System: Hub only wires `.on` handlers on these four emitters. */
-function fakeSystem(): { system: System; agents: EventEmitter } {
+/** Minimal System: Hub only wires `.on` handlers on these five emitters. */
+function fakeSystem(): { system: System; agents: EventEmitter; localRun: EventEmitter } {
   const agents = new EventEmitter();
+  const localRun = new EventEmitter();
   const system = {
     harness: new EventEmitter(),
     agents,
     escalations: new EventEmitter(),
     errors: new EventEmitter(),
+    localRun,
   } as unknown as System;
-  return { system, agents };
+  return { system, agents, localRun };
 }
 
 /** Fake ws socket that captures everything sent to it. */
@@ -104,6 +106,24 @@ test('agent:tail strips ANSI escape codes so the fleet-card preview stays clean'
   assert.ok(!tail.line.includes('\x1b['), 'no raw escape sequences in the preview line');
   assert.ok(tail.line.includes('⚙ Bash'), 'keeps the visible label text');
   assert.ok(tail.line.includes('npm run check'));
+});
+
+test('the local run gets one coalesced refetch, however much it says', async () => {
+  const { system, localRun } = fakeSystem();
+  const hub = new Hub(system);
+  const { socket, sent } = fakeSocket();
+  hub.add(socket);
+
+  // That anything is subscribed at all is half of what this asserts. Nothing was,
+  // so a bring-up that printed for minutes moved nothing on the glass until the next
+  // heartbeat — and a start that was working looked exactly like one that had hung.
+  for (let i = 0; i < 50; i++) localRun.emit('changed');
+  assert.deepEqual(sent, [], 'nothing goes out while the window is open');
+
+  // The other half: one refetch, not fifty. Each `dirty` costs every connected
+  // cockpit a whole snapshot, and this event fires per line of output.
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  assert.deepEqual(sent, [{ type: 'dirty' }]);
 });
 
 test('malformed and unknown client frames are ignored', () => {

@@ -4719,32 +4719,154 @@ a.btn {
   font-family: var(--font-mono);
   color: var(--link-ink);
 }
+/* What the session says it is doing. The one thing on this panel that moves while a
+   bring-up is in flight, so it gets a line of its own rather than being folded into
+   the status: the status is a state, this is an activity. */
+.lrun-stage {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--text);
+}
+/* The fallback — the session's last line, drawn when it never named a phase. In the
+   mono face because that is what it is: raw output, not a caption. */
+.lrun-stage-said {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
 .lrun-note {
   margin: 0;
   font-size: 12px;
   color: var(--muted);
 }
-.lrun-swap {
+/* The picker. Rows rather than a `select`, because what a row has to say — the ref,
+   the part, the pull request on that branch — does not fit in an option's label, and
+   a choice you cannot see is the thing this panel got wrong first. */
+.lrun-pick {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 2px;
   border-top: 1px solid var(--border);
   padding-top: 12px;
   font-size: 12px;
 }
-/* The same chrome `.launch-kind select` gives its picker. A native select against a
-   dark theme keeps the user agent's white box otherwise, which is the one surface on
-   this panel that would not follow a theme. */
-.lrun-swap select {
-  min-width: 0;
-  max-width: 320px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  color: var(--text);
+.lrun-pick-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+.lrun-pick-head h4 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+}
+.lrun-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.lrun-row {
+  border: 1px solid transparent;
   border-radius: var(--r-md);
-  padding: 6px 8px;
+  padding: 4px 6px;
+}
+/* The selected row, which is the answer to "what will that button do". */
+.lrun-row.on {
+  border-color: var(--border);
+  background: var(--well);
+}
+.lrun-row-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+/* An earlier part of the same goal, indented under its tip. */
+.lrun-sub {
+  padding-left: 18px;
+}
+/* The row's name is the control; its refs sit outside it, because one click cannot
+   have two destinations. */
+.lrun-row-pick {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: block;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  color: inherit;
   font: inherit;
+  cursor: pointer;
+}
+.lrun-row-name {
+  display: block;
+  color: var(--text);
+}
+.lrun-row-sub {
+  display: block;
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.lrun-row-sub code {
+  font-family: var(--font-mono);
+  color: var(--link-ink);
+}
+/* Something that changes what a run of this branch means: CI is red, or an agent is
+   writing to it while you look. Not an error — a caveat on a choice. */
+.lrun-warn {
+  color: var(--amber);
+}
+.lrun-tag {
+  color: var(--green);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.lrun-refs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  padding-top: 4px;
+  font-size: 11.5px;
+}
+.lrun-more {
+  background: none;
+  border: 0;
+  padding: 2px 0 2px 18px;
+  color: var(--muted);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+.lrun-more:hover {
+  color: var(--text);
+}
+.lrun-go {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+/* The ref beside the button: the last chance to see what is about to be checked
+   out, which a goal number does not say. */
+.lrun-go-ref {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--link-ink);
+}
+/* What is on the branch that is up — the same reading a row carries, so the header
+   and the picker answer "what am I looking at" in one vocabulary. */
+.lrun-on {
+  margin-top: 4px;
 }
 .lrun-hint {
   color: var(--muted);

@@ -357,12 +357,17 @@ function panelBody(
         <LocalRunPanel
           run={state.localRun}
           configured={state.config.localRunConfigured}
+          stopConfigured={state.config.localRunStopConfigured}
           // The goals the cockpit already has, watched ones first: what is startable
           // is what is being worked on, and a list of every issue the tracker has
           // ever held would bury it.
           goals={state.world.issues}
+          // Where each of those goals would actually run, and what has happened
+          // there — derived server-side, because which branch is the tip of a stack
+          // is the runner's decision and not a second one taken here.
+          targets={state.localRunTargets}
           now={view.now}
-          onStart={(issueNumber) => actions.startLocalRun(issueNumber)}
+          onStart={(issueNumber, ref) => actions.startLocalRun(issueNumber, ref)}
           onStop={() => actions.stopLocalRun()}
           fetchOutput={() => actions.localRunOutput()}
         />

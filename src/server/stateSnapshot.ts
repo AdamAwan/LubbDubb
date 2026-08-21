@@ -9,15 +9,26 @@ import type {
   PlanPart,
   Retrospective,
   ScratchPadSummary,
+  TaskSummary,
   WorldSnapshot,
 } from '../types.js';
-import type { CockpitState, GoalReachView, LocalRunView, PlanPartView, ValidationResourceView } from '../wire.js';
+import type {
+  CockpitState,
+  GoalReachView,
+  LocalRunRefFacts,
+  LocalRunTargetView,
+  LocalRunView,
+  OpenPullRequest,
+  PlanPartView,
+  PullRequest,
+  ValidationResourceView,
+} from '../wire.js';
 import { buildRefUrls, decisionSubjectRef, issueCommentRef } from './refUrls.js';
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
-import { prHealth } from '../prHealth.js';
+import { prHealth, prState } from '../prHealth.js';
 import { prAttentionStatus, type PrAttentionContext } from '../prAttention.js';
-import { issuePickupStatus, type IssuePickupContext } from '../dispatcher/issuePickup.js';
+import { issuePickupStatus, openPrForIssue, type IssuePickupContext } from '../dispatcher/issuePickup.js';
 import { issueConclusionOrigin, resolveIssueConclusion } from '../issueConclusion.js';
 import { rollUpIssueSpend } from '../issueSpend.js';
 import { tallyRunOutcomes } from '../reliabilityInsights.js';
@@ -36,6 +47,8 @@ import { assaySignalQuery } from '../intake/assay.js';
 import { classifyCiFailures } from '../ci/ciPolicy.js';
 import { validationVerdict } from '../validation/verdict.js';
 import { localRunIsLive } from '../store/localRuns.js';
+import { localRunChoices } from '../localRun/ref.js';
+import { isActiveTask } from '../tasks.js';
 import { validationResourcePath } from '../validation/resources.js';
 import { withLiveClaim } from '../validation/desktop.js';
 import { watchLabelFor } from '../watchLabels.js';
@@ -439,6 +452,31 @@ export function buildStateSnapshot(
       validation: validationChecksFor(origin),
     };
   };
+  // The open pull requests with their three verdicts folded — hoisted out of the
+  // `world` literal below because the local run's rows read the same rows: what has
+  // happened on a branch has to be the same answer wherever it is asked, and
+  // `ciVerdict` in particular is a classification that must not be made twice.
+  const openPullRequests: OpenPullRequest[] = world.pullRequests.map((pr) => ({
+    ...pr,
+    // Two verdicts about one PR because "can this merge" and "whose turn is it" are
+    // different questions with different right answers for the same PR
+    // (see `src/prAttention.ts`).
+    health: prHealth(pr, world.pullRequests),
+    attention: prAttentionStatus(pr, attentionCtx),
+    // The third verdict beside the other two, and it exists for the same reason
+    // they are computed here rather than in the browser: the alternative is shipping
+    // `config.ci` and re-matching client-side, which means a second glob matcher and
+    // a second first-match-wins ordering sitting nowhere near the rule they
+    // duplicate. That drift would fail silently — the cockpit saying *repair* while
+    // the harness held. Same call the dispatcher makes, off the same policy.
+    ciVerdict: classifyCiFailures(pr.ciChecks, config.ci),
+  }));
+  // Branch → the pull request on it, open rows first so a reopened branch reads as
+  // open. Built once: every ref the local-run rows describe looks itself up here,
+  // and the lookup is by **branch** precisely so a goal's other pull requests can
+  // never be presented as facts about the ref being run.
+  const prByBranch = new Map<string, PullRequest>();
+  for (const pr of [...(world.closedPullRequests ?? []), ...openPullRequests]) prByBranch.set(pr.branch, pr);
   return {
     config: {
       heartbeatIntervalMs: config.heartbeatIntervalMs,
@@ -462,6 +500,7 @@ export function buildStateSnapshot(
       // The fact rather than the text: the instruction is prose only the session
       // needs, and the cockpit's question is whether it can offer a start at all.
       localRunConfigured: config.localRun.instruction.trim() !== '',
+      localRunStopConfigured: config.localRun.stopInstruction.trim() !== '',
       // The container policy itself, because the backlog draws a container as a
       // heading over its children rather than as a row beside them — a question
       // about the item's type that no per-item verdict answers.
@@ -504,19 +543,7 @@ export function buildStateSnapshot(
       // `attention` sits beside `health`, not inside it: health answers "can this
       // merge" and attention answers "whose turn is it", and the two have
       // different right answers for the same PR (see `src/prAttention.ts`).
-      pullRequests: world.pullRequests.map((pr) => ({
-        ...pr,
-        health: prHealth(pr, world.pullRequests),
-        attention: prAttentionStatus(pr, attentionCtx),
-        // The third verdict beside the other two, and it exists for the same
-        // reason they are computed here rather than in the browser: the
-        // alternative is shipping `config.ci` and re-matching client-side, which
-        // means a second glob matcher and a second first-match-wins ordering
-        // sitting nowhere near the rule they duplicate. That drift would fail
-        // silently — the cockpit saying *repair* while the harness held. Same
-        // call the dispatcher makes, off the same policy.
-        ciVerdict: classifyCiFailures(pr.ciChecks, config.ci),
-      })),
+      pullRequests: openPullRequests,
       // `conclusion` sits beside `pickup` and does not feed it — the same
       // relationship `attention` has to `health` above. Pickup answers "would an
       // agent start on this next cycle", which the work-item state already
@@ -547,7 +574,20 @@ export function buildStateSnapshot(
     // "nothing is up, the last attempt failed like this" is an answer to it. `live`
     // is derived here rather than in the cockpit so which statuses count is decided
     // once, by the thing that sets them.
-    localRun: localRunView(system.localRun.current()),
+    localRun: localRunView(system.localRun.current(), system.localRun.phase(), (ref, origin) =>
+      localRunRefFacts(ref, planPartsOf(origin), { prByBranch, tasks, defaultBranch: config.defaultBranch }),
+    ),
+    // Where it could be pointed instead, and what has happened on each of those
+    // branches. Drawn whether anything is up or not, which is why it is a key of its
+    // own rather than something hanging off the run above.
+    localRunTargets: localRunTargetViews({
+      issues: world.issues,
+      partsOf: planPartsOf,
+      prByBranch,
+      openPrs: openPullRequests,
+      tasks,
+      defaultBranch: config.defaultBranch,
+    }),
     // The validation plan beside the plan graph it hangs off — the checks whole,
     // superseded ones included, because "this check was withdrawn" is a thing the
     // sheet has to be able to say.
@@ -887,11 +927,109 @@ function buildEnvironmentReach(store: System['store'], environments: Environment
 /**
  * The run as the cockpit reads it, or null when nothing has ever been started.
  *
- * `live` is the only thing added, and adding it here is the point: which statuses
- * count as a running environment is one rule, and it belongs beside the writer that
+ * `live` and `phase` are the two things added, and adding them here is the point:
+ * which statuses count as a running environment, and which of a session's lines
+ * counts as a stage, are each one rule — and they belong beside the writer that
  * sets them rather than in a component deciding whether to draw a Stop button.
+ *
+ * The phase comes from the runner rather than the row because it is not durable and
+ * should not be: it describes work in flight, and the process that was doing the
+ * work is the only thing that can vouch for it. A restart correctly has none.
  */
-function localRunView(run: LocalRun | null): LocalRunView | null {
+function localRunView(
+  run: LocalRun | null,
+  phase: string | null,
+  facts: (ref: string, origin: string) => LocalRunRefFacts,
+): LocalRunView | null {
   if (run === null) return null;
-  return { ...run, live: localRunIsLive(run) };
+  return { ...run, live: localRunIsLive(run), phase, refFacts: facts(run.ref, run.originRef) };
+}
+
+/**
+ * What has happened on **one branch**: the part it belongs to, and the pull request
+ * that is on it.
+ *
+ * The lookup is by branch, and that is the whole discipline. A goal can have three
+ * pull requests, none of which describes the ref about to be checked out — and the
+ * tempting fold, "show the goal's PR", is how a panel comes to report a passing
+ * build for a branch nothing has built. A ref with no pull request of its own says
+ * so, beside the count of what *did* land in the integration branch.
+ */
+function localRunRefFacts(
+  ref: string,
+  parts: readonly PlanPart[],
+  ctx: { prByBranch: Map<string, PullRequest>; tasks: readonly TaskSummary[]; defaultBranch: string },
+): LocalRunRefFacts {
+  const part = parts.find((p) => p.branch === ref) ?? null;
+  const pr = ctx.prByBranch.get(ref) ?? null;
+  const onBranch = ctx.tasks.filter((t) => t.branch === ref);
+  return {
+    ref,
+    isDefaultBranch: ref === ctx.defaultBranch,
+    part:
+      part === null
+        ? null
+        : { slug: part.slug, title: part.title, seq: part.seq, total: parts.length, status: part.status },
+    pr:
+      pr === null
+        ? null
+        : {
+            number: pr.number,
+            state: prState(pr),
+            ciStatus: pr.ciStatus,
+            // The CI policy's own classification of what is failing, read off the
+            // verdict this snapshot already folded. A closed row carries none, which
+            // reads as no detail rather than as a clean bill of health — the
+            // aggregate `ciStatus` still speaks.
+            failing: [...(pr.ciVerdict?.dispatch ?? []), ...(pr.ciVerdict?.escalate ?? [])].map((c) => c.name),
+            approved: pr.approved === true,
+            unresolved: pr.unresolvedComments.length,
+          },
+    mergedParts: parts.filter((p) => p.status === 'merged').length,
+    // The same rule the dispatcher, the executor and the branch reap read, rather
+    // than a fourth opinion about which statuses are live.
+    agentOnIt: onBranch.some((t) => isActiveTask(t)),
+    lastActivityAt: onBranch.reduce<string | null>(
+      (newest, t) => (newest === null || t.updatedAt > newest ? t.updatedAt : newest),
+      null,
+    ),
+  };
+}
+
+/**
+ * Where the local run could be pointed, one entry per goal.
+ *
+ * The ref comes from `localRunChoices` — the same function the runner starts from
+ * and guards an override with — so what the panel offers, what a start runs, and
+ * what a start will accept are one decision. A cockpit that worked out the tip of a
+ * stack for itself would be free to draw a branch nobody would get.
+ */
+function localRunTargetViews(ctx: {
+  issues: readonly Issue[];
+  partsOf: (origin: string) => PlanPart[];
+  prByBranch: Map<string, PullRequest>;
+  openPrs: PullRequest[];
+  tasks: readonly TaskSummary[];
+  defaultBranch: string;
+}): LocalRunTargetView[] {
+  return ctx.issues.map((issue) => {
+    const origin = issueConclusionOrigin(issue.number);
+    const parts = ctx.partsOf(origin);
+    // The goal's own branch as well as its parts', through the same
+    // `openPrForIssue` the pickup verdict uses — and the same call the runner makes,
+    // so what the panel offers is what a start will accept.
+    const choices = localRunChoices(parts, openPrForIssue(issue, ctx.openPrs)?.branch ?? null);
+    const facts = (ref: string): LocalRunRefFacts => localRunRefFacts(ref, parts, ctx);
+    return {
+      originRef: origin,
+      issueNumber: issue.number,
+      target: facts(choices.target ?? ctx.defaultBranch),
+      options: choices.options.map((option) => ({ option, facts: facts(option.ref) })),
+      // A goal with no branch of its own resolves to the integration branch, which
+      // is where every other such goal resolves too — so it is not a *choice*, and
+      // the panel's default filter leaves it out rather than drawing the same one
+      // answer forty times.
+      runnable: choices.target !== null,
+    };
+  });
 }

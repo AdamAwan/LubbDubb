@@ -135,11 +135,16 @@ async function main(): Promise<void> {
     // Interrupt (not kill) so the next boot offers this in-flight work for restore.
     system.agents.interruptAll();
     // The local run is *stopped*, not interrupted, and that asymmetry is the point:
-    // an agent's work is worth restoring and a dev environment is not — nothing of
-    // it survives this process, because the server is a descendant of the session
-    // going down with us. Left running it would be an orphan holding both a port and
-    // the preview checkout, with a row claiming it is live and nothing to kill.
-    system.localRun.stop('the harness shut down');
+    // an agent's work is worth restoring and a dev environment is not.
+    //
+    // **The fast path, deliberately.** A stop is a session's turn now — the project's
+    // own `stop` command, because a dev environment is not a process tree and no
+    // signal reaches a container. Waiting for a turn here would hang the two paths
+    // that must not hang: a Ctrl-C, and the upgrade handoff, which is a restart. So
+    // the session and its children are reaped and the row records that the
+    // instruction did not run, which is what makes a container that outlived the
+    // harness something the panel states on the next boot rather than a mystery.
+    system.localRun.stopFast('the harness shut down');
     await system.mcp.close();
     await system.desktop.close();
     await app.close();

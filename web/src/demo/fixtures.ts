@@ -18,7 +18,10 @@
 import type {
   AppState,
   Issue,
+  LocalRunRefFacts,
+  LocalRunTargetView,
   OpenPullRequest,
+  PullRequest,
   PlanHistory,
   PlanNarrative,
   PlanPart,
@@ -223,6 +226,7 @@ export function buildDemoState(): DemoSeed {
       // the one explaining what is missing. Both are worth seeing and only one can
       // be the default; this is the state an operator who has set it up is in.
       localRunConfigured: true,
+      localRunStopConfigured: true,
       // The demo tracker's own vocabulary, coloured — the setting is invisible
       // until a deployment has used it, and the demo is where it is looked at.
       stateColours: { New: '#8a93a0', Ready: '#7fb3ff', Active: '#63d297', Closed: '#666b73' },
@@ -977,8 +981,12 @@ export function buildDemoState(): DemoSeed {
     // the half that needs no explaining.
     localRun: {
       id: 'run-1',
-      originRef: 'issue:395',
-      ref: 'issue/395/route',
+      // The stacked goal, at the tip of its stack — a run whose branch carries its
+      // own pull request, with an earlier part behind it to fall back to. A run on a
+      // goal with one branch and nothing on it would demonstrate none of what the
+      // panel is for.
+      originRef: 'issue:390',
+      ref: 'issue/390/validate',
       dir: '/Users/you/code/demo-shop/.lubbdubb/local-run',
       pid: 48211,
       status: 'running',
@@ -987,7 +995,17 @@ export function buildDemoState(): DemoSeed {
       startedAt: ago(18),
       endedAt: null,
       live: true,
+      // An environment that is already up has nothing in flight to caption. The
+      // phase is what a bring-up shows *while* it is happening — press Start in the
+      // demo and the scripted one in `demoBackend` runs through them.
+      phase: null,
+      // Filled below, from the same rows the rows are: see `localRunTargets`.
+      refFacts: null,
     },
+    // Filled below rather than written out: one entry per goal, and hand-maintaining
+    // twenty of them beside the issue list is how a fixture comes to describe a world
+    // that is not the one above it.
+    localRunTargets: [],
     // A vivarium with something in it, because an empty one is indistinguishable
     // from the feature being broken — and the demo is where somebody decides
     // whether they want it at all. Four species, four stages, one of each rarity.
@@ -2452,6 +2470,117 @@ export function buildDemoState(): DemoSeed {
       '@@LUBBDUBB_DONE@@',
     ].join('\n'),
   };
+
+  // Where the local run could be pointed, and what has happened on each of those
+  // branches. **Restated, not imported** — the demo has no server to ask, the same
+  // reason the questionnaire fold above is restated. It mirrors `localRunChoices`
+  // and `localRunRefFacts` in `src/`: the tip of the stack is the furthest-along part
+  // with a branch, and the pull request is the one on *that branch* and never one
+  // borrowed from elsewhere on the goal.
+  const stale = (status: PlanPart['status']): boolean =>
+    status === 'merged' || status === 'retired' || status === 'concluded';
+  const allPrs: PullRequest[] = [...state.world.pullRequests, ...(state.world.closedPullRequests ?? [])];
+  state.localRunTargets = state.world.issues.map((issue) => {
+    const origin = `issue:${String(issue.number)}`;
+    const plan = state.plans.find((p) => p.originRef === origin);
+    const parts = plan
+      ? state.planParts.filter((p) => p.planId === plan.id).sort((a, b) => a.seq - b.seq)
+      : ([] as PlanPartView[]);
+    const branched = parts.filter((p) => p.branch !== null && p.branch !== '');
+    const tip = [...branched].reverse().find((p) => !stale(p.status)) ?? null;
+    // The goal's own branch, the way `openPrForIssue` finds it: the conventional
+    // name, or whatever its linked pull request is on. A goal nobody decomposed has
+    // its whole work there.
+    const ownPr =
+      state.world.pullRequests.find(
+        (r) => r.merged !== true && (r.number === issue.linkedPrNumber || r.branch === `issue/${String(issue.number)}`),
+      ) ?? null;
+    const facts = (ref: string): LocalRunRefFacts => {
+      const part = parts.find((p) => p.branch === ref) ?? null;
+      const pr = allPrs.find((r) => r.branch === ref) ?? null;
+      const onBranch = state.tasks.filter((t) => t.branch === ref);
+      return {
+        ref,
+        isDefaultBranch: ref === 'main',
+        part:
+          part === null
+            ? null
+            : { slug: part.slug, title: part.title, seq: part.seq, total: parts.length, status: part.status },
+        pr:
+          pr === null
+            ? null
+            : {
+                number: pr.number,
+                state: pr.state ?? (pr.merged === true ? 'merged' : 'open'),
+                ciStatus: pr.ciStatus,
+                failing: [...(pr.ciVerdict?.dispatch ?? []), ...(pr.ciVerdict?.escalate ?? [])].map((c) => c.name),
+                approved: pr.approved === true,
+                unresolved: pr.unresolvedComments.length,
+              },
+        mergedParts: parts.filter((p) => p.status === 'merged').length,
+        agentOnIt: onBranch.some((t) => t.status === 'queued' || t.status === 'running' || t.status === 'waiting'),
+        lastActivityAt: onBranch.reduce<string | null>(
+          (newest, t) => (newest === null || t.updatedAt > newest ? t.updatedAt : newest),
+          null,
+        ),
+      };
+    };
+    // Its own branch first, then its parts in plan order — the order
+    // `localRunChoices` builds them in.
+    const options: LocalRunTargetView['options'] = [];
+    if (ownPr !== null) options.push({ option: { ref: ownPr.branch, part: null }, facts: facts(ownPr.branch) });
+    for (const part of branched) {
+      if (part.branch === null) continue;
+      options.push({
+        option: { ref: part.branch, part: { slug: part.slug, title: part.title, seq: part.seq, status: part.status } },
+        facts: facts(part.branch),
+      });
+    }
+    return {
+      originRef: origin,
+      issueNumber: issue.number,
+      target: facts(tip?.branch ?? ownPr?.branch ?? 'main'),
+      options,
+      runnable: tip !== null || ownPr !== null,
+    };
+  });
+  if (state.localRun !== null) {
+    // Facts for the run's **own** ref, never the goal's default. Falling back to the
+    // target is the tempting shortcut and it describes a different branch than the
+    // one that is up — which is the whole failure this view exists to end.
+    const run: string = state.localRun.ref;
+    const parts = state.planParts.filter((p) => {
+      const plan = state.plans.find((pl) => pl.id === p.planId);
+      return plan?.originRef === state.localRun?.originRef;
+    });
+    const pr = allPrs.find((r) => r.branch === run) ?? null;
+    const part = parts.find((p) => p.branch === run) ?? null;
+    state.localRun = {
+      ...state.localRun,
+      refFacts: {
+        ref: run,
+        isDefaultBranch: run === 'main',
+        part:
+          part === null
+            ? null
+            : { slug: part.slug, title: part.title, seq: part.seq, total: parts.length, status: part.status },
+        pr:
+          pr === null
+            ? null
+            : {
+                number: pr.number,
+                state: pr.state ?? (pr.merged === true ? 'merged' : 'open'),
+                ciStatus: pr.ciStatus,
+                failing: [...(pr.ciVerdict?.dispatch ?? []), ...(pr.ciVerdict?.escalate ?? [])].map((c) => c.name),
+                approved: pr.approved === true,
+                unresolved: pr.unresolvedComments.length,
+              },
+        mergedParts: parts.filter((p) => p.status === 'merged').length,
+        agentOnIt: false,
+        lastActivityAt: null,
+      },
+    };
+  }
 
   return { state, transcripts };
 }

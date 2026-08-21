@@ -1412,16 +1412,28 @@ the way it settles any other agent.
 
 ### `POST /api/local-run`
 
-`{issue}` — start the machine's one dev environment on that goal's code, stopping whatever was running.
-**Start is also swap**: one environment, so there is no separate route and no second name for one
-transition. Refuses with a 400 and the reason when nothing is configured to start or the checkout will
-not prepare. → [23](23-local-runs.md#routes)
+`{issue, ref?}` — start the machine's one dev environment on that goal's code, stopping whatever was
+running. **Start is also swap**: one environment, so there is no separate route and no second name for
+one transition. Refuses with a 400 and the reason when nothing is configured to start or the checkout
+will not prepare.
+
+`ref` runs an earlier part of the goal rather than the tip of its stack. The schema checks its shape
+only; that it is one of **that goal's own** part branches is a question about the plan, so the runner
+asks it and refuses with the goal named. Both halves are load-bearing — a schema that accepted any
+string and a runner that trusted it would make this route a way to check out anything in the
+repository. → [23](23-local-runs.md#routes)
 
 ### `POST /api/local-run/stop`
 
 No body and no id. There is one run, and "stop whatever is running" is the whole request — an id would
 let a stale panel stop a run that had already been swapped out from under it, and would mean the same
 thing whenever it was right.
+
+**Answers before the stop has finished.** Taking a dev environment down is a session's turn — the
+project's own stop command, because a dev environment is not a process tree and no signal reaches a
+container — so the handler starts the teardown, the run goes to the live status `stopping`, and the
+runner's own `changed` events carry the rest. Awaiting the turn here would hold a request open for up
+to two minutes. → [23](23-local-runs.md#stopping-is-a-turn-not-a-signal)
 
 ### `GET /api/local-run/output`
 
@@ -1642,6 +1654,13 @@ low-volume and fleet-wide.
 Three events deliberately have **no dedicated frame** and produce only a `dirty`: `usage`, `progress`
 and `files`. Their payload is already on a row the `/api/state` refetch brings, unlike `agent:tail`,
 which exists only as a broadcast and has to carry its own payload.
+
+The local run's `changed` is a fourth, and the only one that is **rate-limited**: it fires per line of
+output, and every `dirty` costs every connected cockpit a whole snapshot. So the hub gathers them for
+`LOCAL_RUN_COALESCE_MS` (400) and asks once. Nothing subscribed to it at all when the runner shipped,
+which is the failure worth naming: the panel's status, phase and log moved no sooner than the next
+heartbeat, so a bring-up in progress and one that had hung looked identical for a whole pulse at a
+time ([23](23-local-runs.md#saying-what-it-is-doing)).
 
 ### The tail
 

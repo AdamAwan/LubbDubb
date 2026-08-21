@@ -93,6 +93,9 @@ const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
   'localRun.instruction': (next, deps) => {
     deps.running.localRun = next.localRun;
   },
+  'localRun.stopInstruction': (next, deps) => {
+    deps.running.localRun = next.localRun;
+  },
   'localRun.url': (next, deps) => {
     deps.running.localRun = next.localRun;
   },

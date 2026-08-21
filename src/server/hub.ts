@@ -27,6 +27,13 @@ export type ServerEvent =
   | { type: 'dirty' };
 
 /**
+ * How long the local run's own events are gathered up before one refetch is asked
+ * for. Long enough that an install log costs one snapshot rather than hundreds,
+ * short enough that a phase line reads as it happens.
+ */
+const LOCAL_RUN_COALESCE_MS = 400;
+
+/**
  * Fans harness/agent/escalation events out to every connected cockpit socket.
  * A coarse `dirty` signal tells clients "re-fetch /api/state"; fine-grained
  * events (agent output, waiting) let the UI react live without polling.
@@ -41,8 +48,11 @@ export class Hub {
   // across delta boundaries.
   private readonly tails = new Map<string, { partial: string; last: string }>();
 
+  // The pending coalesced local-run refetch, if one is due. See the wiring below.
+  private localRunPending: NodeJS.Timeout | null = null;
+
   constructor(system: System) {
-    const { harness, agents, escalations, errors } = system;
+    const { harness, agents, escalations, errors, localRun } = system;
 
     // Recorded failures stream to the cockpit's Errors panel live; the `dirty`
     // makes the panel durable-consistent via the /api/state refetch.
@@ -127,6 +137,26 @@ export class Hub {
     escalations.on('dismissed', (escalation) => {
       this.broadcast({ type: 'escalation:dismissed', escalation });
       this.broadcast({ type: 'dirty' });
+    });
+
+    // The local run, coarse and **rate-limited**, which is the one thing here that
+    // is not like the rest of this constructor.
+    //
+    // Coarse for the usual reason: everything the panel draws — the status turn from
+    // `starting` to `running`, the phase, a failure's last words — is shipped inside
+    // /api/state, so the refetch is the whole delivery. Without it none of that
+    // moved until the next heartbeat, which on a slow bring-up is the difference
+    // between a start that is working and one that has hung.
+    //
+    // Rate-limited because this event also fires per line of output, and every
+    // `dirty` costs every connected cockpit a full snapshot. A bring-up printing an
+    // install log would otherwise pay for one of those per line, to move a caption.
+    localRun.on('changed', () => {
+      if (this.localRunPending !== null) return;
+      this.localRunPending = setTimeout(() => {
+        this.localRunPending = null;
+        this.broadcast({ type: 'dirty' });
+      }, LOCAL_RUN_COALESCE_MS);
     });
   }
 

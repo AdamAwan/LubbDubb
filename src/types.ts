@@ -3102,17 +3102,24 @@ export interface EnvironmentGateRelease {
 }
 
 /**
- * How a local run is going. Four states and no more, because the harness only
- * knows three things: that it asked, that the session finished asking, and that
- * something ended.
+ * How a local run is going. Five states and no more, because the harness only
+ * knows four things: that it asked, that the session finished asking, that it has
+ * asked for it to be taken down, and that something ended.
  *
  * `running` is **presumed, not probed** — it means the session that was told to
  * bring the environment up finished its turn without failing, and its process is
  * still alive holding whatever it started. Nothing here opens a socket to check,
  * which is why the panel draws the URL as a link to try rather than as a reading.
  * A readiness probe is the honest way to close that gap and is a separate change.
+ *
+ * `stopping` is a **live** state, and that is the whole reason it exists rather than
+ * the stop being instantaneous: taking a dev environment down is a session's turn
+ * (`docker compose down` and whatever else the project needs), so for a minute or so
+ * there is a run that is neither up nor over — and one that still holds the
+ * environment, so nothing else may begin beside it.
+ * → `docs/spec/23-local-runs.md`
  */
-export type LocalRunStatus = 'starting' | 'running' | 'stopped' | 'failed';
+export type LocalRunStatus = 'starting' | 'running' | 'stopping' | 'stopped' | 'failed';
 
 /**
  * The one local run: which goal's code is in the machine's dev environment right
