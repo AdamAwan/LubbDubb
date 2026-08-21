@@ -1418,12 +1418,13 @@ export type {
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './remedyInsights.js';
 export type { RemedyCause, RemedyGuard, RemedyKind } from './types.js';
 export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
+export type { InsightsWindow, InsightsWindowView } from './insightsWindow.js';
 export type {
   SpendTrend,
   SpendTrendComparison,
   SpendTrendPeriod,
   SpendTrendPhaseShift,
-  SpendTrendWeek,
+  SpendTrendBucket,
 } from './spendTrend.js';
 export type { ChecksSpend, TaskTypeSpend } from './taskTypeSpend.js';
 export type { Stack } from './stacks/stack.js';

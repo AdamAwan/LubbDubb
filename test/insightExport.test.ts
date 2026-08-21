@@ -21,8 +21,26 @@ import type { ReliabilityInsights, SpendInsights, SpendPhase } from '../web/src/
 (globalThis as { React?: typeof React }).React = React;
 
 const { toCsv } = await import('../web/src/components/Downloads.js');
-const { spendCsv } = await import('../web/src/components/SpendModal.js');
-const { reliabilityCsv } = await import('../web/src/components/ReliabilityModal.js');
+const { spendCsv } = await import('../web/src/components/EconomicsTab.js');
+const { reliabilityCsv } = await import('../web/src/components/ReliabilityTab.js');
+
+/**
+ * The window every payload here says it was taken over.
+ *
+ * One constant shared by both, because the two files are meant to be opened side
+ * by side — and the first row of each is now the window, so a test that gave
+ * them different ones would be asserting a pair of files that cannot be read
+ * against each other.
+ */
+const WINDOW = {
+  key: '7d',
+  label: '7d',
+  bucketLabel: '6h buckets',
+  since: '2026-08-06T09:00:00.000Z',
+  startsAt: '2026-08-06T09:00:00.000Z',
+  bucketMs: 6 * 60 * 60 * 1000,
+  buckets: 28,
+} as const;
 
 /** The rows of a named section, up to the blank line that ends it. */
 function section(csv: string, name: string): string[] {
@@ -73,7 +91,9 @@ function insights(over: Partial<SpendInsights> = {}): SpendInsights {
       measuredRuns: 3,
       unmeasuredRuns: 5,
     },
-    windows: { fiveHourCostUsd: 0.002, sevenDayCostUsd: 0.004 },
+    window: WINDOW,
+    landed: 2,
+    lostCostUsd: 0.001,
     phases: PHASES.map((phase) => ({
       phase,
       label: phase === 'build' ? 'Build' : 'Deliberation',
@@ -137,7 +157,7 @@ test('spend leaves at full precision — the cockpit’s rounding stops at the s
   const csv = spendCsv(insights());
   // Every one of these renders as `$0.00` or `1.2M` on the panel. A hundred rows
   // of `$0.00` add up to real money, so the file carries the number.
-  assert.ok(section(csv, 'Totals').includes('All-time cost (USD),0.004'));
+  assert.ok(section(csv, 'Totals').includes('Cost in window (USD),0.004'));
   assert.ok(section(csv, 'Totals').includes('Input tokens,1234567'));
   assert.ok(section(csv, 'Runs').some((r) => r.includes(',0.003,')));
   assert.ok(!csv.includes('$'), 'a formatted figure is a presentation, not an export');
@@ -183,7 +203,7 @@ test('the caveats the panel says in prose leave as rows', () => {
 function yieldOf(over: Partial<ReliabilityInsights> = {}): ReliabilityInsights {
   return {
     generatedAt: '2026-08-13T09:00:00.000Z',
-    windowDays: 14,
+    window: WINDOW,
     runs: {
       settled: 8,
       live: 1,
@@ -332,10 +352,10 @@ test('the causes half leaves with its caveat, or does not leave at all', () => {
 test('the method note leaves as rows — the two windows, what a red is, what stopped is not', () => {
   const csv = reliabilityCsv(yieldOf(), null);
   const tallies = section(csv, 'Tallies');
-  // The window split reads as a mistake until it is stated, and there is no note
-  // beside a spreadsheet to state it.
-  assert.ok(tallies.includes('Outcomes measured over,all time'));
-  assert.ok(tallies.includes('CI measured over (days),14'));
+  // The window leads both files, because a spreadsheet read six months from now
+  // has no time bar beside it to say what stretch its figures were taken over.
+  assert.ok(tallies.includes('Window,7d'));
+  assert.ok(tallies.some((r) => r.startsWith('Window opened (ISO),')));
   assert.ok(tallies.some((r) => r.startsWith('A red is,')), 'a reader summing reds must know they are verdicts'); // prettier-ignore
   // One CI agent answers several reds at once, so the per-red figure divides one
   // repair across every verdict it cleared.
@@ -346,16 +366,18 @@ test('the method note leaves as rows — the two windows, what a red is, what st
   assert.ok(csv.includes('The 1 most-repeated of 4 origins that ran more than once.'));
 });
 
-test('neither panel exports what it could not fetch — there is no file of zeroes', () => {
-  // Pinned on the sources rather than by rendering: both controls sit behind
-  // `insights !== null`, which is each panel's own "a failed fetch must not read
-  // as a clean fleet" rule applied to the artefact that outlives the tab.
-  for (const panel of ['SpendModal', 'ReliabilityModal']) {
-    const src = readFileSync(fileURLToPath(new URL(`../web/src/components/${panel}.tsx`, import.meta.url)), 'utf8');
-    const at = src.indexOf('<Downloads');
-    assert.notEqual(at, -1, `${panel} must offer an export`);
-    assert.ok(src.lastIndexOf('insights !== null', at) !== -1, `${panel}'s export must be gated on a payload`);
-    // The PDF is the panel printed, so it needs the node the panel drew.
-    assert.ok(src.includes('sheet={{'), `${panel} must hand the print sheet its own node`);
-  }
+test('the page exports nothing it could not fetch — there is no file of zeroes', () => {
+  // Pinned on the source rather than by rendering: both arms of the export sit
+  // behind a non-null payload, which is the page's own "a failed fetch must not
+  // read as a clean fleet" rule applied to the artefact that outlives the tab.
+  const src = readFileSync(fileURLToPath(new URL('../web/src/components/InsightsPage.tsx', import.meta.url)), 'utf8');
+  const first = src.indexOf('<Downloads');
+  assert.notEqual(first, -1, 'the page must offer an export');
+  assert.ok(src.includes('spend !== null'), "the spend tabs' export must be gated on a payload");
+  assert.ok(src.includes('reliability !== null'), "the run tabs' export must be gated on a payload");
+  // The PDF is the page printed, so it needs the nodes the page drew.
+  assert.ok(src.includes('node: () => page.current'), 'the print sheet must be handed the page it prints');
+  // One control, and it follows the tab: a file is "the last 24 hours of causes"
+  // rather than "all time, always", which is what the window makes possible.
+  assert.ok(src.includes('lubbdubb-${view}'), 'the file must be named for the tab it came from');
 });

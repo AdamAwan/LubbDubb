@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { buildReliabilityInsights, tallyRunOutcomes } from '../src/reliabilityInsights.js';
 import { ciStatusOf, diffWorlds } from '../src/world/worldDiff.js';
 import type { Agent, AgentStatus, Task, UsageEvent, WorldEvent, WorldSnapshot } from '../src/types.js';
+import { resolveWindow, type InsightsWindow } from '../src/insightsWindow.js';
 
 /**
  * The reading beside the spend one. What it has to get right is not the
@@ -71,12 +72,24 @@ function ciEvent(ref: string, status: string, at: number): WorldEvent {
   return { id: `we_${ref}_${at}`, kind: 'pr_ci', ref, summary: `PR #${ref.slice(3)} CI ${status}`, createdAt: iso(at) };
 }
 
-function build(over: { agents?: Agent[]; tasks?: Task[]; ciEvents?: WorldEvent[]; usageEvents?: UsageEvent[] }) {
+/**
+ * A fold over a stated window.
+ *
+ * `30d` rather than the fortnight the CI half used to hard-code, because the
+ * window is a parameter now and a test that did not name one would be asserting
+ * whatever the default happened to be — which is exactly the kind of coupling
+ * the constant's removal was for. The fixtures all sit inside a month.
+ */
+function build(
+  over: { agents?: Agent[]; tasks?: Task[]; ciEvents?: WorldEvent[]; usageEvents?: UsageEvent[] },
+  key: InsightsWindow = '30d',
+) {
   return buildReliabilityInsights({
     agents: over.agents ?? [],
     tasks: over.tasks ?? [],
     ciEvents: over.ciEvents ?? [],
     usageEvents: over.usageEvents ?? [],
+    window: resolveWindow(key, NOW),
     now: NOW,
   });
 }
@@ -263,14 +276,17 @@ test('the CI and landing figures are the windowed money, from dated deltas', () 
     { agentId: 'a1', costUsd: 0.5, at: iso(NOW - 60 * MIN) },
     { agentId: 'a1', costUsd: 0.25, at: iso(NOW - 30 * MIN) },
     // Outside the window: the caller's `since` and the fold's must agree, and a
-    // delta older than the buckets belongs to a fortnight this figure is not about.
+    // delta older than the buckets belongs to a stretch this figure is not about.
     { agentId: 'a1', costUsd: 9, at: iso(NOW - 30 * 24 * 60 * MIN) },
     // Build, not landing — the classifier decides, not the caller.
     { agentId: 'a2', costUsd: 4, at: iso(NOW - 30 * MIN) },
     { agentId: 'a3', costUsd: 1.5, at: iso(NOW - 30 * MIN) },
     { agentId: 'a4', costUsd: 0.4, at: iso(NOW - 20 * MIN) },
   ];
-  const { ci } = build({ agents, tasks, usageEvents });
+  // A week, so the month-old delta above is genuinely outside it. The window is
+  // named here rather than left to the helper's default precisely because this
+  // test is *about* the boundary.
+  const { ci } = build({ agents, tasks, usageEvents }, '7d');
   assert.equal(ci.ciCostUsd, 1.15, 'a blocked gate is the same pipeline’s bill as a failing check');
   assert.equal(ci.landingCostUsd, 1.5, 'answering review is landing, and never in the CI figure');
 });
@@ -334,8 +350,8 @@ test('the timelines bucket by day and end at now', () => {
 
   const ciBuckets = insights.ci.timeline.buckets;
   const runBuckets = insights.runs.timeline.buckets;
-  assert.equal(ciBuckets.length, insights.windowDays);
-  assert.equal(runBuckets.length, insights.windowDays);
+  assert.equal(ciBuckets.length, insights.window.buckets);
+  assert.equal(runBuckets.length, insights.window.buckets);
   assert.equal(ciBuckets.at(-1)?.red, 1);
   assert.equal(ciBuckets.at(-1)?.green, 1);
   assert.equal(runBuckets.at(-1)?.settled, 1);
@@ -400,4 +416,45 @@ test('the CI read is bounded by kind and comes back oldest first', async () => {
     'oldest first: the failure comes back before the recovery it was fixed by',
   );
   assert.deepEqual(system.store.listWorldEventsOfKindsSince(since, []), [], 'no kinds, no query');
+});
+
+/**
+ * Both halves take the window, and that is the change this reading was rebuilt
+ * around.
+ *
+ * The run half used to be all-time and the CI half a rolling fortnight, so a
+ * completion rate and a red rate sat side by side on one surface describing two
+ * different stretches of the fleet's life with nothing saying so. The cut is made
+ * once, at the door, and both folds read the list it produces — so a run outside
+ * the window is in the outcome bar, the phase table and the repeats no more than
+ * it is in the headline count.
+ */
+test('the run half obeys the window, in every table and not only the headline', () => {
+  const day = 24 * 60 * 60 * 1000;
+  const inside = agent('a1', 'done');
+  const outside = agent('a2', 'failed', {
+    startedAt: iso(NOW - 40 * day),
+    endedAt: iso(NOW - 40 * day),
+    costUsd: 99,
+  });
+  const tasks = [task('a1', 'issue:7:part:one'), task('a2', 'issue:7:part:two')];
+
+  const week = build({ agents: [inside, outside], tasks }, '7d');
+  assert.equal(week.runs.settled, 1);
+  assert.equal(week.runs.completionRate, 1, 'a failure a month ago is not this week');
+  assert.equal(week.runs.lostCostUsd, 0);
+  assert.equal(
+    week.runs.byOutcome.reduce((n, o) => n + o.runs, 0),
+    1,
+    'the outcome bar must count the same population as the rate above it',
+  );
+  assert.equal(week.runs.byPhase.reduce((n, p) => n + p.settled, 0), 1); // prettier-ignore
+
+  // Widen it and the same fold sees both, which is what the control is for: a
+  // rate over few runs moves a long way on one more failure, and the way to find
+  // out whether it holds is to ask for a longer stretch.
+  const all = build({ agents: [inside, outside], tasks }, 'all');
+  assert.equal(all.runs.settled, 2);
+  assert.equal(all.runs.completionRate, 0.5);
+  assert.equal(all.runs.lostCostUsd, 99);
 });

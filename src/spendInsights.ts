@@ -1,7 +1,17 @@
-import type { Agent, Issue, IssueRun, IssueSpend, TaskSummary, UsageEvent, WorkNode } from './types.js';
+import type { Agent, Issue, IssueRun, IssueSpend, TaskSummary, UsageEvent, WorkNode, WorldEvent } from './types.js';
 import { issueOriginRole } from './issueOrigins.js';
 import { rollUpIssueSpend, roundUsd } from './issueSpend.js';
 import { rollUpChecks, rollUpTaskTypes, type ChecksSpend, type TaskTypeSpend } from './taskTypeSpend.js';
+import {
+  bucketIndexIn,
+  inWindow,
+  runInstant,
+  timelineSpan,
+  windowView,
+  type InsightsWindowView,
+  type ResolvedWindow,
+  type TimelineSpan,
+} from './insightsWindow.js';
 
 /**
  * The spend breakdown: the same money the cost chips report, split three ways at
@@ -99,10 +109,6 @@ const PHASE_COPY: Record<SpendPhase, { label: string; blurb: string }> = {
   job: { label: 'Jobs', blurb: 'Work an operator queued directly, rather than a goal the harness picked up' },
   other: { label: 'Unclassified', blurb: 'Runs whose origin names none of the above — see the note below' },
 };
-
-/** How far back the trend reaches, and at what resolution. */
-const TIMELINE_DAYS = 14;
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
  * How many runs the costliest-runs table carries. Capped because the table is a
@@ -212,12 +218,12 @@ interface SpendBucket {
 }
 
 /**
- * The trend, in rolling buckets ending now.
+ * The trend, in rolling buckets ending now, at whatever resolution the window
+ * asked for ({@link timelineSpan}).
  *
- * Rolling rather than calendar days, which is the same stance the 5h and 7d
- * windows take: a calendar day needs a timezone, and the harness has no opinion
- * about the operator's. The last bucket is therefore "the last 24 hours" and the
- * panel labels it `now`.
+ * Rolling rather than calendar buckets: a calendar day needs a timezone, and the
+ * harness has no opinion about the operator's. The last bucket is therefore "up
+ * to now" — it is still filling, and the panel draws it hollow for that reason.
  */
 interface SpendTimeline {
   bucketMs: number;
@@ -227,12 +233,15 @@ interface SpendTimeline {
 
 export interface SpendInsights {
   generatedAt: string;
-  totals: SpendTotals;
   /**
-   * The rolling windows the cost chip reads, restated here so the panel and the
-   * indicator an operator opened it from cannot disagree about what the chip says.
+   * The stretch every figure below was measured over, as the page reads it back.
+   *
+   * Shipped rather than assumed, because the page's caption and the timeline
+   * under it must be the same window: a caption derived from the key the browser
+   * asked with is free to disagree with the buckets the server actually cut.
    */
-  windows: { fiveHourCostUsd: number; sevenDayCostUsd: number };
+  window: InsightsWindowView;
+  totals: SpendTotals;
   /** Every phase with a run in it, in funnel order. A phase with nothing in it is left out. */
   phases: SpendPhaseTotal[];
   /** Costliest goal first. */
@@ -247,6 +256,25 @@ export interface SpendInsights {
   taskTypes: TaskTypeSpend[];
   /** Cost per CI check — what `dotnet test` and `Qodana` are each costing. */
   checks: ChecksSpend;
+  /**
+   * Pull requests merged inside the window — the denominator of the page's one
+   * headline, `spent ÷ landed`.
+   *
+   * Merges rather than closed goals, and deliberately: a goal closes when a
+   * person says it is done, which can happen without the fleet having landed
+   * anything, while a merge is the fleet's own output. It is the same event the
+   * production reading counted, asked over the same window as the money beside
+   * it — which is what the reading never had.
+   */
+  landed: number;
+  /**
+   * What the runs that failed or crashed inside the window cost.
+   *
+   * On this payload rather than the reliability one because the headline needs
+   * it: "$26 of $118 never landed" is one sentence, and fetching its two halves
+   * from two routes is how they end up describing two windows.
+   */
+  lostCostUsd: number;
   /** The {@link TOP_RUNS} costliest runs, costliest first. */
   runs: SpendRun[];
   /** How many runs the table above is a ranking *of*, so the cap can be stated against it. */
@@ -265,8 +293,10 @@ interface SpendInsightsInput {
   runs: readonly IssueRun[];
   /** The dated cost deltas behind the trend — already windowed by the caller. */
   usageEvents: readonly UsageEvent[];
-  fiveHourCostUsd: number;
-  sevenDayCostUsd: number;
+  /** `pr_merged` rows inside the window. Only the count is read. */
+  mergeEvents: readonly WorldEvent[];
+  /** The stretch to measure. Every figure below obeys it, including the goals. */
+  window: ResolvedWindow;
   now: number;
 }
 
@@ -403,12 +433,28 @@ export function buildSpendGoals(input: {
 }
 
 export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
-  const { agents, tasks, nodes, issues, usageEvents, now } = input;
+  const { tasks, nodes, issues, usageEvents, mergeEvents, window, now } = input;
+  // The window is applied **once, here**, and everything below folds the list it
+  // produces. Applying it per fold instead would put the same filter in five
+  // places for the four other folds to get subtly different — and the way that
+  // shows up is a phase table whose costs do not add to the total beside it.
+  const agents = input.agents.filter((agent) => inWindow(window, runInstant(agent)));
   const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
   const titleOfTask = new Map(tasks.map((t) => [t.id, t.title]));
   // The per-goal totals and the attribution behind them, computed once by the
   // fold that owns the question — never a second walk of the graph. See above.
   const rollup = buildSpendGoals({ agents, tasks, nodes, issues, runs: input.runs });
+  const span = timelineSpan(
+    window,
+    // The earliest *reported* instant, which for `all` is what the timeline spans.
+    // Taken off the events rather than off the agents because the events are what
+    // it buckets: an agent row with no usage on it would stretch the axis in front
+    // of a graph that has nothing to draw there.
+    usageEvents.reduce<number | null>((oldest, event) => {
+      const at = Date.parse(event.at);
+      return Number.isNaN(at) ? oldest : oldest === null || at < oldest ? at : oldest;
+    }, null),
+  );
 
   const totals: SpendTotals = {
     costUsd: 0,
@@ -423,6 +469,7 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
   };
   const phaseTotals = new Map<SpendPhase, SpendPhaseTotal>();
   const runs: SpendRun[] = [];
+  let lostCostUsd = 0;
 
   for (const agent of agents) {
     // The same silence `rollUpIssueSpend` keeps, and for the same reason: a run
@@ -456,6 +503,10 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
     }
     totals.turns += agent.numTurns ?? 0;
     totals.measuredRuns += 1;
+    // `failed` and `crashed` only. A killed run is a steer rather than a fault,
+    // and counting an operator's own change of mind as waste is the reading that
+    // makes every steered fleet look broken.
+    if (agent.status === 'failed' || agent.status === 'crashed') lostCostUsd = roundUsd(lostCostUsd + cost);
 
     const phaseTotal = phaseTotals.get(phase) ?? {
       phase,
@@ -488,16 +539,18 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
 
   return {
     generatedAt: new Date(now).toISOString(),
+    window: windowView(window, span),
     totals,
-    windows: { fiveHourCostUsd: input.fiveHourCostUsd, sevenDayCostUsd: input.sevenDayCostUsd },
     phases: PHASE_ORDER.map((p) => phaseTotals.get(p)).filter((p): p is SpendPhaseTotal => p !== undefined),
     goals: rollup.goals,
     unattributedCostUsd: rollup.unattributedCostUsd,
     taskTypes: rollUpTaskTypes({ agents, tasks }),
     checks: rollUpChecks({ agents, tasks }),
+    landed: mergeEvents.length,
+    lostCostUsd,
     runs: [...runs].sort((a, b) => b.costUsd - a.costUsd).slice(0, TOP_RUNS),
     rankedFrom: runs.length,
-    timeline: bucketise(usageEvents, now),
+    timeline: bucketise(usageEvents, span),
   };
 }
 
@@ -509,23 +562,15 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
  * outside it is a clock skew rather than history, and a spike drawn on day one
  * that nothing spent there is worse than a missing point.
  */
-function bucketise(events: readonly UsageEvent[], now: number): SpendTimeline {
-  const start = now - TIMELINE_DAYS * DAY_MS;
-  const buckets: SpendBucket[] = Array.from({ length: TIMELINE_DAYS }, (_, i) => ({
-    startsAt: new Date(start + i * DAY_MS).toISOString(),
+function bucketise(events: readonly UsageEvent[], span: TimelineSpan): SpendTimeline {
+  const buckets: SpendBucket[] = Array.from({ length: span.buckets }, (_, i) => ({
+    startsAt: new Date(span.startMs + i * span.bucketMs).toISOString(),
     costUsd: 0,
   }));
   for (const event of events) {
-    const at = Date.parse(event.at);
-    if (Number.isNaN(at) || at < start) continue;
-    const index = Math.min(TIMELINE_DAYS - 1, Math.floor((at - start) / DAY_MS));
-    const bucket = buckets[index];
+    const index = bucketIndexIn(span, Date.parse(event.at));
+    const bucket = index === null ? undefined : buckets[index];
     if (bucket) bucket.costUsd = roundUsd(bucket.costUsd + event.costUsd);
   }
-  return { bucketMs: DAY_MS, startsAt: new Date(start).toISOString(), buckets };
-}
-
-/** How far back {@link buildSpendInsights} wants dated events — the route's `since`. */
-export function spendTimelineSince(now: number): string {
-  return new Date(now - TIMELINE_DAYS * DAY_MS).toISOString();
+  return { bucketMs: span.bucketMs, startsAt: new Date(span.startMs).toISOString(), buckets };
 }

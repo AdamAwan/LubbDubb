@@ -199,8 +199,9 @@ export function useCockpit(): CockpitStatus {
       hatchEgg: (id) => go({ hatch: id }),
       viewScratchpad: (issueRef) => go({ scratchpad: issueRef }),
       openConfig: (where) => go({ tab: 'config', goal: null, ...where }),
-      openSpend: (open) => go({ spend: open }),
-      openReliability: (open) => go({ reliability: open }),
+      // One `go` for both halves: the tab and the window are one place, and two
+      // calls would push two history entries for a single change of question.
+      openInsights: (where) => go({ tab: 'insights', goal: null, ...where }),
       selectGoal: (ref) => go({ goal: ref }),
       openPanel: (panel) => go({ panel }),
       openTab: (next) => go({ tab: next }),
@@ -292,8 +293,8 @@ export function useCockpit(): CockpitStatus {
       viewingRetro: place.retro,
       hatching: place.hatch,
       viewingScratchpad: place.scratchpad,
-      spendOpen: place.spend,
-      reliabilityOpen: place.reliability,
+      insightsView: place.insightsView,
+      insightsWindow: place.insightsWindow,
       selectedGoal: place.goal,
       consolePanel: place.panel,
       tab: place.tab,

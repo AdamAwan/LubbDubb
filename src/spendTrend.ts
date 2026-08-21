@@ -3,6 +3,7 @@ import type { TicketClosure } from './store/tickets.js';
 import { roundUsd } from './issueSpend.js';
 import { PHASE_ORDER, phaseLabel, zeroPhases, type SpendGoal, type SpendPhase } from './spendInsights.js';
 import { ciStatusOf } from './world/worldDiff.js';
+import { runInstant, trendSpan, windowView, type InsightsWindowView, type ResolvedWindow } from './insightsWindow.js';
 
 /**
  * The spend trend: is the fleet getting cheaper, where did the money move, and
@@ -70,21 +71,16 @@ import { ciStatusOf } from './world/worldDiff.js';
  * to fix.
  */
 
-/** How far back the trend reaches, and at what resolution. */
-const TREND_WEEKS = 8;
-const DAY_MS = 24 * 60 * 60 * 1000;
-const WEEK_MS = 7 * DAY_MS;
-
-/** Two weeks either side, below which a comparison is a coin toss — see {@link compare}. */
-const MIN_HALF_WEEKS = 2;
+/** Two periods either side, below which a comparison is a coin toss — see {@link compare}. */
+const MIN_HALF_PERIODS = 2;
 
 /** The endings that are the harness failing, as opposed to a run being stopped. */
 const LOST: readonly AgentStatus[] = ['failed', 'crashed'];
 /** Every ending. The live statuses are not outcomes and settle no week. */
 const SETTLED: readonly AgentStatus[] = ['done', 'failed', 'crashed', 'killed', 'interrupted'];
 
-/** One week on the shared axis. Every chart in the tab is drawn from these. */
-export interface SpendTrendWeek {
+/** One period on the shared axis. Every chart in the tab is drawn from these. */
+export interface SpendTrendBucket {
   startsAt: string;
   /**
    * True for the week `now` falls inside. Goals are still closing into it, so
@@ -194,14 +190,19 @@ export interface SpendTrendComparison {
 
 export interface SpendTrend {
   generatedAt: string;
-  /** The span, stated rather than assumed by the panel. */
-  weeks: number;
+  /**
+   * The window each period is one of — eight of these make the axis. Stated
+   * rather than assumed by the panel, for {@link SpendInsights}' reason.
+   */
+  window: InsightsWindowView;
+  /** How many periods the axis carries. */
+  periods: number;
   bucketMs: number;
   startsAt: string;
-  buckets: SpendTrendWeek[];
+  buckets: SpendTrendBucket[];
   /**
    * The complete weeks split down the middle. Null when the window holds fewer
-   * than {@link MIN_HALF_WEEKS} complete weeks either side — a comparison drawn
+   * than {@link MIN_HALF_PERIODS} complete weeks either side — a comparison drawn
    * off one week of goals is noise with a percentage sign on it, and refusing to
    * ship it is the only way the panel can be made to refuse to draw it.
    */
@@ -229,6 +230,8 @@ interface SpendTrendInput {
   agents: readonly Agent[];
   /** `pr_ci` rows inside the window. Order is not read — only the count of reds is. */
   ciEvents: readonly WorldEvent[];
+  /** The window one period is the length of. Eight of them make the axis. */
+  window: ResolvedWindow;
   now: number;
 }
 
@@ -240,7 +243,7 @@ function median(samples: readonly number[]): number | null {
 }
 
 /** An empty week — every field present, so a week nothing happened in is a row and not a gap. */
-function emptyWeek(startsAt: string, partial: boolean): SpendTrendWeek {
+function emptyWeek(startsAt: string, partial: boolean): SpendTrendBucket {
   return {
     startsAt,
     partial,
@@ -261,20 +264,29 @@ function emptyWeek(startsAt: string, partial: boolean): SpendTrendWeek {
 }
 
 export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
-  const { goals, closures, issues, agents, ciEvents, now } = input;
-  const start = now - TREND_WEEKS * WEEK_MS;
-  const buckets = Array.from({ length: TREND_WEEKS }, (_, i) =>
-    emptyWeek(new Date(start + i * WEEK_MS).toISOString(), i === TREND_WEEKS - 1),
+  const { goals, closures, issues, agents, ciEvents, window, now } = input;
+  const span = trendSpan(
+    window,
+    // The oldest thing the axis could be about. Closures and runs both, because
+    // either alone leaves the unbounded axis starting after data it will draw.
+    [...closures.map((c) => Date.parse(c.closedAt)), ...agents.map(runInstant)].reduce<number | null>(
+      (oldest, at) => (Number.isNaN(at) ? oldest : oldest === null || at < oldest ? at : oldest),
+      null,
+    ),
   );
-  /** Which bucket an instant falls in, or null when it predates the window. */
+  const start = span.startMs;
+  const buckets = Array.from({ length: span.buckets }, (_, i) =>
+    emptyWeek(new Date(start + i * span.bucketMs).toISOString(), i === span.buckets - 1),
+  );
+  /** Which bucket an instant falls in, or null when it predates the axis. */
   const bucketAt = (at: number): number | null => {
     if (Number.isNaN(at) || at < start) return null;
-    return Math.min(TREND_WEEKS - 1, Math.floor((at - start) / WEEK_MS));
+    return Math.min(span.buckets - 1, Math.floor((at - start) / span.bucketMs));
   };
 
   const spendOfGoal = new Map(goals.map((g) => [g.issueNumber, g]));
   // Open *now*, so a goal that closed inside the window and is nonetheless here
-  // came back. See `SpendTrendWeek.reopened` for why this is read from state
+  // came back. See `SpendTrendBucket.reopened` for why this is read from state
   // rather than from an event.
   const openNow = new Set(issues.filter((i) => i.state === 'open').map((i) => i.number));
 
@@ -350,11 +362,12 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
 
   return {
     generatedAt: new Date(now).toISOString(),
-    weeks: TREND_WEEKS,
-    bucketMs: WEEK_MS,
+    window: windowView(window, span),
+    periods: span.buckets,
+    bucketMs: span.bucketMs,
     startsAt: new Date(start).toISOString(),
     buckets,
-    comparison: compare(buckets, cohorts),
+    comparison: compare(buckets, cohorts, span.bucketMs),
   };
 }
 
@@ -366,14 +379,15 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
  * shape that makes a fleet look like it is improving on the day it is read.
  */
 function compare(
-  buckets: readonly SpendTrendWeek[],
+  buckets: readonly SpendTrendBucket[],
   cohorts: ReadonlyMap<number, SpendGoal[]>,
+  bucketMs: number,
 ): SpendTrendComparison | null {
   const complete = buckets.map((week, index) => ({ week, index })).filter((b) => !b.week.partial);
   const half = Math.floor(complete.length / 2);
-  if (half < MIN_HALF_WEEKS) return null;
-  const earlier = fold(complete.slice(0, half), cohorts);
-  const recent = fold(complete.slice(complete.length - half), cohorts);
+  if (half < MIN_HALF_PERIODS) return null;
+  const earlier = fold(complete.slice(0, half), cohorts, bucketMs);
+  const recent = fold(complete.slice(complete.length - half), cohorts, bucketMs);
   return { earlier, recent, phases: shifts(earlier, recent) };
 }
 
@@ -387,8 +401,9 @@ function compare(
  * same say as a week that closed nine.
  */
 function fold(
-  span: readonly { week: SpendTrendWeek; index: number }[],
+  span: readonly { week: SpendTrendBucket; index: number }[],
   cohorts: ReadonlyMap<number, SpendGoal[]>,
+  bucketMs: number,
 ): SpendTrendPeriod {
   const first = span[0]?.week;
   const last = span[span.length - 1]?.week;
@@ -407,7 +422,7 @@ function fold(
 
   return {
     startsAt: first?.startsAt ?? '',
-    endsAt: new Date(Date.parse(last?.startsAt ?? first?.startsAt ?? '') + WEEK_MS).toISOString(),
+    endsAt: new Date(Date.parse(last?.startsAt ?? first?.startsAt ?? '') + bucketMs).toISOString(),
     weeks: span.length,
     goalsClosed: pooled.length,
     medianCostUsd: median(pooled.map((g) => g.costUsd)),
@@ -434,9 +449,4 @@ function shifts(earlier: SpendTrendPeriod, recent: SpendTrendPeriod): SpendTrend
     changeRatio:
       earlier.byPhase[phase] > 0 ? (recent.byPhase[phase] - earlier.byPhase[phase]) / earlier.byPhase[phase] : null,
   }));
-}
-
-/** How far back {@link buildSpendTrend} wants dated rows — the route's `since`. */
-export function spendTrendSince(now: number): string {
-  return new Date(now - TREND_WEEKS * WEEK_MS).toISOString();
 }

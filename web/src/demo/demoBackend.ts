@@ -39,7 +39,8 @@ import type {
   SpendPhase,
   SpendTrend,
   SpendTrendPeriod,
-  SpendTrendWeek,
+  InsightsWindowView,
+  SpendTrendBucket,
   SpendRun,
   TaskSummary,
   UnrecordedWorkView,
@@ -2450,7 +2451,7 @@ function buildDemoReliability(): ReliabilityInsights {
 
   return {
     generatedAt: new Date(now).toISOString(),
-    windowDays: DEMO_CI_DAYS.length,
+    window: demoWindow(now, DEMO_CI_DAYS.length),
     runs: {
       ...tally,
       live: 3,
@@ -2500,6 +2501,27 @@ function buildDemoReliability(): ReliabilityInsights {
         })),
       },
     },
+  };
+}
+
+/**
+ * The window a demo payload says it was taken over.
+ *
+ * The demo's figures are authored, not folded, so this describes them rather
+ * than producing them — but it has to be *there*, because the page draws its
+ * caption and its bucket labels off the payload rather than off the key it asked
+ * with, and a demo missing it renders "reading…" forever.
+ */
+function demoWindow(now: number, days: number): InsightsWindowView {
+  const dayMs = 24 * 60 * 60 * 1000;
+  return {
+    key: '7d',
+    label: '7d',
+    bucketLabel: `${days} daily buckets`,
+    since: new Date(now - days * dayMs).toISOString(),
+    startsAt: new Date(now - days * dayMs).toISOString(),
+    bucketMs: dayMs,
+    buckets: days,
   };
 }
 
@@ -2589,7 +2611,9 @@ function buildDemoSpend(): SpendInsights {
       // where it belongs rather than being a branch nobody sees.
       unmeasuredRuns: 2,
     },
-    windows: { fiveHourCostUsd: 4.28, sevenDayCostUsd: 20.2 },
+    window: demoWindow(now, 14),
+    landed: 9,
+    lostCostUsd: round(DEMO_PHASE_HEALTH.reduce((a, p) => a + p.lostCostUsd, 0)),
     phases,
     goals,
     unattributedCostUsd: round(DEMO_LOOSE.reduce((a, l) => a + l.costUsd, 0)),
@@ -2742,7 +2766,7 @@ function buildDemoTrend(): SpendTrend {
   const tokensOf = (costUsd: number) => Math.round(costUsd * 620_000);
 
   const start = now - DEMO_TREND_WEEKS.length * week;
-  const buckets: SpendTrendWeek[] = DEMO_TREND_WEEKS.map((seed, i) => {
+  const buckets: SpendTrendBucket[] = DEMO_TREND_WEEKS.map((seed, i) => {
     const costs = [...seed.costs].sort((a, b) => a - b);
     return {
       startsAt: new Date(start + i * week).toISOString(),
@@ -2766,7 +2790,7 @@ function buildDemoTrend(): SpendTrend {
   });
 
   /** The same fold `buildSpendTrend` does, over the complete weeks of one half. */
-  const fold = (span: SpendTrendWeek[]): SpendTrendPeriod => {
+  const fold = (span: SpendTrendBucket[]): SpendTrendPeriod => {
     const costs = span.flatMap((w) => w.costs);
     const settled = span.reduce((n, w) => n + w.settled, 0);
     const completed = span.reduce((n, w) => n + w.completed, 0);
@@ -2802,7 +2826,8 @@ function buildDemoTrend(): SpendTrend {
 
   return {
     generatedAt: new Date(now).toISOString(),
-    weeks: DEMO_TREND_WEEKS.length,
+    window: demoWindow(now, 7),
+    periods: DEMO_TREND_WEEKS.length,
     bucketMs: week,
     startsAt: new Date(start).toISOString(),
     buckets,
@@ -2951,6 +2976,9 @@ export const demoApi = {
   // The spend breakdown, authored above. The real route derives it from every
   // agent the store holds; the demo's world is built fresh in the browser each
   // load, so a fixture is the only honest way to show the panel at all.
+  // The window is accepted and ignored: the demo's figures are authored rather
+  // than folded, so there is nothing to re-cut — and a demo that answered `6h`
+  // with an empty page would teach the reader the feature is broken.
   getSpend: () => Promise.resolve({ insights: buildDemoSpend() }),
   // The trend behind it, authored for the same reason and against the same
   // fixture: the demo's store holds no closed goals to cohort, so a fixture is

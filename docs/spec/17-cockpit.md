@@ -40,7 +40,7 @@ What keeps that from swallowing the cockpit's rules is the split on **behaviour 
 the shared card, not a compact copy of it, because a copy is how one surface ends up offering free
 text on a proposal that only takes a verdict.
 
-**Five surfaces hang off the shell rather than off the console**, and each for one reason — it is
+**Three surfaces hang off the shell rather than off the console**, and each for one reason — it is
 _overlaid_ rather than placed. Which one is open is cockpit state, not console state (the drawer's
 output subscription is tied to it), and the surfaces that open one are scattered across the page:
 
@@ -49,8 +49,10 @@ output subscription is tied to it), and the surfaces that open one are scattered
 | `AgentDrawer`                                  | a fleet row, a goal's part, an ask — `select`               |
 | `PlanModal` / `RetroModal` / `ScratchpadModal` | the goal page — `viewPlan` / `viewRetro` / `viewScratchpad` |
 | `SettingsModal`                                | the top bar — `openSettings`                                |
-| `SpendModal`                                   | the Spend reading — `openSpend`                             |
-| `ReliabilityModal`                             | the Yield reading — `openReliability`                       |
+
+Two more used to: the spend and reliability breakdowns. They are the [Insights](#insights) destination
+now, and the move is the argument against overlaying a reading at all — a sheet that covers the queue
+rail hides the ask that sent the operator to it.
 
 The console asks for each the way it asks for a plan — a method on the seam — and the shell answers.
 
@@ -122,11 +124,11 @@ those modules in.
 
 ## Shape
 
-Four surfaces and one shell.
+Five surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ident ↗issue │ Overview Backlog Work │ Scan · Fleet  Spend Yield … Launch ⚙ │ top bar
+│ ident ↗issue │ Overview Work Tickets Insights │ Scan · Fleet  Findings … ⚙ │ top bar
 ├────────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned            │
 ├───────────────┬────────────────────────────────────────────────────────┤
@@ -134,7 +136,7 @@ Four surfaces and one shell.
 │ ┌───────────┐ │                                                        │
 │ │ Blocking  │ │                                                        │
 │ │ escalation│ │             the situation area                         │
-│ │ plan      │ │    (a tab — overview, work, tickets, pets — or a goal)│
+│ │ plan      │ │  (a tab — overview, work, tickets, insights, pets — or a goal) │
 │ │ permission│ │                                                        │
 │ │ Yours     │ │                                                        │
 │ │ bench     │ │                                                        │
@@ -835,16 +837,30 @@ from.
 
 ## The overview
 
-What the situation area shows when no goal is selected: five cards, rows rather than pictures, in
-reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **World signals**. The
-fleet's **runway** is a band along the foot of the first of them rather than a sixth card, because
-"who is out" and "what is behind them" are one thought.
+What the situation area shows when no goal is selected: six cards, rows rather than pictures, in
+reading order — **Fleet**, **Goals in flight**, **Pull requests**, **Up next**, **Rate**, **World
+signals**. The fleet's **runway** is a band along the foot of the first of them rather than a seventh
+card, because "who is out" and "what is behind them" are one thought.
 
 Two rules run through all five. **Nothing here re-decides what the server decided**: a PR's court is
 `attention.status`, its checks are `ciVerdict`, a queued item's hold is the queue's own sentence, and a
 goal's state is its `pickup.status`. And **an empty card still draws**, muted, because a surface that
 vanishes when quiet is indistinguishable from one that broke.
 
+- **Rate** — is the floor producing, or merely busy? The one reading in the cockpit that is against
+  _time_, drawn from the timestamps already on `decisions` and `worldEvents` (`web/src/view/production.ts`);
+  a held or skipped dispatch is not counted, because it produced no work. **The churn ratio (dispatches
+  per merge) is the point**: dispatches are effort and merges are output, and a rising first figure over
+  a flat second one is a fleet going round. A series with nothing in the first half of its window draws
+  no delta rather than a 0% one — there is nothing to have changed from — and when the decision log does
+  not reach back to the window's start the card **says so**, because a rate that silently under-reports
+  is worse than no rate.
+
+  It was the Output panel. The half of it that was about money is [Insights](#insights)' headline ratio
+  now; this is the half that belongs on the overview. It keeps a **fixed six hours** while everything on
+  that page obeys a control, and deliberately: this card answers "what is happening", and a window an
+  operator has to set before the answer means anything is not that question. It says the span out loud
+  for the same reason, and carries the one way through to the money behind the rates.
 - **Goals in flight** carries the **furthest environment** holding a goal whole, where any is —
   last-declared in the operator's list, since that list is the order the work travels in. `partial`
   gets no chip: a row reading `liveUs` for half a feature is the boolean rollup the reach fold refuses
@@ -1322,8 +1338,8 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 ## The top bar and the panels
 
-The strip carries the ident, the nav, the pulse, the fleet cap, and nine readings: **Spend**, **Yield**,
-**Output**, **Findings**, **Lessons**, **Faults**, **Launch**, **Build** and **Settings**. Each is one subject stated once, in
+The strip carries the ident, the nav, the pulse, the fleet cap, and six readings: **Findings**,
+**Lessons**, **Faults**, **Launch**, **Build** and **Config**. Each is one subject stated once, in
 a plain label-and-number face. None reaches `api.js`: every one is a method on `CockpitActions`, and
 the fleet cap is the shared `FleetControl`, which is already on that seam.
 
@@ -1370,7 +1386,14 @@ which is the one place this did not go. The open state is local `useState` and n
 `GoalPage`'s reason — a half-typed report is not somewhere you can come back to, so it is not somewhere
 the URL should be able to send you.
 
-Four rules hold them:
+**Spend, Yield and Output are not on this bar.** They were three readings of one subject — what the
+fleet cost, what it landed, how much of that survived — and each of the three had grown a version of the
+other two on the panel behind it. They are the [Insights](#insights) destination now, which is in the
+nav: a reading you go to and come back from rather than a number you glance at, and one whose *window* an
+operator changes rather than accepts. What is left here is what a glance can actually settle — counts of
+things waiting on a person, and the state of this build.
+
+Three rules hold them:
 
 - **A reading that opens something carries a chevron; a reading that acts does not.** `Scan` presses
   to run a pulse rather than opening a panel, so it wears the same raised chrome and no chevron — a
@@ -1379,13 +1402,7 @@ Four rules hold them:
   precisely when an operator wants to confirm nothing moves.
 - **A zero count mutes a reading; it never removes it.** The gauge staying put is what lets an operator
   glance at the same spot every time rather than hunting for a control that reflows when its number
-  happens to hit zero. Yield extends this from a muted count to an **absent** one: nothing is drawn
-  until the first run settles, since a rate over no runs is not 100% and a gauge reading perfect on an
-  idle fleet is the one lie this bar must not tell.
-- **The gauge and the panel behind it share one derivation.** Output reads `productionReading`
-  (`web/src/view/production.ts`) — the same function the output graph is built from — rather than a
-  differently-shaped count of the same events, so the two agree from the first paint. It sits in
-  `view/` for exactly that: a pure, React-free derivation neither surface owns.
+  happens to hit zero.
 - **Launch counts the queue, not the history.** A launched blueprint that has been dispatched is an
   agent in the Fleet, and counting it here would have the reading climb as work starts rather than as
   it waits.
@@ -1411,7 +1428,7 @@ It is deliberately **not** drawn as the crash-recovery banner. That treatment is
 is loud because the harness is running no cycles at all while it is up; an available update stops
 nothing, so borrowing it would say something untrue — and after the second time, be scrolled past.
 
-Six panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings, Spend and Yield are shell-owned modals beside them:
+Five panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings is a shell-owned modal beside them:
 
 - **Findings** — the shared `FindingsPanel`, with promote / file / dismiss. The count is findings at
   `open` and nothing else: promoted, filed and dismissed are done, and `filing` is decided. Nothing in
@@ -1457,14 +1474,6 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   costs the only copy and for every cockpit rather than this one. One misclick between "leave" and
   "delete the only copy" is too few, and the only route to it must not depend on there being rows.
   Amber, never red — the log blocks nothing.
-- **Output** — the one reading that is against _time_, which is the only way to answer whether the
-  fleet is producing rather than merely busy. Rates come from the timestamps already on `decisions` and
-  `worldEvents`; a held or skipped dispatch is not counted, because it produced no work. **The churn
-  ratio (dispatches per merge) is the point of the panel**: dispatches are effort and merges are
-  output, and a rising first line over a flat second one is a fleet spinning. A series with nothing in
-  the first half of the window draws no delta rather than a 0% one — there is nothing to have changed
-  from. When the decision log does not reach back to the window's start the panel **says so**: a rate
-  that silently under-reports is worse than no rate.
 - **Launch** — the shared `LaunchPanel` and `SchedulePanel` together, since a recurrence is the same
   act with a `when` attached: a firing writes the identical job the composer writes, into the identical
   queue drawn below both. `InjectPanel` rides here under **`view.demo`** alone. Injection fakes a world
@@ -1574,9 +1583,12 @@ it: fifty keys, five sections and a file to reconcile against is a thing you wor
 at and dismiss. The decisive argument is smaller than that, though — **a modal cannot be linked to**,
 and "look at what `agentMode` is set to on the box" is a URL now.
 
-It is not in the nav. The nav is the three surfaces work happens on, and a fourth button beside them
-would say configuration is a fourth thing you _do_ rather than the thing you set up once; the reading
-in the bar is where an operator already reached for it. `?settings=1`, which opened the modal, is
+It is not in the nav. The nav is where you **go** — the surfaces an operator moves between during a day
+— and configuration is not one of them: a button beside the others would say it is a fifth thing you
+_do_ rather than the thing you set up once, and the reading in the bar is where an operator already
+reached for it. That is the rule [Insights](#insights) is in the nav under, and the earlier phrasing of
+it — "the three surfaces work happens on" — did not survive contact with a destination that is read
+rather than acted on. `?settings=1`, which opened the modal, is
 honoured as a way in for `?tab=backlog`'s reason.
 
 Its place is on `Place`, never a `useState`: the section (`?section=`) and the group of keys it is
@@ -1962,105 +1974,181 @@ A channel that is not listening is said so, above a command that is otherwise co
 socket is refused when another harness already holds it, and the honest answer is what the tab draws
 rather than a registration that would connect to the other one.
 
-## Spend
+## Insights
 
-`web/src/components/SpendModal.tsx`, opened from the Spend reading, drawing the payload
-`GET /api/spend` returns ([18](18-observability.md#the-spend-breakdown)). It is the answer to the
-question every cost figure in the cockpit raises and none of them can hold.
+`web/src/components/InsightsPage.tsx`, the fourth destination in the nav. It replaces three surfaces —
+the Spend modal, the Yield modal and the Output panel — and the reason is not that they were busy: they
+were the **numerator, the denominator and the leakage of one ratio**, and each had independently grown a
+version of the other two. The output graph drew a cost row; the yield panel drew four dollar figures; the
+spend trend drew a completion rate off a second server builder, one click from the first. That is the
+shape of a wrong seam.
 
-**Fetched on open, three states, and the third is the point.** Loading, the breakdown, and a _failure_
-— because a fetch that failed must not render as a fleet that has spent nothing. `$0.00` is a real
-answer here (a fresh harness, or one run entirely in PTY mode), so it cannot also be the failure mode.
-The all-zero case gets its own sentence rather than a table of zeroes: **unmeasured is not free**, and
-a panel of `$0.00` rows says the wrong one of those.
+**One page, one window, five readings of it.**
 
-**Nothing here is derived in the browser.** The server ships the splits, for the reason `PrAttention`
-and `StackLandingView` are shipped: a cockpit-side re-derivation of which goal a pull request's money
-belongs to would be a second opinion about a decision made elsewhere, drawn inches from the first. What
-the cockpit owns is presentation — the phase **colours**, which live in the stylesheet as `--sp-<phase>`
-so the component names a phase and the sheet decides what that looks like.
+- **Economics** — is the fleet worth what it costs? The ratio headline, the phase split, the timeline,
+  the goals and the costliest runs.
+- **Reliability** — did it finish, and did it go green? Outcomes, the CI timeline, the reddest pull
+  requests, the phase health and the repeats.
+- **Causes** — what keeps sending the fleet back? The guard split, both cause tables, and Lately.
+- **Trend** — is what I changed working? The eight-period cohort view.
+- **Work mix** — why does *this kind* of work cost what it does? By task type, and by failing check.
 
-Four pictures, in the order the questions arrive:
+Every table the three panels drew lands in exactly one of these, and the duplicates collapse on the way
+in: there is one phase table rather than two, and one completion rate rather than the reliability fold's
+and the trend's.
 
-- **Four tiles** — all-time, the 5h and 7d windows, and the token split. The windows restate exactly
-  what the reading the operator just clicked says, and are there for that reason rather than their own:
-  a panel opened from a gauge must begin by agreeing with it.
-- **Where it went** — one stacked bar over the whole fleet, and a legend that is also the table (cost,
-  share, runs, average per run). The blurb under each phase name is the phase's definition, shipped
-  with the figures rather than held here, because it is a claim about what the harness did and not
-  about how to draw it.
-- **The trend** — 14 rolling daily buckets as **bars, not lines**: these are totals over a period and
-  not samples of a rate, and a line between two days implies money moved smoothly between them, which
-  is exactly what a fleet that ran for one afternoon did not do.
-- **By goal**, then **the costliest runs**. Each goal row's bar is drawn at the width of its share of
-  the fleet and split by phase inside, so it carries two readings at once: how much of the budget this
-  goal was, and what inside it the money went on. The runs table is capped and **says so** — a silently
-  truncated table reads as a complete one.
+### A destination, not a modal
 
-**The method note is part of the panel, not a footnote**, and it sits level with the figures it
-qualifies rather than three screens below them. It states the one thing the numbers cannot: dollars are
-the provider's own, already net of cache pricing, while tokens are gross with cache reads and writes
-folded into input ([18](18-observability.md#dollars-are-net-of-cache-tokens-are-gross)) — which is why
-the tokens tile's second line is **the cached share of the input** and not a dollars-per-million rate.
-The rate was only ever a proxy for that share, and one a reader had to be told how to interpret; the
-share says it outright, and it is the one token figure a deployment can act on, since cost arrives with
-the discount already in it. Its denominator is the input of the runs that _reported_ a split, so the
-note names the shortfall whenever some run did not — a run from before the split was recorded is left
-out of the fraction rather than drawn as a cache miss
-([18](18-observability.md#the-cached-share-is-stored-not-inferred)). It also names the unmeasured runs,
-which appear in no figure above it.
+The two modals covered the queue rail, and the rail is where the ask that sends an operator here comes
+from — a `burn` row saying an agent is running at four times the median for its bucket
+([18](18-observability.md#the-burn-watch)). Answering it behind a sheet that hid it was the arrangement.
 
-**It [exports](#exporting-a-reading)**, seven sections in the order the panel draws them — totals,
-phases, days, task types, failing checks, goals, runs — with the phase split riding inside each goal
-row as it rides inside that goal's bar, and each of the three remainders (reached no goal, named no
-check, attributed to a check) carried as its own row. Three more sections follow **once the Trend tab
-has been opened**; when it has not, the export says so in a row rather than omitting them silently,
-because a file read six months from now has no panel beside it to explain a gap.
+It also makes the page's state part of [`Place`](#the-address-bar), which the modals' never was. The
+window and the open tab are query parameters (`?tab=insights&view=causes&win=24h`), so a reading is a
+link somebody can send. The three fields this replaced — `spend`, `reliability` and the `output` panel —
+were independent booleans, so `?spend=1&reliability=1&panel=output` was a representable place that drew
+all three at once. That is precisely the state `ConsolePanel` is one value to rule out, and these two
+escaped it by being modals rather than panels.
+
+**It fetches, so it lives under `components/` rather than `console/`.** The console may not reach
+`api.js`, and the sanctioned route is the one the tickets tab and the work tree already take: a component
+that fetches, rendered from the situation area, with the place it reads handed in as props.
+
+### The time bar
+
+One control, **above the tabs rather than inside one**, because it is page state: switching tabs keeps
+the window, and every reading under it obeys the same one. That is the whole argument for the five
+sharing a surface.
+
+Five windows — `6h`, `24h`, `7d`, `30d` and `All` — resolved server-side by `resolveWindow`
+(`src/insightsWindow.ts`) and shipped back on every payload
+([18](18-observability.md#the-window)). **The page draws the window it was handed, never the one it
+asked with**: a caption derived from the key is free to disagree with the buckets the server actually
+cut, and the caption is the half a reader would believe. The resolution is stated beside the control —
+`6h buckets` — rather than left to be counted off the bars.
+
+Before this, each reading picked its own span and none of them lined up: six hours for the production
+graph, five and seven days for the spend tiles, a fortnight for the spend timeline, another fortnight
+for CI, eight weeks for the trend — and all-time for the run half and the spend totals. Two figures side
+by side on one surface described different stretches of the fleet's life with nothing saying so.
+
+**The Trend tab obeys it too**, by showing the last eight windows *of the length the operator picked*:
+`7d` gives eight weeks, `24h` gives eight days ([18](18-observability.md#the-spend-trend)). That is what
+keeps one control meaningful on a tab that is inherently about change, and it has a second payoff — the
+comparison a headline draws against "the previous window" is literally the last two bars of that chart,
+rather than a second notion of "before" for a reader to reconcile.
+
+### Economics
+
+**The ratio is the headline**, read left to right as one sentence: what the window cost, what landed in
+it, what one landed change therefore cost, and how much of the spend never landed at all. The operators
+between the tiles are drawn because they *are* the reading — four unrelated boxes would leave the
+division to the reader, which is what three separate panels did.
+
+- **Landed is pull requests merged**, not goals closed. A goal closes when a person says it is done,
+  which can happen without the fleet having landed anything; a merge is the fleet's own output. It is
+  the event the production graph counted, now asked over the same window as the money beside it.
+- **A window with nothing landed draws no ratio at all.** Dividing by zero gives `Infinity`, and a fleet
+  that spent forty dollars and landed nothing is the single most important state this tile has to render
+  honestly — as the sentence it is, not as a symbol.
+- **Never landed counts failures and crashes only.** A killed run is a steer, and counting an operator's
+  own change of mind as waste makes every steered fleet look broken.
+
+Under the headline: the phase bar and its legend-that-is-a-table, the cost timeline at the window's own
+resolution, the goals ranked with the phase split inside each row, and the costliest runs — capped, and
+**saying so**, because a silently truncated table reads as a complete one.
+
+**Nothing here is derived in the browser.** The server ships the splits, for `PrAttention`'s reason: a
+cockpit-side re-derivation of which goal a pull request's money belongs to would be a second opinion
+about a decision made elsewhere, drawn inches from the first. What the cockpit owns is presentation —
+the phase colours, which live in the stylesheet as `--sp-<phase>`.
+
+**Fetched on open, three states, and the third is the point.** Loading, the reading, and a *failure* —
+because a fetch that failed must not render as a fleet that has spent nothing. `$0.00` is a real answer
+here (a fresh harness, or one run entirely in PTY mode), so it cannot also be the failure mode. The
+all-unmeasured case gets its own sentence rather than a table of zeroes: **unmeasured is not free**.
+
+### Reliability
+
+Spend's twin, and built as one deliberately: the same chrome, the same tables, the same phase
+vocabulary. Four tiles, the outcome bar, the CI timeline, the reddest pull requests, the phase table and
+the repeats.
+
+**Both halves are measured over the page's window.** The run half used to be all-time and the CI half a
+rolling fortnight, so a completion rate and a red rate sat side by side describing two different
+stretches. What replaces the note explaining that is the one thing a single window makes newly worth
+saying: a rate over a short window is a rate over few runs, and the reader deciding whether to act on
+64% wants to know it is 64% of eleven.
+
+The outcome **colours** live in the stylesheet as `--rl-<outcome>` and differ in kind from the phase
+palette on purpose — a phase is a category whose colours only have to read apart, while an outcome is a
+*verdict* and carries the alarm vocabulary. Grey is doing real work in it: a killed run is not a fault.
+
+A fleet with runs still out and none settled gets its own sentence rather than a table of zeroes —
+**not yet is not perfect**.
+
+### Causes
+
+Drawn on a tab of its own rather than as the third block of the reliability panel, and it is the section
+that gained most from the move: three tables and a quotation list read *below* two other readings is
+where an operator stops scrolling, and this is the one surface on the page that shows the taxonomy is
+being used rather than guessed at ([18](18-observability.md#causes-why-the-fleet-came-back)).
+
+The guard split leads it as one bar and a legend, ordered by what acting on each costs; the two cause
+tables follow, one per kind, ranked by accounts with the empty causes kept at the foot — "nothing was a
+flake this window" is a reading, and a table that dropped its own zero rows could not make it. Then
+**Lately**: the most recent accounts in the agents' own words. The section's caveat is drawn with its
+total rather than in a footnote — every share in it is a share of what was *reported*, and
+`unaccounted` is what says how much that is.
 
 ### The Trend tab
 
 `web/src/components/SpendTrendTab.tsx`, drawing `GET /api/spend/trend`
-([18](18-observability.md#the-spend-trend)). A tab rather than a second panel because the breakdown
-and the trend are one subject read two ways, and the bar's rule is that a subject is stated once —
-the same argument that put the breakdown behind the Power reading rather than beside it.
-
-**It fetches on its first visit and both tabs stay mounted after**, which is the settings modal's
-stance ([Settings](#settings)): a tab an operator never opens costs nothing, and switching back costs
-nothing twice. Tab state is a `useState` and not a [`Place`](#the-address-bar) field, for the same
-reason the settings modal's is — it is a position inside a surface the address bar already carries,
-not a surface of its own.
-
-Three sections, each headed by the question it answers, and **the shared week axis is the design**:
-every chart is the same eight weeks at the same x, so a change that shows up in one is read against
-the other two without a click.
+([18](18-observability.md#the-spend-trend)). Three sections, each headed by the question it answers, and
+**the shared axis is the design**: every chart is the same eight periods at the same x, so a change that
+shows up in one is read against the other two without a click.
 
 - **Are goals getting cheaper?** — median cost per closed goal as bars, with every goal in the cohort
-  drawn as a point beside it. The spread is drawn rather than summarised because goals differ in
-  size; the points are placed by index rather than jittered, since a random offset would reshuffle on
-  every render. The current week is **outlined rather than filled** — it is an under-count by
-  construction, and a hollow bar is the only honest way to draw a figure that is going to grow.
-- **Which stages cost more, and which less?** — the cohort's phase split as a share band, and the
-  same shift as **dollars** in the table beneath it. The table is not optional: a stage whose share
-  rose while its dollars fell is a fleet doing everything else more cheaply, and the band alone draws
-  that as a regression. This is the reading the tab exists for.
+  drawn as a point beside it. The spread is drawn rather than summarised because goals differ in size;
+  the points are placed by index rather than jittered, since a random offset would reshuffle on every
+  render. The current period is **outlined rather than filled** — it is an under-count by construction,
+  and a hollow bar is the only honest way to draw a figure that is going to grow.
+- **Which stages cost more, and which less?** — the cohort's phase split as a share band, and the same
+  shift as **dollars** in the table beneath it. The table is not optional: a stage whose share rose
+  while its dollars fell is a fleet doing everything else more cheaply, and the band alone draws that as
+  a regression. This is the reading the tab exists for.
 - **Has the success rate changed?** — completion rate and red checks per goal on two axes, plus four
-  tiles including **reopened after close**. That last one is the honesty check: a fleet that got
-  cheaper by closing goals it had not finished looks like progress on every other chart here.
+  tiles including **reopened after close**. That last one is the honesty check: a fleet that got cheaper
+  by closing goals it had not finished looks like progress on every other chart here.
 
-**Colour is the direction the reading moves in, not the sign of the number.** `.sp-delta` takes a
-tone from the call site — falling money is `good`, falling completion is `bad` — because deciding by
-sign in the stylesheet would paint a halved completion rate green.
+**Colour is the direction the reading moves in, not the sign of the number.** `.sp-delta` takes a tone
+from the call site — falling money is `good`, falling completion is `bad` — because deciding by sign in
+the stylesheet would paint a halved completion rate green.
 
-**The panel draws figures and never derives them.** Medians, the two halves and the phase shift are
-all `buildSpendTrend`'s, for the reason the breakdown ships its splits: a second implementation of
-"the median goal" a tab away from the first is free to disagree with it, silently. When the server
-withholds the comparison — fewer than two complete weeks a side — the tab says so rather than drawing
-a percentage off one week of goals.
+**The tab draws figures and never derives them.** Medians, the two halves and the phase shift are all
+`buildSpendTrend`'s. When the server withholds the comparison — fewer than two complete periods a side —
+the tab says so rather than drawing a percentage off one period of goals.
+
+**It fetches on its first visit for a given window**, which is the settings modal's stance: a tab an
+operator never opens should cost nothing. The window is part of that key rather than a boolean beside
+it, because a window change invalidates the trend — holding "already fetched" as a boolean is how the
+trend ends up drawn over one stretch while everything above it describes another. The fetch hangs off
+the *place* rather than the click that changed it, so arriving on `?view=trend` from a shared link is a
+first visit too.
+
+### Work mix
+
+The two tables that were the foot of the spend panel, where they were read about once a month and cost
+every other reader a screen of scrolling. **A tab is a better fold than a collapsed section**: it is
+named, it is addressable, and nobody scrolls past it to reach something else. They are a partition of
+the same money Economics totals, cut by what the fleet was asked to do rather than by which phase it was
+in — review comments get a figure of their own here, which no phase can give them, and so does
+`dotnet test`.
 
 ## Exporting a reading
 
-`web/src/components/Downloads.tsx`. [Spend](#spend) and [Yield](#yield) are the two surfaces that
-answer a question nobody asks at the glass — what a month cost, split how, and what it bought — and
+`web/src/components/Downloads.tsx`. [Insights](#insights) is the surface that
+answers a question nobody asks at the glass — what a month cost, split how, and what it bought — and
 those answers are wanted in a spreadsheet, a ticket or a budget review rather than in a tab that is
 gone on the next poll. The twins offer the **same three files**, which is the same rule that makes them
 twins at all:
@@ -2103,63 +2191,6 @@ Four rules hold them:
   and keeps the accents, because a phase bar with no colour is not the panel.
 
 `test/insightExport.test.ts` pins the quoting, the sections, the precision and the caveat rows.
-
-## Yield
-
-`web/src/components/ReliabilityModal.tsx`, opened from the Yield reading, drawing the payload
-`GET /api/reliability` returns ([18](18-observability.md#the-reliability-breakdown)). It is
-[Spend](#spend)'s twin and is built as one deliberately — the same chrome, the same tables, the same
-phase vocabulary — because the two answer halves of one question: where the money went, and what it
-bought.
-
-**Fetched on open, three states**, for Spend's reason with the sign flipped: a fetch that failed must
-not render as a fleet that never fails. 100% is a real answer here, so it cannot also be the failure
-mode. A fleet with runs still out and none settled gets its own sentence rather than a table of zeroes
-— **not yet is not perfect**.
-
-**Nothing here is derived in the browser**, again for `PrAttention`'s reason. What the cockpit owns is
-presentation: the outcome **colours**, which live in the stylesheet as `--rl-<outcome>` and
-`--rm-<guard>` beside the phase
-palette. The two palettes differ in kind on purpose — a phase is a category whose colours only have to
-read apart, while an outcome is a _verdict_ and carries the alarm vocabulary. Grey is doing real work
-in it: a killed run is not a fault, and colouring it like one would make every steered fleet look
-broken.
-
-Five pictures:
-
-- **Four tiles** — runs finished, money lost to faults, the CI red rate, and the median time back to
-  green. The first restates exactly what the reading just said, for the reason Spend's windows do. The
-  other two are the rates' _prices_: a rate with no cost beside it is a statistic, and the question an
-  operator opened this on was whether to do something about it.
-- **How runs ended** — one stacked bar over every settled run, and a legend that is also the table. The
-  blurb under each ending is shipped with the figures rather than held here, as the phase copy is.
-- **CI verdicts** — 14 rolling daily buckets, red **stacked on** green rather than two series, because
-  the reading is a ratio and two lines make that a comparison instead of a glance. Bars for the spend
-  trend's reason.
-- **Causes** — why the fleet came back, drawn **below** the two readings it explains, because a cause
-  table read before the counts has no denominator ([18](18-observability.md#causes-why-the-fleet-came-back)).
-  The guard split leads it as one bar and a legend, ordered by what acting on each costs; the two
-  cause tables follow, one per kind, ranked by accounts with the empty causes kept at the foot —
-  "nothing was a flake this fortnight" is a reading, and a table that dropped its own zero rows could
-  not make it. Then **Lately**: the most recent accounts in the agents' own words, which is the only
-  thing on the panel that shows the taxonomy is being used rather than guessed at. The section's own
-  caveat is drawn with its total rather than in a footnote — every share in it is a share of what was
-  _reported_, and `unaccounted` is what says how much that is.
-
-- **By phase**, then the two rankings — the reddest pull requests and the origins that ran more than
-  once. Both are capped and **say so**. The repeats table is a ranking and never a count of mistakes: a
-  part agent that lands and then answers review comments legitimately runs twice, and what earns it a
-  table is that the expensive kind of repetition is invisible everywhere else — a goal whose row shows
-  one number quietly went round four times.
-
-**The method note states the two things a reader would otherwise discover by disbelieving the panel:**
-the two halves are measured over different windows, and a red is a CI verdict rather than a pull
-request. It also names the unmeasured runs, which count in every rate above it and in no dollar.
-
-**It [exports](#exporting-a-reading)** as Spend does, and the twins offer the same three files for the
-reason they share their chrome. Six sections — tallies, outcomes, CI days, phases, the reddest pull
-requests, the repeats — and the phase table is keyed the way Spend's is, from the same server-side
-classifier, so the two files join on it.
 
 ## Data flow
 

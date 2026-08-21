@@ -777,34 +777,42 @@ nobody wrote up: "no retrospective" is an ordinary answer here, not a missing re
 
 ### `GET /api/spend`
 
-The breakdown behind the cost indicators: the same money split by phase, by goal and over a
-fortnight, plus the coverage caveat. Returns `{ insights }` — see
+The breakdown behind the Insights page's Economics and Work mix tabs: the money spent inside a window,
+split by phase, by goal and over time, plus what landed and what never did. Returns `{ insights }` — see
 [18](18-observability.md#the-spend-breakdown) for what each split means and why the phases are a
 partition.
 
+**Takes `?window=`** — `6h`, `24h`, `7d`, `30d` or `all`, defaulting to `7d`, validated by
+`InsightsQuery`. It is the only parameter, and it is the whole of what makes the page's one control
+mean anything: the window is resolved once here and passed to every fold under it
+([18](18-observability.md#the-window)). A key this route does not recognise is a **400**, not a
+silent fallback — the page can only ask with the union, so an unrecognised one came from a hand-edited
+address bar and deserves to be told.
+
 Fetched on open for `/api/work`'s reason: it reads **every agent the harness has ever run** and every
-dated cost delta of the last fourteen days, where `/api/state` comes round every couple of seconds for
-every open cockpit. What the indicators themselves need — the rolling windows, and each goal's own
-total — is already on the snapshot and costs nothing.
+dated cost delta inside the window, where `/api/state` comes round every couple of seconds for every
+open cockpit.
 
 Derived on the server rather than in the browser, and not only because the timeline needs the store.
-The per-goal totals are `rollUpIssueSpend`'s own, taken whole: the panel and the goal card state the
+The per-goal totals are `rollUpIssueSpend`'s own, taken whole: the page and the goal card state the
 same figure inches apart in the cockpit, so a cockpit-side re-derivation would be a second opinion
-about which goal a pull request's money belongs to. Read-only, and it takes no parameters — the
-windows it reports are the same two `buildUsage` puts on the snapshot, asked the same way, so the
-panel and the chip it opens from cannot disagree.
+about which goal a pull request's money belongs to.
 
 ### `GET /api/spend/trend`
 
-The same money on a week axis, cohorted by the goals that closed: median cost and tokens per goal,
+The same money on a period axis, cohorted by the goals that closed: median cost and tokens per goal,
 the stage split as dollars per goal, and whether the work still landed. Returns `{ trend }` — see
 [18](18-observability.md#the-spend-trend) for why the unit is a closed goal, why cohort and period
-weeks are different weeks, and what is withheld rather than drawn thin.
+buckets are different buckets, and what is withheld rather than drawn thin.
 
-Fetched on the Trend tab's **first visit** rather than alongside `/api/spend`, which is one step
-further than the other fetched-on-open routes go: it reads two months of `world_events` and the closed
-end of the ticket mirror on top of the same all-time agent walk, and the tab an operator never opens
-should cost nothing. The closures are the mirror's and not `world_events`', which is the whole reason
+**Takes the same `?window=`, and reads eight of them.** A period on this axis is one window, so the
+route's `since` comes from `trendSince` rather than the window's own — asking for a single period
+would draw one bar and seven empty ones.
+
+Fetched on the Trend tab's **first visit for a given window** rather than alongside `/api/spend`, which
+is one step further than the other fetched-on-open routes go: it reads eight windows of `world_events`
+and the closed end of the ticket mirror on top of the same all-time agent walk, and the tab an operator
+never opens should cost nothing. The closures are the mirror's and not `world_events`', which is the whole reason
 the tab has anything to draw — see [18](18-observability.md#the-spend-trend). Its goals come
 from `buildSpendGoals`, the fold `/api/spend` ships — the two tabs state one goal's cost a click
 apart, and agreement by construction is the only kind that holds.
@@ -812,26 +820,26 @@ apart, and agreement by construction is the only kind that holds.
 ### `GET /api/reliability`
 
 What the spending bought: run outcomes all-time, CI health over the last fortnight, and — over that
-same fortnight — the accounts agents wrote of why they had to come back. Returns
+same window — the accounts agents wrote of why they had to come back. Returns
 `{ insights, remedies }` — see [18](18-observability.md#the-reliability-breakdown) for what each half
-of the first means, why the two windows differ, and why `killed` is not counted as a failure, and
+of the first means and why `killed` is not counted as a failure, and
 [18](18-observability.md#causes-why-the-fleet-came-back) for the second.
 
-`remedies` rides on **this** payload rather than a route of its own because it is a section of this
-panel and shares its window: two fetches for one modal would be two chances for the two halves to
-describe different fortnights. It is folded from the same `usage_events` this handler already read,
+`remedies` rides on **this** payload rather than a route of its own because it shares the window: two
+fetches would be two chances for the two halves to describe different stretches. It is folded from the same `usage_events` this handler already read,
 and its `unaccounted` denominator counts tasks whose **origin** is `pr:<n>:ci` or `pr:<n>:comments` —
 the same fence `report_remedy` uses, so the numerator and the denominator are one population.
 
-Fetched on open for `/api/spend`'s reason and at the same cost: it walks every agent the harness has
-ever run, plus a fortnight of `pr_ci` transitions. What the **Yield gauge** needs to draw is already
-on the snapshot as `runOutcomes`, folded by the same `tallyRunOutcomes` this route opens with, so the
-gauge and the panel cannot disagree.
+**Takes the same `?window=`**, and both halves obey it — the run half was all-time and the CI half a
+rolling fortnight before this, so a completion rate and a red rate sat side by side describing two
+different stretches ([18](18-observability.md#the-window)).
 
-Both windows are resolved in the handler rather than inside the fold, so the `since` a row is
-selected by and the `since` it is bucketed into are one value: a store read wider than the buckets
-drops rows silently at the fold, and a narrower one draws an empty first day that was never empty.
-Read-only, and it takes no parameters.
+Fetched on open for `/api/spend`'s reason and at the same cost: it walks every agent the harness has
+ever run, plus the window's `pr_ci` transitions.
+
+The window is resolved in the handler rather than inside the fold, so the `since` a row is selected by
+and the `since` it is bucketed into are one value: a store read wider than the buckets drops rows
+silently at the fold, and a narrower one draws an empty first bucket that was never empty.
 
 ### `GET /api/scratchpads/:ref`
 

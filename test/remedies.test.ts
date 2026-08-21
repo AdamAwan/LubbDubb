@@ -266,6 +266,6 @@ test('the Causes reading rides on the panel it is a section of', async () => {
   // two halves to describe different fortnights.
   assert.equal(payload.remedies.accounts, 1);
   assert.equal(payload.remedies.byKind.find((k) => k.kind === 'ci')?.accounts, 1);
-  assert.ok(payload.insights.windowDays > 0);
+  assert.ok(payload.insights.window.buckets > 0);
   await app.close();
 });

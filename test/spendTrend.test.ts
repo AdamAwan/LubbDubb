@@ -13,6 +13,7 @@ import { gitRepo } from './support/gitRepo.js';
 import type { Agent, Issue, TrackerItem, WorldEvent } from '../src/types.js';
 import type { TicketClosure } from '../src/store/tickets.js';
 import type { SpendTrendPayload } from '../src/wire.js';
+import { resolveWindow } from '../src/insightsWindow.js';
 
 /**
  * The trend behind the breakdown. What it has to get right is not the arithmetic
@@ -115,6 +116,10 @@ function build(over: {
     issues: over.issues ?? [],
     agents: over.agents ?? [],
     ciEvents: over.ciEvents ?? [],
+    // A weekly period, so the axis is the eight weeks these fixtures were
+    // written against — the span is a parameter now and a test that named none
+    // would assert whatever the default happened to be.
+    window: resolveWindow('7d', NOW),
     now: NOW,
   });
 }
@@ -387,7 +392,7 @@ test('the route answers a full axis on a store with nothing in it', async () => 
   assert.equal(res.statusCode, 200);
   const { trend } = res.json() as SpendTrendPayload;
 
-  assert.equal(trend.buckets.length, trend.weeks);
+  assert.equal(trend.buckets.length, trend.periods);
   assert.equal(trend.buckets.at(-1)?.partial, true);
   assert.ok(trend.buckets.every((w) => w.goalsClosed === 0 && w.medianCostUsd === null));
   // Too few complete weeks *with* anything in them is not the test here — the
