@@ -6,7 +6,16 @@
  */
 import assert from 'node:assert/strict';
 import { type ChildProcess, spawn } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmSync,
+  utimesSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, before, describe, it } from 'node:test';
@@ -54,6 +63,40 @@ const stderrOf = (child: ChildProcess): { text: () => string } => {
   return { text: () => text };
 };
 
+/** The non-throwing view of `acquired`: what the child has said so far, if anything. */
+const stdoutOf = (child: ChildProcess): { text: () => string } => {
+  let text = '';
+  child.stdout?.on('data', (c: Buffer) => (text += c.toString()));
+  return { text: () => text };
+};
+
+/** Puts a record under the lock's name the way the lock does: complete, in one step. */
+const publishRecord = (lock: string, pid: number): void => {
+  const staging = `${lock}.seed`;
+  writeFileSync(staging, JSON.stringify({ pid, startedAt: Date.now() }));
+  renameSync(staging, lock);
+};
+
+/** A reading of the lockfile, or undefined if those bytes are not a whole record. */
+const recordIn = (raw: string): { pid: number } | undefined => {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed !== null && 'pid' in parsed && typeof parsed.pid === 'number'
+      ? { pid: parsed.pid }
+      : undefined;
+  } catch {
+    return undefined;
+  }
+};
+
+/** So a failed assertion cannot leave a child holding the lock and the suite open. */
+const reap = (child: ChildProcess): void => {
+  if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+};
+
+/** Whatever a take staged beside the lock and did not clean up. */
+const litter = (): string[] => readdirSync(dir).filter((name) => name.endsWith('.staged'));
+
 const exited = (child: ChildProcess): Promise<number | null> =>
   new Promise((resolve) => child.on('exit', (code) => resolve(code)));
 
@@ -83,6 +126,72 @@ describe('check lock', () => {
       assert.equal(lines[i]?.split(' ')[1], lines[i + 1]?.split(' ')[1], 'paired by pid');
     }
     assert.equal(existsSync(lock), false, 'released on clean exit');
+  });
+
+  it('never shows a lockfile that names nobody', async () => {
+    const { lock, log } = paths();
+    // A take is one `link` of an already-written file, so every reading of the
+    // lockfile — the first one included — is a whole record. The two-step take this
+    // replaces created the name empty and filled it in afterwards, and a waiter that
+    // read it in between cleared a live holder's lock.
+    const readings: string[] = [];
+    const watcher = { stop: false };
+    const watching = (async () => {
+      while (!watcher.stop) {
+        try {
+          readings.push(readFileSync(lock, 'utf8'));
+        } catch {
+          // Not taken yet, or released already. Only what exists is evidence.
+        }
+        await new Promise((r) => setImmediate(r));
+      }
+    })();
+
+    const holder = spawnChild(lock, log, -1);
+    try {
+      await acquired(holder);
+      watcher.stop = true;
+      await watching;
+      // The holder is still in, so this last one is not a race with anything: how
+      // many of the arrival the loop caught is up to the machine, but not this.
+      readings.push(readFileSync(lock, 'utf8'));
+
+      for (const raw of readings) {
+        assert.equal(recordIn(raw)?.pid, holder.pid, `a reading that names nobody: ${JSON.stringify(raw)}`);
+      }
+      assert.deepEqual(litter(), [], 'the staged file is not left behind');
+    } finally {
+      watcher.stop = true;
+      reap(holder);
+    }
+    await exited(holder);
+  });
+
+  it('leaves a lockfile that names nobody alone while it could still be arriving', async () => {
+    const { lock, log } = paths();
+    // The window itself, held open: the name is taken and the record is not there
+    // yet. Nothing in the file says who holds it, and that is not grounds to clear
+    // it — the age of the bytes is what separates litter from an arrival.
+    writeFileSync(lock, '');
+
+    const waiter = spawnChild(lock, log, 0);
+    const out = stdoutOf(waiter);
+    const err = stderrOf(waiter);
+    try {
+      await new Promise((r) => setTimeout(r, 1_000));
+      assert.equal(out.text().includes('acquired'), false, 'a lockfile that named nobody was taken as free');
+      assert.equal(readFileSync(lock, 'utf8'), '', 'and it was left exactly as it was found');
+
+      // Now it names its holder, the way it does a moment after the name is claimed.
+      publishRecord(lock, process.pid);
+      await waitFor(() => err.text().includes(`waiting ${process.pid}`));
+    } catch (failure) {
+      reap(waiter);
+      throw failure;
+    }
+
+    rmSync(lock);
+    assert.equal(await exited(waiter), 0);
   });
 
   it('names the holder to whoever is waiting', async () => {
@@ -144,9 +253,13 @@ describe('check lock', () => {
     assert.equal(await exited(child), 0);
   });
 
-  it('discards a lockfile it cannot read', async () => {
+  it('discards a lockfile it cannot read once it has stopped changing', async () => {
     const { lock, log } = paths();
     writeFileSync(lock, 'not json');
+    // Backdated past the grace an arriving lock gets: these bytes name nobody, and
+    // nothing is going to fill them in.
+    const settled = new Date(Date.now() - 60_000);
+    utimesSync(lock, settled, settled);
 
     const child = spawnChild(lock, log, 0);
     await acquired(child);
