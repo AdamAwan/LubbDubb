@@ -583,6 +583,27 @@ Both are named in `MCP_PROTOCOL_ADDENDUM` rather than at a point of use — the 
 `test/mcpChannel.test.ts` forces on every tool. Every agent may write to this store and every agent
 may read it, so there is no one dispatch prompt that could name them.
 
+### The doors that closed, and why they are still there
+
+`report_finding`, `knowledge_propose`, `knowledge_notice` and `knowledge_contradict` are **named
+nowhere**. They are still registered, still granted, and still work.
+
+That is deliberate on both halves. Advertising them would put six ways to file one observation in
+front of every agent, which is the taxonomy `raise` exists to remove — an agent choosing between
+doors is an agent that can choose wrong, and the whole value of the intake is that there is nothing
+to get wrong. But **deleting a tool name fails silently in the one place it matters most**: an
+operator's prompt override written before the intake may still name `report_finding`, and a name
+dropped from `MCP_TOOL_NAMES` and the `--allowedTools` grants comes back refused with nothing in the
+logs to say why — on exactly the deployments that customised most. Unlike a `PromptId`, whose removal
+turns a deployment into a harness that will not boot and says so, a withdrawn tool name is a call that
+quietly does not work.
+
+So they are classified `superseded` in `test/mcpChannel.test.ts` — a third answer beside `addendum`
+and `point-of-use`, which is where that intent is recorded. Without it they would read as
+`point-of-use` and look like tools somebody forgot to name, which is the state `open_pr` spent its
+first release in and the thing that test exists to catch. Withdrawing the names for real is a later
+change, once overrides have moved.
+
 **A raised claim is refused by name when it is barred**, with the id of the rejected claim and the
 `contradicts` argument that is the way back. A silent refusal teaches the fleet nothing, and it files
 the same claim again tomorrow.

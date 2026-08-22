@@ -6,6 +6,13 @@ says so. A **lesson** is a claim of a different kind — what working a goal tau
 repository — and it reaches nothing until an operator promotes it. A **human task** is work only a
 person can do, and the operator is the one who does it.
 
+**Two of the four no longer have a door of their own, or a surface of their own.** An agent files a
+finding through `raise` ([27](27-knowledge.md#the-intake-asks-nothing-an-agent-cannot-answer)), which
+takes no kind and no destination — `report_finding` is still registered but named nowhere — and
+findings and lessons are read and ruled on as sections of the Knowledge page rather than as panels
+([17](17-cockpit.md)). What is described below is the stores, the routes and the transitions, all of
+which are unchanged: what moved is where a claim comes in and where it is looked at.
+
 ## Jobs
 
 A job is an ad-hoc prompt queued from the cockpit. Unlike a `Task` — created the instant an agent
@@ -512,7 +519,7 @@ them.
 
 - **A `code` job, not a `desk` one.** It writes files in a tree and pushes a branch to open the pull
   request from, and a desk job would cut neither. The body's `kind` defaults to `code`, which is why
-  nothing here forces it — the cockpit sends no body at all, so every promotion from the panel is a
+  nothing here forces it — the cockpit sends no body at all, so every promotion from the page is a
   code job, and the override stays available for the operator who wants otherwise, the same as for
   every kind.
 - The title is `Document: <first line>`, capped at 80 characters. It is the **job's** title, not the
@@ -702,24 +709,25 @@ make the claim safe are the reason the store is allowed to exist at all:
 The question that decides it is: does this describe **the repository**, or **working the
 repository**?
 
-| The lesson is…                                                      | Destination                                              | Why                                                            |
-| ------------------------------------------------------------------- | -------------------------------------------------------- | -------------------------------------------------------------- |
-| A fact about the code — a seam, an invariant, a second registration | `report_finding` kind `docs` → promotion → **a docs PR** | It is the repo's knowledge and belongs where the repo keeps it |
-| A fact about working the goal                                       | The lesson store, promoted                               | Ours, not theirs; no business in someone else's tree           |
-| A one-off defect noticed in passing                                 | `report_finding` kind `out_of_scope` → promotion → job   | Already built above; needs nothing                             |
-| Something true only of this goal                                    | The goal's scratchpad                                    | Already built; dies with the goal, correctly                   |
+| The lesson is…                                                      | Destination                | Why                                                  |
+| ------------------------------------------------------------------- | -------------------------- | ---------------------------------------------------- |
+| A fact about working the goal                                       | The lesson store, promoted | Ours, not theirs; no business in someone else's tree |
+| A fact about the code, or a defect noticed in passing               | `raise` → [27](27-knowledge.md) | One call, and the harness routes it             |
+| Something true only of this goal                                    | The goal's scratchpad      | Dies with the goal, correctly                        |
 
-Row one was prose until #397: the `issue-retro` template said "say so in the document; do not file it
-as a lesson", and the document is read once, by a person. Three of the four answers were rails and the
-fourth was not, which made the most durable thing an agent learns the one thing with nowhere to put it.
-It is a rail now, and it stays out of the lesson store on the same argument the store rests on: a claim
-about _working_ the repository is a lesson, and a claim about the repository is theirs.
+**The table used to have four rows, and shrinking it is the point.** Rows one and three were
+`report_finding` kind `docs` and kind `out_of_scope` — two destinations the writer had to tell apart
+by what an operator would do about each, which is the operator's knowledge and not the writer's. They
+are one row now because `raise` is one call: the agent says what it saw and the routing is the
+harness's. What is left is the only question a writer is actually placed to answer — is this about
+_working_ the repository, about this goal alone, or neither.
 
-The discriminator is stated in **three** places for the reason it was already stated in two:
-`issue-retro`'s template is operator-overridable, `retro_submit`'s tool description always arrives,
-and `report_finding`'s description is what an agent that never gets to a retrospective reads — which
-matters most here, because a repo fact is learned mid-run and filing it then beats waiting for a
-retrospective that may summarise it away.
+The discriminator is still stated in **two** places, and that duplication is deliberate:
+`issue-retro`'s template is operator-overridable, so a deployment running an override written before
+this would otherwise dispatch an agent that never hears the distinction, and `retro_submit`'s tool
+description always arrives. It used to be three, and the third — `report_finding`'s description — went
+with the door: an agent that never gets to a retrospective now reads `raise`'s description instead,
+which asks it to sort nothing.
 
 ### The three states, and the two that are one-way
 
@@ -761,7 +769,7 @@ un-retire" rests on, and it re-dates the claim.
 | `POST /api/lessons/:id/retire`  | The prune. 404 unknown, 409 already retired.                       |
 
 There is no list route: the lessons ride on `/api/state` with everything else the cockpit polls,
-which is what `findings` does and for the same reason — the panel draws them beside refs the
+which is what `findings` does and for the same reason — the section draws them beside refs the
 snapshot's own link map resolves. All three broadcast `dirty` rather than `world:changed` and run no
 cycle: nothing in the world moved.
 
@@ -826,9 +834,9 @@ for renders, each claim carries the goal it was learned on and the date it was w
 bounded by `knowledgeBlockChars`, and what the cap drops is visible to the operator — on the Knowledge
 page, per row and against the budget, since that is where the block that ships is drawn.
 
-The Lessons panel still says per row whether a promoted lesson is reaching agents, and that flag is
+The Lessons section still says per row whether a promoted lesson is reaching agents, and that flag is
 the knowledge block's own answer read back through the fact the lesson was adopted into
-→ [17](17-cockpit.md#the-console). One block is delivered, so both panels have to be describing it.
+→ [17](17-cockpit.md#the-console). One block is delivered, and since the fold-in one page describes it.
 
 With nothing injected, nothing is appended at all — not a header, not a newline — and the launch
 arguments are byte-identical to a build without the feature. A retired lesson stops appearing at the

@@ -33,11 +33,10 @@ export const retroSubmit: ToolFactory = ({ deps, agent, ok }) => ({
     '- Working the repository — "the suite needs the web bundle built first", "this subsystem\'s tests ' +
     'sit at an odd seam", "a ticket naming only a symptom is under-specified for a planner every ' +
     'time" → a lesson here.\n' +
-    '- A fact about the code — a seam, an invariant, a second place a thing must be registered → ' +
-    'report_finding with kind "docs". Promoted, it becomes a pull request against the repository\'s ' +
-    'own documentation, which is where the repository keeps its own knowledge. Not a lesson: a ' +
-    "lesson is ours and has no business in someone else's tree.\n" +
-    '- A defect you noticed in passing → report_finding with kind "out_of_scope". Not a lesson.\n' +
+    '- A fact about the code, or a defect you noticed in passing → `raise` it. One call, and you do ' +
+    'not have to work out which of them it is: the harness routes it and an operator decides what it ' +
+    'is for. Not a lesson — a lesson is about working this repository, and a fact about the code is ' +
+    "the repository's own, with no business in a store of ours.\n" +
     '- Something true only of this goal → the scratchpad, where it dies with the goal, correctly. Not ' +
     'a lesson.\n\n' +
     'A lesson lands as a *proposal* and reaches no agent until an operator vouches for it, so file the ' +

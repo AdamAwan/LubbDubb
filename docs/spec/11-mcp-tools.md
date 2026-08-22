@@ -759,12 +759,18 @@ called. `open_pr` spent its first release exactly there.
 So every tool is named in one of two places, and which one is a decision, not a default:
 
 - **`MCP_PROTOCOL_ADDENDUM`** for the tools any agent may choose to call at any point in any dispatch:
-  `raise`, `escalate`, `plan_submit`, `world_read`, `open_pr`, `report_finding`, `request_human_task`,
-  `note_progress`, and the knowledge tools — `knowledge_propose`, `knowledge_ask`, `knowledge_notice`,
-  `knowledge_contradict`. Nothing else names these. `raise` and the knowledge tools are here because
-  every agent may write to that store and every agent may read it, so there is no one dispatch prompt
-  that could name them — and `raise` most of all, since the whole of its value is being callable the
-  moment an agent learns something rather than at a point somebody predicted.
+  `raise`, `escalate`, `plan_submit`, `world_read`, `open_pr`, `request_human_task`, `note_progress`
+  and `knowledge_ask`. Nothing else names these. `raise` and `knowledge_ask` are here because every
+  agent may write to that store and every agent may read it, so there is no one dispatch prompt that
+  could name them — and `raise` most of all, since the whole of its value is being callable the moment
+  an agent learns something rather than at a point somebody predicted.
+- **Nowhere at all**, for the four `raise` replaced — `report_finding`, `knowledge_propose`,
+  `knowledge_notice`, `knowledge_contradict`. They are still registered and still granted, and that
+  pair of decisions is one argument: six advertised ways to file one observation is the taxonomy the
+  intake removed, while a *withdrawn* tool name fails silently on the deployments that customised most
+  — an override still naming one gets a call that comes back refused with nothing in the logs. They
+  are classified `superseded` in `test/mcpChannel.test.ts`, so they cannot be mistaken for tools
+  somebody forgot to name. → [27](27-knowledge.md#the-doors-that-closed-and-why-they-are-still-there)
 - **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
   a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
   `assay_issue`, `retro_submit`, `link_ticket`, the scratch pair, the validation pair. Keeping them out
