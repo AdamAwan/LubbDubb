@@ -78,6 +78,8 @@ function proposal(overrides: Partial<FactProposal> = {}): FactProposal {
     evidence: 'check failed on an exported type nothing imported.',
     supersedes: null,
     resolvesWhen: null,
+    aboutRef: null,
+    where: null,
     ...overrides,
   };
 }
@@ -457,6 +459,8 @@ test('a contradiction is validated on the amendment it demands, and the amendmen
     originRef: 'issue:41',
     ruledAt: now,
     resolvesWhen: null,
+    aboutRef: null,
+    where: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -878,6 +882,9 @@ test('the page draws every reach, the rejected tail included', async () => {
         graduations: state.knowledgeGraduations,
         delivery: state.knowledgeDelivery,
         cost: state.knowledgeCost,
+        findings: state.findings,
+        lessons: state.lessons,
+        canFileTickets: state.config.canFileTickets,
         now: Date.now(),
         refUrls: state.refUrls,
         viewingFact: null,
@@ -887,6 +894,12 @@ test('the page draws every reach, the rejected tail included', async () => {
         onDetail: () => Promise.resolve({ corroborations: [], contradictions: [] }),
         onResolveContradiction: () => undefined,
         onViewFact: () => undefined,
+        onPromoteFinding: () => undefined,
+        onFileFinding: () => undefined,
+        onDismissFinding: () => undefined,
+        onProposeLesson: () => Promise.resolve(undefined),
+        onPromoteLesson: () => undefined,
+        onRetireLesson: () => undefined,
       }),
     }),
   );

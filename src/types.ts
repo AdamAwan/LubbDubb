@@ -1281,7 +1281,32 @@ export type FactLifetime = 'standing' | 'expiring';
  *   nothing else: "true, but not worth the context" is `lookup`, where it costs
  *   nothing until somebody asks.
  */
-export type FactReach = 'proposal' | 'lookup' | 'injected' | 'committed' | 'superseded' | 'rejected';
+export type FactReach =
+  | 'proposal'
+  | 'lookup'
+  | 'injected'
+  | 'committed'
+  | 'superseded'
+  /**
+   * Not carried any more, and **not judged untrue**.
+   *
+   * The distinction from `rejected` is the whole of why this exists, and the
+   * lesson store had it as two meanings of one word: retiring is the prune and
+   * rejecting is the bar. A claim that stopped being worth its place — the check
+   * it was about is gone, the seam it described was refactored away, the fleet has
+   * simply moved on — is not a claim anybody found false, and barring it means the
+   * agent that hits the same wall next quarter is refused by name for saying
+   * something true.
+   *
+   * So a retired claim is out of every read and may be raised again, which files a
+   * fresh row and **re-dates** it. That is deliberate rather than incidental: a
+   * claim worth bringing back is worth reading first, and a re-raise arrives with
+   * its own evidence and its own date rather than resurrecting a judgement nobody
+   * has revisited. `lessons` has stated exactly this rule since #355 — there is no
+   * un-retire — and this is where it now lives.
+   */
+  | 'retired'
+  | 'rejected';
 
 /**
  * One thing the fleet believes about this repository that the repository does not
@@ -1339,6 +1364,28 @@ export interface KnowledgeFact {
    * → `docs/spec/27-knowledge.md#notices`
    */
   resolvesWhen: FactResolution | null;
+  /**
+   * The world item the claim is *about* (`issue:41`, `pr:412`), or null.
+   *
+   * Never {@link KnowledgeFact.originRef}, which names the goal the observing
+   * agent was working when it learned this. The two are different questions and
+   * the answer differs exactly when it matters most: an agent on `issue:41` that
+   * says `pr:412` duplicates `pr:398` has an origin of the first and is talking
+   * about the second. Attributing such a claim to its origin files it under
+   * somebody else's goal — the defect `findingJobRequest` already refuses by
+   * carrying `finding.ref` rather than `finding.originRef`.
+   */
+  aboutRef: string | null;
+  /**
+   * What locates the claim — a file and line, a package, a service, an endpoint.
+   *
+   * Free text rather than a closed vocabulary because "where" means a different
+   * thing for a duplicate, a flaky check and an undocumented seam, and a schema
+   * for it would be guessed at. Optional for {@link KnowledgeFact.aboutRef}'s
+   * reason: a required field an agent has nothing for comes back as "N/A", and a
+   * list of those is worse than an absence.
+   */
+  where: string | null;
   createdAt: string;
   /** When it last moved — for anything but a fresh proposal, when its reach changed. */
   updatedAt: string;

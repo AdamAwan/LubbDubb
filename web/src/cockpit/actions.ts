@@ -48,8 +48,6 @@ export type ValidationAct =
 export type ConfigTab = 'values' | 'raw' | 'ci' | 'prompts' | 'mcp' | 'notifications' | 'theme';
 
 export type ConsolePanel =
-  | 'findings'
-  | 'lessons'
   | 'faults'
   | 'launch'
   | 'build'

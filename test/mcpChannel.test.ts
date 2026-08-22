@@ -167,24 +167,39 @@ test('the granted permission names are exactly the tools the server exposes', ()
  * it belongs to, which is the better place for a tool only one kind of agent ever
  * calls. Keeping them *out* of the addendum is what keeps it short enough to read.
  *
+ * `superseded` — deliberately named nowhere. `raise` is the door for everything
+ * these four did, so advertising them would put six ways to file one observation in
+ * front of every agent, which is the taxonomy the intake exists to remove. They stay
+ * *registered* rather than deleted because an operator's prompt override written
+ * before the intake may still name one, and unlike a `PromptId` a retired tool name
+ * fails silently: the call simply comes back refused, on exactly the deployments
+ * that customised most. This classification is the place that distinction is
+ * recorded — without it they would read as `point-of-use` and look like tools
+ * somebody forgot to name.
+ *
  * A `Record` over `McpToolName`, so a new tool does not compile until it has been
  * classified — the decision this test exists to force.
  */
-const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
+const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use' | 'superseded'> = {
+  // The one door. Every agent may raise, on every dispatch, so there is no single
+  // prompt that could name it — which is the addendum's own criterion.
+  raise: 'addendum',
   escalate: 'addendum',
   plan_submit: 'addendum',
   world_read: 'addendum',
   open_pr: 'addendum',
-  report_finding: 'addendum',
   note_progress: 'addendum',
-  // Every agent may write to the knowledge base and every agent may read it, so
-  // neither has a point of use to be named at: a tool named nowhere but in
-  // `tools/list` is a tool an agent finishes without.
-  knowledge_propose: 'addendum',
+  // Every agent may read the knowledge base, and it has no point of use to be named
+  // at: a tool named nowhere but in `tools/list` is a tool an agent finishes without.
   knowledge_ask: 'addendum',
-  knowledge_notice: 'addendum',
-  knowledge_contradict: 'addendum',
+  // A request for a person to act rather than an observation, which is why it did
+  // not fold into `raise` — and why it still needs naming.
   request_human_task: 'addendum',
+  // The four `raise` replaced. Kept registered for an override that names one.
+  report_finding: 'superseded',
+  knowledge_propose: 'superseded',
+  knowledge_notice: 'superseded',
+  knowledge_contradict: 'superseded',
   // Terminal or task-scoped: the dispatch prompt names these where they are used.
   link_ticket: 'point-of-use',
   conclude_work: 'point-of-use',
@@ -210,6 +225,21 @@ test('the addendum names every tool an agent has to choose to call', () => {
     } else {
       assert.equal(named, false, `${name} is named at its point of use; the addendum stays short`);
     }
+  }
+});
+
+test('a superseded tool is still granted, so an override that names one is not refused', () => {
+  // The failure this closes is silent and lands only on the deployments that
+  // customised most: an operator's prompt override written before the intake still
+  // says "report_finding", and a name dropped from the grants comes back refused
+  // with nothing in the logs to say why. Unlike a `PromptId`, a tool name that no
+  // longer exists does not fail loudly at boot.
+  for (const [name, naming] of Object.entries(TOOL_NAMING)) {
+    if (naming !== 'superseded') continue;
+    assert.ok(
+      ALLOWED_MCP_TOOLS.includes(`mcp__${MCP_SERVER_ID}__${name}`),
+      `${name} is superseded, not withdrawn — it must still be granted`,
+    );
   }
 });
 

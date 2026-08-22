@@ -14,6 +14,7 @@ import { linkTicket } from './tools/linkTicket.js';
 import { noteProgress } from './tools/noteProgress.js';
 import { openPr } from './tools/openPr.js';
 import { planSubmit } from './tools/planSubmit.js';
+import { raise as raiseFact } from './tools/raise.js';
 import { reportFinding } from './tools/reportFinding.js';
 import { reportRemedy } from './tools/reportRemedy.js';
 import { requestHumanTask } from './tools/requestHumanTask.js';
@@ -61,6 +62,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   validation_amend: validationAmend,
   validation_report: validationReport,
   report_remedy: reportRemedy,
+  raise: raiseFact,
   knowledge_propose: knowledgePropose,
   knowledge_ask: knowledgeAsk,
   knowledge_notice: knowledgeNotice,

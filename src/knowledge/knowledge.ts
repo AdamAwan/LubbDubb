@@ -79,6 +79,10 @@ export interface FactProposal {
    * {@link validateFactProposal} never fills this in for that reason.
    */
   resolvesWhen: FactResolution | null;
+  /** The world item the claim is about (`pr:412`), or null. Never the observer's own origin. */
+  aboutRef: string | null;
+  /** What locates it — file and line, package, service. Null when the agent had nothing to give. */
+  where: string | null;
 }
 
 /**
@@ -175,6 +179,8 @@ export function validateFactProposal(
     expiresInHours = hours;
   }
   const supersedes = typeof args.supersedes === 'string' ? args.supersedes.trim() : '';
+  const located = validateLocators(args);
+  if (!located.ok) return located;
   return {
     ok: true,
     proposal: {
@@ -185,8 +191,61 @@ export function validateFactProposal(
       evidence: evidence.slice(0, MAX_EVIDENCE_CHARS),
       supersedes: supersedes || null,
       resolvesWhen: null,
+      aboutRef: located.aboutRef,
+      where: located.where,
     },
   };
+}
+
+/**
+ * How long a locator may be. `validateFinding`'s bound, kept to the character
+ * because a `where` written under one tool and read under the other is the same
+ * string — two bounds for one field is a field that means something different
+ * depending on which door it came through.
+ */
+const MAX_WHERE_CHARS = 200;
+
+/**
+ * The two fields that say *what the claim is about* and *where it was seen*.
+ *
+ * Shared by every writer rather than validated per tool, for the reason
+ * {@link MAX_CLAIM_CHARS} is one constant: whichever writer is looser decides what
+ * an operator ends up being asked to read, and a bound written twice drifts in
+ * exactly that direction.
+ */
+function validateLocators(
+  args: Record<string, unknown>,
+): { ok: true; aboutRef: string | null; where: string | null } | { ok: false; error: string } {
+  const where = typeof args.where === 'string' ? args.where.trim() : '';
+  if (where.length > MAX_WHERE_CHARS) {
+    return { ok: false, error: `where must be ${MAX_WHERE_CHARS} characters or fewer — it locates the claim` };
+  }
+  const rawRef = typeof args.ref === 'string' ? args.ref.trim() : '';
+  if (!rawRef) return { ok: true, aboutRef: null, where: where || null };
+  const ref = parseAboutRef(rawRef);
+  if (!ref) {
+    return {
+      ok: false,
+      error:
+        'ref must name a world item as "issue:<n>" or "pr:<n>" — a bare number is refused because there is ' +
+        'nothing here to tell issue #41 from pull request #41, and a claim about the wrong one is worse ' +
+        'than a claim about neither. Omit it and say what you mean in the claim',
+    };
+  }
+  return { ok: true, aboutRef: ref, where: where || null };
+}
+
+/**
+ * The closed `issue:` / `pr:` vocabulary, suffix-tolerant so a dispatch origin
+ * passes back verbatim — `parseFindingRef`'s rule and its reason.
+ *
+ * A bare number is refused rather than guessed at: unlike `world_read` there is no
+ * second argument to disambiguate with, and an open-ended ref field is an
+ * unqueryable junk drawer.
+ */
+function parseAboutRef(raw: string): string | null {
+  const match = /^(issue|pr):(\d+)(?::[a-z]+)?$/.exec(raw.trim().toLowerCase());
+  return match ? `${match[1]}:${match[2]}` : null;
 }
 
 /**
@@ -205,6 +264,79 @@ export function validateFactNotice(
 ): { ok: true; proposal: FactProposal } | { ok: false; error: string } {
   const args = (raw ?? {}) as Record<string, unknown>;
   return validateFactProposal({ ...args, lifetime: 'expiring' }, goalRef);
+}
+
+/**
+ * Validate what the unified intake was handed.
+ *
+ * `raise` is {@link validateFactProposal} with **every taxonomy question
+ * removed** — one validator rather than a second opinion about what a claim may
+ * be, exactly as {@link validateFactNotice} is. What changes is only what the
+ * caller has to have decided:
+ *
+ * - **Lifetime is not asked for.** `until` carries the hours, and *its presence is
+ *   the answer*: a claim filed with one is expiring, a claim filed without one
+ *   stands. An agent cannot file a notice by picking the wrong word, and cannot
+ *   file a standing fleet-wide claim by forgetting the right one — which was the
+ *   whole argument for `knowledge_notice` being a separate tool, met here without
+ *   a second door.
+ * - **Scope defaults to `fleet` rather than being required.** This is the one
+ *   default worth arguing: `goal` would be safer to be wrong about and is the
+ *   wrong default anyway, because a claim scoped to a goal dies with it — so an
+ *   agent that did not think about scope would have its observation buried on
+ *   exactly the run that learned it. What makes `fleet` safe is the gate rather
+ *   than the guess: a proposal reaches nobody, two *different* goals agreeing is
+ *   itself evidence a claim is not goal-local, and an operator sees the scope on
+ *   the row. A default an agent never has to think about, that an agent who has
+ *   thought about it can still override, is not a taxonomy question.
+ */
+export function validateRaise(
+  raw: unknown,
+  goalRef: string | null,
+): { ok: true; proposal: FactProposal } | { ok: false; error: string } {
+  const args = (raw ?? {}) as Record<string, unknown>;
+  const until = args.until;
+  if (until !== undefined && until !== null && typeof until !== 'number') {
+    return { ok: false, error: 'until must be a number of hours: how long you expect what you saw to still be true' };
+  }
+  const expiring = typeof until === 'number';
+  return validateFactProposal(
+    {
+      ...args,
+      scope: typeof args.scope === 'string' && args.scope.trim() ? args.scope : 'fleet',
+      lifetime: expiring ? 'expiring' : 'standing',
+      // Named `until` at the boundary and `expiresInHours` underneath, because the
+      // agent-facing name has to say what the number *is* in the one word an agent
+      // reads, while the stored name has to say what the number is measured in.
+      expiresInHours: expiring ? until : undefined,
+      supersedes: args.supersedes,
+    },
+    goalRef,
+  );
+}
+
+/**
+ * The intake's other arm: the same call, read as a contradiction because it named
+ * a claim it disputes.
+ *
+ * `contradicts` is routed here rather than folded into `supersedes` because the
+ * two are not the same act and the store already knows it. A bare `supersedes`
+ * files a sharper claim beside a blunter one and records no disagreement; a
+ * contradiction says *the claim you gave me does not fit what I am looking at*,
+ * and that dispute is what an operator reads to decide whether the original was
+ * ever right. Folding them would file every amendment as an undisputed refinement
+ * and leave the contradiction ratio reading zero on a claim the fleet keeps
+ * walking into — a silence, and the expensive kind.
+ *
+ * So the agent's field is one word (`contradicts: <id>`) and the routing is the
+ * harness's. The claim it is raising **is** the amendment: an agent that has seen
+ * a claim fail has, in the same breath, said what it should say instead.
+ */
+export function validateRaisedContradiction(
+  raw: unknown,
+): { ok: true; contradiction: FactContradiction } | { ok: false; error: string } {
+  const args = (raw ?? {}) as Record<string, unknown>;
+  return validateContradiction({ ...args, factId: args.contradicts, amendment: args.claim });
 }
 
 /**
@@ -315,6 +447,16 @@ export function contradictableFact(fact: KnowledgeFact, now: string): { ok: true
         `saw with knowledge_propose instead.`,
     };
   }
+  if (fact.reach === 'retired') {
+    return {
+      ok: false,
+      error:
+        `an operator has retired that claim (${fact.id}), so it is out of every prompt and nothing is being ` +
+        `told it. Retired is not rejected — it was not judged untrue, it just stopped being carried — so if ` +
+        `what you saw is worth the next agent knowing, raise it in your own words. That files a fresh claim ` +
+        `with your evidence and today's date, which is what a claim coming back should look like.`,
+    };
+  }
   if (fact.reach === 'committed' || fact.reach === 'superseded') {
     return {
       ok: false,
@@ -365,6 +507,13 @@ export function amendmentProposal(fact: KnowledgeFact, contradiction: FactContra
     // An agent never writes a condition, amendment or not: a condition is a
     // mechanism the harness has to keep watching, and nothing watches this one.
     resolvesWhen: null,
+    // Inherited rather than taken from the contradicting agent, for the reason the
+    // scope and the lifetime are: an amendment is a sharper wording of the same
+    // claim about the same thing, so it is about whatever its parent was about. The
+    // contradicting agent's own observation is not lost — it is the contradiction's
+    // `words`, which is where an operator reads it.
+    aboutRef: fact.aboutRef,
+    where: fact.where,
   };
 }
 

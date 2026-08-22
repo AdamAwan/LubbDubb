@@ -60,8 +60,12 @@ const MAX_OBSERVATION_CHARS = 1_000;
  *   the afternoon by years, and the fact's own lapse would then take the claim out
  *   of prompts it is no longer in while the document went on saying it.
  *
- * The three terminal reaches are refused because there is nothing left to commit:
- * `committed` is already there, and `rejected` and `superseded` reach nobody.
+ * The terminal reaches are refused because there is nothing left to commit:
+ * `committed` is already there, and `rejected`, `superseded` and `retired` reach
+ * nobody. `retired` is refused for the weakest of the reasons and still refused:
+ * it was not judged untrue, but an operator has just said the fleet does not need
+ * carrying it — writing it into the repository in the same breath would commit a
+ * claim to a document on the strength of a decision to stop telling anyone.
  */
 export function committableFact(fact: KnowledgeFact): { ok: true } | { ok: false; error: string } {
   if (fact.reach === 'proposal') {
@@ -73,7 +77,7 @@ export function committableFact(fact: KnowledgeFact): { ok: true } | { ok: false
     };
   }
   if (fact.reach === 'committed') return { ok: false, error: 'this claim is in the repository already' };
-  if (fact.reach === 'rejected' || fact.reach === 'superseded') {
+  if (fact.reach === 'rejected' || fact.reach === 'superseded' || fact.reach === 'retired') {
     return { ok: false, error: `this claim is ${fact.reach} — it reaches nobody, and there is nothing to commit` };
   }
   if (fact.lifetime === 'expiring') {

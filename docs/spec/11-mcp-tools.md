@@ -18,6 +18,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 
 | Tool                 | Purpose                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `raise`              | The one door for anything an agent learns. Says what is true and what it saw; the harness works out where the claim goes and an operator settles what it is for. No kind, no lifetime word, no destination. → [27](27-knowledge.md#the-intake-asks-nothing-an-agent-cannot-answer) |
 | `plan_submit`        | Submit a decomposition verdict. Replaces writing `.lubbdubb/plan.json`.                                                                                                                                                                                                                                                                                                                                                                      |
 | `escalate`           | Ask the human a question and park. The typed form of the WAITING sentinel.                                                                                                                                                                                                                                                                                                                                                                   |
 | `world_read`         | Read the harness's own view of a PR or issue.                                                                                                                                                                                                                                                                                                                                                                                                |
@@ -150,6 +151,31 @@ mutates nothing, and the cockpit already serves this same snapshot unauthenticat
 this path needs a 0600 bearer token. What _is_ kept: an agent can only name items the harness already
 holds, in the harness's own vocabulary — no query, no provider passthrough, no path or URL argument,
 so it cannot reach another repository or project.
+
+### `raise`
+
+Arguments `{claim, evidence, where?, ref?, until?, contradicts?, scope?}`. Two are required and the
+rest are the harness's routing read off what the caller supplied. The full argument is
+[27](27-knowledge.md#the-intake-asks-nothing-an-agent-cannot-answer); what belongs here is what the
+channel contributes to it:
+
+- **It takes no author, no kind and no destination.** Identity is structural, as it is for every write
+  here (`token -> agent -> task -> origin`), and the scope resolves from the same chain — an agent
+  naming `goal` gets its own goal or a refusal, never somebody else's and never a silent widening to
+  `fleet`. What is left for the caller is what it saw.
+- **The routing is two reads of presence.** `contradicts` present routes to a contradiction with the
+  raised claim as the amendment; `until` present makes it a notice bounded by that clock. Neither is a
+  word an agent can pick wrongly, which is the whole reason the two tools they replace could be
+  collapsed at all.
+- **Both arms answer in the response, not only the description.** A claim that merged into a standing
+  one says so, so an agent does not read a returned id as proof it filed something new and say it
+  again, louder; a barred claim is refused by name with `contradicts` as the way back; and an id that
+  names nothing comes back as an error the agent can fix in the same turn rather than a success it
+  cannot tell from one.
+- **It queues nothing and parks nobody**, and says so in both places. An agent that raises a defect
+  and then assumes its fix is scheduled has been told something untrue about what it just did —
+  `report_finding`'s rule, and it holds here for that rule's reason: nothing in the dispatcher reads
+  this store at any reach.
 
 ### `report_finding`
 
@@ -733,11 +759,18 @@ called. `open_pr` spent its first release exactly there.
 So every tool is named in one of two places, and which one is a decision, not a default:
 
 - **`MCP_PROTOCOL_ADDENDUM`** for the tools any agent may choose to call at any point in any dispatch:
-  `escalate`, `plan_submit`, `world_read`, `open_pr`, `report_finding`, `request_human_task`,
-  `note_progress`, and the four knowledge tools — `knowledge_propose`, `knowledge_ask`,
-  `knowledge_notice`, `knowledge_contradict`. Nothing else names these. The knowledge four are here
-  because every agent may write to that store and every agent may read it, so there is no one dispatch
-  prompt that could name them.
+  `raise`, `escalate`, `plan_submit`, `world_read`, `open_pr`, `request_human_task`, `note_progress`
+  and `knowledge_ask`. Nothing else names these. `raise` and `knowledge_ask` are here because every
+  agent may write to that store and every agent may read it, so there is no one dispatch prompt that
+  could name them — and `raise` most of all, since the whole of its value is being callable the moment
+  an agent learns something rather than at a point somebody predicted.
+- **Nowhere at all**, for the four `raise` replaced — `report_finding`, `knowledge_propose`,
+  `knowledge_notice`, `knowledge_contradict`. They are still registered and still granted, and that
+  pair of decisions is one argument: six advertised ways to file one observation is the taxonomy the
+  intake removed, while a *withdrawn* tool name fails silently on the deployments that customised most
+  — an override still naming one gets a call that comes back refused with nothing in the logs. They
+  are classified `superseded` in `test/mcpChannel.test.ts`, so they cannot be mistaken for tools
+  somebody forgot to name. → [27](27-knowledge.md#the-doors-that-closed-and-why-they-are-still-there)
 - **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
   a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
   `assay_issue`, `retro_submit`, `link_ticket`, the scratch pair, the validation pair. Keeping them out

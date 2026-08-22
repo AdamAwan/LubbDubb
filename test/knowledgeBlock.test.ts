@@ -201,6 +201,8 @@ function fact(id: string, over: Partial<KnowledgeFact> = {}): KnowledgeFact {
     originRef: 'issue:41',
     ruledAt: '2026-01-01T00:00:00.000Z',
     resolvesWhen: null,
+    aboutRef: null,
+    where: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...over,

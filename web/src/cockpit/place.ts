@@ -198,7 +198,16 @@ const TAB_ALIASES: Readonly<Record<string, ConsoleTab>> = { backlog: 'tickets', 
  * still lands on tickets: an explicit tab is the operator saying where they meant
  * to be, and an alias must not overrule one.
  */
-const PANEL_ALIASES: Readonly<Record<string, ConsoleTab>> = { knowledge: 'knowledge' };
+const PANEL_ALIASES: Readonly<Record<string, ConsoleTab>> = {
+  knowledge: 'knowledge',
+  // Findings and lessons became sections of the knowledge page rather than panels
+  // of their own, so every link an operator saved to either spells a panel name
+  // `PANELS` no longer knows. Aliased for the reason `knowledge` itself is: without
+  // this the panel parses back to null and the link opens the overview, which is
+  // the shape of a stranded link and is silent.
+  findings: 'knowledge',
+  lessons: 'knowledge',
+};
 const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched'];
 const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
 const TICKET_GROUP = ['feature', 'flat'] as const;
@@ -220,8 +229,6 @@ const TICKET_VIEW: readonly Place['ticketView'][] = ['table', 'card'];
  * the last panel that forgot one of these.
  */
 const PANEL_NAMES: Record<Exclude<ConsolePanel, null | { ask: string }>, true> = {
-  findings: true,
-  lessons: true,
   faults: true,
   launch: true,
   build: true,
