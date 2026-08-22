@@ -870,39 +870,56 @@ test('the page draws every reach, the rejected tail included', async () => {
   const { buildDemoState } = await import('../web/src/demo/fixtures.js');
   const { KnowledgePanel } = await import('../web/src/components/KnowledgePanel.js');
   const { RefLinks } = await import('../web/src/components/refs.js');
+  const { KNOWLEDGE_GROUPS } = await import('../web/src/cockpit/knowledgeQuery.js');
 
   const state = buildDemoState().state;
-  const html = renderToStaticMarkup(
-    createElement(RefLinks, {
-      refUrls: state.refUrls,
-      openGoal: () => undefined,
-      hasGoal: () => true,
-      children: createElement(KnowledgePanel, {
-        facts: state.knowledge,
-        graduations: state.knowledgeGraduations,
-        delivery: state.knowledgeDelivery,
-        cost: state.knowledgeCost,
-        findings: state.findings,
-        lessons: state.lessons,
-        canFileTickets: state.config.canFileTickets,
-        now: Date.now(),
+  const draw = (query: {
+    view: 'list' | 'table';
+    show: 'all' | 'waiting' | 'reaching' | 'settled';
+    sort: 'reach' | 'claim' | 'scope' | 'observers' | 'disputes' | 'asks' | 'age';
+    desc: boolean;
+    open: string[];
+  }): string =>
+    renderToStaticMarkup(
+      createElement(RefLinks, {
         refUrls: state.refUrls,
-        viewingFact: null,
-        onReach: () => undefined,
-        onCommit: () => undefined,
-        onSettleGraduation: () => undefined,
-        onDetail: () => Promise.resolve({ corroborations: [], contradictions: [] }),
-        onResolveContradiction: () => undefined,
-        onViewFact: () => undefined,
-        onPromoteFinding: () => undefined,
-        onFileFinding: () => undefined,
-        onDismissFinding: () => undefined,
-        onProposeLesson: () => Promise.resolve(undefined),
-        onPromoteLesson: () => undefined,
-        onRetireLesson: () => undefined,
+        openGoal: () => undefined,
+        hasGoal: () => true,
+        children: createElement(KnowledgePanel, {
+          facts: state.knowledge,
+          graduations: state.knowledgeGraduations,
+          delivery: state.knowledgeDelivery,
+          cost: state.knowledgeCost,
+          findings: state.findings,
+          lessons: state.lessons,
+          canFileTickets: state.config.canFileTickets,
+          now: Date.now(),
+          refUrls: state.refUrls,
+          viewingFact: null,
+          query,
+          onQuery: () => undefined,
+          onReach: () => undefined,
+          onCommit: () => undefined,
+          onSettleGraduation: () => undefined,
+          onDetail: () => Promise.resolve({ corroborations: [], contradictions: [] }),
+          onResolveContradiction: () => undefined,
+          onViewFact: () => undefined,
+          onPromoteFinding: () => undefined,
+          onFileFinding: () => undefined,
+          onDismissFinding: () => undefined,
+          onProposeLesson: () => Promise.resolve(undefined),
+          onPromoteLesson: () => undefined,
+          onRetireLesson: () => undefined,
+        }),
       }),
-    }),
-  );
+    );
+
+  const bare = { view: 'list' as const, show: 'all' as const, sort: 'reach' as const, desc: false };
+  const shut = draw({ ...bare, open: [] });
+  // Every tail an operator has opened, which is the page with nothing folded — the
+  // shape the surface had before it grew a fold, and the one every assertion below
+  // about a tail's *contents* is made against.
+  const html = draw({ ...bare, open: KNOWLEDGE_GROUPS.filter((g) => g.tail).map((g) => g.id) });
 
   for (const heading of [
     'Live notices',
@@ -914,8 +931,17 @@ test('the page draws every reach, the rejected tail included', async () => {
     'Superseded',
     'Rejected',
   ]) {
+    // Drawn whether or not the tail under it is open: a heading and its count are
+    // how the page says a tail is not empty, and folding must not cost that.
+    assert.ok(shut.includes(heading), `the folded page draws no ${heading} heading`);
     assert.ok(html.includes(heading), `the page draws no ${heading} section`);
   }
+  // A folded tail is folded: its rows are not in the markup at all, which is what
+  // the fold buys. The heading above still counts them.
+  assert.ok(
+    !shut.includes('The dispatcher reads the lessons table'),
+    'a folded tail still renders its rows, so the fold buys nothing',
+  );
   // The claim an operator killed is on the page. A governance surface that drew
   // only what it let through could not show that anything was stopped, and the
   // bar that keeps it from being re-proposed is invisible everywhere else.
@@ -941,6 +967,21 @@ test('the page draws every reach, the rejected tail included', async () => {
     html.indexOf('scope has drifted') > html.indexOf('On lookup'),
     'the drifted claim is not in the section its reach puts it in',
   );
+  // An empty heading is drawn on the whole store — that is the page saying a tail
+  // is empty rather than missing — and under no narrowing, where it would be eight
+  // headings answering a question nobody asked. Narrowed to the settled tail,
+  // *Live notices* has nothing in it and is gone entirely: heading and all.
+  const settled = draw({ ...bare, show: 'settled', open: [] });
+  assert.ok(!settled.includes('Live notices'), 'a narrowed page draws a heading with nothing under it');
+  assert.ok(!settled.includes('Nothing here.'), 'a narrowed page draws an empty section');
+  assert.ok(settled.includes('Committed to the repository'), 'the settled filter drops the tail it is about');
+  // What every agent receives is a page-level reading now that the page has a
+  // filter, so it survives one: an operator narrowed to the settled tail must not
+  // have to un-narrow to find out what the block is costing them.
+  assert.ok(
+    draw({ ...bare, show: 'settled', open: [] }).includes('a dispatch'),
+    'the block budget disappears when the page is narrowed',
+  );
   // Where a claim went, and where one is going: both drawn as references rather
   // than as text, because a row that names a pull request and offers no way there
   // is a dead end that reads correctly (#27 phase 6).
@@ -952,6 +993,18 @@ test('the page draws every reach, the rejected tail included', async () => {
   assert.ok(html.includes('being written up'), 'a graduation in flight is not drawn');
   // And the one thing an operator must not be able to do from here.
   assert.ok(!/>File a claim</.test(html), 'nothing on this page files a claim');
+
+  // The table draws the same store, and draws it whole: a view that quietly held
+  // rows back would be a second answer to what the fleet knows.
+  const table = draw({ ...bare, view: 'table', open: [] });
+  assert.ok(table.includes('<table'), 'the table view draws no table');
+  for (const claim of ['The dispatcher reads the lessons table', 'The seed script leaves two orphaned catalog rows']) {
+    assert.ok(table.includes(claim), `the table drops ${claim}`);
+  }
+  // The ask count is a lookup row's reading and nobody else's, in either view: a
+  // zero against an injected claim would read as nobody wanting a claim no agent
+  // could ask for.
+  assert.ok(table.includes('asked for 11') || table.includes('>11<'), 'the table does not draw the ask count');
 });
 
 // -- delivery (phase 3) -------------------------------------------------------

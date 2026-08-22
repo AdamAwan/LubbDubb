@@ -32,6 +32,23 @@ test('every place round-trips through the query string', () => {
     at({ goal: 'issue:142' }),
     at({ tab: 'tickets', goal: 'issue:142', agent: 'agent-7' }),
     at({ tab: 'knowledge' }),
+    at({ tab: 'knowledge', knowledgeView: 'table' }),
+    at({ tab: 'knowledge', knowledgeShow: 'waiting' }),
+    at({ tab: 'knowledge', knowledgeSort: 'asks', knowledgeDesc: true }),
+    at({ tab: 'knowledge', knowledgeSort: 'claim' }),
+    // A column read from the other end while it is the one the page opens on: the
+    // pair is one parameter, so `reach` ascending is a bare URL and `reach`
+    // descending has to still be a place.
+    at({ tab: 'knowledge', knowledgeDesc: true }),
+    at({ tab: 'knowledge', knowledgeOpen: ['rejected', 'retired'] }),
+    at({
+      tab: 'knowledge',
+      knowledgeView: 'table',
+      knowledgeShow: 'settled',
+      knowledgeSort: 'disputes',
+      knowledgeDesc: true,
+    }),
+    at({ tab: 'knowledge', fact: 'fact_abc', knowledgeOpen: ['committed'] }),
     at({ panel: 'faults' }),
     at({ panel: 'launch' }),
     at({ panel: { ask: 'esc-9' } }),

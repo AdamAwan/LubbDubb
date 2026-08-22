@@ -1735,6 +1735,153 @@ a.btn {
   line-height: 1.5;
   margin: 0;
 }
+
+/* The page's two controls: what it is showing, and how it is laid out. Drawn as
+   the tickets tab's filter bar is, in this page's own class names and the shared
+   token family it already uses — the two bars are one idiom and not one
+   stylesheet, so re-pointing either cannot silently re-point the other. */
+.kn-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+}
+.kn-fgroup {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.kn-flabel {
+  font-size: 10.5px;
+  letter-spacing: 0.7px;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.kn-fdiv {
+  width: 1px;
+  height: 22px;
+  background: var(--border);
+}
+.kn-seg {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  overflow: hidden;
+  background: var(--panel-2);
+}
+.kn-seg button {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--muted);
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+}
+.kn-seg button:last-child {
+  border-right: 0;
+}
+.kn-seg button:hover {
+  color: var(--text);
+  background: var(--veil);
+}
+.kn-seg button.on {
+  background: var(--accent-fill);
+  color: var(--text);
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
+/* A tail heading. The caret is the whole affordance, so the control is the
+   heading itself rather than a chevron beside it — two hit targets for one fold
+   is the row that opens something in two places. */
+.kn-fold {
+  font: inherit;
+  color: inherit;
+  text-align: left;
+}
+.kn-fold:hover {
+  color: var(--accent);
+}
+/* Why a claim is waiting on a person, where the heading above it does not already
+   say so. Amber because it is the one line on a card that asks for something —
+   and never red: nothing here is a fault, and nothing was demoted by it. */
+.kn-waiting {
+  color: var(--amber);
+  font-size: 11.5px;
+  line-height: 1.45;
+  margin: 6px 0 0;
+}
+/* The table. Its own scroller, so a store with long claims in it scrolls the
+   table and never the page. */
+.kn-tablewrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--panel);
+}
+.kn-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+}
+.kn-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--border);
+  padding: 6px 9px;
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.kn-table th.num,
+.kn-table td.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  width: 1%;
+}
+.kn-table td {
+  border-bottom: 1px solid var(--border);
+  padding: 5px 9px;
+  vertical-align: top;
+}
+.kn-table tbody tr:hover td {
+  background: var(--veil);
+}
+/* Waiting on somebody, marked in form as well as in the filter's count — a row
+   an operator can act on reads at a glance, whichever order the table is in. */
+.kn-trow.waiting td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+.kn-trow.open td {
+  background: var(--well);
+}
+/* One line, clipped: the card it opens draws the same claim in full, as markdown
+   and with its references live. */
+.kn-tclaim {
+  display: block;
+  max-width: 62ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.kn-tclaim:hover {
+  color: var(--accent);
+}
+.kn-tdetail td {
+  background: var(--well);
+  padding: 8px;
+}
 .kn-section {
   display: flex;
   flex-direction: column;

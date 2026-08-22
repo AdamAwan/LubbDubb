@@ -182,6 +182,22 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
           now={view.now}
           refUrls={view.state.refUrls}
           viewingFact={view.viewingFact}
+          query={{
+            view: view.knowledgeView,
+            show: view.knowledgeShow,
+            sort: view.knowledgeSort,
+            desc: view.knowledgeDesc,
+            open: view.knowledgeOpen,
+          }}
+          onQuery={(next) =>
+            actions.setKnowledgeQuery({
+              ...(next.view !== undefined && { knowledgeView: next.view }),
+              ...(next.show !== undefined && { knowledgeShow: next.show }),
+              ...(next.sort !== undefined && { knowledgeSort: next.sort }),
+              ...(next.desc !== undefined && { knowledgeDesc: next.desc }),
+              ...(next.open !== undefined && { knowledgeOpen: next.open }),
+            })
+          }
           onReach={(id, reach) => actions.setFactReach(id, reach)}
           onCommit={(id, commitment) => actions.commitFact(id, commitment)}
           onSettleGraduation={(id, outcome) => actions.settleGraduation(id, outcome)}

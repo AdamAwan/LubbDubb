@@ -182,6 +182,17 @@ export interface CockpitView {
   viewingScratchpad: string | null;
   /** The claim whose provenance is open on the Knowledge page, by fact id. */
   viewingFact: string | null;
+  /**
+   * How the Knowledge page is drawn, narrowed and ordered. Carried through the view
+   * model rather than read from the place in the panel, for the tickets tab's
+   * reason: every surface reads one shape, and the panel stays a component that is
+   * *told* where it is.
+   */
+  knowledgeView: 'list' | 'table';
+  knowledgeShow: 'all' | 'waiting' | 'reaching' | 'settled';
+  knowledgeSort: 'reach' | 'claim' | 'scope' | 'observers' | 'disputes' | 'asks' | 'age';
+  knowledgeDesc: boolean;
+  knowledgeOpen: string[];
   /** Which reading the Insights page is showing. */
   insightsView: InsightsView;
   /** The stretch of time every reading on that page is measured over. */
@@ -263,6 +274,12 @@ interface ViewInputs {
    * Optional for `collapsed`'s reason: nothing open is what a bare URL means.
    */
   viewingFact?: string | null;
+  /** Optional for `collapsed`'s reason: the defaults are what a bare URL means. */
+  knowledgeView?: 'list' | 'table';
+  knowledgeShow?: 'all' | 'waiting' | 'reaching' | 'settled';
+  knowledgeSort?: 'reach' | 'claim' | 'scope' | 'observers' | 'disputes' | 'asks' | 'age';
+  knowledgeDesc?: boolean;
+  knowledgeOpen?: string[];
   /** Which reading the Insights page is showing. */
   insightsView: InsightsView;
   /** The stretch of time every reading on that page is measured over. */
@@ -383,5 +400,10 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     hatching: input.hatching,
     viewingScratchpad: input.viewingScratchpad,
     viewingFact: input.viewingFact ?? null,
+    knowledgeView: input.knowledgeView ?? 'list',
+    knowledgeShow: input.knowledgeShow ?? 'all',
+    knowledgeSort: input.knowledgeSort ?? 'reach',
+    knowledgeDesc: input.knowledgeDesc ?? false,
+    knowledgeOpen: input.knowledgeOpen ?? [],
   };
 }
