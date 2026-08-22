@@ -120,7 +120,9 @@ export function KnowledgePanel({
   // A notice is an expiring fact that has not lapsed. A lapsed one is out of every
   // read but its row still says what it said, so it falls through to the section
   // its reach puts it in rather than vanishing.
-  const notices = facts.filter((f) => f.lifetime === 'expiring' && f.reach !== 'rejected' && live(f));
+  const notices = facts.filter(
+    (f) => f.lifetime === 'expiring' && f.reach !== 'rejected' && f.reach !== 'retired' && live(f),
+  );
   const noticed = new Set(notices.map((f) => f.id));
   const standing = facts.filter((f) => !noticed.has(f.id));
   const section = (reach: KnowledgeFactView['reach'], ruled: boolean | null = null): KnowledgeFactView[] =>
@@ -243,6 +245,12 @@ export function KnowledgePanel({
         title="Superseded"
         blurb="Replaced. An agent said one of these was contradicted by the code in front of it, wrote what it should say instead, and you adopted that amendment — so this wording is out of every prompt while its row stays saying what it said. Not rejected: it was not judged untrue, and a rejection would bar the sharper claim's own words, since an amendment contains the claim it sharpens."
         facts={section('superseded')}
+        {...shared}
+      />
+      <KnowledgeSection
+        title="Retired"
+        blurb="Not carried any more, and never judged untrue — the check it was about is gone, the seam it described was refactored away, the fleet moved on. Drawn rather than dropped, so a list you have finished with can be told from one that lost rows. An agent that hits the same wall may raise it again, which files a fresh claim with its own evidence and today's date rather than resurrecting this judgement: a claim worth bringing back is worth reading first."
+        facts={section('retired')}
         {...shared}
       />
       <KnowledgeSection
@@ -480,7 +488,8 @@ function FactCard({
   // anybody would link to or expect the back button to restore, which is the line
   // the address bar draws (`docs/spec/17-cockpit.md#the-address-bar`).
   const [committing, setCommitting] = useState(false);
-  const settled = fact.reach === 'rejected' || fact.reach === 'committed' || fact.reach === 'superseded';
+  const settled =
+    fact.reach === 'rejected' || fact.reach === 'committed' || fact.reach === 'superseded' || fact.reach === 'retired';
   return (
     <div className={`kn-card${settled ? ' resolved' : ''}`}>
       {/* Markdown, and handed the ref map so a goal named inside the claim is
@@ -864,6 +873,20 @@ function FactRulings({
   // second reason: a sharper version of it is standing, and bringing this one back
   // would put the two in one block saying different things.
   if (fact.reach === 'rejected' || fact.reach === 'committed' || fact.reach === 'superseded') return null;
+  // A retired claim is the one non-live reach that offers anything, because
+  // retiring is a prune and not a bar: it was never judged untrue, so bringing it
+  // back is an ordinary ruling rather than an appeal.
+  if (fact.reach === 'retired') {
+    return (
+      <AsyncButton
+        className="ghost"
+        onClick={() => onReach(fact.id, 'lookup')}
+        title="Carry it again — answered when an agent asks. Retiring was a prune, not a judgement, so this needs no appeal"
+      >
+        Carry again
+      </AsyncButton>
+    );
+  }
   return (
     <>
       {fact.reach === 'proposal' && (
@@ -901,11 +924,24 @@ function FactRulings({
           Inject
         </AsyncButton>
       )}
+      {/* One click, no confirmation, and that asymmetry with Reject beside it is
+          the point. Retiring is the cheap act on this surface — an operator who has
+          to be sure before tidying is an operator who does not tidy, and a store
+          nobody prunes is the failure the whole design fears. Nothing is lost: the
+          row stays, saying what it said, and an agent that hits the same wall
+          raises it again with its own evidence and today's date. */}
+      <AsyncButton
+        className="ghost"
+        onClick={() => onReach(fact.id, 'retired')}
+        title="Stop carrying it — not a judgement that it is false. An agent that sees it again may raise it, which re-dates the claim"
+      >
+        Retire
+      </AsyncButton>
       <ConfirmButton
         className="ghost"
         label="Reject"
         confirmLabel="Say it is not true?"
-        title="Not true — and barred from being proposed again. Terminal: what comes back is an amendment naming this claim, filed by an agent"
+        title="Not true — and barred from being raised again. Terminal: what comes back is an amendment naming this claim, filed by an agent"
         onConfirm={() => onReach(fact.id, 'rejected')}
       />
     </>

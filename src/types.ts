@@ -1281,7 +1281,32 @@ export type FactLifetime = 'standing' | 'expiring';
  *   nothing else: "true, but not worth the context" is `lookup`, where it costs
  *   nothing until somebody asks.
  */
-export type FactReach = 'proposal' | 'lookup' | 'injected' | 'committed' | 'superseded' | 'rejected';
+export type FactReach =
+  | 'proposal'
+  | 'lookup'
+  | 'injected'
+  | 'committed'
+  | 'superseded'
+  /**
+   * Not carried any more, and **not judged untrue**.
+   *
+   * The distinction from `rejected` is the whole of why this exists, and the
+   * lesson store had it as two meanings of one word: retiring is the prune and
+   * rejecting is the bar. A claim that stopped being worth its place — the check
+   * it was about is gone, the seam it described was refactored away, the fleet has
+   * simply moved on — is not a claim anybody found false, and barring it means the
+   * agent that hits the same wall next quarter is refused by name for saying
+   * something true.
+   *
+   * So a retired claim is out of every read and may be raised again, which files a
+   * fresh row and **re-dates** it. That is deliberate rather than incidental: a
+   * claim worth bringing back is worth reading first, and a re-raise arrives with
+   * its own evidence and its own date rather than resurrecting a judgement nobody
+   * has revisited. `lessons` has stated exactly this rule since #355 — there is no
+   * un-retire — and this is where it now lives.
+   */
+  | 'retired'
+  | 'rejected';
 
 /**
  * One thing the fleet believes about this repository that the repository does not

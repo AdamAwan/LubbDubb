@@ -698,6 +698,13 @@ export class KnowledgeStore {
         // ones: a rejection is the bar, and nothing lifts it but an amendment; a
         // superseded claim has a sharper version standing in its place, and moving
         // it back would put the two in one block saying different things.
+        //
+        // `retired` is deliberately **not** guarded with them. It is the prune, and
+        // a prune has to be the cheap act on this surface — an operator who has to
+        // be sure before tidying is an operator who does not tidy, and the store
+        // this whole design fears is the one nobody prunes. Bringing one back is an
+        // ordinary ruling; what a retired claim does not do is come back by itself,
+        // through an agent raising it again.
         `UPDATE knowledge_facts SET reach=?, updated_at=?, ruled_at=COALESCE(?, ruled_at)
            WHERE id=? AND reach NOT IN ('rejected','superseded')`,
       )
@@ -984,7 +991,15 @@ function autoReach(fact: KnowledgeFact): FactReach {
   return fact.lifetime === 'expiring' && fact.expiresAt !== null ? 'injected' : 'lookup';
 }
 
-/** The reaches a live claim can be in — everything a re-proposal may join. */
+/**
+ * The reaches a live claim can be in — everything a re-raise may join.
+ *
+ * `retired` is **not** here, and that absence is what makes retiring a prune
+ * rather than a quieter bar: a raised claim that matches a retired row files a
+ * fresh one instead of joining it, which re-dates the claim and brings its own
+ * evidence with it. Joining the old row would resurrect a judgement nobody has
+ * revisited, wearing the date it was made on.
+ */
 const LIVE_REACHES: readonly FactReach[] = ['proposal', 'lookup', 'injected', 'committed'];
 
 /**

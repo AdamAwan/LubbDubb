@@ -104,10 +104,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
    * is `/commit` below, which opens the pull request, and the graduation sweep,
    * which moves the reach when it lands.
    */
-  // Typed as the wire's own narrowing of `FactReach`, so the three literals here
-  // and the union the cockpit posts are one statement rather than two that agree
-  // today.
-  const RULINGS: [FactRuling, ...FactRuling[]] = ['lookup', 'injected', 'rejected'];
+  // Typed as the wire's own narrowing of `FactReach`, so the literals here and the
+  // union the cockpit posts are one statement rather than two that agree today.
+  const RULINGS: [FactRuling, ...FactRuling[]] = ['lookup', 'injected', 'retired', 'rejected'];
   const ReachBody = z.object({
     // One `errorMap` rather than the two stock messages, because a missing reach
     // and a reach nobody has heard of are the same mistake from the caller's side
@@ -115,8 +114,9 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     reach: z.enum(RULINGS, {
       errorMap: () => ({
         message:
-          'reach must be one of lookup (answered when an agent asks), injected (in front of every agent) ' +
-          'or rejected (not true, and barred from coming back)',
+          'reach must be one of lookup (answered when an agent asks), injected (in front of every agent), ' +
+          'retired (not carried any more, and may be raised again) or rejected (not true, and barred from ' +
+          'coming back)',
       }),
     }),
   });

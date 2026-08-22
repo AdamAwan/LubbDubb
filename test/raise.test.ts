@@ -307,3 +307,95 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
   const result = (await session!.call(name, args)) as ToolResultText;
   return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
 }
+
+// -- retiring is a prune, rejecting is a bar ---------------------------------
+
+/**
+ * The two used to be one word.
+ *
+ * `lessons` called its prune `retired` and allowed the claim to be written again;
+ * `knowledge_facts` called its terminal ruling `rejected` and barred it by name.
+ * Merged onto one surface with one set of buttons, an operator tidying a claim
+ * nobody had vouched for would have barred it forever — including the agent that
+ * hits the same wall next quarter and is refused for saying something true.
+ *
+ * → `docs/spec/27-knowledge.md#retiring-is-not-rejecting`
+ */
+
+test('a retired claim may be raised again, and the re-raise is a fresh row with a fresh date', async () => {
+  const system = build();
+  const claim = 'The fixture server has to be started before the integration suite.';
+  const filed = await callTool(system, spawnAgent(system, 'issue:12'), 'raise', { claim, evidence: 'It hung.' });
+  const first = (JSON.parse(filed.text) as { fact: { id: string } }).fact.id;
+  system.store.setFactReach(first, 'retired');
+  assert.equal(system.store.getFact(first)?.reach, 'retired');
+
+  const again = await callTool(system, spawnAgent(system, 'issue:13'), 'raise', {
+    claim,
+    evidence: 'Hung for me too, on a clean checkout.',
+  });
+  assert.equal(again.isError, false, 'a prune is not a bar');
+  const second = (JSON.parse(again.text) as { fact: { id: string } }).fact.id;
+  // A fresh row rather than the retired one brought back to life: a claim worth
+  // returning is worth reading first, and it returns with its own evidence and its
+  // own date rather than a judgement nobody has revisited.
+  assert.notEqual(second, first);
+  assert.equal(system.store.getFact(first)?.reach, 'retired', 'and the retired row stays where it was');
+  system.store.close();
+});
+
+test('a rejected claim is still refused by name, with the way back', async () => {
+  const system = build();
+  const claim = 'Every route handler should read the request body itself.';
+  const filed = await callTool(system, spawnAgent(system, 'issue:12'), 'raise', { claim, evidence: 'I assumed so.' });
+  const id = (JSON.parse(filed.text) as { fact: { id: string } }).fact.id;
+  system.store.setFactReach(id, 'rejected');
+
+  const again = await callTool(system, spawnAgent(system, 'issue:13'), 'raise', { claim, evidence: 'Me too.' });
+  assert.equal(again.isError, true);
+  assert.match(again.text, /rejected/i);
+  // Refused by name and with the way back, so the fleet does not raise it again
+  // tomorrow having learned nothing from the refusal.
+  assert.ok(again.text.includes(id));
+  assert.match(again.text, /contradicts/);
+  system.store.close();
+});
+
+test('a retired claim is out of every read, and reaches nobody', async () => {
+  const system = build();
+  const claim = 'knip runs every rule at error.';
+  const filed = await callTool(system, spawnAgent(system, 'issue:12'), 'raise', { claim, evidence: 'Saw it.' });
+  const id = (JSON.parse(filed.text) as { fact: { id: string } }).fact.id;
+  system.store.setFactReach(id, 'injected');
+  assert.ok(
+    system.store.askFacts({ question: null }).some((f) => f.id === id),
+    'an injected claim is answerable',
+  );
+
+  system.store.setFactReach(id, 'retired');
+  assert.equal(
+    system.store.askFacts({ question: null }).some((f) => f.id === id),
+    false,
+    'a retired one is out of every read — the row stays, saying what it said',
+  );
+  system.store.close();
+});
+
+test('retiring is reversible where rejecting is not', async () => {
+  const system = build();
+  const filed = await callTool(system, spawnAgent(system, 'issue:12'), 'raise', {
+    claim: 'The suite wants a built bundle first.',
+    evidence: 'It failed cold.',
+  });
+  const id = (JSON.parse(filed.text) as { fact: { id: string } }).fact.id;
+
+  system.store.setFactReach(id, 'retired');
+  // A prune has to be the cheap act: an operator who has to be sure before tidying
+  // is an operator who does not tidy, and a store nobody prunes is the failure the
+  // whole design fears.
+  assert.equal(system.store.setFactReach(id, 'lookup')?.reach, 'lookup');
+
+  system.store.setFactReach(id, 'rejected');
+  assert.equal(system.store.setFactReach(id, 'lookup'), null, 'a bar is not lifted by a click');
+  system.store.close();
+});

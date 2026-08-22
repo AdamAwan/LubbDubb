@@ -464,7 +464,7 @@ export interface KnowledgeGraduationView extends KnowledgeGraduation {
  * request landing (phase 6), so setting the reach without opening one would take
  * the claim out of every prompt while putting it nowhere.
  */
-export type FactRuling = Extract<FactReach, 'lookup' | 'injected' | 'rejected'>;
+export type FactRuling = Extract<FactReach, 'lookup' | 'injected' | 'retired' | 'rejected'>;
 
 /**
  * `GET /api/knowledge/facts/:id` — one fact with the observations behind it, in

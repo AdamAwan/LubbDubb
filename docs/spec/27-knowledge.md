@@ -146,11 +146,12 @@ Reach is the state machine, and it is the whole of the governance.
 | `injected`   | In front of every agent, before it reads any code.      | **You** — or two goals, for a notice.   |
 | `committed`  | In the repository. **Out of every prompt.**             | A docs pull request landing.            |
 | `superseded` | Nowhere. A sharper claim naming it stands in its place. | **You**, adopting an amendment.         |
+| `retired`    | Nowhere, and **free to be raised again**.               | You.                                    |
 | `rejected`   | Nowhere, and barred from coming back.                   | You.                                    |
 
 Two of those transitions belong to the fleet: an agent proposing, and corroboration carrying a
 proposal to `lookup` — or, for a [notice](#notices) and only a notice, to `injected`. The rest are the operator's, and the [page](#in-the-cockpit) is what they are
-reached through — promote, demote and reject through `POST /api/knowledge/facts/:id/reach`, and
+reached through — promote, demote, retire and reject through `POST /api/knowledge/facts/:id/reach`, and
 `committed` through the documentation pull request an operator opens with
 `POST /api/knowledge/facts/:id/commit` and the world merges
 ([Committing to the repository](#committing-to-the-repository)).
@@ -161,6 +162,43 @@ context, so an operator who has read a corroborated claim and decided it belongs
 has to be able to say so — the store stamps `ruled_at` on any move they make, whether or not the
 reach changed. Without it the page's **Needs you** section would ask again forever, and the only way
 to empty it would be a decision the operator does not agree with.
+
+### Retiring is not rejecting
+
+The two were one word, in two stores, meaning opposite things. `lessons` called its prune `retired`
+and said outright that a lesson retired in error is simply written again; `knowledge_facts` called its
+terminal ruling `rejected` and barred the claim by name. On one surface with one set of buttons, an
+operator tidying a claim nobody had vouched for would have barred it forever — and what a bar costs is
+paid by the agent that hits the same wall next quarter and is refused, by name, for saying something
+true.
+
+So they are two reaches, and the difference is what a claim leaving means:
+
+| | `retired` | `rejected` |
+| --- | --- | --- |
+| Says | not carried any more | **not true** |
+| Raised again | files a **fresh claim**, with its own evidence and today's date | refused by name |
+| Undone by | an ordinary ruling — "Carry again" | nothing but an amendment naming it |
+| Confirmation | none | two-step |
+
+**A retired claim comes back by being raised, never by being restored**, which is `lessons`' rule
+("there is no un-retire") kept rather than inherited by accident. `LIVE_REACHES` does not include
+`retired`, so a raised claim matching a retired row files beside it instead of joining it. Joining
+would resurrect a judgement nobody has revisited, wearing the date it was made on — and the whole
+value of a returning claim is that somebody saw it again, recently, and said so.
+
+**Retiring takes one click and rejecting takes two**, and that asymmetry is the feature rather than an
+inconsistency. A prune has to be the cheap act on this surface: an operator who has to be sure before
+tidying is an operator who does not tidy, and a store nobody prunes is the failure this whole design
+is built around. Nothing is lost either way — the row stays, saying what it said, drawn in its own
+section rather than dropped, so a list you have finished with can still be told from one that lost
+rows.
+
+What a retired claim cannot do is anything at all: it is out of `askFacts`, out of the block, and
+refused by `contradictableFact` and `committableFact` alike. The refusal from `contradictableFact` is
+the one worth reading, because it is the only place the distinction reaches an agent: it says the claim
+was not judged untrue and invites the agent to raise what it saw in its own words, rather than sending
+it to argue with a row nobody is being told.
 
 **`committed` is not the top of a ladder — it is a different medium.** Once a fact is in
 `docs/spec/` an agent reads it from the repository, and keeping it injected pays context twice for
@@ -613,11 +651,14 @@ would be a different number wearing the same label — free to disagree with the
 carries a claim to `lookup`.
 
 **Nothing on the page auto-promotes anything, and it files nothing.** Agents propose through the tool
-channel on a scoped MCP credential; the cockpit's bearer token reaches four verbs — promote, demote,
-reject, keep — plus the three answers to a contradiction and the two of graduation, and none of them is
-available to an agent. Nothing here files an amendment either: an agent wrote that through `raise`,
-naming the claim it contradicts, with an observation behind it. There is no un-reject: a rejection is terminal,
-and what comes back is an amendment naming the barred claim.
+channel on a scoped MCP credential; the cockpit's bearer token reaches five verbs — promote, demote,
+retire, reject, keep — plus the three answers to a contradiction and the two of graduation, and none of
+them is available to an agent. Nothing here files an amendment either: an agent wrote that through
+`raise`, naming the claim it contradicts, with an observation behind it. There is no un-reject: a
+rejection is terminal, and what comes back is an amendment naming the barred claim. There is no
+un-retire either, and it is a different absence: a retired claim comes back by an agent **raising it
+again**, which files a fresh row with fresh evidence — the operator's own "Carry again" is for the
+prune they regret, not for the claim's return.
 
 **A committable row carries a "Commit to the repository" control**, which asks where the claim goes
 before it opens anything — the owning document, or `CLAUDE.md` with the sentence that arm costs. It is

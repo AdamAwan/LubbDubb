@@ -1698,9 +1698,9 @@ Four panels open from the bar, the ask panel opens from a queue row ([the rail](
   rather than its placement, and `ConsoleRoot` mounts the same component either way. Reach is a state
   machine rather than a status, so it is a page of sections: **Live notices** with their clocks,
   **Needs you**, then the two that were panels of their own — **Reported by agents** and **Lessons** —
-  then **Injected**, **On lookup**, **One voice**, **Committed to the repository**, **Superseded**, and
-  the **Rejected** tail. Read top to bottom in the order things demand attention rather than in the
-  order of the machine.
+  then **Injected**, **On lookup**, **One voice**, **Committed to the repository**, **Superseded**,
+  **Retired**, and the **Rejected** tail. Read top to bottom in the order things demand attention
+  rather than in the order of the machine.
 
   **Findings and lessons are sections here rather than panels of their own**, and the argument is the
   one that put Knowledge on the nav in the first place. All three ask the same question of the same
@@ -1748,6 +1748,14 @@ Four panels open from the bar, the ask panel opens from a queue row ([the rail](
   that went red and green on one commit, and a check red on a branch other pull requests are based on
   (#27 phase 4). A row that carries a resolution condition draws it, because a notice ending when the
   world settles it rather than when its clock runs out is otherwise invisible.
+
+  **Retire is one click and Reject is two**, and that asymmetry is the surface stating the difference
+  between them. Retiring says the claim is not carried any more; rejecting says it is not true and
+  bars it from coming back. A prune has to be the cheap act here — an operator who has to be sure
+  before tidying is an operator who does not tidy — while a bar is paid for by the agent refused, by
+  name, for saying something true next quarter. A retired row carries **Carry again** and nothing
+  else: bringing one back is an ordinary ruling rather than an appeal, because nothing was ever
+  judged. → [27](27-knowledge.md#retiring-is-not-rejecting)
 
   **It draws what it stopped.** The rejected tail is not a courtesy: this page is the whole of the
   governance, a surface showing only what it let through cannot tell an operator that a claim was

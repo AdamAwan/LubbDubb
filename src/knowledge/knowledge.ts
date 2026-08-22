@@ -447,6 +447,16 @@ export function contradictableFact(fact: KnowledgeFact, now: string): { ok: true
         `saw with knowledge_propose instead.`,
     };
   }
+  if (fact.reach === 'retired') {
+    return {
+      ok: false,
+      error:
+        `an operator has retired that claim (${fact.id}), so it is out of every prompt and nothing is being ` +
+        `told it. Retired is not rejected — it was not judged untrue, it just stopped being carried — so if ` +
+        `what you saw is worth the next agent knowing, raise it in your own words. That files a fresh claim ` +
+        `with your evidence and today's date, which is what a claim coming back should look like.`,
+    };
+  }
   if (fact.reach === 'committed' || fact.reach === 'superseded') {
     return {
       ok: false,
