@@ -62,6 +62,7 @@ import type { ReliabilityInsights, RunTally } from './reliabilityInsights.js';
 import type { RemedyInsights } from './remedyInsights.js';
 import type { KnowledgeCost } from './knowledge/cost.js';
 import type { SpendInsights } from './spendInsights.js';
+import type { McpInsights } from './mcpInsights.js';
 import type { SpendTrend } from './spendTrend.js';
 import type { Stack } from './stacks/stack.js';
 import type { LocalRunOption } from './localRun/ref.js';
@@ -1474,6 +1475,19 @@ export interface SpendTrendPayload {
 }
 
 /**
+ * `/api/mcp/usage` — the tool channel as a reading, behind the Insights MCP tab.
+ *
+ * A route of its own rather than a field on `SpendPayload`, and for the trend's
+ * reason rather than the remedies': it folds a table nothing else reads and joins
+ * it against every task prompt the window dispatched, which is the one query in
+ * the harness that touches the `prompt` column in bulk. An operator who opened
+ * Insights to read the phase table should not pay for it.
+ */
+export interface McpUsagePayload {
+  insights: McpInsights;
+}
+
+/**
  * `/api/reliability` — what the spending bought: run outcomes all-time, and CI
  * health over the last fortnight. Fetched on open for `SpendPayload`'s reason.
  */
@@ -1690,7 +1704,19 @@ export type {
 } from './reliabilityInsights.js';
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './remedyInsights.js';
 export type { RemedyCause, RemedyGuard, RemedyKind } from './types.js';
+export type { McpChannel } from './types.js';
 export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
+export type {
+  McpChannelUsage,
+  McpInsights,
+  McpNaming,
+  McpNamingTotal,
+  McpPhaseUsage,
+  McpQuietTool,
+  McpRefusal,
+  McpSilentRun,
+  McpToolUsage,
+} from './mcpInsights.js';
 export type { InsightsWindow, InsightsWindowView } from './insightsWindow.js';
 export type {
   SpendTrend,

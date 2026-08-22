@@ -154,7 +154,7 @@ export interface Place {
 }
 
 const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'knowledge', 'insights', 'pets', 'config'];
-const INSIGHTS_VIEWS: readonly InsightsView[] = ['economics', 'reliability', 'causes', 'trend', 'mix'];
+const INSIGHTS_VIEWS: readonly InsightsView[] = ['economics', 'reliability', 'causes', 'trend', 'mix', 'mcp'];
 /**
  * The windows the time bar offers, and what a bare Insights URL means.
  *

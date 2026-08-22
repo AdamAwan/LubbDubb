@@ -239,7 +239,7 @@ export function conclusionOrigin(
         `is done, and no part agent has to say so. Finish your part: open its pull request, or if it ` +
         `finished without one (it was a write-up, or you found nothing needs building) close it with ` +
         `conclude_part. If you believe the *plan* is wrong (a part is missing, or one is no longer ` +
-        `needed), use report_finding.`,
+        `needed), raise it.`,
     };
   }
   const planner = /^issue:(\d+):plan$/.exec(ref);

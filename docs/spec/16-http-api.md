@@ -33,6 +33,7 @@ is about.
 | `routes/spend.ts`       | `/api/spend` and `/api/spend/trend` — the breakdown behind the cost indicators, and its trend                                                                             |
 | `routes/readings.ts`    | `/api/retrospectives/:ref`, `/api/scratchpads/:ref`                                                                                                                       |
 | `routes/reliability.ts` | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                 |
+| `routes/mcpUsage.ts`    | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                          |
 | `routes/work.ts`        | The work graph and its ignore / file verdicts                                                                                                                             |
 | `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                                                                                                            |
 
@@ -871,6 +872,32 @@ ever run, plus the window's `pr_ci` transitions.
 The window is resolved in the handler rather than inside the fold, so the `since` a row is selected by
 and the `since` it is bucketed into are one value: a store read wider than the buckets drops rows
 silently at the fold, and a narrower one draws an empty first bucket that was never empty.
+
+### `GET /api/mcp/usage`
+
+The tool channel as a reading, behind the Insights MCP tab ([17](17-cockpit.md#mcp)). Returns
+`{ insights }` — per-tool counts on both channels, the runs that made no call at all, and a **verdict**
+per silent tool with the evidence behind it. See [11](11-mcp-tools.md#what-is-recorded) for what a row
+in `mcp_calls` is and why the table exists.
+
+A route of its own rather than a field on `/api/spend`, for `/api/spend/trend`'s reason: the naming
+evidence is a scan of every dispatch prompt inside the window, which is the one query in the harness
+that reads the `tasks.prompt` column in bulk — 17 MB of it on a deployment with a year of history. The
+tab fetches on its own first visit, so an operator who came to read the phase table does not pay for it.
+
+**Takes the same `?window=`**, and every store read takes its `since`. That matters more here than on
+the two beside it: a silence is a count of zero measured against a stretch of time, so a tool reading
+and a run count taken over different stretches would not merely disagree — they would manufacture
+findings.
+
+Two things on the payload are deliberately **not** windowed:
+
+- **The last call per tool**, which is answered over all time. The most useful sentence about a silent
+  tool is "nothing called it this week, and the last call was nineteen days ago" — a date the window by
+  definition cannot contain.
+- **`allowedToolsOverridden`**, a live read of `config.claudeArgs`. It is the commonest cause of a run
+  that calls nothing, and the point is to report the flag before it costs a run rather than to explain
+  one afterwards.
 
 ### `GET /api/scratchpads/:ref`
 

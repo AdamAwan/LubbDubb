@@ -17,7 +17,7 @@ import {
   MCP_SERVER_ID,
   MCP_TOOL_NAMES,
   PERMISSION_PROMPT_TOOL,
-  SUPERSEDED_TOOL_NAMES,
+  RETIRED_TOOL_NAMES,
   TOOL_NAMING,
 } from '../src/mcp/names.js';
 import { defaultSocketPath, McpBridgeServer } from '../src/mcp/server.js';
@@ -162,7 +162,7 @@ test('the granted permission names are exactly the tools the server exposes', ()
  * is actually granted, silently.
  *
  * What is asserted here is each side of it: the addendum names every `addendum`
- * tool and no other, and every `superseded` tool is still granted.
+ * tool and no other, and a retired name is answered but never advertised.
  */
 test('the addendum names every tool an agent has to choose to call', () => {
   for (const name of MCP_TOOL_NAMES) {
@@ -175,29 +175,52 @@ test('the addendum names every tool an agent has to choose to call', () => {
   }
 });
 
-test('the superseded list is derived from the classification, not written out again', () => {
-  // Two lists that merely agreed today would let a withdrawal reach the grants
-  // without reaching the reading that tells an operator who still names one.
-  assert.deepEqual(
-    [...SUPERSEDED_TOOL_NAMES],
-    MCP_TOOL_NAMES.filter((name) => TOOL_NAMING[name] === 'superseded'),
-  );
-  assert.ok(SUPERSEDED_TOOL_NAMES.includes('report_finding'));
-});
-
-test('a superseded tool is still granted, so an override that names one is not refused', () => {
-  // The failure this closes is silent and lands only on the deployments that
-  // customised most: an operator's prompt override written before the intake still
-  // says "report_finding", and a name dropped from the grants comes back refused
-  // with nothing in the logs to say why. Unlike a `PromptId`, a tool name that no
-  // longer exists does not fail loudly at boot.
-  for (const name of SUPERSEDED_TOOL_NAMES) {
+test('a retired name is no longer a tool, and no longer granted', () => {
+  // The four `raise` replaced are gone: not in the list, not in the registry, and
+  // not in the grants. What is left of them is the *name*, which is the whole of
+  // the withdrawal's safety — see the next two tests.
+  for (const name of RETIRED_TOOL_NAMES) {
+    assert.ok(!(MCP_TOOL_NAMES as readonly string[]).includes(name), `${name} is retired, not advertised`);
     assert.ok(
-      ALLOWED_MCP_TOOLS.includes(`mcp__${MCP_SERVER_ID}__${name}`),
-      `${name} is superseded, not withdrawn — it must still be granted`,
+      !ALLOWED_MCP_TOOLS.includes(`mcp__${MCP_SERVER_ID}__${name}`),
+      `${name} is retired — granting it would advertise a door that only refuses`,
     );
   }
+  assert.ok(RETIRED_TOOL_NAMES.includes('report_finding'));
 });
+
+test('a retired name is answered, so an override that still names one is not a dead channel', () => {
+  // The failure this closes is the reason the four spent a release registered
+  // rather than deleted, and it is silent: an operator's prompt override written
+  // before the intake still says "report_finding", and a name that is simply gone
+  // comes back as an unknown method — which reaches the agent as a broken channel
+  // and appears in no reading at all. Answered, it is a refusal that names the
+  // replacement, and a recorded call the MCP tab can show.
+  const tools = retiredAwareTools();
+  for (const name of RETIRED_TOOL_NAMES) {
+    const tool = tools.find((t) => t.name === name);
+    assert.ok(tool, `${name} must still be dispatchable`);
+    assert.equal(tool.hidden, true, `${name} must not be advertised in tools/list`);
+    assert.match(tool.description, /raise/, 'the refusal names the door that replaced it');
+  }
+});
+
+test('tools/list advertises the live tools and never a retired one', async () => {
+  const listed = await handleRequest({ jsonrpc: '2.0', id: 1, method: 'tools/list' }, retiredAwareTools());
+  const names = ((listed?.result as { tools: { name: string }[] }).tools ?? []).map((t) => t.name);
+  assert.deepEqual(names, [...MCP_TOOL_NAMES], 'the advertised set is the granted set, in its own order');
+  for (const name of RETIRED_TOOL_NAMES) assert.ok(!(names as string[]).includes(name));
+});
+
+/** The whole tool set as one dispatch sees it — the live tools and the retired names. */
+function retiredAwareTools(): McpTool[] {
+  const system = build();
+  const agent = spawnAgent(system, 'issue:12');
+  return buildTools(
+    { store: system.store, agents: system.agents },
+    { agent, task: system.store.getTask(agent.taskId)! },
+  );
+}
 
 test('the addendum keeps the sentinels as the floor rather than withdrawing them', () => {
   // The done sentinel has no tool, and the prompt must not imply otherwise.
@@ -991,26 +1014,28 @@ test('a desk agent with no origin is told to name a ref rather than reading noth
   system.store.close();
 });
 
-// -- report_finding, end to end ----------------------------------------------
+// -- raise, end to end -------------------------------------------------------
 
 /**
- * The door `raise` replaced, kept working and named nowhere — and now writing to
- * the one claim store like everything else.
+ * The one door, end to end: an observation arriving from an agent and coming to
+ * rest as a `knowledge_facts` row, bounded and located and matched by the
+ * intake's own rules.
  *
- * What these assert is the translation: a call that would have made a `findings`
- * row makes a `knowledge_facts` row, bounded and located and matched by the
- * intake's own rules. Keeping a second table alive so an unadvertised tool could
- * go on writing to it is exactly the drift the merge removed.
+ * These were written against `report_finding` while that was still a door of its
+ * own. What they assert has never been about the door — it is about what the
+ * claim store guarantees whatever knocks on it: attribution that cannot be
+ * forged, a repeat that is agreement rather than a second row, a refusal that
+ * names the field, and a filing that queues nothing. `report_finding` is retired,
+ * so they are asked of `raise`, which is the only thing that can answer them now.
  */
 
-test('report_finding lands as a claim, attributed from the credential', async () => {
+test('a raised claim lands attributed from the credential, and nothing else', async () => {
   const system = build();
   const agent = spawnAgent(system, 'pr:142:ci');
 
-  const res = await callTool(system, agent, 'report_finding', {
-    kind: 'out_of_scope',
-    summary: 'The retry helper squares the delay instead of doubling it.',
-    detail: 'The 5th retry waits ~17 minutes.',
+  const res = await callTool(system, agent, 'raise', {
+    claim: 'The retry helper squares the delay instead of doubling it.',
+    evidence: 'The 5th retry waits ~17 minutes.',
     ref: 'issue:41',
   });
   assert.equal(res.isError, false);
@@ -1032,10 +1057,9 @@ test('report_finding lands as a claim, attributed from the credential', async ()
   // The goal, not the dispatch concern — `corroborationGoal`'s collapse, applied to
   // this door like every other.
   assert.equal(voice!.goalRef, 'pr:142');
-  // The evidence is the agent's own account, with the kind it named folded in: the
-  // word decides nothing and is not a column, and throwing it away would lose the
-  // one thing about a call through this door that is not true of a `raise`.
-  assert.match(voice!.words, /out_of_scope/);
+  // The evidence is the agent's own account, kept whole. It is what an operator
+  // reads to decide whether the claim should reach anybody, so nothing summarises
+  // it on the way in.
   assert.match(voice!.words, /~17 minutes/);
 
   const payload = JSON.parse(res.text) as {
@@ -1048,7 +1072,7 @@ test('report_finding lands as a claim, attributed from the credential', async ()
   assert.equal(payload.fact.id, fact!.id);
   // The response says it queues nothing, so an agent doesn't report a bug and then
   // assume its fix is now scheduled.
-  assert.match(payload.note, /queues no work/);
+  assert.match(payload.note, /Nothing is queued/);
   assert.equal(payload._status.origin, 'pr:142:ci');
   system.store.close();
 });
@@ -1062,18 +1086,24 @@ test('a claim is a write, so it stays structurally attributed — there is no ar
   // That reasoning does not carry: this write puts words in an agent's mouth in
   // front of an operator, and a claim is read as testimony about work its author
   // actually did. So the schema offers nothing that could name a different agent.
-  const schema = advertisedSchema(system, one, 'report_finding');
-  assert.deepEqual(Object.keys(schema.properties).sort(), ['detail', 'kind', 'ref', 'summary', 'where']);
+  const schema = advertisedSchema(system, one, 'raise');
+  assert.deepEqual(Object.keys(schema.properties).sort(), [
+    'claim',
+    'contradicts',
+    'evidence',
+    'ref',
+    'scope',
+    'until',
+    'where',
+  ]);
 
-  await callTool(system, one, 'report_finding', {
-    kind: 'blocked',
-    summary: 'Upstream typings are wrong.',
-    detail: 'The field is on the wire and not in the .d.ts.',
+  await callTool(system, one, 'raise', {
+    claim: 'Upstream typings are wrong.',
+    evidence: 'The field is on the wire and not in the .d.ts.',
   });
-  await callTool(system, two, 'report_finding', {
-    kind: 'duplicate',
-    summary: 'Same as #41.',
-    detail: 'Both describe the same rate limiter.',
+  await callTool(system, two, 'raise', {
+    claim: 'Same as #41.',
+    evidence: 'Both describe the same rate limiter.',
     ref: 'issue:41',
   });
 
@@ -1086,11 +1116,10 @@ test('a claim carries where and the evidence through the channel, and a repeat i
   const system = build();
   const agent = spawnAgent(system, 'pr:142:ci');
 
-  await callTool(system, agent, 'report_finding', {
-    kind: 'out_of_scope',
-    summary: 'The retry helper squares the delay instead of doubling it',
+  await callTool(system, agent, 'raise', {
+    claim: 'The retry helper squares the delay instead of doubling it',
     where: 'src/net/backoff.ts:41',
-    detail: 'The 5th retry waits ~17 minutes.\n\n```\ndelay = base ** attempt\n```',
+    evidence: 'The 5th retry waits ~17 minutes.\n\n```\ndelay = base ** attempt\n```',
   });
   const filed = system.store.listFacts()[0]!;
   assert.equal(filed.where, 'src/net/backoff.ts:41');
@@ -1100,10 +1129,9 @@ test('a claim carries where and the evidence through the channel, and a repeat i
   // findings store overwrote the thinner account, the claim store keeps both,
   // because the words are what an operator reads to decide whether it should have
   // carried.
-  await callTool(system, agent, 'report_finding', {
-    kind: 'out_of_scope',
-    summary: 'The retry helper squares the delay instead of doubling it',
-    detail: 'Confirmed: `ingest.flaky.test.ts` times out on the 4th retry.',
+  await callTool(system, agent, 'raise', {
+    claim: 'The retry helper squares the delay instead of doubling it',
+    evidence: 'Confirmed: `ingest.flaky.test.ts` times out on the 4th retry.',
   });
   assert.equal(system.store.listFacts().length, 1, 'a repeat of the same claim is agreement, not a second row');
   assert.equal(system.store.listCorroborations(filed.id).length, 2);
@@ -1118,10 +1146,9 @@ test('a claim queues no work by itself; sending it on is the operator’s click'
   const { app } = await buildApp(system);
   const agent = spawnAgent(system, 'pr:142:ci');
 
-  await callTool(system, agent, 'report_finding', {
-    kind: 'out_of_scope',
-    summary: 'The retry helper squares the delay instead of doubling it.',
-    detail: 'Seen on the 5th retry.',
+  await callTool(system, agent, 'raise', {
+    claim: 'The retry helper squares the delay instead of doubling it.',
+    evidence: 'Seen on the 5th retry.',
   });
   // The deliberate half of the design: an agent that could queue jobs could put
   // agents on the fleet (rule `manual-job` dispatches a job ahead of every
@@ -1161,10 +1188,9 @@ test('a rejected claim stays rejected, and a verbatim repeat is refused by name'
   const { app } = await buildApp(system);
   const agent = spawnAgent(system, 'issue:12');
   const report = (): Promise<{ isError: boolean; text: string }> =>
-    callTool(system, agent, 'report_finding', {
-      kind: 'duplicate',
-      summary: 'Same as #41.',
-      detail: 'Both describe the same rate limiter.',
+    callTool(system, agent, 'raise', {
+      claim: 'Same as #41.',
+      evidence: 'Both describe the same rate limiter.',
       ref: 'issue:41',
     });
 
@@ -1187,10 +1213,9 @@ test('a rejected claim stays rejected, and a verbatim repeat is refused by name'
   assert.equal(system.store.getFact(fact.id)?.reach, 'rejected');
 
   // A *different* claim is a different row, not a repeat.
-  await callTool(system, agent, 'report_finding', {
-    kind: 'duplicate',
-    summary: 'Also overlaps #7.',
-    detail: 'Different subsystem entirely.',
+  await callTool(system, agent, 'raise', {
+    claim: 'Also overlaps #7.',
+    evidence: 'Different subsystem entirely.',
   });
   assert.equal(system.store.listFacts().length, 2);
   await app.close();
@@ -1201,21 +1226,21 @@ test('a malformed report is refused with the reason and stores nothing', async (
   const system = build();
   const agent = spawnAgent(system, 'issue:12');
 
-  // The one refusal this door kept: the only cheap moment to fix a blob is the
-  // agent's own turn, and an unreadable row costs an operator every time they open
-  // it. The error names the field the text belongs in.
-  const blob = await callTool(system, agent, 'report_finding', {
-    summary: 'The retry helper squares the delay.\n\nStack:\n  at backoff (src/net/backoff.ts:41)',
-    detail: 'x',
+  // The only cheap moment to fix a malformed claim is the agent's own turn, and an
+  // unreadable row costs an operator every time they open it — so a claim is
+  // refused rather than trimmed, and the refusal names what is wrong with it.
+  // (`report_finding` also refused a multi-line summary outright; `raise` caps the
+  // length instead, and that rule went with the tool rather than moving.)
+  const noEvidence = await callTool(system, agent, 'raise', {
+    claim: 'The retry helper squares the delay instead of doubling it.',
   });
-  assert.equal(blob.isError, true);
-  assert.match(blob.text, /single line/);
-  assert.match(blob.text, /detail/);
+  assert.equal(noEvidence.isError, true);
+  assert.match(noEvidence.text, /evidence is required/);
+  assert.deepEqual(system.store.listFacts(), []);
 
-  const badRef = await callTool(system, agent, 'report_finding', {
-    kind: 'duplicate',
-    summary: 'Same as 41.',
-    detail: 'both describe the same limiter',
+  const badRef = await callTool(system, agent, 'raise', {
+    claim: 'Same as 41.',
+    evidence: 'both describe the same limiter',
     ref: '41',
   });
   assert.equal(badRef.isError, true);
@@ -1223,10 +1248,9 @@ test('a malformed report is refused with the reason and stores nothing', async (
   assert.deepEqual(system.store.listFacts(), []);
 
   // ...and the corrected retry lands, in the same turn.
-  const fixed = await callTool(system, agent, 'report_finding', {
-    kind: 'duplicate',
-    summary: 'Same as #41.',
-    detail: 'Both describe the same rate limiter.',
+  const fixed = await callTool(system, agent, 'raise', {
+    claim: 'Same as #41.',
+    evidence: 'Both describe the same rate limiter.',
     ref: 'issue:41',
   });
   assert.equal(fixed.isError, false);
@@ -1238,10 +1262,9 @@ test('the cockpit is shipped the claim and a link for the item it names', async 
   const system = build();
   const { app } = await buildApp(system);
   const agent = spawnAgent(system, 'issue:12');
-  await callTool(system, agent, 'report_finding', {
-    kind: 'duplicate',
-    summary: 'Same as #41.',
-    detail: 'Both describe the same rate limiter.',
+  await callTool(system, agent, 'raise', {
+    claim: 'Same as #41.',
+    evidence: 'Both describe the same rate limiter.',
     ref: 'issue:41',
   });
 

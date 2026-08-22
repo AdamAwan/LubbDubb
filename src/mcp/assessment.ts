@@ -10,7 +10,7 @@
  * for `validateConclusion`'s reason: a verdict that parks a ticket has to be
  * reviewable, and it is written once per issue rather than once a minute.
  *
- * It is kept in **two** fields, not one, for `report_finding`'s reason: an
+ * It is kept in **two** fields, not one, for the claim intake's reason: an
  * assessor handed a single string writes its sections into it as inline capitals,
  * and what reaches the operator is a paragraph with no seams. `summary` is the
  * headline and `detail` is the account, and the newline refusal below is what
@@ -38,7 +38,7 @@ export const ASSESSMENT_VERDICT_HELP: Record<AssessmentVerdict, string> = {
 /**
  * One line, and short enough to be one: this is the sentence an operator reads on
  * a card before deciding anything, so it is capped where a headline stops being a
- * headline. Matches `report_finding`'s `summary`, deliberately — an operator who
+ * headline. Matches a raised claim's own one-line shape, deliberately — an operator who
  * has learned the shape on one surface should not have to learn a second.
  */
 const MAX_ASSESSMENT_SUMMARY = 160;

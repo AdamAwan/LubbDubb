@@ -13,6 +13,7 @@ import {
   type ToolCallResult,
 } from './protocol.js';
 import { SocketChannel } from './socketChannel.js';
+import { buildCallLog, type McpCallLog } from './callLog.js';
 import { MCP_SERVER_ID } from './names.js';
 import { buildTools } from './tools.js';
 import type { AgentToolTarget, McpIdentity, McpToolDeps } from './tools/context.js';
@@ -53,6 +54,11 @@ interface McpBridgeServerOptions {
   openPr?: () => McpToolDeps['openPr'];
   /** Lazy for `openPr`'s reason: the sink it files through is built after this server. */
   filing?: () => McpToolDeps['filing'];
+  /**
+   * How long a recorded call's arguments are kept, in days. `0` records none at
+   * all. Absent takes the store's own default — see `McpCallStore`.
+   */
+  argsRetentionDays?: number;
   errors?: ErrorRecorder;
 }
 
@@ -91,11 +97,13 @@ interface McpSession {
  */
 export class McpBridgeServer {
   private readonly channel: SocketChannel;
+  private readonly calls: McpCallLog;
   private listening = false;
   /** token -> agentId. Populated at spawn once the agent row exists. */
   private readonly identities = new Map<string, string | null>();
 
   constructor(private readonly opts: McpBridgeServerOptions) {
+    this.calls = buildCallLog(opts);
     this.channel = new SocketChannel({
       socketPath: opts.socketPath,
       label: 'MCP tool channel (agents fall back to sentinels only)',
@@ -221,8 +229,23 @@ export class McpBridgeServer {
     return { ok: true, identity: { agent, task } };
   }
 
-  /** Answer one request frame against the tools of the token's identity. */
+  /**
+   * Answer one request frame against the tools of the token's identity.
+   *
+   * **Every `tools/call` that gets this far is recorded**, including the ones
+   * refused for want of an identity — those especially. A run whose
+   * `mcp__lubbdubb__*` grants were dropped makes no call at all and so appears
+   * here not once; that silence is only legible against the runs that existed,
+   * which is why the usage reading joins these rows to `agents` rather than
+   * reading them alone. See `src/mcpInsights.ts`.
+   *
+   * The record is taken *after* the answer, so it carries what the tool actually
+   * did, and it is never allowed to change the answer: the frame is dispatched,
+   * the response is what this returns, and the row is written on the way past.
+   */
   private async dispatch(token: string, frame: JsonRpcRequest): Promise<JsonRpcResponse | null> {
+    const call = this.calls.callOf(frame);
+    const startedAt = Date.now();
     const resolved = this.resolve(token);
     if (!resolved.ok) {
       // `initialize`/`tools/list` are still answered (with an empty tool set) so a
@@ -230,6 +253,19 @@ export class McpBridgeServer {
       // only an actual tool call needs a real identity behind it, and it gets the
       // reason as a handled error rather than a dead channel.
       if (frame.method === 'tools/call') {
+        if (call !== null) {
+          this.calls.record({
+            channel: 'fleet',
+            tool: call.tool,
+            agentId: null,
+            taskId: null,
+            originRef: null,
+            ok: false,
+            error: resolved.error,
+            durationMs: Date.now() - startedAt,
+            args: call.args,
+          });
+        }
         return { jsonrpc: '2.0', id: frame.id ?? null, result: toolError(resolved.error) };
       }
       return await handleRequest(frame, []);
@@ -246,7 +282,25 @@ export class McpBridgeServer {
       },
       resolved.identity,
     );
-    return await handleRequest(frame, tools);
+    const response = await handleRequest(frame, tools);
+    if (call !== null) {
+      const refusal = this.calls.refusalOf(response);
+      this.calls.record({
+        channel: 'fleet',
+        tool: call.tool,
+        agentId: resolved.identity.agent.id,
+        taskId: resolved.identity.task.id,
+        // The origin as it is *now*, copied onto the row: a task retargeted later
+        // would otherwise silently re-file every call it ever made under a
+        // different phase.
+        originRef: resolved.identity.task.originRef,
+        ok: refusal === null,
+        error: refusal,
+        durationMs: Date.now() - startedAt,
+        args: call.args,
+      });
+    }
+    return response;
   }
 }
 

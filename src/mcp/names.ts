@@ -26,7 +26,6 @@ export const MCP_TOOL_NAMES = [
   'plan_submit',
   'escalate',
   'world_read',
-  'report_finding',
   'request_human_task',
   'note_progress',
   'request_permission',
@@ -43,10 +42,7 @@ export const MCP_TOOL_NAMES = [
   'validation_report',
   'report_remedy',
   'raise',
-  'knowledge_propose',
   'knowledge_ask',
-  'knowledge_notice',
-  'knowledge_contradict',
 ] as const;
 
 /**
@@ -72,26 +68,25 @@ export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
  *   work it belongs to, which is the better place for a tool only one kind of
  *   agent ever calls. Keeping them *out* of the addendum is what keeps it short
  *   enough to read.
- * - `superseded` — deliberately named nowhere. `raise` is the door for everything
- *   these four did, so advertising them would put six ways to file one
- *   observation in front of every agent. They stay *registered* rather than
- *   deleted because an operator's prompt override written before the intake may
- *   still name one, and unlike a `PromptId` a withdrawn tool name fails silently:
- *   the call comes back refused with nothing in the logs, on exactly the
- *   deployments that customised most.
+ *
+ * There is no third class. The four `raise` replaced were a `superseded` one for
+ * a release — registered, granted and named nowhere — and they are gone; what
+ * kept them was that a withdrawn name fails *silently*, and {@link
+ * RETIRED_TOOL_NAMES} is what answers that instead.
  *
  * **This lives beside the names rather than in `test/mcpChannel.test.ts`, where it
- * was written.** `src/setup/reading.ts` reads the `superseded` half to tell an
- * operator that an override of theirs still names one, and a classification a
- * test owns is a classification production code has to keep a second copy of —
- * free to disagree with what is actually granted, silently, which is the failure
- * the whole module exists to make impossible. The test asserts *against* it
- * instead, in both directions.
+ * was written.** The Insights MCP tab reads it to say what a tool's silence
+ * *means* — an `addendum` tool nothing called is a broken channel or a prompt that
+ * stopped naming it, where a `point-of-use` tool's silence only tracks what ran —
+ * and a classification a test owns is a classification production code has to
+ * keep a second copy of: free to disagree with what is actually granted,
+ * silently, which is the failure the whole module exists to make impossible. The
+ * test asserts *against* it instead, in both directions.
  *
  * A `Record` over {@link McpToolName}, so a new tool does not compile until it has
  * been classified.
  */
-export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use' | 'superseded'> = {
+export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   // The one door. Every agent may raise, on every dispatch, so there is no single
   // prompt that could name it — which is the addendum's own criterion.
   raise: 'addendum',
@@ -106,11 +101,6 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use' | 'sup
   // A request for a person to act rather than an observation, which is why it did
   // not fold into `raise` — and why it still needs naming.
   request_human_task: 'addendum',
-  // The four `raise` replaced. Kept registered for an override that names one.
-  report_finding: 'superseded',
-  knowledge_propose: 'superseded',
-  knowledge_notice: 'superseded',
-  knowledge_contradict: 'superseded',
   // Terminal or task-scoped: the dispatch prompt names these where they are used.
   link_ticket: 'point-of-use',
   conclude_work: 'point-of-use',
@@ -129,18 +119,43 @@ export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use' | 'sup
 };
 
 /**
- * The tools `raise` replaced, still registered and still granted.
+ * Tool names this harness used to answer to and no longer does.
  *
- * Derived from {@link TOOL_NAMING} rather than written out again, so the list an
- * operator is warned about cannot drift from the list that is actually granted —
- * which is the same three-way-agreement argument as {@link ALLOWED_MCP_TOOLS},
- * pointed at the reading instead of at the launch.
+ * `raise` replaced all four, and they spent a release registered-but-named-nowhere
+ * rather than deleted, for one reason: a withdrawn tool name fails **silently**.
+ * An operator's prompt override written before the intake still names one, the
+ * call comes back as an unknown method, and nothing in the logs says why — on
+ * exactly the deployments that customised most.
  *
- * → `docs/spec/26-setup.md#an-override-that-names-a-superseded-tool`
+ * Deleting the implementations does not have to mean accepting that, and this is
+ * the same answer `PromptId` gives to the same problem: the *name* is kept and
+ * marked withdrawn, so it stays loud in three places. The setup reading still
+ * warns an operator whose override names one; a call to one is answered with a
+ * refusal that names `raise` rather than an unknown-method error; and because it
+ * is answered, it is **recorded**, so the Insights MCP tab shows a deployment
+ * still reaching for a tool that is gone.
+ *
+ * A name is never removed from this list. It costs one string, and taking one out
+ * puts that deployment back on the silent failure this list exists to end.
+ *
+ * → `docs/spec/11-mcp-tools.md#retired-tools`, `docs/spec/26-setup.md#an-override-that-names-a-retired-tool`
  */
-export const SUPERSEDED_TOOL_NAMES: readonly McpToolName[] = MCP_TOOL_NAMES.filter(
-  (name) => TOOL_NAMING[name] === 'superseded',
-);
+export const RETIRED_TOOL_NAMES: readonly string[] = [
+  'report_finding',
+  'knowledge_propose',
+  'knowledge_notice',
+  'knowledge_contradict',
+];
+
+/** What a call to a retired tool is told, so the answer names the door that replaced it. */
+export function retiredToolMessage(name: string): string {
+  return (
+    `${name} has been retired. Everything it did is now one call: raise(claim, evidence) — say what you ` +
+    'learned and what you saw, and the harness works out where it goes. Add `contradicts: <id>` if you ' +
+    'are disputing a claim the harness gave you, or `until: <hours>` if it is only true for now. If you ' +
+    'reached this from a prompt that named it, that prompt is out of date.'
+  );
+}
 
 /**
  * The names as the permission layer sees them.

@@ -643,26 +643,34 @@ Both are named in `MCP_PROTOCOL_ADDENDUM` rather than at a point of use — the 
 `test/mcpChannel.test.ts` forces on every tool. Every agent may write to this store and every agent
 may read it, so there is no one dispatch prompt that could name them.
 
-### The doors that closed, and why they are still there
+### The doors that closed, and what is left of them
 
-`report_finding`, `knowledge_propose`, `knowledge_notice` and `knowledge_contradict` are **named
-nowhere**. They are still registered, still granted, and still work.
+`report_finding`, `knowledge_propose`, `knowledge_notice` and `knowledge_contradict` are **gone**. No
+modules, no entries in `MCP_TOOL_NAMES`, no `mcp__lubbdubb__*` grants. Six ways to file one observation
+is the taxonomy `raise` exists to remove — an agent choosing between doors is an agent that can choose
+wrong, and the whole value of the intake is that there is nothing to get wrong.
 
-That is deliberate on both halves. Advertising them would put six ways to file one observation in
-front of every agent, which is the taxonomy `raise` exists to remove — an agent choosing between
-doors is an agent that can choose wrong, and the whole value of the intake is that there is nothing
-to get wrong. But **deleting a tool name fails silently in the one place it matters most**: an
-operator's prompt override written before the intake may still name `report_finding`, and a name
-dropped from `MCP_TOOL_NAMES` and the `--allowedTools` grants comes back refused with nothing in the
-logs to say why — on exactly the deployments that customised most. Unlike a `PromptId`, whose removal
-turns a deployment into a harness that will not boot and says so, a withdrawn tool name is a call that
-quietly does not work.
+They did not go at once, and the reason they did not is worth keeping: **deleting a tool name fails
+silently in the one place it matters most.** An operator's prompt override written before the intake
+may still name `report_finding`, and a name dropped from `MCP_TOOL_NAMES` and the `--allowedTools`
+grants comes back as an unknown method with nothing in the logs to say why — on exactly the deployments
+that customised most. Unlike a `PromptId`, whose removal turns a deployment into a harness that will
+not boot and says so, a withdrawn tool name is a call that quietly does not work.
 
-So they are classified `superseded` in `test/mcpChannel.test.ts` — a third answer beside `addendum`
-and `point-of-use`, which is where that intent is recorded. Without it they would read as
-`point-of-use` and look like tools somebody forgot to name, which is the state `open_pr` spent its
-first release in and the thing that test exists to catch. Withdrawing the names for real is a later
-change, once overrides have moved.
+So they spent a release classified `superseded`: registered, granted and named nowhere, while
+`src/setup/reading.ts` counted the overrides that still said one. Two things then let the names be
+withdrawn for real, and both are the same idea `PromptId`'s `retired: true` is:
+
+- **The names outlive the tools.** `RETIRED_TOOL_NAMES` keeps them, and `src/mcp/retiredTools.ts`
+  answers a call to one with a refusal that names `raise` — hidden from `tools/list`, so no agent is
+  offered the door, but dispatchable, so a stale prompt gets a sentence it can act on instead of a dead
+  channel ([11](11-mcp-tools.md#retired-tools)).
+- **The call is recorded.** Because it is answered, it lands in `mcp_calls`, so the Insights MCP tab
+  names a deployment still reaching for one ([17](17-cockpit.md#mcp)) and the Setup reading names the
+  file it is in ([26](26-setup.md#an-override-that-names-a-retired-tool)).
+
+A name is never removed from that list. It costs one string, and taking one out puts that deployment
+back on the silent failure the whole arrangement exists to end.
 
 **A raised claim is refused by name when it is barred**, with the id of the rejected claim and the
 `contradicts` argument that is the way back. A silent refusal teaches the fleet nothing, and it files
@@ -681,12 +689,12 @@ of these is a claim-shaped thing that stayed out for a stated reason rather than
 | `scratch_append`     | A conversation between siblings on one goal: chronological, unstructured, nothing to corroborate.                  |
 | `report_remedy`      | The **event** record of one return to a pull request, with its counts and its dollars ([18](18-observability.md)). |
 
-**Both doors write here now.** `report_remedy` raises its claim through the intake's own path
-([below](#the-remedy-arm)), and `report_finding` writes a `knowledge_facts` row like everything else —
-what is left of that tool is a translation and a name kept alive for the overrides that still say it
-([The doors that closed](#the-doors-that-closed-and-why-they-are-still-there)). Neither is folded into
-`raise`, and neither needs to be: what each keeps is its own job, which is an event record with counts
-in one case and a one-line headline an operator scans in the other.
+**`report_remedy` writes here too**, raising its claim through the intake's own path
+([below](#the-remedy-arm)) rather than being folded into `raise`. It does not need to be: what it keeps
+is its own job, an event record with counts and dollars behind it, and the claim is a by-product of
+that rather than the point of the call. `report_finding`, which used to sit beside it here as the other
+door writing the same store, is retired
+([The doors that closed](#the-doors-that-closed-and-what-is-left-of-them)).
 
 ### The remedy arm
 

@@ -54,6 +54,24 @@ export function fmtDuration(ms: number | null): string {
 }
 
 /**
+ * How long ago an instant was, in the largest unit that still reads as one.
+ *
+ * `relTime` is the cockpit's usual answer and stops at hours, which is right
+ * everywhere it is used: an agent's note, a world event, a run that ended — all
+ * things a page is showing because they are recent. The MCP tab asks the question
+ * of an instant that is deliberately **outside** the window ("nothing called this
+ * in the last week, and the last call was…"), and that is the first surface in the
+ * cockpit where the honest answer is nineteen days. `456h ago` is a number a
+ * reader has to convert before it means anything.
+ *
+ * Deferred to {@link fmtDuration} rather than written again, so an age and a wait
+ * on one page are cut at the same units.
+ */
+export function fmtSince(iso: string, now: number = Date.now()): string {
+  return `${fmtDuration(Math.max(0, now - Date.parse(iso)))} ago`;
+}
+
+/**
  * The plot box every timeline on the page draws into.
  *
  * One box rather than one per chart, because the tabs are now read against each

@@ -129,7 +129,7 @@ has an arm and applies now; everything else lands in the file and is reported as
 ## The checks
 
 `buildSetupReading` (`src/setup/reading.ts`) answers six, plus one about the prompt overrides
-whenever a deployment has any ([below](#an-override-that-names-a-superseded-tool)) and one whenever
+whenever a deployment has any ([below](#an-override-that-names-a-retired-tool)) and one whenever
 the file has moved ahead of the process ([below](#a-fault-the-file-has-already-answered)), and they
 outlive the first three minutes on purpose. That is the argument for their being checks rather than wizard steps: `credential` is how an
 operator finds out on a Tuesday that a token expired, and `eligibility` is how they find out that a
@@ -166,23 +166,30 @@ As one standing check it settled into a permanent scold for doing nothing wrong,
 
 Every other check names a fault that clears when it is fixed, so none of them can settle into a nag.
 
-### An override that names a superseded tool
+### An override that names a retired tool
 
-`report_finding`, `knowledge_propose`, `knowledge_notice` and `knowledge_contradict` are registered,
-granted and **named nowhere**: `raise` is the one door, and advertising six ways to file one
-observation is the taxonomy the intake removed ([27](27-knowledge.md#the-doors-that-closed-and-why-they-are-still-there)).
-They were kept rather than deleted for one reason — an operator's prompt override written before the
-intake may still name one, and unlike a `PromptId`, whose removal turns a deployment into a harness
-that will not boot and says so, a **withdrawn tool name fails silently**: the call comes back refused
-with nothing in the logs, on exactly the deployments that customised most.
+`report_finding`, `knowledge_propose`, `knowledge_notice` and `knowledge_contradict` are **retired**:
+`raise` is the one door, and advertising six ways to file one observation is the taxonomy the intake
+removed ([27](27-knowledge.md#the-doors-that-closed-and-what-is-left-of-them)).
 
-That shim is doing nothing until somebody can see whether it is still needed, and this check is what
-makes it visible. It turns "we cannot know who still names these" into a reading an operator can act
-on — which is also what makes the later withdrawal safe to take.
+They spent a release registered-but-named-nowhere rather than deleted, for one reason — an operator's
+prompt override written before the intake may still name one, and unlike a `PromptId`, whose removal
+turns a deployment into a harness that will not boot and says so, a **withdrawn tool name fails
+silently**: the call comes back as an unknown method with nothing in the logs, on exactly the
+deployments that customised most.
 
-- **`warn`, never `bad`.** The call still works, so nothing is broken. What is true is that the
-  deployment is one withdrawal away from breaking, which is a discrepancy between what an override
-  says and what the channel advertises rather than a fault in what is running.
+**This check is what let the withdrawal be taken.** It turns "we cannot know who still names these"
+into a reading an operator can act on. The other half is that the names outlived their
+implementations: `RETIRED_TOOL_NAMES` is what keeps this check answerable, and what keeps the call
+itself answered with a refusal naming `raise` rather than lost as a protocol error
+([11](11-mcp-tools.md#retired-tools)).
+
+- **`bad`, since the withdrawal.** While the four were still registered this was a `warn`: the call
+  still worked and the deployment was one withdrawal away from breaking. The withdrawal has happened,
+  so an override naming one now sends every agent it dispatches at a name that answers only with a
+  refusal. The agent recovers — it is told to say `raise`, and the call is recorded so the Insights
+  MCP tab shows it ([17](17-cockpit.md#mcp)) — but a prompt of the operator's own is spending a turn
+  on nothing, every dispatch.
 - **Only the operator's overrides are read**, and a deployment with none draws **no check at all**
   rather than an `ok` row about a thing it does not do. The built-ins name none of these by
   construction — `test/mcpChannel.test.ts` holds that — so scanning them would be scanning the
@@ -196,12 +203,11 @@ on — which is also what makes the later withdrawal safe to take.
   `promptTemplatesDir` rather than a config leaf, so there is no `set` the harness could apply; and a
   fix that landed the operator on the values page would be the failure this rail was rebuilt around —
   a row that opens the wrong screen is worse than no row.
-- **The classification is read from `src/mcp/names.ts`**, beside the names it classifies and beside
-  the `--allowedTools` grants derived from the same list. It was written in `test/mcpChannel.test.ts`,
-  which is the wrong home for it now that production code needs the same answer: a second copy is
-  free to disagree with what is actually granted, silently, and a withdrawal could then reach the
-  grants without ever reaching this row. The test asserts against it instead
-  ([11](11-mcp-tools.md#where-a-tool-is-named-to-the-agent)).
+- **The list is read from `src/mcp/names.ts`**, beside the names it classifies and beside the
+  `--allowedTools` grants derived from the same list. A second copy would be free to disagree with
+  what is actually answered, silently, and a name dropped from one could then vanish without ever
+  reaching this row — which is why a name is never removed from `RETIRED_TOOL_NAMES`
+  ([11](11-mcp-tools.md#retired-tools)).
 
 The check is **not** in the settle map below, for `credential`'s reason pointed at a different file:
 no edit to `lubbdubb.config.json` rewrites a prompt override, so a restatement there would tell an

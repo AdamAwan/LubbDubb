@@ -22,6 +22,7 @@ import {
   type FactQuery,
 } from './knowledge.js';
 import { RemedyStore } from './remedies.js';
+import { McpCallStore } from './mcpCalls.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
 import { ValidationStore, VALIDATION_COLUMNS, VALIDATION_REBUILDS } from './validation.js';
@@ -97,6 +98,8 @@ import type {
   Remedy,
   RemedyInput,
   RemedyKind,
+  McpCall,
+  McpCallInput,
   CostDelta,
   LocalRun,
   LocalRunStatus,
@@ -171,6 +174,7 @@ export class Store {
   private readonly profileOverrides: ProfileOverrideStore;
   private readonly knowledge: KnowledgeStore;
   private readonly remedies: RemedyStore;
+  private readonly mcpCalls: McpCallStore;
   private readonly humanTasks: HumanTaskStore;
   private readonly plans: PlanStore;
   private readonly validation: ValidationStore;
@@ -281,6 +285,7 @@ export class Store {
     this.profileOverrides = new ProfileOverrideStore(ctx);
     this.knowledge = new KnowledgeStore(ctx);
     this.remedies = new RemedyStore(ctx);
+    this.mcpCalls = new McpCallStore(ctx);
     this.humanTasks = new HumanTaskStore(ctx);
     this.plans = new PlanStore(ctx);
     this.validation = new ValidationStore(ctx);
@@ -327,6 +332,9 @@ export class Store {
   }
   listTasks(): TaskSummary[] {
     return this.tasksStore.listTasks();
+  }
+  countTasksNamingTools(since: string, names: readonly string[]): Map<string, number> {
+    return this.tasksStore.countTasksNamingTools(since, names);
   }
   listOutstandingTasks(): Task[] {
     return this.tasksStore.listOutstandingTasks();
@@ -564,6 +572,21 @@ export class Store {
   }
   listRecentRemedies(kind: RemedyKind, limit: number): Remedy[] {
     return this.remedies.listRecentRemedies(kind, limit);
+  }
+
+  // -- MCP calls (which tools the fleet reaches for, and which it never does) -
+
+  recordMcpCall(input: McpCallInput, retainArgsDays: number): McpCall {
+    return this.mcpCalls.recordMcpCall(input, retainArgsDays);
+  }
+  compactMcpCallArgs(retainDays: number, force = false): number {
+    return this.mcpCalls.compactMcpCallArgs(retainDays, force);
+  }
+  listMcpCallsSince(since: string): McpCall[] {
+    return this.mcpCalls.listMcpCallsSince(since);
+  }
+  lastMcpCallByTool(): Map<string, string> {
+    return this.mcpCalls.lastMcpCallByTool();
   }
 
   // -- Human tasks (work only a person can do) -------------------------------

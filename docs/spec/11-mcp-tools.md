@@ -22,7 +22,6 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `plan_submit`          | Submit a decomposition verdict. Replaces writing `.lubbdubb/plan.json`.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `escalate`             | Ask the human a question and park. The typed form of the WAITING sentinel.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `world_read`           | Read the harness's own view of a PR or issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `report_finding`       | Superseded by `raise` and named nowhere; still registered, and writing the same claim store. Its `kind` is accepted and ignored.                                                                                                                                                                                                                                                                                                                                                                           |
 | `request_human_task`   | Ask for work only a person can do. Files a durable work item, parks nobody, dispatches nobody.                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `note_progress`        | Say in one line what the agent is working on right now.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `link_ticket`          | File the tracker item for a filed finding or a bug an operator raised: the agent hands over the title and body, or names an existing item it duplicates.                                                                                                                                                                                                                                                                                                                                                   |
@@ -36,10 +35,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `report_remedy`        | Account for one return to a pull request: why CI was red or why a reviewer asked for changes, what settled it, and what would have caught it earlier. Two enums and a line. Fenced to `pr:<n>:ci` and `pr:<n>:comments` origins, which are also where its `kind` comes from. May carry a claim, raised through the same intake `raise` writes to, and only when the guard is `undocumented`. → [18](18-observability.md#causes-why-the-fleet-came-back), [27](27-knowledge.md#the-remedy-arm)              |
 | `validation_amend`     | Correct the validation plan for the goal this agent is working: add or amend checks, withdraw one with a reason, declare a resource. **Merge-only** — an omitted check is untouched. Open to every agent on the goal; refused to the planner, which has `plan_submit`. → [20](20-validation.md)                                                                                                                                                                                                            |
 | `validation_report`    | Record the reading of the one validation check this agent was dispatched to run: `passed`, `failed`, or `handback` — could not run it, which records nothing and returns the check to the operator with the reason. Refused to every caller but that check's own agent, by name. → [20](20-validation.md#the-hand-over)                                                                                                                                                                                    |
-| `knowledge_propose`    | Write down something learned about working **this repository** that the repository does not say — with its scope, its lifetime and the evidence for it. Open to every agent, which is the widening: before it, only a retrospective (and a remedy under one guard verdict) could record a durable claim. A claim somebody has already filed records the caller as corroborating it rather than filing a second copy. → [27](27-knowledge.md)                                                               |
 | `knowledge_ask`        | Read what the fleet has learned, for this caller's own scopes or about a question. Answers only with claims two independent goals have seen or an operator has vouched for — never a bare proposal. → [27](27-knowledge.md)                                                                                                                                                                                                                                                                                |
-| `knowledge_notice`     | Raise an observation that is true today and will stop being true — a check that failed and passed on one commit, a registry refusing installs. It states what was seen and never what to do about it, and it is the one write in the channel that reaches every agent without an operator: two goals seeing the same thing injects it, bounded by the clock the caller must name. → [27](27-knowledge.md#notices)                                                                                          |
-| `knowledge_contradict` | Say that a claim the harness gave this agent is contradicted by the code in front of it — **with the amendment**: what the claim should say instead, filed as a proposal naming the original. A contradiction with no amendment is refused, because nothing in that store is demoted by a count: a claim right in general and wrong at one edge attracts contradictions because it is being used. It moves nothing on the agent's say-so. → [27](27-knowledge.md#contradiction-and-why-it-does-not-delete) |
 | `request_permission`   | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`).                                                                                                                                                                                                                                                                  |
 
 There is a **second, much shorter list** for the desktop channel below — six tools, none of them
@@ -107,7 +103,7 @@ blank marked as unanswered — see [16](16-http-api.md#post-apiescalationsidansw
 [17](17-cockpit.md) for the modal.
 
 `detail` is **markdown**, and the card renders it as such. This one is a description, not a
-validation: unlike `report_finding.summary` there is no one-line invariant to hold, and `question` is
+validation: unlike a raised claim there is no one-line invariant to hold, and `question` is
 already the short field. Terminal output the harness captured stays preformatted — see
 [17](17-cockpit.md#agent-authored-prose).
 
@@ -174,45 +170,41 @@ channel contributes to it:
   cannot tell from one.
 - **It queues nothing and parks nobody**, and says so in both places. An agent that raises a defect
   and then assumes its fix is scheduled has been told something untrue about what it just did —
-  `report_finding`'s rule, and it holds here for that rule's reason: nothing in the dispatcher reads
+  the claim intake's rule, and it holds here for that rule's reason: nothing in the dispatcher reads
   this store at any reach.
 
-### `report_finding`
+### Retired tools
 
-Arguments `{kind?, summary, where?, detail?, ref?}`, and **it writes a `knowledge_facts` row** like
-everything else — there is one claim store ([27](27-knowledge.md#what-the-three-stores-became)), so
-this door is a translation rather than a second writer: `summary` is the claim, `detail` is the
-evidence the corroboration carries, and `where`/`ref` are the two coordinates a fact already had under
-the same two names. Five properties:
+`report_finding`, `knowledge_propose`, `knowledge_notice` and `knowledge_contradict` were four doors
+onto one thing, sorted by _what an operator would do about the claim_ — the operator's knowledge and
+not the agent's. `raise` is that door now, and the four are **gone**: no modules, no entries in
+`MCP_TOOL_NAMES`, no `mcp__lubbdubb__*` grants.
 
-- **`kind` is accepted and ignored**, which is the interesting one. It named a four-word taxonomy
-  sorted by _what an operator would do about the claim_ — the operator's knowledge and not the
-  agent's — and the unified intake is the removal of that question. Refusing a call that supplies one
-  would break the overrides this door is kept alive **for**; storing it would revive a taxonomy nothing
-  else writes and no operator has ever set. So it rides into the evidence, where an operator reads how
-  the claim arrived, and decides nothing.
+Their **names** are not gone, and that is the whole of the withdrawal's design. They live in
+`RETIRED_TOOL_NAMES` in `src/mcp/names.ts`, and `src/mcp/retiredTools.ts` builds one `hidden` tool per
+name — advertised nowhere, answered anyway.
 
-- **The one-line refusal is kept**, and it is the one this door has that `raise` does not. `raise`
-  bounds a claim and takes a line or two; this asks for the single line an operator scans in a list,
-  because the only cheap moment to fix a blob is the agent's own turn and an unreadable row costs an
-  operator every time they open it. The error names the field the text belongs in.
+Three things turn on that pair of decisions:
 
-- **It queues nothing, and that is the design.** A queued job is dispatched by rule `manual-job` ahead of every
-  world-driven rule, so an agent that could queue jobs could put agents on the fleet — a capability
-  escalation. Promotion is an operator's click. The tool's description **and** its response say so, so
-  an agent does not report a bug and then assume its fix is scheduled.
-- **Identity is structural, with full force.** The schema is `{kind, summary, where, detail, ref}` and
-  nothing else; `agentId`/`taskId`/`originRef` come from the credential. This is a write that puts
-  words in an agent's mouth in front of an operator and is read as testimony about work its author
-  actually did. The two text fields change nothing here — they are the reporter describing its own
-  observation, not naming anyone.
-- **`summary` is one line and the boundary enforces it.** A newline is refused, with the error naming
-  `where` and `detail` as the fields the rest belongs in. The point is the timing: a report that
-  arrives as one blob is fixable for the price of a tool call in the agent's own turn, and unfixable
-  by the time an operator is reading it.
-- **`ref` is kind-strict and a bare number is refused.** Unlike `world_read` there is no `kind`
-  argument to say whether `41` is an issue or a PR, and a duplicate report must not guess. Anything
-  off-vocabulary is refused with "omit ref, describe it in the summary".
+- **Out of `tools/list`.** Six advertised ways to file one observation is the taxonomy the intake
+  removed, and a withdrawn tool must not be one of the doors a model chooses between. `hidden` on
+  `McpTool` is what `handleRequest` filters the advertised set by.
+- **Still dispatchable**, because a withdrawn name fails **silently**. An operator's prompt override
+  written before the intake still says `report_finding`; a name that is simply gone comes back as an
+  unknown method, which reaches the agent as a broken channel rather than an out-of-date prompt, and
+  appears in no reading anywhere. Answered, it is a sentence the agent can act on — `retiredToolMessage`
+  names `raise` and says what to pass it — and a **recorded call**, so the Insights MCP tab
+  ([17](17-cockpit.md#mcp)) names the deployment still reaching for it and the Setup reading
+  ([26](26-setup.md#an-override-that-names-a-retired-tool)) names the file.
+- **Nothing is forwarded.** A call shaped for a retired schema is not a `raise` call, and quietly
+  turning it into one would file a claim nobody wrote with the agent believing something else had
+  happened. The message is the whole of the handler.
+
+**A name is never removed from this list.** It costs one string; taking one out puts that deployment
+back on the silent failure the list exists to end — which is `PromptId`'s `retired: true` rule
+([05](05-dispatcher.md#prompt-templates)), reached independently and for the same reason.
+
+→ [27](27-knowledge.md#the-doors-that-closed-and-what-is-left-of-them)
 
 ### `request_human_task`
 
@@ -225,7 +217,7 @@ Arguments `{title, detail?}` and **nothing that names work**. See
   gets on with, or concludes, whatever it can. Left to one tool, every "somebody has to flip this
   setting" would park an agent overnight.
 - **It queues nothing and blocks nothing by itself**, said in the response as well as the
-  description, `report_finding`'s discipline for its reason. The half that _can_ hold work off the
+  description, the claim intake's discipline for its reason. The half that _can_ hold work off the
   fleet is a plan part declared `expectedKind: 'human'`, which arrives through `plan_submit` and the
   approval gate. So the capability an agent gains here is "ask a person", never "stop the fleet", and
   nothing in the dispatcher reads `human_tasks`.
@@ -233,7 +225,7 @@ Arguments `{title, detail?}` and **nothing that names work**. See
   `originRef` come from the credential. This write puts an obligation on a person under an agent's
   name, so it must say truthfully which agent asked and what it was working on.
 - **`title` is one line and the boundary enforces it**, with the error naming `detail` as the field
-  the rest belongs in — `report_finding.summary`'s refusal, and for exactly its reason: this string is
+  the rest belongs in — the one-line refusal the retired `report_finding` carried, and for exactly its reason: this string is
   a panel headline, fixable for one tool call in the agent's own turn and unfixable by the time an
   operator is reading it. `detail` is optional, because a required field an agent has nothing for
   comes back as "N/A".
@@ -271,7 +263,7 @@ emitting.
   is `blocked`, and `escalate` already owns that and does it properly.
 - **Trimmed, not rejected.** An over-long note is collapsed to one line, cut to `MAX_NOTE_LENGTH`
   (200) with an ellipsis, and **stored**, with the trim reported back. The opposite of
-  `report_finding`, because a finding is testimony an operator acts on while a note is a status line
+  a raised claim, because a claim is testimony an operator acts on while a note is a status line
   whose value is being cheap and frequent. Only an empty note is refused.
 
 It routes through `AgentManager.recordProgress` for the `progress` event, which the `Hub` turns into a
@@ -302,7 +294,7 @@ a story from the cockpit (see [13](13-jobs-and-tickets.md#filing-a-ticket)).
 - **The target comes from the credential, never an argument.** `agent → task → its job:<id> origin →
 the finding or the bug filing that job was created for`. A job is created for at most one of the
   two, so there is nothing to disambiguate; and there is no id to point at somebody else's, so an agent
-  on any other kind of task resolves to neither and is told so. Same discipline as `report_finding`,
+  on any other kind of task resolves to neither and is told so. Same discipline as the claim intake,
   and here it is the whole access check. `AgentManager.filingTarget` answers it **before** the create,
   because which arm it is decides the type and the relation.
 - **`ref` is the same closed vocabulary**, parsed by the same `parseFindingRef`: `issue:314`,
@@ -372,7 +364,7 @@ resolved from the credential.
   characters of markdown: the account, rendered as the body of the card. The 2000-character cap moved
   off `summary` and onto `detail`; it did not disappear.
 
-  **Refusing the newline is the load-bearing part**, exactly as it is for `report_finding` (whose
+  **Refusing the newline is the load-bearing part**, exactly as it was for the retired `report_finding` (whose
   shape this copies deliberately, so an operator learns one). An assessor handed a single string
   writes its sections into it as inline capitals — `PRESENT: … MISSING: … REMAINING: …` — and what
   reaches the operator is a paragraph with no seams. Refused here, it is a tool error the same agent
@@ -483,7 +475,7 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
 - **Identity is structural, with full force.** Branch, base, issue and stack position all resolve from
   the credential's origin (`resolveOpenPr`, `src/mcp/openPr.ts`), so an agent cannot open a pull
   request against another agent's work however it phrases the call. The same discipline
-  `report_finding` rests on, and with more reason: this write puts a pull request into the world under
+  the claim intake rests on, and with more reason: this write puts a pull request into the world under
   the operator's account.
 - **Base selection reuses `partBase`.** Two answers to "what does this part stack on" is the drift
   class the branch gate and the reconciler already avoid by sharing one.
@@ -771,34 +763,32 @@ So every tool is named in one of two places, and which one is a decision, not a 
   agent may write to that store and every agent may read it, so there is no one dispatch prompt that
   could name them — and `raise` most of all, since the whole of its value is being callable the moment
   an agent learns something rather than at a point somebody predicted.
-- **Nowhere at all**, for the four `raise` replaced — `report_finding`, `knowledge_propose`,
-  `knowledge_notice`, `knowledge_contradict`. They are still registered and still granted, and that
-  pair of decisions is one argument: six advertised ways to file one observation is the taxonomy the
-  intake removed, while a _withdrawn_ tool name fails silently on the deployments that customised most
-  — an override still naming one gets a call that comes back refused with nothing in the logs. They
-  are classified `superseded`, so they cannot be mistaken for tools somebody forgot to name — and
-  `src/setup/reading.ts` reads that classification to tell an operator when an override of theirs
-  still names one ([26](26-setup.md#an-override-that-names-a-superseded-tool)), which is what makes
-  the withdrawal safe to take later.
-  → [27](27-knowledge.md#the-doors-that-closed-and-why-they-are-still-there)
 - **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
   a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
   `assay_issue`, `retro_submit`, `link_ticket`, the scratch pair, the validation pair. Keeping them out
   of the addendum is what keeps it short enough to be read. `request_permission` is named in neither,
   because no agent calls it: Claude Code invokes it through `--permission-prompt-tool`.
 
+There are two classes and no third. The four `raise` replaced were a `superseded` one for a release —
+registered, granted, named nowhere — and are now **retired** instead (above), which is a different
+thing: not a tool classified as unadvertised, but a name with no tool behind it.
+
 **The classification lives in `src/mcp/names.ts`, beside the names it classifies**, as a
 `Record<McpToolName, …>` — so a new tool does not compile until it has been placed.
 `test/mcpChannel.test.ts` asserts each side of it: the addendum names every `addendum` tool and no
-other, and every `superseded` tool is still granted.
+other, and a retired name is answered but never advertised.
 
 It was written in that test, and moved when production code needed the same answer. A classification a
 test owns is one the reading has to keep a second copy of, free to disagree with what is actually
 granted and silent when it does — which is the whole failure this module exists to make impossible,
-arriving through the list rather than through the names. `SUPERSEDED_TOOL_NAMES` is derived from the
-record rather than written out again, for the same reason `ALLOWED_MCP_TOOLS` is derived from
-`MCP_TOOL_NAMES`: two lists that merely agreed today would let a withdrawal reach the grants without
-reaching the operator who still names one.
+arriving through the list rather than through the names.
+
+The classification has a second reader now, and it is the one that gives it teeth: the Insights MCP tab
+reads it to say what a tool's **silence means**. An `addendum` tool nothing called is a broken channel
+or a prompt that stopped naming it; a `point-of-use` tool's silence only tracks what ran. That reading
+also checks the claim against the evidence — a tool classified `addendum` whose name does not actually
+appear in `MCP_PROTOCOL_ADDENDUM` is a defect the tab names outright, which a check of the
+classification alone would agree was fine. → [17](17-cockpit.md#mcp)
 
 ### Why lessons are a field and not a tool
 
@@ -817,12 +807,42 @@ retro agent proposes a lesson.
 
 The same rule decided the docs route the other way (#397). A fact about the repository is _not_ part of
 the retrospective's submission — any agent that learns one can file it, and the one that learns it
-first is rarely the one writing the retrospective — so it went on `report_finding` rather than becoming
-a second field on `retro_submit`, and it is `raise` now. Which also means no new tool, no new grant and
+first is rarely the one writing the retrospective — so it went on the claim intake rather than becoming
+a second field on `retro_submit`, and that intake is `raise`. Which also means no new tool, no new grant and
 no second cap: it reuses a row and a gate that already exist. What `retro_submit` still carries is what
 _working the goal_ taught, raised as a claim like any other and counted back as `lessonsFiled` — by what
 actually landed, because a claim an operator rejected is refused by name and reaches nobody however many
 times it is filed. → [27](27-knowledge.md)
+
+## What is recorded
+
+Every `tools/call` that reaches a tool body is written to `mcp_calls`, on **both** channels — the tool,
+the channel, the calling agent and its origin, whether it was refused and with what words, how long the
+body took, and the arguments. It is the only table in the harness whose sole reader is a cockpit panel
+([17](17-cockpit.md#mcp)), and it exists because the failure it is about leaves no trace anywhere else.
+
+**The failure.** An operator `--allowedTools` in `claudeArgs` is appended last, so it beats the
+harness's and drops every `mcp__lubbdubb__*` grant from the launch. The channel connects; every call is
+refused before it arrives; the agent falls back to the sentinels, finishes its work and reports
+nothing. Its transcript is indistinguishable from an agent that chose not to use the tools, and nothing
+is red. A call that never arrives cannot be recorded — which is exactly why the reading is built on the
+_runs_ that made no call rather than on the calls themselves.
+
+Four rules the recording keeps:
+
+- **It is written after the answer and never changes it.** Recording is bookkeeping on the call path of
+  every tool on both channels: a store that refuses a row is a reading lost, not a tool call lost. Every
+  write is wrapped and a failure goes to `errors.record` and no further. `src/mcp/callLog.ts` is the one
+  place both channels write from, so the rules are stated once.
+- **A refused call is the most valuable row in the table**, including one refused for an unresolvable
+  credential — recorded with a null identity rather than skipped for having no agent behind it.
+- **The origin is copied onto the row at call time**, not joined at read time: a task retargeted later
+  would otherwise silently re-file every call it ever made under a different phase.
+- **The two channels are never summed.** Different credentials, different tool sets, and
+  `validation_report` is two different tools with one name.
+
+Arguments are the one column that is ever cleared — after `mcpArgsRetentionDays`
+([02](02-configuration.md)), and the row stays. → [14](14-persistence.md#mcp-calls)
 
 ## Degradation
 

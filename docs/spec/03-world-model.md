@@ -158,7 +158,7 @@ is carried beside the world, in `DispatchContext.retainedIssues`.
 ## The ref vocabulary
 
 Refs are the strings that tie a piece of work to the world item it exists for. They are used as task
-`originRef`s, as world-event refs, as `world_read`/`report_finding` arguments, and as keys in the
+`originRef`s, as world-event refs, as `world_read`/`raise` arguments, and as keys in the
 cockpit's link map.
 
 | Ref shape                    | Names                                               | Branch the dispatcher uses |
