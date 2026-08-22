@@ -19,7 +19,9 @@ import type {
   CockpitDecision,
   Decision,
   ContradictionRuling,
+  FactCommitment,
   FactRuling,
+  GraduationOutcome,
   FilingTargetProbe,
   Issue,
   IssueFiled,
@@ -1053,6 +1055,62 @@ class DemoServer {
     // Answered either way — the queue is what an operator has left to decide, and
     // dismissing is a decision.
     fact.openContradictions -= 1;
+    this.dirty();
+    return { ok: true };
+  }
+
+  /**
+   * Commit a claim to the repository — the demo mirror of
+   * `POST /api/knowledge/facts/:id/commit` (#27 phase 6), including the property
+   * that is the whole of the intermediate state: **the reach does not move**. The
+   * claim goes on being delivered while its pull request is open, and reaches
+   * `committed` only when that pull request lands.
+   */
+  async commitFact(id: string, commitment: FactCommitment): Promise<{ ok: true }> {
+    const fact = this.state.knowledge.find((f) => f.id === id);
+    if (!fact || this.state.knowledgeGraduations.some((g) => g.factId === id && g.outcome === null)) {
+      return { ok: true };
+    }
+    const at = new Date().toISOString();
+    this.state.knowledgeGraduations = [
+      {
+        id: `kng-${id}`,
+        factId: id,
+        jobId: `job-docs-${id}`,
+        target: commitment.target,
+        bar: commitment.target === 'claudeMd' ? commitment.bar : null,
+        prRef: null,
+        outcome: null,
+        settledAt: null,
+        createdAt: at,
+        reading: 'waiting',
+      },
+      ...this.state.knowledgeGraduations,
+    ];
+    this.dirty();
+    return { ok: true };
+  }
+
+  /**
+   * Say what became of a graduation the harness will not read for itself — the
+   * demo mirror of `POST /api/knowledge/graduations/:id/settle`. `landed` is the
+   * one place `committed` is an operator's own word, and it moves the claim out of
+   * every prompt; `abandoned` moves nothing at all.
+   */
+  async settleGraduation(id: string, outcome: GraduationOutcome): Promise<{ ok: true }> {
+    const graduation = this.state.knowledgeGraduations.find((g) => g.id === id);
+    if (!graduation || graduation.outcome !== null) return { ok: true };
+    graduation.outcome = outcome;
+    graduation.reading = outcome;
+    graduation.settledAt = new Date().toISOString();
+    if (outcome === 'landed') {
+      const fact = this.state.knowledge.find((f) => f.id === graduation.factId);
+      if (fact) {
+        fact.reach = 'committed';
+        fact.ruledAt = graduation.settledAt;
+        fact.updatedAt = graduation.settledAt;
+      }
+    }
     this.dirty();
     return { ok: true };
   }
@@ -3549,6 +3607,8 @@ export const demoApi = {
   promoteLesson: (id: string) => getServer().promoteLesson(id),
   retireLesson: (id: string) => getServer().retireLesson(id),
   setFactReach: (id: string, reach: FactRuling) => getServer().setFactReach(id, reach),
+  commitFact: (id: string, commitment: FactCommitment) => getServer().commitFact(id, commitment),
+  settleGraduation: (id: string, outcome: GraduationOutcome) => getServer().settleGraduation(id, outcome),
   knowledgeFact: (id: string) => getServer().knowledgeFact(id),
   resolveContradiction: (id: string, ruling: ContradictionRuling) => getServer().resolveContradiction(id, ruling),
   completeHumanTask: (id: string, note?: string) => getServer().completeHumanTask(id, note),

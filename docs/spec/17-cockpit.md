@@ -1709,6 +1709,30 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   _Narrow it yourself_ opens the claim for rewriting in place. _Dismiss_ is the only one of the three
   that leaves the fact where it was.
 
+  **Committing a claim to the repository is one control and one call** (#27 phase 6). It is offered on
+  a standing claim at `lookup` or `injected` — the two the store will take — and it asks where the
+  claim goes before it opens anything: the document that already owns the subject, which the agent
+  finds, or `CLAUDE.md`, which costs a sentence. That asymmetry is the control's whole job. CLAUDE.md
+  is loaded into every agent's context on every dispatch and its length is asserted rather than
+  intended, so the arm that could be taken by clicking past it is the arm that would get taken; the
+  sentence — what breaks _silently_ without the claim — is required by the body's shape and is
+  appended to the agent's prompt, where it is checked rather than obeyed.
+
+  **The click moves nothing.** The claim keeps its reach and goes on being delivered while its
+  documentation pull request is in review, because a claim taken out of every prompt the moment
+  somebody queues a docs job is one the fleet stops being told for a pull request that may be closed
+  unmerged. While a graduation is going the row says so and draws **the pull request as a reference**;
+  a graduation that did not land says that instead, and the control comes back. The **Committed to the
+  repository** section draws the pull request that put each claim there, so the section is a record of
+  where the fleet's knowledge went rather than a list of names.
+
+  **A row whose reading is `unknown` draws the two controls that answer it** — _it merged_ / _it did
+  not_ — beside that pull request. That reading is the harness declining to guess: a pull request that
+  left the world without ever being seen closed reads as merged only by inference, and acting on it
+  would take a claim out of every prompt for something that may never have merged. The reading itself
+  is the sweep's own answer shipped on the row, never worked out here — a second implementation of
+  "did this land" is free to disagree with the one that actually moves a claim.
+
   Four reach controls and no fifth, and none of them files anything — and none of them is what put a notice
   at `injected`, which is the store's own doing: agents propose through the tool channel,
   so a page that could write a claim would be writing one with no observation behind it. Promote,
