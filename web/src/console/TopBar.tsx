@@ -10,12 +10,19 @@ import { untriagedCount } from '../worldBuckets.js';
 /**
  * The nav's destinations, in reading order — the order the tabs are drawn in.
  *
- * Three. Insights is the one destination here that is read rather than acted on,
+ * Four. Insights is the one destination here that is read rather than acted on,
  * which is worth stating because the nav used to be described as "the surfaces
  * work happens on": the rule that actually holds is that the nav is where you
  * *go*, and Config stays out of it because it is set up once, not because it is
  * passive. Insights is somewhere an operator goes several times a day and comes
  * back from.
+ *
+ * **Knowledge is the fourth, and it was a reading on this bar until it was one.**
+ * A count that opened a panel said the fleet's written record was something you
+ * glance at, and the panel drew over the rail an operator had just come from — but
+ * ruling on a claim is triage, done in a sitting, several times a day, exactly like
+ * the tickets tab beside it. What it needed was the situation area and a way back,
+ * which is what a tab is. The count did not go: it is the badge on the button.
  *
  * **Work was the second of these and is not here any more.** Every part of it had
  * found a better home — a goal's record onto its goal page, the unrecorded-work
@@ -28,7 +35,7 @@ import { untriagedCount } from '../worldBuckets.js';
  * and hidden — exactly as the rail's vivarium is: a tab that opens on a page
  * explaining a subsystem this cockpit does not draw is worse than no tab.
  */
-const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'insights'];
+const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'knowledge', 'insights'];
 
 /**
  * Where a bug in LubbDubb goes when the harness cannot file one itself — fixed, and
@@ -57,6 +64,7 @@ const NEW_ISSUE_URL = 'https://github.com/AdamAwan/LubbDubb/issues/new';
 export const TAB_LABEL: Record<ConsoleTab, string> = {
   overview: 'Overview',
   tickets: 'Tickets',
+  knowledge: 'Knowledge',
   insights: 'Insights',
   pets: 'Pets',
   config: 'Config',
@@ -70,16 +78,10 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
  * from, and the bar is the one row of the shell that is always on screen.
  *
  * A click clears *both* pieces of state, because a nav click means "go here" and
- * either half left standing would land somewhere else. Tickets carries its
- * triage count — the one number that says whether it is worth opening; the other
- * two carry none, since neither has a number that decides whether to look.
+ * either half left standing would land somewhere else. Two of the tabs carry a
+ * badge and the rest carry none — see {@link navBadge} for which number and why.
  *
- * Tickets carries the triage tally the backlog used to, since it is now the surface
- * triage happens on. It counts what the tab's Unwatched filter draws, so the number
- * and the rows behind it cannot differ, and it is hidden at zero — a badge that
- * always shows is one nobody reads.
- *
- * Three tabs and nothing else: the open goal's crumb is drawn at the head of the
+ * Tabs and nothing else: the open goal's crumb is drawn at the head of the
  * situation area instead ({@link ConsoleRoot}). A title is as long as whoever
  * filed it made it, and one in here widens the nav by whatever that is — pushing
  * the readings onto a second line on the act of opening a goal. The bar is the
@@ -88,33 +90,70 @@ export const TAB_LABEL: Record<ConsoleTab, string> = {
  */
 function Nav({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const goal = view.goalPage;
-  const untriaged = untriagedCount(view.state.world.issues, view.state.config.watchLabel);
   const go = (tab: ConsoleTab) => () => {
     actions.selectGoal(null);
     actions.openTab(tab);
   };
 
-  // Appended rather than listed, so the nav is the same three tabs on a deployment
-  // drawing no vivarium and the fourth cannot be reached by a stale URL either
+  // Appended rather than listed, so the nav is the same four tabs on a deployment
+  // drawing no vivarium and the fifth cannot be reached by a stale URL either
   // — `tabBody` refuses it for the same reason.
   const tabs = view.state.pets === null ? TABS : [...TABS, 'pets' as const];
 
   return (
     <nav className="cn-nav">
-      {tabs.map((tab) => (
-        <button key={tab} type="button" className={goal === null && view.tab === tab ? 'cn-on' : ''} onClick={go(tab)}>
-          {TAB_LABEL[tab]}
-          {/* The space is the gap: `.cn-n` carries no margin of its own. */}
-          {tab === 'tickets' && untriaged > 0 && (
-            <>
-              {' '}
-              <i className="cn-n">{untriaged} to triage</i>
-            </>
-          )}
-        </button>
-      ))}
+      {tabs.map((tab) => {
+        const badge = navBadge(tab, view);
+        return (
+          <button
+            key={tab}
+            type="button"
+            className={goal === null && view.tab === tab ? 'cn-on' : ''}
+            onClick={go(tab)}
+            // The sentence the badge used to be. A tab with no number to carry
+            // needs none: its own label already says where it goes.
+            {...(badge === null ? {} : { title: badge.title })}
+          >
+            {TAB_LABEL[tab]}
+            {badge !== null && <i className="cn-badge">{badge.count}</i>}
+          </button>
+        );
+      })}
     </nav>
   );
+}
+
+/**
+ * What is waiting behind a nav button, as a number and the sentence that explains
+ * it — or null, for a tab with no number that decides whether to look.
+ *
+ * **A badge, not a phrase.** Tickets read `2 to triage` and Knowledge was a count
+ * on the readings strip; both are the same question — is there anything here for
+ * me — and the answer is the digit. The words were a sentence in the one row an
+ * operator glances at without reading, and they widened the button by however long
+ * they happened to be, which is the thing the nav most has to not do. The sentence
+ * survives as the button's `title`, where it costs no width and is there for
+ * whoever wants it.
+ *
+ * Hidden at zero, both of them: a badge that always shows is one nobody reads.
+ *
+ * Each number is the *same* number the surface behind it draws — `untriagedCount`
+ * over the watch bucket the tickets tab's Unwatched filter uses, and
+ * `factsNeedingYou` over the corroborated claims the Knowledge page opens on — so
+ * the badge and the rows behind it cannot differ.
+ */
+function navBadge(tab: ConsoleTab, view: CockpitView): { count: number; title: string } | null {
+  if (tab === 'tickets') {
+    const count = untriagedCount(view.state.world.issues, view.state.config.watchLabel);
+    return count === 0 ? null : { count, title: `${count} untriaged — nothing has said whether the fleet works these` };
+  }
+  if (tab === 'knowledge') {
+    const count = view.factsNeedingYou;
+    return count === 0
+      ? null
+      : { count, title: `${count} claim${count === 1 ? '' : 's'} two agents agreed on that nobody has ruled on` };
+  }
+  return null;
 }
 
 /**
@@ -233,10 +272,25 @@ function Read({
 }
 
 /**
- * The pulse countdown, and the way to force one. Wears the same raised chrome
- * as the other readings but acts rather than opening a panel, so it carries no
- * chevron: a reading that opens something and a reading that does something are
- * different promises, and the chevron is the only thing that says which.
+ * The pulse countdown, and the way to force one — drawn **under the fleet's
+ * pause control** rather than as a reading of its own beside it.
+ *
+ * The two are one subject. Pause is the control that stops the next dispatch
+ * decision from happening and this is the clock counting down to it, so a reader
+ * asking "is anything about to happen" was reading two chips that only make sense
+ * together. Under the pause button they are one gauge: what the fleet is allowed to
+ * do, and when it next gets to.
+ *
+ * **It carries no label.** "Scan" named the mechanism, and the mechanism is not the
+ * question — `47s`, `paused` and `held` each say what they are, in the one spot
+ * where the countdown is the only thing that could be counting down. The word cost
+ * a third of the chip's width to restate the row it was in. The sentence it carried
+ * is the `title`, which is where the two states that are *not* a countdown explain
+ * themselves.
+ *
+ * It acts rather than opening a panel, so it carries no chevron: a reading that
+ * opens something and a reading that does something are different promises, and the
+ * chevron is the only thing that says which.
  */
 function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions }): JSX.Element {
   const stopped = view.pulseHeld || view.state.control.paused;
@@ -249,14 +303,41 @@ function Scan({ view, actions }: { view: CockpitView; actions: CockpitActions })
   return (
     <button
       type="button"
-      className={`cn-read cn-act cn-scan ${stopped ? 'cn-quiet' : ''}`}
+      className={`cn-countdown ${stopped ? 'cn-quiet' : ''}`}
       onClick={() => void actions.pulse()}
       title={title}
       aria-label={title}
     >
-      <span>Scan</span>
-      <b>{reading}</b>
+      {reading}
     </button>
+  );
+}
+
+/**
+ * The cog, and the console's first icon.
+ *
+ * Config is the one way-in on this strip that is not a reading of anything: it
+ * states no count and no state, and wearing the label-and-value face of the gauges
+ * beside it said otherwise — a word in a row of numbers, read as a subject whose
+ * number had gone quiet. A cog says "settings" without claiming to be a measurement
+ * of anything, and it buys back the width of the word in a strip that wraps at
+ * laptop sizes.
+ *
+ * Drawn inline rather than reached for from an icon set, and in `currentColor`, so
+ * it takes the hover and the theme through the cascade like everything else here —
+ * a set would be a dependency and a second colour system for one glyph. The label
+ * is not lost: it is the `aria-label` and the `title`, which is what a
+ * pointer and a screen reader each ask for.
+ */
+function Cog(): JSX.Element {
+  return (
+    <svg className="cn-cog" viewBox="0 0 16 16" aria-hidden focusable="false">
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        d="M6.6 0.8L9.4 0.8L9.6 2.7L10.6 3.1L12.1 1.9L14.1 3.9L12.9 5.4L13.3 6.4L15.2 6.6L15.2 9.4L13.3 9.6L12.9 10.6L14.1 12.1L12.1 14.1L10.6 12.9L9.6 13.3L9.4 15.2L6.6 15.2L6.4 13.3L5.4 12.9L3.9 14.1L1.9 12.1L3.1 10.6L2.7 9.6L0.8 9.4L0.8 6.6L2.7 6.4L3.1 5.4L1.9 3.9L3.9 1.9L5.4 3.1L6.4 2.7ZM10.5 8.0L10.4 7.4L10.2 6.8L9.8 6.2L9.3 5.8L8.6 5.6L8.0 5.5L7.4 5.6L6.8 5.8L6.2 6.2L5.8 6.8L5.6 7.4L5.5 8.0L5.6 8.6L5.8 9.3L6.2 9.8L6.7 10.2L7.4 10.4L8.0 10.5L8.6 10.4L9.3 10.2L9.8 9.8L10.2 9.3L10.4 8.6Z"
+      />
+    </svg>
   );
 }
 
@@ -396,11 +477,16 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
 
       <div className="cn-sep" />
 
-      <Scan view={view} actions={actions} />
-
+      {/* One gauge in two rows: what the fleet is allowed to do, and when it next
+          gets to decide. The countdown is under the pause button rather than beside
+          it because Pause is the control that stops the thing it is counting down
+          to — see {@link Scan}. */}
       <div className="cn-read cn-cap">
-        <span>Fleet</span>
-        <FleetControl live={view.live.length} cap={state.control.cap} paused={state.control.paused} />
+        <div className="cn-caprow">
+          <span>Fleet</span>
+          <FleetControl live={view.live.length} cap={state.control.cap} paused={state.control.paused} />
+        </div>
+        <Scan view={view} actions={actions} />
       </div>
 
       <div className="cn-reads">
@@ -417,13 +503,6 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
           quiet={view.proposedLessonCount === 0}
           onOpen={() => actions.openPanel('lessons')}
           title="Lessons nobody has ruled on — open the lessons panel"
-        />
-        <Read
-          label="Knowledge"
-          value={`${view.factsNeedingYou}`}
-          quiet={view.factsNeedingYou === 0}
-          onOpen={() => actions.openPanel('knowledge')}
-          title="Claims two agents agreed on that nobody has ruled on — open the knowledge base"
         />
         <Read
           label="Faults"
@@ -456,7 +535,9 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
             Config is a destination and not a modal, but it stays off the nav for
             the same reason as Record: the nav is the surfaces work happens on,
             and a button beside them would say configuration is another thing you
-            do rather than the thing you set up once. */}
+            do rather than the thing you set up once. It is a cog and not a word
+            for the reason it is last: it is the one control here that measures
+            nothing ({@link Cog}). */}
         <Read
           label="Record"
           value={null}
@@ -464,13 +545,15 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
           onOpen={() => actions.openPanel('record')}
           title="What the harness did, after the world snapshot forgot it — operator jobs, and the goals it has worked"
         />
-        <Read
-          label="Config"
-          value={null}
-          quiet={false}
-          onOpen={() => actions.openConfig({})}
-          title="How this harness is configured"
-        />
+        <button
+          type="button"
+          className="cn-read cn-act cn-icon"
+          onClick={() => actions.openConfig({})}
+          title="Config — how this harness is configured"
+          aria-label="Config"
+        >
+          <Cog />
+        </button>
       </div>
     </div>
   );

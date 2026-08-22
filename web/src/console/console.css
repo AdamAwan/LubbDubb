@@ -233,10 +233,6 @@
 .cn-read.cn-quiet b {
   color: var(--cn-fg-faint);
 }
-.cn-scan {
-  border-color: var(--cn-blue-line-hi);
-  background: var(--cn-blue-bg);
-}
 /* The build gauge. Amber only when there is something to take or take now: its
    resting state is the muted `current` reading, which is where it spends nearly
    all of its life, and a gauge that is always coloured is one nobody reads. */
@@ -248,10 +244,69 @@
   color: var(--cn-amber);
 }
 
+/* The fleet gauge: what the fleet is allowed to do, with the countdown to its next
+   dispatch decision under it. A column, and aligned to its trailing edge so the
+   countdown sits under the pause button rather than under the word "Fleet" — the
+   pause control is the thing that stops what it is counting down to, and the two
+   read as one gauge only when they are stacked.
+
+   Its own padding, tighter top and bottom than `.cn-read`'s. The bar has one row and
+   has to keep it: a chip taller than the strip's own height grows the whole bar,
+   which reads as the countdown having added a row to the console. What buys the
+   space is `.fleet-control` being compact (`styles.css`) — at the chunky size it
+   was, it alone was half again the height of every reading beside it. */
 .cn-cap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  padding: 2px 9px 3px;
+}
+.cn-caprow {
   display: flex;
   align-items: center;
   gap: 5px;
+}
+/* The countdown, with no label and no chrome of its own — it is inside the fleet
+   reading's, and a second border around it would read as a second gauge.
+
+   **Selected through its parent, and that is load-bearing.** `.cn button` resets
+   `font` to `inherit` at (0,1,1), so a bare `.cn-countdown` loses the shorthand and
+   the countdown renders at the bar's 13px/1.45 — nineteen pixels where thirteen were
+   budgeted, which is the whole of what made this chip grow a row. The line-height is
+   stated with the size for the same reason: the row it sits under has none to spare. */
+.cn-cap .cn-countdown {
+  padding: 0;
+  /* The pill's own border and padding, so the countdown sits under the word "Pause"
+     rather than under the pill's outer edge — the control it is a caption for is the
+     button, not the enclosure around it. */
+  margin-right: 6px;
+  font: 600 11px/13px var(--cn-mono);
+  color: var(--cn-fg-dim);
+}
+.cn-cap .cn-countdown:hover {
+  color: var(--cn-fg);
+}
+/* Paused and held are the two states that are not a countdown, and they are the
+   quiet ones for `.cn-read.cn-quiet`'s reason: the gauge stays exactly where an
+   operator learned to look. */
+.cn-cap .cn-countdown.cn-quiet {
+  color: var(--cn-fg-faint);
+}
+
+/* An icon-only way-in — the Config cog, and so far the only one. Square rather than
+   the label-and-value box, since there is no value to leave room for. */
+.cn-read.cn-icon {
+  padding: 5px 7px;
+}
+.cn-cog {
+  display: block;
+  width: 14px;
+  height: 14px;
+  color: var(--cn-fg-faint);
+}
+.cn-read.cn-icon:hover .cn-cog {
+  color: var(--cn-fg);
 }
 
 /* the nav, in the bar: the page's primary navigation, so it is drawn at the
@@ -297,9 +352,25 @@
   color: var(--cn-fg);
   border-color: var(--cn-line);
 }
-.cn-nav .cn-n {
-  font: 600 10.5px var(--cn-mono);
-  color: var(--cn-fg-faint);
+/* What is waiting behind a tab, as a badge rather than the sentence it used to be.
+   A pill of its own colour, so the number reads as a count on the button instead of
+   as a second word in its label — and `min-width` with a `999px` radius so one digit
+   is a circle and three are a lozenge, rather than the button changing shape by the
+   width of the number in it.
+
+   The margin is here rather than a space in the markup: a space is a line-break
+   opportunity, and a badge that wraps under its own label is a nav two rows tall. */
+.cn-nav .cn-badge {
+  display: inline-block;
+  min-width: 17px;
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 999px;
+  font: 600 10.5px/16px var(--cn-mono);
+  font-style: normal;
+  text-align: center;
+  color: var(--cn-blue-ink);
+  background: var(--cn-blue-fill);
 }
 
 /* ---------- body ---------- */

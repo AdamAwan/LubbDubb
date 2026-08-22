@@ -514,12 +514,17 @@ the event record, and a `docs` finding is still the thing that becomes a documen
 
 ## In the cockpit
 
-One full-surface panel, `?panel=knowledge`, reached from the **Knowledge** reading in the top bar —
-which counts the corroborated claims nobody has ruled on, and nothing else, for the reason the
-Lessons reading counts proposals ([17](17-cockpit.md#the-top-bar-and-the-panels)). Which panel is in
-front and which claim has its provenance open are both on `Place`
-([17](17-cockpit.md#the-address-bar)): `?fact=<id>` is a link to what two agents actually saw, and a
-row held open in a `useState` works right up until the back button steps over it.
+One destination, `?tab=knowledge`, reached from the **Knowledge** button in the nav — which carries a
+badge of the corroborated claims nobody has ruled on, and nothing else, for the reason the Lessons
+reading counts proposals ([17](17-cockpit.md#shape)). It was a panel on `?panel=knowledge` until the
+top bar was tidied, and it is a tab now because ruling on a claim is triage — a sitting, several times
+a day, like the tickets tab beside it — where a panel drew over the queue rail the ask that sent you
+here came from. `readPlace` aliases the old parameter onto the tab, so every link an operator saved to
+a claim still lands ([17](17-cockpit.md#the-address-bar)).
+
+Where the nav is and which claim has its provenance open are both on `Place`: `?fact=<id>` is a link to
+what two agents actually saw, and a row held open in a `useState` works right up until the back button
+steps over it.
 
 The **Live notices** section says what a notice is and where one comes from — including that the
 harness raises its own, and that a row carrying a resolution condition ends when the world meets it

@@ -126,7 +126,7 @@ export interface Place {
   ticketColumns: string[];
 }
 
-const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'insights', 'pets', 'config'];
+const TABS: readonly ConsoleTab[] = ['overview', 'tickets', 'knowledge', 'insights', 'pets', 'config'];
 const INSIGHTS_VIEWS: readonly InsightsView[] = ['economics', 'reliability', 'causes', 'trend', 'mix'];
 /**
  * The windows the time bar offers, and what a bare Insights URL means.
@@ -184,6 +184,21 @@ const CONFIG_TABS: readonly ConfigTab[] = ['values', 'raw', 'ci', 'prompts', 'mc
  * `?tab=work` was overwhelmingly about.
  */
 const TAB_ALIASES: Readonly<Record<string, ConsoleTab>> = { backlog: 'tickets', work: 'tickets' };
+
+/**
+ * Panels that became destinations, and the tab each is now — the same apology
+ * {@link TAB_ALIASES} makes, owed to the other half of the address bar.
+ *
+ * Knowledge was a panel, so every link an operator saved to a claim spells
+ * `?panel=knowledge&fact=…`. `knowledge` is no longer a name `PANELS` knows, so
+ * without this the panel parses back to null and the link opens the overview with
+ * the fact id still in the URL — the shape of a stranded link, and silent.
+ *
+ * It is consulted only when nothing else named a tab, so `?tab=tickets&panel=knowledge`
+ * still lands on tickets: an explicit tab is the operator saying where they meant
+ * to be, and an alias must not overrule one.
+ */
+const PANEL_ALIASES: Readonly<Record<string, ConsoleTab>> = { knowledge: 'knowledge' };
 const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched'];
 const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
 const TICKET_GROUP = ['feature', 'flat'] as const;
@@ -207,7 +222,6 @@ const TICKET_VIEW: readonly Place['ticketView'][] = ['table', 'card'];
 const PANEL_NAMES: Record<Exclude<ConsolePanel, null | { ask: string }>, true> = {
   findings: true,
   lessons: true,
-  knowledge: true,
   faults: true,
   launch: true,
   build: true,
@@ -245,7 +259,10 @@ export function readPlace(search: string): Place {
     // with nothing saying so is a bug report.
     tab: query.has('settings')
       ? 'config'
-      : (TABS.find((t) => t === tab) ?? (tab !== null ? TAB_ALIASES[tab] : undefined) ?? 'overview'),
+      : (TABS.find((t) => t === tab) ??
+        (tab !== null ? TAB_ALIASES[tab] : undefined) ??
+        (panel !== null ? PANEL_ALIASES[panel] : undefined) ??
+        'overview'),
     goal: param(query, 'goal'),
     // The ask panel carries its row, so it is its own parameter rather than a
     // prefix on `panel` — an id is opaque and free to contain whatever the
