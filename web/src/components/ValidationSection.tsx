@@ -272,7 +272,7 @@ export function ValidationDigest({
 type Verb = 'passed' | 'failed' | 'deferred' | 'waived';
 
 const VERB_PROMPT: Record<Verb, string> = {
-  passed: 'What did you see?',
+  passed: 'What did you see? (optional)',
   failed: 'What happened?',
   deferred: 'What is it waiting for?',
   waived: 'Why is this one not being checked?',
@@ -324,9 +324,9 @@ function CheckBlock({
 
   const submit = (): void => {
     const text = note.trim();
-    // The server refuses a blank note in the same words; refusing here saves the
-    // round trip and never instead of it.
-    if (verb === null || text.length === 0) return;
+    // The server refuses a blank note in the same words, for every verb but a
+    // pass; refusing here saves the round trip and never instead of it.
+    if (verb === null || (text.length === 0 && verb !== 'passed')) return;
     void send.run(async () => {
       if (verb === 'passed' || verb === 'failed') await onResult(verb, text);
       else if (verb === 'deferred') await onDefer(text);
