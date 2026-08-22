@@ -1,6 +1,6 @@
 import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
 import { prTitleFields, renderPrTitle } from '../../prTitle.js';
-import { resolveOpenPr } from '../openPr.js';
+import { openPrFailure, resolveOpenPr } from '../openPr.js';
 import { linkPrWorkItem } from '../../prWorkItemDesk.js';
 import { seedPrWatch } from '../../prWatchDesk.js';
 import { toolError } from '../protocol.js';
@@ -10,7 +10,9 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
   description:
     'Open the pull request for the work you were dispatched to do. The harness supplies the branch, ' +
     'the base — which is the rung beneath you when your work is stacked on another part — and the ' +
-    'title convention; you supply what the change does. You cannot open a pull request for another ' +
+    'title convention; you supply what the change does. Commit and push your branch before you call ' +
+    'this — the harness never pushes, and the provider refuses a pull request whose head it cannot ' +
+    'see. You cannot open a pull request for another ' +
     "agent's work: the branch and base come from your own origin, never from an argument. If this " +
     'tool reports it is unavailable, open the pull request yourself against the branch and base named ' +
     'in your prompt.',
@@ -136,10 +138,7 @@ export const openPr: ToolFactory = ({ deps, task, ok }) => ({
             : `Opened against ${target.base} — your work is stacked on it, so do not retarget this at the default branch.`,
       });
     } catch (err) {
-      return toolError(
-        `Opening the pull request failed: ${(err as Error).message}. Open it yourself against ` +
-          `${target.branch} -> ${target.base}.`,
-      );
+      return toolError(openPrFailure((err as Error).message, target.branch, target.base));
     }
   },
 });

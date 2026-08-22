@@ -489,6 +489,22 @@ Arguments `{summary, type?, scope?, body?}` — and **nothing that names work**.
   agent already has a pull request; a planner, assayer, assessor or desk job writes no code. Refusing
   beats silently scoping: an agent handed a target it did not ask for would open a PR for work it is
   not doing.
+- **The branch must already be pushed, and that is stated in three places.** Nothing in the harness
+  pushes — `src/git/gitCli.ts` has no push path and `WorktreeManager` has none either; `git push` is
+  the agent's, and the branch handed to `git worktree add` is deliberately given no upstream so a
+  bare push cannot aim at the base. So an agent that commits and calls this tool is refused by the
+  provider, not by the harness. The precondition is now in the tool's own description, in
+  `MCP_PROTOCOL_ADDENDUM` (appended, so an operator's prompt override cannot drop it), and in the
+  failure the tool returns.
+- **An unpushed head is diagnosed rather than quoted.** GitHub answers
+  `{"resource":"PullRequest","field":"head","code":"invalid"}`, which says nothing an agent can act
+  on — and the generic failure then advises opening the pull request *by hand*, which fails
+  identically while the commits are only local. On issue #508's part that cost three refusals and a
+  human opening the pull request. `openPrFailure` (`src/mcp/openPr.ts`) matches the two fields — not
+  the prose or the docs URL, which are GitHub's to reword — and answers with `git push -u origin
+  <branch>` and *call again*, withholding the by-hand fallback that is right for an unwired tool and
+  wrong for an unpushed branch. Azure words an absent source branch differently and falls through to
+  the generic arm, deliberately: a wrong diagnosis is worse than none.
 - **The title comes from `pr-title`** (see [07](07-pull-requests.md)); `type` and `scope` are the one
   thing the agent knows and the harness does not.
 - **The issue reference is appended, never a closing keyword.** Whether a PR closes its issue is the
