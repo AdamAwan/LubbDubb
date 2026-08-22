@@ -133,6 +133,14 @@ so a check cannot render "passed — the test environment is rebuilt on Thursday
 recorded on the row rather than appended to a table for `note_progress`'s reason — the audit trail
 already exists in the record beside it, and exactly one current reading is what anything asks for.
 
+**One exception:** a `passed` result posted by an operator through `POST .../result` may carry no
+note. A person clicking through their own checklist is watching the check happen, so a note would
+only repeat what the checklist already says; a `failed` result still requires one, since it is the
+only account anyone has of what went wrong. A noteless pass still writes `resultBy: 'operator'` —
+that attribution is passed explicitly by the route rather than derived from whether a note was
+given, so it is not confused with a `reset`, the one transition that means "nothing to attribute" and
+is the only caller that still writes `note: null` on purpose.
+
 **A result is declared, never derived** — by whoever declares it. A dispatched agent is held to the
 same rule and told so in as many words, because it is the caller most able to break it: it can see a
 green build and a merged PR, and neither is the check. Nothing infers a pass from a green build, a merged pull
@@ -773,13 +781,13 @@ be no way out that costs nothing to say.
 ([16](16-http-api.md)). Every handler is wrapped in `checked(schemas, handler)`; a refusal is a
 returned value, never a throw.
 
-| Route                                                   | Does                                               |
-| ------------------------------------------------------- | -------------------------------------------------- |
-| `POST /api/issues/:number/validation/:checkId/result`   | `{result: passed｜failed, note}`.                  |
-| `POST /api/issues/:number/validation/:checkId/defer`    | `{reason, until?}`.                                |
-| `POST /api/issues/:number/validation/:checkId/waive`    | `{reason}`.                                        |
-| `POST /api/issues/:number/validation/:checkId/reset`    | Back to `unrun`; the undo for all three.           |
-| `POST /api/issues/:number/validation/:checkId/handover` | `{to: fleet｜human}` — the only writer of `actor`. |
+| Route                                                   | Does                                                                               |
+| ------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `POST /api/issues/:number/validation/:checkId/result`   | `{result: passed｜failed, note?}`. `note` required only when `result` is `failed`. |
+| `POST /api/issues/:number/validation/:checkId/defer`    | `{reason, until?}`.                                                                |
+| `POST /api/issues/:number/validation/:checkId/waive`    | `{reason}`.                                                                        |
+| `POST /api/issues/:number/validation/:checkId/reset`    | Back to `unrun`; the undo for all three.                                           |
+| `POST /api/issues/:number/validation/:checkId/handover` | `{to: fleet｜human}` — the only writer of `actor`.                                 |
 
 Handing a **settled** check to the fleet is refused with a 400 pointing at `reset`, rather than
 accepted and silently doing nothing: the rule only ever runs an `unrun` check, so it would otherwise

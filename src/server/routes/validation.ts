@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import type { ValidationCheckState } from '../../types.js';
+import type { ValidationCheckResultBy, ValidationCheckState } from '../../types.js';
 import { checked, IssueNumberParams } from '../validation.js';
 import type { RouteContext } from './context.js';
 import { issueOrigin } from '../../plans/planning.js';
@@ -23,12 +23,14 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   const { store } = system;
 
   /**
-   * A note is required on every one of these, and **not trimmed to nothing
+   * A note is required on a deferral and a waiver, and **not trimmed to nothing
    * silently** — the schema refuses blank in the same words it refuses absent.
    * `conclude_work`'s rule, for its reason: a reading an operator acts on later
-   * must not be a state with no account of itself. A pass says what was seen; a
-   * failure says what happened; a deferral says what it is waiting for; a waiver
-   * says why it is not being done.
+   * must not be a state with no account of itself. A deferral says what it is
+   * waiting for; a waiver says why it is not being done. A `failed` result shares
+   * the same discipline, spelled out on `ResultBody` below — a note is the one
+   * account anyone has of what went wrong. A `passed` result is the one exception:
+   * the person clicking through their own checklist is watching it happen.
    */
   const requiredNote = (what: string): z.ZodType<string, z.ZodTypeDef, unknown> =>
     z
@@ -46,29 +48,49 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   const write = (
     originRef: string,
     checkId: string,
-    input: { state: ValidationCheckState; note: string | null; until?: string | null },
+    input: {
+      state: ValidationCheckState;
+      note: string | null;
+      by: ValidationCheckResultBy | null;
+      until?: string | null;
+    },
   ): ReturnType<typeof store.recordValidationResult> => {
-    const next = store.recordValidationResult(originRef, checkId, {
-      ...input,
-      by: input.note === null ? null : 'operator',
-    });
+    const next = store.recordValidationResult(originRef, checkId, input);
     if (next) hub.broadcast({ type: 'world:changed' });
     return next;
   };
 
-  // Mark a check passed or failed. The operator's own reading, and the only thing
-  // that ever writes one by hand.
-  const ResultBody = z.object({
-    result: z.enum(['passed', 'failed'], {
-      required_error: 'result must be "passed" or "failed"',
-      invalid_type_error: 'result must be "passed" or "failed"',
-    }),
-    note: requiredNote('say what you saw, so the result means something in a month'),
-  });
+  /**
+   * Mark a check passed or failed. The operator's own reading, and the only thing
+   * that ever writes one by hand.
+   *
+   * A note is optional on a **pass** — a person clicking through their own
+   * checklist is watching it happen, so the sentence would only repeat the
+   * checklist back — and still required on a **failure**, where it is the one
+   * account anyone has of what went wrong.
+   */
+  const ResultBody = z
+    .object({
+      result: z.enum(['passed', 'failed'], {
+        required_error: 'result must be "passed" or "failed"',
+        invalid_type_error: 'result must be "passed" or "failed"',
+      }),
+      note: z.string().trim().optional(),
+    })
+    .superRefine((data, ctx) => {
+      if (data.result === 'failed' && (data.note === undefined || data.note.length === 0)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'note is required — say what you saw, so the result means something in a month',
+          path: ['note'],
+        });
+      }
+    });
   app.post(
     '/api/issues/:number/validation/:checkId/result',
     checked({ params: CheckParams, body: ResultBody }, async ({ params, body, reply }) => {
-      const next = write(issueOrigin(params.number), params.checkId, { state: body.result, note: body.note });
+      const note = body.note !== undefined && body.note.length > 0 ? body.note : null;
+      const next = write(issueOrigin(params.number), params.checkId, { state: body.result, note, by: 'operator' });
       // 409 rather than 404 because the commonest cause is not a typo: an
       // amendment withdrew the check between the sheet being drawn and the click.
       if (!next) return reply.code(409).send({ error: 'no such check on this goal, or an amendment has withdrawn it' });
@@ -91,6 +113,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const next = write(issueOrigin(params.number), params.checkId, {
         state: 'deferred',
         note: body.reason,
+        by: 'operator',
         until: body.until ?? null,
       });
       if (!next) return reply.code(409).send({ error: 'no such check on this goal, or an amendment has withdrawn it' });
@@ -106,7 +129,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/issues/:number/validation/:checkId/waive',
     checked({ params: CheckParams, body: WaiveBody }, async ({ params, body, reply }) => {
-      const next = write(issueOrigin(params.number), params.checkId, { state: 'waived', note: body.reason });
+      const next = write(issueOrigin(params.number), params.checkId, {
+        state: 'waived',
+        note: body.reason,
+        by: 'operator',
+      });
       if (!next) return reply.code(409).send({ error: 'no such check on this goal, or an amendment has withdrawn it' });
       return { ok: true, check: next };
     }),
@@ -159,7 +186,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   app.post(
     '/api/issues/:number/validation/:checkId/reset',
     checked({ params: CheckParams }, async ({ params, reply }) => {
-      const next = write(issueOrigin(params.number), params.checkId, { state: 'unrun', note: null });
+      const next = write(issueOrigin(params.number), params.checkId, { state: 'unrun', note: null, by: null });
       if (!next) return reply.code(409).send({ error: 'no such check on this goal, or an amendment has withdrawn it' });
       return { ok: true, check: next };
     }),

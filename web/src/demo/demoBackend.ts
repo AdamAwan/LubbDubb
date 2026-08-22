@@ -765,7 +765,10 @@ class DemoServer {
               ? 'waived'
               : 'unrun';
       check.state = state;
-      check.resultNote = act.kind === 'result' ? act.note : act.kind === 'reset' ? null : act.reason;
+      // A blank note reads as absent, matching the real route: a noteless pass
+      // draws no dangling "— " beside it, exactly as a reset does.
+      check.resultNote =
+        act.kind === 'result' ? (act.note.length > 0 ? act.note : null) : act.kind === 'reset' ? null : act.reason;
       check.resultBy = act.kind === 'reset' ? null : 'operator';
       check.resultAt = act.kind === 'reset' ? null : new Date().toISOString();
       check.deferUntil = null;

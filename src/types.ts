@@ -2384,7 +2384,11 @@ export interface ValidationCheck {
    */
   handbackNote: string | null;
   state: ValidationCheckState;
-  /** Required with every result, and with a deferral or a waiver. */
+  /**
+   * Required with every result, and with a deferral or a waiver — except a
+   * `passed` result, where it is optional: the person clicking through their own
+   * checklist is watching it happen, so nothing is lost by leaving it blank.
+   */
   resultNote: string | null;
   /**
    * Who took the reading. **Drawn wherever the reading is**, because "an agent
