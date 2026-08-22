@@ -11,12 +11,16 @@ import type {
   KnowledgeDeliveryView,
   KnowledgeFactView,
   KnowledgeGraduationView,
+  Finding,
+  LessonView,
 } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { renderMarkdown } from './markdown.js';
 import { absDate, fmtTokens, fmtUsd, relTime, untilTime } from './util.js';
 import { Ref } from './refs.js';
+import { FindingsSection } from './FindingsSection.js';
+import { LessonsSection } from './LessonsSection.js';
 
 /**
  * What the fleet knows about working this repository, and how far each claim
@@ -59,6 +63,9 @@ export function KnowledgePanel({
   graduations,
   delivery,
   cost,
+  findings,
+  lessons,
+  canFileTickets,
   now,
   refUrls,
   viewingFact,
@@ -68,6 +75,12 @@ export function KnowledgePanel({
   onDetail,
   onResolveContradiction,
   onViewFact,
+  onPromoteFinding,
+  onFileFinding,
+  onDismissFinding,
+  onProposeLesson,
+  onPromoteLesson,
+  onRetireLesson,
 }: {
   facts: KnowledgeFactView[];
   /** Every attempt to put a claim in the repository, with the sweep's own reading of each. */
@@ -89,6 +102,18 @@ export function KnowledgePanel({
   }>;
   onResolveContradiction: (id: string, ruling: ContradictionRuling) => Promise<unknown> | unknown;
   onViewFact: (id: string | null) => void;
+  /** What agents filed for an operator, still on their own store until the intake merges them. */
+  findings: Finding[];
+  /** What working a goal taught, still on its own store; a promoted one is already a fact above. */
+  lessons: LessonView[];
+  /** False when no real tracker is configured — there is nowhere to file a finding into. */
+  canFileTickets: boolean;
+  onPromoteFinding: (id: string) => Promise<unknown> | unknown;
+  onFileFinding: (id: string) => Promise<unknown> | unknown;
+  onDismissFinding: (id: string) => Promise<unknown> | unknown;
+  onProposeLesson: (text: string, originRef: string | null) => Promise<unknown>;
+  onPromoteLesson: (id: string) => Promise<unknown> | unknown;
+  onRetireLesson: (id: string) => Promise<unknown> | unknown;
 }) {
   const live = (fact: KnowledgeFactView): boolean =>
     fact.expiresAt === null || new Date(fact.expiresAt).getTime() > now;
@@ -126,13 +151,13 @@ export function KnowledgePanel({
   return (
     <div className="kn">
       <p className="muted small kn-note">
-        What agents have learned about <em>working</em> this repository, and how far each claim carries. Agents write
-        these down through <code>knowledge_propose</code>; two of them on two different goals carry a claim as far as{' '}
-        <b>on lookup</b>, and nothing but a person puts a standing one in front of every agent. The one exception is a{' '}
-        <b>notice</b> — an observation with a clock on it, raised through <code>knowledge_notice</code> or by the
-        harness itself — which agreement alone injects, because it ends by itself. A promoted lesson is mirrored in here
-        as an injected fleet claim, so the <b>Lessons</b> panel and this page show the same claims — govern a mirrored
-        claim wherever you first vouched for it.
+        Everything the fleet has raised about working this repository, and how far each claim carries. Agents write them
+        down through one call — <code>raise</code> — and do not choose a destination: two of them on two different goals
+        carry a claim as far as <b>on lookup</b>, and nothing but a person puts a standing one in front of every agent.
+        The one exception is a <b>notice</b> — an observation with a clock on it — which agreement alone injects,
+        because it ends by itself. What an agent reported and what a goal taught are sections below rather than surfaces
+        of their own: they are the same question asked of the same person, and three places to answer it is two places
+        to forget.
       </p>
       <KnowledgeSection
         title="Live notices"
@@ -146,6 +171,49 @@ export function KnowledgePanel({
         facts={section('lookup', false)}
         {...shared}
       />
+      {/* The two surfaces that used to be panels of their own. They sit directly
+          under **Needs you** because they ask the same question of the same person
+          in the same sitting — a claim an agent filed, and what it is for — and an
+          operator who has to remember two more places to look is an operator who
+          rules on one of them and not the others. */}
+      <section className="kn-section">
+        <h3 className="kn-head">
+          Reported by agents <span className="muted small">· {findings.filter((f) => f.status === 'open').length}</span>
+        </h3>
+        <p className="muted small">
+          What an agent noticed that was not its own task — a duplicate, work blocked outside its reach, a defect it
+          worked around — and facts about the repository its documentation does not state. These reach no agent at any
+          status: the buttons are the only thing that turns one into work, because an agent that could queue jobs could
+          put agents on the fleet.
+        </p>
+        <FindingsSection
+          findings={findings}
+          now={now}
+          refUrls={refUrls}
+          canFileTickets={canFileTickets}
+          onPromote={onPromoteFinding}
+          onFile={onFileFinding}
+          onDismiss={onDismissFinding}
+        />
+      </section>
+      <section className="kn-section">
+        <h3 className="kn-head">
+          Lessons <span className="muted small">· {lessons.filter((l) => l.status === 'proposed').length}</span>
+        </h3>
+        <p className="muted small">
+          What working a goal taught about <em>working</em> this repository. A promoted one is mirrored into the claims
+          above as an injected fleet fact and is delivered from there, so a row here that says it is reaching agents is
+          this page&rsquo;s own answer read back — govern a mirrored claim wherever you first vouched for it.
+        </p>
+        <LessonsSection
+          lessons={lessons}
+          now={now}
+          refUrls={refUrls}
+          onPropose={onProposeLesson}
+          onPromote={onPromoteLesson}
+          onRetire={onRetireLesson}
+        />
+      </section>
       <KnowledgeSection
         title="Injected"
         blurb="In every agent's system prompt before it reads any code — vouched for by you, or a notice two goals saw. Everything here rides the block below whatever its scope, because a claim about one check is for the agent about to run it as much as for the one sent to fix it. The exception is a goal claim: it dies with its goal, so it rides that goal's own dispatches instead."
@@ -300,7 +368,7 @@ function fmtSmallUsd(n: number): string {
  * The half of this page a store this size cannot be governed without: the reach
  * machine says where a claim *stands*, and this says what is *sent* — and they
  * come apart at the cap, silently, because the agent is told a count and never
- * which claims it is missing. `LessonsPanel` carries the idea in miniature, per
+ * which claims it is missing. The lessons section carries the idea in miniature, per
  * row; a whole store needs the text itself.
  *
  * The scoped lists are per scope rather than per dispatch: a dispatch matches its

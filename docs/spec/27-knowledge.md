@@ -650,7 +650,7 @@ receives both entries, in one pass through the renderer.
 
 Both are **projected server-side from the renderer's own answer**, never a second reading of it. A
 meter drawn from a plain character count in the browser would be exactly the second implementation of
-"what fits" that rule exists to prevent. `LessonsPanel` carries the idea in miniature ("is this claim
+"what fits" that rule exists to prevent. The lessons section carries the idea in miniature ("is this claim
 actually being sent"); a store this size cannot be governed without it.
 
 ## What nothing does

@@ -29,7 +29,7 @@ filling slots in a shared page.
 What keeps that from swallowing the cockpit's rules is the split on **behaviour weight**:
 
 - **Shared** (`web/src/components/`) — anything with an async flow, a refusal rule or hold semantics:
-  `EscalationCard`, `RecoveryPanel`, `HumanTaskActions`, `FindingsPanel`, `LaunchPanel`,
+  `EscalationCard`, `RecoveryPanel`, `HumanTaskActions`, `FindingsSection`, `LaunchPanel`,
   `SchedulePanel`, `InjectPanel`, `FleetControl`, `AgentDrawer`, the modals, the buttons and the leaf
   helpers. The escalation 409 rules, the recovery verdicts and the decline-needs-a-note refusal get
   exactly one implementation, and the console **embeds** them rather than redrawing them.
@@ -1549,8 +1549,11 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 ## The top bar and the panels
 
-The strip carries the ident, the nav, the fleet gauge, and six readings: **Findings**, **Lessons**,
-**Faults**, **Launch**, **Local**, **Build** — then **Record**, then the Config cog. Each is one subject
+The strip carries the ident, the nav, the fleet gauge, and four readings: **Faults**, **Launch**,
+**Local**, **Build** — then **Record**, then the Config cog. Findings and Lessons were two of these
+until they became sections of the Knowledge page; the nav's Knowledge badge is the reading for all
+three now, and one destination with one number is what stops an operator ruling on the same claim in
+two places. Each is one subject
 stated once, in a plain label-and-number face. None reaches `api.js`: every one is a method on
 `CockpitActions`, and the fleet cap is the shared `FleetControl`, which is already on that seam.
 
@@ -1685,56 +1688,59 @@ It is deliberately **not** drawn as the crash-recovery banner. That treatment is
 is loud because the harness is running no cycles at all while it is up; an available update stops
 nothing, so borrowing it would say something untrue — and after the second time, be scrolled past.
 
-Six panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings is a shell-owned modal beside them:
-
-- **Findings** — the shared `FindingsPanel`, with promote / file / dismiss. The count is findings at
-  `open` and nothing else: promoted, filed and dismissed are done, and `filing` is decided. Nothing in
-  the dispatcher reads `findings`, so those three buttons are the only way one becomes anything.
-
-  **The promote button says what promoting _this kind_ does.** On a `docs` claim it reads "Queue docs
-  PR", because the click produces a pull request against the worked repository's own documentation and
-  not a fix for the thing described — "Queue job" there would read as scheduling the work the claim
-  names, which is a different decision the operator did not make. Every other kind keeps "Queue job"
-  (`PROMOTE` in `web/src/components/FindingsPanel.tsx`, keyed by kind so a fifth kind cannot be added
-  without answering the question). The kind chip and its tooltip come from the same map they always
-  did. → [13](13-jobs-and-findings.md#the-four-kinds)
-
-- **Lessons** — the shared `LessonsPanel`: what working a goal taught about working this repository,
-  the composer that writes one down, and the promote / retire buttons that are the only way one moves
-  (#355). Three sections, because the three statuses are three different questions — _what wants a
-  decision_, _what is vouched for_, _what did we stop believing_. The count is lessons at `proposed`
-  and nothing else, for the Findings count's reason: a count of what is already promoted would tick
-  up on the operator's own click and never come down.
-
-  Three things about this panel are load-bearing rather than presentational. **Retired lessons are
-  drawn**, muted, rather than dropped: this is the surface one prunes from, and a row that vanished
-  on being pruned would leave no way to tell a list you have finished with from one that lost rows.
-  Every card carries its **provenance**, the goal it was learned on drawn as a `<Ref>` and the date
-  beside it, since those are exactly the two things a bare block of assertions strips — and since
-  #355 phase 3 they are rendered to the agent too. Retire is a `ConfirmButton`: it is the one
-  irreversible act on the surface.
-
-  And every **promoted** row says whether agents are actually getting it — a `sent to agents` chip,
-  or `over the cap`. Since #27 phase 3 a promoted lesson reaches agents as the **fact it is mirrored
-  into**, so this flag is the knowledge block's own answer looked up under the adopted id
-  (`LessonView.rendered` in `src/wire.ts`) → [10](10-agent-runtimes.md#the-knowledge-block). One block
-  ships, so both panels have to be describing it, and a second rendering of the lessons table here
-  would be a chip about a row that is not the one delivered. Per row rather than as a count, because
-  "two are over the cap" leaves the operator to work out _which_ two before they can act; computed
-  server-side and never re-derived in the browser, since a second implementation of "what fits" would
-  be free to disagree with the one that actually ran.
+Four panels open from the bar, the ask panel opens from a queue row ([the rail](#the-queue-rail--needs-you)), and Settings is a shell-owned modal beside them:
 
 - **Knowledge** — `KnowledgePanel`, and a **nav destination rather than a panel** since the top bar was
   tidied: what the fleet has written down about working this repository, and how far each claim carries
   (#27 phase 2). It is drawn in the situation area for the tickets tab's reason — ruling on claims is
   triage done in a sitting, and a sheet over the console covers the queue rail the ask that sent you
   here came from. It is described here with the panels because everything below is about the surface
-  rather than its placement, and `ConsoleRoot` mounts the same component either way. It is the Lessons
-  panel's shape one axis wider, because
-  reach is a state machine rather than a status: **Live notices** with their clocks, **Needs you**,
-  **Injected**, **On lookup**, **One voice**, **Committed to the repository**, **Superseded**, and the
-  **Rejected** tail — read top to bottom in the order things demand attention rather than in the order
-  of the machine.
+  rather than its placement, and `ConsoleRoot` mounts the same component either way. Reach is a state
+  machine rather than a status, so it is a page of sections: **Live notices** with their clocks,
+  **Needs you**, then the two that were panels of their own — **Reported by agents** and **Lessons** —
+  then **Injected**, **On lookup**, **One voice**, **Committed to the repository**, **Superseded**, and
+  the **Rejected** tail. Read top to bottom in the order things demand attention rather than in the
+  order of the machine.
+
+  **Findings and lessons are sections here rather than panels of their own**, and the argument is the
+  one that put Knowledge on the nav in the first place. All three ask the same question of the same
+  person — *an agent filed a claim; what is it for?* — and they were asking it from three places with
+  three counts on the bar. An operator who has to remember two more surfaces is an operator who rules
+  on one of them and lets the others fill up, which is the failure this page exists to prevent: a
+  claim nobody has ruled on reaches nobody, and looks exactly like a claim nobody filed. They sit
+  directly under **Needs you** because that is the same sitting. `FindingsSection` and `LessonsSection`
+  are the same components under their older names, so nothing about how a card is drawn changed with
+  the move — what changed is that there is one destination and one badge.
+
+  **Reported by agents** is `FindingsSection`, with promote / file / dismiss. Nothing in the dispatcher
+  reads `findings`, so those three buttons are the only way one becomes anything. **The promote button
+  says what promoting _this kind_ does**: on a `docs` claim it reads "Queue docs PR", because the click
+  produces a pull request against the worked repository's own documentation and not a fix for the thing
+  described — "Queue job" there would read as scheduling the work the claim names, which is a different
+  decision the operator did not make. Every other kind keeps "Queue job" (`PROMOTE` in
+  `web/src/components/FindingsSection.tsx`, keyed by kind so a fifth kind cannot be added without
+  answering the question). → [13](13-jobs-and-findings.md#the-four-kinds)
+
+  **Lessons** is `LessonsSection`: what working a goal taught about working this repository, the
+  composer that writes one down, and the promote / retire buttons that are the only way one moves
+  (#355). Three subsections, because the three statuses are three different questions — _what wants a
+  decision_, _what is vouched for_, _what did we stop believing_. Three things about it are
+  load-bearing rather than presentational. **Retired lessons are drawn**, muted, rather than dropped:
+  this is the surface one prunes from, and a row that vanished on being pruned would leave no way to
+  tell a list you have finished with from one that lost rows. Every card carries its **provenance**,
+  the goal it was learned on drawn as a `<Ref>` and the date beside it, since those are exactly the two
+  things a bare block of assertions strips. Retire is a `ConfirmButton`: it is the one irreversible act
+  on the surface.
+
+  And every **promoted** lesson row says whether agents are actually getting it — a `sent to agents`
+  chip, or `over the cap`. Since #27 phase 3 a promoted lesson reaches agents as the **fact it is
+  mirrored into**, so this flag is the knowledge block's own answer looked up under the adopted id
+  (`LessonView.rendered` in `src/wire.ts`) → [10](10-agent-runtimes.md#the-knowledge-block). One block
+  ships, and now one page describes it — which is the other thing the fold-in bought: the chip and the
+  claim it is about are on the same screen, where before they were a panel apart. Per row rather than
+  as a count, because "two are over the cap" leaves the operator to work out _which_ two before they
+  can act; computed server-side and never re-derived in the browser, since a second implementation of
+  "what fits" would be free to disagree with the one that actually ran.
 
   **Live notices** is the one section drawing rows nobody vouched for. A notice is an expiring
   observation, and it is the one thing agreement alone puts in front of every agent — so the blurb
@@ -1843,7 +1849,7 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   dispatch matches its goal and every check it answers at once and the set of dispatches is not a list.
   The reach machine says where a claim _stands_; this says what is _sent_, and the two come apart at
   the cap — silently, since the agent is told a count and never which claims it is missing.
-  `LessonsPanel` carries the idea in miniature, per row; a store this size cannot be governed without
+  The lessons section carries the idea in miniature, per row; a store this size cannot be governed without
   it. → [27](27-knowledge.md#in-the-cockpit)
 
 - **Faults** — the recorded failures, forty rows, the surface you went looking for rather than a crop

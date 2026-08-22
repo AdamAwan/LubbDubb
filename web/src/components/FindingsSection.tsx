@@ -55,7 +55,7 @@ const PROMOTE: Record<Finding['kind'], { label: string; title: string }> = {
  * puts it in the tracker so it can wait its turn there — defer it; "Dismiss"
  * records that it was read and needs nothing.
  */
-export function FindingsPanel({
+export function FindingsSection({
   findings,
   now,
   refUrls,

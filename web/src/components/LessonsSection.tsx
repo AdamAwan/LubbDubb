@@ -31,7 +31,7 @@ import { Ref } from './refs.js';
  * page and nowhere else; retiring a promoted lesson is one of the two ways to make
  * room for one that is over the cap.
  */
-export function LessonsPanel({
+export function LessonsSection({
   lessons,
   now,
   refUrls,

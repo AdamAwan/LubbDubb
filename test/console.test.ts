@@ -1244,8 +1244,6 @@ test('the fault log keeps its clear even when it is empty', () => {
 
 test('a reading opens the panel behind it, in front of the console', () => {
   const panels: [ConsolePanel, string][] = [
-    ['findings', 'Findings'],
-    ['lessons', 'Lessons'],
     ['faults', 'Faults'],
     ['launch', 'Launch'],
   ];
@@ -1322,11 +1320,15 @@ test('the local run panel offers its filter when the filter is what is hiding th
   assert.ok(!nothing.includes('show every goal'), 'a filter that can reveal nothing must not be drawn');
 });
 
-test('the lessons panel draws the retired ones too', () => {
+test('the knowledge page draws the retired lessons too', () => {
   // The load-bearing half of the prune surface (#355): a lesson that vanished on
   // being retired would leave no way to tell a list you have finished with from
   // one that lost rows, and "retired" would read as "deleted".
-  const v = view({ consolePanel: 'lessons' });
+  //
+  // On the knowledge tab since the panels were folded in, which is the thing worth
+  // asserting after the move: the section survived being relocated, rather than the
+  // rows quietly ceasing to be drawn anywhere.
+  const v = view({ tab: 'knowledge' });
   const retired = v.state.lessons.find((l) => l.status === 'retired');
   assert.ok(retired, 'the demo fixtures must carry a retired lesson to draw');
   // The first plain run of the fixture's text: markdown renders its inline code

@@ -31,7 +31,7 @@ test('every place round-trips through the query string', () => {
     at({ panel: 'record' }),
     at({ goal: 'issue:142' }),
     at({ tab: 'tickets', goal: 'issue:142', agent: 'agent-7' }),
-    at({ panel: 'findings' }),
+    at({ tab: 'knowledge' }),
     at({ panel: 'faults' }),
     at({ panel: 'launch' }),
     at({ panel: { ask: 'esc-9' } }),
@@ -147,6 +147,33 @@ test('a link to the deleted backlog tab lands on the tickets tab', () => {
 test('a link to the retired work tab lands where its triage went', () => {
   assert.equal(readPlace('?tab=work').tab, 'tickets');
   assert.equal(readPlace('?tab=work&goal=issue:142').goal, 'issue:142', 'and keeps the rest of the place');
+});
+
+/**
+ * Findings and lessons became sections of the knowledge page rather than panels of
+ * their own, and every saved link to either spells a panel name `PANELS` no longer
+ * knows.
+ *
+ * Without the alias an unknown panel parses back to null and the link opens the
+ * overview with the rest of the place still in the URL — a stranded link, and a
+ * silent one. It is a panel alias rather than a tab one for the same reason
+ * `knowledge` is: an explicit tab is the operator saying where they meant to be,
+ * and an alias must never overrule one.
+ */
+test('links to the retired findings and lessons panels land on the knowledge page', () => {
+  assert.equal(readPlace('?panel=findings').tab, 'knowledge');
+  assert.equal(readPlace('?panel=lessons').tab, 'knowledge');
+  assert.equal(readPlace('?panel=findings').panel, null, 'and open no panel over it');
+  assert.equal(
+    readPlace('?panel=lessons&goal=issue:142').goal,
+    'issue:142',
+    'and keep the rest of the place they carried',
+  );
+  assert.equal(
+    readPlace('?tab=tickets&panel=findings').tab,
+    'tickets',
+    'an explicit tab is the operator saying where they meant to be',
+  );
 });
 
 // The two coarse axes swapped meaning in #351: `state` is the tracker's own word

@@ -12,8 +12,6 @@ import { RecoveryPanel } from '../components/RecoveryPanel.js';
 import { TicketsPanel } from '../components/TicketsPanel.js';
 import { ConfigPage } from '../components/ConfigPage.js';
 import { RecordPanel } from '../components/RecordPanel.js';
-import { FindingsPanel } from '../components/FindingsPanel.js';
-import { LessonsPanel } from '../components/LessonsPanel.js';
 import { KnowledgePanel } from '../components/KnowledgePanel.js';
 import { LaunchPanel } from '../components/LaunchPanel.js';
 import { SetupPanel } from '../components/SetupPanel.js';
@@ -167,12 +165,20 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       // fleet's claims is a sitting, and a panel does it over the top of the rail
       // the ask that sent you here came from. The claim whose provenance is open
       // rides in from `Place` (`view.viewingFact`), so a link to one opens on it.
+      //
+      // Findings and lessons ride in as sections of the same page rather than as
+      // panels of their own. They are the same act — reading a claim an agent
+      // filed and saying what it is for — and three surfaces asking one question
+      // is how an operator ends up ruling on the same claim twice.
       return (
         <KnowledgePanel
           facts={view.state.knowledge}
           graduations={view.state.knowledgeGraduations}
           delivery={view.state.knowledgeDelivery}
           cost={view.state.knowledgeCost}
+          findings={view.state.findings}
+          lessons={view.state.lessons}
+          canFileTickets={view.state.config.canFileTickets}
           now={view.now}
           refUrls={view.state.refUrls}
           viewingFact={view.viewingFact}
@@ -182,6 +188,12 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
           onDetail={(id) => actions.factDetail(id)}
           onResolveContradiction={(id, ruling) => actions.resolveContradiction(id, ruling)}
           onViewFact={(id) => actions.viewFact(id)}
+          onPromoteFinding={(id) => actions.promoteFinding(id)}
+          onFileFinding={(id) => actions.fileFinding(id)}
+          onDismissFinding={(id) => actions.dismissFinding(id)}
+          onProposeLesson={(text, originRef) => actions.proposeLesson(text, originRef)}
+          onPromoteLesson={(id) => actions.promoteLesson(id)}
+          onRetireLesson={(id) => actions.retireLesson(id)}
         />
       );
     case 'pets':
@@ -275,8 +287,6 @@ function Crumb({
 
 /** What each panel calls itself — the same word as the reading that opens it. */
 const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string> = {
-  findings: 'Findings',
-  lessons: 'Lessons',
   faults: 'Faults',
   launch: 'Launch',
   build: 'Build',
@@ -373,29 +383,6 @@ function panelBody(
 ): ReactNode {
   const { state } = view;
   switch (panel) {
-    case 'findings':
-      return (
-        <FindingsPanel
-          findings={state.findings}
-          now={view.now}
-          refUrls={state.refUrls}
-          canFileTickets={state.config.canFileTickets}
-          onPromote={(id) => actions.promoteFinding(id)}
-          onFile={(id) => actions.fileFinding(id)}
-          onDismiss={(id) => actions.dismissFinding(id)}
-        />
-      );
-    case 'lessons':
-      return (
-        <LessonsPanel
-          lessons={state.lessons}
-          now={view.now}
-          refUrls={state.refUrls}
-          onPropose={(text, originRef) => actions.proposeLesson(text, originRef)}
-          onPromote={(id) => actions.promoteLesson(id)}
-          onRetire={(id) => actions.retireLesson(id)}
-        />
-      );
     case 'pets':
       return state.pets === null ? null : (
         <PetsPanel
