@@ -161,6 +161,29 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
           now={view.now}
         />
       );
+    case 'knowledge':
+      // A destination since the nav gained it, and drawn here rather than in a
+      // panel for the reason the tickets tab is not one either: ruling on the
+      // fleet's claims is a sitting, and a panel does it over the top of the rail
+      // the ask that sent you here came from. The claim whose provenance is open
+      // rides in from `Place` (`view.viewingFact`), so a link to one opens on it.
+      return (
+        <KnowledgePanel
+          facts={view.state.knowledge}
+          graduations={view.state.knowledgeGraduations}
+          delivery={view.state.knowledgeDelivery}
+          cost={view.state.knowledgeCost}
+          now={view.now}
+          refUrls={view.state.refUrls}
+          viewingFact={view.viewingFact}
+          onReach={(id, reach) => actions.setFactReach(id, reach)}
+          onCommit={(id, commitment) => actions.commitFact(id, commitment)}
+          onSettleGraduation={(id, outcome) => actions.settleGraduation(id, outcome)}
+          onDetail={(id) => actions.factDetail(id)}
+          onResolveContradiction={(id, ruling) => actions.resolveContradiction(id, ruling)}
+          onViewFact={(id) => actions.viewFact(id)}
+        />
+      );
     case 'pets':
       // A deployment drawing no vivarium has no tab to reach this, but a stale URL
       // still can — and an empty page is a better answer than a page describing a
@@ -254,7 +277,6 @@ function Crumb({
 const PANEL_TITLE: Record<Exclude<ConsolePanel, null | { ask: string }>, string> = {
   findings: 'Findings',
   lessons: 'Lessons',
-  knowledge: 'Knowledge',
   faults: 'Faults',
   launch: 'Launch',
   build: 'Build',
@@ -372,24 +394,6 @@ function panelBody(
           onPropose={(text, originRef) => actions.proposeLesson(text, originRef)}
           onPromote={(id) => actions.promoteLesson(id)}
           onRetire={(id) => actions.retireLesson(id)}
-        />
-      );
-    case 'knowledge':
-      return (
-        <KnowledgePanel
-          facts={state.knowledge}
-          graduations={state.knowledgeGraduations}
-          delivery={state.knowledgeDelivery}
-          cost={state.knowledgeCost}
-          now={view.now}
-          refUrls={state.refUrls}
-          viewingFact={view.viewingFact}
-          onReach={(id, reach) => actions.setFactReach(id, reach)}
-          onCommit={(id, commitment) => actions.commitFact(id, commitment)}
-          onSettleGraduation={(id, outcome) => actions.settleGraduation(id, outcome)}
-          onDetail={(id) => actions.factDetail(id)}
-          onResolveContradiction={(id, ruling) => actions.resolveContradiction(id, ruling)}
-          onViewFact={(id) => actions.viewFact(id)}
         />
       );
     case 'pets':

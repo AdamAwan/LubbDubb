@@ -781,15 +781,27 @@ function store2Goals(system: System): void {
 // -- the page -----------------------------------------------------------------
 
 test('the knowledge page and the claim it has open are places, not component state', () => {
-  const place = { ...NOWHERE, panel: 'knowledge' as const, fact: 'fact_abc' };
+  const place = { ...NOWHERE, tab: 'knowledge' as const, fact: 'fact_abc' };
   // A row held open in a `useState` works right up until the back button steps
-  // over it, and a panel name `readPlace` does not know is parsed back to null —
-  // which is a control that opens nothing at all, with nothing red.
+  // over it, and a tab name `readPlace` does not know is parsed back to the
+  // overview — which is a control that opens nothing at all, with nothing red.
   assert.deepEqual(readPlace(placeQuery(place)), place);
-  assert.equal(readPlace('?panel=knowledge&fact=').fact, null);
+  assert.equal(readPlace('?tab=knowledge&fact=').fact, null);
+
+  // Knowledge was a panel until it became a destination, so every link an operator
+  // saved to a claim spells `?panel=knowledge`. `knowledge` is not a panel name any
+  // more, so without the alias it parses back to null and the link lands on the
+  // overview with the fact id still in the URL — a stranded link, and silent.
+  const saved = readPlace('?panel=knowledge&fact=fact_abc');
+  assert.equal(saved.tab, 'knowledge');
+  assert.equal(saved.panel, null);
+  assert.equal(saved.fact, 'fact_abc');
+  // An explicit tab is the operator saying where they meant to be; an alias for a
+  // panel that no longer exists must not overrule one.
+  assert.equal(readPlace('?tab=tickets&panel=knowledge').tab, 'tickets');
 });
 
-test('the Knowledge reading counts the corroborated claims nobody has ruled on', () => {
+test('the Knowledge badge counts the corroborated claims nobody has ruled on', () => {
   const facts = [
     { id: 'a', reach: 'lookup', ruledAt: null },
     { id: 'b', reach: 'lookup', ruledAt: '2026-01-01T00:00:00.000Z' },
@@ -824,8 +836,8 @@ test('the Knowledge reading counts the corroborated claims nobody has ruled on',
     insightsView: 'economics',
     insightsWindow: '7d',
     selectedGoal: null,
-    consolePanel: 'knowledge',
-    tab: 'overview',
+    consolePanel: null,
+    tab: 'knowledge',
   });
   // What wants the operator is the claim two agents already agreed on. A count
   // that included one agent's unseconded note would never come down, and one that

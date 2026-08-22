@@ -50,7 +50,6 @@ export type ConfigTab = 'values' | 'raw' | 'ci' | 'prompts' | 'mcp' | 'notificat
 export type ConsolePanel =
   | 'findings'
   | 'lessons'
-  | 'knowledge'
   | 'faults'
   | 'launch'
   | 'build'
@@ -75,8 +74,13 @@ export type ConsolePanel =
  * drew reads on the goal pages, its triage list reads on the tickets tab, and what
  * was left is the {@link ConsolePanel} `record`. `readPlace` aliases the old name
  * onto `tickets`, where the one part of it an operator still acts on went.
+ *
+ * `knowledge` went the other way — it was a {@link ConsolePanel} and is a
+ * destination now, because ruling on the fleet's claims is triage done in a sitting
+ * rather than a number glanced at, and a panel drew over the rail the operator came
+ * from. `readPlace` aliases `?panel=knowledge` onto the tab for `work`'s reason.
  */
-export type ConsoleTab = 'overview' | 'tickets' | 'insights' | 'pets' | 'config';
+export type ConsoleTab = 'overview' | 'tickets' | 'knowledge' | 'insights' | 'pets' | 'config';
 
 /**
  * Which reading the Insights page is showing.

@@ -128,7 +128,7 @@ Five surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ident ↗issue │ Overview Tickets Insights │ Scan · Fleet  Findings … Record ⚙ │ top bar
+│ ident ↗issue │ Overview Tickets② Knowledge① Insights │ Fleet ⏸ 14s  Findings … Record ⚙ │ top bar
 ├────────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned            │
 ├───────────────┬────────────────────────────────────────────────────────┤
@@ -136,8 +136,8 @@ Five surfaces and one shell.
 │ ┌───────────┐ │                                                        │
 │ │ Blocking  │ │                                                        │
 │ │ escalation│ │             the situation area                         │
-│ │ plan      │ │  (a tab — overview, tickets, insights, pets — or a goal) │
-│ │ permission│ │                                                        │
+│ │ plan      │ │  (a tab — overview, tickets, knowledge, insights, pets, │
+│ │ permission│ │   or a goal)                                           │
 │ │ Yours     │ │                                                        │
 │ │ bench     │ │                                                        │
 │ │ close-out │ │                                                        │
@@ -156,12 +156,33 @@ outranks the nav's tab, whichever it is. Selecting a goal is what a queue row do
 move the nav — so with a tab winning, clicking an ask would land the operator on a triage list, or on
 a reading, instead of on the ask.
 
-The **nav** is three tabs: Overview, Tickets and Insights — the second carrying the untriaged count,
-the one number that says whether triage is worth opening. It is `untriagedCount` (`web/src/worldBuckets.ts`)
-over the same watch bucket the tab's Unwatched filter uses, so the number on the button and the rows
-behind it cannot differ, and it is hidden at zero because a badge that always shows is one nobody
-reads. Every button clears _both_ pieces of state, because a nav click
-means "go here" and either half left standing would land somewhere else.
+The **nav** is four tabs: Overview, Tickets, Knowledge and Insights. Every button clears _both_ pieces
+of state, because a nav click means "go here" and either half left standing would land somewhere else.
+
+**Two of them carry a badge, and it is a number and nothing else** (`navBadge`, `TopBar.tsx`). Tickets
+carries the untriaged count — `untriagedCount` (`web/src/worldBuckets.ts`) over the same watch bucket
+the tab's Unwatched filter uses — and Knowledge carries `factsNeedingYou`, the corroborated claims
+nobody has ruled on. Each is the same number the surface behind it draws, so the badge and the rows
+cannot differ, and each is hidden at zero because a badge that always shows is one nobody reads.
+
+Tickets used to spell its out — `2 to triage` — and that half is worth stating. Both badges answer one
+question, _is there anything here for me_, and the answer is the digit: the words were a sentence in the
+one row an operator glances at without reading, and they widened the button by however long they happened
+to be, which is the thing the nav most has to not do. The sentence survives as the button's `title`,
+where it costs no width. The badge is `.cn-nav .cn-badge` — a pill with a `min-width` and a `999px`
+radius, so one digit is a circle and three a lozenge rather than the button changing shape by the width
+of the number in it, and its margin is in the stylesheet rather than a space in the markup, since a space
+is a line-break opportunity and a badge wrapping under its own label is a nav two rows tall.
+
+**Knowledge is the third in reading order, and it was a panel until it was a tab.** A count on the bar
+that opened a sheet said the fleet's written record is a thing you glance at, and the sheet drew over the
+queue rail the ask that sent you there came from. Ruling on a claim is triage — a sitting, several times
+a day, exactly like the tickets tab beside it — so what it wanted was the situation area and a way back,
+which is what a tab is. `readPlace` aliases `?panel=knowledge` onto it (`PANEL_ALIASES`), because
+`knowledge` is not a panel name any more and every link an operator saved to a claim spells one: without
+the alias it parses back to null and lands on the overview with the fact id still in the URL. An explicit
+`?tab=` still wins, since an alias for a panel that no longer exists must not overrule the operator
+saying where they meant to be.
 
 **Work was the second of these and is not a destination any more** ([below](#the-record-panel)). Every
 part of it had found a better home — a goal's own record onto its goal page, the unrecorded-work
@@ -175,9 +196,9 @@ tickets, where the one half of it an operator acted on went.
 area scrolls, and a page's primary navigation that scrolls away is navigation you have to scroll back
 to find; the bar is the `auto` row of the `.cn` grid and is the only part of the shell always on
 screen. It is drawn at the bar's own size rather than the smaller type the readings wear, because the
-readings are glanced at and the nav is aimed at, and it is `nowrap` where the readings wrap — three
-tabs stacked one per line is not a tab strip. When the bar runs out of room the _bar_ wraps, dropping
-the readings to a second line and leaving the nav whole.
+readings are glanced at and the nav is aimed at, and it is `nowrap` where the readings wrap — tabs
+stacked one per line is not a tab strip. When the bar runs out of room the _bar_ wraps, dropping the
+readings to a second line and leaving the nav whole.
 
 **The crumb is not in the nav**; it is drawn at the head of the situation area, and only when a goal
 is open. Two reasons that are one reason: an issue title has no length limit, so a crumb in the bar
@@ -191,11 +212,11 @@ rather than a label.
 The tabs are a **list** (`ConsoleTab`, `web/src/cockpit/actions.ts`) rather than a hand-written pair
 of buttons over a boolean, for `ConsolePanel`'s reason: a destination that has to be remembered in two
 booleans and four call sites is a destination that arrives half-wired. `test/console.test.ts` renders
-the nav and asserts all three labels, so a tab added to the type and forgotten in the nav is a view
+the nav and asserts every label, so a tab added to the type and forgotten in the nav is a view
 nothing can reach — and fails. It asserts `Work` is **not** among them for the mirror reason: a slot
 given back is given back.
 
-**Pets is the fourth, and it is conditional.** It is appended to the list only when
+**Pets is the fifth, and it is conditional.** It is appended to the list only when
 `state.pets` is non-null — the same reading that decides whether the rail draws a vivarium at all —
 because a tab opening on a page that explains a subsystem this deployment does not run is worse
 than no tab. `tabBody` refuses it on the same reading, so a stale `?tab=pets` URL lands on a
@@ -250,13 +271,13 @@ once.
 
 | Parameter                            | Carries                                                                                                                                             |
 | ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `tab`                                | `tickets` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, so links to either deleted tab still land |
+| `tab`                                | `tickets` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land |
 | `goal`                               | the open goal page, as `issue:<n>`                                                                                                                  |
-| `panel`                              | `findings` / `lessons` / `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                     |
+| `panel`                              | `findings` / `lessons` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                                   |
 | `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                          |
 | `agent`                              | the open drawer's agent                                                                                                                             |
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                      |
-| `fact`                               | the claim whose provenance is open on the Knowledge panel, by fact id                                                                               |
+| `fact`                               | the claim whose provenance is open on the Knowledge tab, by fact id                                                                                 |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                            |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                   |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                  |
@@ -1112,7 +1133,7 @@ backlog is deleted and every part of it is named a destination here rather than 
 | features as headings, folds on `Place`         | `group=feature`, the same `collapsed` field                |
 | the name opening the goal page                 | unchanged — `selectGoal`, refs beside it                   |
 | 25 rows then "…and 31 more"                    | the keyset cursor and infinite scroll this tab already had |
-| the nav's unwatched count                      | the same number on the Tickets button (`untriagedCount`)   |
+| the nav's unwatched count                      | the same number on the Tickets badge (`untriagedCount`)    |
 
 `?tab=backlog` **resolves to this tab** rather than falling through to the overview, which is what an
 unknown tab does: every bookmark and shared link to it would otherwise land somewhere else with
@@ -1528,10 +1549,32 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 ## The top bar and the panels
 
-The strip carries the ident, the nav, the pulse, the fleet cap, and eight readings: **Findings**,
-**Lessons**, **Knowledge**, **Faults**, **Launch**, **Build**, **Record** and **Config**. Each is one
-subject stated once, in a plain label-and-number face. None reaches `api.js`: every one is a method on
+The strip carries the ident, the nav, the fleet gauge, and six readings: **Findings**, **Lessons**,
+**Faults**, **Launch**, **Local**, **Build** — then **Record**, then the Config cog. Each is one subject
+stated once, in a plain label-and-number face. None reaches `api.js`: every one is a method on
 `CockpitActions`, and the fleet cap is the shared `FleetControl`, which is already on that seam.
+
+**The fleet gauge holds the pulse countdown, beside the pause control** (`.cn-cap`, `.cn-countdown`).
+The two are one subject: Pause is the control that stops the next dispatch decision from happening, and
+the countdown is the clock running down to it — so as two chips separated along the bar they only meant
+anything together, and a reader asking _is anything about to happen_ had to read both to learn either.
+Inside one reading they are one gauge, left to right: what the fleet is allowed to do, and when it next
+gets to.
+
+**Beside it, and not under it.** Stacking the countdown below the pause button was tried first and reads
+worse whatever the pixels say: the strip is a single row of chips at one height, and a two-row gauge in
+it is a gauge that has grown a row. Inline it costs the bar nothing and stays on the baseline the
+readings share. It is selected as `.cn-cap .cn-countdown` rather than by its bare class, and that is
+load-bearing: `.cn button` resets `font` to `inherit` at (0,1,1), so a single-class rule loses the
+shorthand and the line renders at the bar's 13px/1.45 — taller than the row it sits in, which grows the
+whole bar with nothing red to say so.
+
+**The countdown carries no label.** It read `Scan 14s`, and "Scan" named the mechanism rather than the
+question — `14s`, `paused` and `held` each say what they are, in the one spot on the bar where the only
+thing that could be counting down is the next scan. The word cost a third of the chip to restate the row
+it was in. The sentence it carried is the `title`, which is where the two states that are _not_ a
+countdown explain themselves. Its `line-height` is stated with its size rather than left to the shorthand
+because `.cn button` resets `font` to `inherit` at (0,1,1) and would otherwise hand it the bar's 1.45.
 
 **The last two state no number, and they sit together at the tail for that reason.** Every reading
 before them is a count or a state — a thing waiting on a person, or where this build stands — and is
@@ -1542,6 +1585,15 @@ so a button beside them would say the archive is somewhere work happens and conf
 you do rather than the thing you set up once. Record is on the bar rather than a tab for a second reason
 of its own — a selected goal outranks every tab, so as a tab the record could not be read beside the goal
 that sent you looking for it.
+
+**Config is a cog, and it is the console's only icon** (`Cog`, `TopBar.tsx`; `.cn-read.cn-icon`,
+`.cn-cog`). It is the one control on this strip that measures nothing, and wearing the label-and-value
+face of the gauges beside it said otherwise — a word in a row of numbers reads as a subject whose number
+has gone quiet. A cog says "settings" without claiming to be a reading of anything, and it buys back the
+width of the word on a strip that wraps at laptop sizes. It is drawn inline in `currentColor` rather than
+reached for from an icon set, so it takes hover and the theme through the cascade like everything else
+here; a set would be a dependency and a second colour system for one glyph. The label is not lost — it is
+the `aria-label` and the head of the `title`.
 
 **The ident carries the one way off this bar to a tracker**, and it has two faces onto _one_
 destination. Connected, `Raise an issue` is a button opening a compose modal and the issue is created
@@ -1595,18 +1647,19 @@ things waiting on a person, and the state of this build.
 
 Three rules hold them:
 
-- **A reading that opens something carries a chevron; a reading that acts does not.** `Scan` presses
-  to run a pulse rather than opening a panel, so it wears the same raised chrome and no chevron — a
-  reading that opens something and a reading that does something are different promises, and the
-  chevron is the only thing that says which. Scan stays pressable while paused or held: that is
-  precisely when an operator wants to confirm nothing moves.
+- **A reading that opens something carries a chevron; a reading that acts does not.** The countdown
+  presses to run a pulse rather than opening a panel, so it carries no chevron — a reading that opens
+  something and a reading that does something are different promises, and the chevron is the only thing
+  that says which. It stays pressable while paused or held: that is precisely when an operator wants to
+  confirm nothing moves.
 - **A zero count mutes a reading; it never removes it.** The gauge staying put is what lets an operator
   glance at the same spot every time rather than hunting for a control that reflows when its number
   happens to hit zero.
-- **Knowledge counts the corroborated claims nobody has ruled on**, which is the Lessons reading's rule
-  one axis over: what wants the operator is the claim two agents on two goals already agreed on. A
-  count of what is already vouched for would tick up on their own click and never come down, and one
-  that included a single agent's unseconded note would never come down either.
+- **The Knowledge count is on the nav, not here.** It counts the corroborated claims nobody has ruled
+  on, which is the Lessons reading's rule one axis over: what wants the operator is the claim two agents
+  on two goals already agreed on. A count of what is already vouched for would tick up on their own
+  click and never come down, and one that included a single agent's unseconded note would never come
+  down either. The number did not change when the page became a destination — only where it is drawn.
 - **Launch counts the queue, not the history.** A launched blueprint that has been dispatched is an
   agent in the Fleet, and counting it here would have the reading climb as work starts rather than as
   it waits.
@@ -1671,8 +1724,13 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   server-side and never re-derived in the browser, since a second implementation of "what fits" would
   be free to disagree with the one that actually ran.
 
-- **Knowledge** — `KnowledgePanel`: what the fleet has written down about working this repository, and
-  how far each claim carries (#27 phase 2). It is the Lessons panel's shape one axis wider, because
+- **Knowledge** — `KnowledgePanel`, and a **nav destination rather than a panel** since the top bar was
+  tidied: what the fleet has written down about working this repository, and how far each claim carries
+  (#27 phase 2). It is drawn in the situation area for the tickets tab's reason — ruling on claims is
+  triage done in a sitting, and a sheet over the console covers the queue rail the ask that sent you
+  here came from. It is described here with the panels because everything below is about the surface
+  rather than its placement, and `ConsoleRoot` mounts the same component either way. It is the Lessons
+  panel's shape one axis wider, because
   reach is a state machine rather than a status: **Live notices** with their clocks, **Needs you**,
   **Injected**, **On lookup**, **One voice**, **Committed to the repository**, **Superseded**, and the
   **Rejected** tail — read top to bottom in the order things demand attention rather than in the order
@@ -1901,16 +1959,16 @@ fill the panel would be free to drift from the originals with nothing to catch i
 
 ### Configuration
 
-Configuration is a **page** (`web/src/components/ConfigPage.tsx`), reached from the Config reading in
+Configuration is a **page** (`web/src/components/ConfigPage.tsx`), reached from the cog at the tail of
 the top bar and addressed as `?tab=config`. It was a modal with three tabs until the surface outgrew
 it: fifty keys, five sections and a file to reconcile against is a thing you work in rather than glance
 at and dismiss. The decisive argument is smaller than that, though — **a modal cannot be linked to**,
 and "look at what `agentMode` is set to on the box" is a URL now.
 
 It is not in the nav. The nav is where you **go** — the surfaces an operator moves between during a day
-— and configuration is not one of them: a button beside the others would say it is a fifth thing you
-_do_ rather than the thing you set up once, and the reading in the bar is where an operator already
-reached for it. That is the rule [Insights](#insights) is in the nav under, and the earlier phrasing of
+— and configuration is not one of them: a button beside the others would say it is another thing you
+_do_ rather than the thing you set up once, and the cog at the tail of the bar is where an operator
+already reached for it. That is the rule [Insights](#insights) is in the nav under, and the earlier phrasing of
 it — "the three surfaces work happens on" — did not survive contact with a destination that is read
 rather than acted on. `?settings=1`, which opened the modal, is
 honoured as a way in for `?tab=backlog`'s reason.

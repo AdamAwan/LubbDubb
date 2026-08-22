@@ -1421,7 +1421,7 @@ test('each tab replaces the last, and a selected goal outranks every one of them
  * of pages that are one click away anyway: a goal's record reads on its goal page,
  * and the triage list that was its only acted-on part reads on the tickets tab.
  *
- * Both halves are asserted. The three labels, so a tab added to `ConsoleTab` and
+ * Both halves are asserted. Every label, so a tab added to `ConsoleTab` and
  * forgotten in the nav fails here rather than being a view nothing can reach — and
  * `Work` explicitly *not* among them, since the whole change is that the slot went
  * back. And the record reachable from the bar at every tab, since a panel nothing
@@ -1429,7 +1429,7 @@ test('each tab replaces the last, and a selected goal outranks every one of them
  */
 test('the work graph is a panel reached from the bar, not a nav destination', () => {
   const nav = render(view()).split('</nav>')[0] ?? '';
-  for (const label of ['Overview', 'Tickets', 'Insights']) {
+  for (const label of ['Overview', 'Tickets', 'Knowledge', 'Insights']) {
     assert.ok(nav.includes(`>${label}`), `the nav is missing ${label}`);
   }
   assert.ok(!nav.includes('>Work'), 'the record is not a nav destination — it is the Record reading');
