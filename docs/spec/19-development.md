@@ -52,12 +52,20 @@ node_modules/.cache` forces cold.
 
 ### The lock
 
-A lockfile in the OS temp dir (`lubbdubb-check.lock`), created with `O_EXCL` so the kernel picks the
-winner of a race that a read-then-write would let both runs win. It lives there rather than under
-`node_modules/.cache/` with the other check artefacts because what is being rationed is the
-machine's cores, not a checkout's caches — and because `.claude/worktrees/*` has no `node_modules`
-of its own, so a checkout-relative lock would hand every agent session a private lockfile and stop
-nothing.
+A lockfile in the OS temp dir (`lubbdubb-check.lock`), whose name only one of two racing runs can
+win — picked by the kernel rather than by a read-then-write both runs would win. It lives there
+rather than under `node_modules/.cache/` with the other check artefacts because what is being
+rationed is the machine's cores, not a checkout's caches — and because `.claude/worktrees/*` has no
+`node_modules` of its own, so a checkout-relative lock would hand every agent session a private
+lockfile and stop nothing.
+
+**The record and the name are claimed in one step.** The holder's `{pid, startedAt}` is written to a
+private file beside the lock and `link`ed into place; `link` fails `EEXIST` when the name is taken,
+which is the arbitration `O_EXCL` gave — minus `O_EXCL`'s window. Creating the file and then filling
+it in leaves an instant where the lockfile exists and names nobody, and a waiter arriving in it read
+that as an abandoned lock and unlinked a live holder's file: two runs, both budgeting every core,
+which is the one thing the lock is for. So a lockfile that is visible and empty must not be a state
+this code can produce.
 
 A lock that can wedge the gate is worse than the contention it fixes, so a lockfile is never fatal.
 Three things clear one:
@@ -69,11 +77,24 @@ Three things clear one:
 - **An hour-long age ceiling**, for the case liveness gets wrong. A killed run's pid is eventually
   reused by something unrelated, which would otherwise look like a holder forever.
 
-A lockfile that cannot be parsed names nobody and is discarded. A stale one is only unlinked if it
-still names the pid judged dead, so two waiters cannot have one delete the fresh lock the other just
-took. `test/checkLock.test.ts` covers each of these by spawning real processes — the failure is
+All three name a pid and judge it, and **a lockfile that names nobody is never grounds enough on its
+own** — that judgement is what the window turned into a lock-breaker. A file whose bytes are not a
+holder record is left alone until they are a few seconds old: no reading of a lockfile this code
+wrote can be unnamed, but a build from before the one-step take, or a hand-edited file, can be, and
+from the outside those are indistinguishable from an arrival. Waiting is the safe way round, and
+bounded, so litter costs one pause rather than a wedged gate.
+
+Whatever the grounds, the unlink is gated on identity: the file is cleared only if it is still the
+one that was judged — same bytes, same inode, same mtime. Judging and deleting are two reads of a
+shared name, and everything that goes wrong lives between them: the holder released and someone else
+took the lock, or the file named nobody a moment ago and names its holder now.
+
+`test/checkLock.test.ts` covers each of these by spawning real processes — the failure is
 cross-process by construction and a single-process test would pass against something that is not a
-lock at all.
+lock at all. The window has two tests of its own rather than a timing assumption: one reads the
+lockfile in a loop across a real take and requires every reading of it to be a whole record, and one
+recreates the window's exact shape on disk — a lockfile that exists and names nobody — and requires a
+waiter to leave it alone.
 
 The shape of the cost, which is why the above is worth having: the test suite is **startup-bound**,
 not work-bound. Roughly half its files finish in under half a second, and each worker pays tsx's
