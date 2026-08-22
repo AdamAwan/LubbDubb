@@ -458,7 +458,8 @@ whose issue is open and passes `issueWatchGateReason`:
 - Per part: a `hold` verdict is skipped entirely (it must not eat a slot a sibling could use — that is
   how one stuck part would stall a whole plan); an `escalate` verdict emits `escalate_to_human` from
   `plan-part-escalation`; beyond `room` the part is queued as **`capped`** rather than skipped, so the
-  limit is visible instead of looking like nothing happened.
+  limit is visible instead of looking like nothing happened; a `cooldown` verdict is the same—it must
+  not eat a slot, so the part stays queued as held without spending one.
 - For an `awaiting_approval` plan every ready part is queued **`unapproved`** and nothing else: the
   cooldown and attempt-cap arms are skipped, because they would answer "why did this part not get an
   agent" with the wrong reason. Skipping the plan outright would make an unapproved plan

@@ -320,6 +320,38 @@ test('maxConcurrentPartsPerIssue caps how many parts of one plan get agents', as
   );
 });
 
+test('a cooling part does not consume a concurrency slot', async () => {
+  const parts = [part('a', 1), part('b', 2), part('c', 3)];
+  const recentExecuted: Decision = {
+    id: 'dec_1',
+    cycleId: 'cyc',
+    action: {
+      type: 'dispatch_code_agent',
+      originRef: partOrigin(12, 'a'),
+      reason: 'part a',
+      rule: 'plan-part',
+    },
+    outcome: 'executed',
+    detail: '',
+    rule: 'plan-part',
+    admission: null,
+    createdAt: '2026-07-25T11:50:00.000Z',
+  };
+  const dispatcher = new RuleDispatcher({}, {}, undefined, 'main', { ...enabled, maxConcurrentPartsPerIssue: 2 });
+  const result = await dispatcher.decide(
+    context([issue(12)], {
+      plans: [plan()],
+      planParts: parts,
+      recentDecisions: [recentExecuted],
+    }),
+  );
+  assert.deepEqual(
+    result.actions.map((a) => (a.type === 'dispatch_code_agent' ? a.branch : a.type)),
+    ['issue/12/b', 'issue/12/c'],
+    'parts b and c get dispatched even though part a is cooling, because cooling does not consume a slot',
+  );
+});
+
 test('each part gets its own throttle, and a repeatedly failing one escalates', async () => {
   // Three executed dispatches for part `a` and nothing to show for it.
   const attempts: Decision[] = [1, 2, 3].map((n) => ({

@@ -109,9 +109,10 @@ export function planPart(s: StageContext): void {
       // satisfied and the whole fleet idle simply never appeared anywhere, and the
       // only way to find out why was to read `maxConcurrentPartsPerIssue`. It is
       // still never dispatched — the cut below treats a held candidate as held.
-      const capped = room <= 0;
-      if (!capped) room -= 1;
-      const held = capped ? 'capped' : verdict.kind === 'cooldown' ? 'cooldown' : undefined;
+      const cooling = verdict.kind === 'cooldown';
+      const capped = !cooling && room <= 0;
+      if (!cooling && !capped) room -= 1;
+      const held = cooling ? 'cooldown' : capped ? 'capped' : undefined;
       partCandidates.push({
         depth,
         issueNumber,
