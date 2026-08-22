@@ -1,4 +1,5 @@
 import type {
+  ContradictionRuling,
   FactRuling,
   FilingTargetProbe,
   KnowledgeFactPayload,
@@ -360,6 +361,16 @@ export interface CockpitActions {
    * row nobody has opened.
    */
   factDetail(id: string): Promise<KnowledgeFactPayload>;
+  /**
+   * Answer one contradiction (#27 phase 5): adopt the agent's amendment and
+   * supersede the claim, narrow the claim yourself, or say the dispute is wrong.
+   *
+   * One call and not two, because the first of the three is one act — an amendment
+   * promoted without the claim it replaces being superseded leaves the two of them
+   * in the same block saying different things, and nothing would be red. Only the
+   * last leaves the fact where it was.
+   */
+  resolveContradiction(id: string, ruling: ContradictionRuling): Promise<void>;
   /** Open one fact's provenance, or close it. A place, so a link to it lands on it. */
   viewFact(id: string | null): void;
 

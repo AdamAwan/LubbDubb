@@ -1,6 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { JSX } from 'react';
-import type { FactRuling, KnowledgeCorroboration, KnowledgeDeliveryView, KnowledgeFactView } from '../types.js';
+import type {
+  ContradictionRuling,
+  FactRuling,
+  KnowledgeContradictionView,
+  KnowledgeCorroboration,
+  KnowledgeDeliveryView,
+  KnowledgeFactView,
+} from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { renderMarkdown } from './markdown.js';
@@ -42,6 +49,7 @@ export function KnowledgePanel({
   viewingFact,
   onReach,
   onDetail,
+  onResolveContradiction,
   onViewFact,
 }: {
   facts: KnowledgeFactView[];
@@ -52,7 +60,11 @@ export function KnowledgePanel({
   /** The claim whose provenance is open, from `Place` — never this component's own state. */
   viewingFact: string | null;
   onReach: (id: string, reach: FactRuling) => Promise<unknown> | unknown;
-  onDetail: (id: string) => Promise<{ corroborations: KnowledgeCorroboration[] }>;
+  onDetail: (id: string) => Promise<{
+    corroborations: KnowledgeCorroboration[];
+    contradictions: KnowledgeContradictionView[];
+  }>;
+  onResolveContradiction: (id: string, ruling: ContradictionRuling) => Promise<unknown> | unknown;
   onViewFact: (id: string | null) => void;
 }) {
   const live = (fact: KnowledgeFactView): boolean =>
@@ -70,7 +82,7 @@ export function KnowledgePanel({
   // Never a character count taken here: a second implementation of "what fits" is
   // free to disagree with the one that shipped, and nothing is red when it does.
   const dropped = new Set(delivery.dropped);
-  const shared = { now, refUrls, viewingFact, onReach, onDetail, onViewFact, dropped };
+  const shared = { now, refUrls, viewingFact, onReach, onDetail, onResolveContradiction, onViewFact, dropped };
   return (
     <div className="kn">
       <p className="muted small kn-note">
@@ -117,6 +129,12 @@ export function KnowledgePanel({
         title="Committed to the repository"
         blurb="In docs/spec or CLAUDE.md now, and out of every prompt: an agent reads these from the repository, and keeping them injected would pay context twice for one sentence. This list growing while Injected shrinks is the number worth watching."
         facts={section('committed')}
+        {...shared}
+      />
+      <KnowledgeSection
+        title="Superseded"
+        blurb="Replaced. An agent said one of these was contradicted by the code in front of it, wrote what it should say instead, and you adopted that amendment — so this wording is out of every prompt while its row stays saying what it said. Not rejected: it was not judged untrue, and a rejection would bar the sharper claim's own words, since an amendment contains the claim it sharpens."
+        facts={section('superseded')}
         {...shared}
       />
       <KnowledgeSection
@@ -219,7 +237,11 @@ interface RowProps {
   refUrls: Record<string, string>;
   viewingFact: string | null;
   onReach: (id: string, reach: FactRuling) => Promise<unknown> | unknown;
-  onDetail: (id: string) => Promise<{ corroborations: KnowledgeCorroboration[] }>;
+  onDetail: (id: string) => Promise<{
+    corroborations: KnowledgeCorroboration[];
+    contradictions: KnowledgeContradictionView[];
+  }>;
+  onResolveContradiction: (id: string, ruling: ContradictionRuling) => Promise<unknown> | unknown;
   onViewFact: (id: string | null) => void;
   /** Ids the block's cap left out, from the renderer that left them out. */
   dropped: Set<string>;
@@ -265,11 +287,12 @@ function FactCard({
   viewingFact,
   onReach,
   onDetail,
+  onResolveContradiction,
   onViewFact,
   dropped,
 }: { fact: KnowledgeFactView } & RowProps) {
   const open = viewingFact === fact.id;
-  const settled = fact.reach === 'rejected' || fact.reach === 'committed';
+  const settled = fact.reach === 'rejected' || fact.reach === 'committed' || fact.reach === 'superseded';
   return (
     <div className={`kn-card${settled ? ' resolved' : ''}`}>
       {/* Markdown, and handed the ref map so a goal named inside the claim is
@@ -281,6 +304,37 @@ function FactCard({
         <span className={`chip small ${fact.corroborations > 1 ? 'ok' : ''}`} title={countTitle(fact.corroborations)}>
           {fact.corroborations} {fact.corroborations === 1 ? 'observer' : 'observers'}
         </span>
+        {/* What the fleet has said *against* the claim, and the fraction of
+            everything said that is. Both the server's — the count is over a
+            different table from the one beside it, and the ratio is its division,
+            because two counts of voices divided in the browser would be arithmetic
+            over numbers whose rule this file does not know.
+
+            A reading and never a verdict: nothing here demoted anything. A claim
+            right in general and wrong at one edge attracts contradictions because
+            it is being used, so a high ratio on a well-used claim is a claim worth
+            sharpening rather than one worth killing. */}
+        {fact.contradictions > 0 && (
+          <span
+            className={`chip small ${fact.openContradictions > 0 ? 'warn' : ''}`}
+            title={
+              `${fact.contradictions} independent ${fact.contradictions === 1 ? 'voice disputes' : 'voices dispute'} ` +
+              `this — ${Math.round(fact.contradictionRatio * 100)}% of everything said about it. Nothing was ` +
+              `demoted by that: the claim is exactly where it was, and only you or its own clock will move it.`
+            }
+          >
+            {fact.contradictions} {fact.contradictions === 1 ? 'dispute' : 'disputes'} ·{' '}
+            {Math.round(fact.contradictionRatio * 100)}%
+          </span>
+        )}
+        {fact.openContradictions > 0 && (
+          <span
+            className="chip small warn"
+            title="Open disputes, each with an amendment behind it. Until you answer one the claim keeps reaching every agent it already reached — nothing here is demoted by a count."
+          >
+            {fact.openContradictions} to answer
+          </span>
+        )}
         {fact.expiresAt !== null && (
           <span className="chip small warn" title="An expiring fact is out of every read once it lapses; the row stays">
             {new Date(fact.expiresAt).getTime() > now ? `lapses in ${untilTime(fact.expiresAt, now)}` : 'lapsed'}
@@ -337,7 +391,7 @@ function FactCard({
         <span className="spacer" />
         <FactRulings fact={fact} onReach={onReach} />
       </div>
-      {open && <FactProvenance id={fact.id} now={now} onDetail={onDetail} />}
+      {open && <FactProvenance id={fact.id} now={now} onDetail={onDetail} onResolve={onResolveContradiction} />}
     </div>
   );
 }
@@ -369,7 +423,10 @@ function FactRulings({
   fact: KnowledgeFactView;
   onReach: (id: string, reach: FactRuling) => Promise<unknown> | unknown;
 }): JSX.Element | null {
-  if (fact.reach === 'rejected' || fact.reach === 'committed') return null;
+  // Nothing to say about a claim that is settled. `superseded` is terminal for a
+  // second reason: a sharper version of it is standing, and bringing this one back
+  // would put the two in one block saying different things.
+  if (fact.reach === 'rejected' || fact.reach === 'committed' || fact.reach === 'superseded') return null;
   return (
     <>
       {fact.reach === 'proposal' && (
@@ -453,30 +510,44 @@ function FactScope({ scope }: { scope: KnowledgeFactView['scope'] }): JSX.Elemen
 }
 
 /**
- * The observations behind one claim, in the observers' own words.
+ * The observations behind one claim — who agreed, who disputed it, and what each
+ * of them actually saw.
  *
  * Fetched when the row is opened rather than shipped on the polled snapshot: the
  * evidence for a claim runs to thousands of characters per observation, and the
  * rows nobody opens should cost nothing. A failure says so rather than drawing an
  * empty list, which would read as "nobody said anything".
+ *
+ * Both sides are here because the decision is between them: an operator answering
+ * a contradiction is choosing between the sentence that stands and the sentence
+ * being offered, and a surface showing only one of them would be asking for that
+ * decision with half of it hidden.
  */
 function FactProvenance({
   id,
   now,
   onDetail,
+  onResolve,
 }: {
   id: string;
   now: number;
-  onDetail: (id: string) => Promise<{ corroborations: KnowledgeCorroboration[] }>;
+  onDetail: (id: string) => Promise<{
+    corroborations: KnowledgeCorroboration[];
+    contradictions: KnowledgeContradictionView[];
+  }>;
+  onResolve: (id: string, ruling: ContradictionRuling) => Promise<unknown> | unknown;
 }): JSX.Element {
-  const [rows, setRows] = useState<KnowledgeCorroboration[] | null>(null);
+  const [payload, setPayload] = useState<{
+    corroborations: KnowledgeCorroboration[];
+    contradictions: KnowledgeContradictionView[];
+  } | null>(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
     let live = true;
-    setRows(null);
+    setPayload(null);
     setFailed(false);
     onDetail(id)
-      .then((payload) => live && setRows(payload.corroborations))
+      .then((next) => live && setPayload(next))
       .catch(() => live && setFailed(true));
     return () => {
       live = false;
@@ -484,10 +555,10 @@ function FactProvenance({
   }, [id, onDetail]);
 
   if (failed) return <p className="muted small">The observations behind this could not be read.</p>;
-  if (rows === null) return <p className="muted small">Reading what was seen…</p>;
+  if (payload === null) return <p className="muted small">Reading what was seen…</p>;
   return (
     <div className="kn-seen">
-      {rows.map((row) => (
+      {payload.corroborations.map((row) => (
         <div className="kn-obs" key={row.id}>
           <div className="kn-words">{row.words}</div>
           <div className="muted small">
@@ -502,6 +573,119 @@ function FactProvenance({
           </div>
         </div>
       ))}
+      {payload.contradictions.length > 0 && (
+        <>
+          <div className="kn-head small">Disputed</div>
+          <p className="muted small">
+            An agent found this claim contradicted by the code in front of it and wrote what it should say instead —
+            which is the whole of a contradiction here, because nothing is demoted by a count. A claim that is right in
+            general and wrong at one edge attracts these <em>because it is being used</em>, so the move is usually to
+            sharpen it. Until you make one, the claim goes on reaching every agent it already reached.
+          </p>
+          {payload.contradictions.map((row) => (
+            <Contradiction key={row.id} row={row} now={now} onResolve={onResolve} />
+          ))}
+        </>
+      )}
     </div>
   );
 }
+
+/**
+ * One dispute: what the agent saw, the sentence it offered instead, and the three
+ * moves — **two of which move the claim, and one of which is the only one that
+ * does not**.
+ *
+ * "Adopt" is one control and one call rather than a promote followed by a demote:
+ * the amendment reaching the claim's place and the claim leaving it are two halves
+ * of one decision, and half of it landing puts the sharper claim in the same block
+ * as the blunter one it was written to replace, both being read by every agent
+ * until somebody notices.
+ */
+function Contradiction({
+  row,
+  now,
+  onResolve,
+}: {
+  row: KnowledgeContradictionView;
+  now: number;
+  onResolve: (id: string, ruling: ContradictionRuling) => Promise<unknown> | unknown;
+}): JSX.Element {
+  const [narrowing, setNarrowing] = useState<string | null>(null);
+  return (
+    <div className={`kn-obs kn-dispute${row.resolution !== null ? ' resolved' : ''}`}>
+      <div className="kn-words">{row.words}</div>
+      {row.amendment !== null ? (
+        <div className="kn-amendment">
+          <div className="kn-head small">Should say instead</div>
+          <div>{row.amendment.claim}</div>
+        </div>
+      ) : (
+        <p className="muted small">The amendment filed with this is gone.</p>
+      )}
+      <div className="muted small">
+        {row.goalRef !== null ? (
+          <>
+            on <Ref to={row.goalRef} />
+          </>
+        ) : (
+          'no goal behind it'
+        )}{' '}
+        · {relTime(row.createdAt, now)}
+        {row.resolution !== null && <> · {RESOLVED_AS[row.resolution]}</>}
+      </div>
+      {row.resolution === null &&
+        (narrowing === null ? (
+          <div className="kn-acts">
+            <AsyncButton
+              className="primary"
+              onClick={() => onResolve(row.id, { resolution: 'amended' })}
+              title="Put the amendment exactly where this claim is and supersede this wording — one act, so the two can never both be in the block"
+            >
+              Adopt the amendment
+            </AsyncButton>
+            <button type="button" className="ghost" onClick={() => setNarrowing(row.amendment?.claim ?? '')}>
+              Narrow it yourself
+            </button>
+            <span className="spacer" />
+            <AsyncButton
+              className="ghost"
+              onClick={() => onResolve(row.id, { resolution: 'dismissed' })}
+              title="The dispute is wrong. The claim stays exactly where it is, and the amendment stays a proposal reaching nobody"
+            >
+              Dismiss
+            </AsyncButton>
+          </div>
+        ) : (
+          <div className="kn-narrow">
+            <textarea
+              value={narrowing}
+              rows={4}
+              onChange={(e) => setNarrowing(e.target.value)}
+              aria-label="What the claim should say"
+            />
+            <div className="kn-acts">
+              <AsyncButton
+                className="primary"
+                disabled={narrowing.trim() === ''}
+                onClick={() => onResolve(row.id, { resolution: 'narrowed', claim: narrowing.trim() })}
+                title="Rewrite the claim in place. Every open dispute on it is answered, and the amendments they offered are superseded by your wording"
+              >
+                Save this wording
+              </AsyncButton>
+              <button type="button" className="ghost" onClick={() => setNarrowing(null)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        ))}
+    </div>
+  );
+}
+
+/** What an answered dispute says it was. The verb an operator used, in their terms rather than the store's. */
+const RESOLVED_AS: Record<NonNullable<KnowledgeContradictionView['resolution']>, string> = {
+  amended: 'you adopted this amendment',
+  narrowed: 'you narrowed the claim yourself',
+  dismissed: 'you left the claim where it was',
+};

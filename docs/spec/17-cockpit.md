@@ -1674,9 +1674,9 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
 - **Knowledge** — `KnowledgePanel`: what the fleet has written down about working this repository, and
   how far each claim carries (#27 phase 2). It is the Lessons panel's shape one axis wider, because
   reach is a state machine rather than a status: **Live notices** with their clocks, **Needs you**,
-  **Injected**, **On lookup**, **One voice**, **Committed to the repository**, and the **Rejected**
-  tail — read top to bottom in the order things demand attention rather than in the order of the
-  machine.
+  **Injected**, **On lookup**, **One voice**, **Committed to the repository**, **Superseded**, and the
+  **Rejected** tail — read top to bottom in the order things demand attention rather than in the order
+  of the machine.
 
   **Live notices** is the one section drawing rows nobody vouched for. A notice is an expiring
   observation, and it is the one thing agreement alone puts in front of every agent — so the blurb
@@ -1688,9 +1688,28 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   **It draws what it stopped.** The rejected tail is not a courtesy: this page is the whole of the
   governance, a surface showing only what it let through cannot tell an operator that a claim was
   killed, and the rejection bar — which is what stops two agents re-proposing next week what was
-  killed today — is invisible everywhere else in the harness.
+  killed today — is invisible everywhere else in the harness. **Superseded** is the same argument for
+  the claims an amendment replaced: they were not judged untrue, and a page that dropped them would
+  lose the record of what the fleet used to be told.
 
-  Four controls and no fifth, and none of them files anything — and none of them is what put a notice
+  **A disputed claim stays in the section its reach puts it in** (#27 phase 5). Nothing here is
+  demoted by a count, so lifting a contradicted claim out of _Injected_ would draw a demotion that did
+  not happen — a claim right in general and wrong at one edge attracts contradictions because it is
+  being used. What the row carries instead is the count of disputing voices, the ratio of them to
+  everything said about the claim, and — while any dispute is open — how many are left to answer.
+  Both numbers are the server's, the ratio included: they are counts of _voices_ rather than of rows,
+  so a division taken here would be arithmetic over numbers this layer does not know the rule for.
+
+  **The three answers to a contradiction sit inside the row's provenance**, beside the words that ask
+  for them and beside the amendment being offered: an operator choosing between the claim and the
+  sentence written to replace it has to read both, and a control where only one was visible would ask
+  for the decision with half of it hidden. _Adopt the amendment_ is **one** control and one call —
+  promoting the amendment and superseding the claim are two halves of one decision, and a pair of
+  calls could leave the sharper claim in the block beside the blunter one it was written to replace.
+  _Narrow it yourself_ opens the claim for rewriting in place. _Dismiss_ is the only one of the three
+  that leaves the fact where it was.
+
+  Four reach controls and no fifth, and none of them files anything — and none of them is what put a notice
   at `injected`, which is the store's own doing: agents propose through the tool channel,
   so a page that could write a claim would be writing one with no observation behind it. Promote,
   demote, reject — a `ConfirmButton`, since a rejection is terminal and what comes back is an amendment

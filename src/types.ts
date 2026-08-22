@@ -1271,11 +1271,17 @@ export type FactLifetime = 'standing' | 'expiring';
  * - `committed` — in the repository. Out of every prompt: once a fact is in
  *   `docs/spec/` an agent reads it there, and keeping it injected pays context
  *   twice for one sentence.
+ * - `superseded` — replaced. A sharper claim naming this one in `supersedes` was
+ *   adopted by an operator, so this is out of every read while its row stays
+ *   saying what it said. **Not `rejected`**: the claim was not judged untrue, and
+ *   it must not bar the amendment's own words from being restated by the next
+ *   agent to hit the same edge — which is precisely what a rejection would do,
+ *   since an amendment usually contains the claim it sharpens.
  * - `rejected` — nowhere, and barred from coming back. Means **not true**, and
  *   nothing else: "true, but not worth the context" is `lookup`, where it costs
  *   nothing until somebody asks.
  */
-export type FactReach = 'proposal' | 'lookup' | 'injected' | 'committed' | 'rejected';
+export type FactReach = 'proposal' | 'lookup' | 'injected' | 'committed' | 'superseded' | 'rejected';
 
 /**
  * One thing the fleet believes about this repository that the repository does not
@@ -1391,6 +1397,75 @@ export interface FactObservation {
   sessionId: string | null;
   words: string;
 }
+
+/**
+ * One agent saying an injected claim is contradicted by the code in front of it —
+ * and what it should say instead.
+ *
+ * **A row in its own table rather than a discriminated corroboration**, which is
+ * the one decision here where a mistake is silent. A contradiction carries an
+ * agent, a goal, a session, a moment and the agent's own words — the same shape a
+ * {@link KnowledgeCorroboration} carries — so folding the two into one table with
+ * a stance column would leave `distinctCorroborators` counting disputes as
+ * agreement unless every reader remembered a filter. A contradiction that promoted
+ * the claim it disputes is exactly the failure nothing would report, and a second
+ * table is what makes it unreachable rather than merely wrong.
+ *
+ * → `docs/spec/27-knowledge.md#contradiction-and-why-it-does-not-delete`
+ */
+export interface KnowledgeContradiction {
+  id: string;
+  /** The claim being disputed. */
+  factId: string;
+  /**
+   * The amendment filed alongside it — what the contradicting agent says the
+   * claim should say instead, as a fact of its own naming `factId` in
+   * `supersedes`.
+   *
+   * Never null: a contradiction with no amendment is refused at the tool, because
+   * a bare "this is wrong" is a count, and nothing here is demoted by count.
+   */
+  amendmentId: string;
+  /** Null for the harness's own reading, exactly as a corroboration's is. */
+  agentId: string | null;
+  taskId: string | null;
+  /** The goal it was seen on, collapsed from the dispatch origin — the unit the ratio is taken over. */
+  goalRef: string | null;
+  /** The session it was seen in, so a re-dispatch disputing its own predecessor's claim counts once. */
+  sessionId: string | null;
+  /** What the agent actually saw that the claim does not fit. Never the amendment restated. */
+  words: string;
+  /** How an operator answered it, or null while it is still open. */
+  resolution: ContradictionResolution | null;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
+/**
+ * The three moves an operator has on a contradiction, and there is no fourth.
+ *
+ * - `amended` — the amendment is adopted at the original's reach and the original
+ *   is superseded. **One act, one call**: two calls could half-land, leaving an
+ *   amendment injected beside the blunter claim it was written to replace, both in
+ *   the same block saying different things.
+ * - `narrowed` — the operator writes the sharper sentence themselves, in place, and
+ *   the amendments they answered are superseded by it.
+ * - `dismissed` — the contradiction is wrong. **The only one that leaves the fact
+ *   where it was**, and the only one that touches nothing but the contradiction row.
+ */
+export type ContradictionResolution = 'amended' | 'narrowed' | 'dismissed';
+
+/**
+ * One of those three moves as it is made — the verb, and what `narrowed` needs to
+ * make it.
+ *
+ * A discriminated union rather than an optional `claim` beside a free verb,
+ * because "narrow this claim" with nothing to narrow it to is the one shape of
+ * this decision that could silently do nothing. One statement rather than two: it
+ * is the store's argument and the route's body, so a `claim` that became optional
+ * on one side would be a narrowing that reached the store empty.
+ */
+export type ContradictionRuling = { resolution: 'amended' | 'dismissed' } | { resolution: 'narrowed'; claim: string };
 
 /**
  * Which kind of return to a pull request a {@link Remedy} accounts for: its CI

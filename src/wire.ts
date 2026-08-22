@@ -101,6 +101,7 @@ import type {
   PetStage,
   PetWallet,
   JobSchedule,
+  KnowledgeContradiction,
   KnowledgeCorroboration,
   KnowledgeFact,
   Lesson,
@@ -350,6 +351,45 @@ export interface CockpitWorld extends WorldSnapshot {
 export interface KnowledgeFactView extends KnowledgeFact {
   /** How many independent corroborators say so. Two is what carries a proposal to `lookup`. */
   corroborations: number;
+  /**
+   * How many independent voices dispute it, over the whole life of the claim.
+   *
+   * Counted by the same union over goal and session the agreement count uses, and
+   * out of a **different table**: a contradiction is not a corroboration and never
+   * reaches the count that promotes.
+   */
+  contradictions: number;
+  /**
+   * What fraction of everything said about this claim disputes it — the server's
+   * division and never the browser's.
+   *
+   * Shipped rather than derived for `distinctCorroborators`' reason exactly: the
+   * two counts beside it are counts of *voices*, so a ratio taken from them in the
+   * view layer would be arithmetic over numbers whose rule it does not know, and
+   * free to disagree with the one the page claims to be showing.
+   *
+   * **A reading and never a trigger.** Nothing is demoted, lapsed or deleted by
+   * it: a claim right in general and wrong at one edge attracts contradictions
+   * because it is being used, and a count that acted would kill the store's most
+   * valuable claims first.
+   */
+  contradictionRatio: number;
+  /** Disputes nobody has ruled on — the queue, where the ratio is the reading. */
+  openContradictions: number;
+}
+
+/**
+ * One contradiction as the page draws it: what the agent saw, and the amendment
+ * filed with it (issue #27 phase 5).
+ *
+ * The amendment rides along because an operator cannot answer a contradiction
+ * without reading the sentence being offered in place of the claim, and the fact
+ * list this page polls is bounded — a claim whose amendment had fallen off the end
+ * of it would draw three controls over a proposal nobody could read.
+ */
+export interface KnowledgeContradictionView extends KnowledgeContradiction {
+  /** The amendment as its own claim, or null if it has since been deleted. */
+  amendment: KnowledgeFact | null;
 }
 
 /**
@@ -373,6 +413,11 @@ export type FactRuling = Extract<FactReach, 'lookup' | 'injected' | 'rejected'>;
 export interface KnowledgeFactPayload {
   fact: KnowledgeFactView;
   corroborations: KnowledgeCorroboration[];
+  /**
+   * The disputes, resolved ones included — a surface that draws only the open ones
+   * cannot show an operator that they already answered this claim once.
+   */
+  contradictions: KnowledgeContradictionView[];
 }
 
 /**
@@ -1523,6 +1568,9 @@ export type {
   JobAttachment,
   JobAttachmentInput,
   JobSchedule,
+  ContradictionResolution,
+  ContradictionRuling,
+  KnowledgeContradiction,
   KnowledgeCorroboration,
   KnowledgeFact,
   Lesson,

@@ -384,6 +384,7 @@ function panelBody(
           viewingFact={view.viewingFact}
           onReach={(id, reach) => actions.setFactReach(id, reach)}
           onDetail={(id) => actions.factDetail(id)}
+          onResolveContradiction={(id, ruling) => actions.resolveContradiction(id, ruling)}
           onViewFact={(id) => actions.viewFact(id)}
         />
       );

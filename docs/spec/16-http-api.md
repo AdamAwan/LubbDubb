@@ -27,7 +27,7 @@ is about.
 | `routes/humanTasks.ts`  | Work only a person can do: filing one, and the two ways it settles                            |
 | `routes/issues.ts`      | Watch, priority, conclusion, assay, delivered, shortfall, dismiss-run                         |
 | `routes/jobs.ts`        | `/api/jobs`, `/api/jobs/:id/cancel`, `/api/upnext/order`, `/api/upnext/profile`               |
-| `routes/knowledge.ts`   | One claim's observations, and how far an operator says a claim carries                        |
+| `routes/knowledge.ts`   | One claim's observations and disputes, how far an operator says it carries, and the three answers to a contradiction |
 | `routes/plans.ts`       | Plan history, replan, acceptance ticks, part model pins                                       |
 | `routes/validation.ts`  | One validation check's current reading — result, defer, waive, reset — and who runs it        |
 | `routes/schedules.ts`   | Recurring blueprints: write, edit, run now, delete                                            |
@@ -1227,8 +1227,10 @@ reports the ticket through `link_ticket` — see [11](11-mcp-tools.md).
 
 ### `GET /api/knowledge/facts/:id`
 
-One claim with the observations behind it, in the observers' own words — `{fact, corroborations}`.
-**404** when absent. Its own route rather than a field on the snapshot for the reason in
+One claim with the observations behind it, in the observers' own words — plus the contradictions, each
+carrying the amendment filed with it: `{fact, corroborations, contradictions}`. Both sides, because
+answering a contradiction is choosing between the claim and the sentence offered in its place, and a
+payload with one of them would ask for that decision with half of it hidden. **404** when absent. Its own route rather than a field on the snapshot for the reason in
 [_Bulk text_](#bulk-text): the evidence for one claim runs to thousands of characters per
 observation, and the rows nobody opens should cost nothing per poll. The count on the `fact` is
 `distinctCorroborators`', never `corroborations.length` — two observations are one corroborator if
@@ -1255,9 +1257,30 @@ every agent's context, so the store stamps `ruled_at` on any operator move wheth
 changed — without it the cockpit's **Needs you** section would ask again forever, and the only way to
 empty it would be a decision the operator does not agree with.
 
-**These two are the whole write surface the cockpit has on this store.** Nothing here files a claim:
-agents propose through `knowledge_propose` on a scoped MCP credential ([11](11-mcp-tools.md)), which
-is the same split between an operator's arm and an agent's that the lessons store keeps.
+### `POST /api/knowledge/contradictions/:id/resolve`
+
+The operator's answer to one contradiction (#27 phase 5). Body is a discriminated union on
+`resolution`: `amended` adopts the amendment at the claim's own reach and moves the claim to
+`superseded`; `narrowed` takes a `claim` and rewrites the original in place, superseding the
+amendments it answered; `dismissed` answers the one row and leaves the fact exactly where it was.
+**404** when absent, **400** on an unknown resolution or a `narrowed` with no claim, **409** on a
+contradiction already answered or a claim already gone. Broadcasts `dirty` and returns
+`{ ok: true, fact }`.
+
+**One route rather than two, and that is the point of it.** Promoting the amendment and superseding
+the claim it replaces are two halves of one decision, and two calls can half-land: the sharper claim
+injected beside the blunter one it was written to replace, both in the same block, saying different
+things to every agent until somebody notices. The store makes both writes in one transaction and this
+is the only way to reach it — there is no route that moves a fact to `superseded` on its own.
+
+`narrowed` carrying its claim in the body's *shape* rather than as an optional field is the same
+discipline: a narrowing with nothing to narrow to is the one form of this call that could silently do
+nothing.
+
+**These three are the whole write surface the cockpit has on this store.** Nothing here files a claim
+or an amendment: agents write both through the tool channel on a scoped MCP credential
+([11](11-mcp-tools.md)), which is the same split between an operator's arm and an agent's that the
+lessons store keeps.
 
 ### `POST /api/human-tasks`
 
@@ -1602,7 +1625,7 @@ read **once** and shared, so two parts of the UI cannot disagree.
 | `overlaps`                      | Paths two concurrently-live code agents wrote.                                                                                                                                                                                                                                                                                  |
 | `humanTasks`                    | Work only a person can do — open ones and a settled tail, newest first. Beside `findings` rather than inside `escalations`: nobody is parked on one.                                                                                                                                                                            |
 | `findings`                      | Every finding.                                                                                                                                                                                                                                                                                                                  |
-| `knowledge`                     | Every fact the fleet has written down, newest first, **the rejected ones included** — each with the corroborator count that promotes it. The evidence behind a claim is not here: see `GET /api/knowledge/facts/:id`.                                                                                                           |
+| `knowledge`                     | Every fact the fleet has written down, newest first, **the rejected ones included** — each with the corroborator count that promotes it, the count of voices disputing it, the ratio between them and how many disputes are unanswered. Every one of those is taken server-side beside the rows it counts; the ratio in particular, because two counts of _voices_ divided in the browser would be arithmetic over numbers whose rule the view layer does not know. The evidence behind a claim is not here: see `GET /api/knowledge/facts/:id`.                                                                                                           |
 | `knowledgeDelivery`             | What that list actually sends: the system-prompt block verbatim against `knowledgeBlockChars`, the ids it carries and the ids the cap dropped, and the task-prompt append for each `check:`/`goal:` scope. Projected from the renderers that deliver it, never a second reading of them ([27](27-knowledge.md#in-the-cockpit)). |
 | `escalations`                   | The escalations still waiting on a person — **open only**. See _Bulk text_ below.                                                                                                                                                                                                                                               |
 | `recovery`                      | Work the previous run orphaned (a dead agent, or a task no agent ever started), each awaiting restore / requeue / remove. Non-empty ⇒ **the harness is running no cycles**.                                                                                                                                                     |

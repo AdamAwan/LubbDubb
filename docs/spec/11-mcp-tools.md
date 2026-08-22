@@ -38,6 +38,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `knowledge_propose`  | Write down something learned about working **this repository** that the repository does not say — with its scope, its lifetime and the evidence for it. Open to every agent, which is the widening: before it, only a retrospective (and a remedy under one guard verdict) could record a durable claim. A claim somebody has already filed records the caller as corroborating it rather than filing a second copy. → [27](27-knowledge.md) |
 | `knowledge_ask`      | Read what the fleet has learned, for this caller's own scopes or about a question. Answers only with claims two independent goals have seen or an operator has vouched for — never a bare proposal. → [27](27-knowledge.md)                                                                                                                                                                                                                  |
 | `knowledge_notice`   | Raise an observation that is true today and will stop being true — a check that failed and passed on one commit, a registry refusing installs. It states what was seen and never what to do about it, and it is the one write in the channel that reaches every agent without an operator: two goals seeing the same thing injects it, bounded by the clock the caller must name. → [27](27-knowledge.md#notices)                            |
+| `knowledge_contradict` | Say that a claim the harness gave this agent is contradicted by the code in front of it — **with the amendment**: what the claim should say instead, filed as a proposal naming the original. A contradiction with no amendment is refused, because nothing in that store is demoted by a count: a claim right in general and wrong at one edge attracts contradictions because it is being used. It moves nothing on the agent's say-so. → [27](27-knowledge.md#contradiction-and-why-it-does-not-delete) |
 | `request_permission` | Harness-internal (issue #130). Claude Code calls it via `--permission-prompt-tool` to route an un-allowlisted tool call to the operator. The one tool an agent never calls itself, and the one whose response is **bare** (no `_status`).                                                                                                                                                                                                    |
 
 There is a **second, much shorter list** for the desktop channel below — six tools, none of them
@@ -733,7 +734,10 @@ So every tool is named in one of two places, and which one is a decision, not a 
 
 - **`MCP_PROTOCOL_ADDENDUM`** for the tools any agent may choose to call at any point in any dispatch:
   `escalate`, `plan_submit`, `world_read`, `open_pr`, `report_finding`, `request_human_task`,
-  `note_progress`. Nothing else names these.
+  `note_progress`, and the four knowledge tools — `knowledge_propose`, `knowledge_ask`,
+  `knowledge_notice`, `knowledge_contradict`. Nothing else names these. The knowledge four are here
+  because every agent may write to that store and every agent may read it, so there is no one dispatch
+  prompt that could name them.
 - **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
   a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
   `assay_issue`, `retro_submit`, `link_ticket`, the scratch pair, the validation pair. Keeping them out

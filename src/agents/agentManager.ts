@@ -55,9 +55,14 @@ import { goalFingerprint } from '../intake/assay.js';
 import { padWriteTarget } from '../scratch/pad.js';
 import { retroSubmitOrigin } from '../retro/retro.js';
 import { remedyOrigin, type RemedySubmission } from '../remedies/remedies.js';
-import { corroborationGoal, distinctCorroborators, type FactProposal } from '../knowledge/knowledge.js';
+import {
+  corroborationGoal,
+  distinctCorroborators,
+  type FactContradiction,
+  type FactProposal,
+} from '../knowledge/knowledge.js';
 import type { AnsweredFact } from '../mcp/tools/context.js';
-import type { FactProposalOutcome } from '../store/knowledge.js';
+import type { FactContradictionOutcome, FactProposalOutcome } from '../store/knowledge.js';
 import { partConclusionOrigin } from '../mcp/partOutcome.js';
 import type { AgentToolTarget } from '../mcp/tools/context.js';
 import type { ParsedFlag } from './sentinels.js';
@@ -1156,6 +1161,51 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
           fact: outcome.fact,
           filed: outcome.outcome === 'filed',
           corroborations: outcome.corroborations,
+        });
+      }
+      return { ok: true, outcome };
+    });
+  }
+
+  /**
+   * Say that a claim this agent was shown is contradicted by what it is looking
+   * at, with the sentence it should have said instead (the `knowledge_contradict`
+   * tool).
+   *
+   * The observer is the credential's, exactly as {@link proposeFact}'s is and for
+   * the same reason twice over: the amendment filed alongside is a proposal, whose
+   * first corroboration this call is, and the contradiction ratio counts by goal —
+   * so an agent that could name its own goal could both promote its amendment and
+   * inflate the dispute on the claim it replaces.
+   *
+   * The words are the agent's evidence rather than its amendment: what an operator
+   * reads to choose between the two sentences is what the agent actually saw, and
+   * the amendment is already a claim they can read on its own row.
+   */
+  contradictFact(
+    agentId: string,
+    contradiction: FactContradiction,
+  ): { ok: true; outcome: FactContradictionOutcome } | { ok: false; error: string } {
+    return this.withCaller(agentId, ({ agent, task }) => {
+      const outcome = this.store.contradictFact(contradiction, {
+        agentId,
+        taskId: task.id,
+        goalRef: corroborationGoal(task.originRef),
+        sessionId: agent.sessionId,
+        words: contradiction.evidence,
+      });
+      // Only a recorded contradiction repaints: a refusal wrote nothing, and an
+      // event on one would put a claim in front of an operator as though the fleet
+      // had just disputed it.
+      if (outcome.outcome === 'recorded') {
+        this.emit('fact', {
+          agentId,
+          taskId: task.id,
+          // The amendment is the fact that moved — it is the new row, and the
+          // claim it names is exactly where it was.
+          fact: outcome.amendment,
+          filed: true,
+          corroborations: 1,
         });
       }
       return { ok: true, outcome };

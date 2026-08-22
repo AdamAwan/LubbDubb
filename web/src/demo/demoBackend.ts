@@ -18,6 +18,7 @@ import type {
   BuildReading,
   CockpitDecision,
   Decision,
+  ContradictionRuling,
   FactRuling,
   FilingTargetProbe,
   Issue,
@@ -994,7 +995,66 @@ class DemoServer {
           : 'I hit the same wall on a different goal, and this is what it looked like.',
       createdAt: fact.createdAt,
     }));
-    return { fact, corroborations };
+    // The disputes, synthesised the same way and from the same two readings the
+    // row already ships: `contradictions` is how many voices spoke against the
+    // claim and `openContradictions` how many of those an operator has still to
+    // answer, so the first N rows are open and the rest are answered. The
+    // amendment is the fixture's own — the fact naming this one in `supersedes` —
+    // because an operator cannot answer a dispute without reading the sentence
+    // being offered in place of the claim.
+    const amendment = this.state.knowledge.find((f) => f.supersedes === fact.id) ?? null;
+    const contradictions = Array.from({ length: fact.contradictions }, (_, i) => ({
+      id: `knx-${fact.id}-${i + 1}`,
+      factId: fact.id,
+      amendmentId: amendment?.id ?? 'fact-gone',
+      amendment,
+      agentId: null,
+      taskId: null,
+      goalRef: amendment?.originRef ?? null,
+      sessionId: null,
+      words:
+        'The claim did not hold here: the ticket named the failing check, and that was enough to plan from. ' +
+        'What I saw is in the amendment.',
+      resolution: i < fact.openContradictions ? null : ('dismissed' as const),
+      resolvedAt: i < fact.openContradictions ? null : fact.updatedAt,
+      createdAt: fact.updatedAt,
+    }));
+    return { fact, corroborations, contradictions };
+  }
+
+  /**
+   * Answer one contradiction — the demo mirror of
+   * `POST /api/knowledge/contradictions/:id/resolve` (#27 phase 5), including the
+   * property that makes it one route: adopting the amendment moves **both** facts,
+   * so the demo cannot show the half-landed state where the sharper claim and the
+   * blunter one are both in the block.
+   */
+  async resolveContradiction(id: string, ruling: ContradictionRuling): Promise<{ ok: true }> {
+    // The synthesised id carries the claim it disputes: `knx-<factId>-<n>`.
+    const factId = id.slice('knx-'.length).replace(/-\d+$/, '');
+    const fact = this.state.knowledge.find((f) => f.id === factId);
+    if (!fact || fact.openContradictions === 0) return { ok: true };
+    const amendment = this.state.knowledge.find((f) => f.supersedes === fact.id) ?? null;
+    const at = new Date().toISOString();
+    if (ruling.resolution === 'amended' && amendment) {
+      // The amendment takes the claim's place exactly, and the claim is superseded
+      // rather than rejected: it was not judged untrue, and a rejection would bar
+      // the amendment's own words, which contain it.
+      amendment.reach = fact.reach;
+      amendment.ruledAt = at;
+      amendment.updatedAt = at;
+      fact.reach = 'superseded';
+    }
+    if (ruling.resolution === 'narrowed') fact.claim = ruling.claim;
+    if (ruling.resolution !== 'dismissed') {
+      fact.ruledAt = at;
+      fact.updatedAt = at;
+    }
+    // Answered either way — the queue is what an operator has left to decide, and
+    // dismissing is a decision.
+    fact.openContradictions -= 1;
+    this.dirty();
+    return { ok: true };
   }
 
   /** The legal predecessors, kept here so the demo cannot drift from `LessonStore`. */
@@ -3490,6 +3550,7 @@ export const demoApi = {
   retireLesson: (id: string) => getServer().retireLesson(id),
   setFactReach: (id: string, reach: FactRuling) => getServer().setFactReach(id, reach),
   knowledgeFact: (id: string) => getServer().knowledgeFact(id),
+  resolveContradiction: (id: string, ruling: ContradictionRuling) => getServer().resolveContradiction(id, ruling),
   completeHumanTask: (id: string, note?: string) => getServer().completeHumanTask(id, note),
   declineHumanTask: (id: string, note: string) => getServer().declineHumanTask(id, note),
   dismissHumanTask: (id: string) => getServer().dismissHumanTask(id),
