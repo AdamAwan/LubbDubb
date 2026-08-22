@@ -769,17 +769,29 @@ So every tool is named in one of two places, and which one is a decision, not a 
   pair of decisions is one argument: six advertised ways to file one observation is the taxonomy the
   intake removed, while a *withdrawn* tool name fails silently on the deployments that customised most
   — an override still naming one gets a call that comes back refused with nothing in the logs. They
-  are classified `superseded` in `test/mcpChannel.test.ts`, so they cannot be mistaken for tools
-  somebody forgot to name. → [27](27-knowledge.md#the-doors-that-closed-and-why-they-are-still-there)
+  are classified `superseded`, so they cannot be mistaken for tools somebody forgot to name — and
+  `src/setup/reading.ts` reads that classification to tell an operator when an override of theirs
+  still names one ([26](26-setup.md#an-override-that-names-a-superseded-tool)), which is what makes
+  the withdrawal safe to take later.
+  → [27](27-knowledge.md#the-doors-that-closed-and-why-they-are-still-there)
 - **Its point of use** — the dispatch prompt or the instruction block for the work it belongs to — for
   a tool only one kind of agent ever calls: `conclude_work`, `conclude_part`, `assess_issue`,
   `assay_issue`, `retro_submit`, `link_ticket`, the scratch pair, the validation pair. Keeping them out
   of the addendum is what keeps it short enough to be read. `request_permission` is named in neither,
   because no agent calls it: Claude Code invokes it through `--permission-prompt-tool`.
 
-`test/mcpChannel.test.ts` holds that classification as a `Record<McpToolName, …>` and asserts each side
-of it, so a new tool does not compile until it has been placed — and one placed in the addendum that
-the addendum does not name fails.
+**The classification lives in `src/mcp/names.ts`, beside the names it classifies**, as a
+`Record<McpToolName, …>` — so a new tool does not compile until it has been placed.
+`test/mcpChannel.test.ts` asserts each side of it: the addendum names every `addendum` tool and no
+other, and every `superseded` tool is still granted.
+
+It was written in that test, and moved when production code needed the same answer. A classification a
+test owns is one the reading has to keep a second copy of, free to disagree with what is actually
+granted and silent when it does — which is the whole failure this module exists to make impossible,
+arriving through the list rather than through the names. `SUPERSEDED_TOOL_NAMES` is derived from the
+record rather than written out again, for the same reason `ALLOWED_MCP_TOOLS` is derived from
+`MCP_TOOL_NAMES`: two lists that merely agreed today would let a withdrawal reach the grants without
+reaching the operator who still names one.
 
 ### Why lessons are a field and not a tool
 

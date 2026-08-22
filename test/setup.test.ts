@@ -6,6 +6,12 @@ import { join } from 'node:path';
 import { loadConfig, type Config } from '../src/config.js';
 import { diffConfig } from '../src/configApply.js';
 import type { SetupProbes } from '../src/setup/probes.js';
+import {
+  defaultPromptTemplates,
+  loadPromptTemplates,
+  type PromptTemplates,
+} from '../src/dispatcher/promptTemplates.js';
+import { SUPERSEDED_TOOL_NAMES } from '../src/mcp/names.js';
 import { buildSetupReading } from '../src/setup/reading.js';
 import { parseRemote, credentialVar } from '../src/setup/remote.js';
 import { resolveFromRepo } from '../src/setup/resolve.js';
@@ -136,6 +142,7 @@ test('the reading says the harness is on the mock, and stops saying so once it i
     probes: probes(),
     configFile: join(mkdtempSync(join(tmpdir(), 'lubbdubb-setup-')), 'lubbdubb.config.json'),
     pending: [],
+    prompts: defaultPromptTemplates(),
   });
   assert.equal(onMock.checks.find((c) => c.id === 'pointed')?.verdict, 'bad');
   // The fake provider needs no credential, so that check must not go red for it.
@@ -149,6 +156,7 @@ test('a credential the environment does not hold is bad, and the fleet’s own k
     probes: probes({ env: (name) => (name === 'ANTHROPIC_API_KEY' ? 'sk-ant-x' : undefined) }),
     configFile: '/nowhere/lubbdubb.config.json',
     pending: [],
+    prompts: defaultPromptTemplates(),
   });
   assert.equal(reading.checks.find((c) => c.id === 'credential')?.verdict, 'bad');
   // Agents inherit the harness's environment and the CLI prefers a key with no
@@ -166,6 +174,7 @@ test('a world nothing has been read into yet is unknown, never “nothing is wat
     probes: probes(),
     configFile: '/nowhere/lubbdubb.config.json',
     pending: [],
+    prompts: defaultPromptTemplates(),
   });
   assert.equal(reading.checks.find((c) => c.id === 'watch')?.verdict, 'unknown');
 });
@@ -177,6 +186,7 @@ test('the reading prefills both answers, so nothing the machine already knows is
     probes: probes(),
     configFile: '/nowhere/lubbdubb.config.json',
     pending: [],
+    prompts: defaultPromptTemplates(),
   });
   assert.equal(reading.prefill.email, 'adam@acme.com');
   assert.equal(reading.prefill.repoRoot, '/srv/acme-app');
@@ -218,6 +228,7 @@ test('a fault the file already answers says restart, instead of asking for the w
       github: { owner: 'AdamAwan', repo: 'LubbDubb' },
       userId: 'AdamAwan',
     }),
+    prompts: defaultPromptTemplates(),
   });
 
   const pointed = reading.checks.find((c) => c.id === 'pointed');
@@ -255,6 +266,7 @@ test('a pending change no check names gets a row of its own', async () => {
       userId: 'AdamAwan',
       heartbeatIntervalMs: 5000,
     }),
+    prompts: defaultPromptTemplates(),
   });
   const restart = reading.checks.find((c) => c.id === 'restart');
   assert.equal(restart?.verdict, 'warn');
@@ -278,6 +290,7 @@ test('a pending change to a key whose check is already ok is still named', async
       integrations: { sourceControl: 'github', issues: 'github' },
       userId: 'someone-else',
     }),
+    prompts: defaultPromptTemplates(),
   });
   assert.equal(reading.checks.find((c) => c.id === 'identity')?.verdict, 'ok');
   assert.match(reading.checks.find((c) => c.id === 'restart')?.detail ?? '', /userId = "someone-else"/);
@@ -297,6 +310,7 @@ test('a harness running what its file says has no restart row', async () => {
     probes: probes(),
     configFile: '/nowhere/lubbdubb.config.json',
     pending: [],
+    prompts: defaultPromptTemplates(),
   });
   assert.equal(
     reading.checks.find((c) => c.id === 'restart'),
@@ -326,10 +340,79 @@ test('a pending change never restates a check the environment owns', async () =>
       github: { owner: 'a', repo: 'b' },
       heartbeatIntervalMs: 5000,
     }),
+    prompts: defaultPromptTemplates(),
   });
   for (const id of ['credential', 'billing']) {
     const check = reading.checks.find((c) => c.id === id);
     assert.equal(check?.verdict, 'bad');
     assert.doesNotMatch(check?.remedy ?? '', /[Rr]estart to take it up/);
+  }
+});
+
+/**
+ * The shim `raise` left behind is doing nothing until somebody can see whether it
+ * is still needed. `report_finding` and the three `knowledge_*` tools are
+ * registered, granted and named nowhere, kept only because an operator's override
+ * written before the intake may still name one — and a withdrawn tool name fails
+ * silently, the call coming back refused with nothing in the logs. This is the
+ * reading that makes the later withdrawal safe.
+ */
+function withOverride(id: string, body: string): PromptTemplates {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-prompts-'));
+  writeFileSync(join(dir, `${id}.md`), body);
+  return loadPromptTemplates(dir);
+}
+
+async function reading(prompts: PromptTemplates) {
+  return buildSetupReading({
+    config: config(),
+    store: buildSystem(config()).store,
+    probes: probes(),
+    configFile: '/nowhere/lubbdubb.config.json',
+    pending: [],
+    prompts,
+  });
+}
+
+test('an override that still names a tool the intake replaced says which, and what to say instead', async () => {
+  const found = await reading(
+    withOverride('pr-ci-fix', 'Fix the failing check. If you notice anything else, call report_finding.\n'),
+  );
+  const check = found.checks.find((c) => c.id === 'prompt-tools');
+  // `warn`, not `bad`: nothing is broken — the call still works. What is true is
+  // that this deployment is one withdrawal away from breaking.
+  assert.equal(check?.verdict, 'warn');
+  // Named rather than counted: the whole remedy is which file to open and which
+  // word to change in it, so a count would be a row nobody can act on.
+  assert.match(check?.detail ?? '', /pr-ci-fix\.md names report_finding/);
+  assert.match(check?.remedy ?? '', /raise/);
+  // The Prompts tab, not the values page — a fix that opens the wrong screen is
+  // worse than no fix.
+  assert.deepEqual(check?.fix, { kind: 'goto', label: 'Open Prompts', to: 'prompts' });
+});
+
+test('a deployment with no overrides draws no such check at all', async () => {
+  // Not an `ok` row about a thing it does not do. The built-ins name none of these
+  // by construction, so scanning them would be scanning the harness's own text for
+  // the harness's own mistake.
+  const none = await reading(defaultPromptTemplates());
+  assert.equal(
+    none.checks.find((c) => c.id === 'prompt-tools'),
+    undefined,
+  );
+
+  // An override that names none of them is the reading having been taken, which is
+  // the shape `credential` has when the variable is present — and it draws no row.
+  const clean = await reading(withOverride('pr-ci-fix', 'Fix the failing check. Raise anything you learn.\n'));
+  assert.equal(clean.checks.find((c) => c.id === 'prompt-tools')?.verdict, 'ok');
+});
+
+test('every superseded name is scanned for, not just the one that is remembered', async () => {
+  // The list is `src/mcp/names.ts`', which is also where the grants come from: two
+  // lists that merely agreed today would let a withdrawal reach the grants without
+  // reaching this row.
+  for (const tool of SUPERSEDED_TOOL_NAMES) {
+    const found = await reading(withOverride('pr-ci-fix', `Fix the check, then call ${tool}.\n`));
+    assert.match(found.checks.find((c) => c.id === 'prompt-tools')?.detail ?? '', new RegExp(tool));
   }
 });
