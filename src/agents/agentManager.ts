@@ -1076,11 +1076,26 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * agent about, and a list an agent could assert is a column reporting whatever
    * it remembered.
    *
-   * The lesson rides on the same call rather than on a second tool, exactly as
-   * `recordRetrospective`'s does and for its reason: there is no submission that
-   * proposed a lesson but recorded no remedy, and none that lost its lesson to a
-   * follow-up call the agent never got to make. It lands `proposed` and reaches
-   * no agent until an operator vouches.
+   * The claim rides on the same call rather than on a second tool, exactly as
+   * `recordRetrospective`'s lessons do and for their reason: there is no
+   * submission that raised a claim but recorded no remedy, and none that lost its
+   * claim to a follow-up call the agent never got to make.
+   *
+   * **The two are not folded together.** The remedy row is the *event* record of
+   * one return to a pull request, with its counts and its dollars
+   * (`docs/spec/18-observability.md`); the claim is a durable statement about
+   * working this repository. Folding an account of an event into a durable claim
+   * would lose the counts, so this writes both and neither stands in for the
+   * other — and the remedy lands whatever becomes of the claim, including when an
+   * operator has already rejected it.
+   *
+   * The claim goes through {@link fileFact}, which is the path `raise` uses: the
+   * observer is the credential's, so an agent hitting a wall two other agents have
+   * already documented is recorded as **agreeing with them** rather than filing a
+   * third copy of it. The goal it carries is `corroborationGoal`'s reading of this
+   * task's origin, which for a `pr:<n>:ci` or `pr:<n>:comments` dispatch is
+   * `pr:<n>` — the pull request the remedy was filed on, exactly as the lesson's
+   * `originRef` was, and resolved from the credential rather than asserted.
    *
    * Routed through the manager rather than straight to the store so the cockpit
    * repaints now rather than on the next pulse — {@link recordFinding}'s reason —
@@ -1090,8 +1105,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   recordRemedy(
     agentId: string,
     submission: RemedySubmission,
-  ): { ok: true; remedy: Remedy; lessonProposed: boolean } | { ok: false; error: string } {
-    return this.withCaller(agentId, ({ task }) => {
+  ): { ok: true; remedy: Remedy; raised: FactProposalOutcome | null } | { ok: false; error: string } {
+    return this.withCaller(agentId, (caller) => {
+      const { task } = caller;
       const scope = remedyOrigin(task.originRef);
       if (!scope.ok) return { ok: false, error: scope.error };
       const remedy = this.store.recordRemedy({
@@ -1105,18 +1121,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         agentId,
         taskId: task.id,
       });
-      // The pull request, not the dispatch origin: `pr:42` is what both lesson
-      // surfaces already render — the block writes "learned on pr:42" and the
-      // cockpit draws it as a link — and it is the truthful answer, since what
-      // taught this was the review or the red, not the goal above it. Resolving
-      // the goal instead would mean a second parser of the branch convention, and
-      // a lesson carrying the wrong goal is worse provenance than a narrower
-      // right one.
-      if (submission.lesson !== null) {
-        this.store.proposeLesson({ text: submission.lesson, originRef: `pr:${scope.prNumber}` });
-      }
+      const raised = submission.claim === null ? null : this.fileFact(caller, submission.claim);
       this.emit('remedy', { agentId, taskId: task.id, originRef: scope.originRef });
-      return { ok: true, remedy, lessonProposed: submission.lesson !== null };
+      return { ok: true, remedy, raised };
     });
   }
 
@@ -1140,31 +1147,47 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     agentId: string,
     proposal: FactProposal,
   ): { ok: true; outcome: FactProposalOutcome } | { ok: false; error: string } {
-    return this.withCaller(agentId, ({ agent, task }) => {
-      const outcome = this.store.proposeFact(proposal, {
-        agentId,
-        taskId: task.id,
-        goalRef: corroborationGoal(task.originRef),
-        sessionId: agent.sessionId,
-        // The agent's own words, never the claim restated: the count is what
-        // promotes a fact and this is what an operator reads to decide whether it
-        // should have.
-        words: proposal.evidence,
-      });
-      // A barred proposal wrote nothing, so there is nothing to repaint — and an
-      // event on it would put a claim an operator killed back in front of them as
-      // if it had just arrived.
-      if (outcome.outcome !== 'barred') {
-        this.emit('fact', {
-          agentId,
-          taskId: task.id,
-          fact: outcome.fact,
-          filed: outcome.outcome === 'filed',
-          corroborations: outcome.corroborations,
-        });
-      }
-      return { ok: true, outcome };
+    return this.withCaller(agentId, (caller) => ({ ok: true, outcome: this.fileFact(caller, proposal) }));
+  }
+
+  /**
+   * The one path a claim reaches the store by, whichever tool the agent was
+   * holding.
+   *
+   * Split out of {@link proposeFact} when `report_remedy` grew its own arm
+   * (`docs/spec/27-knowledge.md#the-remedy-arm`), because a second writer that
+   * assembled its own observer would be a second answer to *who said this* — and
+   * the count that carries a claim to `lookup` is a count of observers. The
+   * caller is already resolved, so the remedy path writes its row and raises its
+   * claim under one credential lookup rather than re-entering the tool seam.
+   *
+   * @public the fact-writing seam shared by `raise` and `report_remedy`
+   */
+  private fileFact(caller: { agent: Agent; task: Task }, proposal: FactProposal): FactProposalOutcome {
+    const { agent, task } = caller;
+    const outcome = this.store.proposeFact(proposal, {
+      agentId: agent.id,
+      taskId: task.id,
+      goalRef: corroborationGoal(task.originRef),
+      sessionId: agent.sessionId,
+      // The agent's own words, never the claim restated: the count is what
+      // promotes a fact and this is what an operator reads to decide whether it
+      // should have.
+      words: proposal.evidence,
     });
+    // A barred proposal wrote nothing, so there is nothing to repaint — and an
+    // event on it would put a claim an operator killed back in front of them as
+    // if it had just arrived.
+    if (outcome.outcome !== 'barred') {
+      this.emit('fact', {
+        agentId: agent.id,
+        taskId: task.id,
+        fact: outcome.fact,
+        filed: outcome.outcome === 'filed',
+        corroborations: outcome.corroborations,
+      });
+    }
+    return outcome;
   }
 
   /**

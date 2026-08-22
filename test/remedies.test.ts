@@ -8,7 +8,7 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import type { Remedy, RemedyInput } from '../src/types.js';
+import type { Agent, Remedy, RemedyInput } from '../src/types.js';
 import type { ReliabilityPayload } from '../src/wire.js';
 import { remedyAskNote, remedyOrigin, validateRemedy } from '../src/remedies/remedies.js';
 import { priorCiRemediesNote, priorReviewRemediesNote } from '../src/remedies/priorRemedies.js';
@@ -105,27 +105,51 @@ test('a cause the kind cannot have is refused with the list it can', () => {
   assert.equal(validateRemedy('review', { cause: 'defect', guard: 'documented', summary: 'x' }).ok, true);
 });
 
-test('a lesson is fenced to the one guard that means something is missing', () => {
+test('a claim is fenced to the one guard that means something is missing', () => {
   const ok = validateRemedy('ci', {
     cause: 'missed_gate',
     guard: 'undocumented',
-    summary: 'x',
-    lesson: 'The formatter must run before a push.',
+    summary: 'the formatter rewrote three files the push had not run it over.',
+    claim: 'The formatter must run before a push.',
   });
   assert.equal(ok.ok, true);
-  if (ok.ok) assert.equal(ok.submission.lesson, 'The formatter must run before a push.');
+  if (ok.ok) {
+    // Already a proposal rather than a string: the bounds and the refusals are the
+    // knowledge store's own, applied before anything is written.
+    assert.equal(ok.submission.claim?.claim, 'The formatter must run before a push.');
+    // The summary is the observation behind the claim — one answer, not two fields.
+    assert.equal(ok.submission.claim?.evidence, 'the formatter rewrote three files the push had not run it over.');
+    // Fleet, never a `check:`: matching is inside a scope, so scoping this to the
+    // check the remedy answers would put it where nothing else could corroborate it.
+    assert.equal(ok.submission.claim?.scope, 'fleet');
+    assert.equal(ok.submission.claim?.lifetime, 'standing');
+    // A claim is about the repository, not about the pull request it was learned
+    // on — that provenance is the credential's, and rides the corroboration.
+    assert.equal(ok.submission.claim?.aboutRef, null);
+  }
 
-  // Refused rather than dropped: a lesson reaches every later dispatch once an
-  // operator vouches, so the gate on what may become one has to be visible to the
-  // agent proposing it.
+  // Refused rather than dropped: a claim reaches every later dispatch once it is
+  // vouched for, so the gate on what may become one has to be visible to the agent
+  // raising it. A remedy under any other guard has already said the fleet knew.
   const refused = validateRemedy('ci', {
     cause: 'missed_gate',
     guard: 'documented',
     summary: 'x',
-    lesson: 'It is in CLAUDE.md.',
+    claim: 'It is in CLAUDE.md.',
   });
   assert.equal(refused.ok, false);
   if (!refused.ok) assert.match(refused.error, /undocumented/);
+
+  // The knowledge store's own bound, refused before the remedy row is written:
+  // the agent can shorten it and call again, where the same refusal afterwards
+  // would lose the claim to a submission that otherwise succeeded.
+  const tooLong = validateRemedy('ci', {
+    cause: 'missed_gate',
+    guard: 'undocumented',
+    summary: 'x',
+    claim: 'y'.repeat(2_001),
+  });
+  assert.equal(tooLong.ok, false);
 });
 
 test('a bare pair of enums is not a reading', () => {
@@ -251,6 +275,135 @@ test('a cause the fortnight never saw still draws, and the top check is named', 
   assert.deepEqual(gate?.topCheck, { name: 'format:check', accounts: 2 });
   // A review remedy has no checks, so it has no top check to name.
   assert.equal(insights.byKind.find((k) => k.kind === 'review')?.accounts, 0);
+});
+
+// -- the tool, and the claim it raises ----------------------------------------
+
+interface ToolResultText {
+  content: { type: 'text'; text: string }[];
+  isError?: boolean;
+}
+
+function spawnAgent(system: System, originRef: string): Agent {
+  const task = system.store.createTask({
+    kind: 'code',
+    title: `Work ${originRef}`,
+    prompt: 'do it',
+    branch: 'pr/12',
+    originRef,
+    originTitle: 'Big thing',
+  });
+  return system.agents.spawn(task, mkdtempSync(join(tmpdir(), 'lubbdubb-wt-')));
+}
+
+async function callTool(system: System, agent: Agent, name: string, args: Record<string, unknown>) {
+  const session = system.mcp.session(agent.id);
+  assert.ok(session, 'a spawned agent has a live MCP credential');
+  const result = (await session!.call(name, args)) as ToolResultText;
+  return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
+}
+
+const CLAIM = 'knip runs every rule at error, so an unimported export turns npm run check red.';
+
+test('a remedy under the undocumented guard raises a fact, not a lesson', async () => {
+  const system = build();
+  const agent = spawnAgent(system, 'pr:12:ci');
+  const res = await callTool(system, agent, 'report_remedy', {
+    cause: 'missed_gate',
+    guard: 'undocumented',
+    summary: 'check went red on an exported type nothing imports.',
+    claim: CLAIM,
+  });
+  assert.equal(res.isError, false);
+  const payload = JSON.parse(res.text) as {
+    raised: { recorded: string; id: string; reach: string; corroborations: number };
+    note: string;
+  };
+  // The claim is a fact now: the lessons store has no agent-facing writer left
+  // outside `retro_submit`, so the same sentence cannot reach two stores under two
+  // gates depending on which tool the agent was holding.
+  assert.equal(system.store.listLessons().length, 0);
+  const fact = system.store.getFact(payload.raised.id);
+  assert.equal(fact?.claim, CLAIM);
+  assert.equal(fact?.scope, 'fleet');
+  assert.equal(fact?.lifetime, 'standing');
+  // Reaches nobody on one agent's say-so — the gate is `raise`'s, unchanged.
+  assert.equal(fact?.reach, 'proposal');
+  // The pull request the remedy was filed on, resolved from the credential rather
+  // than asserted: `pr:12:ci` collapses to the goal `pr:12`.
+  assert.equal(fact?.originRef, 'pr:12');
+  // The summary is the observation an operator reads to decide whether it should
+  // have promoted.
+  assert.equal(
+    system.store.listCorroborations(fact!.id)[0]?.words,
+    'check went red on an exported type nothing imports.',
+  );
+  // The remedy is untouched by any of it: the event record keeps its counts.
+  assert.equal(system.store.listRemediesSince('2000-01-01T00:00:00.000Z').length, 1);
+  assert.match(payload.note, /raised/i);
+  system.store.close();
+});
+
+test('an agent hitting a wall another goal documented is told it agreed, not that it filed', async () => {
+  const system = build();
+  const first = spawnAgent(system, 'pr:12:ci');
+  await callTool(system, first, 'report_remedy', {
+    cause: 'missed_gate',
+    guard: 'undocumented',
+    summary: 'check went red on an exported type nothing imports.',
+    claim: CLAIM,
+  });
+  const second = spawnAgent(system, 'pr:44:comments');
+  const res = await callTool(system, second, 'report_remedy', {
+    cause: 'convention',
+    guard: 'undocumented',
+    summary: 'the reviewer pointed at the same rule.',
+    claim: CLAIM,
+  });
+  const payload = JSON.parse(res.text) as { raised: { recorded: string; corroborations: number }; note: string };
+  // The value this arm exists for: the second account of the same wall is
+  // agreement, which is what carries a claim out of one agent's head. Under the
+  // lessons store it was a second row nothing could read against the first.
+  assert.equal(payload.raised.recorded, 'corroborated');
+  assert.equal(payload.raised.corroborations, 2);
+  assert.equal(system.store.listFacts().length, 1);
+  // Two goals agreeing carries it exactly as far as `lookup` and no further.
+  assert.equal(system.store.listFacts()[0]?.reach, 'lookup');
+  // And two remedies, because two returns to two pull requests are two events.
+  assert.equal(system.store.listRemediesSince('2000-01-01T00:00:00.000Z').length, 2);
+  // Said in words as well as in the payload: filing and agreeing ask for opposite
+  // things next, and an agent that cannot tell them apart says it again, louder.
+  assert.match(payload.note, /agreeing/i);
+  system.store.close();
+});
+
+test('a rejected claim does not take the remedy down with it', async () => {
+  const system = build();
+  const first = spawnAgent(system, 'pr:12:ci');
+  await callTool(system, first, 'report_remedy', {
+    cause: 'missed_gate',
+    guard: 'undocumented',
+    summary: 'I assumed so.',
+    claim: CLAIM,
+  });
+  system.store.setFactReach(system.store.listFacts()[0]!.id, 'rejected');
+
+  const second = spawnAgent(system, 'pr:44:ci');
+  const res = await callTool(system, second, 'report_remedy', {
+    cause: 'missed_gate',
+    guard: 'undocumented',
+    summary: 'saw it again.',
+    claim: CLAIM,
+  });
+  assert.equal(res.isError, false);
+  const payload = JSON.parse(res.text) as { raised: { recorded: string }; note: string };
+  assert.equal(payload.raised.recorded, 'barred');
+  // The account of an event does not depend on what became of the claim — losing
+  // the remedy to an operator's ruling about a sentence would lose the counts the
+  // Yield panel is built on.
+  assert.equal(system.store.listRemediesSince('2000-01-01T00:00:00.000Z').length, 2);
+  assert.match(payload.note, /rejected/i);
+  system.store.close();
 });
 
 // -- the route ----------------------------------------------------------------

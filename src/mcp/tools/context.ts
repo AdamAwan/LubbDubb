@@ -111,7 +111,7 @@ export interface AgentToolTarget {
   recordRemedy(
     agentId: string,
     submission: RemedySubmission,
-  ): { ok: true; remedy: Remedy; lessonProposed: boolean } | { ok: false; error: string };
+  ): { ok: true; remedy: Remedy; raised: FactProposalOutcome | null } | { ok: false; error: string };
   proposeFact(
     agentId: string,
     proposal: FactProposal,

@@ -37,8 +37,16 @@
  * The guard is where the loop closes. `undocumented` is the one verdict that
  * names something the harness can act on — a fact about working this repository
  * that is written down nowhere — so it is the one verdict that may carry a
- * proposed lesson, and `src/knowledge/block.ts` puts a vouched-for claim in front of
- * every later dispatch. Everything else is a reading for a person.
+ * **claim**, raised through the same intake `raise` uses. Everything else is a
+ * reading for a person.
+ *
+ * The claim used to be a `lessons` row, which made this the last agent-facing
+ * writer to that store: the same sentence reached a different store, under a
+ * different gate and with no corroboration, depending on which tool the agent
+ * happened to be holding. It goes through {@link validateFactProposal} now, so an
+ * agent hitting a wall two other agents already documented is recorded as
+ * **agreeing with them** — which is the whole value it could not have while the
+ * two stores could not read each other. → `docs/spec/27-knowledge.md`
  *
  * ## Nothing gates on a remedy
  *
@@ -49,6 +57,7 @@
  * later dispatch's prompt.
  */
 
+import { validateFactProposal, type FactProposal } from '../knowledge/knowledge.js';
 import type { RemedyCause, RemedyGuard, RemedyKind } from '../types.js';
 
 /**
@@ -157,7 +166,7 @@ export function remedyOrigin(
       `report_remedy is only for an agent dispatched to answer a pull request's failing CI or its ` +
       `review threads, and this task's origin is ${originRef ?? '(none)'}. If you are finishing work on ` +
       `an issue, use conclude_work; if you are writing up a goal, use retro_submit; if you noticed ` +
-      `something that is not your task at all, use report_finding.`,
+      `something that is not your task at all, use raise.`,
   };
 }
 
@@ -192,21 +201,38 @@ export interface RemedySubmission {
   cause: RemedyCause;
   guard: RemedyGuard;
   summary: string;
-  /** The claim to propose as a lesson, or null. Only ever set under `undocumented`. */
-  lesson: string | null;
+  /**
+   * The claim to raise, or null. Only ever set under `undocumented`.
+   *
+   * Already a {@link FactProposal} rather than a string, because the bounds and
+   * the refusals belong **before** anything is written: an agent handed
+   * "claim must be 2,000 characters or fewer" can fix it and call again, where the
+   * same refusal after the remedy row had landed would be a claim lost to a
+   * submission that otherwise succeeded.
+   */
+  claim: FactProposal | null;
 }
 
 /**
  * What a submission is allowed to be.
  *
- * The **lesson is fenced to `undocumented`** and refused there rather than
- * dropped. A lesson reaches every later dispatch once an operator vouches for it,
- * so the gate on what may become one has to be visible to the agent proposing it
- * — silently discarding the claim teaches nothing and leaves the agent believing
- * it filed something. And the fence is the whole discriminator: `documented`
- * means the rule is already in the tree, so a lesson restating it is a second
- * copy of something that already has an owner, which is the drift the
+ * The **claim is fenced to `undocumented`** and refused there rather than
+ * dropped. A claim reaches every later dispatch once it is vouched for, so the
+ * gate on what may become one has to be visible to the agent raising it —
+ * silently discarding it teaches nothing and leaves the agent believing it filed
+ * something. And the fence is the whole discriminator: a remedy under any other
+ * guard has already said the fleet knew, so the fence is what stops "we fixed it"
+ * being filed as "the repository does not say this" — which is the drift the
  * repository's one documentation rule exists to stop.
+ *
+ * **The summary is the evidence and the claim is the claim**, which is why this
+ * asks for no field the tool did not already have. The summary is what the agent
+ * saw — the assertion, the file, the rule — and the claim is what it should have
+ * known; asking again for an observation the submission is already carrying would
+ * be a third field for one answer.
+ *
+ * The scope is `fleet`, never a `check:` — see
+ * `docs/spec/27-knowledge.md#the-remedy-arm`.
  */
 export function validateRemedy(
   kind: RemedyKind,
@@ -235,15 +261,26 @@ export function validateRemedy(
   if (summary.length > MAX_REMEDY_SUMMARY) {
     return { ok: false, error: `summary must be ${MAX_REMEDY_SUMMARY} characters or fewer` };
   }
-  const lessonRaw = typeof args.lesson === 'string' ? args.lesson.trim() : '';
-  if (lessonRaw.length > 0 && guard !== 'undocumented') {
+  const claimRaw = typeof args.claim === 'string' ? args.claim.trim() : '';
+  if (claimRaw.length > 0 && guard !== 'undocumented') {
     return {
       ok: false,
       error:
-        `a lesson only belongs on a remedy whose guard is "undocumented", and you said "${guard}" — ` +
-        `which means the answer was already available to you. Drop the lesson, or say the fact was ` +
+        `a claim only belongs on a remedy whose guard is "undocumented", and you said "${guard}" — ` +
+        `which means the answer was already available to you. Drop the claim, or say the fact was ` +
         `written down nowhere.`,
     };
+  }
+  let claim: FactProposal | null = null;
+  if (claimRaw.length > 0) {
+    // Through the one validator, never a second reading of what a claim may be:
+    // a sentence raised here and the same sentence raised through `raise` are one
+    // claim, and a bound written twice drifts in the direction of whichever
+    // writer is looser. `goal` is not on offer — the scope is decided below, not
+    // asked for — so it needs no goal to resolve one against.
+    const parsed = validateFactProposal({ claim: claimRaw, evidence: summary, scope: 'fleet' }, null);
+    if (!parsed.ok) return { ok: false, error: parsed.error };
+    claim = parsed.proposal;
   }
   return {
     ok: true,
@@ -251,7 +288,7 @@ export function validateRemedy(
       cause: cause as RemedyCause,
       guard: guard as RemedyGuard,
       summary,
-      lesson: lessonRaw.length > 0 ? lessonRaw : null,
+      claim,
     },
   };
 }
