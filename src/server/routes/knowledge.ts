@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { checkScopeDrift, checkSightings } from '../../knowledge/drift.js';
 import { committableFact, factDocsFields, graduationNote } from '../../knowledge/graduation.js';
 import { MAX_CLAIM_CHARS } from '../../knowledge/knowledge.js';
+import type { FactExit } from '../../types.js';
 import type { FactRuling, KnowledgeContradictionView, KnowledgeFactPayload } from '../../wire.js';
 import { checked, IdParams } from '../validation.js';
 import type { RouteContext } from './context.js';
@@ -164,7 +165,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
    * in review — because a claim taken out of every prompt the moment somebody
    * queues a docs job is a claim the fleet stops being told for a pull request that
    * may be closed unmerged, and then nobody is told it and nobody can read it. The
-   * reach moves to `committed` when `KnowledgeGraduationDesk` reads the pull
+   * reach moves to `graduated` when `KnowledgeGraduationDesk` reads the pull
    * request as merged, and never before.
    *
    * **Nothing auto-commits.** This is an operator's click and only an operator's,
@@ -177,7 +178,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   const CommitBody = z.discriminatedUnion('target', [
     // The ordinary answer, and the one that needs nothing said: `docs/README.md`
     // says which document owns what, and the agent reads it.
-    z.object({ target: z.literal('spec') }),
+    z.object({ exit: z.literal('docs').default('docs'), target: z.literal('spec') }),
     // The exception, priced like one. CLAUDE.md is loaded into every agent's
     // context on every dispatch and its length is asserted rather than intended, so
     // graduating there grows without bound the exact cost this design exists to
@@ -187,6 +188,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     // It is not ceremony: the sentence is appended to the agent's prompt, so
     // whoever writes the entry has the argument in the operator's words.
     z.object({
+      exit: z.literal('docs').default('docs'),
       target: z.literal('claudeMd'),
       bar: z
         .string()
@@ -230,11 +232,15 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // duplicate candidates are on `POST /api/findings/:id/file` — an override that
       // never learned about a new `{token}` drops it in silence, on precisely the
       // deployments that customised most.
+      // The exit this route opens, named where it is opened. `docs` is the only one
+      // it takes: a claim leaving for a job or a ticket is the same act through the
+      // same table, and it arrives through the route that carries all three.
+      const exit: FactExit = body;
       const prompt = [
         system.prompts.render('docs-change', vars),
-        graduationNote(fact, body, store.listCorroborations(fact.id)),
+        graduationNote(fact, exit, store.listCorroborations(fact.id)),
       ].join('\n\n');
-      const { job, graduation } = store.commitFact(fact, body, { title, prompt });
+      const { job, graduation } = store.exitFact(fact, exit, { title, prompt });
       hub.broadcast({ type: 'world:changed' });
       // Dispatched on this pulse rather than the next, `POST /api/findings/:id/promote`'s
       // shape: the operator clicked, and a queue that only moves on the heartbeat
@@ -247,7 +253,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   /**
    * Say what became of a graduation the harness cannot read for itself.
    *
-   * This is the `committed` verb the reach route deliberately does not carry, and
+   * This is the `graduated` verb the reach route deliberately does not carry, and
    * the objection that keeps it out of there does not apply here: the pull request
    * has already been opened, so saying it landed puts the claim in a place rather
    * than nowhere. Its opposite says the pull request is not happening, and leaves

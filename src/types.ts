@@ -1268,9 +1268,15 @@ export type FactLifetime = 'standing' | 'expiring';
  * - `injected` — in front of every agent, before it reads any code. **An operator,
  *   and only an operator**, moves a fact here; the one exception is a notice,
  *   whose blast radius is capped by its own clock.
- * - `committed` — in the repository. Out of every prompt: once a fact is in
- *   `docs/spec/` an agent reads it there, and keeping it injected pays context
- *   twice for one sentence.
+ * - `graduated` — somewhere else now, and **out of every prompt**. The claim left
+ *   this store for a medium that carries it better: the repository, where an agent
+ *   reads it from the tree; a job, where it is being acted on; a ticket, where it
+ *   waits its turn with everything else. One reach and not three, because what
+ *   they share is the whole of what a reach says — the claim is no longer
+ *   something the fleet is *told* — and which exit it took is a
+ *   {@link KnowledgeGraduation} row rather than a third value of this field,
+ *   since a claim may be sent somewhere twice and a column would overwrite the
+ *   attempt that failed.
  * - `superseded` — replaced. A sharper claim naming this one in `supersedes` was
  *   adopted by an operator, so this is out of every read while its row stays
  *   saying what it said. **Not `rejected`**: the claim was not judged untrue, and
@@ -1285,7 +1291,7 @@ export type FactReach =
   | 'proposal'
   | 'lookup'
   | 'injected'
-  | 'committed'
+  | 'graduated'
   | 'superseded'
   /**
    * Not carried any more, and **not judged untrue**.
@@ -1515,7 +1521,31 @@ export type ContradictionResolution = 'amended' | 'narrowed' | 'dismissed';
 export type ContradictionRuling = { resolution: 'amended' | 'dismissed' } | { resolution: 'narrowed'; claim: string };
 
 /**
- * Where a fact graduates to — the two places named in
+ * The three ways a claim leaves this store, and the whole of what "graduated"
+ * discriminates.
+ *
+ * They are one field because they are one act — *this claim is better somewhere
+ * else than in front of the fleet* — and three values because what "there" is
+ * decides who does the work and what landing looks like:
+ *
+ * - `docs` — a pull request against the worked repository's own documentation.
+ *   The claim ends up where an agent reads it from the tree.
+ * - `job` — an agent works it now. What a promoted `docs`-less finding always
+ *   was: the claim is a thing to do rather than a thing to be told.
+ * - `ticket` — an agent writes it up and files it in the tracker, so it waits its
+ *   turn in the backlog with everything else. The *defer* arm beside `job`'s
+ *   "work it now", and the one thing a job could never express, since a queued
+ *   job either runs or is cancelled.
+ *
+ * All three were separate implementations before the stores merged, and two of
+ * them were silent: a promoted finding was stamped `promoted` and never learned
+ * what became of the job, and a filed one carried a ticket ref with nothing
+ * watching whether the filing agent ever created it. One shape, one sweep.
+ */
+export type GraduationExit = 'docs' | 'job' | 'ticket';
+
+/**
+ * Which document a `docs` exit writes into — the two places named in
  * `docs/spec/27-knowledge.md#committing-to-the-repository`, and there is no third.
  *
  * `spec` leaves *which* document to the agent, because `docs/README.md` already
@@ -1525,30 +1555,39 @@ export type ContradictionRuling = { resolution: 'amended' | 'dismissed' } | { re
  * dispatch and **its length is asserted, not intended**, so graduating there grows
  * without bound the exact cost this whole design exists to cap. The operator says
  * why it meets that file's bar in their own words, and the shape of
- * {@link FactCommitment} is what makes that unskippable.
+ * {@link FactExit} is what makes that unskippable.
+ *
+ * Null on any exit that is not `docs`: a job and a ticket have no document, and a
+ * defaulted `spec` there would be a target nothing reads wearing a name that says
+ * an agent will write into it.
  */
 export type GraduationTarget = 'spec' | 'claudeMd';
 
 /**
- * The operator's decision to commit a claim: where it goes, and — for the one
- * target that needs it — the argument that it belongs there.
+ * The operator's decision to send a claim somewhere: which exit, where within it,
+ * and — for the one target that needs it — the argument that it belongs there.
  *
- * A discriminated union rather than an optional `bar` beside a free target, for
+ * A discriminated union rather than optional fields beside free ones, for
  * {@link ContradictionRuling}'s reason exactly: a CLAUDE.md graduation with no
  * statement of what breaks silently without the claim is the one shape of this
  * decision that would silently do the expensive thing. The sentence is not
  * ceremony — it is appended to the agent's prompt, so whoever writes the entry has
  * the argument in the operator's words rather than having to invent one.
  */
-export type FactCommitment = { target: 'spec' } | { target: 'claudeMd'; bar: string };
+export type FactExit =
+  | { exit: 'docs'; target: 'spec' }
+  | { exit: 'docs'; target: 'claudeMd'; bar: string }
+  | { exit: 'job' }
+  | { exit: 'ticket' };
 
 /**
  * What became of a graduation. Null on the row means it is still going.
  *
- * `abandoned` is not a failure state to be tidied away: a documentation pull
- * request closed unmerged means **nobody committed the claim**, so the fact stays
- * exactly where it was and goes on being delivered. The row stays too, because an
- * operator deciding whether to try again needs to know one was tried.
+ * `abandoned` is not a failure state to be tidied away: a pull request closed
+ * unmerged, or a job cancelled before it opened one, means **nobody took the
+ * claim anywhere**, so the fact stays exactly where it was and goes on being
+ * delivered. The row stays too, because an operator deciding whether to try again
+ * needs to know one was tried.
  */
 export type GraduationOutcome = 'landed' | 'abandoned';
 
@@ -1565,31 +1604,49 @@ export type GraduationOutcome = 'landed' | 'abandoned';
 export type GraduationReading = 'waiting' | 'unknown' | GraduationOutcome;
 
 /**
- * One attempt to put a claim in the repository: the docs job an operator opened
- * for it, where they said it belongs, and where it got to.
+ * One attempt to put a claim somewhere other than in front of the fleet: the job
+ * an operator opened for it, which exit it took, and where it got to.
  *
- * **Its own table rather than columns on `knowledge_facts`.** A pull request
- * closed unmerged leaves the claim exactly where it was and an operator free to
- * try again, so a fact can have more than one of these over its life — and columns
- * would overwrite the record of the attempt that failed, which is precisely what
- * the operator deciding whether to try again needs to read.
+ * **Its own table rather than columns on `knowledge_facts`.** An attempt that
+ * does not land — a pull request closed unmerged, a job cancelled — leaves the
+ * claim exactly where it was and an operator free to try again, so a fact can have
+ * more than one of these over its life, and columns would overwrite the record of
+ * the attempt that failed, which is precisely what the operator deciding whether
+ * to try again needs to read.
  *
- * It is deliberately **not** a reach. The claim is still true and still being
- * delivered while its pull request sits in review: a reach that took it out of
- * every prompt at the click would stop the fleet being told a claim that nobody
- * has committed and that nobody can read yet — and if that pull request is closed
- * unmerged, would stop telling them forever, with nothing red.
+ * It is deliberately **not** a reach, and this is the same argument the reach
+ * machine makes about `graduated` being one value rather than three: reach says
+ * how far a claim carries, and a claim being written up carries exactly as far as
+ * it did yesterday. A reach that moved at the click would stop the fleet being
+ * told a claim that nobody has committed and that nobody can read yet — and if
+ * the attempt is abandoned, would stop telling them forever, with nothing red.
  */
 export interface KnowledgeGraduation {
   id: string;
   factId: string;
-  /** The documentation job the operator opened. Its branch is how the pull request is found. */
+  exit: GraduationExit;
+  /**
+   * The job the operator opened. Its branch is how a pull request is found, and
+   * its origin is how `link_ticket` finds the graduation back from a filing
+   * agent's credential.
+   */
   jobId: string;
-  target: GraduationTarget;
-  /** The operator's statement of what breaks silently without the claim. Null for a `spec` graduation. */
+  /** Which document a `docs` exit writes into. Null on a `job` or a `ticket`. */
+  target: GraduationTarget | null;
+  /** The operator's statement of what breaks silently without the claim. Null for anything but `claudeMd`. */
   bar: string | null;
   /** The pull request the job produced (`pr:41`), stamped when the work graph first shows one. */
   prRef: string | null;
+  /**
+   * The tracker item a `ticket` exit created (`issue:314`), reported back by the
+   * filing agent through `link_ticket`. Null until then, and on every other exit.
+   *
+   * Its own field beside {@link prRef} rather than one neutral "what it became":
+   * a pull request and a tracker item are two different world objects, drawn as
+   * two different references, and one column would have to be read with the exit
+   * in hand to know which it was holding.
+   */
+  ticketRef: string | null;
   /** `landed` or `abandoned`, or null while it is still going. */
   outcome: GraduationOutcome | null;
   settledAt: string | null;

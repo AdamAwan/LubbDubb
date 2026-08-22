@@ -258,7 +258,7 @@ CREATE TABLE IF NOT EXISTS knowledge_facts (
   scope      TEXT NOT NULL,        -- fleet | check:<name> | goal:<ref>
   lifetime   TEXT NOT NULL,        -- standing | expiring
   expires_at TEXT,                 -- when an expiring fact lapses; null for a standing one
-  reach      TEXT NOT NULL,        -- proposal | lookup | injected | committed | rejected
+  reach      TEXT NOT NULL,        -- proposal | lookup | injected | graduated | superseded | retired | rejected
   supersedes TEXT,                 -- the fact this amends; exempts it from that fact's rejection bar
   origin_ref TEXT,                 -- the goal it was first observed on, or null for an operator's own
   ruled_at   TEXT,                 -- when an operator last moved it; null means nobody has ruled on it yet
@@ -340,28 +340,32 @@ CREATE TABLE IF NOT EXISTS knowledge_asks (
   created_at TEXT NOT NULL
 );
 
--- One attempt to put a claim in the repository: the documentation job an operator
--- opened for it, where they said it belongs, and where it got to.
+-- One attempt to put a claim somewhere other than in front of the fleet: the job
+-- an operator opened for it, which exit it took, and where it got to. Three exits,
+-- one shape: a documentation pull request, a job that works the claim now, or a
+-- ticket that files it for later.
 --
 -- Its own table rather than columns on knowledge_facts, because a fact can have
--- more than one of these. A pull request closed unmerged leaves the claim exactly
+-- more than one of these. An attempt that does not land leaves the claim exactly
 -- where it was and the operator free to try again, and columns would overwrite the
 -- record of the attempt that failed — which is the one thing somebody deciding
 -- whether to try again needs to read.
 --
 -- Deliberately not a reach. The claim is still true and still delivered while its
 -- pull request sits in review; a reach that took it out of every prompt at the
--- click would stop the fleet being told something nobody has committed and nobody
--- can yet read, and — if the pull request never merged — would stop telling them
--- forever with nothing red. The reach moves to committed only when the sweep
--- reads the pull request as merged.
+-- click would stop the fleet being told something nobody has acted on and nobody
+-- can yet read, and — if the attempt never landed — would stop telling them
+-- forever with nothing red. The reach moves to graduated only when the sweep, or
+-- the filing agent, says the exit was actually taken.
 CREATE TABLE IF NOT EXISTS knowledge_graduations (
   id         TEXT PRIMARY KEY,
   fact_id    TEXT NOT NULL,
-  job_id     TEXT NOT NULL,        -- the docs job; its branch is how the pull request is found
-  target     TEXT NOT NULL,        -- spec | claudeMd
-  bar        TEXT,                 -- the operator's reason it meets CLAUDE.md's bar; null for a spec graduation
+  exit       TEXT NOT NULL,        -- docs | job | ticket; which way the claim left
+  job_id     TEXT NOT NULL,        -- the job; its branch finds the PR, its origin finds this row back
+  target     TEXT,                 -- spec | claudeMd for a docs exit; null on a job or a ticket
+  bar        TEXT,                 -- the operator's reason it meets CLAUDE.md's bar; null otherwise
   pr_ref     TEXT,                 -- pr:<n>, stamped when the work graph first shows one
+  ticket_ref TEXT,                 -- issue:<n>, reported by a filing agent through link_ticket
   outcome    TEXT,                 -- landed | abandoned; null while it is still going
   settled_at TEXT,
   created_at TEXT NOT NULL

@@ -1,5 +1,5 @@
 import type {
-  FactCommitment,
+  FactExit,
   GraduationReading,
   KnowledgeCorroboration,
   KnowledgeFact,
@@ -26,6 +26,14 @@ import type {
 
 /** How long the job's title may be before it stops being a title. `findingDocsFields`' bound. */
 const MAX_TITLE = 80;
+
+/**
+ * The `docs` arm of {@link FactExit}, narrowed out of the union rather than
+ * written again — this module composes the prompt for a documentation pull
+ * request and nothing else, and a second spelling of the arm would be free to
+ * drift from the one the route validates.
+ */
+type DocsExit = Extract<FactExit, { exit: 'docs' }>;
 
 /**
  * How many of a claim's observations ride the prompt.
@@ -61,7 +69,7 @@ const MAX_OBSERVATION_CHARS = 1_000;
  *   of prompts it is no longer in while the document went on saying it.
  *
  * The terminal reaches are refused because there is nothing left to commit:
- * `committed` is already there, and `rejected`, `superseded` and `retired` reach
+ * `graduated` has already left, and `rejected`, `superseded` and `retired` reach
  * nobody. `retired` is refused for the weakest of the reasons and still refused:
  * it was not judged untrue, but an operator has just said the fleet does not need
  * carrying it — writing it into the repository in the same breath would commit a
@@ -76,7 +84,7 @@ export function committableFact(fact: KnowledgeFact): { ok: true } | { ok: false
         'would commit a claim no one has vouched for. Rule on it first: “Put on lookup” costs nothing.',
     };
   }
-  if (fact.reach === 'committed') return { ok: false, error: 'this claim is in the repository already' };
+  if (fact.reach === 'graduated') return { ok: false, error: 'this claim has already left for somewhere else' };
   if (fact.reach === 'rejected' || fact.reach === 'superseded' || fact.reach === 'retired') {
     return { ok: false, error: `this claim is ${fact.reach} — it reaches nobody, and there is nothing to commit` };
   }
@@ -145,7 +153,7 @@ export function factDocsFields(fact: KnowledgeFact): { title: string; vars: Reco
  */
 export function graduationNote(
   fact: KnowledgeFact,
-  commitment: FactCommitment,
+  commitment: DocsExit,
   observations: readonly KnowledgeCorroboration[],
 ): string {
   const seen = observations.slice(0, MAX_OBSERVATIONS).map((row) => {

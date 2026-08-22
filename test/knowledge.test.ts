@@ -910,7 +910,7 @@ test('the page draws every reach, the rejected tail included', async () => {
     'Injected',
     'On lookup',
     'One voice',
-    'Committed to the repository',
+    'Gone somewhere better',
     'Superseded',
     'Rejected',
   ]) {
@@ -944,8 +944,8 @@ test('the page draws every reach, the rejected tail included', async () => {
   // Where a claim went, and where one is going: both drawn as references rather
   // than as text, because a row that names a pull request and offers no way there
   // is a dead end that reads correctly (#27 phase 6).
-  assert.ok(html.includes('committed to the document that owns it'), 'a committed row does not say where it went');
-  assert.ok(html.includes('/pull/409'), 'a committed row does not link to the pull request that put it there');
+  assert.ok(html.includes('committed to the document that owns it'), 'a graduated row does not say where it went');
+  assert.ok(html.includes('/pull/409'), 'a graduated row does not link to the pull request that put it there');
   assert.ok(html.includes('/pull/411'), 'a graduating row does not link to its open pull request');
   // And the claim being written up is still on lookup, still delivered: nothing
   // moved when the operator clicked.

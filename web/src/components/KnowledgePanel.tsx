@@ -236,9 +236,9 @@ export function KnowledgePanel({
         {...shared}
       />
       <KnowledgeSection
-        title="Committed to the repository"
-        blurb="In the repository now, and out of every prompt: an agent reads these from the tree, and keeping them injected would pay context twice for one sentence. Each row carries the pull request that put it there — a claim only reaches this section when that pull request actually merged, never when the work was queued. This list growing while Injected shrinks is the number worth watching."
-        facts={section('committed')}
+        title="Gone somewhere better"
+        blurb="Out of every prompt, because somewhere else carries these better than a line in front of the fleet does: the repository's own documentation, where an agent reads it from the tree; a job, where somebody is acting on it; a ticket, where it waits its turn. Each row names which, and links to it. A claim only reaches this section when the exit was actually taken — never when the work was queued. This list growing while Injected shrinks is the number worth watching."
+        facts={section('graduated')}
         {...shared}
       />
       <KnowledgeSection
@@ -489,7 +489,7 @@ function FactCard({
   // the address bar draws (`docs/spec/17-cockpit.md#the-address-bar`).
   const [committing, setCommitting] = useState(false);
   const settled =
-    fact.reach === 'rejected' || fact.reach === 'committed' || fact.reach === 'superseded' || fact.reach === 'retired';
+    fact.reach === 'rejected' || fact.reach === 'graduated' || fact.reach === 'superseded' || fact.reach === 'retired';
   return (
     <div className={`kn-card${settled ? ' resolved' : ''}`}>
       {/* Markdown, and handed the ref map so a goal named inside the claim is
@@ -817,7 +817,10 @@ function FactCommitForm({
           className="primary"
           disabled={target === 'claudeMd' && bar.trim() === ''}
           onClick={async () => {
-            await onCommit(fact.id, target === 'claudeMd' ? { target, bar: bar.trim() } : { target });
+            await onCommit(
+              fact.id,
+              target === 'claudeMd' ? { exit: 'docs', target, bar: bar.trim() } : { exit: 'docs', target },
+            );
             onDone();
           }}
           title="Queue the documentation job. Nothing leaves any prompt until its pull request merges"
@@ -872,7 +875,7 @@ function FactRulings({
   // Nothing to say about a claim that is settled. `superseded` is terminal for a
   // second reason: a sharper version of it is standing, and bringing this one back
   // would put the two in one block saying different things.
-  if (fact.reach === 'rejected' || fact.reach === 'committed' || fact.reach === 'superseded') return null;
+  if (fact.reach === 'rejected' || fact.reach === 'graduated' || fact.reach === 'superseded') return null;
   // A retired claim is the one non-live reach that offers anything, because
   // retiring is a prune and not a bar: it was never judged untrue, so bringing it
   // back is an ordinary ruling rather than an appeal.

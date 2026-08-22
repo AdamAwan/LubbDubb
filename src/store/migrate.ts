@@ -106,3 +106,53 @@ export function ensureColumns(db: Database.Database, migrations: ColumnMigration
   }
   return added;
 }
+
+/**
+ * Run a migration **exactly once per database**, whatever else happens to the
+ * schema — and never again on any boot after it.
+ *
+ * The pattern is `pet_resets`' (`docs/spec/22-pets.md#clearing-the-vivarium`)
+ * lifted out of pets, because the hazard is not pets'. A one-shot that runs on
+ * every boot and a one-shot that never runs fail in exactly opposite directions
+ * and **both are silent**: the first re-creates rows an operator has since ruled
+ * on, and the second loses the whole of what it was meant to carry on the boot
+ * the operator takes the build. Neither errors and no test at rest can see
+ * either, so the gate is a row keyed by the migration's own name.
+ *
+ * **Keyed by name, never by "has any migration run".** A build that asked the
+ * latter could only ever ship one, and the second would find the answer already
+ * yes. Which is the other half of the rule: an id here is **never edited in
+ * place**. Renaming one does not rename a migration, it declares a *second* one —
+ * so every database that already ran the first runs it again, on the boot after
+ * the build lands, with nothing red. A further pass is a further id, added
+ * deliberately.
+ *
+ * `run` returns how many rows it touched, kept only for the record: it is what
+ * separates "this ran and there was nothing to do" from "this ran and moved a
+ * thousand rows", which is the first thing anybody asks of a fold that went
+ * wrong. Both are stamped, because the gate is about the run and not the rows.
+ *
+ * One transaction around the check, the work and the stamp, so a crash halfway
+ * leaves the database exactly as it was rather than half folded and unstamped.
+ *
+ * `at` is the store's own clock rather than a wall-clock read here, for the reason
+ * every other timestamp under `src/store/` is: a fixed clock is what lets a test
+ * assert on when a fold ran.
+ *
+ * → `docs/spec/14-persistence.md#a-migration-that-must-run-once`
+ */
+export function runOnce(db: Database.Database, id: string, at: string, run: () => number): void {
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS store_migrations (
+       id   TEXT PRIMARY KEY,
+       at   TEXT NOT NULL,
+       rows INTEGER NOT NULL
+     )`,
+  );
+  db.transaction(() => {
+    const done = db.prepare(`SELECT id FROM store_migrations WHERE id=?`).get(id);
+    if (done) return;
+    const rows = run();
+    db.prepare(`INSERT INTO store_migrations (id, at, rows) VALUES (?, ?, ?)`).run(id, at, rows);
+  })();
+}

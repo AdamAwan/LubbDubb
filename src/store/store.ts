@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { SCHEMA } from './schema.js';
 import { systemClock, type Clock, type StoreContext } from './context.js';
-import { ensureColumns, rebuildTables } from './migrate.js';
+import { ensureColumns, rebuildTables, runOnce } from './migrate.js';
 import { backfillTaskDispatchKind, TaskStore, TASK_COLUMNS } from './tasks.js';
 import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
@@ -11,9 +11,12 @@ import { PriorityStore } from './priority.js';
 import { ProfileOverrideStore } from './profileOverrides.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { LessonStore } from './lessons.js';
+import { corroborationGoal } from '../knowledge/knowledge.js';
 import {
+  adoptedFactId,
   KnowledgeStore,
   KNOWLEDGE_COLUMNS,
+  stampGraduationsBeforeExits,
   type ContradictionOutcome,
   type FactContradictionOutcome,
   type FactCounts,
@@ -72,7 +75,7 @@ import type {
   ErrorLogInput,
   Escalation,
   EscalationSpan,
-  FactCommitment,
+  FactExit,
   FactReach,
   Finding,
   FindingInput,
@@ -246,6 +249,13 @@ export class Store {
     // pet from before the shell existed is stamped as already opened, once. Run on
     // every boot instead, it would open the eggs an operator was saving.
     if (addedColumns.includes('pets.opened_at')) openPetsFromBeforeEggs(this.db);
+    // The second of the two, and the same shape: a graduation's `exit` is null on
+    // every row written before there were three of them, and null there is a value
+    // nothing recognises rather than a value that happens to be absent. Every one
+    // of those rows was a documentation pull request, which is what it is stamped.
+    // Run on every boot instead, it would rewrite the exit of every job and ticket
+    // graduation written since.
+    if (addedColumns.includes('knowledge_graduations.exit')) stampGraduationsBeforeExits(this.db);
     // The migrations that are not columns, here for the same reason the pass above
     // is — before any module is constructed, let alone reads. #203's
     // `floor_completions` becomes #234's `issue_runs`, carrying the operator's
@@ -268,6 +278,11 @@ export class Store {
     // discarded for the desk to re-derive; see the function for why those are
     // opposite answers.
     repairPartRefGoals(this.db);
+    // Every claim an agent ever filed and every lesson an operator ever wrote,
+    // carried into the one store that now holds all three — once per database, and
+    // gated on a name because both ways of getting that wrong are silent. See
+    // `foldClaimStores`.
+    foldClaimStores(this.db, clock());
     const ctx: StoreContext = { db: this.db, now: clock };
     this.tasksStore = new TaskStore(ctx);
     this.jobs = new JobStore(ctx);
@@ -551,36 +566,48 @@ export class Store {
   }
 
   /**
-   * Open the documentation work for a claim, and record that it was opened —
+   * Open the work that takes a claim somewhere, and record that it was opened —
    * **one transaction over two modules**.
    *
    * Here rather than in either of them because it is a cross-domain write and this
-   * is the caller that holds both, exactly as `adoptLessons` is: `jobs.ts` owns the
-   * queue and `knowledge.ts` owns the facts, and a store module reaching a
-   * sibling's tables is what `test/storeModules.test.ts` refuses.
+   * is the caller that holds both: `jobs.ts` owns the queue and `knowledge.ts` owns
+   * the facts, and a store module reaching a sibling's tables is what
+   * `test/storeModules.test.ts` refuses.
    *
    * One transaction because both half-landings are silent. A job with no
-   * graduation naming it is a documentation pull request that lands and takes
-   * nothing out of any prompt — the fleet goes on paying for a sentence the
-   * repository now states. A graduation naming no job is a claim the page shows as
-   * on its way to a repository nothing is writing it into.
+   * graduation naming it is work that lands and takes nothing out of any prompt —
+   * the fleet goes on paying for a sentence somebody else is already carrying. A
+   * graduation naming no job is a claim the page shows as on its way somewhere
+   * nothing is taking it.
    *
-   * The job carries **no origin**. `originRef` names the work a job stands in for,
-   * and the graph adopts a job by it — so attributing this one to the goal the
-   * claim was first seen on would file a documentation pull request under
-   * somebody else's issue, which is the mistake `src/mcp/findings.ts` names when it
-   * passes a finding's `ref` and never its `originRef`. A claim about the
-   * repository stands in for no tracked work, and a job with no origin stands in
-   * for nothing — which is exactly true here.
+   * **One method for all three exits, and that is the whole of this change.** A
+   * documentation pull request and a promoted finding were two implementations of
+   * one act, and the weaker one was silent: it stamped a status and never learned
+   * what became of the job. Now both write the same row, and the same sweep reads
+   * it.
+   *
+   * The job carries **`originRef: fact.aboutRef`** — the world item the claim is
+   * *about*, and never the goal it was first observed on. The graph adopts a job by
+   * its origin, so attributing this one to the observer's goal would file the work
+   * under somebody else's issue, which is the defect `findingJobRequest` already
+   * refused by carrying a finding's `ref` rather than its `originRef`. A claim
+   * about nothing tracked has a null `aboutRef`, and a job with no origin stands in
+   * for nothing — which is exactly true of it.
    */
-  commitFact(fact: KnowledgeFact, commitment: FactCommitment, work: { title: string; prompt: string }): FactCommitted {
-    const write = this.db.transaction((): FactCommitted => {
-      // Code and not desk: writing a documentation change and opening a pull
-      // request for it means files in a tree, so it wants a worktree and a branch —
-      // the same reason `POST /api/findings/:id/promote` defaults a `docs`
-      // promotion to a code job.
-      const job = this.jobs.createJob({ title: work.title, prompt: work.prompt, kind: 'code', originRef: null });
-      return { job, graduation: this.knowledge.recordGraduation(fact.id, job.id, commitment) };
+  exitFact(fact: KnowledgeFact, exit: FactExit, work: { title: string; prompt: string }): FactExited {
+    const write = this.db.transaction((): FactExited => {
+      const job = this.jobs.createJob({
+        title: work.title,
+        prompt: work.prompt,
+        // A `ticket` exit touches no repository — the agent writes a title and a
+        // body and hands them to `link_ticket` — so cutting a worktree and a
+        // branch for it would be pure cost. The other two write files in a tree:
+        // a documentation change has to be pushed to open a pull request from, and
+        // a job is the work itself.
+        kind: exit.exit === 'ticket' ? 'desk' : 'code',
+        originRef: fact.aboutRef,
+      });
+      return { job, graduation: this.knowledge.recordGraduation(fact.id, job.id, exit) };
     });
     return write();
   }
@@ -1366,14 +1393,324 @@ export class Store {
 }
 
 /**
- * What committing a claim produced: the documentation job an agent will work, and
- * the row that links the two.
+ * What sending a claim out produced: the job an agent will work, and the row that
+ * links the two.
  *
  * Both, because the caller needs both — the route hands the job back so the
  * cockpit can watch it in Up next, and the graduation is what the page draws the
- * pull request from once there is one.
+ * pull request or the ticket from once there is one.
  */
-interface FactCommitted {
+interface FactExited {
   job: Job;
   graduation: KnowledgeGraduation;
+}
+
+/**
+ * The name of the one-shot that folds `findings` and `lessons` into
+ * `knowledge_facts`, and **never edited in place**.
+ *
+ * `VIVARIUM_RESET`'s rule, pointed the other way (CLAUDE.md, "Persistence"). That
+ * constant names one clearance, so renaming it declares a *second* clearance that
+ * runs on every database that already had the first. This names one fold, and
+ * renaming it would re-fold every claim an operator has since ruled on — the
+ * dismissed ones back as proposals, the promoted ones beside themselves — on the
+ * boot after the build lands, with nothing red. A further pass is a further id.
+ */
+const KNOWLEDGE_FOLD = 'findings-and-lessons-into-knowledge-facts';
+
+/**
+ * Carry every `findings` and `lessons` row across into `knowledge_facts`, **once
+ * per database**.
+ *
+ * ## Why it is gated on a name and not on a count
+ *
+ * The two failures are exact opposites and **both are silent**. A fold that runs
+ * on every boot re-creates the rows an operator has since ruled on: a claim they
+ * dismissed comes back as a proposal, a claim they retired comes back beside its
+ * own retirement, and the page fills from underneath with decisions that were
+ * already made. A fold that never runs loses every claim the deployment holds, on
+ * the boot the operator takes the build — and a knowledge page that is simply
+ * empty looks exactly like a deployment nobody has raised anything on yet.
+ * Neither errors. So the gate is {@link runOnce} on a named id.
+ *
+ * It also cannot be gated on "did `ensureColumns` add a column", which is the
+ * other one-shot gate this file uses. That test is true on exactly the boot a
+ * column arrives, and this fold has no column of its own to arrive with: the
+ * columns it writes into (`about_ref`, `where_at`) landed with the unified intake,
+ * one release before the stores merged.
+ *
+ * ## Here rather than in a domain module
+ *
+ * It reads two domains' tables and writes a third's, which is the cross-domain
+ * join `test/storeModules.test.ts` refuses inside a module and CLAUDE.md sends to
+ * the composition root. This is that root.
+ *
+ * ## What it does not do
+ *
+ * **It copies, and deletes nothing.** The `findings` and `lessons` rows stay
+ * exactly where they are, unread. A fold that got a row wrong is recoverable
+ * while its source is still on disk and is not once the source is dropped, and
+ * two dozen kilobytes of dead rows is a cheap price for that.
+ */
+function foldClaimStores(db: Database.Database, at: string): void {
+  runOnce(db, KNOWLEDGE_FOLD, at, () => foldFindings(db) + foldLessons(db));
+}
+
+/**
+ * Every finding becomes a fact, its evidence becomes the corroboration behind it,
+ * and what an operator did about it becomes a graduation.
+ *
+ * ## The kind does not become a column
+ *
+ * `FindingKind` was a prediction of **what an operator would do** — close a
+ * duplicate, unblock the work, decide whether it becomes a job, open a docs pull
+ * request — which is the operator's knowledge and not the reporting agent's. The
+ * unified intake removed that question from the agent (`raise` takes no kind), so
+ * nothing writes one any more, and a column only a migration ever fills is a
+ * column that means *this row predates the intake* wearing a name that says
+ * otherwise. The other reading — that it survives as an **operator-set label** —
+ * is a real one and is argued in `docs/spec/27-knowledge.md`; what settles it here
+ * is that no operator has ever set one, so a fold that made the column would be
+ * inventing a labelling nobody did.
+ *
+ * The word is not lost. It goes into the corroboration's **words**, which is where
+ * everything else about how an observation arrived already lives, and where an
+ * operator reads it beside the evidence rather than as a chip claiming a taxonomy
+ * the harness no longer keeps.
+ *
+ * ## A pre-split row keeps its blob
+ *
+ * A finding filed before `summary`/`where`/`detail` were three fields holds a
+ * whole report in `summary` and null in the other two. It becomes a fact whose
+ * claim is that whole report, **unsplit**: no content migration guesses at where
+ * the seams were, which is the stance `docs/spec/13-jobs-and-findings.md` took the
+ * day the fields were split and which is if anything stronger here, since a claim
+ * is matched against other claims by its text. The card clamps it, so an old row
+ * reads as a slightly tall card rather than as a lie about its own structure.
+ *
+ * ## `SELECT *`, deliberately
+ *
+ * `where_at`, `detail` and `ticket_ref` are `ALTER TABLE` columns, so a database
+ * old enough may not have them at all. Naming them in the `SELECT` would throw on
+ * exactly the databases this exists for; `SELECT *` binds by name in the reader
+ * below and reads a missing column as absent, which is what it is. (The warning
+ * against `SELECT *` in `migrate.ts` is about a *copy* that binds by position —
+ * a different hazard, and not this one.)
+ */
+function foldFindings(db: Database.Database): number {
+  if (!hasTable(db, 'findings')) return 0;
+  const rows = db.prepare(`SELECT * FROM findings ORDER BY created_at ASC, rowid ASC`).all() as FoldedFinding[];
+  const fact = db.prepare(
+    `INSERT OR IGNORE INTO knowledge_facts
+       (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, resolves_when,
+        about_ref, where_at, created_at, updated_at)
+     VALUES (?, ?, 'fleet', 'standing', NULL, ?, NULL, ?, ?, NULL, ?, ?, ?, ?)`,
+  );
+  const voice = db.prepare(
+    `INSERT OR IGNORE INTO knowledge_corroborations
+       (id, fact_id, agent_id, task_id, goal_ref, session_id, words, created_at)
+     VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`,
+  );
+  const exit = db.prepare(
+    `INSERT OR IGNORE INTO knowledge_graduations
+       (id, fact_id, exit, job_id, target, bar, pr_ref, ticket_ref, outcome, settled_at, created_at)
+     VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)`,
+  );
+  for (const row of rows) {
+    const id = foldedFactId(row.id);
+    const ruled = row.status === 'open' ? null : row.updated_at;
+    fact.run(
+      id,
+      row.summary,
+      findingReach(row.status),
+      row.origin_ref,
+      ruled,
+      row.ref,
+      row.where_at ?? null,
+      row.created_at,
+      row.updated_at,
+    );
+    voice.run(
+      `knc_${row.id}`,
+      id,
+      row.agent_id,
+      row.task_id,
+      corroborationGoal(row.origin_ref),
+      findingWords(row),
+      row.created_at,
+    );
+    // The exit an operator already chose, as the row that now records one. A
+    // `promoted` or `filing` finding gets an **open** graduation, which is the
+    // whole point of the merge: the finding stores stamped a status and never
+    // learned what became of the job, and an open row is what the sweep reads.
+    //
+    // No job means no graduation, and the pair cannot arise — `resolveFinding`
+    // took the job's id on every arm that left `open`. If one somehow exists, the
+    // fact still takes the reach the operator's verdict earned it, and there is
+    // simply nothing to draw beside it.
+    const kind = findingExit(row.status);
+    if (kind !== null && row.job_id !== null) {
+      const landed = row.status === 'filed';
+      exit.run(
+        `kng_${row.id}`,
+        id,
+        kind,
+        row.job_id,
+        row.ticket_ref ?? null,
+        landed ? 'landed' : null,
+        landed ? row.updated_at : null,
+        row.updated_at,
+      );
+    }
+  }
+  return rows.length;
+}
+
+/**
+ * Every lesson becomes a fact — and the promoted ones **already are one**.
+ *
+ * `KnowledgeStore.adoptLessons` has been mirroring a promoted lesson in as an
+ * injected fleet claim under an id derived from the lesson's since delivery moved,
+ * so the fold cannot insert those again: it would either collide on the primary
+ * key or, worse, write a second copy under a second id and put one sentence in the
+ * block twice. It uses **the same derivation** and `INSERT OR IGNORE`, so an
+ * already-mirrored row is left exactly as it stands, with whatever an operator has
+ * since done to it.
+ *
+ * That is also why a retired lesson can land here as a fact still at `injected`.
+ * The mirror only ever un-mirrored a row nobody had touched; one that had been
+ * corroborated or amended stayed, because at that point it is a fact in its own
+ * right and the lessons panel is not where it is governed. `INSERT OR IGNORE`
+ * keeps that answer rather than overwriting it with a status the lessons table
+ * still holds.
+ *
+ * The status map has one row worth reading twice: a retired lesson becomes
+ * `retired` and **never** `rejected`. The two words meant opposite things in the
+ * two stores — `lessons` called its prune "retired" and said outright that a
+ * lesson retired in error is simply written again, while `knowledge_facts` bars a
+ * rejected claim by name — so folding a prune into a bar would refuse, by name and
+ * forever, every claim an operator had merely tidied.
+ */
+function foldLessons(db: Database.Database): number {
+  if (!hasTable(db, 'lessons')) return 0;
+  const rows = db.prepare(`SELECT * FROM lessons ORDER BY created_at ASC, rowid ASC`).all() as FoldedLesson[];
+  const fact = db.prepare(
+    `INSERT OR IGNORE INTO knowledge_facts
+       (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, resolves_when,
+        about_ref, where_at, created_at, updated_at)
+     VALUES (?, ?, 'fleet', 'standing', NULL, ?, NULL, ?, ?, NULL, NULL, NULL, ?, ?)`,
+  );
+  const voice = db.prepare(
+    `INSERT OR IGNORE INTO knowledge_corroborations
+       (id, fact_id, agent_id, task_id, goal_ref, session_id, words, created_at)
+     VALUES (?, ?, NULL, NULL, ?, NULL, ?, ?)`,
+  );
+  for (const row of rows) {
+    const id = adoptedFactId(row.id);
+    fact.run(
+      id,
+      row.text,
+      row.status === 'promoted' ? 'injected' : row.status === 'retired' ? 'retired' : 'proposal',
+      row.origin_ref,
+      row.status === 'proposed' ? null : row.updated_at,
+      row.created_at,
+      row.updated_at,
+    );
+    voice.run(
+      `knc_${row.id}`,
+      id,
+      corroborationGoal(row.origin_ref),
+      'Written down as a lesson about working this repository, before the knowledge base held them.',
+      row.created_at,
+    );
+  }
+  return rows.length;
+}
+
+/**
+ * The fact a finding becomes. Derived from the finding's id rather than minted,
+ * for {@link adoptedFactId}'s reason: a derivation is idempotent by construction,
+ * so the `INSERT OR IGNORE` above is a second guard behind the named gate rather
+ * than the only one.
+ */
+function foldedFactId(findingId: string): string {
+  return `fact_${findingId}`;
+}
+
+/**
+ * Where a finding's status puts the claim.
+ *
+ * The two that are not obvious are the two worth stating. `dismissed` becomes
+ * `rejected` because that is what dismissing meant in `findings`: the store
+ * already refused to fold a fresh report into a dismissed row, which is the
+ * rejection bar under another name. And a `promoted` or `filing` finding stays a
+ * **`proposal`** — an operator queueing work for a claim is not a ruling about how
+ * far the claim carries, and a finding reached no agent at any status, so
+ * anything else would put a sentence in front of the fleet that nobody vouched
+ * for. What the operator did is the graduation row beside it.
+ */
+function findingReach(status: string): string {
+  if (status === 'dismissed') return 'rejected';
+  if (status === 'filed') return 'graduated';
+  return 'proposal';
+}
+
+/** Which exit an operator's verdict on a finding was, or null when they took none. */
+function findingExit(status: string): string | null {
+  if (status === 'promoted') return 'job';
+  if (status === 'filing' || status === 'filed') return 'ticket';
+  return null;
+}
+
+/**
+ * The observation behind a folded finding, in the terms an operator reads the
+ * others in: what the agent actually saw, and how it arrived.
+ *
+ * The kind leads, because it is the one thing about a folded row that is not true
+ * of anything raised since — it is a word the harness stopped asking for — and
+ * because on a row with no `detail` it is the only thing there is to say beyond
+ * the claim. A corroboration with no words at all would be a voice in the count
+ * with nothing behind it, which is exactly what the corroborations table is a
+ * table rather than a counter to avoid.
+ */
+function findingWords(row: FoldedFinding): string {
+  const how = `Reported as a "${row.kind}" finding, before the claim stores merged.`;
+  return row.detail ? `${how}\n\n${row.detail}` : how;
+}
+
+/** Whether this database has a table at all — a fresh one has neither of the folded two. */
+function hasTable(db: Database.Database, table: string): boolean {
+  return db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name=?`).get(table) !== undefined;
+}
+
+/**
+ * A `findings` row as the fold reads it — every column optional past the ones that
+ * shipped in the original `CREATE`, because a database old enough predates the
+ * three-field split and the ticket ref alike.
+ */
+interface FoldedFinding {
+  id: string;
+  agent_id: string;
+  task_id: string;
+  origin_ref: string | null;
+  kind: string;
+  ref: string | null;
+  summary: string;
+  status: string;
+  job_id: string | null;
+  where_at: string | null | undefined;
+  detail: string | null | undefined;
+  ticket_ref: string | null | undefined;
+  created_at: string;
+  updated_at: string;
+}
+
+/** A `lessons` row as the fold reads it. The table never gained a column. */
+interface FoldedLesson {
+  id: string;
+  text: string;
+  origin_ref: string | null;
+  status: string;
+  created_at: string;
+  updated_at: string;
 }

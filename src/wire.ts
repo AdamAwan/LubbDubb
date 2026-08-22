@@ -79,6 +79,7 @@ import type {
   EnvironmentGateRelease,
   ErrorLogEntry,
   Escalation,
+  FactExit,
   FactReach,
   Finding,
   GoalArrival,
@@ -465,6 +466,16 @@ export interface KnowledgeGraduationView extends KnowledgeGraduation {
  * the claim out of every prompt while putting it nowhere.
  */
 export type FactRuling = Extract<FactReach, 'lookup' | 'injected' | 'retired' | 'rejected'>;
+
+/**
+ * The body of `POST /api/knowledge/facts/:id/commit` — the `docs` arm of
+ * {@link FactExit}, narrowed out of the union rather than written again.
+ *
+ * Narrowed for {@link FactRuling}'s reason: the shape the cockpit posts and the
+ * shape the store takes are one statement, so a `bar` that became optional on one
+ * side would be a CLAUDE.md graduation reaching the store with nothing said.
+ */
+export type FactCommitment = Extract<FactExit, { exit: 'docs' }>;
 
 /**
  * `GET /api/knowledge/facts/:id` — one fact with the observations behind it, in
@@ -1652,7 +1663,7 @@ export type {
   JobSchedule,
   ContradictionResolution,
   ContradictionRuling,
-  FactCommitment,
+  FactExit,
   GraduationOutcome,
   GraduationReading,
   GraduationTarget,

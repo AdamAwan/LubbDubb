@@ -1076,10 +1076,12 @@ class DemoServer {
       {
         id: `kng-${id}`,
         factId: id,
+        exit: 'docs',
         jobId: `job-docs-${id}`,
         target: commitment.target,
         bar: commitment.target === 'claudeMd' ? commitment.bar : null,
         prRef: null,
+        ticketRef: null,
         outcome: null,
         settledAt: null,
         createdAt: at,
@@ -1106,7 +1108,7 @@ class DemoServer {
     if (outcome === 'landed') {
       const fact = this.state.knowledge.find((f) => f.id === graduation.factId);
       if (fact) {
-        fact.reach = 'committed';
+        fact.reach = 'graduated';
         fact.ruledAt = graduation.settledAt;
         fact.updatedAt = graduation.settledAt;
       }

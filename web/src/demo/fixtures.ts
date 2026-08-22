@@ -2153,7 +2153,7 @@ export function buildDemoState(): DemoSeed {
         scope: 'fleet',
         lifetime: 'standing',
         expiresAt: null,
-        reach: 'committed',
+        reach: 'graduated',
         supersedes: null,
         originRef: 'issue:341',
         ruledAt: ago(150),
@@ -2202,16 +2202,18 @@ export function buildDemoState(): DemoSeed {
     // the interesting half of graduation is the state *between* the click and the
     // landing: the claim on `fact-lookup` is still on lookup and still answered,
     // with a pull request open — and only the one whose pull request actually
-    // merged is `committed`. A page that moved a claim at the click would be
+    // merged is `graduated`. A page that moved a claim at the click would be
     // showing a claim nobody has committed and nobody can yet read.
     knowledgeGraduations: [
       {
         id: 'kng-lookup',
         factId: 'fact-lookup',
+        exit: 'docs',
         jobId: 'job-docs-1',
         target: 'spec',
         bar: null,
         prRef: 'pr:411',
+        ticketRef: null,
         outcome: null,
         settledAt: null,
         createdAt: ago(40),
@@ -2220,10 +2222,12 @@ export function buildDemoState(): DemoSeed {
       {
         id: 'kng-committed',
         factId: 'fact-committed',
+        exit: 'docs',
         jobId: 'job-docs-0',
         target: 'spec',
         bar: null,
         prRef: 'pr:409',
+        ticketRef: null,
         outcome: 'landed',
         settledAt: ago(150),
         createdAt: ago(190),

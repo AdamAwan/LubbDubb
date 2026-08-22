@@ -274,7 +274,7 @@ test('a claim reaches committed when its pull request lands, and not when the jo
   // Merged, and observed: the claim is in the repository, so it leaves every prompt.
   graphSays(system, job!.id, { ref: 'pr:77', status: 'merged', terminal: true, provenance: 'observed' });
   desk.run();
-  assert.equal(system.store.getFact(fact.id)?.reach, 'committed');
+  assert.equal(system.store.getFact(fact.id)?.reach, 'graduated');
   assert.equal(system.store.listGraduations()[0]?.outcome, 'landed');
   assert.equal(
     system.store.askFacts({}).find((f) => f.id === fact.id),
@@ -337,7 +337,7 @@ test('an inferred merge settles nothing, and the operator answers it', async () 
     payload: { outcome: 'landed' },
   });
   assert.equal(settled.statusCode, 200);
-  assert.equal(system.store.getFact(fact.id)?.reach, 'committed');
+  assert.equal(system.store.getFact(fact.id)?.reach, 'graduated');
   // Answered once and not twice.
   const again = await app.inject({
     method: 'POST',
@@ -354,10 +354,12 @@ function graduation(overrides: Partial<KnowledgeGraduation> = {}): KnowledgeGrad
   return {
     id: 'kng_1',
     factId: 'fact_1',
+    exit: 'docs',
     jobId: 'j1',
     target: 'spec',
     bar: null,
     prRef: null,
+    ticketRef: null,
     outcome: null,
     settledAt: null,
     createdAt: '2026-08-01T00:00:00.000Z',
@@ -423,7 +425,7 @@ test('what may be committed, and the wording of each refusal', () => {
   };
   assert.equal(committableFact(base).ok, true);
   assert.equal(committableFact({ ...base, reach: 'lookup' }).ok, true);
-  for (const reach of ['proposal', 'committed', 'rejected', 'superseded'] as const) {
+  for (const reach of ['proposal', 'graduated', 'rejected', 'superseded'] as const) {
     assert.equal(committableFact({ ...base, reach }).ok, false, `${reach} is committable`);
   }
   assert.equal(committableFact({ ...base, lifetime: 'expiring', expiresAt: '2026-09-01T00:00:00.000Z' }).ok, false);
@@ -456,7 +458,7 @@ test('the note says what the landing costs the claim, whichever target it names'
     words: `observation ${i}`,
     createdAt: '2026-08-01T00:00:00.000Z',
   }));
-  const note = graduationNote(fact, { target: 'spec' }, observations);
+  const note = graduationNote(fact, { exit: 'docs', target: 'spec' }, observations);
   // The consequence of the pull request landing, said where the agent writing the
   // document reads it: a thinner sentence than the claim is a net loss.
   assert.match(note, /leaves every prompt/);
@@ -468,7 +470,11 @@ test('the note says what the landing costs the claim, whichever target it names'
   assert.match(note, /3 further observations/);
   assert.match(note, /test \(windows\)/);
 
-  const claudeMd = graduationNote(fact, { target: 'claudeMd', bar: 'nothing goes red when you get it wrong' }, []);
+  const claudeMd = graduationNote(
+    fact,
+    { exit: 'docs', target: 'claudeMd', bar: 'nothing goes red when you get it wrong' },
+    [],
+  );
   assert.match(claudeMd, /nothing goes red when you get it wrong/);
   assert.match(claudeMd, /asserted rather than intended/);
 });
