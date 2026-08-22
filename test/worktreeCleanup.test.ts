@@ -1,11 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { existsSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { buildSystem } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
+import type { Spawner, StreamChild } from '../src/agents/streamJsonSession.js';
 import { gitRepo } from './support/gitRepo.js';
 import { failPlanningOpen } from './support/plans.js';
 import { pinnedPool } from './support/worktrees.js';
@@ -39,6 +41,51 @@ function build() {
   const system = buildSystem(config, { backend, worktrees: pool.worktrees });
   pool.attach(system);
   return { system, backend };
+}
+
+/**
+ * A fake headless `claude` child whose `kill()` is deliberately silent — a real
+ * signalled process dies *later*, and `exit` must land as its own event for the
+ * kill/reap rendezvous to be worth testing at all. `crash()` drives that later exit.
+ */
+class FakeStreamChild extends EventEmitter implements StreamChild {
+  pid = 555;
+  stdout = { on: () => {} } as unknown as NodeJS.ReadableStream;
+  stderr = null;
+  stdin = { write: () => {}, end: () => {} } as unknown as NodeJS.WritableStream;
+  override on(event: 'exit', cb: (code: number | null) => void): this {
+    return super.on(event, cb);
+  }
+  crash(code: number): void {
+    this.emit('exit', code);
+  }
+  kill(): void {}
+}
+
+/** Same pool/config shape as {@link build}, but on the stream runtime so a kill's
+ * exit is a later, separate event instead of firing synchronously off `kill()`. */
+function buildStream() {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
+  const config = loadConfig({
+    labelPrefix: '',
+    dbPath: ':memory:',
+    agentMode: 'stream',
+    deskRoot: join(dir, 'desk'),
+    worktreeRoot: join(dir, 'wt'),
+    repoRoot: gitRepo(),
+    heartbeatIntervalMs: 999_999,
+    maxConcurrentAgents: 3,
+  });
+  const children: FakeStreamChild[] = [];
+  const spawner: Spawner = (_command, _args, _opts) => {
+    const child = new FakeStreamChild();
+    children.push(child);
+    return child;
+  };
+  const pool = pinnedPool(config, 1);
+  const system = buildSystem(config, { streamSpawner: spawner, worktrees: pool.worktrees });
+  pool.attach(system);
+  return { system, children };
 }
 
 /** Dispatch a code agent for an injected issue; returns its task (whose worktree now exists). */
@@ -101,6 +148,30 @@ test('a failed agent keeps its worktree for debugging, but not its lease', async
   // Nothing else releases a lease, so skipping the failed ones would shrink the
   // pool by one per failure with nothing at all to say so.
   assert.equal(await reissued(system, cwd, 'someone/else'), true, 'the slot goes back to the pool');
+  system.store.close();
+});
+
+test('a killed agent keeps its worktree, and its lease releases once the process exits', async () => {
+  const { system, children } = buildStream();
+  await codeAgent(system, 10);
+  const agent = system.store.listAgentsByStatus('starting', 'running')[0]!;
+  const cwd = agent.cwd;
+
+  assert.equal(system.agents.kill(agent.id), true);
+  assert.equal(system.store.getAgent(agent.id)!.status, 'killed');
+  assert.equal(
+    await reissued(system, cwd, 'someone/else'),
+    false,
+    'held until the process the kill signalled has actually exited',
+  );
+
+  const reaped = new Promise<void>((r) => system.agents.on('reaped', () => r()));
+  children[0]!.crash(143);
+  await reaped;
+  await tick(20);
+
+  assert.ok(existsSync(cwd), 'a killed agent worktree must not be removed');
+  assert.equal(await reissued(system, cwd, 'someone/later'), true, 'and the slot is back in the pool');
   system.store.close();
 });
 

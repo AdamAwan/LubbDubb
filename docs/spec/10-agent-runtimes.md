@@ -918,16 +918,23 @@ panel with the reason `restorability` already wrote. Full flow: [21](21-self-upd
 
 ### Kill vs interrupt vs interruptAll
 
-| Call             | Agent status  | Task status   | Resumable on next boot | Worktree |
-| ---------------- | ------------- | ------------- | ---------------------- | -------- |
-| `kill(id)`       | `killed`      | `interrupted` | No                     | Kept     |
-| `interrupt(id)`  | unchanged     | unchanged     | —                      | —        |
-| `interruptAll()` | `interrupted` | unchanged     | Yes                    | Kept     |
+| Call             | Agent status  | Task status   | Resumable on next boot | Worktree              |
+| ---------------- | ------------- | ------------- | ---------------------- | --------------------- |
+| `kill(id)`       | `killed`      | `interrupted` | No                     | Kept, lease released  |
+| `interrupt(id)`  | unchanged     | unchanged     | —                      | —                     |
+| `interruptAll()` | `interrupted` | unchanged     | Yes                    | Kept                  |
 
 `interrupt` sends raw ETX (`\x03`) and mutates no status — the agent's own output and exit drive what
-happens next. `kill` releases the credential and spool, clears the park, flushes the transcript,
-deletes the recorded exit code (a deliberate kill's exit code is not a failure cause) and clears the
-exited marker, so a killed agent is never `reaped` and its worktree stays.
+happens next. `kill` releases the credential and spool, clears the park, flushes the transcript, and
+deletes the recorded exit code (a deliberate kill's exit code is not a failure cause). It records a
+`killed` terminal and completes the same reap rendezvous a clean finish does (see
+[09](09-execution.md#release)): the checkout itself stays, exactly as before, but the pool's lease on
+it is released once the process has actually exited — synchronously for a usage-limit park with no
+live session left to exit, and on the session's own `exit` event otherwise. Before worktree pooling,
+`remove` deleted the checkout outright, so suppressing the reap on a kill was the only way to keep a
+killed agent's tree readable afterwards; pooling changed `remove` to release the lease and delete
+nothing, which made "the tree survives" and "the lease is returned" two different questions — this is
+what let the reap follow the same rule as `done`/`failed` without losing the tree.
 
 `interruptAll` is used on **server shutdown**: agents are left in the resumable `interrupted` state and
 `waitingReason` and the task status are **preserved** as the signal for how to resume.
