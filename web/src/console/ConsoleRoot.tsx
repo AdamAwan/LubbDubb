@@ -380,6 +380,7 @@ function panelBody(
           facts={state.knowledge}
           graduations={state.knowledgeGraduations}
           delivery={state.knowledgeDelivery}
+          cost={state.knowledgeCost}
           now={view.now}
           refUrls={state.refUrls}
           viewingFact={view.viewingFact}

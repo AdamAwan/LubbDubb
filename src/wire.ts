@@ -60,6 +60,7 @@ import type { RunningConfigGroup } from './server/runningConfig.js';
 import type { ConfigChange } from './configApply.js';
 import type { ReliabilityInsights, RunTally } from './reliabilityInsights.js';
 import type { RemedyInsights } from './remedyInsights.js';
+import type { KnowledgeCost } from './knowledge/cost.js';
 import type { SpendInsights } from './spendInsights.js';
 import type { SpendTrend } from './spendTrend.js';
 import type { Stack } from './stacks/stack.js';
@@ -378,6 +379,44 @@ export interface KnowledgeFactView extends KnowledgeFact {
   contradictionRatio: number;
   /** Disputes nobody has ruled on — the queue, where the ratio is the reading. */
   openContradictions: number;
+  /**
+   * How often an agent asked for this claim and was answered with it (issue #27
+   * phase 7) — every ask, over the whole life of the claim, and no window.
+   *
+   * The one signal a `lookup` claim has that an injected one cannot. There is no
+   * way to measure whether an injected line was *read*, and this page does not
+   * pretend there is; a lookup claim is different because an agent had to go and
+   * want it.
+   *
+   * **Explicit asks only.** A `lookup` claim also reaches agents through the
+   * task-prompt append of every dispatch its scope matches, and counting that
+   * would make this a count of dispatches matching a scope — a fact about the
+   * fleet's week rather than about the claim, under a label that says otherwise.
+   *
+   * **A reading and never a trigger**, like every other number on this row.
+   */
+  asks: number;
+  /** The most recent ask, so the count can be dated. Null when there has been none. */
+  lastAskedAt: string | null;
+  /**
+   * Whether this fact's `check:` scope has matched nothing in
+   * `knowledgeScopeStaleDays` and the provider is not reporting the check either —
+   * a job probably renamed or re-matrixed, which stops the fact being delivered
+   * *silently* (issue #27 phase 7).
+   *
+   * The verdict is the server's for the ratio's reason: it is a comparison against
+   * a configured window, taken beside the dispatches and the world it reads, and a
+   * "days since" taken from `Date.now()` in the browser would be a second
+   * implementation of it. Always false for a `fleet` or `goal:` scope, which have
+   * no such failure.
+   */
+  scopeStale: boolean;
+  /**
+   * The most recent dispatch that carried this check, or null if none ever has —
+   * the evidence behind {@link scopeStale}, so the page can date the reading
+   * rather than assert it.
+   */
+  scopeLastMatchedAt: string | null;
 }
 
 /**
@@ -1054,6 +1093,18 @@ export interface CockpitState {
    */
   knowledge: KnowledgeFactView[];
   /**
+   * What the injected block costs, in the dollars the rest of the cockpit uses and
+   * over the window Insights opens on (issue #27 phase 7).
+   *
+   * Measured rather than modelled: the block's share of the fleet's own input,
+   * applied to the fleet's own recorded spend. There is no price table here and
+   * there must not be one — it would be a second statement about money, free to
+   * disagree with `costUsd` silently. The one estimate is characters into tokens,
+   * which nothing in the harness can measure, and it is shipped as a number so the
+   * page can say so.
+   */
+  knowledgeCost: KnowledgeCost;
+  /**
    * Every attempt to put a claim in the repository, newest first — the abandoned
    * ones included (issue #27 phase 6).
    *
@@ -1647,6 +1698,7 @@ export type { QueueItem } from './dispatcher/dispatcher.js';
 export type { DispatchRule } from './dispatcher/rules.js';
 export type { PromptTemplateDescription } from './dispatcher/promptTemplates.js';
 export type { FileOverlap } from './fileOverlap.js';
+export type { KnowledgeCost } from './knowledge/cost.js';
 export type { UnrecordedWork } from './graph/unrecorded.js';
 export type { RunningConfigGroup } from './server/runningConfig.js';
 export type { RunningConfigEntry } from './server/runningConfig.js';

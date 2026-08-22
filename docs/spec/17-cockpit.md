@@ -1751,6 +1751,15 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   thousands of characters per observation and the snapshot is polled — and the open row is `?fact=<id>`
   on `Place`, so it is a link somebody can send.
 
+  **Two further readings on the row, and neither of them acts.** A `check:` row whose scope has matched
+  nothing in `knowledgeScopeStaleDays`, and whose check the provider is not reporting either, is marked
+  **scope has drifted**: a renamed or re-matrixed job stops a claim being delivered _silently_, and this
+  is the only surface that can say so. A `lookup` row says **how often it was asked for**, including
+  when that is never — explicit `knowledge_ask` calls only, never delivery by a matching scope, which
+  is the harness putting a claim in front of an agent that did not want it. The drifted claim stays in
+  the section its reach puts it in, and nothing is demoted for want of demand.
+  → [27](27-knowledge.md#what-it-costs)
+
   Promoted lessons are mirrored into this store, so the Lessons panel and this page show the same
   claims; the panel says so at the top rather than leaving a reader to work out which surface is
   authoritative.
@@ -1760,6 +1769,14 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   now delivers. Both are the block renderer's own answer, projected onto the wire
   (`KnowledgeDeliveryView`): a meter drawn from a character count taken in the browser would be exactly
   the second implementation of "what fits" that rule exists to prevent.
+
+  **And under the meter, what the block costs.** The characters are the cap; the dollars are the
+  purchase, in the money the Insights page reports and over the window it opens on. Every figure is the
+  server's — the share, the total and the per-dispatch division alike — because it is arithmetic over a
+  token estimate and a fleet total whose rule this layer does not know, and a division taken here would
+  be free to disagree with the spend drawn a tab away. A window in which nothing reported usage draws
+  **"cannot be priced"** rather than `$0.00`: unmeasured is never free, and a zero there would be the
+  one number on the page that is a lie. → [27](27-knowledge.md#what-it-costs)
 
   **And the page ends with what an agent actually receives** — the system-prompt block verbatim, and
   the task-prompt append for each scope with anything deliverable left in it once the block has taken

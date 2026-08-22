@@ -67,6 +67,7 @@ export type {
   KnowledgeGraduation,
   KnowledgeGraduationView,
   KnowledgeCorroboration,
+  KnowledgeCost,
   KnowledgeDeliveryView,
   KnowledgeFact,
   KnowledgeFactPayload,

@@ -7,6 +7,7 @@ import type {
   GraduationOutcome,
   KnowledgeContradictionView,
   KnowledgeCorroboration,
+  KnowledgeCost,
   KnowledgeDeliveryView,
   KnowledgeFactView,
   KnowledgeGraduationView,
@@ -14,7 +15,7 @@ import type {
 import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { renderMarkdown } from './markdown.js';
-import { relTime, untilTime } from './util.js';
+import { absDate, fmtTokens, fmtUsd, relTime, untilTime } from './util.js';
 import { Ref } from './refs.js';
 
 /**
@@ -42,12 +43,22 @@ import { Ref } from './refs.js';
  * waiting on the one decision that is yours, then what you have already vouched
  * for, then the long tails.
  *
+ * **Every number here is a reading and never a trigger** (issue #27 phase 7). What
+ * the block costs, whether a `check:` scope has stopped matching anything, and how
+ * often a claim was asked for are all drawn and none of them acts: nothing is
+ * demoted, lapsed or dropped from a prompt because it costs money, because its
+ * check was renamed, or because nobody has wanted it lately. There is one thing
+ * the page deliberately does not show, because it cannot be measured — whether an
+ * injected line was *read*. Cost, corroboration, contradiction and demand are
+ * measurable, and the fourth is not invented to sit beside them.
+ *
  * → `docs/spec/27-knowledge.md`, `docs/spec/17-cockpit.md`
  */
 export function KnowledgePanel({
   facts,
   graduations,
   delivery,
+  cost,
   now,
   refUrls,
   viewingFact,
@@ -63,6 +74,8 @@ export function KnowledgePanel({
   graduations: KnowledgeGraduationView[];
   /** What the two renderers actually send, projected server-side. Never recomputed here. */
   delivery: KnowledgeDeliveryView;
+  /** What sending it costs, priced server-side against the fleet's own spend. Never divided here. */
+  cost: KnowledgeCost;
   now: number;
   refUrls: Record<string, string>;
   /** The claim whose provenance is open, from `Place` — never this component's own state. */
@@ -137,12 +150,12 @@ export function KnowledgePanel({
         title="Injected"
         blurb="In every agent's system prompt before it reads any code — vouched for by you, or a notice two goals saw. Everything here rides the block below whatever its scope, because a claim about one check is for the agent about to run it as much as for the one sent to fix it. The exception is a goal claim: it dies with its goal, so it rides that goal's own dispatches instead."
         facts={section('injected')}
-        meter={<BlockBudget delivery={delivery} />}
+        meter={<BlockBudget delivery={delivery} cost={cost} />}
         {...shared}
       />
       <KnowledgeSection
         title="On lookup"
-        blurb="True, and answered when an agent asks. This is where a claim that is not worth every agent's context belongs — it costs nothing until somebody wants it."
+        blurb="True, and answered when an agent asks. This is where a claim that is not worth every agent's context belongs — it costs nothing until somebody wants it. Each row carries how often it was actually asked for, which is the one signal an injected claim cannot have: there is no way to measure whether a line in every agent's prompt was read, and this page does not pretend there is. Nothing is demoted for want of demand."
         facts={section('lookup', true)}
         {...shared}
       />
@@ -183,7 +196,7 @@ export function KnowledgePanel({
  * meter is per-row — which is why the count is here and the marking is on the
  * cards, rather than a bare "two are over" they would then have to go and find.
  */
-function BlockBudget({ delivery }: { delivery: KnowledgeDeliveryView }): JSX.Element {
+function BlockBudget({ delivery, cost }: { delivery: KnowledgeDeliveryView; cost: KnowledgeCost }): JSX.Element {
   const used = delivery.block.length;
   const full = delivery.limit > 0 && used >= delivery.limit;
   const over = delivery.dropped.length;
@@ -209,8 +222,76 @@ function BlockBudget({ delivery }: { delivery: KnowledgeDeliveryView }): JSX.Ele
           ' · everything above is being sent'
         )}
       </span>
+      <BlockCost cost={cost} />
     </div>
   );
+}
+
+/**
+ * What the block costs, in the dollars the rest of the cockpit uses.
+ *
+ * Characters are the cap; this is the purchase. Every figure is the server's —
+ * the share, the total and the per-dispatch division alike — because it is
+ * arithmetic over a token estimate and a fleet total whose rule this file does not
+ * know, and a division taken here would be free to disagree with the spend the
+ * Insights page reports an inch away.
+ *
+ * **A reading and never a trigger.** Nothing above is demoted, lapsed or dropped
+ * from the block because of what it costs; the only thing this can do is be read.
+ *
+ * A null figure is *cannot say*, not free — a deployment whose runtime reports no
+ * usage still pays for this block, and a `$0.00` there would be the one number on
+ * the page that is a lie.
+ */
+function BlockCost({ cost }: { cost: KnowledgeCost }): JSX.Element {
+  if (cost.perDispatchUsd === null || cost.windowCostUsd === null) {
+    return (
+      <p className="muted small kn-cost">
+        No dispatch in the last {cost.windowLabel} reported what it cost, so this block cannot be priced.{' '}
+        {cost.unmeasured > 0
+          ? `${cost.unmeasured} ${cost.unmeasured === 1 ? 'dispatch' : 'dispatches'} ran and reported no usage — unmeasured, not free.`
+          : 'Nothing has been dispatched.'}
+      </p>
+    );
+  }
+  return (
+    <p className="muted small kn-cost">
+      <b title="The block's share of the fleet's own input over this window, applied to the fleet's own recorded spend. There is no price list here: a table of per-token prices would be a second statement about money, free to disagree with what the agents reported.">
+        {fmtSmallUsd(cost.perDispatchUsd)} a dispatch
+      </b>{' '}
+      · {fmtUsd(cost.windowCostUsd)} over {cost.launches.toLocaleString()}{' '}
+      {cost.launches === 1 ? 'dispatch' : 'dispatches'} in the last {cost.windowLabel}
+      {cost.unmeasured > 0 && (
+        <span title="These reported no usage at all, so they are in none of the figures. Unmeasured is never free.">
+          {' '}
+          ({cost.unmeasured} more reported nothing)
+        </span>
+      )}
+      <br />
+      <span
+        title={`${cost.blockTokens.toLocaleString()} tokens estimated at ${cost.charsPerToken} characters each — the one figure here nothing can measure, since the harness does not tokenise. Everything else is what the fleet reported.`}
+      >
+        ≈{fmtTokens(cost.blockTokens)} tokens, sent on each of {cost.turns.toLocaleString()} turns
+      </span>{' '}
+      ·{' '}
+      <span title="The block is in the system prompt so that it is a cached prefix: identical on every launch, and re-sent on every turn of a session. It is priced at the fleet's own dollars per input token, which already carries whatever the cache saved.">
+        {Math.round((cost.shareOfInput ?? 0) * 1000) / 10}% of the fleet&rsquo;s input,{' '}
+        {cost.inputTokens > 0 ? Math.round((cost.cachedInputTokens / cost.inputTokens) * 100) : 0}% of which was served
+        from cache
+      </span>
+    </p>
+  );
+}
+
+/**
+ * Dollars that run below a cent, where `fmtUsd`'s two places print `$0.00`.
+ *
+ * A per-dispatch figure is usually fractions of a cent, and the whole point of the
+ * reading is that it is small — rounding it to a zero would answer "what does this
+ * cost" with "nothing", which is the one thing it must not say.
+ */
+function fmtSmallUsd(n: number): string {
+  return n < 0.01 ? `$${n.toFixed(4)}` : fmtUsd(n);
 }
 
 /**
@@ -340,6 +421,51 @@ function FactCard({
       <div className="kn-claim">{renderMarkdown(fact.claim, refUrls)}</div>
       <div className="kn-foot">
         <FactScope scope={fact.scope} />
+        {/* The one failure a check scope has that nothing else can show: a check
+            name is a provider identifier matched exactly, so a renamed or
+            re-matrixed job stops the claim being delivered and nothing errors.
+            The verdict is the server's — it is a comparison against a configured
+            window, made beside the dispatches and the world it reads.
+
+            Nothing was demoted by it. A scope that matched nothing may be a check
+            that is simply not running this week, which is why this says what it
+            saw rather than what to do about it. */}
+        {fact.scopeStale && (
+          <span
+            className="chip small warn"
+            title={
+              `Nothing has matched this scope lately, and the provider is not reporting a check by this name — ` +
+              `so it is probably a job that was renamed or re-matrixed, and this claim is reaching nobody. ` +
+              (fact.scopeLastMatchedAt === null
+                ? 'No dispatch has ever carried it.'
+                : `Last carried by a dispatch on ${absDate(fact.scopeLastMatchedAt)}.`) +
+              ' Nothing was demoted by this reading — the claim is exactly where you left it.'
+            }
+          >
+            scope has drifted
+          </span>
+        )}
+        {/* How often the claim was actually wanted — explicit `knowledge_ask`
+            calls, never delivery by a matching scope, which is the harness putting
+            a claim in front of an agent that did not ask for it. Drawn on lookup
+            rows alone: an injected claim is in front of every agent whether it
+            wanted it or not, and there is no way to measure whether a line was
+            read. This page does not pretend there is.
+
+            A reading and never a trigger: a claim nobody asked for this month may
+            be the one that saves the next agent a day. */}
+        {fact.reach === 'lookup' && (
+          <span
+            className={`chip small ${fact.asks > 0 ? 'ok' : ''}`}
+            title={
+              fact.asks === 0
+                ? 'No agent has asked for this. That is a reading and not a verdict — nothing is demoted, lapsed or dropped for want of demand, and a claim nobody wanted this month may be the one that saves the next agent a day.'
+                : `Asked for ${fact.asks} ${fact.asks === 1 ? 'time' : 'times'}${fact.lastAskedAt === null ? '' : `, most recently on ${absDate(fact.lastAskedAt)}`}. Explicit knowledge_ask calls only: a claim also reaches the dispatches its scope matches, and counting those would make this a count of dispatches rather than of demand.`
+            }
+          >
+            {fact.asks === 0 ? 'never asked for' : `asked for ${fact.asks}×`}
+          </span>
+        )}
         <span className={`chip small ${fact.corroborations > 1 ? 'ok' : ''}`} title={countTitle(fact.corroborations)}>
           {fact.corroborations} {fact.corroborations === 1 ? 'observer' : 'observers'}
         </span>

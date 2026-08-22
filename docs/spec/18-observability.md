@@ -274,6 +274,13 @@ started last Tuesday does not draw twenty-five empty buckets in front of itself.
 that opened before the window and finished inside it spent its money inside it, and counting it at its
 start would leave a nine-hour agent out of the six-hour window it in fact dominated.
 
+**A reading with no control of its own takes the window the page opens on** (`defaultWindow`). The
+Knowledge page's cost figure ([27](27-knowledge.md#what-it-costs)) is the caller: it draws one number,
+has no time bar, and a second control there would be a second answer to "over what stretch" on a page
+whose whole argument is that one figure should be readable beside another. It is the one reading here
+that dates a run by **when it started** rather than by `runInstant`: the knowledge block is written
+into a launch's arguments once, at the top of the run, where money is spent throughout one.
+
 **The window is shipped back on every payload** as `InsightsWindowView`, and the page draws that rather
 than the key it asked with. A caption computed in the browser from the key is free to disagree with the
 buckets the server actually cut, and the caption is the half a reader would believe.

@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { checkScopeDrift, checkSightings } from '../../knowledge/drift.js';
 import { committableFact, factDocsFields, graduationNote } from '../../knowledge/graduation.js';
-import { contradictionRatio, distinctCorroborators, MAX_CLAIM_CHARS } from '../../knowledge/knowledge.js';
+import { MAX_CLAIM_CHARS } from '../../knowledge/knowledge.js';
 import type { FactRuling, KnowledgeContradictionView, KnowledgeFactPayload } from '../../wire.js';
 import { checked, IdParams } from '../validation.js';
 import type { RouteContext } from './context.js';
@@ -47,24 +48,36 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const fact = store.getFact(params.id);
       if (!fact) return reply.code(404).send({ error: 'fact not found' });
       const corroborations = store.listCorroborations(fact.id);
-      // Both counts through the same function, over two tables: a contradiction is
-      // not a corroboration, and the one thing that must never happen here is a
-      // dispute counted as agreement — a contradiction promoting the claim it
-      // disputes would look exactly like the claim being corroborated.
       const contradictions = store.listContradictions(fact.id);
-      const disputing = distinctCorroborators(contradictions);
-      const agreeing = distinctCorroborators(corroborations);
+      // Every count on the row comes from `factCounts` — the same one read the
+      // snapshot's rows are built from — rather than being re-derived here from the
+      // lists fetched for their words. Two of them are counts of *voices* (an
+      // agreement and a dispute are one voice if they share a goal or a session),
+      // one is a division of the other two, and one is a count of asks in a third
+      // table; a second implementation of any of them would be a number that looks
+      // like the one beside it on the page an inch away and is free to disagree.
+      const counts = store.factCounts().get(fact.id);
+      // The `check:` staleness verdict, from the records that already hold the
+      // evidence. Read here rather than shipped from the snapshot because the whole
+      // row is: the payload is what a reader opens, and half of it coming from a
+      // poll two seconds old is a row that disagrees with itself.
+      const drift = checkScopeDrift(
+        fact,
+        checkSightings(store.listTasks(), store.getWorldBaseline()?.pullRequests ?? []),
+        { now: Date.now(), staleDays: system.config.knowledgeScopeStaleDays },
+      );
       return {
-        // Counted here through the same function the store promotes on, never as
-        // `corroborations.length`: two observations are one corroborator if they
-        // share a goal or a session, so the length is a different number that
-        // looks like the same one.
         fact: {
           ...fact,
-          corroborations: agreeing,
-          contradictions: disputing,
-          contradictionRatio: contradictionRatio(agreeing, disputing),
-          openContradictions: contradictions.filter((c) => c.resolution === null).length,
+          corroborations: 0,
+          contradictions: 0,
+          contradictionRatio: 0,
+          openContradictions: 0,
+          asks: 0,
+          lastAskedAt: null,
+          ...counts,
+          scopeStale: drift?.stale ?? false,
+          scopeLastMatchedAt: drift?.lastMatchedAt ?? null,
         },
         corroborations,
         contradictions: contradictions.map(

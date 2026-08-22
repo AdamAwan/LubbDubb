@@ -57,6 +57,9 @@ import {
   renderScopedKnowledgeNote,
   ridesSystemPrompt,
 } from '../knowledge/block.js';
+import { knowledgeBlockCost } from '../knowledge/cost.js';
+import { checkScopeDrift, checkSightings } from '../knowledge/drift.js';
+import { defaultWindow } from '../insightsWindow.js';
 import { acceptanceCriteria, bySlug, partDepth, planIssueNumber } from '../plans/parts.js';
 import { planScopeDrift } from '../plans/scopeDrift.js';
 import { deliveryHold, deliverySignalQuery } from '../delivery/delivery.js';
@@ -138,6 +141,18 @@ export function buildStateSnapshot(
   // panels say about what is *sent* comes from here — the block's budget meter,
   // the per-claim drop, and the lesson rows' "sent to agents" chip alike.
   const delivery = knowledgeDelivery(store, config.knowledgeBlockChars);
+  // The harness's own clock rather than `world.takenAt`: both readings below are
+  // about how long ago something happened *now*, and dating them to a world
+  // snapshot that is a pulse old would put the staleness verdict a pulse behind
+  // the page drawing it.
+  const readAt = Date.now();
+  // What the harness has seen of each check name — the dispatches it made and the
+  // checks the provider is reporting — for the `check:` staleness verdict below.
+  // Derived from records already in hand rather than from a new write path: a
+  // recorder for a reading is a second record to keep true, and the failure this
+  // surfaces is silent non-delivery, which a recorder that stopped writing would
+  // reproduce rather than reveal.
+  const sightings = checkSightings(tasks, world.pullRequests);
   // The work graph, read once for every graduation in flight rather than a subtree
   // query each: the list is the operator's own clicks, and this is a polled snapshot.
   const graduationNodes = store.listWorkNodes();
@@ -171,9 +186,9 @@ export function buildStateSnapshot(
   // be free to disagree with the count that actually promotes a claim.
   const facts = store.listFacts();
   // Every count on a fact row, taken together in the store: the agreement count,
-  // the dispute count and the fraction that is. One read rather than three, so the
-  // ratio the page draws and the count beside it cannot be answers to two
-  // different questions about the same rows.
+  // the dispute count, the fraction that is, and how often the claim was asked
+  // for. One read rather than four, so the ratio the page draws and the count
+  // beside it cannot be answers to two different questions about the same rows.
   const factCounts = store.factCounts();
   // Work only a person can do. Read here rather than only in the panel for
   // findings' reason: each row's `originRef` names the work it belongs to, and the
@@ -759,14 +774,26 @@ export function buildStateSnapshot(
     // surface drawing only what it let through cannot show that a claim was
     // killed. Nothing in the dispatcher reads one — a fact feeds prompts (phase 3)
     // and this panel, and that is the whole of it.
-    knowledge: facts.map((fact) => ({
-      ...fact,
-      corroborations: 0,
-      contradictions: 0,
-      contradictionRatio: 0,
-      openContradictions: 0,
-      ...factCounts.get(fact.id),
-    })),
+    knowledge: facts.map((fact) => {
+      // Whether the check this claim is scoped to still runs (issue #27 phase 7).
+      // Taken here rather than in the browser for the ratio's reason: it is a
+      // comparison against a configured window, made beside the dispatches and the
+      // world it reads, and a "days since" computed from `Date.now()` in the view
+      // layer would be a second implementation of the verdict.
+      const drift = checkScopeDrift(fact, sightings, { now: readAt, staleDays: config.knowledgeScopeStaleDays });
+      return {
+        ...fact,
+        corroborations: 0,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
+        asks: 0,
+        lastAskedAt: null,
+        ...factCounts.get(fact.id),
+        scopeStale: drift?.stale ?? false,
+        scopeLastMatchedAt: drift?.lastMatchedAt ?? null,
+      };
+    }),
     // Every attempt to put one in the repository, the abandoned ones included:
     // committing is one act with two ends, and the operator deciding whether to try
     // again needs to see the try that did not land. `reading` is the sweep's own
@@ -775,6 +802,10 @@ export function buildStateSnapshot(
     knowledgeGraduations: graduations,
     // What that list actually sends, from the renderers that send it.
     knowledgeDelivery: delivery,
+    // What sending it costs, over the window Insights opens on. The block's length
+    // is the renderer's own answer above rather than a second rendering: a cost
+    // drawn from a block that did not ship is a cost for nothing.
+    knowledgeCost: knowledgeBlockCost(agents, delivery.block.length, defaultWindow(readAt)),
     // Bugs raised from a story row: `filing` while the desk agent writes one, `filed`
     // with a ref once it exists. Several per story is the normal case, not an error —
     // a story can be wrong in more than one way.

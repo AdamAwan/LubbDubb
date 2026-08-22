@@ -10,6 +10,9 @@ import { loadConfig } from '../src/config.js';
 import { Store } from '../src/store/store.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { knowledgeBlockCost, KNOWLEDGE_CHARS_PER_TOKEN } from '../src/knowledge/cost.js';
+import { checkScopeDrift, checkSightings } from '../src/knowledge/drift.js';
+import { resolveWindow } from '../src/insightsWindow.js';
 import {
   amendmentProposal,
   contradictionRatio,
@@ -862,6 +865,7 @@ test('the page draws every reach, the rejected tail included', async () => {
         facts: state.knowledge,
         graduations: state.knowledgeGraduations,
         delivery: state.knowledgeDelivery,
+        cost: state.knowledgeCost,
         now: Date.now(),
         refUrls: state.refUrls,
         viewingFact: null,
@@ -899,6 +903,19 @@ test('the page draws every reach, the rejected tail included', async () => {
   assert.ok(html.includes('1 dispute'), 'the contradiction count is not drawn');
   assert.ok(html.includes('25%'), 'the contradiction ratio is not drawn');
   assert.ok(html.includes('1 to answer'), 'an unanswered dispute is not drawn');
+  // The three phase 7 readings, all drawn and none of them a control: what the
+  // block costs, a check scope that has stopped matching anything, and how often a
+  // lookup claim was actually wanted.
+  assert.ok(html.includes('a dispatch'), 'the cost per dispatch is not drawn');
+  assert.ok(html.includes('scope has drifted'), 'a drifted check scope is not drawn');
+  assert.ok(html.includes('asked for 11'), 'the ask count is not drawn');
+  assert.ok(html.includes('never asked for'), 'a lookup claim nobody has asked for is not drawn as one');
+  // A drifted scope stays exactly where its reach put it. Lifting it out of its
+  // section — or into a "stale" one — would draw a demotion that did not happen.
+  assert.ok(
+    html.indexOf('scope has drifted') > html.indexOf('On lookup'),
+    'the drifted claim is not in the section its reach puts it in',
+  );
   // Where a claim went, and where one is going: both drawn as references rather
   // than as text, because a row that names a pull request and offers no way there
   // is a dead end that reads correctly (#27 phase 6).
@@ -1363,7 +1380,7 @@ test('no rule, desk or gate reads a fact', () => {
       if (entry.isDirectory()) walk(path);
       else if (
         entry.name.endsWith('.ts') &&
-        /\b(askFacts|listFacts|proposeFact|setFactReach|contradictFact|listContradictions|resolveContradiction|factCounts|commitFact|listGraduations|openGraduations|settleGraduation)\b/.test(
+        /\b(askFacts|listFacts|proposeFact|setFactReach|contradictFact|listContradictions|resolveContradiction|factCounts|recordFactAsks|commitFact|listGraduations|openGraduations|settleGraduation)\b/.test(
           readFileSync(path, 'utf8'),
         )
       )
@@ -1372,4 +1389,214 @@ test('no rule, desk or gate reads a fact', () => {
   };
   walk('src/dispatcher');
   assert.deepEqual(readers, []);
+});
+
+// -- what it costs, and what has drifted (phase 7) ----------------------------
+
+/**
+ * Phase 7's row: dollars per dispatch, stale `check:` scopes, and lookup
+ * ask-counts. Every one of them is a **reading and never a trigger**, which is
+ * what most of what follows asserts — nothing is demoted, lapsed or dropped from
+ * a prompt by any of it.
+ */
+
+const PRICING_NOW = Date.parse('2026-08-22T12:00:00.000Z');
+
+function run(overrides: Partial<Parameters<typeof knowledgeBlockCost>[0][number]> = {}) {
+  return {
+    startedAt: '2026-08-22T09:00:00.000Z',
+    costUsd: 10,
+    inputTokens: 1_000_000,
+    cacheReadTokens: 900_000,
+    numTurns: 40,
+    ...overrides,
+  };
+}
+
+test('the block is priced at the fleet’s own rate, on every turn rather than once per launch', () => {
+  const window = resolveWindow('7d', PRICING_NOW);
+  const cost = knowledgeBlockCost([run({ numTurns: 40 }), run({ numTurns: 60 })], 4_000, window);
+  assert.equal(cost.blockTokens, 4_000 / KNOWLEDGE_CHARS_PER_TOKEN);
+  assert.equal(cost.launches, 2);
+  assert.equal(cost.turns, 100);
+  // 1,000 tokens sent on each of 100 turns, out of 2,000,000 input tokens.
+  assert.equal(cost.shareOfInput, 0.05);
+  // 5% of the $20 those two runs reported. No price list is consulted: the rate is
+  // the fleet's own dollars per input token, and because `inputTokens` is the
+  // gross figure it already carries whatever the cache saved.
+  assert.equal(cost.windowCostUsd, 1);
+  assert.equal(cost.perDispatchUsd, 0.5);
+  // Counted once per *launch* instead — which is what "the block is a cached
+  // prefix, paid once" reads as — the same block prices at a fiftieth of this,
+  // because a session re-sends its system prompt on every turn. The arithmetic
+  // looks identical and the answer is off by the fleet's average turn count.
+  assert.equal((cost.blockTokens * cost.launches) / cost.inputTokens, 0.001);
+});
+
+test('a run outside the window is not counted, and one that reported nothing is unmeasured rather than free', () => {
+  const window = resolveWindow('24h', PRICING_NOW);
+  const cost = knowledgeBlockCost(
+    [
+      run(),
+      // A fortnight ago: it paid for a block, but not for this window's.
+      run({ startedAt: '2026-08-08T09:00:00.000Z' }),
+      // A PTY run: it carried the same block and reported no usage at all.
+      run({ costUsd: null, inputTokens: null, cacheReadTokens: null, numTurns: null }),
+    ],
+    4_000,
+    window,
+  );
+  assert.equal(cost.launches, 1);
+  assert.equal(cost.unmeasured, 1);
+  assert.equal(cost.inputTokens, 1_000_000);
+});
+
+test('a window nothing measured cannot be priced, and answers null rather than zero', () => {
+  const window = resolveWindow('6h', PRICING_NOW);
+  const cost = knowledgeBlockCost([run({ costUsd: null, inputTokens: null, numTurns: null })], 4_000, window);
+  // Null is unmeasured and never free — `Agent.costUsd`'s own convention. A `$0.00`
+  // here would be the one figure on the page that is a lie, and it would read as
+  // the feature costing nothing.
+  assert.equal(cost.perDispatchUsd, null);
+  assert.equal(cost.windowCostUsd, null);
+  assert.equal(cost.shareOfInput, null);
+  assert.equal(cost.unmeasured, 1);
+});
+
+test('a check scope is stale only when nothing has matched it and the provider is not reporting it', () => {
+  const now = Date.parse('2026-08-22T12:00:00.000Z');
+  const day = 24 * 60 * 60 * 1000;
+  const at = (daysAgo: number): string => new Date(now - daysAgo * day).toISOString();
+  const sightings = checkSightings(
+    [
+      // A dispatch that carried two checks, seven days ago.
+      { originRef: 'pr:412:ci', ciChecks: ['test (windows)', 'lint'], createdAt: at(7) },
+      // And one that carried a third, long ago.
+      { originRef: 'pr:377:ci', ciChecks: ['test (windows-2019)'], createdAt: at(60) },
+    ],
+    // The provider is reporting a check nothing has had to be dispatched about —
+    // green checks are the normal case, and this half is what stops the reading
+    // calling almost every scope stale within a week.
+    [{ ciChecks: [{ name: 'build', aliases: ['Build / build'] }] }],
+  );
+  const opts = { now, staleDays: 30 };
+  const fact = (scope: string, daysOld: number) => ({ scope, createdAt: at(daysOld) });
+
+  assert.equal(checkScopeDrift(fact('check:test (windows)', 40), sightings, opts)?.stale, false);
+  // Renamed when the matrix moved: no dispatch in sixty days, and the provider
+  // reports nothing by that name. The claim is simply not being delivered, and
+  // nothing errored when it stopped.
+  const drifted = checkScopeDrift(fact('check:test (windows-2019)', 60), sightings, opts);
+  assert.equal(drifted?.stale, true);
+  assert.equal(drifted?.lastMatchedAt, at(60));
+  // Green and running, so not gone — however long since a dispatch answered it.
+  assert.equal(checkScopeDrift(fact('check:build', 90), sightings, opts)?.stale, false);
+  // An alias is the same check under the name the provider also shows.
+  assert.equal(checkScopeDrift(fact('check:Build / build', 90), sightings, opts)?.stale, false);
+  // A claim younger than the window cannot be stale: there has not been time.
+  assert.equal(checkScopeDrift(fact('check:nightly', 3), sightings, opts)?.stale, false);
+  // Zero turns the reading off without demoting anything to achieve it.
+  assert.equal(checkScopeDrift(fact('check:nightly', 90), sightings, { now, staleDays: 0 })?.stale, false);
+  // And the two scopes that have no such failure are not given a verdict at all.
+  assert.equal(checkScopeDrift(fact('fleet', 90), sightings, opts), null);
+  assert.equal(checkScopeDrift(fact('goal:issue:41', 90), sightings, opts), null);
+});
+
+test('an ask is recorded from the tool, and the cockpit’s own reads of the same store are not asks', async () => {
+  const system = build();
+  const claim = 'The suite wants a built web bundle first.';
+  for (const origin of ['issue:12', 'issue:44']) {
+    const agent = spawnAgent(system, origin);
+    await callTool(system, agent, 'knowledge_propose', { claim, scope: 'fleet', evidence: 'the suite failed cold.' });
+  }
+  const id = system.store.listFacts()[0]!.id;
+  assert.equal(system.store.getFact(id)?.reach, 'lookup');
+  assert.equal(system.store.factCounts().get(id)?.asks, 0);
+
+  const asker = spawnAgent(system, 'issue:77');
+  await callTool(system, asker, 'knowledge_ask', {});
+  assert.equal(system.store.factCounts().get(id)?.asks, 1);
+  assert.ok(system.store.factCounts().get(id)?.lastAskedAt);
+
+  // The cockpit polls the same store, and `stateSnapshot` reads `askFacts` twice
+  // on every poll to project the delivery view. A counter inside that read would
+  // count the operator's browser as fleet demand — growing fastest while nobody
+  // was looking at the page, and fastest of all on the claims nobody asks for.
+  const app = await serve(system);
+  for (let i = 0; i < 3; i++) await app.inject({ method: 'GET', url: '/api/state' });
+  system.store.askFacts({ limit: 10 });
+  assert.equal(system.store.factCounts().get(id)?.asks, 1);
+
+  // And a second explicit ask *is* demand, even from the same goal: this counts how
+  // often the claim was wanted, not how many independent parties will vouch for it.
+  await callTool(system, asker, 'knowledge_ask', {});
+  assert.equal(system.store.factCounts().get(id)?.asks, 2);
+  await app.close();
+  system.store.close();
+});
+
+test('the snapshot ships the ask count, the drift verdict and the block’s price', async () => {
+  const system = build();
+  const app = await serve(system);
+  // A claim on a check no dispatch has ever carried and no provider is reporting,
+  // filed long enough ago for the window to have something to say about it.
+  const stale = system.store.proposeFact(
+    proposal({ scope: 'check:test (windows-2019)', claim: 'The Windows leg needs npm ci before the rebuild.' }),
+    seenOn('pr:377'),
+  );
+  assert.ok(stale.outcome !== 'barred');
+  system.store.setFactReach(stale.fact.id, 'lookup');
+  system.store.recordFactAsks([stale.fact.id], {
+    agentId: 'agent_1',
+    taskId: 'task_1',
+    goalRef: 'issue:41',
+    sessionId: null,
+  });
+
+  const snap = (await app.inject({ method: 'GET', url: '/api/state' })).json() as {
+    knowledge: { id: string; asks: number; scopeStale: boolean; scopeLastMatchedAt: string | null }[];
+    knowledgeCost: { blockChars: number; charsPerToken: number; perDispatchUsd: number | null; windowLabel: string };
+  };
+  const row = snap.knowledge.find((f) => f.id === stale.fact.id);
+  assert.equal(row?.asks, 1);
+  // Filed this instant, so the window has nothing to say yet — a claim younger
+  // than `knowledgeScopeStaleDays` cannot be stale, and a page that said otherwise
+  // would flag every check claim the day it was written.
+  assert.equal(row?.scopeStale, false);
+  assert.equal(row?.scopeLastMatchedAt, null);
+  // The reading rides the polled snapshot rather than a route of its own: both
+  // halves of it are folds over rows the snapshot already holds.
+  assert.equal(snap.knowledgeCost.charsPerToken, KNOWLEDGE_CHARS_PER_TOKEN);
+  assert.equal(snap.knowledgeCost.windowLabel, '7d');
+  // Nothing has been dispatched, so nothing reported usage — and the price is
+  // "cannot say" rather than a zero.
+  assert.equal(snap.knowledgeCost.perDispatchUsd, null);
+  await app.close();
+  system.store.close();
+});
+
+test('nothing is demoted, lapsed or dropped by a reading', async () => {
+  const system = build();
+  // A claim on a check nothing runs any more, that nobody has ever asked for.
+  const filed = system.store.proposeFact(proposal({ scope: 'check:gone' }), seenOn('issue:41'));
+  assert.ok(filed.outcome !== 'barred');
+  system.store.setFactReach(filed.fact.id, 'injected');
+  const before = system.store.getFact(filed.fact.id);
+
+  const app = await serve(system);
+  for (let i = 0; i < 3; i++) await app.inject({ method: 'GET', url: '/api/state' });
+
+  // Same reach, same clock, still in the block. The cost of a claim, the silence
+  // of its scope and the absence of demand are all things to read and none of them
+  // is a thing that acts: a claim nobody asked for this month may be the one that
+  // saves the next agent a day, and a check that matched nothing may be one that
+  // simply is not running this week.
+  const after = system.store.getFact(filed.fact.id);
+  assert.deepEqual(after, before);
+  const snap = (await app.inject({ method: 'GET', url: '/api/state' })).json() as {
+    knowledgeDelivery: { rendered: string[] };
+  };
+  assert.ok(snap.knowledgeDelivery.rendered.includes(filed.fact.id), 'a claim was dropped from the block by a reading');
+  await app.close();
+  system.store.close();
 });

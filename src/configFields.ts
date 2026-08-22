@@ -206,6 +206,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Cap on the knowledge block an agent is launched with. Read at every launch.',
   },
   {
+    path: 'knowledgeScopeStaleDays',
+    type: 'number',
+    access: 'plain',
+    why: 'How long a check scope may match nothing before the Knowledge page says so. A reading — nothing is demoted by it. 0 turns it off.',
+  },
+  {
     path: 'whitelistedApprovals',
     type: 'json',
     access: 'fileOnly',

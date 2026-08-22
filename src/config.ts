@@ -522,6 +522,26 @@ export interface Config {
    * operator sees the same drop per row on the cockpit's Knowledge page.
    */
   knowledgeBlockChars: number;
+  /**
+   * How many days a `check:` scope may go without matching anything before the
+   * cockpit's Knowledge page says so (issue #27 phase 7). `0` turns the reading
+   * off.
+   *
+   * A **reading and never a trigger.** Nothing is demoted, lapsed or dropped from
+   * a prompt by it: a check scope that matched nothing may be a check that is
+   * simply not running this week, and a rule acting on this would delete the
+   * fleet's record of exactly the checks it sees least. What it surfaces is the one
+   * failure a check scope has that nothing else can show — a renamed or
+   * re-matrixed job stops matching *silently*, and the fact simply stops being
+   * delivered.
+   *
+   * Thirty days rather than a fortnight because the false positive is the
+   * expensive one here: a release job or a nightly leg can be three weeks between
+   * runs, and a page that called those drifted would teach an operator to ignore
+   * the reading. A check the provider is still reporting is never stale whatever
+   * this says.
+   */
+  knowledgeScopeStaleDays: number;
   /** Command used to launch an agent session (overridable for tests). */
   claudeCommand: string;
   /** Extra args passed to the agent command. */
@@ -758,6 +778,7 @@ const DEFAULTS: Config = {
   agentStallExtendMs: 900_000,
   agentResumeAttempts: 3,
   knowledgeBlockChars: 6_000,
+  knowledgeScopeStaleDays: 30,
   claudeCommand: 'claude',
   claudeArgs: [],
   promptTemplatesDir: '.lubbdubb/prompts',

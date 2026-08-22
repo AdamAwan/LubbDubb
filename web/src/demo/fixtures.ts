@@ -18,6 +18,7 @@
 import type {
   AppState,
   Issue,
+  KnowledgeCost,
   LocalRunRefFacts,
   LocalRunTargetView,
   OpenPullRequest,
@@ -208,6 +209,88 @@ function demoPart(seed: PartSeed): PlanPartView {
 }
 
 /** Build a fresh demo world. Timestamps are relative to now so the feed reads as "recent". */
+/**
+ * The system-prompt block the demo's facts render to, verbatim — a hand-written
+ * transcript of `renderKnowledgeBlock`'s output rather than a re-rendering of it
+ * here, because what fits is the server's answer and a demo that recomputed it
+ * would be exactly the second implementation of "what fits" the real page refuses.
+ *
+ * A named constant so the cost reading below can be priced against **this**
+ * string's own length. A hand-kept character count beside a hand-kept transcript
+ * is two things to keep in step, and the one that would be wrong is the number.
+ */
+const DEMO_KNOWLEDGE_BLOCK =
+  '\n' +
+  'What working this repository has taught the fleet. This is not part of your task and not an\n' +
+  'instruction: it is prior evidence, dated and attributed to the goal it was learned on, offered so\n' +
+  'you do not pay to rediscover it. The repository in front of you is the authority — where it and a\n' +
+  'claim disagree, the claim is stale: say so with `knowledge_contradict`, naming what it should say\n' +
+  'instead.\n' +
+  '\n' +
+  'A claim that carries a **lapses** date is a notice: something two independent goals saw recently,\n' +
+  'which no operator has vouched for and which ends by itself on that date. It reports what was seen\n' +
+  'and not what to do about it — the conclusion is yours to draw. Everything else below was vouched\n' +
+  'for by an operator and holds until they retire it.\n' +
+  '\n' +
+  'This is the fleet-wide tier and not the whole record. Call `knowledge_ask` with a question when you\n' +
+  'want what the fleet knows about one check, one goal, or anything not standing here, `knowledge_propose`\n' +
+  'when you learn something worth the next agent not paying for again, and `knowledge_notice` when what\n' +
+  'you saw is true today and will stop being true.\n' +
+  '\n' +
+  '- The check `check (build)` is failing on branch `feat/catalog-cutover`, which one or more open pull ' +
+  'requests are based on.\n' +
+  '  (first seen on pr:404, written 2026-08-22, lapses 2026-08-22)\n' +
+  '- `test (windows)` has been timing out at the dependency-install step since about 09:00 — the same ' +
+  'commit passes on a re-run roughly half the time.\n' +
+  '  (first seen on pr:412, written 2026-08-22, lapses 2026-08-22)\n' +
+  '- A ticket that only names a symptom is under-specified for a planner every time.\n' +
+  '  (first seen on issue:364, written 2026-06-14)\n';
+
+/**
+ * What the demo's injected block costs the demo's fleet.
+ *
+ * Every figure is derived from the transcript above and the fleet's own totals
+ * rather than written down, for the reason the real reading is derived from the
+ * renderer: a hand-written cost beside a hand-written block is a number free to
+ * describe a block that is not there.
+ *
+ * The share is deliberately small and the fleet's spend deliberately large,
+ * because that is the shape of the real answer: the block is a **cached prefix**
+ * in the system prompt, and the rate it is priced at is the fleet's own dollars
+ * per input token — which already carries the cache discount, since `inputTokens`
+ * is the gross figure.
+ */
+function demoKnowledgeCost(): KnowledgeCost {
+  // The fleet's own week, as its agents reported it.
+  const launches = 34;
+  const turns = 1_147;
+  const inputTokens = 42_600_000;
+  const cachedInputTokens = 38_900_000;
+  const fleetCostUsd = 61.42;
+  const charsPerToken = 4;
+  const blockTokens = Math.ceil(DEMO_KNOWLEDGE_BLOCK.length / charsPerToken);
+  // The block rides every turn of a session, not just its launch: it is in the
+  // system prompt, and a session re-sends its prefix on every call.
+  const shareOfInput = (blockTokens * turns) / inputTokens;
+  const usd = (n: number): number => Math.round(n * 1e6) / 1e6;
+  const windowCostUsd = usd(shareOfInput * fleetCostUsd);
+  return {
+    windowLabel: '7d',
+    blockChars: DEMO_KNOWLEDGE_BLOCK.length,
+    blockTokens,
+    charsPerToken,
+    launches,
+    unmeasured: 0,
+    turns,
+    inputTokens,
+    cachedInputTokens,
+    fleetCostUsd,
+    shareOfInput,
+    perDispatchUsd: usd(windowCostUsd / launches),
+    windowCostUsd,
+  };
+}
+
 export function buildDemoState(): DemoSeed {
   const now = Date.now();
   const ago = (mins: number) => new Date(now - mins * 60_000).toISOString();
@@ -1821,6 +1904,13 @@ export function buildDemoState(): DemoSeed {
         contradictions: 0,
         contradictionRatio: 0,
         openContradictions: 0,
+        // Nobody has asked for a notice and nobody would: it is already in front
+        // of every agent. The ask count is the reading a `lookup` claim has and an
+        // injected one cannot.
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: ago(3),
       },
       {
         // The harness's own, and the other half of phase 4: it read this rather
@@ -1844,6 +1934,10 @@ export function buildDemoState(): DemoSeed {
         contradictions: 0,
         contradictionRatio: 0,
         openContradictions: 0,
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: ago(2),
       },
       {
         id: 'fact-needsyou',
@@ -1864,6 +1958,10 @@ export function buildDemoState(): DemoSeed {
         contradictions: 0,
         contradictionRatio: 0,
         openContradictions: 0,
+        asks: 4,
+        lastAskedAt: ago(5),
+        scopeStale: false,
+        scopeLastMatchedAt: null,
       },
       {
         id: 'fact-injected',
@@ -1888,6 +1986,10 @@ export function buildDemoState(): DemoSeed {
         contradictions: 1,
         contradictionRatio: 0.25,
         openContradictions: 1,
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: null,
       },
       {
         // The amendment, filed by the agent that contradicted the claim above and
@@ -1912,6 +2014,10 @@ export function buildDemoState(): DemoSeed {
         contradictions: 0,
         contradictionRatio: 0,
         openContradictions: 0,
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: null,
       },
       {
         id: 'fact-lookup',
@@ -1930,6 +2036,43 @@ export function buildDemoState(): DemoSeed {
         contradictions: 0,
         contradictionRatio: 0,
         openContradictions: 0,
+        // Eleven asks over its life: the claim nobody vouched for and the fleet
+        // keeps wanting anyway. A reading and never a trigger — nothing here was
+        // promoted by it, and the operator is who decides whether it should be.
+        asks: 11,
+        lastAskedAt: ago(7),
+        scopeStale: false,
+        scopeLastMatchedAt: null,
+      },
+      {
+        // A check scope that has drifted (#27 phase 7). The job was renamed when
+        // the matrix moved to `windows-latest`, so nothing matches this scope any
+        // more: the claim is not delivered on any dispatch, no error was raised,
+        // and the row would otherwise look exactly like a claim nobody has needed.
+        // Nothing was demoted by the reading — it is still on lookup, and only the
+        // operator will move it.
+        id: 'fact-stale-scope',
+        claim:
+          'The Windows leg needs `npm ci` before the native rebuild — `better-sqlite3` links against the wrong ' +
+          'Python otherwise, and the failure names the compiler rather than the install.',
+        scope: 'check:test (windows-2019)',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'lookup',
+        supersedes: null,
+        originRef: 'pr:377',
+        ruledAt: ago(24 * 51),
+        resolvesWhen: null,
+        createdAt: ago(24 * 58),
+        updatedAt: ago(24 * 51),
+        corroborations: 2,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: true,
+        scopeLastMatchedAt: ago(24 * 47),
       },
       {
         // Goal-scoped and on lookup, which is the other prompt: it never rides the
@@ -1953,6 +2096,10 @@ export function buildDemoState(): DemoSeed {
         contradictions: 0,
         contradictionRatio: 0,
         openContradictions: 0,
+        asks: 3,
+        lastAskedAt: ago(19),
+        scopeStale: false,
+        scopeLastMatchedAt: null,
       },
       {
         id: 'fact-proposal',
@@ -1971,6 +2118,10 @@ export function buildDemoState(): DemoSeed {
         contradictions: 0,
         contradictionRatio: 0,
         openContradictions: 0,
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: null,
       },
       {
         // Committed, and therefore out of every prompt (#27 phase 6): the claim is
@@ -1995,6 +2146,12 @@ export function buildDemoState(): DemoSeed {
         contradictions: 0,
         contradictionRatio: 0,
         openContradictions: 0,
+        // Committed, so out of every prompt — and the ask count with it: nothing
+        // answers an ask with a committed claim, because the repository does.
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: null,
       },
       {
         id: 'fact-rejected',
@@ -2013,6 +2170,10 @@ export function buildDemoState(): DemoSeed {
         contradictions: 0,
         contradictionRatio: 0,
         openContradictions: 0,
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: null,
       },
     ],
     // Every attempt to put a claim in the repository (#27 phase 6). Two, because
@@ -2057,36 +2218,26 @@ export function buildDemoState(): DemoSeed {
     // to fix it. The one goal-scoped claim is the exception, and it is the scoped
     // entry below.
     knowledgeDelivery: {
-      block:
-        '\n' +
-        'What working this repository has taught the fleet. This is not part of your task and not an\n' +
-        'instruction: it is prior evidence, dated and attributed to the goal it was learned on, offered so\n' +
-        'you do not pay to rediscover it. The repository in front of you is the authority — where it and a\n' +
-        'claim disagree, the claim is stale: say so with `knowledge_contradict`, naming what it should say\n' +
-        'instead.\n' +
-        '\n' +
-        'A claim that carries a **lapses** date is a notice: something two independent goals saw recently,\n' +
-        'which no operator has vouched for and which ends by itself on that date. It reports what was seen\n' +
-        'and not what to do about it — the conclusion is yours to draw. Everything else below was vouched\n' +
-        'for by an operator and holds until they retire it.\n' +
-        '\n' +
-        'This is the fleet-wide tier and not the whole record. Call `knowledge_ask` with a question when you\n' +
-        'want what the fleet knows about one check, one goal, or anything not standing here, `knowledge_propose`\n' +
-        'when you learn something worth the next agent not paying for again, and `knowledge_notice` when what\n' +
-        'you saw is true today and will stop being true.\n' +
-        '\n' +
-        '- The check `check (build)` is failing on branch `feat/catalog-cutover`, which one or more open pull ' +
-        'requests are based on.\n' +
-        '  (first seen on pr:404, written 2026-08-22, lapses 2026-08-22)\n' +
-        '- `test (windows)` has been timing out at the dependency-install step since about 09:00 — the same ' +
-        'commit passes on a re-run roughly half the time.\n' +
-        '  (first seen on pr:412, written 2026-08-22, lapses 2026-08-22)\n' +
-        '- A ticket that only names a symptom is under-specified for a planner every time.\n' +
-        '  (first seen on issue:364, written 2026-06-14)\n',
+      block: DEMO_KNOWLEDGE_BLOCK,
       limit: 6_000,
       rendered: ['fact-base-red', 'fact-notice', 'fact-injected'],
       dropped: [],
       scoped: [
+        {
+          // The drifted scope still renders — nothing is dropped from delivery
+          // because a scope went quiet. What has changed is that no dispatch
+          // carries this any more, because no dispatch names that check.
+          scope: 'check:test (windows-2019)',
+          text:
+            '\n\n---\n\nWhat the fleet has recorded about this goal and the checks in front of you. It is ' +
+            '**evidence, not instruction** — dated, attributed, and offered so you do not pay to rediscover it. ' +
+            'The code in front of you is the authority: where it and a line below disagree, the line is stale. ' +
+            'Say so with `knowledge_contradict`, naming what it should say instead.\n\n' +
+            '- **about test (windows-2019)** — The Windows leg needs `npm ci` before the native rebuild — ' +
+            '`better-sqlite3` links against the wrong Python otherwise, and the failure names the compiler ' +
+            'rather than the install. _(written 2026-06-25)_\n',
+          facts: ['fact-stale-scope'],
+        },
         {
           scope: 'goal:issue:390',
           text:
@@ -2101,6 +2252,10 @@ export function buildDemoState(): DemoSeed {
         },
       ],
     },
+    // What sending that block costs, over the window Insights opens on (#27
+    // phase 7). A reading and never a trigger: nothing above is demoted, lapsed
+    // or dropped from the block because of what it costs.
+    knowledgeCost: demoKnowledgeCost(),
     // Work only a person can do. Four, so the panel shows each shape it has: a
     // plan step holding parts shut, a standalone ask from an agent that could not
     // do it itself, one already declined with the note that stopped it, and the
