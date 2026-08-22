@@ -1984,6 +1984,37 @@ export function buildDemoState(): DemoSeed {
         scopeLastMatchedAt: null,
       },
       {
+        // Also out of every prompt, and by a different exit: an operator filed this
+        // one in the tracker rather than writing it into the repository, so the
+        // backlog carries it now and the row draws the item rather than a pull
+        // request. One reach for three exits is the point — what they share is that
+        // the fleet is no longer told the claim.
+        id: 'fact-filed',
+        claim:
+          'The Azure integration suite shares one work-item pool, so two branches running it at once trip ' +
+          'over each other — the failure names an assertion rather than the collision.',
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'graduated',
+        supersedes: null,
+        originRef: 'issue:364',
+        ruledAt: ago(8),
+        resolvesWhen: null,
+        aboutRef: null,
+        where: 'test/support/azure.ts',
+        createdAt: ago(30),
+        updatedAt: ago(3),
+        corroborations: 2,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: null,
+      },
+      {
         // Committed, and therefore out of every prompt (#27 phase 6): the claim is
         // in the repository now, so an agent reads it there and keeping it injected
         // would pay context twice for one sentence. It reached this reach when the
@@ -2077,6 +2108,13 @@ export function buildDemoState(): DemoSeed {
     // with a pull request open — and only the one whose pull request actually
     // merged is `graduated`. A page that moved a claim at the click would be
     // showing a claim nobody has committed and nobody can yet read.
+    //
+    // One of each exit, because "three ways a claim leaves" is the page's whole
+    // claim and a surface that only ever draws the documentation one demonstrates
+    // a third of it. The `job` row hangs off a **proposal**, which is the case the
+    // merge turns on: one agent's report is exactly what every finding was, and
+    // queueing work for one asserts nothing — the prompt tells the agent to check
+    // the claim first.
     knowledgeGraduations: [
       {
         id: 'kng-lookup',
@@ -2091,6 +2129,39 @@ export function buildDemoState(): DemoSeed {
         settledAt: null,
         createdAt: ago(40),
         reading: 'waiting',
+      },
+      {
+        id: 'kng-job',
+        factId: 'fact-proposal',
+        exit: 'job',
+        jobId: 'job-work-1',
+        // A job has no document, and a defaulted `spec` would be a target nothing
+        // writes into wearing a name that says an agent will.
+        target: null,
+        bar: null,
+        prRef: null,
+        ticketRef: null,
+        outcome: null,
+        settledAt: null,
+        createdAt: ago(6),
+        reading: 'waiting',
+      },
+      {
+        id: 'kng-ticket',
+        factId: 'fact-filed',
+        exit: 'ticket',
+        jobId: 'job-file-1',
+        target: null,
+        bar: null,
+        prRef: null,
+        // The item the filing agent created. A `ticket` exit lands on
+        // `link_ticket` rather than on the sweep — there is no pull request to
+        // watch — which is why this one is settled with no `prRef` beside it.
+        ticketRef: 'issue:352',
+        outcome: 'landed',
+        settledAt: ago(3),
+        createdAt: ago(8),
+        reading: 'landed',
       },
       {
         id: 'kng-committed',
@@ -2699,6 +2770,7 @@ export function buildDemoState(): DemoSeed {
       '#333': 'https://github.com/example/markdown-magpie/issues/333',
       '#341': 'https://github.com/example/markdown-magpie/issues/341',
       '#345': 'https://github.com/example/markdown-magpie/issues/345',
+      '#352': 'https://github.com/example/markdown-magpie/issues/352',
       '#357': 'https://github.com/example/markdown-magpie/issues/357',
       '#359': 'https://github.com/example/markdown-magpie/issues/359',
       '#364': 'https://github.com/example/markdown-magpie/issues/364',
@@ -2720,6 +2792,10 @@ export function buildDemoState(): DemoSeed {
       // for the same items (see `buildRefUrls`), so the demo does too — otherwise
       // the Pages build is the one place every new link renders as plain text.
       'issue:341': 'https://github.com/example/markdown-magpie/issues/341',
+      // The ticket a claim's `ticket` exit produced. Brand new, so it is in no
+      // world list the `#n` keys are built from — which is exactly why the server
+      // resolves a graduation's `ticketRef` directly rather than borrowing it.
+      'issue:352': 'https://github.com/example/markdown-magpie/issues/352',
       'issue:364': 'https://github.com/example/markdown-magpie/issues/364',
       'issue:371': 'https://github.com/example/markdown-magpie/issues/371',
       'issue:379': 'https://github.com/example/markdown-magpie/issues/379',

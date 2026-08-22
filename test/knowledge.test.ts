@@ -876,6 +876,19 @@ test('the page draws every reach, the rejected tail included', async () => {
   assert.ok(html.includes('committed to the document that owns it'), 'a graduated row does not say where it went');
   assert.ok(html.includes('/pull/409'), 'a graduated row does not link to the pull request that put it there');
   assert.ok(html.includes('/pull/411'), 'a graduating row does not link to its open pull request');
+  // All three exits, because "three ways a claim leaves" is the page's whole claim
+  // and one chip that only ever says "committed" demonstrates a third of it. The
+  // job hangs off a **proposal**, which is the case the merge turns on: one agent's
+  // report is exactly what every finding was, and queueing work for one asserts
+  // nothing.
+  assert.ok(html.includes('being worked now'), 'a claim queued as a job is not drawn as one');
+  assert.ok(html.includes('filed in the tracker'), 'a claim filed as a ticket is not drawn as one');
+  // And a filed one draws the **item**, not a pull request: a `ticket` exit lands
+  // on `link_ticket` rather than on the sweep, so there is no pull request to
+  // link. It is a `<Ref>` like every other, so with a goal in the world it is the
+  // goal button and without one it links out to the tracker — both keyed, which is
+  // the whole of what stops the row being a dead end.
+  assert.ok(html.includes('>#352<'), 'a filed claim does not draw the ticket it became as a reference');
   // And the claim being written up is still on lookup, still delivered: nothing
   // moved when the operator clicked.
   assert.ok(html.includes('being written up'), 'a graduation in flight is not drawn');
