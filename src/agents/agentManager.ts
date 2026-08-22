@@ -240,7 +240,7 @@ interface AgentManagerEvents {
    * exit first). Only now is it safe to touch resources the process pinned,
    * e.g. removing its worktree cwd.
    */
-  reaped: [{ agentId: string; taskId: string; status: 'done' | 'failed' }];
+  reaped: [{ agentId: string; taskId: string; status: 'done' | 'failed' | 'killed' }];
   status: [{ agentId: string; taskId: string; status: AgentStatus }];
   usage: [{ agentId: string; taskId: string; usage: AgentUsage }];
   /** The agent surfaced an artifact/link mid-run (already persisted, deduped by ref). */
@@ -354,7 +354,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   private readonly exitCodes = new Map<string, number>();
   // The two halves of a 'reaped' emission: terminal status recorded vs process
   // exit observed. Their order differs per runtime, so track both.
-  private readonly terminals = new Map<string, 'done' | 'failed'>();
+  private readonly terminals = new Map<string, 'done' | 'failed' | 'killed'>();
   private readonly exited = new Set<string>();
   // agentId → its file-events spool key, so we can drain (and later dispose) the
   // dir the hook writes to. Present only when a spool is wired and the launch got one.
@@ -1581,8 +1581,21 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     if (agent) this.store.updateTask(agent.taskId, { status: 'interrupted' });
     this.sessions.delete(agentId);
     this.exitCodes.delete(agentId); // a deliberate kill's exit code is not a failure cause
-    this.exited.delete(agentId); // and a killed agent is never 'reaped' — its worktree stays
-    if (agent) this.reflectStatus(agentId, agent.taskId, 'killed');
+    // A killed agent still has to be reaped — the worktree lease outlives the process
+    // otherwise — so record the terminal and let `maybeReap` decide when the other
+    // half (`exited`) is in hand, exactly as `handleTerminal` does for `done`/`failed`.
+    this.terminals.set(agentId, 'killed');
+    if (!session) {
+      // The usage-limit-park arm: the process already exited before the park began,
+      // and `shedLimitedSession` cleared `exited` for it at the time — there is no
+      // live session left to fire a future `exit` event, so nothing will complete
+      // the rendezvous unless it happens here, synchronously.
+      this.exited.add(agentId);
+    }
+    if (agent) {
+      this.reflectStatus(agentId, agent.taskId, 'killed');
+      this.maybeReap(agentId, agent.taskId);
+    }
     return true;
   }
 
@@ -1602,11 +1615,13 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * load-bearing: that flag only stops the *session* reclassifying its own exit —
    * here the manager decides the record, and it decides `done`.
    *
-   * The one line that is the inverse of `kill`: `exited` is left alone rather than
-   * deleted. Both runtimes emit `exit` before their killed early-return, so the exit
-   * still lands, {@link maybeReap} finds a `done` terminal, and the reap removes the
-   * worktree — the clean finish, which is the whole point of saying done instead of
-   * killing. Credential revocation and spool disposal ride along there as usual.
+   * Both `complete` and `kill` now drive the same reap rendezvous — the difference
+   * is only which terminal `maybeReap` finds waiting: `done` here, `killed` there.
+   * Both runtimes emit `exit` before their killed early-return, so the exit still
+   * lands, {@link maybeReap} finds the `done` terminal `handleTerminal` records
+   * below, and the reap fires — the clean finish, which is the whole point of
+   * saying done instead of killing. Credential revocation and spool disposal ride
+   * along there as usual.
    *
    * Liveness is the whole guard: an agent that has already ended is not a candidate,
    * since re-labelling a settled record is a different question with a different
