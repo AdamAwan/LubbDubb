@@ -175,8 +175,8 @@ export class KnowledgeStore {
 
   /**
    * Every fact, newest first — including the rejected ones, for the reason
-   * `listLessons` keeps its retired rows: a governance surface that draws only
-   * what it let through cannot show what it stopped.
+   * the retired ones are kept too: a governance surface that draws only what it
+   * let through cannot show what it stopped.
    */
   listFacts(limit = 200): KnowledgeFact[] {
     const rows = this.ctx.db

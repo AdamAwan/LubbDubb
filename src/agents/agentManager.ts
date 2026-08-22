@@ -307,8 +307,29 @@ interface AgentManagerEvents {
  */
 const RETRO_EVIDENCE = 'Written up in the retrospective for this goal, as something working it taught.';
 
-/** The same, for a claim that rode in on a remedy: what coming back to a pull request taught. */
-const REMEDY_EVIDENCE = 'Learned coming back to this pull request, and filed with the remedy that says why.';
+/**
+ * A retrospective's claim as a proposal.
+ *
+ * Fleet-scoped and standing because that is what a write-up's lesson is: something
+ * working *this repository* taught, with no scope and no clock the retrospective
+ * ever had to give. `report_remedy` builds its own in `validateRemedy`, where the
+ * knowledge store's bounds can refuse before anything is written; this one has
+ * nothing to refuse that `validateClaimText` has not already refused inside
+ * `parseRetro`.
+ */
+function retroClaim(claim: string): FactProposal {
+  return {
+    claim,
+    scope: 'fleet',
+    lifetime: 'standing',
+    expiresInHours: null,
+    evidence: RETRO_EVIDENCE,
+    supersedes: null,
+    resolvesWhen: null,
+    aboutRef: null,
+    where: null,
+  };
+}
 
 /**
  * Owns the fleet of live PTY agent sessions: spawn, stream, detect
@@ -1040,7 +1061,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     document: string,
     lessons: string[],
   ): { ok: true; issueOrigin: string; lessonsFiled: number } | { ok: false; error: string } {
-    return this.withCaller(agentId, ({ agent, task }) => {
+    return this.withCaller(agentId, (caller) => {
+      const { task } = caller;
       const origin = retroSubmitOrigin(task.originRef);
       if (!origin.ok) return { ok: false, error: origin.error };
       this.store.recordRetrospective({
@@ -1060,9 +1082,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       // by name and reaches nobody however many times it is filed, and telling the
       // agent it filed one is exactly the silence the by-name refusal exists to
       // remove.
-      const filed = lessons.filter(
-        (claim) => this.raiseFromRun(agentId, task, agent, claim, RETRO_EVIDENCE).outcome !== 'barred',
-      ).length;
+      const filed = lessons.filter((claim) => this.fileFact(caller, retroClaim(claim)).outcome !== 'barred').length;
       this.emit('retrospective', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin });
       return { ok: true, issueOrigin: origin.issueOrigin, lessonsFiled: filed };
     });
@@ -1080,11 +1100,26 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * agent about, and a list an agent could assert is a column reporting whatever
    * it remembered.
    *
-   * The lesson rides on the same call rather than on a second tool, exactly as
-   * `recordRetrospective`'s does and for its reason: there is no submission that
-   * proposed a lesson but recorded no remedy, and none that lost its lesson to a
-   * follow-up call the agent never got to make. It lands `proposed` and reaches
-   * no agent until an operator vouches.
+   * The claim rides on the same call rather than on a second tool, exactly as
+   * `recordRetrospective`'s lessons do and for their reason: there is no
+   * submission that raised a claim but recorded no remedy, and none that lost its
+   * claim to a follow-up call the agent never got to make.
+   *
+   * **The two are not folded together.** The remedy row is the *event* record of
+   * one return to a pull request, with its counts and its dollars
+   * (`docs/spec/18-observability.md`); the claim is a durable statement about
+   * working this repository. Folding an account of an event into a durable claim
+   * would lose the counts, so this writes both and neither stands in for the
+   * other — and the remedy lands whatever becomes of the claim, including when an
+   * operator has already rejected it.
+   *
+   * The claim goes through {@link fileFact}, which is the path `raise` uses: the
+   * observer is the credential's, so an agent hitting a wall two other agents have
+   * already documented is recorded as **agreeing with them** rather than filing a
+   * third copy of it. The goal it carries is `corroborationGoal`'s reading of this
+   * task's origin, which for a `pr:<n>:ci` or `pr:<n>:comments` dispatch is
+   * `pr:<n>` — the pull request the remedy was filed on, exactly as the lesson's
+   * `originRef` was, and resolved from the credential rather than asserted.
    *
    * Routed through the manager rather than straight to the store so the cockpit
    * repaints now rather than on the next pulse — {@link proposeFact}'s reason —
@@ -1094,8 +1129,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   recordRemedy(
     agentId: string,
     submission: RemedySubmission,
-  ): { ok: true; remedy: Remedy; lessonProposed: boolean } | { ok: false; error: string } {
-    return this.withCaller(agentId, ({ agent, task }) => {
+  ): { ok: true; remedy: Remedy; raised: FactProposalOutcome | null } | { ok: false; error: string } {
+    return this.withCaller(agentId, (caller) => {
+      const { task } = caller;
       const scope = remedyOrigin(task.originRef);
       if (!scope.ok) return { ok: false, error: scope.error };
       const remedy = this.store.recordRemedy({
@@ -1109,79 +1145,10 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         agentId,
         taskId: task.id,
       });
-      // Raised as a claim, and attributed the way every other write in the tool
-      // channel is: the goal the credential resolves to, which for a `pr:42:ci`
-      // origin is `pr:42` — the same answer the old `originRef: pr:<n>` gave, now
-      // taken from the one function that collapses a dispatch concern to its goal
-      // rather than from a second spelling of the convention here.
-      if (submission.lesson !== null) {
-        this.raiseFromRun(agentId, task, agent, submission.lesson, REMEDY_EVIDENCE);
-      }
+      const raised = submission.claim === null ? null : this.fileFact(caller, submission.claim);
       this.emit('remedy', { agentId, taskId: task.id, originRef: scope.originRef });
-      return { ok: true, remedy, lessonProposed: submission.lesson !== null };
+      return { ok: true, remedy, raised };
     });
-  }
-
-  /**
-   * Raise a claim that rode in on another submission — a retrospective's, a
-   * remedy's — from inside a call that has already resolved the caller.
-   *
-   * Its own method rather than a call back through {@link proposeFact} because
-   * that one resolves the credential again, and both callers are already inside
-   * `withCaller` holding the agent and the task it resolved. The observer it
-   * builds is **identical**, which is the point: a claim filed alongside a
-   * write-up is attributed exactly as one raised through the intake, so nothing
-   * about where it came from changes what it takes to carry it anywhere.
-   *
-   * Fleet-scoped and standing, because that is what both of these are: what
-   * working a goal taught about working *this repository*. Neither writer has ever
-   * had a scope or a clock to give, and defaulting is what `raise` does with the
-   * same absence.
-   *
-   * `evidence` is the caller's sentence rather than the claim restated. There is no
-   * separate observation to record — the write-up beside it is the observation —
-   * so what the corroboration carries is where the claim came from, which is what
-   * an operator reads when deciding whether one voice should have been two.
-   */
-  private raiseFromRun(
-    agentId: string,
-    task: Task,
-    agent: Agent,
-    claim: string,
-    evidence: string,
-  ): FactProposalOutcome {
-    const outcome = this.store.proposeFact(
-      {
-        claim,
-        scope: 'fleet',
-        lifetime: 'standing',
-        expiresInHours: null,
-        evidence,
-        supersedes: null,
-        resolvesWhen: null,
-        aboutRef: null,
-        where: null,
-      },
-      {
-        agentId,
-        taskId: task.id,
-        goalRef: corroborationGoal(task.originRef),
-        sessionId: agent.sessionId,
-        words: evidence,
-      },
-    );
-    // A barred proposal wrote nothing, so there is nothing to repaint —
-    // {@link proposeFact}'s rule and its reason.
-    if (outcome.outcome !== 'barred') {
-      this.emit('fact', {
-        agentId,
-        taskId: task.id,
-        fact: outcome.fact,
-        filed: outcome.outcome === 'filed',
-        corroborations: outcome.corroborations,
-      });
-    }
-    return outcome;
   }
 
   /**
@@ -1204,31 +1171,53 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     agentId: string,
     proposal: FactProposal,
   ): { ok: true; outcome: FactProposalOutcome } | { ok: false; error: string } {
-    return this.withCaller(agentId, ({ agent, task }) => {
-      const outcome = this.store.proposeFact(proposal, {
-        agentId,
-        taskId: task.id,
-        goalRef: corroborationGoal(task.originRef),
-        sessionId: agent.sessionId,
-        // The agent's own words, never the claim restated: the count is what
-        // promotes a fact and this is what an operator reads to decide whether it
-        // should have.
-        words: proposal.evidence,
-      });
-      // A barred proposal wrote nothing, so there is nothing to repaint — and an
-      // event on it would put a claim an operator killed back in front of them as
-      // if it had just arrived.
-      if (outcome.outcome !== 'barred') {
-        this.emit('fact', {
-          agentId,
-          taskId: task.id,
-          fact: outcome.fact,
-          filed: outcome.outcome === 'filed',
-          corroborations: outcome.corroborations,
-        });
-      }
-      return { ok: true, outcome };
+    return this.withCaller(agentId, (caller) => ({ ok: true, outcome: this.fileFact(caller, proposal) }));
+  }
+
+  /**
+   * The one path a claim reaches the store by, whichever tool the agent was
+   * holding.
+   *
+   * Split out of {@link proposeFact} when `report_remedy` grew its own arm
+   * (`docs/spec/27-knowledge.md#the-remedy-arm`), because a second writer that
+   * assembled its own observer would be a second answer to *who said this* — and
+   * the count that carries a claim to `lookup` is a count of observers. The
+   * caller is already resolved, so a path that writes a row *and* raises a claim
+   * does both under one credential lookup rather than re-entering the tool seam.
+   *
+   * Three callers now: `raise`, `report_remedy`, and the retrospective's write-up,
+   * whose claims were `lessons` rows until the stores merged. That is the whole
+   * point of the seam — a claim is attributed identically whatever submission it
+   * rode in on, so nothing about where it came from changes what it takes to carry
+   * it anywhere.
+   *
+   * @public the fact-writing seam shared by `raise`, `report_remedy` and `retro_submit`
+   */
+  private fileFact(caller: { agent: Agent; task: Task }, proposal: FactProposal): FactProposalOutcome {
+    const { agent, task } = caller;
+    const outcome = this.store.proposeFact(proposal, {
+      agentId: agent.id,
+      taskId: task.id,
+      goalRef: corroborationGoal(task.originRef),
+      sessionId: agent.sessionId,
+      // The agent's own words, never the claim restated: the count is what
+      // promotes a fact and this is what an operator reads to decide whether it
+      // should have.
+      words: proposal.evidence,
     });
+    // A barred proposal wrote nothing, so there is nothing to repaint — and an
+    // event on it would put a claim an operator killed back in front of them as
+    // if it had just arrived.
+    if (outcome.outcome !== 'barred') {
+      this.emit('fact', {
+        agentId: agent.id,
+        taskId: task.id,
+        fact: outcome.fact,
+        filed: outcome.outcome === 'filed',
+        corroborations: outcome.corroborations,
+      });
+    }
+    return outcome;
   }
 
   /**

@@ -16,8 +16,9 @@ import {
   ALLOWED_MCP_TOOLS,
   MCP_SERVER_ID,
   MCP_TOOL_NAMES,
-  type McpToolName,
   PERMISSION_PROMPT_TOOL,
+  SUPERSEDED_TOOL_NAMES,
+  TOOL_NAMING,
 } from '../src/mcp/names.js';
 import { defaultSocketPath, McpBridgeServer } from '../src/mcp/server.js';
 import { parseWorldRef, readWorldItem, WORLD_READ_KINDS } from '../src/mcp/worldRead.js';
@@ -153,66 +154,16 @@ test('the granted permission names are exactly the tools the server exposes', ()
 });
 
 /**
- * Where each tool is named to the agent that has to call it.
+ * The classification itself lives in `src/mcp/names.ts`, beside the names it
+ * classifies, because production code reads the `superseded` half: the setup
+ * reading tells an operator when a prompt override of theirs still names one
+ * (`docs/spec/26-setup.md`). It was written here, and a classification a test owns
+ * is one production code has to keep a second copy of — free to disagree with what
+ * is actually granted, silently.
  *
- * `addendum` — nothing else names it, so if {@link MCP_PROTOCOL_ADDENDUM} does not,
- * the tool is discoverable from `tools/list` alone and an agent reaches for `gh`/`az`
- * instead. That was `open_pr`'s state: wired, allow-listed, and never once named.
- *
- * `point-of-use` — named by the prompt or the instruction that dispatches the work
- * it belongs to, which is the better place for a tool only one kind of agent ever
- * calls. Keeping them *out* of the addendum is what keeps it short enough to read.
- *
- * `superseded` — deliberately named nowhere. `raise` is the door for everything
- * these four did, so advertising them would put six ways to file one observation in
- * front of every agent, which is the taxonomy the intake exists to remove. They stay
- * *registered* rather than deleted because an operator's prompt override written
- * before the intake may still name one, and unlike a `PromptId` a retired tool name
- * fails silently: the call simply comes back refused, on exactly the deployments
- * that customised most. This classification is the place that distinction is
- * recorded — without it they would read as `point-of-use` and look like tools
- * somebody forgot to name.
- *
- * A `Record` over `McpToolName`, so a new tool does not compile until it has been
- * classified — the decision this test exists to force.
+ * What is asserted here is each side of it: the addendum names every `addendum`
+ * tool and no other, and every `superseded` tool is still granted.
  */
-const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use' | 'superseded'> = {
-  // The one door. Every agent may raise, on every dispatch, so there is no single
-  // prompt that could name it — which is the addendum's own criterion.
-  raise: 'addendum',
-  escalate: 'addendum',
-  plan_submit: 'addendum',
-  world_read: 'addendum',
-  open_pr: 'addendum',
-  note_progress: 'addendum',
-  // Every agent may read the knowledge base, and it has no point of use to be named
-  // at: a tool named nowhere but in `tools/list` is a tool an agent finishes without.
-  knowledge_ask: 'addendum',
-  // A request for a person to act rather than an observation, which is why it did
-  // not fold into `raise` — and why it still needs naming.
-  request_human_task: 'addendum',
-  // The four `raise` replaced. Kept registered for an override that names one.
-  report_finding: 'superseded',
-  knowledge_propose: 'superseded',
-  knowledge_notice: 'superseded',
-  knowledge_contradict: 'superseded',
-  // Terminal or task-scoped: the dispatch prompt names these where they are used.
-  link_ticket: 'point-of-use',
-  conclude_work: 'point-of-use',
-  conclude_part: 'point-of-use',
-  assess_issue: 'point-of-use',
-  assay_issue: 'point-of-use',
-  retro_submit: 'point-of-use',
-  scratch_append: 'point-of-use',
-  scratch_read: 'point-of-use',
-  validation_report: 'point-of-use',
-  validation_amend: 'point-of-use',
-  report_remedy: 'point-of-use',
-  // The one tool an agent is never told about: Claude Code calls it through
-  // --permission-prompt-tool, so naming it would invite a call that means nothing.
-  request_permission: 'point-of-use',
-};
-
 test('the addendum names every tool an agent has to choose to call', () => {
   for (const name of MCP_TOOL_NAMES) {
     const named = MCP_PROTOCOL_ADDENDUM.includes(name);
@@ -224,14 +175,23 @@ test('the addendum names every tool an agent has to choose to call', () => {
   }
 });
 
+test('the superseded list is derived from the classification, not written out again', () => {
+  // Two lists that merely agreed today would let a withdrawal reach the grants
+  // without reaching the reading that tells an operator who still names one.
+  assert.deepEqual(
+    [...SUPERSEDED_TOOL_NAMES],
+    MCP_TOOL_NAMES.filter((name) => TOOL_NAMING[name] === 'superseded'),
+  );
+  assert.ok(SUPERSEDED_TOOL_NAMES.includes('report_finding'));
+});
+
 test('a superseded tool is still granted, so an override that names one is not refused', () => {
   // The failure this closes is silent and lands only on the deployments that
   // customised most: an operator's prompt override written before the intake still
   // says "report_finding", and a name dropped from the grants comes back refused
   // with nothing in the logs to say why. Unlike a `PromptId`, a tool name that no
   // longer exists does not fail loudly at boot.
-  for (const [name, naming] of Object.entries(TOOL_NAMING)) {
-    if (naming !== 'superseded') continue;
+  for (const name of SUPERSEDED_TOOL_NAMES) {
     assert.ok(
       ALLOWED_MCP_TOOLS.includes(`mcp__${MCP_SERVER_ID}__${name}`),
       `${name} is superseded, not withdrawn — it must still be granted`,

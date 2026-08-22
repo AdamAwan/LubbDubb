@@ -691,12 +691,19 @@ two from the caller's own task origin and refuses every other caller by name; th
 assert is a column reporting whatever each agent took it to mean, and the counts would be worth
 nothing.
 
-**`undocumented` is the one verdict that may carry a lesson**, and it rides on the same call rather
-than a second tool — atomic, exactly as a retrospective's lessons are ([13](13-jobs-and-tickets.md)).
-A lesson on any other guard is **refused rather than dropped**: a claim reaches every later dispatch
-once an operator vouches for it, so the gate on what may become one has to be visible to the agent
-proposing it. The lesson's provenance is the pull request (`pr:<n>`), which both lesson surfaces
-already render; resolving the goal above it would mean a second parser of the branch convention.
+**`undocumented` is the one verdict that may carry a claim**, and it rides on the same call rather
+than a second tool — atomic, exactly as a retrospective's lessons are ([27](27-knowledge.md)).
+A claim on any other guard is **refused rather than dropped**: a claim reaches every later dispatch
+once it is vouched for, so the gate on what may become one has to be visible to the agent raising it.
+The claim goes to the knowledge base through the path `raise` uses, so a wall two other agents have
+already documented is recorded as agreement rather than as a third copy
+([27](27-knowledge.md#the-remedy-arm)). Its provenance is the pull request (`pr:<n>`), resolved from
+the credential rather than asserted.
+
+**The remedy row is untouched by any of it.** The account of an event and a durable claim are
+different animals: the row keeps its counts and its dollars, it lands whatever becomes of the claim —
+including under an operator's rejection of it — and nothing on this page is derived from the
+knowledge base.
 
 **An account is not a red, and not a run.** One agent that settled four reds in one dispatch files
 one row; a pull request that went red four times over four days collects four. So `accounts` is never

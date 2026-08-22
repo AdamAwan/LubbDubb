@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { Config } from '../config.js';
 import type { ConfigChange } from '../configApply.js';
+import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
+import { SUPERSEDED_TOOL_NAMES } from '../mcp/names.js';
 import type { Store } from '../store/store.js';
 import { isWatched, watchLabelFor } from '../watchLabels.js';
 import { credentialVar } from './remote.js';
@@ -65,7 +67,15 @@ export type SetupFix =
       /** The key to open on the config page when the operator would rather look first. */
       group: string;
     }
-  | { kind: 'goto'; label: string; to: 'config' | 'tickets'; group?: string }
+  /**
+   * Open the surface where the decision is made.
+   *
+   * `prompts` is the config page's Prompts tab rather than a destination of its
+   * own: a fix that landed an operator on the values page to answer a question
+   * about a prompt override would be the failure this whole surface was rebuilt
+   * around — a row that opens the wrong screen is worse than no row.
+   */
+  | { kind: 'goto'; label: string; to: 'config' | 'tickets' | 'prompts'; group?: string }
   /**
    * Open the confirm sheet — a repository, everything it implies, and the diff.
    *
@@ -152,8 +162,18 @@ export async function buildSetupReading(deps: {
    * end. → {@link awaitingRestart}
    */
   pending: readonly ConfigChange[];
+  /**
+   * The resolved template book — `system.prompts`, the same one the dispatcher
+   * renders from.
+   *
+   * Required rather than defaulted, for `pending`'s reason exactly: the default
+   * would be "no overrides", which is the one answer that draws no row at all —
+   * so a caller that forgot it would produce a reading that silently says a
+   * deployment names no withdrawn tool when it names four.
+   */
+  prompts: PromptTemplates;
 }): Promise<SetupReading> {
-  const { config, store, probes, configFile, pending } = deps;
+  const { config, store, probes, configFile, pending, prompts } = deps;
   const configFileExists = existsSync(configFile);
   const onMock = config.integrations.issues === 'fake' && config.integrations.sourceControl === 'fake';
   const install = probes.installRoot();
@@ -170,6 +190,7 @@ export async function buildSetupReading(deps: {
     ...watchChecks(config, store),
     await agentCheck(config, probes),
     billingCheck(probes),
+    ...supersededToolChecks(prompts),
   ]) {
     const waiting = awaitingRestart(check, pending);
     checks.push(waiting ?? check);
@@ -555,6 +576,88 @@ function watchChecks(config: Config, store: Store): SetupCheck[] {
       fix: { kind: 'goto', label: 'Open Tickets', to: 'tickets' },
     },
   ];
+}
+
+/**
+ * Whether an operator's own prompt overrides still name a tool the intake
+ * replaced.
+ *
+ * `report_finding`, `knowledge_propose`, `knowledge_notice` and
+ * `knowledge_contradict` are registered, granted and named nowhere: `raise` is
+ * the one door now, and advertising six ways to file one observation is the
+ * taxonomy the intake removed. They were kept rather than deleted for one reason
+ * — an operator's override written before the intake may still name one, and a
+ * **withdrawn** tool name fails silently: the call comes back refused with
+ * nothing in the logs, on exactly the deployments that customised most
+ * ([27](27-knowledge.md)). Unlike a `PromptId`, whose removal turns a deployment
+ * into a harness that will not boot and says so.
+ *
+ * That shim is doing nothing until somebody can see whether it is still needed,
+ * which is the whole of this check: it turns "we cannot know who still names
+ * these" into a reading an operator can act on, and the withdrawal into something
+ * that can be taken safely.
+ *
+ * **`warn`, never `bad`.** Nothing is broken — the call still works. What is true
+ * is that the deployment is one withdrawal away from breaking, which is a
+ * discrepancy between what an override says and what the channel advertises,
+ * rather than a fault in what is running.
+ *
+ * **Only the overrides are read, and a deployment with none draws no check at
+ * all** rather than an `ok` row about a thing it does not do. The built-ins name
+ * none of these by construction (`test/mcpChannel.test.ts` holds that), so
+ * scanning them would be scanning the harness's own text for the harness's own
+ * mistake. Where there *are* overrides and none names one, the `ok` row is the
+ * reading having been taken — the same shape `credential` takes when the variable
+ * is present.
+ *
+ * The names come from `src/mcp/names.ts`, which is also where the grants come
+ * from: two lists that merely agreed today would let a withdrawal reach the
+ * grants without reaching this row. → `docs/spec/26-setup.md#an-override-that-names-a-superseded-tool`
+ */
+function supersededToolChecks(prompts: PromptTemplates): SetupCheck[] {
+  const overrides = prompts.describe().filter((template) => template.overridden);
+  if (overrides.length === 0) return [];
+  const naming = overrides
+    .map((template) => ({
+      id: template.id,
+      tools: SUPERSEDED_TOOL_NAMES.filter((tool) => template.template.includes(tool)),
+    }))
+    .filter((entry) => entry.tools.length > 0);
+  if (naming.length === 0) {
+    return [
+      {
+        id: 'prompt-tools',
+        label: 'Prompt overrides',
+        verdict: 'ok',
+        detail: `${overrides.length} override(s), none naming a tool the intake replaced`,
+      },
+    ];
+  }
+  // Named rather than counted: "3 overrides name withdrawn tools" is a quantity an
+  // operator cannot act on, and the whole remedy is which file to open and which
+  // word to change in it.
+  const named = naming.map((entry) => `${entry.id}.md names ${entry.tools.join(', ')}`);
+  return [
+    {
+      id: 'prompt-tools',
+      label: 'Prompt overrides',
+      verdict: 'warn',
+      detail: `${describeNaming(named)} — tools \`raise\` replaced. They still work, and they are the next thing to be withdrawn.`,
+      remedy: 'Say `raise` instead: it takes any observation and the harness works out where it goes.',
+      fix: { kind: 'goto', label: 'Open Prompts', to: 'prompts' },
+    },
+  ];
+}
+
+/**
+ * The overrides as one clause, capped for {@link describeChanges}' reason: this is
+ * the single line a rail row draws, and an operator may have overridden every
+ * template in the book.
+ */
+function describeNaming(named: readonly string[]): string {
+  const shown = named.slice(0, 3);
+  const rest = named.length - shown.length;
+  return rest > 0 ? `${shown.join('; ')} and ${rest} more` : shown.join('; ');
 }
 
 async function agentCheck(config: Config, probes: SetupProbes): Promise<SetupCheck> {

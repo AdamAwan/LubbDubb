@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { loadConfig } from '../src/config.js';
 import { configField, envOverride } from '../src/configFields.js';
 import type { SetupProbes } from '../src/setup/probes.js';
+import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
 import { buildSetupReading, type SetupCheck } from '../src/setup/reading.js';
 import { resolveFromRepo } from '../src/setup/resolve.js';
 import { buildSystem } from '../src/system.js';
@@ -82,6 +83,7 @@ test('every config fix a check offers is a key the config route accepts', async 
       probes: probes(),
       configFile: '/nowhere/lubbdubb.config.json',
       pending: [],
+      prompts: defaultPromptTemplates(),
     }),
     buildSetupReading({
       config: config({ agentMode: 'raw', labelPrefix: '' }),
@@ -89,6 +91,7 @@ test('every config fix a check offers is a key the config route accepts', async 
       probes: probes({ env: (name) => (name === 'ANTHROPIC_API_KEY' ? 'sk-ant-x' : undefined) }),
       configFile: '/nowhere/lubbdubb.config.json',
       pending: [],
+      prompts: defaultPromptTemplates(),
     }),
   ]);
   const fixes = readings.flatMap((reading) => reading.checks.map((check: SetupCheck) => check.fix));
@@ -115,6 +118,7 @@ test('every outstanding check says what to do about it', async () => {
     probes: probes({ agentVersion: () => Promise.resolve(null), env: () => undefined }),
     configFile: '/nowhere/lubbdubb.config.json',
     pending: [],
+    prompts: defaultPromptTemplates(),
   });
   const outstanding = reading.checks.filter((check) => check.verdict === 'bad' || check.verdict === 'warn');
   assert.ok(outstanding.length > 0);
@@ -140,6 +144,7 @@ test('an identity nothing could confirm is never offered as a one-click fix', as
     probes: probes({ env: () => undefined }),
     configFile: '/nowhere/lubbdubb.config.json',
     pending: [],
+    prompts: defaultPromptTemplates(),
   });
   const identity = github.checks.find((check) => check.id === 'identity');
   assert.equal(identity?.verdict, 'bad');
@@ -151,6 +156,7 @@ test('an identity nothing could confirm is never offered as a one-click fix', as
     probes: probes({ env: (name) => (name === 'GITHUB_TOKEN' ? 'ghp_x' : undefined) }),
     configFile: '/nowhere/lubbdubb.config.json',
     pending: [],
+    prompts: defaultPromptTemplates(),
   });
   const asked = confirmed.checks.find((check) => check.id === 'identity');
   assert.equal(asked?.fix?.kind, 'config');
@@ -176,6 +182,7 @@ test('a repoRoot that is the harness’s own checkout is reported as such', asyn
     probes: probes({ installRoot: () => own }),
     configFile: '/nowhere/lubbdubb.config.json',
     pending: [],
+    prompts: defaultPromptTemplates(),
   });
   assert.equal(reading.prefill.repoRootIsSelf, true);
 
@@ -185,6 +192,7 @@ test('a repoRoot that is the harness’s own checkout is reported as such', asyn
     probes: probes({ installRoot: () => '/srv/lubbdubb' }),
     configFile: '/nowhere/lubbdubb.config.json',
     pending: [],
+    prompts: defaultPromptTemplates(),
   });
   assert.equal(elsewhere.prefill.repoRootIsSelf, false);
 });

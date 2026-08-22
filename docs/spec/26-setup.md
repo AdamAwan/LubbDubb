@@ -128,22 +128,24 @@ has an arm and applies now; everything else lands in the file and is reported as
 
 ## The checks
 
-`buildSetupReading` (`src/setup/reading.ts`) answers six, plus a seventh whenever the file has moved
-ahead of the process ([below](#a-fault-the-file-has-already-answered)), and they outlive the first three minutes on
-purpose. That is the argument for their being checks rather than wizard steps: `credential` is how an
+`buildSetupReading` (`src/setup/reading.ts`) answers six, plus one about the prompt overrides
+whenever a deployment has any ([below](#an-override-that-names-a-superseded-tool)) and one whenever
+the file has moved ahead of the process ([below](#a-fault-the-file-has-already-answered)), and they
+outlive the first three minutes on purpose. That is the argument for their being checks rather than wizard steps: `credential` is how an
 operator finds out on a Tuesday that a token expired, and `eligibility` is how they find out that a
 filter of their own is hiding every tagged item on the tracker.
 
-| Check         | Bad when                                                | Why it is silent                                                                                                                 |
-| ------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `pointed`     | both capabilities are still `fake`                      | the invented world reads exactly like a real one                                                                                 |
-| `credential`  | the selected provider's env var is unset                | asked of **both** capabilities, since a deployment may read issues from one provider and PRs from another                        |
-| `identity`    | `userId` is unset                                       | tickets it files go unassigned and its branches are not named as yours ([02](02-configuration.md#userid))                        |
-| `eligibility` | tagged work exists and none of it is yours              | the fleet is idle **and correct**, which is the hardest state to tell from broken                                                |
-| `wiring`      | nothing tagged, and nothing ever picked up              | the same, on the one day an empty panel is unreadable because none has ever been full                                            |
-| `agent`       | `agentMode` is `raw`, or `claudeCommand` is not on PATH | a `raw` dispatch writes a transcript and never calls a model                                                                     |
-| `billing`     | `ANTHROPIC_API_KEY` is in the environment               | agents inherit it and the CLI prefers a key with no prompt, so the whole fleet bills the API ([02](02-configuration.md#secrets)) |
-| `restart`     | the file holds changes this process is not running      | `warn`, not `bad` — the harness works, it is just not working on what the operator last wrote                                    |
+| Check          | Bad when                                                | Why it is silent                                                                                                                 |
+| -------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `pointed`      | both capabilities are still `fake`                      | the invented world reads exactly like a real one                                                                                 |
+| `credential`   | the selected provider's env var is unset                | asked of **both** capabilities, since a deployment may read issues from one provider and PRs from another                        |
+| `identity`     | `userId` is unset                                       | tickets it files go unassigned and its branches are not named as yours ([02](02-configuration.md#userid))                        |
+| `eligibility`  | tagged work exists and none of it is yours              | the fleet is idle **and correct**, which is the hardest state to tell from broken                                                |
+| `wiring`       | nothing tagged, and nothing ever picked up              | the same, on the one day an empty panel is unreadable because none has ever been full                                            |
+| `agent`        | `agentMode` is `raw`, or `claudeCommand` is not on PATH | a `raw` dispatch writes a transcript and never calls a model                                                                     |
+| `billing`      | `ANTHROPIC_API_KEY` is in the environment               | agents inherit it and the CLI prefers a key with no prompt, so the whole fleet bills the API ([02](02-configuration.md#secrets)) |
+| `prompt-tools` | a prompt override names a tool `raise` replaced         | the tool still works, so nothing is broken — the deployment is one withdrawal away from a call refused with nothing in the logs  |
+| `restart`      | the file holds changes this process is not running      | `warn`, not `bad` — the harness works, it is just not working on what the operator last wrote                                    |
 
 ### A check earns a row for a discrepancy, never a quantity
 
@@ -163,6 +165,47 @@ As one standing check it settled into a permanent scold for doing nothing wrong,
   already states, and the one that could disagree with reality is the one that would be wrong.
 
 Every other check names a fault that clears when it is fixed, so none of them can settle into a nag.
+
+### An override that names a superseded tool
+
+`report_finding`, `knowledge_propose`, `knowledge_notice` and `knowledge_contradict` are registered,
+granted and **named nowhere**: `raise` is the one door, and advertising six ways to file one
+observation is the taxonomy the intake removed ([27](27-knowledge.md#the-doors-that-closed-and-why-they-are-still-there)).
+They were kept rather than deleted for one reason — an operator's prompt override written before the
+intake may still name one, and unlike a `PromptId`, whose removal turns a deployment into a harness
+that will not boot and says so, a **withdrawn tool name fails silently**: the call comes back refused
+with nothing in the logs, on exactly the deployments that customised most.
+
+That shim is doing nothing until somebody can see whether it is still needed, and this check is what
+makes it visible. It turns "we cannot know who still names these" into a reading an operator can act
+on — which is also what makes the later withdrawal safe to take.
+
+- **`warn`, never `bad`.** The call still works, so nothing is broken. What is true is that the
+  deployment is one withdrawal away from breaking, which is a discrepancy between what an override
+  says and what the channel advertises rather than a fault in what is running.
+- **Only the operator's overrides are read**, and a deployment with none draws **no check at all**
+  rather than an `ok` row about a thing it does not do. The built-ins name none of these by
+  construction — `test/mcpChannel.test.ts` holds that — so scanning them would be scanning the
+  harness's own text for the harness's own mistake. Where there are overrides and none names one, the
+  `ok` row is the reading having been taken, the same shape `credential` has when the variable is
+  present.
+- **The row names what an operator can act on**: the template, the tool it names, and `raise` as what
+  to say instead. A count of offending overrides is a quantity with the whole remedy — which file,
+  which word — missing from it. The list is capped for `restart`'s reason.
+- **The fix is a `goto` to the config page's Prompts tab.** The override is a file in
+  `promptTemplatesDir` rather than a config leaf, so there is no `set` the harness could apply; and a
+  fix that landed the operator on the values page would be the failure this rail was rebuilt around —
+  a row that opens the wrong screen is worse than no row.
+- **The classification is read from `src/mcp/names.ts`**, beside the names it classifies and beside
+  the `--allowedTools` grants derived from the same list. It was written in `test/mcpChannel.test.ts`,
+  which is the wrong home for it now that production code needs the same answer: a second copy is
+  free to disagree with what is actually granted, silently, and a withdrawal could then reach the
+  grants without ever reaching this row. The test asserts against it instead
+  ([11](11-mcp-tools.md#where-a-tool-is-named-to-the-agent)).
+
+The check is **not** in the settle map below, for `credential`'s reason pointed at a different file:
+no edit to `lubbdubb.config.json` rewrites a prompt override, so a restatement there would tell an
+operator that bouncing the fleet will answer it.
 
 ### A fault the file has already answered
 
@@ -228,12 +271,12 @@ here names something already silent, so the gap between reading the sentence and
 where the surface used to be lost. A check therefore also carries a `fix`, and which of the three
 kinds it gets is the whole of what the harness is honestly able to do about it.
 
-| Kind     | What it does                                                                  | Why                                                                             |
-| -------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `config` | Writes config leaves through `POST /api/config`.                              | The fix _is_ configuration, so the harness applies it — through the one writer. |
-| `goto`   | Opens the surface where the decision is made (Config at a group, or Tickets). | Which ticket to tag is a decision only a person has.                            |
-| `sheet`  | Opens the confirm sheet.                                                      | What a repository implies is a table and a file, not a value on a button.       |
-| `shell`  | Copies a command. **Never runs it.**                                          | Below.                                                                          |
+| Kind     | What it does                                                                                | Why                                                                                    |
+| -------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `config` | Writes config leaves through `POST /api/config`.                                            | The fix _is_ configuration, so the harness applies it — through the one writer.        |
+| `goto`   | Opens the surface where the decision is made (Config at a group or at Prompts, or Tickets). | Which ticket to tag, and what an override should say, are decisions only a person has. |
+| `sheet`  | Opens the confirm sheet.                                                                    | What a repository implies is a table and a file, not a value on a button.              |
+| `shell`  | Copies a command. **Never runs it.**                                                        | Below.                                                                                 |
 
 **A `shell` fix is copied and never executed.** These are exactly the credential and billing checks —
 `export GITHUB_TOKEN=…`, `unset ANTHROPIC_API_KEY`, installing the agent binary — and a button that

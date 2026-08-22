@@ -341,7 +341,13 @@ function ConfigFix({ check, actions }: { check: SetupCheck; actions: CockpitActi
           onClick={() =>
             fix.to === 'tickets'
               ? actions.openTab('tickets')
-              : actions.openConfig({ configTab: 'values', configGroup: fix.group ?? null })
+              : // The Prompts tab for an override question, the values page for
+                // everything else: a fix that opened the wrong screen is the
+                // failure this rail was rebuilt around.
+                actions.openConfig({
+                  configTab: fix.to === 'prompts' ? 'prompts' : 'values',
+                  configGroup: fix.group ?? null,
+                })
           }
         >
           {fix.label}
