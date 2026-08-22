@@ -229,10 +229,10 @@ in React as well — rendering a different tree per width — buys nothing and c
 re-render on every drag, and a second definition of each boundary that will disagree with the first
 time either moves.
 
-| width     | arrangement                                                                   |
-| --------- | ----------------------------------------------------------------------------- |
-| < 1100    | the rail above the situation area; one column throughout                      |
-| 1100–1199 | the rail beside the situation area (360px); situation in one column           |
+| width     | arrangement                                                                             |
+| --------- | --------------------------------------------------------------------------------------- |
+| < 1100    | one column — rail, then situation area, then vivarium — scrolling as a single page        |
+| 1100–1199 | the rail beside the situation area (360px), vivarium on its floor; situation one column   |
 | 1200–1499 | overview cards in two tracks; Fleet, Goals and Pull requests span both        |
 | 1500–1999 | the goal page gains its right-hand column, and its plan waves go side by side |
 | ≥ 2000    | overview cards in four tracks; the three spanning cards take two each         |
@@ -248,6 +248,26 @@ scrolling plan is the failure this layout is a reaction to.
 
 **Document order is reading order.** No card carries a CSS `order`; a section moved in `Overview.tsx`
 or `GoalPage.tsx` moves on screen, which is the point.
+
+**Which is why the vivarium is the last child of `.cn-body` and not a child of the rail.** One column
+is the arrangement the shell falls back to, and in it document order is the whole layout — so an
+enclosure written inside `.cn-rail` drew half way down the page, between the queue and the work the
+operator scrolled to, whatever the sheet said about it being a corner. Written last it is the end of
+the page there, and the wide arrangement is recovered by placement rather than by order: `.cn-body`
+gains a second row above 1100, the rail takes `minmax(0, 1fr)` of the first, the vivarium the `auto`
+second, and the situation area spans both. → [22](22-pets.md#the-vivarium)
+
+**There is one scroller in one column, and two beside each other.** Which is the same statement about
+panes: above 1100 the rail and the situation area are panes with a bottom edge — each scrolls its own
+content, the body does not scroll at all, and the vivarium sits on the rail's floor because that is
+where a pane's footer goes. Below it there are no panes, so each draws at its full height and
+`.cn-body` is what scrolls, top to bottom: the whole queue, then the work, then the enclosure at the
+end of it. Every `overflow: auto` and `min-height: 0` on those two is therefore stated **under the
+breakpoint**, not on the rules themselves — a `min-height: 0` left on says "shorter than its content
+is fine" to a grid whose rows are the page, and the tracks collapse towards nothing with the panes
+drawing over one another. It is also why the enclosure is reached by scrolling rather than pinned
+across the bottom of the glass: a strip that is always there is a pane's footer, and one column has
+no pane to be the footer of.
 
 ## The address bar
 

@@ -316,6 +316,24 @@ test('one part is held, not "1 parts" — the count and the noun agree', () => {
   assert.ok(!html.includes('holding 1 parts'));
 });
 
+/**
+ * One DOM for every width, so where the vivarium lands when the shell collapses to
+ * one column is decided by document order alone — and last is the foot of the page.
+ * Inside the rail it drew between the queue and the work, which is the position
+ * this pins it out of. The wide arrangement is grid placement over the same order,
+ * so a move back into `.cn-rail` would still read correctly at 1400px.
+ * → docs/spec/17-cockpit.md#the-console-at-width
+ */
+test('the vivarium comes after the situation area, not inside the rail', () => {
+  const html = render(view());
+  const rail = html.indexOf('cn-rail');
+  const sit = html.indexOf('cn-sit');
+  const viv = html.indexOf('cn-viv');
+  assert.ok(viv > 0, 'the demo snapshot ships a vivarium');
+  assert.ok(rail < sit, 'the rail is drawn before the situation area');
+  assert.ok(sit < viv, 'the enclosure is the last thing in the body, not a strip in the middle of it');
+});
+
 test('an empty queue collapses the rail rather than removing it', () => {
   const html = render(view({ needsYou: [] }));
   assert.ok(html.includes('cn-rail'), 'a surface that vanishes when quiet reads as one that broke');
