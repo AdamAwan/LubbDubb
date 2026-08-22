@@ -1720,7 +1720,14 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
 
   A row carries the claim, its **scope as a reference** — a `goal:` scope is the goal itself, a
   `check:` scope is the provider's own identifier and says so — its corroboration count, and its
-  provenance. The count is `distinctCorroborators`' answer taken server-side (`KnowledgeFactView` in
+  provenance. A `check:` row whose scope has matched nothing in `knowledgeScopeStaleDays`, and whose
+  check the provider is not reporting either, is marked **scope has drifted**: a renamed or
+  re-matrixed job stops a claim being delivered *silently*, and this is the only surface that can say
+  so. A `lookup` row says **how often it was asked for**, including when that is never — explicit
+  `knowledge_ask` calls only, never delivery by a matching scope, which is the harness putting a claim
+  in front of an agent that did not want it. Both are **readings and never triggers**: the drifted
+  claim stays in the section its reach puts it in, and nothing is demoted for want of demand.
+  → [27](27-knowledge.md#what-it-costs) The count is `distinctCorroborators`' answer taken server-side (`KnowledgeFactView` in
   `src/wire.ts`), never a length counted in the browser: two observations are one corroborator if they
   share a goal or a session, so a second count here would be free to disagree with the one that
   actually promotes. **What the observers saw** is a click and its own fetch — evidence runs to
@@ -1736,6 +1743,14 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   now delivers. Both are the block renderer's own answer, projected onto the wire
   (`KnowledgeDeliveryView`): a meter drawn from a character count taken in the browser would be exactly
   the second implementation of "what fits" that rule exists to prevent.
+
+  **And under the meter, what the block costs.** The characters are the cap; the dollars are the
+  purchase, in the money the Insights page reports and over the window it opens on. Every figure is the
+  server's — the share, the total and the per-dispatch division alike — because it is arithmetic over a
+  token estimate and a fleet total whose rule this layer does not know, and a division taken here would
+  be free to disagree with the spend drawn a tab away. A window in which nothing reported usage draws
+  **"cannot be priced"** rather than `$0.00`: unmeasured is never free, and a zero there would be the
+  one number on the page that is a lie. → [27](27-knowledge.md#what-it-costs)
 
   **And the page ends with what an agent actually receives** — the system-prompt block verbatim, and
   the task-prompt append for each scope with anything deliverable left in it once the block has taken

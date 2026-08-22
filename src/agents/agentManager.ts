@@ -1225,12 +1225,24 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     agentId: string,
     query: { question: string | null; scopes: readonly string[] | null },
   ): { ok: true; scopes: string[]; facts: AnsweredFact[] } | { ok: false; error: string } {
-    return this.withCaller(agentId, ({ task }) => {
+    return this.withCaller(agentId, ({ agent, task }) => {
       const goalRef = corroborationGoal(task.originRef);
       const scopes = query.scopes
         ? [...query.scopes]
         : ['fleet', ...(goalRef ? [`goal:${goalRef}`] : []), ...(task.ciChecks ?? []).map((c) => `check:${c}`)];
-      const facts = this.store.askFacts({ scopes, question: query.question }).map((fact) => ({
+      const answered = this.store.askFacts({ scopes, question: query.question });
+      // How often a claim was actually wanted, recorded **here** rather than in
+      // `askFacts` — which is a read path the cockpit calls twice on every poll to
+      // project its delivery view. A counter inside the store would count the
+      // operator's own browser as fleet demand; what keeps it out is that this
+      // write is attributed to an asker resolved from the credential, and a poll
+      // has none. Delivery by a matching scope is deliberately not an ask: it is
+      // the harness putting a claim in front of an agent that did not want it.
+      this.store.recordFactAsks(
+        answered.map((fact) => fact.id),
+        { agentId, taskId: task.id, goalRef, sessionId: agent.sessionId },
+      );
+      const facts = answered.map((fact) => ({
         fact,
         corroborations: distinctCorroborators(this.store.listCorroborations(fact.id)),
       }));

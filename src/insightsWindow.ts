@@ -99,6 +99,23 @@ export interface ResolvedWindow {
   now: number;
 }
 
+/**
+ * The window a reading with no control of its own is taken over.
+ *
+ * The Knowledge page's cost reading is the caller: it draws one figure and has no
+ * time bar, and a second control there would be a second answer to "over what
+ * stretch" on a page whose whole argument is that one number should be readable
+ * beside another. So it takes the window Insights *opens* on, resolved through
+ * this same function — which is what "against the same window as Insights"
+ * (`docs/spec/27-knowledge.md`) has to mean for a surface that cannot ask.
+ *
+ * A function rather than an exported constant so the default is applied here, once,
+ * exactly as {@link InsightsQuery} applies it for the routes.
+ */
+export function defaultWindow(now: number): ResolvedWindow {
+  return resolveWindow(DEFAULT_INSIGHTS_WINDOW, now);
+}
+
 export function resolveWindow(key: InsightsWindow, now: number): ResolvedWindow {
   if (key === 'all') {
     return {

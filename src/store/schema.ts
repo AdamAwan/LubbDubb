@@ -311,6 +311,33 @@ CREATE TABLE IF NOT EXISTS knowledge_contradictions (
   created_at   TEXT NOT NULL
 );
 
+-- How often a claim was actually *wanted*: one row per fact answered to a
+-- knowledge_ask (#27 phase 7). The count is a reading and never a trigger —
+-- nothing is demoted, lapsed or dropped from the block because nobody asked for
+-- it, and a claim nobody wanted this month may be the one that saves the next
+-- agent a day.
+--
+-- A row rather than a counter on the fact, for the corroborations table's reason
+-- with one word changed: a corroboration carries words because the words are what
+-- an operator reads, and an ask has none to give — so what a row carries instead
+-- is *who and when*, which is the difference between "asked 40 times" and "asked
+-- 40 times by one agent in a loop last March".
+--
+-- Written only from the credentialed tool path (AgentManager.askKnowledge), never
+-- from KnowledgeStore.askFacts: the cockpit reads that same method twice on every
+-- poll to project the delivery view, so a counter inside the store would grow
+-- fastest while nobody was looking at the page. The observer columns are what keeps
+-- it out — the cockpit has no agent, task, goal or session to give.
+CREATE TABLE IF NOT EXISTS knowledge_asks (
+  id         TEXT PRIMARY KEY,
+  fact_id    TEXT NOT NULL,
+  agent_id   TEXT NOT NULL,        -- the asker; there is no uncredentialed ask
+  task_id    TEXT,
+  goal_ref   TEXT,                 -- the goal it was asked on, collapsed from the origin
+  session_id TEXT,
+  created_at TEXT NOT NULL
+);
+
 -- Why the fleet had to come back to a pull request, and what settled it: one row
 -- per CI failure or review round an agent answered, written by that agent through
 -- the report_remedy tool.

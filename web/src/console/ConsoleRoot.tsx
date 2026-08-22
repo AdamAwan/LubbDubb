@@ -379,6 +379,7 @@ function panelBody(
         <KnowledgePanel
           facts={state.knowledge}
           delivery={state.knowledgeDelivery}
+          cost={state.knowledgeCost}
           now={view.now}
           refUrls={state.refUrls}
           viewingFact={view.viewingFact}

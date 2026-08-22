@@ -62,6 +62,7 @@ export type {
   JobSchedule,
   KnowledgeContradictionView,
   KnowledgeCorroboration,
+  KnowledgeCost,
   KnowledgeDeliveryView,
   KnowledgeFact,
   KnowledgeFactPayload,

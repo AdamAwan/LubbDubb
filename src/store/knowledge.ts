@@ -48,11 +48,14 @@ export const KNOWLEDGE_COLUMNS: ColumnMigrations = {
 
 /**
  * The `knowledge_facts` and `knowledge_corroborations` tables: what the fleet
- * knows about working this repository, and who says so.
+ * knows about working this repository, who says so, who disputes it and who has
+ * asked for it.
  *
  * The tables were new in phase 1 and have gained one column since, which is what
  * {@link KNOWLEDGE_COLUMNS} above is: being new *once* does not keep a table
  * exempt, and `CREATE TABLE IF NOT EXISTS` never alters an existing one.
+ * `knowledge_asks` (phase 7) is new here and so has no entry — and is no more
+ * exempt than the two above were on the day they shipped.
  *
  * **Nothing in the dispatcher reads any of this.** No rule, desk or gate consults
  * a fact: nothing is dispatched, held or ranked because of one. A fact feeds
@@ -186,6 +189,45 @@ export class KnowledgeStore {
         .slice(0, limit)
         .map((row) => row.fact)
     );
+  }
+
+  /**
+   * Record that an agent asked for these claims and was answered with them — the
+   * only writer of `knowledge_asks`.
+   *
+   * **Not in {@link askFacts}, and that is the whole of the design.** That method
+   * is a read path, and `stateSnapshot` calls it *twice on every poll* to project
+   * the delivery view — so a count kept inside it would count the operator's own
+   * browser as fleet demand, growing fastest while nobody was looking at the page
+   * and fastest of all on the claims nobody asks for. What keeps the cockpit out
+   * is not a filter somebody has to remember but the argument below: an ask is
+   * attributed to an asker, resolved from the credential the way every other write
+   * in the tool channel is, and the cockpit has none to give.
+   *
+   * **Delivery by scope is not an ask.** A `lookup` claim also reaches agents
+   * through the task-prompt append of every dispatch its scope matches, and
+   * counting that would make this a count of *dispatches matching a scope* — a
+   * fact about the fleet's shape rather than about the claim, under a label that
+   * says otherwise. A `check:format:check` claim would score highest in the week
+   * `format:check` happened to fail most, and a fleet-scoped claim, which no
+   * scoped append ever carries, could never score at all.
+   *
+   * Rows rather than a counter for {@link recordCorroboration}'s reason with one
+   * word changed: a corroboration is a row because the *words* are what an
+   * operator reads, and an ask has none — so what it carries instead is who and
+   * when, which is what separates a claim forty agents wanted from one an agent
+   * asked for forty times in a loop.
+   */
+  recordFactAsks(factIds: readonly string[], asker: FactAsker): void {
+    if (factIds.length === 0) return;
+    const at = this.ctx.now();
+    const insert = this.ctx.db.prepare(
+      `INSERT INTO knowledge_asks (id, fact_id, agent_id, task_id, goal_ref, session_id, created_at)
+       VALUES (@id, @factId, @agentId, @taskId, @goalRef, @sessionId, @createdAt)`,
+    );
+    for (const factId of factIds) {
+      insert.run({ id: `kna_${nanoid(10)}`, factId, ...asker, createdAt: at });
+    }
   }
 
   /**
@@ -449,8 +491,21 @@ export class KnowledgeStore {
       .prepare(`SELECT * FROM knowledge_contradictions ORDER BY created_at ASC, rowid ASC`)
       .all() as ContradictionRow[];
     const disputed = this.groupVoices(disputes);
+    // The ask count is a third read on the same batching argument, and it lands
+    // here rather than in a method of its own for the reason the ratio did: one
+    // read producing every number on a row is one read the page cannot draw two
+    // disagreeing halves of.
+    const asked = new Map<string, { asks: number; lastAskedAt: string }>();
+    for (const row of this.ctx.db
+      .prepare(
+        `SELECT fact_id, COUNT(*) AS asks, MAX(created_at) AS last_asked_at
+           FROM knowledge_asks GROUP BY fact_id`,
+      )
+      .all() as { fact_id: string; asks: number; last_asked_at: string }[]) {
+      asked.set(row.fact_id, { asks: row.asks, lastAskedAt: row.last_asked_at });
+    }
     const counts = new Map<string, FactCounts>();
-    for (const factId of new Set([...agreed.keys(), ...disputed.keys()])) {
+    for (const factId of new Set([...agreed.keys(), ...disputed.keys(), ...asked.keys()])) {
       const corroborations = distinctCorroborators(agreed.get(factId) ?? []);
       const contradictions = distinctCorroborators(disputed.get(factId) ?? []);
       counts.set(factId, {
@@ -462,6 +517,13 @@ export class KnowledgeStore {
         // decisions, and two agents on one goal disputing a claim are still two
         // rows to read before ruling on it.
         openContradictions: disputes.filter((d) => d.fact_id === factId && d.resolution === null).length,
+        // Rows and not voices, and no window. Rows because the question is how
+        // often the claim was *wanted* rather than how many independent parties
+        // will vouch for it — independence is what a count needs when it carries a
+        // claim somewhere, and this one carries nothing. No window for the ratio's
+        // reason: a second span over the same rows would be a second rule.
+        asks: asked.get(factId)?.asks ?? 0,
+        lastAskedAt: asked.get(factId)?.lastAskedAt ?? null,
       });
     }
     return counts;
@@ -724,7 +786,32 @@ export interface FactCounts {
   contradictionRatio: number;
   /** Disputes nobody has ruled on. The queue, where the ratio above is the reading. */
   openContradictions: number;
+  /**
+   * How often an agent asked for this claim and was answered with it — every ask,
+   * over the whole life of the claim.
+   *
+   * The reading a `lookup` claim has that an injected one cannot: an injected line
+   * is in front of every agent whether it wanted it or not, and there is no way to
+   * measure whether one was read. This is demand, and it is measurable.
+   *
+   * **A reading and never a trigger.** Nothing is demoted, lapsed or dropped from
+   * the block because nobody asked for it: a claim nobody wanted this month may be
+   * the one that saves the next agent a day.
+   */
+  asks: number;
+  /** The most recent ask, so the count can be dated. Null when there has been none. */
+  lastAskedAt: string | null;
 }
+
+/**
+ * Who asked — {@link FactObservation} with the words taken out, because an ask has
+ * none to give.
+ *
+ * Every field is resolved from the credential, which is what structurally keeps
+ * the cockpit's own reads of {@link KnowledgeStore.askFacts} out of the count:
+ * there is no uncredentialed ask, so a poll has nothing to write with.
+ */
+type FactAsker = Omit<FactObservation, 'words'>;
 
 /** What an agent (or the cockpit) is asking the knowledge base for. */
 export interface FactQuery {

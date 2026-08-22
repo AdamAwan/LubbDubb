@@ -534,6 +534,9 @@ export class Store {
   askFacts(query: FactQuery): KnowledgeFact[] {
     return this.knowledge.askFacts(query);
   }
+  recordFactAsks(...args: Parameters<KnowledgeStore['recordFactAsks']>): void {
+    this.knowledge.recordFactAsks(...args);
+  }
   setFactReach(id: string, reach: FactReach): KnowledgeFact | null {
     return this.knowledge.setFactReach(id, reach);
   }

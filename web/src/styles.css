@@ -1854,6 +1854,13 @@ a.btn {
   gap: 8px;
   flex-wrap: wrap;
 }
+/* The cost is a sentence and the meter is a bar: on their own row rather than
+   beside each other, or the flex line squeezes the sentence into a column two
+   words wide. */
+.kn-cost {
+  flex-basis: 100%;
+  margin: 0;
+}
 .kn-meter {
   background: var(--well);
   border: 1px solid var(--border);

@@ -1,13 +1,14 @@
 # 27 — Knowledge
 
-> **Status: partly built — phases 6 and 7 outstanding.** The store, its three axes, the corroboration
+> **Status: partly built — phase 6 outstanding.** The store, its three axes, the corroboration
 > count, the rejection bar and `supersedes` are running; any agent can write to and read from them
 > (`knowledge_propose`, `knowledge_ask`, `knowledge_notice`, `knowledge_contradict`); delivery is
 > wired, so an injected claim is in every agent's system prompt and a scope-matched one is in the task
 > prompt of the dispatch it matches; notices run, including the two the harness raises for itself;
-> contradiction and amendment run, so a stale claim is sharpened rather than counted down; and the
-> cockpit page is where an operator governs all of it. What is outstanding is graduation and the cost
-> reading — the sections marked below describe behaviour that does not exist.
+> contradiction and amendment run, so a stale claim is sharpened rather than counted down; the cockpit
+> page is where an operator governs all of it, and it prices what the block costs, says when a
+> `check:` scope has stopped matching anything and counts how often a lookup claim was asked for. What
+> is outstanding is graduation — the section marked below describes behaviour that does not exist.
 > [The phases](#the-phases) says what lands when. Per `docs/README.md`, a module that does not exist
 > yet is named in italics where a real one is backticked, and a phase landing deletes its row and
 > unmarks the part of this document it makes true. When the last row goes, so does this banner.
@@ -93,9 +94,30 @@ job's history in front of an agent under a name it would read as its own. The fa
 fact simply stops being delivered. The page names a check scope as the provider's own identifier and
 says that much where it is drawn.
 
-> **Not yet built — [phase 7](#the-phases):** the staleness reading itself. A fact whose scope has
-> matched nothing in `knowledgeScopeStaleDays` is surfaced on the page as scoped to a check that no
-> longer runs, which is the only way a silently-unmatched scope can be seen.
+**A `check:` scope that has stopped matching is drawn as one**, which is the only way a silently
+unmatched scope can be seen. The reading is `knowledgeScopeStaleDays` (default thirty) and it is
+**derived, never recorded**: nothing writes a match, because a recorder for a reading is a second
+record that has to be kept true, and the failure this exists to surface is silent non-delivery —
+which a recorder that quietly stopped writing would reproduce rather than reveal. The evidence is
+what the harness already holds, and it is two things rather than one:
+
+- **The dispatches it made**, read through `dispatchFactScopes` itself rather than through a second
+  reading of `Task.ciChecks`, so the scopes a fact is judged against and the scopes it is actually
+  delivered on cannot drift apart.
+- **The checks the provider is reporting now.** Not optional: most checks are green most of the time
+  and a green check is dispatched about approximately never, so dispatch evidence alone would call
+  almost every `check:` scope stale inside a week. A check the world reports is running, whatever the
+  fleet has had to do about it. An alias counts as the name, exactly as a `ci.checks` glob treats one.
+
+Three things keep it from crying wolf, and each is a case where a true "stale" would be a lie: a check
+the world reports is never stale; a claim younger than the window cannot be, because there has not
+been time; and `0` turns the reading off without demoting anything to achieve it.
+
+It is a **reading and never a trigger**. Nothing is demoted, lapsed or dropped from a prompt because
+its scope went quiet — a scope that matched nothing may be a check that is simply not running this
+week, and a rule acting on this would delete the fleet's record of exactly the checks it sees least.
+`src/knowledge/drift.ts` holds it, outside `src/dispatcher/` for the reason nothing there reads a
+fact.
 
 ### Lifetime — how it ends
 
@@ -515,11 +537,14 @@ attention: **Live notices** with their clocks,
 **Needs you** — the corroborated claims waiting on the one decision that is yours — then **Injected**,
 **On lookup**, **One voice**, **Committed to the repository**, **Superseded**, and the **Rejected**
 tail. A row carries the claim, its scope as a reference, its corroboration count, its contradiction
-count and ratio, and its provenance, with the observers' own words a click away.
+count and ratio, and its provenance, with the observers' own words a click away. A `check:` row whose
+scope has stopped matching says so; a `lookup` row says how often it was asked for, including when
+that is never. Both are [readings and never triggers](#what-it-costs).
 
-**A disputed claim stays in the section its reach puts it in**, and that is the page's own statement
-of the invariant: nothing is demoted by a count, so lifting a contradicted claim out of **Injected**
-would draw a demotion that did not happen. What it carries instead is the ratio and, while any dispute
+**A disputed claim stays in the section its reach puts it in**, and so does one whose scope has
+drifted and one nobody has asked for. That is the page's own statement of the invariant: nothing is
+demoted by a count, so lifting such a claim out of **Injected** — or into a "stale" section of its own
+— would draw a demotion that did not happen. What it carries instead is the ratio and, while any dispute
 is unanswered, a count of what is left to answer. The three moves are inside the row's provenance,
 beside the words that ask for them — an operator choosing between the claim and the amendment has to
 be able to read both, and a control that sat where only one of them was visible would be asking for
@@ -546,7 +571,8 @@ amendment naming the barred claim.
 page says so in as many words rather than leaving a reader to work out which surface is authoritative.
 
 **The Injected section carries a character budget** drawn against `knowledgeBlockChars`, and marks the
-claims the cap left out, per row. And the page ends with a second surface: **what an agent actually
+claims the cap left out, per row. Beside it is [what the block costs](#what-it-costs) — the characters
+are the cap, and the dollars are the purchase. And the page ends with a second surface: **what an agent actually
 receives** — the system-prompt block verbatim, and the task-prompt append for each `check:` and `goal:`
 scope holding anything deliverable, from the same two renderers the launch and the dispatch use.
 
@@ -571,19 +597,89 @@ actually being sent"); a store this size cannot be governed without it.
   `autoReach` reads the clock itself rather than the lifetime word.
 - **Nothing auto-commits to the repository.** A docs pull request is a dispatch a person promotes,
   through the machinery `src/mcp/findings.ts` already has.
+- **No reading acts.** Nothing is demoted, lapsed, dropped from the block or deprioritised because of
+  what it costs, because its `check:` scope has stopped matching, because it is disputed, or because
+  nobody has asked for it. Every number on the page is drawn for the person who can act on it, and the
+  only things that end a fact are still its own clock and an operator.
 
 ## What it costs
 
-> **Not yet built — [phase 7](#the-phases).**
+The injected block is input the fleet pays for on work nobody asked it to do, so the page prices it in
+the dollars the rest of the cockpit uses — against the same window as Insights
+([18](18-observability.md)) — rather than in tokens, which mean nothing at a glance.
+`src/knowledge/cost.ts` is the fold, and it is drawn beside the character budget on the **Injected**
+section, because the characters are the cap and this is the purchase.
 
-The injected block is input tokens on **every dispatch**, so the page prices it in the dollars the
-rest of the cockpit uses — against the same window as Insights ([18](18-observability.md)) — rather
-than in tokens, which mean nothing at a glance.
+**Measured, not modelled, and there is no price table.** The figure is the block's **share** of the
+fleet's own input applied to the fleet's own recorded spend. A table of per-token prices would be a
+second statement about money, free to disagree with `Agent.costUsd` the moment a rate changes or a
+deployment moves plan — and it would disagree silently, which is the whole objection. Applying the
+fleet's own rate is also what keeps the figure honest about the cache: the block lives in the system
+prompt precisely so it is a cached prefix, and pricing it at a fresh-input rate overstates it by
+roughly an order of magnitude. `Agent.inputTokens` is the **gross** figure — fresh, cache-written and
+cache-read alike — so `costUsd / inputTokens` is the fleet's own dollars per input token with the
+cache discount already inside it. A fleet at a 90% hit rate carries a low rate and the block inherits
+it. Nothing here has to know what a cache read costs.
 
-There is no way to measure whether an injected line was _read_. Cost is measurable, the corroboration
-count is measurable, and the contradiction ratio is measurable; the page shows the last two already
-and will show the first, and it does not pretend to the fourth. A `lookup` fact has the better signal — how often it was actually asked for
-— and that is drawn on its row.
+**It is paid per turn, and "per dispatch" is that divided by the dispatches.** The obvious reading —
+the block is identical on every launch, so it is bought once per launch — is wrong by the fleet's
+average turn count. The block is in the system prompt, and a session re-sends its whole prefix on
+every call; that is what being a cached prefix *means*, and it is why the prefix being cached is the
+point rather than an optimisation. The denominator the share is taken against
+(`Agent.inputTokens`) is likewise a sum over every turn, so a numerator counted per launch would
+understate the block twenty-fold or worse while looking like the same arithmetic. So the block's
+tokens over the window are its tokens times the fleet's turns, and dollars per dispatch is that total
+divided by the dispatches.
+
+**One thing is estimated and it is named on the glass.** Nothing in the harness tokenises and the
+block is never billed as a line item, so characters into tokens is a stated constant
+(`KNOWLEDGE_CHARS_PER_TOKEN`, four) rather than a config key — an operator tuning it would be tuning
+the answer rather than the thing measured, and two deployments' figures would stop being comparable.
+Every other number is what the fleet reported.
+
+**A dispatch that reported no usage is unmeasured, never free.** A PTY run carries the same block and
+reports nothing, so it is counted apart and shown, and a window in which nothing was measured answers
+**null** rather than zero — `Agent.costUsd`'s own convention. A `$0.00` there would be the one figure
+on the page that is a lie, and it would read as the feature costing nothing.
+
+The window is Insights' own, resolved through `resolveWindow` — but the page has no time bar and takes
+the window Insights *opens* on (`defaultWindow`). A second control here would be a second answer to
+"over what stretch" on a page whose whole argument is that one number should be readable beside
+another.
+
+There is no way to measure whether an injected line was _read_, and the page does not pretend there
+is. Cost is measurable, the corroboration count is measurable, the contradiction ratio is measurable,
+and for a `lookup` fact demand is measurable — **how often it was actually asked for**, drawn on its
+row. Four readings, and the fifth is not invented to sit beside them.
+
+**An ask is an explicit `knowledge_ask` and nothing else.** A `lookup` fact also reaches agents
+through the task-prompt append of every dispatch its scope matches, and counting that would make the
+number a count of *dispatches matching a scope* — a fact about the fleet's week rather than about the
+claim, under a label saying otherwise. A `check:format:check` claim would score highest in the week
+`format:check` happened to fail most, and a fleet-scoped claim, which no scoped append ever carries,
+could never score at all. The same shape of decision the contradiction section makes about which
+facts may be disputed: the label has to match what is counted.
+
+**The count is written on the credentialed path and never in the read.** `askFacts` is a read path and
+`stateSnapshot` calls it **twice on every poll** to project the delivery view, so a counter kept inside
+the store would count the operator's own browser as fleet demand — growing fastest while nobody is
+looking at the page, and fastest of all on the claims nobody asks for. What keeps the cockpit out is
+not a filter somebody has to remember but an argument that cannot be supplied: an ask is attributed to
+an asker resolved from the credential (`AgentManager.askKnowledge`), exactly as every other write in
+the tool channel is, and a poll has no agent, task, goal or session to give.
+
+**A row per ask, not a counter** — the corroborations table's stance, with one word changed. A
+corroboration is a row because the *words* are what an operator reads; an ask has none to give, so
+what a row carries instead is who and when, which is what separates a claim forty agents wanted from
+one an agent asked for forty times in a loop. It is counted as **rows rather than voices** and over the
+whole life of the claim: independence is what a count needs when it *carries* a claim somewhere, and
+this one carries nothing, exactly as `openContradictions` beside it is a count of decisions rather
+than of voices.
+
+**Every reading here is a reading and never a trigger.** Nothing is demoted, lapsed, dropped from the
+block or deprioritised because it costs money, because its scope went stale, or because nobody asks
+for it. A claim nobody asked for this month may be the one that saves the next agent a day. The
+contradiction ratio is the precedent: it counts and it does not act.
 
 ## Committing to the repository
 
@@ -608,10 +704,11 @@ of this document it makes true.
 | #   | Lands                                                                                                                                                  | Depends on |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
 | 6   | Graduation. Committing a fact opens a documentation pull request through the `docs`-finding machinery, and the fact leaves every prompt when it lands. | 2          |
-| 7   | Cost and drift. Dollars per dispatch on the page; stale `check:` scopes surfaced; lookup ask-counts.                                                   | 3          |
 
-Phases 1 to 5 — `src/store/knowledge.ts`, the axes, the bar, the four tools, the page an operator
-governs them from, `src/knowledge/block.ts` with the two prompts it renders,
-`src/knowledge/noticeDesk.ts` with the notices the harness raises for itself, and contradiction with
-the amendment it demands — have landed. That is the whole spine: a claim can be written, ruled on,
-delivered, sharpened, and expire. 6 and 7 are independent of each other and can land in either order.
+Phases 1 to 5 and 7 — `src/store/knowledge.ts`, the axes, the bar, the four tools, the page an
+operator governs them from, `src/knowledge/block.ts` with the two prompts it renders,
+`src/knowledge/noticeDesk.ts` with the notices the harness raises for itself, contradiction with the
+amendment it demands, and `src/knowledge/cost.ts` and `src/knowledge/drift.ts` with the readings that
+say what all of it costs and what has stopped matching — have landed. That is the whole spine: a claim
+can be written, ruled on, delivered, sharpened, priced, and expire. Graduation is what is left, and it
+depends on nothing that is not already here.
