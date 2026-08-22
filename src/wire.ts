@@ -104,6 +104,8 @@ import type {
   KnowledgeContradiction,
   KnowledgeCorroboration,
   KnowledgeFact,
+  KnowledgeGraduation,
+  GraduationReading,
   Lesson,
   LocalRun,
   Plan,
@@ -390,6 +392,25 @@ export interface KnowledgeFactView extends KnowledgeFact {
 export interface KnowledgeContradictionView extends KnowledgeContradiction {
   /** The amendment as its own claim, or null if it has since been deleted. */
   amendment: KnowledgeFact | null;
+}
+
+/**
+ * One graduation as the page draws it: the row, plus what the harness reads the
+ * pull request as (issue #27 phase 6).
+ *
+ * **The reading is projected server-side and never derived here.** It is
+ * `graduationReading`'s answer over the work graph — the same function the sweep
+ * settles on — so the page cannot draw a verdict the desk did not take. A browser
+ * that worked it out from a pull request's status would be a second implementation
+ * of "did this land", free to disagree with the one that actually moves a claim out
+ * of every prompt, with nothing red when it does.
+ *
+ * `unknown` is the reading that asks for something: the pull request left the world
+ * without ever being seen closed, so the harness will not say either way, and the
+ * row draws the two controls that answer it.
+ */
+export interface KnowledgeGraduationView extends KnowledgeGraduation {
+  reading: GraduationReading;
 }
 
 /**
@@ -1033,6 +1054,16 @@ export interface CockpitState {
    */
   knowledge: KnowledgeFactView[];
   /**
+   * Every attempt to put a claim in the repository, newest first — the abandoned
+   * ones included (issue #27 phase 6).
+   *
+   * A separate list rather than a field on the fact, because a fact can have more
+   * than one over its life: a pull request closed unmerged leaves the claim exactly
+   * where it was and an operator free to try again, and the page draws both the
+   * attempt that failed and the one in flight.
+   */
+  knowledgeGraduations: KnowledgeGraduationView[];
+  /**
    * Bugs the operator raised from a story row, oldest first — `filing` while the
    * desk agent writes one, `filed` with a ref once it exists.
    *
@@ -1570,9 +1601,14 @@ export type {
   JobSchedule,
   ContradictionResolution,
   ContradictionRuling,
+  FactCommitment,
+  GraduationOutcome,
+  GraduationReading,
+  GraduationTarget,
   KnowledgeContradiction,
   KnowledgeCorroboration,
   KnowledgeFact,
+  KnowledgeGraduation,
   Lesson,
   LessonStatus,
   Plan,

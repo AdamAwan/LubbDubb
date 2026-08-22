@@ -378,11 +378,14 @@ function panelBody(
       return (
         <KnowledgePanel
           facts={state.knowledge}
+          graduations={state.knowledgeGraduations}
           delivery={state.knowledgeDelivery}
           now={view.now}
           refUrls={state.refUrls}
           viewingFact={view.viewingFact}
           onReach={(id, reach) => actions.setFactReach(id, reach)}
+          onCommit={(id, commitment) => actions.commitFact(id, commitment)}
+          onSettleGraduation={(id, outcome) => actions.settleGraduation(id, outcome)}
           onDetail={(id) => actions.factDetail(id)}
           onResolveContradiction={(id, ruling) => actions.resolveContradiction(id, ruling)}
           onViewFact={(id) => actions.viewFact(id)}

@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { committableFact, factDocsFields, graduationNote } from '../../knowledge/graduation.js';
 import { contradictionRatio, distinctCorroborators, MAX_CLAIM_CHARS } from '../../knowledge/knowledge.js';
 import type { FactRuling, KnowledgeContradictionView, KnowledgeFactPayload } from '../../wire.js';
 import { checked, IdParams } from '../validation.js';
@@ -34,7 +35,7 @@ import type { RouteContext } from './context.js';
  * → `docs/spec/27-knowledge.md`, `docs/spec/16-http-api.md`
  */
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
-  const { store } = system;
+  const { store, harness } = system;
 
   // One claim with the observations behind it, in the observers' own words. The
   // count is what promotes a fact; this is what an operator reads to decide
@@ -84,10 +85,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
    * page's Needs you section would ask again forever.
    *
    * `proposal` is absent from the body because nothing moves a claim back to
-   * "nobody has agreed with this"; `committed` is absent because a fact leaves
-   * for the repository through a documentation pull request that does not exist
-   * yet (phase 6), and a route that set the reach without opening one would take
-   * the claim out of every prompt while putting it nowhere.
+   * "nobody has agreed with this"; `committed` is absent because a fact leaves for
+   * the repository through a documentation pull request, and setting the reach
+   * here would take the claim out of every prompt while putting it nowhere. That
+   * is `/commit` below, which opens the pull request, and the graduation sweep,
+   * which moves the reach when it lands.
    */
   // Typed as the wire's own narrowing of `FactReach`, so the three literals here
   // and the union the cockpit posts are one statement rather than two that agree
@@ -128,6 +130,145 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // `dismissFinding` and `promoteLesson` both take.
       hub.broadcast({ type: 'dirty' });
       return { ok: true, fact };
+    }),
+  );
+
+  /**
+   * Commit a claim to the repository: open the documentation work for it, and
+   * record that it is on its way.
+   *
+   * **One call, because it is one act from the operator's side** — "this belongs in
+   * the repository" is the decision, and opening the work and recording where it
+   * went are its two halves. Two calls could half-land in both directions, and both
+   * are silent: a documentation pull request nothing links to lands and takes the
+   * claim out of no prompt, and a graduation naming no job draws a row on its way
+   * to a repository nothing is writing it into. `Store.commitFact` makes both
+   * writes in one transaction and this route is the only way to reach it.
+   *
+   * **It does not move the reach**, and that is the answer to what a fact is
+   * between the click and the landing. The claim is still true, still injected or
+   * still answerable, and still open to contradiction while its pull request sits
+   * in review — because a claim taken out of every prompt the moment somebody
+   * queues a docs job is a claim the fleet stops being told for a pull request that
+   * may be closed unmerged, and then nobody is told it and nobody can read it. The
+   * reach moves to `committed` when `KnowledgeGraduationDesk` reads the pull
+   * request as merged, and never before.
+   *
+   * **Nothing auto-commits.** This is an operator's click and only an operator's,
+   * for the reason `src/mcp/findings.ts` gives about `report_finding`: an agent
+   * that could queue this work could put agents on the fleet, which is a capability
+   * escalation rather than a convenience. It is the same authority
+   * `POST /api/findings/:id/promote` exercises over a `docs` finding, over the same
+   * machinery.
+   */
+  const CommitBody = z.discriminatedUnion('target', [
+    // The ordinary answer, and the one that needs nothing said: `docs/README.md`
+    // says which document owns what, and the agent reads it.
+    z.object({ target: z.literal('spec') }),
+    // The exception, priced like one. CLAUDE.md is loaded into every agent's
+    // context on every dispatch and its length is asserted rather than intended, so
+    // graduating there grows without bound the exact cost this design exists to
+    // cap. The operator states what breaks *silently* without the claim — that file's
+    // own bar — and the shape of the body is what makes it unskippable, the same
+    // reason `narrowed` carries its claim rather than offering an optional field.
+    // It is not ceremony: the sentence is appended to the agent's prompt, so
+    // whoever writes the entry has the argument in the operator's words.
+    z.object({
+      target: z.literal('claudeMd'),
+      bar: z
+        .string()
+        .trim()
+        .min(
+          1,
+          'CLAUDE.md takes only what, not knowing it, gets something broken silently — say what breaks, and ' +
+            'how it fails without anything going red. It is read by the agent writing the entry',
+        )
+        .max(MAX_CLAIM_CHARS),
+    }),
+  ]);
+  app.post(
+    '/api/knowledge/facts/:id/commit',
+    checked({ params: IdParams, body: CommitBody }, async ({ params, body, reply }) => {
+      const fact = store.getFact(params.id);
+      if (!fact) return reply.code(404).send({ error: 'fact not found' });
+      // What may be committed is the claim's own business rather than this route's
+      // — a proposal nobody has agreed with, and a notice that ends by itself, are
+      // both the wrong *kind* of thing to put in a tree. Stated once, next to the
+      // rest of graduation's rules.
+      const allowed = committableFact(fact);
+      if (!allowed.ok) return reply.code(409).send({ error: allowed.error });
+      // One at a time. A second docs job for a claim already being written up is two
+      // agents writing the same paragraph into two pull requests, and whichever
+      // landed first would settle a graduation the other one was still working.
+      const inFlight = store.listGraduations().find((g) => g.factId === fact.id && g.outcome === null);
+      if (inFlight) {
+        return reply.code(409).send({
+          error:
+            'a documentation pull request for this claim is already open' +
+            `${inFlight.prRef === null ? '' : ` (${inFlight.prRef})`} — wait for it to land, or say what became of it`,
+        });
+      }
+      const { title, vars } = factDocsFields(fact);
+      // The `docs-change` template a promoted `docs` finding already renders, and
+      // deliberately not a second id: everything it says is as true of a
+      // corroborated claim as of one agent's report, and an operator who overrode it
+      // to say where documentation lives in their repository said that once. What
+      // graduation adds is **appended** rather than interpolated, exactly as the
+      // duplicate candidates are on `POST /api/findings/:id/file` — an override that
+      // never learned about a new `{token}` drops it in silence, on precisely the
+      // deployments that customised most.
+      const prompt = [
+        system.prompts.render('docs-change', vars),
+        graduationNote(fact, body, store.listCorroborations(fact.id)),
+      ].join('\n\n');
+      const { job, graduation } = store.commitFact(fact, body, { title, prompt });
+      hub.broadcast({ type: 'world:changed' });
+      // Dispatched on this pulse rather than the next, `POST /api/findings/:id/promote`'s
+      // shape: the operator clicked, and a queue that only moves on the heartbeat
+      // reads as nothing having happened.
+      const report = await harness.runCycle('manual');
+      return { ok: true, fact, job, graduation, report };
+    }),
+  );
+
+  /**
+   * Say what became of a graduation the harness cannot read for itself.
+   *
+   * This is the `committed` verb the reach route deliberately does not carry, and
+   * the objection that keeps it out of there does not apply here: the pull request
+   * has already been opened, so saying it landed puts the claim in a place rather
+   * than nowhere. Its opposite says the pull request is not happening, and leaves
+   * the claim exactly where it was — still delivered, and committable again.
+   *
+   * It exists because the sweep will not guess. A pull request that vanished from
+   * the world without ever being seen closed reads as merged only by *inference*,
+   * and acting on that would take a claim out of every prompt for a pull request
+   * that may have been closed unmerged while nothing was watching — so the harness
+   * says `unknown` and asks the one party that can answer. Without this route that
+   * reading would strand the graduation, and the claim would be drawn as on its way
+   * to a repository forever.
+   */
+  const SettleBody = z.object({
+    outcome: z.enum(['landed', 'abandoned'], {
+      errorMap: () => ({
+        message:
+          'outcome must be landed (the pull request merged, so the claim is in the repository and leaves ' +
+          'every prompt) or abandoned (it did not, so the claim stays exactly where it is)',
+      }),
+    }),
+  });
+  app.post(
+    '/api/knowledge/graduations/:id/settle',
+    checked({ params: IdParams, body: SettleBody }, async ({ params, body, reply }) => {
+      const existing = store.getGraduation(params.id);
+      if (!existing) return reply.code(404).send({ error: 'graduation not found' });
+      const graduation = store.settleGraduation(params.id, body.outcome);
+      // The one refusal: the sweep or an earlier click answered it first. A 409 and
+      // never a throw — `setErrorHandler` means unanticipated, and this is
+      // anticipated.
+      if (!graduation) return reply.code(409).send({ error: 'this graduation has already been answered' });
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, graduation, fact: store.getFact(graduation.factId) };
     }),
   );
 

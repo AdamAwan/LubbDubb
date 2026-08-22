@@ -287,7 +287,10 @@ export function validateContradiction(
  * tell which.
  *
  * A `proposal` reaches nobody, so nothing could have been shown one. A `committed`
- * fact is in the repository, where the way to correct it is a pull request. And a
+ * fact is in the repository's own documentation, where the way to correct it is a
+ * change to that document — which is `report_finding` kind `docs`, named in the
+ * refusal, because pointing at the pull request that put it there would be pointing
+ * at a merged diff nobody can file against. And a
  * `rejected` claim has already been answered: it reaches nobody, an operator has
  * said it is not true, and the sharper version an agent has in hand is a claim in
  * its own right — `knowledge_propose` with `supersedes`, which is the one thing
@@ -316,9 +319,11 @@ export function contradictableFact(fact: KnowledgeFact, now: string): { ok: true
     return {
       ok: false,
       error:
-        `that claim is out of every prompt already (${fact.id}, ${fact.reach}). A committed fact lives in ` +
-        `the repository, where the way to correct it is a change to the documentation; a superseded one has ` +
-        `been replaced. Contradict the claim you were actually shown.`,
+        `that claim is out of every prompt already (${fact.id}, ${fact.reach}). A committed fact was written ` +
+        `into this repository's own documentation and is read from there, so correcting it is a change to ` +
+        `that document — report_finding with kind "docs" is the rail for one, and an operator promotes it ` +
+        `into a pull request. A superseded claim has already been replaced. Contradict the claim you were ` +
+        `actually shown.`,
     };
   }
   if (fact.expiresAt !== null && fact.expiresAt <= now) {

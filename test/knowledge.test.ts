@@ -860,11 +860,14 @@ test('the page draws every reach, the rejected tail included', async () => {
       hasGoal: () => true,
       children: createElement(KnowledgePanel, {
         facts: state.knowledge,
+        graduations: state.knowledgeGraduations,
         delivery: state.knowledgeDelivery,
         now: Date.now(),
         refUrls: state.refUrls,
         viewingFact: null,
         onReach: () => undefined,
+        onCommit: () => undefined,
+        onSettleGraduation: () => undefined,
         onDetail: () => Promise.resolve({ corroborations: [], contradictions: [] }),
         onResolveContradiction: () => undefined,
         onViewFact: () => undefined,
@@ -872,7 +875,16 @@ test('the page draws every reach, the rejected tail included', async () => {
     }),
   );
 
-  for (const heading of ['Live notices', 'Needs you', 'Injected', 'On lookup', 'One voice', 'Superseded', 'Rejected']) {
+  for (const heading of [
+    'Live notices',
+    'Needs you',
+    'Injected',
+    'On lookup',
+    'One voice',
+    'Committed to the repository',
+    'Superseded',
+    'Rejected',
+  ]) {
     assert.ok(html.includes(heading), `the page draws no ${heading} section`);
   }
   // The claim an operator killed is on the page. A governance surface that drew
@@ -887,6 +899,15 @@ test('the page draws every reach, the rejected tail included', async () => {
   assert.ok(html.includes('1 dispute'), 'the contradiction count is not drawn');
   assert.ok(html.includes('25%'), 'the contradiction ratio is not drawn');
   assert.ok(html.includes('1 to answer'), 'an unanswered dispute is not drawn');
+  // Where a claim went, and where one is going: both drawn as references rather
+  // than as text, because a row that names a pull request and offers no way there
+  // is a dead end that reads correctly (#27 phase 6).
+  assert.ok(html.includes('committed to the document that owns it'), 'a committed row does not say where it went');
+  assert.ok(html.includes('/pull/409'), 'a committed row does not link to the pull request that put it there');
+  assert.ok(html.includes('/pull/411'), 'a graduating row does not link to its open pull request');
+  // And the claim being written up is still on lookup, still delivered: nothing
+  // moved when the operator clicked.
+  assert.ok(html.includes('being written up'), 'a graduation in flight is not drawn');
   // And the one thing an operator must not be able to do from here.
   assert.ok(!/>File a claim</.test(html), 'nothing on this page files a claim');
 });
@@ -1330,6 +1351,11 @@ test('no rule, desk or gate reads a fact', () => {
   // this subsystem that a reviewer cannot check by reading one file: a fact feeds
   // prompts and a panel, and nothing is dispatched, held or ranked because of one.
   // If this fails, fix the file it names rather than the assertion.
+  //
+  // The **writers** are matched too, and for the same reason a reader is: a desk
+  // that raises a notice or ends a graduation lives outside the dispatcher because
+  // what it writes reaches a prompt, and a rule that wrote one would be deciding
+  // something on a fact by another name. A new store method belongs in this regex.
   const readers: string[] = [];
   const walk = (dir: string): void => {
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
@@ -1337,7 +1363,7 @@ test('no rule, desk or gate reads a fact', () => {
       if (entry.isDirectory()) walk(path);
       else if (
         entry.name.endsWith('.ts') &&
-        /\b(askFacts|listFacts|proposeFact|setFactReach|contradictFact|listContradictions|resolveContradiction|factCounts)\b/.test(
+        /\b(askFacts|listFacts|proposeFact|setFactReach|contradictFact|listContradictions|resolveContradiction|factCounts|commitFact|listGraduations|openGraduations|settleGraduation)\b/.test(
           readFileSync(path, 'utf8'),
         )
       )

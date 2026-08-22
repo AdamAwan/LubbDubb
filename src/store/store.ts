@@ -72,6 +72,7 @@ import type {
   ErrorLogInput,
   Escalation,
   EscalationSpan,
+  FactCommitment,
   FactReach,
   Finding,
   FindingInput,
@@ -90,9 +91,11 @@ import type {
   JobAttachment,
   JobSchedule,
   ContradictionRuling,
+  GraduationOutcome,
   KnowledgeContradiction,
   KnowledgeCorroboration,
   KnowledgeFact,
+  KnowledgeGraduation,
   Lesson,
   LessonInput,
   Remedy,
@@ -542,6 +545,56 @@ export class Store {
   }
   resolveNotice(id: string): KnowledgeFact | null {
     return this.knowledge.resolveNotice(id);
+  }
+
+  /**
+   * Open the documentation work for a claim, and record that it was opened —
+   * **one transaction over two modules**.
+   *
+   * Here rather than in either of them because it is a cross-domain write and this
+   * is the caller that holds both, exactly as `adoptLessons` is: `jobs.ts` owns the
+   * queue and `knowledge.ts` owns the facts, and a store module reaching a
+   * sibling's tables is what `test/storeModules.test.ts` refuses.
+   *
+   * One transaction because both half-landings are silent. A job with no
+   * graduation naming it is a documentation pull request that lands and takes
+   * nothing out of any prompt — the fleet goes on paying for a sentence the
+   * repository now states. A graduation naming no job is a claim the page shows as
+   * on its way to a repository nothing is writing it into.
+   *
+   * The job carries **no origin**. `originRef` names the work a job stands in for,
+   * and the graph adopts a job by it — so attributing this one to the goal the
+   * claim was first seen on would file a documentation pull request under
+   * somebody else's issue, which is the mistake `src/mcp/findings.ts` names when it
+   * passes a finding's `ref` and never its `originRef`. A claim about the
+   * repository stands in for no tracked work, and a job with no origin stands in
+   * for nothing — which is exactly true here.
+   */
+  commitFact(fact: KnowledgeFact, commitment: FactCommitment, work: { title: string; prompt: string }): FactCommitted {
+    const write = this.db.transaction((): FactCommitted => {
+      // Code and not desk: writing a documentation change and opening a pull
+      // request for it means files in a tree, so it wants a worktree and a branch —
+      // the same reason `POST /api/findings/:id/promote` defaults a `docs`
+      // promotion to a code job.
+      const job = this.jobs.createJob({ title: work.title, prompt: work.prompt, kind: 'code', originRef: null });
+      return { job, graduation: this.knowledge.recordGraduation(fact.id, job.id, commitment) };
+    });
+    return write();
+  }
+  listGraduations(limit?: number): KnowledgeGraduation[] {
+    return this.knowledge.listGraduations(limit);
+  }
+  openGraduations(): KnowledgeGraduation[] {
+    return this.knowledge.openGraduations();
+  }
+  getGraduation(id: string): KnowledgeGraduation | null {
+    return this.knowledge.getGraduation(id);
+  }
+  noteGraduationPr(id: string, prRef: string): void {
+    this.knowledge.noteGraduationPr(id, prRef);
+  }
+  settleGraduation(id: string, outcome: GraduationOutcome): KnowledgeGraduation | null {
+    return this.knowledge.settleGraduation(id, outcome);
   }
 
   // -- Remedies (why the fleet came back to a PR, and what settled it) --------
@@ -1307,4 +1360,17 @@ export class Store {
   clearVivarium(id: string): PetReset {
     return this.pets.clearVivarium(id);
   }
+}
+
+/**
+ * What committing a claim produced: the documentation job an agent will work, and
+ * the row that links the two.
+ *
+ * Both, because the caller needs both — the route hands the job back so the
+ * cockpit can watch it in Up next, and the graduation is what the page draws the
+ * pull request from once there is one.
+ */
+interface FactCommitted {
+  job: Job;
+  graduation: KnowledgeGraduation;
 }

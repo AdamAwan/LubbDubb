@@ -17,7 +17,9 @@ import type {
   FilingTargetProbe,
   IssueFiled,
   ContradictionRuling,
+  FactCommitment,
   FactRuling,
+  GraduationOutcome,
   KnowledgeFactPayload,
   PetCatalogue,
   PlanHistory,
@@ -482,6 +484,18 @@ const realApi = {
   // different things to every agent.
   resolveContradiction: (id: string, body: ContradictionRuling) =>
     post<{ ok: true }>(`/api/knowledge/contradictions/${encodeURIComponent(id)}/resolve`, body),
+  // Committing a claim to the repository (#27 phase 6). **One call**, because
+  // opening the documentation work and recording that it is on its way are two
+  // halves of one act — a job nothing links to is a pull request that lands and
+  // takes the claim out of no prompt. It does not move the reach: the claim goes on
+  // being delivered until the pull request actually merges.
+  commitFact: (id: string, body: FactCommitment) =>
+    post<{ ok: true }>(`/api/knowledge/facts/${encodeURIComponent(id)}/commit`, body),
+  // What became of one the harness cannot read for itself — a pull request that
+  // left the world without ever being seen closed. The sweep says `unknown` rather
+  // than guessing merged, and this is the answer to it.
+  settleGraduation: (id: string, outcome: GraduationOutcome) =>
+    post<{ ok: true }>(`/api/knowledge/graduations/${encodeURIComponent(id)}/settle`, { outcome }),
   // Work only a person can do. `done` settles it and concludes any plan step it
   // backs, which releases whatever was waiting; `decline` settles it the other way
   // and deliberately does not conclude the step, so nothing downstream starts.

@@ -271,6 +271,8 @@ export function useCockpit(): CockpitStatus {
       promoteLesson: (id) => then(api.promoteLesson(id)),
       retireLesson: (id) => then(api.retireLesson(id)),
       setFactReach: (id, reach) => then(api.setFactReach(id, reach)),
+      commitFact: (id, commitment) => then(api.commitFact(id, commitment)),
+      settleGraduation: (id, outcome) => then(api.settleGraduation(id, outcome)),
       // A read, so no refetch: the evidence behind one claim rides its own route
       // precisely because it must not be pulled along by the state poll.
       factDetail: (id) => api.knowledgeFact(id),
