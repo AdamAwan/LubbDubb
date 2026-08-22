@@ -59,6 +59,24 @@ export interface SetupProbes {
 
 /** The real probes: git in the named root, `execFile` for the rest. */
 export class RealSetupProbes implements SetupProbes {
+  /**
+   * Logins already asked for, keyed by credential *and* target.
+   *
+   * The one probe on this class that costs a rate-limited request rather than a
+   * subprocess, and the one asked most often: `GET /api/setup` runs on every
+   * cockpit mount and on every config apply, and `POST /api/setup/resolve` is
+   * debounced-per-keystroke behind the setup panel's two fields. Each of those was
+   * a fresh client and a fresh `GET /user` for an answer that is fixed for a
+   * token's lifetime — which is precisely the reasoning
+   * `OctokitGitHubApi.viewerLogin` already caches on, applied to the caller that
+   * kept building a new one.
+   *
+   * Only an answer is remembered. A failure is not: "the credential did not
+   * answer" is the reading the panel exists to correct, so it must be re-asked the
+   * moment the operator exports a token and the page re-reads.
+   */
+  private readonly logins = new Map<string, string>();
+
   async originUrl(repoRoot: string): Promise<string | null> {
     try {
       const { stdout } = await runGit(repoRoot, ['remote', 'get-url', 'origin']);
@@ -121,9 +139,14 @@ export class RealSetupProbes implements SetupProbes {
 
   async viewerLogin(target: RemoteTarget, token: string): Promise<string | null> {
     if (target.provider !== 'github') return null;
+    const key = `${token}\u0000${target.parts.join('/')}`;
+    const known = this.logins.get(key);
+    if (known !== undefined) return known;
     try {
       const api = OctokitGitHubApi.fromToken(token, target.parts[0]!, target.parts[1]!);
-      return (await api.viewerLogin()) || null;
+      const login = (await api.viewerLogin()) || null;
+      if (login !== null) this.logins.set(key, login);
+      return login;
     } catch {
       return null;
     }

@@ -1,6 +1,7 @@
 import { Octokit } from '@octokit/rest';
 import { retry } from '@octokit/plugin-retry';
 import { throttling } from '@octokit/plugin-throttling';
+import { EtagCache, installConditionalRequests } from './etagCache.js';
 import type { MergeMethod } from '../../sink/actionSink.js';
 import { withinClosedWindow } from '../closedWindow.js';
 import type {
@@ -63,7 +64,7 @@ const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTim
 
 /**
  * Extra attempts after the first for a request GitHub itself said to retry —
- * a rate limit, a secondary (abuse) limit, a 5xx, a dropped socket.
+ * a secondary (abuse) limit, a 5xx, a dropped socket.
  *
  * The same budget as Azure's `MAX_RETRIES`, and for the same reason: the snapshot
  * is re-taken every heartbeat anyway, so the retry only has to cover a blip that
@@ -71,6 +72,35 @@ const realSleep = (ms: number): Promise<void> => new Promise((resolve) => setTim
  * spends the pulse waiting instead.
  */
 const MAX_RETRIES = 3;
+
+/**
+ * The longest primary-rate-limit wait worth sitting through, in seconds.
+ *
+ * The primary limit is not the blip {@link MAX_RETRIES} was sized for, and
+ * treating it as one is actively harmful. Its `retryAfter` is time-until-the-hour-
+ * window-resets, so it arrives in the hundreds of seconds; the snapshot fans out
+ * with `Promise.all`, so *every* request in flight parks for that long and the
+ * pulse is held for it; and they then all fire again the instant the window
+ * reopens, re-exhausting the budget they were waiting on. Meanwhile the thing the
+ * wait buys is already available for free: a failed snapshot degrades to
+ * `lastGood` with `stale: true`, and the next pulse tries again.
+ *
+ * So the wait is capped at a value that can only be a genuine blip — a window
+ * about to turn over anyway — and anything longer is refused rather than absorbed.
+ * The secondary limit keeps the full budget: it is burst-triggered, it clears in
+ * seconds, and backing off *is* the correct response to it.
+ */
+const MAX_PRIMARY_LIMIT_WAIT_S = 60;
+
+/**
+ * Whether to sit out a **primary** rate limit, given what GitHub said the wait is
+ * and how many attempts this request has already spent. Pure, so the policy above
+ * is testable without a clock or a socket.
+ */
+export function waitOutRateLimit(retryAfterS: number, retryCount: number): boolean {
+  if (retryAfterS > MAX_PRIMARY_LIMIT_WAIT_S) return false;
+  return retryCount < MAX_RETRIES;
+}
 
 /**
  * Octokit with the two plugins that make a rate limit survivable.
@@ -83,6 +113,10 @@ const MAX_RETRIES = 3;
  * is the same guarantee on the provider that fans out hardest, since the world
  * read is O(open issues + open PRs) requests per pulse and secondary limits are
  * triggered by exactly that shape of burst.
+ *
+ * Retrying is the second line, though, not the first: see
+ * {@link installConditionalRequests}, which is what keeps the fleet under the
+ * budget rather than surviving the moment it is gone.
  */
 const ResilientOctokit = Octokit.plugin(retry, throttling);
 
@@ -148,10 +182,18 @@ export class OctokitGitHubApi implements GitHubApi {
       retry: { retries: MAX_RETRIES },
       throttle: {
         onRateLimit: (retryAfter, options, _octokit, retryCount) => {
+          const wait = waitOutRateLimit(retryAfter, retryCount);
+          // Recorded either way, and worded by which of the two this is, because
+          // they say different things to an operator: a window about to turn over,
+          // or a read that has outgrown its budget and will not be fixed by
+          // waiting. → {@link MAX_PRIMARY_LIMIT_WAIT_S}
+          const where = `GitHub ${options.method} ${options.url}`;
           log(
-            `GitHub ${options.method} ${options.url}: rate limited, retry ${retryCount + 1}/${MAX_RETRIES} in ${retryAfter}s`,
+            wait
+              ? `${where}: rate limited, retry ${retryCount + 1}/${MAX_RETRIES} in ${retryAfter}s`
+              : `${where}: rate limited for ${retryAfter}s — not waiting; this read serves its last good slice and the next pulse retries`,
           );
-          return retryCount < MAX_RETRIES;
+          return wait;
         },
         // The secondary limit is the one this fleet actually provokes: it is
         // triggered by burst concurrency rather than by an hourly budget, and the
@@ -164,6 +206,11 @@ export class OctokitGitHubApi implements GitHubApi {
         },
       },
     });
+    // Every GET this client makes now carries the ETag of the reading it already
+    // holds, so an unchanged resource answers 304 and costs no rate-limit budget
+    // at all. The bulk of the world read is exactly that: one timeline per open
+    // issue, per pulse, for issues that mostly have not moved.
+    installConditionalRequests(octokit, new EtagCache());
     return new OctokitGitHubApi(octokit, owner, repo);
   }
 

@@ -331,6 +331,14 @@ or a real network would answer differently on every developer's machine and in C
 `env()` reads at the moment it is asked rather than snapshotting, because a credential exported after
 boot is exactly the case the `credential` check exists for.
 
+`viewerLogin()` is the opposite, and the one probe that costs a rate-limited request rather than a
+subprocess. It is also the one asked most often: `GET /api/setup` runs on every cockpit mount and
+every config apply, and `POST /api/setup/resolve` sits debounced behind the panel's two fields — so
+each was a fresh client and a fresh `GET /user` for an answer that is fixed for a token's lifetime.
+`RealSetupProbes` remembers it, keyed by credential *and* target. Only an answer is remembered: "the
+credential did not answer" is the reading this panel exists to correct, so it is re-asked the moment
+the operator exports a token and the page re-reads. → [15](15-integrations.md#rate-limits)
+
 ## In the cockpit
 
 **The rows** are on the Needs you rail, merged with everything else waiting on the operator
