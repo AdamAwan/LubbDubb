@@ -3,12 +3,17 @@ import { PetSprite } from '../components/PetSprite.js';
 import { absDate } from '../components/util.js';
 
 /**
- * The enclosure at the foot of the queue rail.
+ * The enclosure: the foot of the queue rail beside it, the foot of the page in
+ * one column.
  *
- * Rendered **below** `.cn-rail-list`, which is already a flex column with a
- * scrolling list — so this is a pinned footer: a queue longer than the rail
- * scrolls behind it rather than pushing it off the bottom. Always in frame, and
- * it covers nothing.
+ * Rendered **last in `.cn-body`**, after the situation area, because document
+ * order is the whole arrangement once the shell collapses to one column — inside
+ * the rail this drew half way down a narrow page, between the queue and the work.
+ * Last, it is the end of the page: scrolled to after the work rather than pinned
+ * across the bottom of it. Above 1100px the sheet places it back into the rail's
+ * column as its second row, so a queue longer than the rail scrolls behind it
+ * rather than pushing it off the bottom. Always in flow: it covers nothing.
+ * → docs/spec/22-pets.md#the-vivarium
  *
  * **One button per creature, rather than one over the floor.** The floor used to
  * be a single button because it had a single destination; an egg gives it two, and

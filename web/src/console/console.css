@@ -360,18 +360,19 @@
 }
 
 /* ---------- body ---------- */
+/* < 1100: one column, and one scroller — the rail, the situation area and the
+   vivarium stacked at their own heights with the body scrolling them, so the page
+   reads asks, then work, then the enclosure at the end of it. 1100+: rail beside,
+   two panes that scroll inside a body that does not; that arrangement is set out
+   below `.cn-sit`, because half of it overrides rules declared after this one.
+   1500+: goal page gains its right column. 2000+: overview in four tracks.
+   Matching these in React as well would cost a resize listener and a second
+   definition of every boundary. */
 .cn-body {
   display: grid;
   grid-template-columns: 1fr;
   min-height: 0;
-}
-/* < 1100: rail above, one column. 1100+: rail beside. 1500+: goal page gains
-   its right column. 2000+: overview in four tracks. Matching these in React as
-   well would cost a resize listener and a second definition of every boundary. */
-@media (min-width: 1100px) {
-  .cn-body {
-    grid-template-columns: 360px 1fr;
-  }
+  overflow: auto;
 }
 
 /* ---------- queue rail ---------- */
@@ -380,7 +381,6 @@
   background: var(--cn-panel);
   display: flex;
   flex-direction: column;
-  min-height: 0;
 }
 .cn-rail-head {
   display: flex;
@@ -404,16 +404,17 @@
   padding: 3px 7px;
   border-radius: 99px;
 }
+/* In one column the list has no scrollport of its own: it draws its whole queue at
+   its full height and the body scrolls it. A scroller here — and the `min-height: 0`
+   that lets a pane shrink below its content — is what made the rail a pane with a
+   bottom edge inside the page, and a pane with a bottom edge has to put its footer
+   on it. Both are set under the 1100 breakpoint instead, where that is what the
+   rail is. */
 .cn-rail-list {
-  overflow: auto;
   padding: 8px;
   display: flex;
   flex-direction: column;
   gap: 6px;
-  /* A flex item's automatic minimum size is its content, so without this the
-     list refuses to shrink below a long queue and pushes the rail's footer off
-     the bottom instead of scrolling. */
-  min-height: 0;
 }
 /* A queue longer than the rail is tall must scroll, not squash: flex items
    shrink by default, and a row shorter than its text hides the ask's goal and
@@ -720,9 +721,48 @@
 
 /* ---------- situation ---------- */
 .cn-sit {
-  overflow: auto;
-  min-height: 0;
   padding: 14px;
+}
+
+/* The shell at 1100 and up: the rail beside the situation area rather than above
+   it, and with that, two panes that scroll on their own inside a body that does
+   not. Stated here rather than beside `.cn-body` because half of it overrides
+   rules declared between the two — the same breakpoint, in the one place all the
+   surfaces it moves are in scope.
+
+   The vivarium comes *last* in the document, which is what puts it at the foot of
+   the page in one column; here it is placed back onto the rail column's floor as a
+   second row, with the situation area spanning both. `minmax(0, 1fr)` rather than
+   `1fr` for the rail's row: a `1fr` track floors at its content, so a long queue
+   would push the enclosure off the bottom instead of scrolling behind it.
+   → docs/spec/17-cockpit.md#the-console-at-width */
+@media (min-width: 1100px) {
+  .cn-body {
+    grid-template-columns: 360px 1fr;
+    grid-template-rows: minmax(0, 1fr) auto;
+    overflow: hidden;
+  }
+  /* Every `min-height: 0` in this block says the same thing, and only here: this
+     pane may be shorter than its content, because it has a scrollbar. Left on at
+     one column they say it to a grid whose rows are the page — every track then
+     collapses towards nothing and the panes draw over each other. */
+  .cn-rail {
+    grid-area: 1 / 1;
+    min-height: 0;
+  }
+  .cn-rail-list {
+    overflow: auto;
+    min-height: 0;
+  }
+  .cn-viv {
+    grid-area: 2 / 1;
+    border-right: 1px solid var(--cn-line);
+  }
+  .cn-sit {
+    grid-area: 1 / 2 / 3 / 3;
+    overflow: auto;
+    min-height: 0;
+  }
 }
 
 /* the recovery banner: outside and above the situation area at every width,
@@ -1881,17 +1921,18 @@ button.cn-grow {
   flex: none;
 }
 
-/* The vivarium: the rail's footer, below its scrolling list, so a long queue
-   scrolls behind it rather than pushing it off the bottom. It never shrinks,
-   and the `auto` top margin absorbs whatever height the queue leaves over — so
-   a short or empty queue leaves the gap above the enclosure rather than below
-   it, and the corner is the corner at every queue length. Inert when the list
-   already fills the rail. */
+/* The vivarium: the last row of the body at every width, which is two
+   arrangements from one placement. In one column it is the end of the page —
+   something the operator scrolls down to, past the work, rather than a strip
+   pinned across the bottom of the glass or wedged between the queue and the work.
+   Beside the rail it is the rail column's floor, under the rail's scrolling list:
+   the row is `auto` against a `minmax(0, 1fr)` rail, so it takes its content
+   height at every queue length and a queue longer than the rail scrolls behind it
+   rather than pushing it off the bottom. It stays in flow at both, so it covers
+   nothing. */
 .cn-viv {
   border-top: 1px solid var(--cn-line);
   background: var(--cn-bg);
-  flex-shrink: 0;
-  margin-top: auto;
 }
 .cn-viv-floor {
   display: flex;

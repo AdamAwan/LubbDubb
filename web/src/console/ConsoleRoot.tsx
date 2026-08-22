@@ -92,22 +92,24 @@ export function ConsoleRoot({ view, actions }: { view: CockpitView; actions: Coc
       <div className="cn-body">
         <aside className="cn-rail">
           <QueueRail view={view} actions={actions} />
-          {/* Below the rail's scrolling list rather than inside it: a queue longer
-              than the rail scrolls behind the enclosure instead of pushing it off
-              the bottom, so the corner is always in frame and covers nothing.
-              Absent entirely when the snapshot ships no vivarium — the feature off,
-              or on and hidden. */}
-          {view.state.pets !== null && (
-            <Vivarium
-              pets={view.state.pets}
-              runningAgents={view.state.agents.filter((a) => a.status === 'running').length}
-              paused={view.state.control.paused}
-              onOpen={() => actions.openPanel('pets')}
-              onHatch={(id) => actions.hatchEgg(id)}
-            />
-          )}
         </aside>
         <main className="cn-sit">{situation}</main>
+        {/* Last in the body rather than inside the rail, because document order is
+            what decides where it lands when the shell collapses to one column: the
+            end of the page, scrolled to after the work, instead of a strip wedged
+            between the queue and the work. The wide arrangement is unchanged — the
+            sheet places it back on the rail's floor, below the rail's scrolling list,
+            so a long queue scrolls behind it. Absent entirely when the snapshot ships
+            no vivarium — the feature off, or on and hidden. */}
+        {view.state.pets !== null && (
+          <Vivarium
+            pets={view.state.pets}
+            runningAgents={view.state.agents.filter((a) => a.status === 'running').length}
+            paused={view.state.control.paused}
+            onOpen={() => actions.openPanel('pets')}
+            onHatch={(id) => actions.hatchEgg(id)}
+          />
+        )}
       </div>
       {panel}
     </div>

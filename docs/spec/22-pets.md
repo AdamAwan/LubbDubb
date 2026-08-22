@@ -479,19 +479,32 @@ an hour. The period is clamped to a range a heart could plausibly beat at.
 
 ## The vivarium
 
-`web/src/console/Vivarium.tsx`, rendered inside `.cn-rail` **below** `.cn-rail-list`. It draws through
-`web/src/components/PetSprite.tsx`, which is shared with the panel and so styles itself through the
-token layer rather than a `cn-` class.
+`web/src/console/Vivarium.tsx`, rendered as the **last child of `.cn-body`** — after the rail and
+after the situation area. It draws through `web/src/components/PetSprite.tsx`, which is shared with
+the panel and so styles itself through the token layer rather than a `cn-` class.
 
-**What pins it is one `auto` margin, not the flex column.** The rail is a full-height flex column,
-but nothing in it grows: the list and the vivarium both size to their content, so a short or empty
-queue used to leave the free height _below_ the enclosure and it rode up under the last ask row.
-`margin-top: auto` on `.cn-viv` absorbs that free height above it instead, which puts the enclosure
-on the rail's floor at every queue length and is inert when the list already fills the rail. The
-list carries `min-height: 0` so it is still allowed to shrink below its content and scroll when the
-queue is long — a queue longer than the rail scrolls behind the vivarium rather than pushing it off
-the bottom. It stays in flow, so it is always in frame and never covers anything: absolute
-positioning would reserve no space and leave the last ask row permanently half-hidden.
+**Last in the document, because that is what decides where it lands in one column.** Below 1100px the
+shell has no rail beside anything: it is one column scrolling as a single page, and document order is
+the entire arrangement. The enclosure lived inside `.cn-rail` until it was noticed that this put it in
+the middle of a narrow page — a strip of pets between the queue and the work, which every scroll to the
+overview had to get past. Written last it is the end of the page instead: something the operator
+arrives at after the work, and never something in the way of it.
+
+**Scrolled to, not pinned.** The narrow arrangement could hold it across the bottom of the glass, and
+that is a worse version of the bug it fixes — the enclosure is decoration, and decoration that is
+always on screen is taking a strip of a phone away from the asks. It goes past the last card and
+stays there. → [17](17-cockpit.md#the-console-at-width)
+
+**Beside the rail, placement puts it back on the rail's floor.** Above 1100px `.cn-body` is two rows,
+`minmax(0, 1fr) auto`: the rail takes the first, the vivarium the second, the situation area spans
+both. The `1fr` is what pins it — the rail's track absorbs whatever height the queue leaves over, so
+the enclosure is on the rail's floor at every queue length, where an `auto` margin on a flex child
+used to do the same job. `minmax(0, …)` rather than `1fr` alone because a `1fr` track floors at its
+content: a queue longer than the rail would push the enclosure off the bottom instead of scrolling
+behind it, which is the thing `.cn-rail-list`'s own `min-height: 0` is also there for. It stays in
+flow at both widths, so it is always in frame and never covers anything: absolute positioning would
+reserve no space and leave the last ask row permanently half-hidden.
+→ [17](17-cockpit.md#the-console-at-width)
 
 **One button per creature, rather than one over the floor.** The floor was a single button while it
 had a single destination; an egg gives it two — a shell opens its own ceremony, anything else opens
@@ -511,7 +524,10 @@ corner is decoration. Putting out a fifth is refused rather than silently swappi
 whoever was there is the cockpit deciding something the operator did not. Clicking it opens the panel.
 
 Four rather than all of them because the rail is a single narrow column and a vivarium that scrolled would
-be a second queue in the one place on the screen reserved for the first.
+be a second queue in the one place on the screen reserved for the first. The bound holds at the
+narrow width too, where the enclosure is as wide as the page: four is what the panel behind it is for,
+and a floor that filled itself because there was room would make the strip at the foot of a phone
+screen the tallest thing on it.
 
 **Under the bar, the date the vivarium started counting from** — `counting since 14 Aug 2026`, drawn
 from `PetState.startedAt` and outside the bar's button, because the bar has a destination and this is
