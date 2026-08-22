@@ -44,6 +44,10 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         // watcher recomputes it on every apply, and this route is re-fetched the
         // moment one lands.
         pending: system.liveConfig.pending(),
+        // The book the dispatcher renders from, so the reading scans what an agent
+        // is actually handed rather than what is on disk. Read once at boot by
+        // `loadPromptTemplates`, exactly as every other consumer of it is.
+        prompts: system.prompts,
       })) satisfies SetupPayload,
   );
 

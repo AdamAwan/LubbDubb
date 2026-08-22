@@ -60,6 +60,89 @@ export const MCP_TOOL_NAMES = [
 export type McpToolName = (typeof MCP_TOOL_NAMES)[number];
 
 /**
+ * Where each tool is named to the agent that has to call it.
+ *
+ * Granting a tool is not telling an agent it exists: `tools/list` advertises it,
+ * but a model working a task reaches for what its instructions named, and a tool
+ * nothing names loses to `gh`, `az` and a hand-rolled equivalent with nothing red
+ * anywhere. `open_pr` spent its first release exactly there.
+ *
+ * - `addendum` — nothing else names it, so {@link MCP_PROTOCOL_ADDENDUM} must.
+ * - `point-of-use` — named by the prompt or the instruction that dispatches the
+ *   work it belongs to, which is the better place for a tool only one kind of
+ *   agent ever calls. Keeping them *out* of the addendum is what keeps it short
+ *   enough to read.
+ * - `superseded` — deliberately named nowhere. `raise` is the door for everything
+ *   these four did, so advertising them would put six ways to file one
+ *   observation in front of every agent. They stay *registered* rather than
+ *   deleted because an operator's prompt override written before the intake may
+ *   still name one, and unlike a `PromptId` a withdrawn tool name fails silently:
+ *   the call comes back refused with nothing in the logs, on exactly the
+ *   deployments that customised most.
+ *
+ * **This lives beside the names rather than in `test/mcpChannel.test.ts`, where it
+ * was written.** `src/setup/reading.ts` reads the `superseded` half to tell an
+ * operator that an override of theirs still names one, and a classification a
+ * test owns is a classification production code has to keep a second copy of —
+ * free to disagree with what is actually granted, silently, which is the failure
+ * the whole module exists to make impossible. The test asserts *against* it
+ * instead, in both directions.
+ *
+ * A `Record` over {@link McpToolName}, so a new tool does not compile until it has
+ * been classified.
+ */
+export const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use' | 'superseded'> = {
+  // The one door. Every agent may raise, on every dispatch, so there is no single
+  // prompt that could name it — which is the addendum's own criterion.
+  raise: 'addendum',
+  escalate: 'addendum',
+  plan_submit: 'addendum',
+  world_read: 'addendum',
+  open_pr: 'addendum',
+  note_progress: 'addendum',
+  // Every agent may read the knowledge base, and it has no point of use to be named
+  // at: a tool named nowhere but in `tools/list` is a tool an agent finishes without.
+  knowledge_ask: 'addendum',
+  // A request for a person to act rather than an observation, which is why it did
+  // not fold into `raise` — and why it still needs naming.
+  request_human_task: 'addendum',
+  // The four `raise` replaced. Kept registered for an override that names one.
+  report_finding: 'superseded',
+  knowledge_propose: 'superseded',
+  knowledge_notice: 'superseded',
+  knowledge_contradict: 'superseded',
+  // Terminal or task-scoped: the dispatch prompt names these where they are used.
+  link_ticket: 'point-of-use',
+  conclude_work: 'point-of-use',
+  conclude_part: 'point-of-use',
+  assess_issue: 'point-of-use',
+  assay_issue: 'point-of-use',
+  retro_submit: 'point-of-use',
+  scratch_append: 'point-of-use',
+  scratch_read: 'point-of-use',
+  validation_report: 'point-of-use',
+  validation_amend: 'point-of-use',
+  report_remedy: 'point-of-use',
+  // The one tool an agent is never told about: Claude Code calls it through
+  // --permission-prompt-tool, so naming it would invite a call that means nothing.
+  request_permission: 'point-of-use',
+};
+
+/**
+ * The tools `raise` replaced, still registered and still granted.
+ *
+ * Derived from {@link TOOL_NAMING} rather than written out again, so the list an
+ * operator is warned about cannot drift from the list that is actually granted —
+ * which is the same three-way-agreement argument as {@link ALLOWED_MCP_TOOLS},
+ * pointed at the reading instead of at the launch.
+ *
+ * → `docs/spec/26-setup.md#an-override-that-names-a-superseded-tool`
+ */
+export const SUPERSEDED_TOOL_NAMES: readonly McpToolName[] = MCP_TOOL_NAMES.filter(
+  (name) => TOOL_NAMING[name] === 'superseded',
+);
+
+/**
  * The names as the permission layer sees them.
  *
  * **Why this is needed at all** (verified empirically against `claude` 2.1.220,

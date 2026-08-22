@@ -21,8 +21,9 @@ are five answers to one question that share no vocabulary and cannot be read aga
 
 Three of the five hold the same shape of claim — _something true of this repository that the
 repository does not say_ — arriving through three tools that do not know about each other and landing
-in three different places. A remedy's `undocumented` lesson and a `docs` finding are the same
-sentence written twice.
+in three different places. A remedy's `undocumented` lesson and a `docs` finding were the same
+sentence written twice — the remedy's half is [now raised as a fact](#the-remedy-arm), and the
+finding's half waits on this merge.
 
 **The scratchpad is not folded in.** A pad is a conversation between siblings on one goal,
 chronological and unstructured; its entries are not claims, have no evidence and nothing to
@@ -31,9 +32,9 @@ everywhere else, so the pad keeps its own writer and this page links to it. A pa
 to be durable is **proposed** as a fact by the agent that found it useful.
 
 `remedies` survives as what it always was — the **event** record of one return to a pull request,
-with its counts and its dollars ([18](18-observability.md)) — and gains the ability to propose a fact
-([not yet built](#what-the-fleet-writes-with)). An account of an event and a durable claim are
-different animals and folding them together would lose the counts.
+with its counts and its dollars ([18](18-observability.md)) — and [raises a fact](#the-remedy-arm)
+under its `undocumented` guard. An account of an event and a durable claim are different animals and
+folding them together would lose the counts, so it writes both and neither stands in for the other.
 
 **The promoted lessons are already here.** A promoted `lessons` row _is_ a fleet-scoped standing claim
 an operator vouched for that reaches every agent's system prompt — which is `injected`, exactly — so
@@ -621,10 +622,67 @@ of these is a claim-shaped thing that stayed out for a stated reason rather than
 | `scratch_append` | A conversation between siblings on one goal: chronological, unstructured, nothing to corroborate.         |
 | `report_remedy` | The **event** record of one return to a pull request, with its counts and its dollars ([18](18-observability.md)). |
 
-> **Not yet built:** the `raise` arm on `report_remedy` and `report_finding`. A remedy still proposes a
-> `lessons` row under an `undocumented` guard, and a `docs` finding is still only a finding. Both are a
-> small change now that the intake exists, and both keep their own jobs either way: a remedy is the
-> event record, and a `docs` finding is the thing that becomes a documentation pull request.
+> **Not yet built:** the `raise` arm on `report_finding`. A `docs` finding is still only a finding. It
+> keeps its own job either way: it is the thing that becomes a documentation pull request. It waits on
+> the findings/lessons store merge rather than on this page.
+
+### The remedy arm
+
+`report_remedy` under an `undocumented` guard raises a fact, and that is the whole of the change: the
+row it writes, the counts on it and the dollars behind it are untouched, because an account of an
+event and a durable claim are different animals and folding them together would lose the counts.
+
+**Why it had to move at all.** The claim used to be a `lessons` row, which made this the last
+agent-facing writer to that store — so the same sentence reached a different store, under a different
+gate and with no corroboration behind it, depending on which tool the agent happened to be holding.
+An agent hitting a wall two other agents had already documented filed a third copy of it that nothing
+could read against the first two. Agreement is the only thing that carries a claim out of one agent's
+head, and it was exactly what this door could not produce. It was left alone until now for a stated
+reason — the intake did not exist, and writing into a store nothing read would have bought nothing —
+and delivery has since moved.
+
+**It goes through the path `raise` uses**, `AgentManager.fileFact`, so the observer is the
+credential's and `claimsMatch` decides whether the call is a claim or an agreement. Nothing about the
+gate changes: it lands a `proposal`, two different goals carry it to `lookup`, and only an operator
+carries it further.
+
+| Field | What the remedy supplies |
+| ----- | -------------------------- |
+| `claim` | The agent's own, and the one argument this arm adds — it replaces the `lesson` field under the same fence. |
+| `evidence` | The remedy's **`summary`**. It is already what the agent saw, so asking again for an observation the submission is carrying would be a third field for one answer. |
+| goal | `corroborationGoal`'s reading of the caller's origin: `pr:<n>` for both `pr:<n>:ci` and `pr:<n>:comments`. The pull request the remedy was filed on, exactly as the lesson's `originRef` was, and resolved from the credential rather than asserted. |
+| `aboutRef` | Null. The claim is about the repository; what it was learned on is the corroboration's, which is where a reader can already see it. |
+| scope | `fleet`. |
+
+**The scope is `fleet`, and a `check:` would have been the wrong answer for three reasons that all
+cut the same way.** It is tempting, because a remedy is filed against one pull request's checks and
+`priorRemedies` already delivers per check — but **matching is inside a scope**, so a remedy-raised
+claim scoped to `check:test (windows)` could never be corroborated by the same sentence raised through
+`raise`, which defaults to `fleet`. That is the fragmentation of exactly the agreement this arm
+exists to gain. A **review** remedy has no checks at all, so a `check:` scope would be available on
+half the remedies and the tool would scope by kind. And `Task.ciChecks` is a *list*: one fact carries
+one scope, so a dispatch answering three checks would have to either file the claim three times or
+pick one arbitrarily. `fleet` matches `raise`'s default, and what makes it safe here is what makes it
+safe there — a proposal reaches nobody, and the scope is on the row in front of the operator.
+
+**The fence stays, and so does its refusal.** A claim is refused under any guard but `undocumented`,
+by name and with the reason. A remedy under `documented`, `local_check` or `unpreventable` has already
+said the fleet knew, so the fence is what stops "we fixed it" being filed as "the repository does not
+say this".
+
+**The bounds are the knowledge store's own and are applied before anything is written.** The claim
+goes through `validateFactProposal` inside `validateRemedy`, so an over-long claim is a refusal the
+agent can act on this turn rather than a claim lost to a submission that otherwise succeeded.
+
+**What comes back says which of three things happened** — raised, recorded as agreeing, or refused by
+the bar — in the payload and in words. That is `raise`'s rule and it applies here for its reason: an
+agent that reads a returned id as proof it filed something new says it again, louder, and an agent
+that cannot tell filing from agreeing cannot tell which of two opposite things to do next.
+
+**A barred claim does not take the remedy with it.** The row is already written when the claim is
+raised, and it stays written: the account of an event does not depend on an operator's ruling about a
+sentence, and losing the remedy to one would lose the counts the Yield panel is built on. The refusal
+is reported to the agent instead, with the `contradicts` argument that is the way back.
 
 ## In the cockpit
 
