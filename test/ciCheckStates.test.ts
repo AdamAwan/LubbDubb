@@ -245,6 +245,64 @@ test('the same world with no rule dispatches nothing at all', async () => {
   system.store.close();
 });
 
+/**
+ * Issue #504's repro, run through the real Azure fold and `RuleDispatcher`: a
+ * `build` policy narrowed to `advisory` still fails Azure's own aggregate
+ * (`aggregatePolicyCiStatus` never reads `policyChecks`), so `ciStatus` is
+ * `failing` while the one check the operator can see is `advisory: true`. Before
+ * this fix, `ciNeedsAttention`'s aggregate arm and `classifyCiFailures`' empty-list
+ * fallback both fired on that alone, dispatching a code agent with nothing
+ * actionable in its prompt.
+ */
+test('an advisory-only red aggregate dispatches no code agent', async () => {
+  const evals = [evaluation({ typeId: BUILD_POLICY, displayName: 'build', status: 'rejected' })];
+  const slice = await new AzureDevOpsSourceControlIntegration({
+    api: fakeApi(evals),
+    policyChecks: { build: 'advisory' },
+  }).snapshot();
+  const pullRequests = slice.pullRequests ?? [];
+  const [pr] = pullRequests;
+  assert.equal(pr?.ciStatus, 'failing');
+  assert.deepEqual(
+    pr?.ciChecks?.map((c) => ({ name: c.name, status: c.status, advisory: c.advisory })),
+    [{ name: 'build', status: 'failing', advisory: true }],
+  );
+
+  const system = build({ checks: [] }, pullRequests);
+  await system.harness.runCycle('manual');
+
+  assert.deepEqual(
+    system.store.listDecisions().filter((d) => d.action.type === 'dispatch_code_agent'),
+    [],
+  );
+  system.store.close();
+});
+
+test('a genuine non-advisory failure alongside an advisory one still dispatches', async () => {
+  const evals = [
+    evaluation({ typeId: BUILD_POLICY, displayName: 'build', status: 'rejected' }),
+    evaluation({ typeId: STATUS_POLICY, displayName: 'lint/status', status: 'rejected' }),
+  ];
+  const slice = await new AzureDevOpsSourceControlIntegration({
+    api: fakeApi(evals),
+    policyChecks: { build: 'advisory' },
+  }).snapshot();
+  const pullRequests = slice.pullRequests ?? [];
+
+  const system = build({ checks: [] }, pullRequests);
+  await system.harness.runCycle('manual');
+
+  const decision = system.store
+    .listDecisions()
+    .find((d) => d.action.type === 'dispatch_code_agent' && d.action.originRef === 'pr:31676:ci');
+  assert.ok(decision, 'the non-advisory failure should still dispatch');
+  const task = findTask(system.store, (t) => t.originRef === 'pr:31676:ci');
+  assert.ok(task);
+  assert.match(task.dispatchReason ?? '', /lint\/status/);
+  assert.doesNotMatch(task.dispatchReason ?? '', /\bbuild\b/);
+  system.store.close();
+});
+
 test('the lens agrees with the dispatcher: the gate is the harness’s court, not elsewhere', async () => {
   const [pr] = await azurePullRequests([evaluation()]);
   const ctx = (ci: CiPolicy): PrAttentionContext => ({

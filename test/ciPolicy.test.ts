@@ -216,6 +216,14 @@ test('classifyCiFailures: an advisory failing check is never classified', () => 
   assert.deepEqual(v.dispatch, []);
   assert.deepEqual(v.escalate, []);
   assert.deepEqual(v.ignored, []);
+  // Detail was reported and nothing in it is actionable — not the "no checks
+  // reported at all" silence, so no rule should dispatch a code agent over this.
+  assert.equal(v.actionable, false);
+});
+
+test('classifyCiFailures: no checks reported at all stays actionable', () => {
+  assert.equal(classifyCiFailures(undefined, policy()).actionable, true);
+  assert.equal(classifyCiFailures([], policy()).actionable, true);
 });
 
 test('classifyCiFailures: no ci.checks rule can claim an advisory check', () => {
@@ -280,10 +288,11 @@ test('classifyWatchedChecks: a rule watching pending claims it, and the failing 
     ['pr-agent-review/reviewed'],
   );
   // The failing classification is the merge-facing answer and must not have
-  // moved: nothing is failing here, so it stays the empty, actionable verdict a
-  // PR with no red checks has always produced.
+  // moved: nothing is failing here, so dispatch/escalate/ignored stay empty —
+  // but detail *was* reported and none of it is failing, so this is not the
+  // "no checks reported at all" silence and `actionable` is false.
   assert.deepEqual(classifyCiFailures(pending, ci), {
-    actionable: true,
+    actionable: false,
     dispatch: [],
     escalate: [],
     ignored: [],
