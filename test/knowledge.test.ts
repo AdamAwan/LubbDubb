@@ -806,32 +806,50 @@ test('the page draws every reach, the rejected tail included', async () => {
   const { buildDemoState } = await import('../web/src/demo/fixtures.js');
   const { KnowledgePanel } = await import('../web/src/components/KnowledgePanel.js');
   const { RefLinks } = await import('../web/src/components/refs.js');
+  const { KNOWLEDGE_GROUPS } = await import('../web/src/cockpit/knowledgeQuery.js');
 
   const state = buildDemoState().state;
-  const html = renderToStaticMarkup(
-    createElement(RefLinks, {
-      refUrls: state.refUrls,
-      openGoal: () => undefined,
-      hasGoal: () => true,
-      children: createElement(KnowledgePanel, {
-        facts: state.knowledge,
-        graduations: state.knowledgeGraduations,
-        delivery: state.knowledgeDelivery,
-        cost: state.knowledgeCost,
-        canFileTickets: state.config.canFileTickets,
-        now: Date.now(),
+  const draw = (query: {
+    view: 'list' | 'table';
+    show: 'all' | 'waiting' | 'reaching' | 'settled';
+    sort: 'reach' | 'claim' | 'scope' | 'observers' | 'disputes' | 'asks' | 'age';
+    desc: boolean;
+    fold: string[];
+  }): string =>
+    renderToStaticMarkup(
+      createElement(RefLinks, {
         refUrls: state.refUrls,
-        viewingFact: null,
-        onReach: () => undefined,
-        onExit: () => undefined,
-        onRaise: () => Promise.resolve(undefined),
-        onSettleGraduation: () => undefined,
-        onDetail: () => Promise.resolve({ corroborations: [], contradictions: [] }),
-        onResolveContradiction: () => undefined,
-        onViewFact: () => undefined,
+        openGoal: () => undefined,
+        hasGoal: () => true,
+        children: createElement(KnowledgePanel, {
+          facts: state.knowledge,
+          graduations: state.knowledgeGraduations,
+          delivery: state.knowledgeDelivery,
+          cost: state.knowledgeCost,
+          canFileTickets: state.config.canFileTickets,
+          now: Date.now(),
+          refUrls: state.refUrls,
+          viewingFact: null,
+          query,
+          onQuery: () => undefined,
+          onReach: () => undefined,
+          onExit: () => undefined,
+          onRaise: () => Promise.resolve(undefined),
+          onSettleGraduation: () => undefined,
+          onDetail: () => Promise.resolve({ corroborations: [], contradictions: [] }),
+          onResolveContradiction: () => undefined,
+          onViewFact: () => undefined,
+        }),
       }),
-    }),
-  );
+    );
+
+  const bare = { view: 'list' as const, show: 'all' as const, sort: 'reach' as const, desc: false };
+  // Nothing folded, which is what a bare URL means and what every assertion below
+  // is made against: a claim hidden by default would leave no way to tell a list
+  // you have finished with from one that lost rows.
+  const html = draw({ ...bare, fold: [] });
+  // Every tail an operator has collapsed — theirs to do, and never the default.
+  const shut = draw({ ...bare, fold: KNOWLEDGE_GROUPS.filter((g) => g.tail).map((g) => g.id) });
 
   for (const heading of [
     'Live notices',
@@ -844,7 +862,18 @@ test('the page draws every reach, the rejected tail included', async () => {
     'Rejected',
   ]) {
     assert.ok(html.includes(heading), `the page draws no ${heading} section`);
+    // A tail an operator collapsed still says what it holds: the heading and its
+    // count are how the page says a tail is not empty, and a fold must not cost that.
+    assert.ok(shut.includes(heading), `a folded tail loses its ${heading} heading`);
   }
+  // A tail an operator folded is folded: its rows leave the markup, which is what
+  // the fold is for. That it is *their* click and never the page's default is the
+  // other half — `test/console.test.ts` asserts the retired claim is on the page as
+  // the shell mounts it.
+  assert.ok(
+    !shut.includes('The dispatcher reads the lessons table'),
+    'a folded tail still renders its rows, so the fold buys nothing',
+  );
   // The claim an operator killed is on the page. A governance surface that drew
   // only what it let through could not show that anything was stopped, and the
   // bar that keeps it from being re-proposed is invisible everywhere else.
@@ -870,6 +899,18 @@ test('the page draws every reach, the rejected tail included', async () => {
     html.indexOf('scope has drifted') > html.indexOf('On lookup'),
     'the drifted claim is not in the section its reach puts it in',
   );
+  // An empty heading is drawn on the whole store — that is the page saying a tail
+  // is empty rather than missing — and under no narrowing, where it would be eight
+  // headings answering a question nobody asked. Narrowed to the settled tail,
+  // *Live notices* has nothing in it and is gone entirely: heading and all.
+  const settled = draw({ ...bare, show: 'settled', fold: [] });
+  assert.ok(!settled.includes('Live notices'), 'a narrowed page draws a heading with nothing under it');
+  assert.ok(!settled.includes('Nothing here.'), 'a narrowed page draws an empty section');
+  assert.ok(settled.includes('Gone somewhere better'), 'the settled filter drops the tail it is about');
+  // What every agent receives is a page-level reading now that the page has a
+  // filter, so it survives one: an operator narrowed to the settled tail must not
+  // have to un-narrow to find out what the block is costing them.
+  assert.ok(settled.includes('a dispatch'), 'the block budget disappears when the page is narrowed');
   // Where a claim went, and where one is going: both drawn as references rather
   // than as text, because a row that names a pull request and offers no way there
   // is a dead end that reads correctly (#27 phase 6).
@@ -902,6 +943,17 @@ test('the page draws every reach, the rejected tail included', async () => {
   // And the thing no control here may do: nothing files a claim on an agent's
   // behalf, and nothing promotes without somebody saying so.
   assert.ok(!/>File a claim</.test(html), 'nothing on this page files a claim for an agent');
+
+  // The table draws the same store, and draws it whole: a view that quietly held
+  // rows back would be a second answer to what the fleet knows.
+  const table = draw({ ...bare, view: 'table', fold: [] });
+  assert.ok(table.includes('<table'), 'the table view draws no table');
+  for (const claim of ['The dispatcher reads the lessons table', 'The seed script leaves two orphaned catalog rows']) {
+    assert.ok(table.includes(claim), `the table drops ${claim}`);
+  }
+  // The composer is above the filter, so it survives every narrowing: writing a
+  // claim down is not a thing the page's narrowing has an opinion about.
+  assert.ok(settled.includes('Write it down'), 'the composer disappears when the page is narrowed');
 });
 
 // -- delivery (phase 3) -------------------------------------------------------

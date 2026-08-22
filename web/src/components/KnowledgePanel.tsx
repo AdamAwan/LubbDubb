@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import type {
   ContradictionRuling,
@@ -17,6 +17,15 @@ import { ConfirmButton } from './ConfirmButton.js';
 import { renderMarkdown } from './markdown.js';
 import { absDate, fmtTokens, fmtUsd, relTime, untilTime } from './util.js';
 import { Ref } from './refs.js';
+import {
+  groupFor,
+  inShow,
+  KNOWLEDGE_GROUPS,
+  nextSort,
+  sortFacts,
+  waitingOn,
+  type KnowledgeQuery,
+} from '../cockpit/knowledgeQuery.js';
 
 /**
  * What the fleet knows about working this repository, and how far each claim
@@ -41,7 +50,20 @@ import { Ref } from './refs.js';
  * The order is the order things demand attention rather than the order of the
  * state machine: the notices with clocks on them, then the corroborated claims
  * waiting on the one decision that is yours, then what you have already vouched
- * for, then the long tails.
+ * for, then the long tails — **each of which an operator may fold away, and none
+ * of which starts folded**: a claim hidden by default would leave no way to tell a
+ * list you have finished with from one that lost rows. What each heading used to
+ * say in a paragraph underneath it, it says in a tooltip now, which is where the
+ * page's real cost was — nine of them between an operator and the rows they came
+ * to rule on. `KNOWLEDGE_GROUPS` holds the words.
+ *
+ * **The filter narrows and never moves.** *Waiting on you* gathers a reading from
+ * four reach states — an unanswered dispute, a cap drop, a drifted scope, a
+ * graduation the harness will not guess about — because that question is one
+ * question and an operator who has to visit four headings to answer it answers
+ * three. What it does is show fewer rows: every claim stays under the heading its
+ * reach puts it in, since lifting a disputed claim out of **Injected** would draw
+ * a demotion that did not happen.
  *
  * **Every number here is a reading and never a trigger** (issue #27 phase 7). What
  * the block costs, whether a `check:` scope has stopped matching anything, and how
@@ -63,6 +85,8 @@ export function KnowledgePanel({
   now,
   refUrls,
   viewingFact,
+  query,
+  onQuery,
   onReach,
   onExit,
   onRaise,
@@ -82,6 +106,9 @@ export function KnowledgePanel({
   refUrls: Record<string, string>;
   /** The claim whose provenance is open, from `Place` — never this component's own state. */
   viewingFact: string | null;
+  /** How the page is drawn, narrowed and ordered — every field of it a `Place` field. */
+  query: KnowledgeQuery;
+  onQuery: (next: Partial<KnowledgeQuery>) => void;
   onReach: (id: string, reach: FactRuling) => Promise<unknown> | unknown;
   /** Send a claim on — a documentation pull request, a job, or a ticket. */
   onExit: (id: string, exit: FactExit) => Promise<unknown> | unknown;
@@ -97,19 +124,6 @@ export function KnowledgePanel({
   /** False when no real tracker is configured — there is nowhere to file a claim into. */
   canFileTickets: boolean;
 }) {
-  const live = (fact: KnowledgeFactView): boolean =>
-    fact.expiresAt === null || new Date(fact.expiresAt).getTime() > now;
-  // A notice is an expiring fact that has not lapsed. A lapsed one is out of every
-  // read but its row still says what it said, so it falls through to the section
-  // its reach puts it in rather than vanishing.
-  const notices = facts.filter(
-    (f) => f.lifetime === 'expiring' && f.reach !== 'rejected' && f.reach !== 'retired' && live(f),
-  );
-  const noticed = new Set(notices.map((f) => f.id));
-  const standing = facts.filter((f) => !noticed.has(f.id));
-  const section = (reach: KnowledgeFactView['reach'], ruled: boolean | null = null): KnowledgeFactView[] =>
-    standing.filter((f) => f.reach === reach && (ruled === null || (f.ruledAt !== null) === ruled));
-
   // Which injected claims the cap left out, as the renderer that ran reported it.
   // Never a character count taken here: a second implementation of "what fits" is
   // free to disagree with the one that shipped, and nothing is red when it does.
@@ -119,6 +133,16 @@ export function KnowledgePanel({
   // and taken from the server's own rows — the reading on each is the sweep's.
   const graduationOf = new Map<string, KnowledgeGraduationView>();
   for (const row of [...graduations].reverse()) graduationOf.set(row.factId, row);
+  // Why each claim is waiting on a person, taken once for the filter, the count on
+  // its chip and the line on its row — three readings of one predicate rather than
+  // three predicates, which is how a count and a list come to disagree.
+  const waiting = new Map<string, string>();
+  for (const fact of facts) {
+    const why = waitingOn(fact, graduationOf.get(fact.id) ?? null, dropped);
+    if (why !== null) waiting.set(fact.id, why);
+  }
+  const shown = facts.filter((fact) => inShow(query.show, fact, waiting.get(fact.id) ?? null));
+  const folded = new Set(query.fold);
   const shared = {
     now,
     refUrls,
@@ -132,6 +156,7 @@ export function KnowledgePanel({
     onViewFact,
     dropped,
     graduationOf,
+    waiting,
   };
   return (
     <div className="kn">
@@ -142,68 +167,329 @@ export function KnowledgePanel({
         The one exception is a <b>notice</b> — an observation with a clock on it — which agreement alone injects,
         because it ends by itself. What an agent noticed outside its own task and what working a goal taught are here
         too, on the same rows: they were three stores and one question, and three places to answer it was two places to
-        forget.
+        forget. Every heading below carries its own rule — hover one to read it.
       </p>
       <ClaimComposer onRaise={onRaise} />
-      <KnowledgeSection
-        title="Live notices"
-        blurb="Expiring observations, with the clock they were filed under. A notice states what was seen and never what to do about it; the agent draws the conclusion. These are the one thing agreement alone puts in front of every agent — two goals seeing the same thing is enough, and what makes that safe is that each one ends by itself. The harness raises its own for a check that went red and green on one commit, and for a check red on a branch other pull requests are based on; it reads those rather than being told them, so it counts as an observer."
-        facts={notices}
-        {...shared}
+      <KnowledgeBar
+        query={query}
+        onQuery={onQuery}
+        counts={{
+          all: facts.length,
+          waiting: facts.filter((f) => waiting.has(f.id)).length,
+          reaching: facts.filter((f) => inShow('reaching', f, null)).length,
+          settled: facts.filter((f) => inShow('settled', f, null)).length,
+        }}
       />
-      <KnowledgeSection
-        title="Needs you"
-        blurb="Two agents on two different goals saw the same thing, which is as far as agreement can carry a claim. What is left is yours: put it in front of every agent, leave it here to be asked for, or say it is not true."
-        facts={section('lookup', false)}
-        {...shared}
-      />
-      <KnowledgeSection
-        title="Injected"
-        blurb="In every agent's system prompt before it reads any code — vouched for by you, or a notice two goals saw. Everything here rides the block below whatever its scope, because a claim about one check is for the agent about to run it as much as for the one sent to fix it. The exception is a goal claim: it dies with its goal, so it rides that goal's own dispatches instead."
-        facts={section('injected')}
-        meter={<BlockBudget delivery={delivery} cost={cost} />}
-        {...shared}
-      />
-      <KnowledgeSection
-        title="On lookup"
-        blurb="True, and answered when an agent asks. This is where a claim that is not worth every agent's context belongs — it costs nothing until somebody wants it. Each row carries how often it was actually asked for, which is the one signal an injected claim cannot have: there is no way to measure whether a line in every agent's prompt was read, and this page does not pretend there is. Nothing is demoted for want of demand."
-        facts={section('lookup', true)}
-        {...shared}
-      />
-      <KnowledgeSection
-        title="One voice"
-        blurb="One agent said it and nothing has agreed. These reach nobody and cost nothing; they are here because the second agent to hit the same wall is what moves them, and because you can rule on one now if you already know."
-        facts={section('proposal')}
-        {...shared}
-      />
-      <KnowledgeSection
-        title="Gone somewhere better"
-        blurb="Out of every prompt, because somewhere else carries these better than a line in front of the fleet does: the repository's own documentation, where an agent reads it from the tree; a job, where somebody is acting on it; a ticket, where it waits its turn. Each row names which, and links to it. A claim only reaches this section when the exit was actually taken — never when the work was queued. This list growing while Injected shrinks is the number worth watching."
-        facts={section('graduated')}
-        {...shared}
-      />
-      <KnowledgeSection
-        title="Superseded"
-        blurb="Replaced. An agent said one of these was contradicted by the code in front of it, wrote what it should say instead, and you adopted that amendment — so this wording is out of every prompt while its row stays saying what it said. Not rejected: it was not judged untrue, and a rejection would bar the sharper claim's own words, since an amendment contains the claim it sharpens."
-        facts={section('superseded')}
-        {...shared}
-      />
-      <KnowledgeSection
-        title="Retired"
-        blurb="Not carried any more, and never judged untrue — the check it was about is gone, the seam it described was refactored away, the fleet moved on. Drawn rather than dropped, so a list you have finished with can be told from one that lost rows. An agent that hits the same wall may raise it again, which files a fresh claim with its own evidence and today's date rather than resurrecting this judgement: a claim worth bringing back is worth reading first."
-        facts={section('retired')}
-        {...shared}
-      />
-      <KnowledgeSection
-        title="Rejected"
-        blurb="Not true, and barred from coming back: a re-proposal of one of these is refused by name. Drawn rather than dropped, because a surface that shows only what it let through cannot show you what it stopped. Terminal — the way back is an agent filing an amendment that names the claim."
-        facts={section('rejected')}
-        {...shared}
-      />
+      {/* The budget is the page's, not a section's, since the page grew a filter
+          and a second view: a reading about what every agent receives that
+          disappears because somebody narrowed to the settled tail is a reading they
+          would have to un-narrow to find. The per-row marking of what the cap left
+          out stays on the cards, which is the half of it an operator acts on. */}
+      <BlockBudget delivery={delivery} cost={cost} />
+      {shown.length === 0 ? (
+        <p className="empty">
+          No claim matches this filter. Nothing was demoted by it — the store is exactly as it was.
+        </p>
+      ) : query.view === 'table' ? (
+        <KnowledgeTable facts={shown} sort={query.sort} desc={query.desc} onQuery={onQuery} {...shared} />
+      ) : (
+        KNOWLEDGE_GROUPS.map((group) => {
+          const inGroup = shown.filter((fact) => groupFor(fact, now) === group.id);
+          // An empty heading is drawn on the whole store and never under a
+          // narrowing. On `all` it is the page saying a tail is empty rather than
+          // missing, which is half of drawing what it stopped; under a filter it is
+          // eight headings answering a question nobody asked.
+          if (inGroup.length === 0 && query.show !== 'all') return null;
+          return (
+            <KnowledgeSection
+              key={group.id}
+              group={group}
+              facts={inGroup}
+              open={!group.tail || !folded.has(group.id)}
+              onToggle={() =>
+                onQuery({
+                  fold: folded.has(group.id) ? query.fold.filter((id) => id !== group.id) : [...query.fold, group.id],
+                })
+              }
+              {...shared}
+            />
+          );
+        })
+      )}
       <Receives delivery={delivery} />
     </div>
   );
 }
+
+/**
+ * What the page is showing, and how it is laid out — the two controls, and the
+ * counts that make them worth clicking.
+ *
+ * A count on each chip rather than a bare word, because the one question this bar
+ * answers before it is touched is *is there anything on me* — and a filter an
+ * operator has to click to find out is one they click once.
+ *
+ * **Neither control moves a claim.** Narrowing shows fewer rows and re-ordering
+ * shows the same rows in another order; nothing here is a ruling, and nothing here
+ * is a reading the server did not already take.
+ */
+function KnowledgeBar({
+  query,
+  onQuery,
+  counts,
+}: {
+  query: KnowledgeQuery;
+  onQuery: (next: Partial<KnowledgeQuery>) => void;
+  counts: Record<KnowledgeQuery['show'], number>;
+}): JSX.Element {
+  return (
+    <div className="kn-bar">
+      <div className="kn-fgroup">
+        <span className="kn-flabel" title="Which claims the page is showing. It narrows and never moves one">
+          Show
+        </span>
+        <div className="kn-seg">
+          {SHOW_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={option.value === query.show ? 'on' : ''}
+              title={option.title}
+              aria-pressed={option.value === query.show}
+              onClick={() => onQuery({ show: option.value })}
+            >
+              {option.label} <span className="muted">{counts[option.value]}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+      <i className="kn-fdiv" />
+      <div className="kn-fgroup">
+        <span className="kn-flabel" title="How the claims are laid out">
+          View
+        </span>
+        <div className="kn-seg">
+          {VIEW_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={option.value === query.view ? 'on' : ''}
+              title={option.title}
+              aria-pressed={option.value === query.view}
+              onClick={() => onQuery({ view: option.value })}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const SHOW_OPTIONS: ReadonlyArray<{ value: KnowledgeQuery['show']; label: string; title: string }> = [
+  { value: 'all', label: 'All', title: 'Every claim the fleet has raised, under the heading its reach puts it in' },
+  {
+    value: 'waiting',
+    label: 'Waiting on you',
+    title:
+      'The claims with something only a person can answer: corroborated and unruled, a dispute nobody has answered, a claim over the block cap, a scope that has stopped matching, a documentation pull request that left the world unseen. Each one stays under its own heading — this narrows the page and demotes nothing',
+  },
+  {
+    value: 'reaching',
+    label: 'Reaching agents',
+    title: 'Injected or on lookup — what the fleet is actually being told, and what it can ask for',
+  },
+  {
+    value: 'settled',
+    label: 'Settled',
+    title:
+      'Gone somewhere better, superseded, retired, rejected. Drawn rather than dropped: a surface that shows only what it let through cannot show you what it stopped',
+  },
+];
+
+const VIEW_OPTIONS: ReadonlyArray<{ value: KnowledgeQuery['view']; label: string; title: string }> = [
+  { value: 'list', label: 'List', title: 'Grouped by where each claim stands, with the long tails folded away' },
+  {
+    value: 'table',
+    label: 'Table',
+    title:
+      'One row per claim, sortable by any reading on it — which claims are most disputed, and which the fleet keeps asking for',
+  },
+];
+
+/**
+ * Every claim as one row, ordered by any reading on it.
+ *
+ * The view a store this size grows into: the list answers *what should I do now*
+ * and cannot answer *what is the fleet asking for that nobody has vouched for*,
+ * because that is a question about an order rather than about a group. Sorting is
+ * the whole of what it adds — every column is a number the server already took,
+ * and a table that recomputed one would be the second implementation this page
+ * refuses everywhere else.
+ *
+ * **The claim cell is a button and carries no reference.** The row opens the same
+ * `?fact=` place the list does, and a reference inside a control is one click with
+ * two destinations — so the cell draws the claim as plain text and the card it
+ * expands into draws it as markdown, references and all.
+ *
+ * The ask count is drawn on `lookup` rows and nowhere else, as in the list: an
+ * injected claim is in front of every agent whether it wanted it or not, so a `0`
+ * against one would read as nobody wanting a claim nobody could ask for.
+ */
+function KnowledgeTable({
+  facts,
+  sort,
+  desc,
+  onQuery,
+  ...row
+}: {
+  facts: KnowledgeFactView[];
+  sort: KnowledgeQuery['sort'];
+  desc: boolean;
+  onQuery: (next: Partial<KnowledgeQuery>) => void;
+} & RowProps): JSX.Element {
+  const ordered = sortFacts(facts, row.now, sort, desc);
+  return (
+    <div className="kn-tablewrap">
+      <table className="kn-table">
+        <thead>
+          <tr>
+            {COLUMNS.map((column) => {
+              // Off the object before the closure: a property narrowed in the
+              // ternary is wide again inside the handler, and `null` there is the
+              // one order this table does not have.
+              const sortKey = column.key;
+              return (
+                <th
+                  key={column.label}
+                  className={column.numeric === true ? 'num' : ''}
+                  aria-sort={sortKey === null ? undefined : ariaSort(sortKey, sort, desc)}
+                >
+                  {sortKey === null ? (
+                    <span title={column.title}>{column.label}</span>
+                  ) : (
+                    <button
+                      type="button"
+                      className="chip-button"
+                      title={column.title}
+                      onClick={() => {
+                        const next = nextSort(sort, desc, sortKey);
+                        onQuery({ sort: next.knowledgeSort, desc: next.knowledgeDesc });
+                      }}
+                    >
+                      {column.label}
+                      {sort === sortKey && <span aria-hidden="true"> {desc ? '↓' : '↑'}</span>}
+                    </button>
+                  )}
+                </th>
+              );
+            })}
+          </tr>
+        </thead>
+        <tbody>
+          {ordered.map((fact) => {
+            const group = KNOWLEDGE_GROUPS.find((g) => g.id === groupFor(fact, row.now));
+            const open = row.viewingFact === fact.id;
+            return (
+              <Fragment key={fact.id}>
+                <tr className={`kn-trow${row.waiting.has(fact.id) ? ' waiting' : ''}${open ? ' open' : ''}`}>
+                  <td>
+                    <button
+                      type="button"
+                      className="chip-button kn-tclaim"
+                      title={open ? 'Close this claim' : fact.claim}
+                      onClick={() => row.onViewFact(open ? null : fact.id)}
+                    >
+                      {/* Backticks stripped rather than rendered: a table cell is one
+                          line, and the card below draws the same claim as markdown. */}
+                      {fact.claim.replace(/`/g, '')}
+                    </button>
+                  </td>
+                  <td>
+                    <span className="chip small" title={group?.blurb}>
+                      {group?.title}
+                    </span>
+                  </td>
+                  <td>
+                    <FactScope scope={fact.scope} />
+                  </td>
+                  <td className="num" title={countTitle(fact.corroborations)}>
+                    {fact.corroborations}
+                  </td>
+                  <td className="num">
+                    {fact.contradictions === 0 ? <span className="muted">—</span> : fact.contradictions}
+                  </td>
+                  <td className="num">
+                    {fact.reach === 'lookup' ? (
+                      fact.asks
+                    ) : (
+                      <span
+                        className="muted"
+                        title="An injected claim is in front of every agent whether it wanted it or not, so there is no demand to count — and a zero here would read as nobody wanting it"
+                      >
+                        —
+                      </span>
+                    )}
+                  </td>
+                  <td className="num" title={absDate(fact.createdAt)}>
+                    {relTime(fact.createdAt, row.now)}
+                  </td>
+                  <td>{fact.originRef !== null && <Ref to={fact.originRef} />}</td>
+                </tr>
+                {open && (
+                  <tr className="kn-tdetail">
+                    <td colSpan={COLUMNS.length}>
+                      <FactCard fact={fact} {...row} />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** What a screen reader is told about the column the table is ordered by. */
+function ariaSort(
+  key: KnowledgeQuery['sort'],
+  sort: KnowledgeQuery['sort'],
+  desc: boolean,
+): 'ascending' | 'descending' | 'none' {
+  if (key !== sort) return 'none';
+  return desc ? 'descending' : 'ascending';
+}
+
+const COLUMNS: ReadonlyArray<{
+  /** Null where the column is not an order: a reference is not a reading. */
+  key: KnowledgeQuery['sort'] | null;
+  label: string;
+  title: string;
+  numeric?: boolean;
+}> = [
+  { key: 'claim', label: 'Claim', title: 'What the fleet says, alphabetically' },
+  { key: 'reach', label: 'Reach', title: 'How far it carries — the order the headings are in' },
+  { key: 'scope', label: 'Scope', title: 'Who it applies to' },
+  { key: 'observers', label: 'Obs', title: 'Independent corroborators, counted server-side', numeric: true },
+  {
+    key: 'disputes',
+    label: 'Disputes',
+    title: 'Independent voices against it, over the whole life of the claim',
+    numeric: true,
+  },
+  {
+    key: 'asks',
+    label: 'Asks',
+    title:
+      'How often an agent asked for it and was answered — the reading that finds a lookup claim worth vouching for',
+    numeric: true,
+  },
+  { key: 'age', label: 'Age', title: 'When it was first seen', numeric: true },
+  { key: null, label: 'Origin', title: 'The goal it was first seen on' },
+];
 
 /**
  * The block against its budget.
@@ -471,27 +757,59 @@ interface RowProps {
   onViewFact: (id: string | null) => void;
   /** Ids the block's cap left out, from the renderer that left them out. */
   dropped: Set<string>;
+  /** Why each claim is waiting on a person, by fact id — `waitingOn`'s answer, taken once. */
+  waiting: Map<string, string>;
 }
 
+/**
+ * One heading and what is under it.
+ *
+ * The blurb is a tooltip rather than a paragraph: the words are the page's only
+ * statement of several of its invariants and none is dropped, but nine of them
+ * stacked between an operator and the rows they came to rule on is what the page
+ * was costing. A tail may be folded away by the operator who has finished with it
+ * and starts open, so nothing is hidden by default; the count stays on the heading
+ * either way, so a tail somebody has collapsed still says what it holds.
+ */
 function KnowledgeSection({
-  title,
-  blurb,
+  group,
   facts,
-  meter,
+  open,
+  onToggle,
   ...row
-}: { title: string; blurb: string; facts: KnowledgeFactView[]; meter?: JSX.Element } & RowProps): JSX.Element {
+}: {
+  group: (typeof KNOWLEDGE_GROUPS)[number];
+  facts: KnowledgeFactView[];
+  /** A tail an operator has opened, or one of the headings that is always open. */
+  open: boolean;
+  onToggle: () => void;
+} & RowProps): JSX.Element {
+  const count = <span className="muted small">· {facts.length}</span>;
   return (
     <section className="kn-section">
       <h3 className="kn-head">
-        {title} <span className="muted small">· {facts.length}</span>
+        {group.tail ? (
+          <button
+            type="button"
+            className="chip-button kn-fold"
+            aria-expanded={open}
+            title={group.blurb}
+            onClick={onToggle}
+          >
+            <span aria-hidden="true">{open ? '▾' : '▸'}</span> {group.title} {count}
+          </button>
+        ) : (
+          <span title={group.blurb}>
+            {group.title} {count}
+          </span>
+        )}
       </h3>
-      <p className="muted small">{blurb}</p>
-      {meter}
-      {facts.length === 0 ? (
-        <p className="empty">Nothing here.</p>
-      ) : (
-        facts.map((fact) => <FactCard key={fact.id} fact={fact} {...row} />)
-      )}
+      {open &&
+        (facts.length === 0 ? (
+          <p className="empty">Nothing here.</p>
+        ) : (
+          facts.map((fact) => <FactCard key={fact.id} fact={fact} {...row} />)
+        ))}
     </section>
   );
 }
@@ -520,9 +838,16 @@ function FactCard({
   onViewFact,
   dropped,
   graduationOf,
+  waiting,
 }: { fact: KnowledgeFactView } & RowProps) {
   const open = viewingFact === fact.id;
   const graduation = graduationOf.get(fact.id) ?? null;
+  // Why this claim is waiting on a person — drawn only where the heading above it
+  // does not already say so. Under **Needs you** it would be the section's own
+  // sentence repeated once per row; on an injected claim with an unanswered
+  // dispute it is the whole reason the row is in the filter, and there is nowhere
+  // else on the page it could be read.
+  const why = groupFor(fact, now) === 'needsYou' ? null : (waiting.get(fact.id) ?? null);
   // Transient form state and not `Place`: a half-filled radio group is not a place
   // anybody would link to or expect the back button to restore, which is the line
   // the address bar draws (`docs/spec/17-cockpit.md#the-address-bar`).
@@ -535,6 +860,14 @@ function FactCard({
           still a way there — the treatment a lesson's text and a finding's detail
           both get. The renderer emits React children, so nothing in it executes. */}
       <div className="kn-claim">{renderMarkdown(fact.claim, refUrls)}</div>
+      {why !== null && (
+        <p
+          className="kn-waiting"
+          title="A reading, and never a trigger: nothing was demoted, lapsed or dropped by it. The claim is exactly where you left it."
+        >
+          {why}
+        </p>
+      )}
       <div className="kn-foot">
         <FactScope scope={fact.scope} />
         {/* The one failure a check scope has that nothing else can show: a check

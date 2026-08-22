@@ -231,6 +231,9 @@ export function useCockpit(): CockpitStatus {
       hatchEgg: (id) => go({ hatch: id }),
       viewScratchpad: (issueRef) => go({ scratchpad: issueRef }),
       viewFact: (id) => go({ fact: id }),
+      // One `go` for however many of the five moved: they are one place, and two
+      // calls would push two history entries for a single change of question.
+      setKnowledgeQuery: (next) => go(next),
       openConfig: (where) => go({ tab: 'config', goal: null, ...where }),
       // One `go` for both halves: the tab and the window are one place, and two
       // calls would push two history entries for a single change of question.
@@ -372,6 +375,11 @@ export function useCockpit(): CockpitStatus {
       hatching: place.hatch,
       viewingScratchpad: place.scratchpad,
       viewingFact: place.fact,
+      knowledgeView: place.knowledgeView,
+      knowledgeShow: place.knowledgeShow,
+      knowledgeSort: place.knowledgeSort,
+      knowledgeDesc: place.knowledgeDesc,
+      knowledgeFolded: place.knowledgeFolded,
       insightsView: place.insightsView,
       insightsWindow: place.insightsWindow,
       selectedGoal: place.goal,

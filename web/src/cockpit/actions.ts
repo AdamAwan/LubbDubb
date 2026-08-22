@@ -324,6 +324,20 @@ export interface CockpitActions {
   blendPet(id: string): Promise<void>;
 
   /**
+   * Narrow, re-order or re-draw the Knowledge page.
+   *
+   * One method taking a partial rather than five, for `setTicketQuery`'s reason:
+   * they are one place, and switching to the table while a filter is on is a
+   * single move that must not push two history entries. It is on the seam at all —
+   * rather than a `useState` in the panel — because "the claims waiting on me" is
+   * a link an operator sends someone.
+   */
+  setKnowledgeQuery(
+    next: Partial<
+      Pick<Place, 'knowledgeView' | 'knowledgeShow' | 'knowledgeSort' | 'knowledgeDesc' | 'knowledgeFolded'>
+    >,
+  ): void;
+  /**
    * Where a claim stands, on the operator's say-so (#27 phase 2) — promote,
    * demote, reject, or keep it exactly where it is.
    *

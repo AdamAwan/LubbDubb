@@ -756,14 +756,14 @@ a day, like the tickets tab beside it — where a panel drew over the queue rail
 here came from. `readPlace` aliases the old parameter onto the tab, so every link an operator saved to
 a claim still lands ([17](17-cockpit.md#the-address-bar)).
 
-Where the nav is and which claim has its provenance open are both on `Place`: `?fact=<id>` is a link to
-what two agents actually saw, and a row held open in a `useState` works right up until the back button
-steps over it.
+Where the nav is, which claim has its provenance open, and how the page is drawn, narrowed and
+ordered are all on `Place`: `?fact=<id>` is a link to what two agents actually saw, `?kn=table&sort=-asks`
+is a link to *what the fleet keeps asking for that nobody has vouched for*, and either held in a
+`useState` works right up until the back button steps over it. The view is `?kn=` and not `?view=`,
+which the tickets tab and the Insights page already share between them — a third reader of one
+parameter is a page that opens showing whatever one of the other two was last set to.
 
-The **Live notices** section says what a notice is and where one comes from — including that the
-harness raises its own, and that a row carrying a resolution condition ends when the world meets it
-rather than when its clock runs out. The page reads top to bottom in the order things demand
-attention: **Live notices** with their clocks,
+The page reads top to bottom in the order things demand attention: **Live notices** with their clocks,
 **Needs you** — the corroborated claims waiting on the one decision that is yours — then **Injected**,
 **On lookup**, **One voice**, **Gone somewhere better**, **Superseded**, **Retired**, and the **Rejected**
 tail. A row carries the claim, its scope as a reference, its corroboration count, its contradiction
@@ -772,10 +772,79 @@ repository, with the observers' own words a click away. A `check:` row whose sco
 matching says so; a `lookup` row says how often it was asked for, including when that is never. Both
 are [readings and never triggers](#what-it-costs).
 
+**Each heading says its own rule in a tooltip rather than in a paragraph under it.** The words are
+unchanged and they are not optional — several state an invariant that is written down nowhere else on
+the glass, which is why the fold and the filter below never drop one — but nine paragraphs of preamble
+between an operator and the eleven rows they came to rule on is what the page was actually costing
+them. `KNOWLEDGE_GROUPS` in `web/src/cockpit/knowledgeQuery.ts` holds the headings, their words, and
+which of them is a tail.
+
+**A tail may be folded away, and none of them starts that way.** *On lookup* and everything below it
+carries a fold, so an operator who has finished with a list can collapse it and `?fold=rejected,retired`
+is what that spells; the heading and its count stay either way, so a collapsed tail still says what it
+holds. **Nothing is folded by default**, because a claim hidden on arrival would leave no way to tell a
+list you have finished with from one that lost rows, and *retired* would read as *deleted* — the
+collision the two words were separated to avoid, asserted in `test/console.test.ts`. The three headings
+that reach an agent — *Live notices*, *Needs you*, *Injected* — carry no fold at all: a page that can
+hide what the fleet is being told is not a governance surface.
+
+### Narrowing is a filter, and a filter never moves a claim
+
+The bar offers four narrowings — **All**, **Waiting on you**, **Reaching agents**, **Settled** — and a
+count on each, because the question an operator arrives with is usually *is there anything on me* and a
+filter they have to click to find that out is one they click once.
+
+**Waiting on you** is the page's one computed reading and the only thing on it that crosses a reach
+boundary. It gathers a corroborated claim nobody has ruled on, a dispute nobody has answered, a claim
+the block's cap left out, a `check:` scope that has stopped matching, and a documentation pull request
+that left the world unseen — four states, one question, and an operator who has to visit four headings
+to answer it answers three of them. It is drawn on the row as a line saying which of those it is,
+except under *Needs you*, where the heading has already said so.
+
+**What it does is show fewer rows.** Every claim stays under the heading its reach puts it in, whatever
+the filter is set to: a disputed claim lifted into a queue of its own — or into a "stale" section — would
+draw a demotion that did not happen, which is the invariant this page exists to state and the reason
+the gathering is a predicate rather than a tenth heading. `waitingOn` and `groupFor` are separate
+functions for exactly that reason, and `test/knowledgeQuery.test.ts` asserts that a disputed injected
+claim is in the *waiting* filter and still in the *Injected* group.
+
+**An empty heading is drawn on the whole store and under no narrowing.** On **All** it is the page
+saying a tail is empty rather than missing, which is half of drawing what it stopped; under a filter it
+is eight headings answering a question nobody asked.
+
+A terminal claim asks nothing however it is marked: a rejection is barred from coming back and a
+superseded wording has a sharper claim standing in its place, so a dispute against either is not a
+thing anybody can act on, and a retired claim was pruned rather than judged.
+
+### The table
+
+`?kn=table` draws the same store as one row per claim, sortable by any reading on it — reach, scope,
+corroborations, disputes, asks, age. It is the half of the page a list cannot be: *what should I do
+now* is a question about a group, and *what is the fleet asking for that nobody has vouched for* is a
+question about an order, which no arrangement of headings can answer.
+
+Sorting is the whole of what it adds. Every column is a number the server already took, and a table
+that recomputed one would be the second implementation of a reading this page refuses everywhere else.
+A count column opens on the end worth reading — most disputed, most asked for, newest — because
+ascending on a page where most rows read zero is a screen of zeroes; **the direction is the column's
+and never the tie-break's**, which stays newest-first at both ends, since a tie-break that flipped too
+would reorder every equal row on each click and read, on a page that polls, as rows moving by
+themselves.
+
+The claim cell is a button and draws the claim as plain text; the card it expands into draws the same
+claim as markdown with its references live. A reference inside a control is one click with two
+destinations ([17](17-cockpit.md#links)). The ask count is drawn on a `lookup` row and nowhere else, as
+in the list: an injected claim is in front of every agent whether it wanted it or not, so a `0` against
+one would read as nobody wanting a claim no agent could ask for.
+
+The composer sits above the filter, because writing a claim down is not a thing the page's narrowing
+has an opinion about — and a control that vanished under a filter would be one an operator had to
+un-narrow to find.
+
 **A disputed claim stays in the section its reach puts it in**, and so does one whose scope has
-drifted and one nobody has asked for. That is the page's own statement of the invariant: nothing is
-demoted by a count, so lifting such a claim out of **Injected** — or into a "stale" section of its own
-— would draw a demotion that did not happen. What it carries instead is the ratio and, while any dispute
+drifted and one nobody has asked for — under every filter and in both views. That is the page's own
+statement of the invariant: nothing is demoted by a count, so lifting such a claim out of **Injected**
+— or into a "stale" section of its own — would draw a demotion that did not happen. What it carries instead is the ratio and, while any dispute
 is unanswered, a count of what is left to answer. The three moves are inside the row's provenance,
 beside the words that ask for them — an operator choosing between the claim and the amendment has to
 be able to read both, and a control that sat where only one of them was visible would be asking for
@@ -838,9 +907,13 @@ argument, pointed at the other end of the fact's life.
 working a goal taught are rows here, on the same cards, with the same buttons — three surfaces asking
 one question is two surfaces an operator forgets to open.
 
-**The Injected section carries a character budget** drawn against `knowledgeBlockChars`, and marks the
-claims the cap left out, per row. Under it is [what the block costs](#what-it-costs): the characters
-are the cap, and the dollars are the purchase.
+**The page carries a character budget** drawn against `knowledgeBlockChars`, and marks the claims the
+cap left out, per row. Beside it is [what the block costs](#what-it-costs): the characters are the cap,
+and the dollars are the purchase. It sits on the page rather than in the **Injected** section because
+the page has a filter now: a reading about what every agent receives that vanished because somebody
+narrowed to the settled tail is one they would have to un-narrow to find. The per-row marking stays on
+the cards, which is the half of it an operator acts on — a bare "two are over" leaves them to go and
+find which two before they can demote anything.
 
 **And the page ends with a second surface: what an agent actually receives** — the system-prompt block
 verbatim, and the task-prompt append for each `check:` and `goal:` scope holding anything deliverable,

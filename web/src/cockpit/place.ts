@@ -55,6 +55,33 @@ export interface Place {
    * → `docs/spec/27-knowledge.md`
    */
   fact: string | null;
+  /**
+   * How the Knowledge page is drawn, narrowed and ordered.
+   *
+   * On `Place` rather than in the panel for the reason every field here is one:
+   * "the claims waiting on me, as a table sorted by what the fleet keeps asking
+   * for" is a question somebody sends a link to, and a view held in a `useState`
+   * works right up until the back button steps over it or a reload drops it.
+   *
+   * The narrowing is a **filter and never a move**: a disputed claim stays under
+   * the heading its reach puts it in whatever this is set to, because lifting one
+   * out would draw a demotion that did not happen.
+   * → `docs/spec/27-knowledge.md#in-the-cockpit`
+   */
+  knowledgeView: 'list' | 'table';
+  knowledgeShow: 'all' | 'waiting' | 'reaching' | 'settled';
+  knowledgeSort: 'reach' | 'claim' | 'scope' | 'observers' | 'disputes' | 'asks' | 'age';
+  knowledgeDesc: boolean;
+  /**
+   * The Knowledge tails an operator has **folded away**, by group id.
+   *
+   * Folded rather than opened, for `collapsed`'s reason exactly: the default is
+   * every heading drawn — a retired claim that vanished would leave no way to tell
+   * a list you have finished with from one that lost rows, and *retired* would read
+   * as *deleted* — so the empty list is the page as it stands and a bare URL.
+   * → `docs/spec/27-knowledge.md#in-the-cockpit`
+   */
+  knowledgeFolded: string[];
   /** Which section of the config page is in front. */
   configTab: ConfigTab;
   /** The config group the page is showing, or null for the first one. */
@@ -152,6 +179,11 @@ export const NOWHERE: Place = {
   hatch: null,
   scratchpad: null,
   fact: null,
+  knowledgeView: 'list',
+  knowledgeShow: 'all',
+  knowledgeSort: 'reach',
+  knowledgeDesc: false,
+  knowledgeFolded: [],
   configTab: 'values',
   configGroup: null,
   insightsView: 'economics',
@@ -208,6 +240,17 @@ const PANEL_ALIASES: Readonly<Record<string, ConsoleTab>> = {
   findings: 'knowledge',
   lessons: 'knowledge',
 };
+const KNOWLEDGE_VIEW: readonly Place['knowledgeView'][] = ['list', 'table'];
+const KNOWLEDGE_SHOW: readonly Place['knowledgeShow'][] = ['all', 'waiting', 'reaching', 'settled'];
+const KNOWLEDGE_SORT: readonly Place['knowledgeSort'][] = [
+  'reach',
+  'claim',
+  'scope',
+  'observers',
+  'disputes',
+  'asks',
+  'age',
+];
 const TICKET_WATCH: readonly TicketWatchFilter[] = ['any', 'watched', 'unwatched'];
 const TICKET_TRACKING: readonly TicketTrackingFilter[] = ['any', 'live', 'frozen'];
 const TICKET_GROUP = ['feature', 'flat'] as const;
@@ -281,6 +324,13 @@ export function readPlace(search: string): Place {
     hatch: param(query, 'hatch'),
     scratchpad: param(query, 'pad'),
     fact: param(query, 'fact'),
+    // `kn`, not `view`: the tickets tab and the Insights page already share that
+    // parameter between them, and a third reader of it is a page that opens
+    // showing whatever one of the other two was last set to.
+    knowledgeView: KNOWLEDGE_VIEW.find((v) => v === param(query, 'kn')) ?? 'list',
+    knowledgeShow: KNOWLEDGE_SHOW.find((s) => s === param(query, 'show')) ?? 'all',
+    ...readKnowledgeSort(param(query, 'sort')),
+    knowledgeFolded: readStrings(param(query, 'fold')),
     configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
     // `keys`, not `group`: the tickets tab already owns `?group=` (its feature
     // heading mode), and two places reading one parameter is a place that opens
@@ -408,6 +458,26 @@ export function widenedFor(
   return facet && facet.live === 0 ? facet : null;
 }
 
+/**
+ * A column and the end of it being read from, out of one parameter — `-asks` is
+ * the most-asked-for first.
+ *
+ * Validated back into the union like every other parameter here: a hand-edited
+ * `?sort=` naming no column is not an error worth a screen, it is an order that
+ * does not exist, and the answer to that is the order the page opens in.
+ */
+function readKnowledgeSort(value: string | null): {
+  knowledgeSort: Place['knowledgeSort'];
+  knowledgeDesc: boolean;
+} {
+  const desc = value !== null && value.startsWith('-');
+  const key = desc ? value.slice(1) : value;
+  const sort = KNOWLEDGE_SORT.find((s) => s === key);
+  return sort === undefined
+    ? { knowledgeSort: 'reach', knowledgeDesc: false }
+    : { knowledgeSort: sort, knowledgeDesc: desc };
+}
+
 /** A feature number, the orphan bucket, or null. Junk narrows nothing, as everywhere here. */
 function readFeature(value: string | null): number | 'none' | null {
   if (value === null) return null;
@@ -475,6 +545,19 @@ export function placeQuery(place: Place): string {
   if (place.hatch !== null) query.set('hatch', place.hatch);
   if (place.scratchpad !== null) query.set('pad', place.scratchpad);
   if (place.fact !== null) query.set('fact', place.fact);
+  if (place.knowledgeView !== 'list') query.set('kn', place.knowledgeView);
+  if (place.knowledgeShow !== 'all') query.set('show', place.knowledgeShow);
+  // One parameter for the pair, because they are one answer: a column and the end
+  // of it you are reading from. Two would make `?sort=asks&dir=desc` and
+  // `?dir=desc` both spellings of places, one of which sorts nothing.
+  if (place.knowledgeSort !== 'reach' || place.knowledgeDesc) {
+    query.set('sort', `${place.knowledgeDesc ? '-' : ''}${place.knowledgeSort}`);
+  }
+  // Sorted on the way out as on the way in, so folding A then B and B then A are
+  // one place rather than two history entries.
+  if (place.knowledgeFolded.length > 0) {
+    query.set('fold', [...place.knowledgeFolded].sort((a, b) => a.localeCompare(b)).join(','));
+  }
   if (place.configTab !== 'values') query.set('section', place.configTab);
   if (place.configGroup !== null) query.set('keys', place.configGroup);
   if (place.insightsView !== 'economics') query.set('view', place.insightsView);
