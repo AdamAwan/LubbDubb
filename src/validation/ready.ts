@@ -15,7 +15,7 @@ import { liveChecks, outstandingChecks } from './verdict.js';
  * ever ran them.
  *
  * A `validate` human task is that obligation, and a human task is the right
- * entity for it by the table in [13](../../docs/spec/13-jobs-and-findings.md): it
+ * entity for it by the table in [13](../../docs/spec/13-jobs-and-tickets.md): it
  * is a unit of work rather than a question, it outlives the agents that produced
  * the delivery, and it costs nothing while open. **Standalone** — no `part_id` —
  * so it blocks nothing, which keeps the rule that only a plan-declared part ever
@@ -142,7 +142,7 @@ export function validationReadyPass(input: ValidationReadyInput): ValidationRead
 /**
  * Whether this check is a person's to run.
  *
- * The bench is work only a person can do ([13](../../docs/spec/13-jobs-and-findings.md)),
+ * The bench is work only a person can do ([13](../../docs/spec/13-jobs-and-tickets.md)),
  * so a check an operator handed to the fleet and which has not come back is not
  * on it: rule `validate-check` is about to dispatch it, and a row asking a person
  * for it is a row that answers itself. Everything else is — including a **failed**

@@ -365,7 +365,7 @@ the plan.
 work a person does by hand — flipping a setting in a console nobody gave the fleet an account for,
 plugging something in, looking at a rendered screen. Ingestion backs each declared human part with a
 `human_tasks` row keyed on `part_id`; the part is the scheduling node and the row is the work item.
-→ [13](13-jobs-and-findings.md#human-tasks)
+→ [13](13-jobs-and-tickets.md#human-tasks)
 
 **No new blocking machinery was needed, and that is the argument for this shape.** A part is already
 the only node the harness knows how to make other work wait on, so a human step reuses every property

@@ -25,7 +25,7 @@ supply  = inflight + queued                      (goals)
 runway  = supply × medianLeadTime ÷ max(1, cap)  (minutes)
 ```
 
-The median comes off `IssueRun`'s `startedAt → completedAt` ([13](13-jobs-and-findings.md)), which is
+The median comes off `IssueRun`'s `startedAt → completedAt` ([13](13-jobs-and-tickets.md)), which is
 the only span that already contains a goal's whole tail — the CI fixes, the review threads, the
 assessment and the write-up that follow its pull request. Agent durations would miss all of it and
 read a goal as twenty minutes of work when it occupies the fleet for three hours.
@@ -58,7 +58,7 @@ substitute.
 **A `burn` row is not a hold**, and it is the one worth stating: a burn notice kills nothing
 ([18](18-observability.md)) — the expensive agent carries straight on while the row stands, so the
 fleet is working through every minute of it. **An `ask` without a `part_id` is not a hold** either,
-by `HumanTask`'s own rule ([13](13-jobs-and-findings.md)): a standalone ask blocks nothing, because
+by `HumanTask`'s own rule ([13](13-jobs-and-tickets.md)): a standalone ask blocks nothing, because
 the agent that filed it gets on with what it can. Only a part is a scheduling node the reconciler
 holds work behind. **A `supply` row is never a hold**: this reading must not describe itself, the
 same rule the debt count follows.
@@ -221,7 +221,7 @@ caller free to report a debt the history beside it does not contain.
 
 ## What it files
 
-A `supply` human task ([13](13-jobs-and-findings.md)), on `SpendBurnDesk`'s terms: store-only, it
+A `supply` human task ([13](13-jobs-and-tickets.md)), on `SpendBurnDesk`'s terms: store-only, it
 dispatches nobody, holds nothing, and no rule reads what it writes. `healthy` and `unknown` file
 nothing.
 

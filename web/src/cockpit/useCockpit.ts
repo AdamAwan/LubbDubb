@@ -264,14 +264,9 @@ export function useCockpit(): CockpitStatus {
       renamePet: (id, name) => then(api.renamePet(id, name)),
       placePet: (id, placed) => then(api.placePet(id, placed)),
       blendPet: (id) => then(api.blendPet(id)),
-      promoteFinding: (id) => then(api.promoteFinding(id)),
-      fileFinding: (id) => then(api.fileFinding(id)),
-      dismissFinding: (id) => then(api.dismissFinding(id)),
-      proposeLesson: (text, originRef) => then(api.proposeLesson(text, originRef)),
-      promoteLesson: (id) => then(api.promoteLesson(id)),
-      retireLesson: (id) => then(api.retireLesson(id)),
       setFactReach: (id, reach) => then(api.setFactReach(id, reach)),
-      commitFact: (id, commitment) => then(api.commitFact(id, commitment)),
+      raiseFact: (claim, originRef) => then(api.raiseFact(claim, originRef)),
+      exitFact: (id, exit) => then(api.exitFact(id, exit)),
       settleGraduation: (id, outcome) => then(api.settleGraduation(id, outcome)),
       // A read, so no refetch: the evidence behind one claim rides its own route
       // precisely because it must not be pulled along by the state poll.

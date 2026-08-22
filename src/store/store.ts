@@ -10,7 +10,6 @@ import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
 import { PriorityStore } from './priority.js';
 import { ProfileOverrideStore } from './profileOverrides.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
-import { LessonStore } from './lessons.js';
 import { corroborationGoal } from '../knowledge/knowledge.js';
 import {
   adoptedFactId,
@@ -78,8 +77,6 @@ import type {
   FactExit,
   FactReach,
   Finding,
-  FindingInput,
-  FindingStatus,
   GoalFile,
   GoalNeighbour,
   HumanTask,
@@ -99,8 +96,6 @@ import type {
   KnowledgeCorroboration,
   KnowledgeFact,
   KnowledgeGraduation,
-  Lesson,
-  LessonInput,
   Remedy,
   RemedyInput,
   RemedyKind,
@@ -168,12 +163,6 @@ import type {
  * {@link IssueVerdictStore} being the clearest — sits in one readable scope instead of
  * hundreds of lines apart, joined only by prose.
  */
-/**
- * How many lessons the knowledge adoption reads. Far above any real deployment's
- * count — the point is that it is not `listLessons`' display default, which would
- * silently leave the oldest promoted lessons behind on a long-lived store.
- */
-const ADOPTION_LIMIT = 10_000;
 
 export class Store {
   private readonly db: Database.Database;
@@ -183,7 +172,6 @@ export class Store {
   private readonly priority: PriorityStore;
   private readonly profileOverrides: ProfileOverrideStore;
   private readonly findings: FindingStore;
-  private readonly lessons: LessonStore;
   private readonly knowledge: KnowledgeStore;
   private readonly remedies: RemedyStore;
   private readonly humanTasks: HumanTaskStore;
@@ -283,6 +271,12 @@ export class Store {
     // gated on a name because both ways of getting that wrong are silent. See
     // `foldClaimStores`.
     foldClaimStores(this.db, clock());
+    // And the pet ledger's side of the same move: what an operator did about a
+    // claim used to be a `finding` action and is now a `claim` one, which is a
+    // different key — so without this every triaged finding and every promoted
+    // lesson in the deployment's history would look like an operator action nobody
+    // had ever been paid for. See `spendRuledClaims`.
+    spendRuledClaims(this.db, clock());
     const ctx: StoreContext = { db: this.db, now: clock };
     this.tasksStore = new TaskStore(ctx);
     this.jobs = new JobStore(ctx);
@@ -290,7 +284,6 @@ export class Store {
     this.priority = new PriorityStore(ctx);
     this.profileOverrides = new ProfileOverrideStore(ctx);
     this.findings = new FindingStore(ctx);
-    this.lessons = new LessonStore(ctx);
     this.knowledge = new KnowledgeStore(ctx);
     this.remedies = new RemedyStore(ctx);
     this.humanTasks = new HumanTaskStore(ctx);
@@ -318,13 +311,6 @@ export class Store {
     this.tickets = new TicketStore(ctx);
     this.upgrades = new UpgradeStore(ctx);
     this.pets = new PetStore(ctx);
-    // Last, and after every module rather than beside the migrations above,
-    // because it is a *cross-domain* copy rather than a schema repair: the
-    // promoted lessons are facts, and `lessons.ts` owns its table while
-    // `knowledge.ts` owns its own. This is the caller that holds both, which is
-    // the only place a read across two domains belongs. Idempotent and re-run on
-    // every boot — see `KnowledgeStore.adoptLessons` for why once is not enough.
-    this.knowledge.adoptLessons(this.lessons.listLessons(ADOPTION_LIMIT));
   }
 
   close(): void {
@@ -458,70 +444,14 @@ export class Store {
 
   // -- Findings (what an agent noticed outside its own task) ----------------
 
-  recordFinding(
-    agentId: string,
-    taskId: string,
-    originRef: string | null,
-    input: FindingInput,
-  ): { finding: Finding; created: boolean } {
-    return this.findings.recordFinding(agentId, taskId, originRef, input);
-  }
-  getFinding(id: string): Finding | null {
-    return this.findings.getFinding(id);
-  }
   listFindings(limit?: number): Finding[] {
     return this.findings.listFindings(limit);
   }
   findingLabels(ids: string[]): Map<string, string> {
     return this.findings.findingLabels(ids);
   }
-  resolveFinding(
-    id: string,
-    status: Exclude<FindingStatus, 'open' | 'filed'>,
-    jobId: string | null = null,
-  ): Finding | null {
-    return this.findings.resolveFinding(id, status, jobId);
-  }
-  findFindingByJobId(jobId: string): Finding | null {
-    return this.findings.findFindingByJobId(jobId);
-  }
-  linkFindingTicket(id: string, ticketRef: string): Finding | null {
-    return this.findings.linkFindingTicket(id, ticketRef);
-  }
 
   // -- Lessons (what working one goal taught, kept for the next) -------------
-
-  proposeLesson(input: LessonInput): Lesson {
-    return this.lessons.proposeLesson(input);
-  }
-  getLesson(id: string): Lesson | null {
-    return this.lessons.getLesson(id);
-  }
-  listLessons(limit?: number): Lesson[] {
-    return this.lessons.listLessons(limit);
-  }
-  /**
-   * Vouch for a lesson — and mirror it in, here rather than only at the next boot.
-   *
-   * Since delivery moved (issue #27 phase 3) the system prompt carries **one**
-   * block and it is the knowledge base's, so a promoted lesson reaches agents as
-   * the fact it is adopted into. Adopting only on boot would mean a lesson vouched
-   * for now reached nobody until the harness was restarted — which is the failure
-   * `adoptLessons` runs every boot to avoid, pointed at the other clock. The
-   * cross-domain read belongs here for its reason: this is the caller that holds
-   * both tables.
-   */
-  promoteLesson(id: string): Lesson | null {
-    const lesson = this.lessons.promoteLesson(id);
-    if (lesson) this.knowledge.adoptLessons([lesson]);
-    return lesson;
-  }
-  /** Prune one, and un-mirror the fact it was adopted into while nothing has touched it. */
-  retireLesson(id: string): Lesson | null {
-    const lesson = this.lessons.retireLesson(id);
-    if (lesson) this.knowledge.adoptLessons([lesson]);
-    return lesson;
-  }
 
   // -- Knowledge (what the fleet knows about this repository) -----------------
 
@@ -533,6 +463,9 @@ export class Store {
   }
   listFacts(limit?: number): KnowledgeFact[] {
     return this.knowledge.listFacts(limit);
+  }
+  factLabels(ids: string[]): Map<string, string> {
+    return this.knowledge.factLabels(ids);
   }
   listCorroborations(factId: string): KnowledgeCorroboration[] {
     return this.knowledge.listCorroborations(factId);
@@ -610,6 +543,12 @@ export class Store {
       return { job, graduation: this.knowledge.recordGraduation(fact.id, job.id, exit) };
     });
     return write();
+  }
+  findGraduationByJobId(jobId: string): KnowledgeGraduation | null {
+    return this.knowledge.findGraduationByJobId(jobId);
+  }
+  linkGraduationTicket(id: string, ticketRef: string): KnowledgeGraduation | null {
+    return this.knowledge.linkGraduationTicket(id, ticketRef);
   }
   listGraduations(limit?: number): KnowledgeGraduation[] {
     return this.knowledge.listGraduations(limit);
@@ -1457,6 +1396,54 @@ function foldClaimStores(db: Database.Database, at: string): void {
 }
 
 /**
+ * The name of the one-shot that stamps every claim already ruled on as spent in
+ * the pet ledger, and **never edited in place** for {@link KNOWLEDGE_FOLD}'s
+ * reason.
+ */
+const CLAIMS_SPENT = 'ruled-claims-into-pet-actions';
+
+/**
+ * Record every claim an operator has **already** ruled on as a pet action that
+ * paid nothing — once per database.
+ *
+ * ## What it is for
+ *
+ * A pet comes from an operator *acting*, and one of the acts is ruling on a claim
+ * an agent raised. That used to be `finding:<finding id>` and is now
+ * `claim:<fact id>`, because the three claim stores became one — and `pet_actions`
+ * is keyed on exactly that pair. So on the boot a deployment takes this build,
+ * every finding it ever triaged and every lesson it ever promoted arrives as a key
+ * the scan has never seen, and the vivarium pays out for a year of decisions in one
+ * afternoon.
+ *
+ * Nothing errors, and a burst of creatures looks exactly like the feature working —
+ * which is the whole reason this is a gated migration rather than something the
+ * scan could be trusted to notice.
+ *
+ * ## Why it writes rows rather than moving the watermark
+ *
+ * `pet_actions` already has a word for this: a row with a null `pet_id` is an
+ * action that was seen and rolled nothing. The vivarium's own start would catch
+ * only the rows older than it, and an operator who has been running this for a
+ * month has a month of rulings inside that window. Writing the keys is the only
+ * thing that answers "seen already" for exactly the set that was.
+ *
+ * `INSERT OR IGNORE`, so a claim the scan somehow reached first keeps whatever it
+ * rolled — a stamp here must never overwrite a pet.
+ */
+function spendRuledClaims(db: Database.Database, at: string): void {
+  runOnce(db, CLAIMS_SPENT, at, () => {
+    const rows = db.prepare(`SELECT id, ruled_at FROM knowledge_facts WHERE ruled_at IS NOT NULL`).all() as {
+      id: string;
+      ruled_at: string;
+    }[];
+    const insert = db.prepare(`INSERT OR IGNORE INTO pet_actions (kind, ref, at, pet_id) VALUES ('claim', ?, ?, NULL)`);
+    for (const row of rows) insert.run(row.id, row.ruled_at);
+    return rows.length;
+  });
+}
+
+/**
  * Every finding becomes a fact, its evidence becomes the corroboration behind it,
  * and what an operator did about it becomes a graduation.
  *
@@ -1483,7 +1470,7 @@ function foldClaimStores(db: Database.Database, at: string): void {
  * A finding filed before `summary`/`where`/`detail` were three fields holds a
  * whole report in `summary` and null in the other two. It becomes a fact whose
  * claim is that whole report, **unsplit**: no content migration guesses at where
- * the seams were, which is the stance `docs/spec/13-jobs-and-findings.md` took the
+ * the seams were, which is the stance `docs/spec/13-jobs-and-tickets.md` took the
  * day the fields were split and which is if anything stronger here, since a claim
  * is matched against other claims by its text. The card clamps it, so an old row
  * reads as a slightly tall card rather than as a lie about its own structure.

@@ -20,12 +20,26 @@ const T0 = '2026-08-01T09:00:00.000Z';
 const T1 = '2026-08-02T09:00:00.000Z';
 
 /**
- * A database from the build before the merge: the two old tables, filled by hand
- * through the driver rather than through a store that no longer writes them.
+ * A database from the build before the merge: the two old tables, created and
+ * filled by hand.
  *
- * `SCHEMA` still creates both, so this only inserts — which is also what makes it
- * a faithful fixture. A deployment taking this build has exactly these rows.
+ * The DDL is written out here rather than imported because it is **gone** —
+ * `SCHEMA` no longer creates either table, since nothing reads them any more. That
+ * is exactly what makes this the faithful fixture: a deployment taking this build
+ * has these tables because an older build made them, and this is that database.
  */
+const LEGACY_TABLES = `
+CREATE TABLE IF NOT EXISTS findings (
+  id TEXT PRIMARY KEY, agent_id TEXT NOT NULL, task_id TEXT NOT NULL, origin_ref TEXT,
+  kind TEXT NOT NULL, ref TEXT, summary TEXT NOT NULL, where_at TEXT, detail TEXT,
+  status TEXT NOT NULL, job_id TEXT, ticket_ref TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS lessons (
+  id TEXT PRIMARY KEY, text TEXT NOT NULL, origin_ref TEXT, status TEXT NOT NULL,
+  created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+);
+`;
+
 function seed(
   dbPath: string,
   rows: { findings?: Record<string, unknown>[]; lessons?: Record<string, unknown>[] },
@@ -35,6 +49,7 @@ function seed(
   // inserted, leaving a database that has the tables and has not been folded.
   new Store(dbPath).close();
   const db = new Database(dbPath);
+  db.exec(LEGACY_TABLES);
   db.prepare(`DELETE FROM store_migrations`).run();
   for (const finding of rows.findings ?? []) {
     const cols = Object.keys(finding);
@@ -173,6 +188,21 @@ test('a dismissed finding is barred and a retired lesson is not', () => {
 test('a promoted lesson is the fact it was already mirrored into, not a second copy', () => {
   withDb((dbPath) => {
     seed(dbPath, { lessons: [lesson({ status: 'promoted', updated_at: T1 })] });
+    // The mirror `adoptLessons` used to write on every boot, under the id the fold
+    // derives too — which is the whole of why the fold cannot insert one again.
+    const db = new Database(dbPath);
+    db.prepare(
+      `INSERT INTO knowledge_facts
+         (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, resolves_when,
+          about_ref, where_at, created_at, updated_at)
+       VALUES ('fact_lesn_a', ?, 'fleet', 'standing', NULL, 'injected', NULL, 'issue:41', ?, NULL, NULL, NULL, ?, ?)`,
+    ).run('The suite wants a built web bundle first.', T1, T0, T1);
+    db.prepare(
+      `INSERT INTO knowledge_corroborations (id, fact_id, agent_id, task_id, goal_ref, session_id, words, created_at)
+       VALUES ('knc_lesn_a', 'fact_lesn_a', NULL, NULL, 'issue:41', NULL, 'An operator vouched for this.', ?)`,
+    ).run(T1);
+    db.close();
+
     const store = new Store(dbPath);
     const facts = store.listFacts();
     assert.equal(facts.length, 1, 'the promoted lesson was folded in beside its own mirror');

@@ -1717,164 +1717,6 @@ export function buildDemoState(): DemoSeed {
     // Empty for the same reason `canFileTickets` is false: the demo has no tracker
     // to raise a bug into, so a row here would be a link to nothing.
     bugFilings: [],
-    // What agents filed for an operator — one of each kind, which is the whole
-    // vocabulary (`report_finding`). Three are things noticed *outside* a task;
-    // the `docs` one arrives from the other direction, which is why it is here.
-    findings: [
-      {
-        id: 'find-1',
-        agentId: 'agent-a1',
-        taskId: 'task-a1',
-        originRef: 'pr:412:ci',
-        kind: 'out_of_scope',
-        ref: null,
-        summary: 'The RRF fold divides by the rank instead of (k + rank), so one list’s top hit swamps every other',
-        where: 'packages/retrieval/src/rrf.ts:41',
-        detail:
-          'Not what I was sent to fix, but it is why `rrf.test.ts` fails once the context is capped — the ' +
-          'cap only exposes it, because the swamped list used to be carried anyway.\n\n' +
-          '```\n' +
-          'score += 1 / rank        // 1, 0.5, 0.33 …\n' +
-          'score += 1 / (k + rank)  // what the comment above it describes\n' +
-          '```',
-        status: 'open',
-        jobId: null,
-        ticketRef: null,
-        createdAt: ago(12),
-        updatedAt: ago(12),
-      },
-      {
-        id: 'find-2',
-        agentId: 'agent-a2',
-        taskId: 'task-a2',
-        originRef: 'issue:376',
-        kind: 'duplicate',
-        ref: 'issue:318',
-        summary: 'This asks for the same publisher seam as #318, which already has a merged design doc',
-        where: null,
-        detail: null,
-        status: 'open',
-        jobId: null,
-        ticketRef: null,
-        createdAt: ago(20),
-        updatedAt: ago(20),
-      },
-      // A fact about the repository itself, learned *inside* the task rather than
-      // beside it (#397). Its promote button says "Queue docs PR", because what
-      // that click produces is a pull request against the worked repository's own
-      // documentation and not a fix for the thing described.
-      {
-        id: 'find-5',
-        agentId: 'agent-a2',
-        taskId: 'task-a2',
-        originRef: 'issue:376',
-        kind: 'docs',
-        ref: null,
-        summary:
-          'A new retriever must be registered in the factory *and* in the eval harness, or evals silently skip it',
-        where: 'docs/architecture/retrieval.md',
-        detail:
-          'Cost me most of an afternoon: `RETRIEVERS` in `packages/retrieval/src/factory.ts` is what production ' +
-          'reads, and `EVAL_TARGETS` in `eval/src/targets.ts` is a second list nothing checks against it. A ' +
-          'retriever in only the first one works everywhere except the numbers you judge it by. Neither file ' +
-          'mentions the other, and no document says there are two.',
-        status: 'open',
-        jobId: null,
-        ticketRef: null,
-        createdAt: ago(26),
-        updatedAt: ago(26),
-      },
-      {
-        id: 'find-3',
-        agentId: 'agent-a0',
-        taskId: 'task-a0',
-        originRef: 'issue:364',
-        kind: 'blocked',
-        ref: 'issue:364',
-        // Deliberately unsplit: a row filed before `where`/`detail` existed, so the
-        // demo shows what the card does with one (clamps it, does not pretend).
-        summary:
-          'The real fix is in pg-boss’s published typings — the job’s `singletonKey` is on the wire but not in the declared result type, so the watcher cannot read it back without a cast. Nothing I can change from this repo.',
-        where: null,
-        detail: null,
-        status: 'dismissed',
-        jobId: null,
-        ticketRef: null,
-        createdAt: ago(48),
-        updatedAt: ago(30),
-      },
-      // The other resolution: filed in the tracker rather than worked now, so the
-      // panel shows what a deferred finding looks like once its ticket exists.
-      {
-        id: 'find-4',
-        agentId: 'agent-a1',
-        taskId: 'task-a1',
-        originRef: 'pr:412:ci',
-        kind: 'out_of_scope',
-        ref: null,
-        summary: 'POST /api/ask has no body-size limit, so a 40MB question is buffered before anything rejects it',
-        where: 'apps/api/src/features/ask/routes.ts, the POST /api/ask handler',
-        detail: 'Unrelated to the CI failure I was sent for. Reproduced with a 40MB body — RSS peaked at 1.1GB.',
-        status: 'filed',
-        jobId: 'job-filed-1',
-        ticketRef: 'issue:346',
-        createdAt: ago(64),
-        updatedAt: ago(58),
-      },
-    ],
-    // What working a goal taught about working the repository (#355). One of each
-    // status, because the panel's whole claim is that the three are different
-    // things: a claim waiting on a reader, one a human vouched for, and one that
-    // stopped being true and was pruned — which is the state the surface exists for.
-    lessons: [
-      {
-        id: 'lesn-1',
-        text:
-          'The console tests render against `web/dist`, so `npm run build:web` has to run before `npm run check` ' +
-          'or they fail on a bundle from the last branch. The failure names a component, never the stale build.',
-        originRef: 'issue:376',
-        status: 'proposed',
-        createdAt: ago(20),
-        updatedAt: ago(20),
-        rendered: false,
-      },
-      {
-        id: 'lesn-2',
-        text:
-          'A ticket that only names a symptom (“search is slow”) is under-specified for a planner every time. ' +
-          'Ask for the query, the corpus size and what “slow” was measured against before dispatching one.',
-        originRef: 'issue:364',
-        status: 'promoted',
-        createdAt: ago(70),
-        updatedAt: ago(66),
-        rendered: true,
-      },
-      {
-        // The other half of the marking, and the reason it is per row: vouched
-        // for, older than the one above, and over the block's cap — so no agent
-        // is reading it, and the only way to find that out is here (#355 phase 3).
-        id: 'lesn-4',
-        text:
-          'The integration suite talks to a real Azure DevOps project, so a run from two branches at once ' +
-          'trips over the same work items. Take the lock in `scripts/devops-lock.sh` before you start one.',
-        originRef: 'issue:301',
-        status: 'promoted',
-        createdAt: ago(300),
-        updatedAt: ago(280),
-        rendered: false,
-      },
-      {
-        // Retired rather than deleted, and drawn: the operator has to be able to
-        // see that the list they are reading is the whole list.
-        id: 'lesn-3',
-        text: 'Run the retrieval suite with `--runInBand` — the fixtures share a Postgres schema and trample each other.',
-        originRef: 'issue:318',
-        status: 'retired',
-        createdAt: ago(400),
-        updatedAt: ago(90),
-        rendered: false,
-      },
-    ],
     // What the fleet knows about working this repository (#27 phase 2). One of
     // each reach, because the page's whole claim is that reach is a state machine
     // and not a label: a live notice on its clock, a corroborated claim waiting on
@@ -2168,6 +2010,37 @@ export function buildDemoState(): DemoSeed {
         openContradictions: 0,
         // Committed, so out of every prompt — and the ask count with it: nothing
         // answers an ask with a committed claim, because the repository does.
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: null,
+      },
+      {
+        // Retired rather than rejected, and drawn rather than dropped: the check it
+        // was about is gone, which is not the same as its having been untrue. An
+        // agent that hits the same wall may raise it again, which files a fresh
+        // claim with today's date — and that difference is invisible unless both
+        // tails are on the page.
+        id: 'fact-retired',
+        claim:
+          'Run the retrieval suite with `--runInBand` — the fixtures share a Postgres schema and trample ' +
+          'each other.',
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'retired',
+        supersedes: null,
+        originRef: 'issue:318',
+        ruledAt: ago(90),
+        resolvesWhen: null,
+        aboutRef: null,
+        where: null,
+        createdAt: ago(400),
+        updatedAt: ago(90),
+        corroborations: 1,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
         asks: 0,
         lastAskedAt: null,
         scopeStale: false,

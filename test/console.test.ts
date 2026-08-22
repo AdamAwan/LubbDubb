@@ -1320,20 +1320,17 @@ test('the local run panel offers its filter when the filter is what is hiding th
   assert.ok(!nothing.includes('show every goal'), 'a filter that can reveal nothing must not be drawn');
 });
 
-test('the knowledge page draws the retired lessons too', () => {
-  // The load-bearing half of the prune surface (#355): a lesson that vanished on
-  // being retired would leave no way to tell a list you have finished with from
-  // one that lost rows, and "retired" would read as "deleted".
-  //
-  // On the knowledge tab since the panels were folded in, which is the thing worth
-  // asserting after the move: the section survived being relocated, rather than the
-  // rows quietly ceasing to be drawn anywhere.
+test('the knowledge page draws the retired claims too', () => {
+  // The load-bearing half of the prune surface: a claim that vanished on being
+  // retired would leave no way to tell a list you have finished with from one that
+  // lost rows, and "retired" would read as "deleted" — which is exactly the
+  // collision the two words were separated to avoid.
   const v = view({ tab: 'knowledge' });
-  const retired = v.state.lessons.find((l) => l.status === 'retired');
-  assert.ok(retired, 'the demo fixtures must carry a retired lesson to draw');
+  const retired = v.state.knowledge.find((f) => f.reach === 'retired');
+  assert.ok(retired, 'the demo fixtures must carry a retired claim to draw');
   // The first plain run of the fixture's text: markdown renders its inline code
   // into its own element, so a longer slice would be split across nodes.
-  assert.ok(decode(render(v)).includes(retired.text.slice(0, 28)), 'a pruned lesson stays visible');
+  assert.ok(decode(render(v)).includes(retired.claim.slice(0, 28)), 'a pruned claim stays visible');
 });
 
 /**

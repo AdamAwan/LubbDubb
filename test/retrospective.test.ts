@@ -7,7 +7,7 @@ import { Store } from '../src/store/store.js';
 import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { MAX_RETRO_DOCUMENT, retroOrigin, retroSubmitOrigin, validateRetrospective } from '../src/retro/retro.js';
-import { MAX_LESSON_CHARS } from '../src/lessons.js';
+import { MAX_CLAIM_CHARS } from '../src/knowledge/knowledge.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
@@ -175,7 +175,7 @@ test('lessons are optional, bounded, and dropped rather than trimmed', () => {
   const parsed = validateRetrospective({
     summary: 'ok',
     document: 'd',
-    lessons: ['  The suite wants a built web bundle first.  ', '', 'x'.repeat(MAX_LESSON_CHARS + 1), 42],
+    lessons: ['  The suite wants a built web bundle first.  ', '', 'x'.repeat(MAX_CLAIM_CHARS + 1), 42],
   });
   assert.equal(parsed.ok, true);
   if (!parsed.ok) return;
@@ -210,16 +210,20 @@ test('a retro files its lessons as proposals against the goal it wrote up', asyn
   assert.equal(filed.isError, false);
   assert.match(filed.text, /"lessonsFiled":\s*2/);
 
-  const lessons = system.store.listLessons();
-  assert.equal(lessons.length, 2);
-  for (const lesson of lessons) {
-    // The gate, asserted from the writer's side: an agent's own claim lands
-    // `proposed` and there is no argument it can pass to land it promoted.
-    assert.equal(lesson.status, 'proposed');
-    // Provenance is the issue, not the retro origin: the goal is what taught it,
-    // and `issue:12:retro` is an implementation detail of who wrote it down.
-    assert.equal(lesson.originRef, 'issue:12');
-    assert.ok(lesson.createdAt);
+  const claims = system.store.listFacts();
+  assert.equal(claims.length, 2);
+  for (const claim of claims) {
+    // The gate, asserted from the writer's side: an agent's own claim lands a
+    // `proposal` and there is no argument it can pass to land it anywhere else.
+    assert.equal(claim.reach, 'proposal');
+    assert.equal(claim.scope, 'fleet');
+    // Provenance is the goal, not the retro origin: the goal is what taught it,
+    // and `issue:12:retro` is an implementation detail of who wrote it down —
+    // which is `corroborationGoal`'s collapse, applied here like everywhere else.
+    assert.equal(claim.originRef, 'issue:12');
+    // And the corroboration says where it came from, because a retrospective has
+    // no separate observation to give: the write-up beside it is the observation.
+    assert.match(system.store.listCorroborations(claim.id)[0]!.words, /retrospective/);
   }
   system.store.close();
 });
@@ -234,7 +238,10 @@ test('a resubmission revises the write-up without doubling its lessons', async (
 
   assert.equal(again.isError, false);
   assert.equal(system.store.getRetrospective('issue:12')?.summary, 'revised', 'the document is upserted');
-  assert.equal(system.store.listLessons().length, 1, 'the lessons are not appended a second time');
+  // `claimsMatch` is what folds the second submission's claim onto the first's row
+  // — the matching every writer gets now, rather than the exact-text dedupe on one
+  // goal `proposeLesson` did.
+  assert.equal(system.store.listFacts().length, 1, 'the lessons are not appended a second time');
   // Told the truth about what the operator will see, rather than "0 filed" — which
   // would read as two of them having failed.
   assert.match(again.text, /"lessonsFiled":\s*1/);
@@ -248,12 +255,12 @@ test('a submission whose lessons are all refused still lands its write-up', asyn
   const filed = await callTool(system, retro, 'retro_submit', {
     summary: 'ok',
     document: 'the whole story',
-    lessons: ['y'.repeat(MAX_LESSON_CHARS + 1)],
+    lessons: ['y'.repeat(MAX_CLAIM_CHARS + 1)],
   });
   assert.equal(filed.isError, false, 'a lesson that does not fit never sinks the retrospective');
   assert.match(filed.text, /"lessonsDropped":\s*1/, 'and the drop is named rather than silent');
   assert.match(system.store.getRetrospective('issue:9')?.document ?? '', /whole story/);
-  assert.deepEqual(system.store.listLessons(), []);
+  assert.deepEqual(system.store.listFacts(), []);
   system.store.close();
 });
 
@@ -266,7 +273,7 @@ test('a working agent cannot file a lesson through the retro tool', async () => 
     lessons: ['I should be able to tell the fleet things.'],
   });
   assert.equal(refused.isError, true);
-  assert.deepEqual(system.store.listLessons(), [], 'the origin check gates the lessons with the document');
+  assert.deepEqual(system.store.listFacts(), [], 'the origin check gates the lessons with the document');
   system.store.close();
 });
 

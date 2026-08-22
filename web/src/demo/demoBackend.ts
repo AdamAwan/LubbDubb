@@ -19,7 +19,7 @@ import type {
   CockpitDecision,
   Decision,
   ContradictionRuling,
-  FactCommitment,
+  FactExit,
   FactRuling,
   GraduationOutcome,
   FilingTargetProbe,
@@ -29,7 +29,6 @@ import type {
   LocalRunView,
   JobSchedule,
   KnowledgeFactPayload,
-  LessonStatus,
   McpChannelPayload,
   OpenPullRequest,
   PetCatalogue,
@@ -871,90 +870,45 @@ class DemoServer {
     return { ok: true };
   }
 
-  async promoteFinding(id: string): Promise<{ ok: true }> {
-    const finding = (this.state.findings ?? []).find((f) => f.id === id);
-    if (finding && finding.status === 'open') {
-      const headline = finding.summary.split('\n')[0]!;
-      // A `docs` claim is promoted through the `docs-change` template on the real
-      // backend and lands as "Document: …" in the queue; every other kind keeps
-      // the derived `[kind] ref headline`. Mirrored here so the demo's Up next
-      // shows what the button it just relabelled actually queues.
-      const title = (
-        finding.kind === 'docs'
-          ? `Document: ${headline}`
-          : `[${finding.kind}]${finding.ref ? ` ${finding.ref}` : ''} ${headline}`
-      ).slice(0, 80);
-      await this.launchJob({ prompt: finding.summary, title });
-      finding.status = 'promoted';
-      finding.jobId = this.state.jobs[0]?.id ?? null;
-      finding.updatedAt = new Date().toISOString();
-      this.dirty();
-    }
-    return { ok: true };
-  }
-
   /**
-   * File a finding as a ticket — the demo mirror of `POST /api/findings/:id/file`.
+   * Write a claim down — the demo mirror of `POST /api/knowledge/facts`.
    *
-   * It stops at `filing`, which is the honest demo: the real transition to
-   * `filed` is a desk agent creating the ticket and calling `link_ticket`, and
-   * the demo has no tracker to create one in.
+   * It lands a **proposal**, as it does on the real route: the gate has no bypass,
+   * and a demo that showed one would be teaching the wrong thing about the surface.
    */
-  async fileFinding(id: string): Promise<{ ok: true }> {
-    const finding = (this.state.findings ?? []).find((f) => f.id === id);
-    if (finding && finding.status === 'open') {
-      await this.launchJob({ prompt: `File this finding as a ticket:\n\n${finding.summary}`, title: 'File ticket' });
-      finding.status = 'filing';
-      finding.jobId = this.state.jobs[0]?.id ?? null;
-      finding.updatedAt = new Date().toISOString();
-      this.dirty();
-    }
-    return { ok: true };
-  }
-
-  /** Dismiss a finding (demo mirror of POST /api/findings/:id/dismiss). */
-  async dismissFinding(id: string): Promise<{ ok: true }> {
-    const finding = (this.state.findings ?? []).find((f) => f.id === id);
-    if (finding && finding.status === 'open') {
-      finding.status = 'dismissed';
-      finding.updatedAt = new Date().toISOString();
-      this.dirty();
-    }
-    return { ok: true };
-  }
-
-  /**
-   * Write a lesson down — the demo mirror of `POST /api/lessons` (#355). It
-   * lands `proposed`, as it does on the real route: the gate has no bypass, and
-   * a demo that showed one would be teaching the wrong thing about the surface.
-   */
-  async proposeLesson(text: string, originRef: string | null): Promise<{ ok: true }> {
+  async raiseFact(claim: string, originRef: string | null): Promise<{ ok: true }> {
     const at = new Date().toISOString();
-    this.state.lessons = [
+    this.state.knowledge = [
       {
-        id: `lesn-${this.state.lessons.length + 1}-demo`,
-        text,
+        id: `fact-${this.state.knowledge.length + 1}-demo`,
+        claim,
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'proposal',
+        supersedes: null,
         originRef,
-        status: 'proposed',
+        ruledAt: null,
+        resolvesWhen: null,
+        aboutRef: null,
+        where: null,
         createdAt: at,
         updatedAt: at,
-        // Nothing unpromoted is ever in the block agents read (#355 phase 3).
-        rendered: false,
+        // One voice — the operator's own. Nothing about typing it into the page
+        // makes it agreed with.
+        corroborations: 1,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: null,
       },
-      ...this.state.lessons,
+      ...this.state.knowledge,
     ];
     this.dirty();
     return { ok: true };
-  }
-
-  /** Vouch for one (demo mirror of POST /api/lessons/:id/promote). */
-  async promoteLesson(id: string): Promise<{ ok: true }> {
-    return this.moveLesson(id, 'promoted', ['proposed']);
-  }
-
-  /** Prune one (demo mirror of POST /api/lessons/:id/retire). */
-  async retireLesson(id: string): Promise<{ ok: true }> {
-    return this.moveLesson(id, 'retired', ['proposed', 'promoted']);
   }
 
   /**
@@ -1060,26 +1014,36 @@ class DemoServer {
   }
 
   /**
-   * Commit a claim to the repository — the demo mirror of
-   * `POST /api/knowledge/facts/:id/commit` (#27 phase 6), including the property
-   * that is the whole of the intermediate state: **the reach does not move**. The
-   * claim goes on being delivered while its pull request is open, and reaches
-   * `committed` only when that pull request lands.
+   * Send a claim on — the demo mirror of `POST /api/knowledge/facts/:id/exit`,
+   * including the property that is the whole of the intermediate state: **the reach
+   * does not move**. The claim goes on being delivered while the work is in flight,
+   * and reaches `graduated` only when the exit is actually taken.
    */
-  async commitFact(id: string, commitment: FactCommitment): Promise<{ ok: true }> {
+  async exitFact(id: string, exit: FactExit): Promise<{ ok: true }> {
     const fact = this.state.knowledge.find((f) => f.id === id);
     if (!fact || this.state.knowledgeGraduations.some((g) => g.factId === id && g.outcome === null)) {
       return { ok: true };
     }
     const at = new Date().toISOString();
+    const headline = fact.claim.split('\n')[0]!;
+    // What each exit queues, mirrored so the demo's Up next shows what the control
+    // the operator just clicked actually asks for.
+    const title = (
+      exit.exit === 'docs'
+        ? `Document: ${headline}`
+        : exit.exit === 'ticket'
+          ? `File ticket: ${headline}`
+          : `${fact.aboutRef ? `${fact.aboutRef} ` : ''}${headline}`
+    ).slice(0, 80);
+    await this.launchJob({ prompt: fact.claim, title });
     this.state.knowledgeGraduations = [
       {
         id: `kng-${id}`,
         factId: id,
-        exit: 'docs',
-        jobId: `job-docs-${id}`,
-        target: commitment.target,
-        bar: commitment.target === 'claudeMd' ? commitment.bar : null,
+        exit: exit.exit,
+        jobId: this.state.jobs[0]?.id ?? `job-${exit.exit}-${id}`,
+        target: exit.exit === 'docs' ? exit.target : null,
+        bar: exit.exit === 'docs' && exit.target === 'claudeMd' ? exit.bar : null,
         prRef: null,
         ticketRef: null,
         outcome: null,
@@ -1096,7 +1060,7 @@ class DemoServer {
   /**
    * Say what became of a graduation the harness will not read for itself — the
    * demo mirror of `POST /api/knowledge/graduations/:id/settle`. `landed` is the
-   * one place `committed` is an operator's own word, and it moves the claim out of
+   * one place `graduated` is an operator's own word, and it moves the claim out of
    * every prompt; `abandoned` moves nothing at all.
    */
   async settleGraduation(id: string, outcome: GraduationOutcome): Promise<{ ok: true }> {
@@ -1114,23 +1078,6 @@ class DemoServer {
       }
     }
     this.dirty();
-    return { ok: true };
-  }
-
-  /** The legal predecessors, kept here so the demo cannot drift from `LessonStore`. */
-  private moveLesson(id: string, status: LessonStatus, from: LessonStatus[]): { ok: true } {
-    const lesson = this.state.lessons.find((l) => l.id === id);
-    if (lesson && from.includes(lesson.status)) {
-      lesson.status = status;
-      lesson.updatedAt = new Date().toISOString();
-      // The block is ordered newest-promotion-first, so the one just vouched for
-      // is the last thing the cap would drop — and a retired lesson reaches
-      // nobody. The demo asserts that much and no more: what the cap does to the
-      // *older* rows is the knowledge block's answer, computed server-side, and
-      // guessing at it here would put a second opinion in front of the operator.
-      lesson.rendered = status === 'promoted';
-      this.dirty();
-    }
     return { ok: true };
   }
 
@@ -3455,6 +3402,7 @@ export const demoApi = {
       rules: {
         rates: {
           job: ZERO_RATE,
+          claim: ZERO_RATE,
           finding: ZERO_RATE,
           'human-task': ZERO_RATE,
           escalation: ZERO_RATE,
@@ -3602,14 +3550,9 @@ export const demoApi = {
   renamePet: (id: string, name: string) => getServer().renamePet(id, name),
   placePet: (id: string, placed: boolean) => getServer().placePet(id, placed),
   blendPet: (id: string) => getServer().blendPet(id),
-  promoteFinding: (id: string) => getServer().promoteFinding(id),
-  fileFinding: (id: string) => getServer().fileFinding(id),
-  dismissFinding: (id: string) => getServer().dismissFinding(id),
-  proposeLesson: (text: string, originRef: string | null) => getServer().proposeLesson(text, originRef),
-  promoteLesson: (id: string) => getServer().promoteLesson(id),
-  retireLesson: (id: string) => getServer().retireLesson(id),
   setFactReach: (id: string, reach: FactRuling) => getServer().setFactReach(id, reach),
-  commitFact: (id: string, commitment: FactCommitment) => getServer().commitFact(id, commitment),
+  exitFact: (id: string, exit: FactExit) => getServer().exitFact(id, exit),
+  raiseFact: (claim: string, originRef: string | null) => getServer().raiseFact(claim, originRef),
   settleGraduation: (id: string, outcome: GraduationOutcome) => getServer().settleGraduation(id, outcome),
   knowledgeFact: (id: string) => getServer().knowledgeFact(id),
   resolveContradiction: (id: string, ruling: ContradictionRuling) => getServer().resolveContradiction(id, ruling),

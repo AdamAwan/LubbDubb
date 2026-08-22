@@ -137,7 +137,7 @@ of this. The test is whether _null_ is a value the running code will act on.
 `findings.where_at` is the one column whose name does not match its field: `where` is SQL, so the
 column is `where_at` and `rowToFinding` maps it to `where`. Both new columns are nullable, and a row
 from before them reads as `null` on each — the pre-split report stays whole in `summary`
-([13](13-jobs-and-findings.md#the-three-text-fields)).
+([27](27-knowledge.md#what-the-three-stores-became)).
 
 ### Rebuilding a table whose key changed
 
@@ -169,7 +169,7 @@ amendment that names a check and every reading already recorded against one. Ass
 `test/validation.test.ts`, against a database built in the old shape.
 
 `GRAPH_REBUILDS` in `graph.ts` drops `work_item_filings.job_id`. A work item's filing had a job
-because a filing _was_ an agent doing something; since [#394](13-jobs-and-findings.md#filing-a-ticket)
+because a filing _was_ an agent doing something; since [#394](13-jobs-and-tickets.md#filing-a-ticket)
 the harness files one itself, so there is no job to name and nothing that resolves a filing from an
 agent's credential. Dropping rather than nulling, because `NOT NULL` is not something `ALTER` can undo
 and a column no writer fills would refuse every new filing on every database created before this
@@ -291,7 +291,7 @@ its lines are load-bearing:
   `INSERT OR IGNORE` — anything else would put one sentence in the block twice.
 - **A pre-split finding keeps its whole report as the claim.** A row from before `summary`/`where`/
   `detail` were three fields holds the lot in `summary`, and no content migration guesses at where the
-  seams were — the stance [13](13-jobs-and-findings.md) took the day they were split, and stronger
+  seams were — the stance [13](13-jobs-and-tickets.md) took the day they were split, and stronger
   here, since a claim is matched against other claims by its text and a split one would be a sentence
   nobody wrote being matched on.
 
@@ -418,7 +418,7 @@ is what says so.
 
 The two `findActive*` predicates are the dispatch gates. They are mirrors of each other, and the branch
 one exists because origin and branch are not 1:1 on the job path — see [09](09-execution.md) and
-[13](13-jobs-and-findings.md).
+[13](13-jobs-and-tickets.md).
 
 ### Jobs
 
@@ -441,7 +441,7 @@ one exists because origin and branch are not 1:1 on the job path — see [09](09
   a row naming a path that does not resolve, and a path an agent cannot open is the failure that
   matters. A deletion is the mirror — rows first, then files.
 - **The ref is decided before anything is written.** A code blueprint with a tracker configured is
-  filed as a ticket rather than dispatched ([13](13-jobs-and-findings.md#filing-a-ticket)), and the
+  filed as a ticket rather than dispatched ([13](13-jobs-and-tickets.md#filing-a-ticket)), and the
   **harness** files it — so the issue number is known on the request, and the images are written under
   `issue:<n>` from the start. They were previously keyed `job:<id>` and re-keyed by `link_ticket` when
   a desk agent reported the ticket back; that whole move is gone with the agent, and with it the
@@ -566,7 +566,7 @@ included — the prune surface has to show what it pruned), `promoteLesson(id)`,
 Both transitions are **guarded in the write** rather than by a read-then-check, the discipline
 `linkFindingTicket` uses: `promoteLesson` moves only a `proposed` row, `retireLesson` moves either
 live status, and each returns null when there was nothing in a status it could leave. `retired` is
-terminal — there is no un-retire. → [13](13-jobs-and-findings.md#lessons)
+terminal — there is no un-retire. → [13](13-jobs-and-tickets.md#lessons)
 
 ### Knowledge
 
@@ -808,7 +808,7 @@ is one condition and not a judgement: the tracker returns it to the open set.
 or still listed with a closed state. Azure keeps reporting a closed work item; GitHub's issues provider
 fetches open issues only. Reading only the first leaves every Azure item live forever; reading only the
 second never fires on GitHub. It is the same pair of readings the delivery close-out sweep takes
-([13](13-jobs-and-findings.md)) — and, like that one, **the freeze is skipped entirely on an empty live
+([13](13-jobs-and-tickets.md)) — and, like that one, **the freeze is skipped entirely on an empty live
 set**: a provider whose snapshot failed hands back its last good read, but one that is down on a first
 boot hands back nothing, and freezing the whole board off that is the one way this can be wrong at
 scale.

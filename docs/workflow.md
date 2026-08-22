@@ -236,7 +236,7 @@ rule that holds on it is the same rule that holds on any red check nobody here c
 - **Close the ticket.** The harness never closes it. A delivered goal whose item is still open files
   a `close_out` human task instead — a standing obligation with a person's name on it, which settles
   itself once the tracker stops listing the item open
-  ([13](spec/13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)). It is asked for after
+  ([13](spec/13-jobs-and-tickets.md#the-step-after-the-launch-the-close-out)). It is asked for after
   the validation rather than beside it, and — where a deployment has configured an environment that
   opens it — only once the work has actually arrived somewhere a person can look at
   ([24](spec/24-environments.md#what-an-arrival-means)).

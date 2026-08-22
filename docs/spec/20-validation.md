@@ -244,7 +244,7 @@ is not a verdict.
 
 `ValidationReadyDesk` (`src/validation/ready.ts`, `readyDesk.ts`) files a `validate` human task on
 every delivered goal with a check a **person** still has to run, once a pulse, beside the resource
-asks and against the same gate ([13](13-jobs-and-findings.md#the-other-step-after-the-launch-the-validation)).
+asks and against the same gate ([13](13-jobs-and-tickets.md#the-other-step-after-the-launch-the-validation)).
 It states what is outstanding through the same `outstandingChecks` the close-out reads, refreshed
 every pulse, so the bench row and the obligation beneath it cannot disagree about what a goal owes.
 
@@ -298,7 +298,7 @@ attachments already make.
 a directory, present or missing, servable to the cockpit and readable by an agent. A resource declared
 `"provided": false` is the planner saying it needs a file it cannot produce — a reference screenshot,
 a dump of real data, a sample from a colleague. A `human_tasks` row asks for it
-([13](13-jobs-and-findings.md)), so a missing fixture is an ask rather than a check that mysteriously
+([13](13-jobs-and-tickets.md)), so a missing fixture is an ask rather than a check that mysteriously
 never runs.
 
 **`kind: 'access'` is the exception, and files nothing.** It names a login or an environment, which is

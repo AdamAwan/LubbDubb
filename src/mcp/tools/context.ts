@@ -4,13 +4,12 @@ import type { PermissionDesk } from '../../agents/permissionDesk.js';
 import type {
   Agent,
   AgentAsk,
-  Finding,
-  FindingInput,
   HumanTask,
   HumanTaskInput,
   IssueConclusion,
   IssueConclusionVerdict,
   KnowledgeFact,
+  KnowledgeGraduation,
   PartOutcomeKind,
   PlanPart,
   Remedy,
@@ -34,15 +33,11 @@ import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
  * What the tool layer needs from the fleet. Narrow on purpose, and every method
  * is here for the same reason: each has a fleet-side transition or event that
  * must not be bypassed. `ask` goes through the *same* park the WAITING sentinel
- * drives; `recordFinding` and `recordProgress` persist and then emit, so the
+ * drives; `proposeFact` and `recordProgress` persist and then emit, so the
  * cockpit hears the moment it happens rather than on the next pulse.
  */
 export interface AgentToolTarget {
   ask(agentId: string, ask: AgentAsk): { ok: true; escalationId: string | null } | { ok: false; error: string };
-  recordFinding(
-    agentId: string,
-    input: FindingInput,
-  ): { ok: true; finding: Finding; created: boolean } | { ok: false; error: string };
   requestHumanTask(
     agentId: string,
     input: HumanTaskInput,
@@ -55,13 +50,13 @@ export interface AgentToolTarget {
    */
   filingTarget(
     agentId: string,
-  ): { ok: true; kind: 'finding' | 'bug'; storyNumber: number | null } | { ok: false; error: string };
+  ): { ok: true; kind: 'claim' | 'bug'; storyNumber: number | null } | { ok: false; error: string };
   linkTicket(
     agentId: string,
     ticketRef: string,
   ):
-    | { ok: true; finding: Finding; bug?: undefined }
-    | { ok: true; bug: BugFiling; finding?: undefined }
+    | { ok: true; graduation: KnowledgeGraduation; bug?: undefined }
+    | { ok: true; bug: BugFiling; graduation?: undefined }
     | { ok: false; error: string };
   recordConclusion(
     agentId: string,

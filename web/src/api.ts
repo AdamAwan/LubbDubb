@@ -17,7 +17,7 @@ import type {
   FilingTargetProbe,
   IssueFiled,
   ContradictionRuling,
-  FactCommitment,
+  FactExit,
   FactRuling,
   GraduationOutcome,
   KnowledgeFactPayload,
@@ -461,18 +461,14 @@ const realApi = {
   placePet: (id: string, placed: boolean) => post<{ ok: true }>(`/api/pets/${id}/place`, { placed }),
   blendPet: (id: string) => post<{ ok: true }>(`/api/pets/${id}/blend`, {}),
 
-  // Lessons (#355). Proposing is the operator's own arm — the retrospective's
-  // will land beside it — and promote/retire are the gate and the prune.
-  proposeLesson: (text: string, originRef: string | null) => post<{ ok: true }>('/api/lessons', { text, originRef }),
-  promoteLesson: (id: string) => post<{ ok: true }>(`/api/lessons/${id}/promote`),
-  retireLesson: (id: string) => post<{ ok: true }>(`/api/lessons/${id}/retire`),
-
-  // Knowledge (#27 phase 2). Two calls and no third: the operator's arm of this
-  // store is where a claim stands, and nothing here files one — agents propose
-  // through the tool channel, on a scoped credential rather than this bearer
-  // token. The detail is fetched per row rather than polled, because the evidence
-  // behind one claim is thousands of characters the snapshot has no business
-  // carrying for rows nobody has opened.
+  // Knowledge (#27). The operator's whole arm of the one claim store: where a
+  // claim stands, where it goes when it leaves, and — the one write that is not a
+  // ruling — a claim they wrote down themselves, which lands a proposal like every
+  // other. Nothing here files a claim on an agent's behalf: agents raise through
+  // the tool channel, on a scoped credential rather than this bearer token. The
+  // detail is fetched per row rather than polled, because the evidence behind one
+  // claim is thousands of characters the snapshot has no business carrying for rows
+  // nobody has opened.
   knowledgeFact: (id: string) =>
     authFetch(`/api/knowledge/facts/${encodeURIComponent(id)}`).then((r) => json<KnowledgeFactPayload>(r)),
   setFactReach: (id: string, reach: FactRuling) =>
@@ -484,13 +480,17 @@ const realApi = {
   // different things to every agent.
   resolveContradiction: (id: string, body: ContradictionRuling) =>
     post<{ ok: true }>(`/api/knowledge/contradictions/${encodeURIComponent(id)}/resolve`, body),
-  // Committing a claim to the repository (#27 phase 6). **One call**, because
-  // opening the documentation work and recording that it is on its way are two
-  // halves of one act — a job nothing links to is a pull request that lands and
-  // takes the claim out of no prompt. It does not move the reach: the claim goes on
-  // being delivered until the pull request actually merges.
-  commitFact: (id: string, body: FactCommitment) =>
-    post<{ ok: true }>(`/api/knowledge/facts/${encodeURIComponent(id)}/commit`, body),
+  // Sending a claim on — a documentation pull request, a job, or a ticket. **One
+  // call**, because opening the work and recording that it is on its way are two
+  // halves of one act: a job nothing links to lands and takes the claim out of no
+  // prompt. It does not move the reach — the claim goes on being delivered until
+  // the exit is actually taken.
+  exitFact: (id: string, body: FactExit) =>
+    post<{ ok: true }>(`/api/knowledge/facts/${encodeURIComponent(id)}/exit`, body),
+  // Writing one down yourself. It lands a proposal like everything else: the
+  // surface is one gate, not one gate and a bypass for whoever is at the keyboard.
+  raiseFact: (claim: string, originRef: string | null) =>
+    post<{ ok: true }>('/api/knowledge/facts', { claim, originRef }),
   // What became of one the harness cannot read for itself — a pull request that
   // left the world without ever being seen closed. The sweep says `unknown` rather
   // than guessing merged, and this is the answer to it.

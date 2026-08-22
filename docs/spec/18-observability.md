@@ -558,7 +558,7 @@ kind of work are different facts, and the ceiling notice says out loud that it i
 **It files a note and kills nothing.** An expensive run is not a wrong run, and this module cannot
 tell the two apart — a bucket mixes a one-line fix with a goal that touches nine files. Killing on a
 threshold would eventually kill work that was going to land. The verdict is a `burn` human task
-([13](13-jobs-and-findings.md#human-tasks)): visible, holding nothing, and answered the same two ways
+([13](13-jobs-and-tickets.md#human-tasks)): visible, holding nothing, and answered the same two ways
 a bench row is. What the operator lacked was not the stop button but the prompt to go and look.
 
 **The title carries no figure and the detail carries all of them.** `recordHumanTask` dedups on
@@ -692,7 +692,7 @@ assert is a column reporting whatever each agent took it to mean, and the counts
 nothing.
 
 **`undocumented` is the one verdict that may carry a lesson**, and it rides on the same call rather
-than a second tool — atomic, exactly as a retrospective's lessons are ([13](13-jobs-and-findings.md)).
+than a second tool — atomic, exactly as a retrospective's lessons are ([13](13-jobs-and-tickets.md)).
 A lesson on any other guard is **refused rather than dropped**: a claim reaches every later dispatch
 once an operator vouches for it, so the gate on what may become one has to be visible to the agent
 proposing it. The lesson's provenance is the pull request (`pr:<n>`), which both lesson surfaces

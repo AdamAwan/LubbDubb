@@ -5,7 +5,6 @@ import {
   amendmentProposal,
   contradictableFact,
   contradictionRatio,
-  corroborationGoal,
   distinctCorroborators,
   questionScore,
   type FactContradiction,
@@ -25,7 +24,6 @@ import type {
   KnowledgeCorroboration,
   KnowledgeFact,
   KnowledgeGraduation,
-  Lesson,
 } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
@@ -185,6 +183,23 @@ export class KnowledgeStore {
       .prepare(`SELECT * FROM knowledge_facts ORDER BY created_at DESC, rowid DESC LIMIT ?`)
       .all(limit) as FactRow[];
     return rows.map(rowToFact);
+  }
+
+  /**
+   * The claim each of these facts makes, by id — the pets panel's label for a
+   * `claim` origin. By id rather than off {@link listFacts}, whose cap is the
+   * reason a client-side join would leave the oldest pets unnamed. A missing id is
+   * absent from the map, never an error.
+   * → `docs/spec/22-pets.md#the-sources`
+   */
+  factLabels(ids: string[]): Map<string, string> {
+    if (ids.length === 0) return new Map();
+    const holes = ids.map(() => '?').join(',');
+    const rows = this.ctx.db.prepare(`SELECT id, claim FROM knowledge_facts WHERE id IN (${holes})`).all(...ids) as {
+      id: string;
+      claim: string;
+    }[];
+    return new Map(rows.map((r) => [r.id, r.claim]));
   }
 
   /** One fact's observations, oldest first — the order they were made in. */
@@ -580,6 +595,58 @@ export class KnowledgeStore {
     return rows.map(rowToGraduation);
   }
 
+  /**
+   * The graduation a job was opened for, if it was opened for one — how
+   * `link_ticket` finds the claim back from a filing agent's credential
+   * (`agent -> task -> its job:<id> origin -> this row`), so the tool takes no
+   * argument naming what it is filing.
+   */
+  findGraduationByJobId(jobId: string): KnowledgeGraduation | null {
+    const row = this.ctx.db.prepare(`SELECT * FROM knowledge_graduations WHERE job_id=?`).get(jobId) as
+      | GraduationRow
+      | undefined;
+    return row ? rowToGraduation(row) : null;
+  }
+
+  /**
+   * Record the tracker item a filing agent created, and end the graduation with it:
+   * the `ticket` exit's own landing, and the claim reaches `graduated` in the same
+   * transaction.
+   *
+   * **The ticket existing is the exit being taken**, which is why this is one write
+   * and not two. A ticket recorded over a claim still injected pays context for a
+   * sentence the backlog now carries, and a claim at `graduated` with no ticket ref
+   * beside it is a row out of every prompt pointing nowhere.
+   *
+   * Guarded in the write (`WHERE ... outcome IS NULL`) rather than by a
+   * read-then-check, the discipline `decideProposal` uses and the one
+   * `linkFindingTicket` had before the stores merged — an agent that calls
+   * `link_ticket` twice links once, with no caller obliged to look first. Null
+   * means there was nothing open to settle, which the tool turns into an error the
+   * agent can read.
+   */
+  linkGraduationTicket(id: string, ticketRef: string): KnowledgeGraduation | null {
+    const at = this.ctx.now();
+    const write = this.ctx.db.transaction((): KnowledgeGraduation | null => {
+      const result = this.ctx.db
+        .prepare(
+          `UPDATE knowledge_graduations SET ticket_ref=?, outcome='landed', settled_at=?
+             WHERE id=? AND exit='ticket' AND outcome IS NULL`,
+        )
+        .run(ticketRef, at, id);
+      if (result.changes === 0) return null;
+      const row = this.getGraduation(id);
+      // Ruled, and by the operator: they said the claim belongs in the tracker, and
+      // the item existing is that decision arriving rather than a second one.
+      // `moveReach` refuses a rejected or superseded claim, so a fact an operator
+      // killed while the filing agent was writing stays killed and the graduation
+      // still ends — the honest reading of both.
+      if (row !== null) this.moveReach(row.factId, 'graduated', at);
+      return row;
+    });
+    return write();
+  }
+
   getGraduation(id: string): KnowledgeGraduation | null {
     const row = this.ctx.db.prepare(`SELECT * FROM knowledge_graduations WHERE id=?`).get(id) as
       | GraduationRow
@@ -756,77 +823,6 @@ export class KnowledgeStore {
       .run(reach, updatedAt, ruledAt, id);
     if (result.changes === 0) return null;
     return this.getFact(id);
-  }
-
-  /**
-   * Mirror the fleet's promoted lessons into this store, and unmirror the ones an
-   * operator has since retired.
-   *
-   * A promoted lesson **is** a fleet-scoped standing fact an operator has vouched
-   * for, reaching every agent's system prompt — which is `injected`, exactly. So
-   * the migration is the identity, not a translation.
-   *
-   * Run on **every** boot rather than once, and idempotent because the fact's id
-   * is derived from the lesson's. Once is not enough: lessons keep their own
-   * surface until delivery moves (phase 3), so a lesson promoted between the two
-   * phases would be a claim that silently stopped reaching agents on the boot the
-   * operator took that build. The unmirror is the same argument backwards — a
-   * lesson retired after it was adopted would otherwise be pruned from one surface
-   * and injected from the other.
-   *
-   * An adopted row is only ever removed while it is still **untouched**: nobody
-   * has corroborated it, nothing amends it, and no operator has moved it. Past
-   * that it is a fact in its own right with its own record, and the lessons panel
-   * is not where it is governed.
-   *
-   * The lessons are passed in rather than read: `src/store/lessons.ts` owns that
-   * table, and a store module that reached a sibling's tables is the cross-domain
-   * read `test/storeModules.test.ts` exists to refuse. The composition root holds
-   * both, so it does the joining.
-   */
-  adoptLessons(lessons: readonly Lesson[]): void {
-    for (const lesson of lessons) {
-      if (lesson.status === 'promoted') this.adoptLesson(lesson);
-      else if (lesson.status === 'retired') this.releaseLesson(lesson);
-    }
-  }
-
-  private adoptLesson(lesson: Lesson): void {
-    const id = adoptedFactId(lesson.id);
-    this.ctx.db
-      .prepare(
-        `INSERT OR IGNORE INTO knowledge_facts
-           (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, resolves_when,
-            about_ref, where_at, created_at, updated_at)
-         VALUES (?, ?, 'fleet', 'standing', NULL, 'injected', NULL, ?, ?, NULL, NULL, NULL, ?, ?)`,
-      )
-      // Ruled, and by the operator who promoted the lesson: the mirror is the
-      // identity, so the moment they vouched for it is the moment it was ruled on.
-      .run(id, lesson.text, lesson.originRef, lesson.updatedAt, lesson.createdAt, lesson.updatedAt);
-    this.ctx.db
-      .prepare(
-        `INSERT OR IGNORE INTO knowledge_corroborations
-           (id, fact_id, agent_id, task_id, goal_ref, session_id, words, created_at)
-         VALUES (?, ?, NULL, NULL, ?, NULL, ?, ?)`,
-      )
-      .run(
-        `knc_${lesson.id}`,
-        id,
-        corroborationGoal(lesson.originRef),
-        'An operator vouched for this as a lesson, before the knowledge base held it.',
-        lesson.updatedAt,
-      );
-  }
-
-  private releaseLesson(lesson: Lesson): void {
-    const id = adoptedFactId(lesson.id);
-    const fact = this.getFact(id);
-    if (!fact || fact.reach !== 'injected') return;
-    if (this.listCorroborations(id).length > 1) return;
-    const amended = this.ctx.db.prepare(`SELECT id FROM knowledge_facts WHERE supersedes=?`).get(id);
-    if (amended) return;
-    this.ctx.db.prepare(`DELETE FROM knowledge_corroborations WHERE fact_id=?`).run(id);
-    this.ctx.db.prepare(`DELETE FROM knowledge_facts WHERE id=?`).run(id);
   }
 
   private stampContradiction(id: string, resolution: ContradictionResolution, at: string): void {
@@ -1048,15 +1044,16 @@ function autoReach(fact: KnowledgeFact): FactReach {
 const LIVE_REACHES: readonly FactReach[] = ['proposal', 'lookup', 'injected', 'graduated'];
 
 /**
- * The fact a promoted lesson becomes. Derived from the lesson's id rather than
- * minted, which is the whole of the adoption's idempotence: the second boot
- * inserts nothing, and the row can still be found again when the lesson is retired.
+ * The fact a `lessons` row became when the stores merged. Derived from the
+ * lesson's id rather than minted, which is what made the fold idempotent by
+ * construction — and, before it, what made the mirror that ran on every boot
+ * insert nothing on the second one.
  *
- * Exported because the cockpit needs the same answer from the other side: since
- * delivery moved (phase 3) a lesson reaches agents *as its fact*, so whether a
- * promoted lesson is being sent is the knowledge block's answer looked up under
- * this id. A second spelling of the derivation in the view layer would make the
- * Lessons panel's chip a claim about a row that might not be the one delivered.
+ * Exported because two callers need the same answer from the other side: the fold
+ * itself, and the cockpit's Lessons list, which reads whether a promoted lesson is
+ * reaching agents by looking the knowledge block's own answer up under this id. A
+ * second spelling of the derivation in the view layer would make that chip a claim
+ * about a row that might not be the one delivered.
  */
 export function adoptedFactId(lessonId: string): string {
   return `fact_${lessonId}`;

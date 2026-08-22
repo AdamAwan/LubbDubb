@@ -34,7 +34,7 @@ export class HumanTaskStore {
    * filed it from the cockpit.
    *
    * A repeat (same agent, same origin, same title) refreshes the existing row
-   * rather than inserting, exactly as `recordFinding` does and for its reason: an
+   * rather than inserting, exactly as `proposeFact` matches a claim and for its reason: an
    * agent that asks for the same thing on every turn must not fill the operator's
    * list. The status is deliberately *not* reset — a declined task asked for
    * again stays declined, which is what declining it meant — and neither is

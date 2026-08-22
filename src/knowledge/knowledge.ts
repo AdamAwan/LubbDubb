@@ -122,6 +122,36 @@ export function resolveFactScope(
 }
 
 /**
+ * Whether this text is a claim at all, and the one place its bound lives.
+ *
+ * Its own function rather than four lines inside {@link validateFactProposal}
+ * because it has three callers with three different ideas of what a refusal costs:
+ * the intake turns it into a tool error the agent fixes in its own turn, the
+ * operator's route turns it into a 400 they retype against, and a retrospective
+ * **drops the claim and keeps the write-up** — half a write-up is a shorter
+ * write-up, and half a claim is a different claim. All three need the same answer
+ * to "is this a claim", and a bound written three times drifts in the direction
+ * that matters: whichever writer is loosest decides what an operator ends up being
+ * asked to read.
+ *
+ * This is `src/lessons.ts`'s `validateLessonText` with one word changed, and one
+ * file fewer for the same rule.
+ */
+export function validateClaimText(raw: unknown): { ok: true; claim: string } | { ok: false; error: string } {
+  const claim = typeof raw === 'string' ? raw.trim() : '';
+  if (!claim) {
+    return {
+      ok: false,
+      error: 'claim is required: one thing that is true of this repository, in the words you would want to read it in',
+    };
+  }
+  if (claim.length > MAX_CLAIM_CHARS) {
+    return { ok: false, error: `claim must be ${MAX_CLAIM_CHARS} characters or fewer — it is a line or two` };
+  }
+  return { ok: true, claim };
+}
+
+/**
  * Validate one proposal.
  *
  * Refused rather than trimmed, the asymmetry `validateFinding` states: a fact is
@@ -134,16 +164,9 @@ export function validateFactProposal(
   goalRef: string | null,
 ): { ok: true; proposal: FactProposal } | { ok: false; error: string } {
   const args = (raw ?? {}) as Record<string, unknown>;
-  const claim = typeof args.claim === 'string' ? args.claim.trim() : '';
-  if (!claim) {
-    return {
-      ok: false,
-      error: 'claim is required: one thing that is true of this repository, in the words you would want to read it in',
-    };
-  }
-  if (claim.length > MAX_CLAIM_CHARS) {
-    return { ok: false, error: `claim must be ${MAX_CLAIM_CHARS} characters or fewer — it is a line or two` };
-  }
+  const parsedClaim = validateClaimText(args.claim);
+  if (!parsedClaim.ok) return parsedClaim;
+  const claim = parsedClaim.claim;
   const scope = resolveFactScope(args.scope, goalRef);
   if (!scope.ok) return scope;
 

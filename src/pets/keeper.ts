@@ -400,6 +400,10 @@ export class PetKeeper {
       ['plan', this.store.planLabels(ids('plan'))],
       ['landing', this.store.landingLabels(ids('landing'))],
       ['job', this.store.jobLabels(ids('job'))],
+      ['claim', this.store.factLabels(ids('claim'))],
+      // The retired kind, still read: nothing hatches one any more, and every pet
+      // carrying it is one somebody has had for months. Its label outlives the
+      // store it came from because the fold copied the claim across.
       ['finding', this.store.findingLabels(ids('finding'))],
     ];
     const out = new Map<string, string>();

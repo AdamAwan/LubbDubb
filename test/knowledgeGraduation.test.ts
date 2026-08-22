@@ -9,15 +9,15 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
-import { committableFact, graduationNote, graduationReading } from '../src/knowledge/graduation.js';
+import { exitableFact, graduationNote, graduationReading } from '../src/knowledge/graduation.js';
 import { KnowledgeGraduationDesk } from '../src/knowledge/graduationDesk.js';
 import { renderKnowledgeBlock } from '../src/knowledge/block.js';
 import type { KnowledgeFact, KnowledgeGraduation, WorkNode } from '../src/types.js';
 
 /**
- * Graduation (issue #27 phase 6,
- * `docs/spec/27-knowledge.md#committing-to-the-repository`): committing a claim to
- * the repository, and the claim leaving every prompt when that pull request lands.
+ * Graduation (`docs/spec/27-knowledge.md#sending-a-claim-on`): the three ways a
+ * claim leaves this store, and the claim leaving every prompt when the exit is
+ * actually taken.
  *
  * Everything worth asserting here is about the two silent failures the design is
  * arranged around. **A claim taken out of prompts too early** is one the fleet
@@ -83,7 +83,11 @@ function injectedClaim(system: System, claim = CLAIM): KnowledgeFact {
 
 /** One commit request, as the status and whatever came back with it. */
 async function commit(app: FastifyInstance, id: string, body: Record<string, unknown>) {
-  const res = await app.inject({ method: 'POST', url: `/api/knowledge/facts/${id}/commit`, payload: body });
+  const res = await app.inject({
+    method: 'POST',
+    url: `/api/knowledge/facts/${id}/exit`,
+    payload: { exit: 'docs', ...body },
+  });
   const json = res.json() as { error?: string; job?: { id: string; kind: string; title: string; prompt: string } };
   return { status: res.statusCode, error: json.error ?? '', job: json.job };
 }
@@ -253,9 +257,168 @@ test('what the store will not commit, and why', async () => {
   await app.close();
 });
 
+// -- the other two exits ------------------------------------------------------
+
+/**
+ * A `job` and a `ticket` were `POST /api/findings/:id/promote` and `/file` before
+ * the stores merged, and the merge is not a rename: what they gain is a
+ * graduation row, which is a row that *ends*. A promoted finding stamped a status
+ * and never learned what became of the job it queued; a filed one carried a ticket
+ * ref with nothing watching whether the filing agent ever created it.
+ */
+
+test('queueing a job for a claim opens work and moves the claim nowhere', async () => {
+  const system = build();
+  const app = await serve(system);
+  // A **proposal**, deliberately: one agent's report is exactly what every finding
+  // was, and refusing to act on one would be the regression this merge must not
+  // make.
+  const filed = system.store.proposeFact(
+    {
+      claim: 'The retry helper squares the delay instead of doubling it.',
+      scope: 'fleet',
+      lifetime: 'standing',
+      expiresInHours: null,
+      evidence: 'The 5th retry waits ~17 minutes.',
+      supersedes: null,
+      resolvesWhen: null,
+      aboutRef: 'pr:41',
+      where: 'src/net/backoff.ts:41',
+    },
+    { agentId: 'a1', taskId: 't1', goalRef: 'issue:12', sessionId: null, words: 'The 5th retry waits ~17 minutes.' },
+  );
+  assert.ok(filed.outcome !== 'barred');
+
+  const res = await app.inject({
+    method: 'POST',
+    url: `/api/knowledge/facts/${filed.fact.id}/exit`,
+    payload: { exit: 'job' },
+  });
+  assert.equal(res.statusCode, 200);
+  const { job, graduation } = res.json() as {
+    job: { kind: string; prompt: string; originRef: string | null };
+    graduation: { exit: string; outcome: string | null; target: string | null };
+  };
+  // A code job, because it is the work itself.
+  assert.equal(job.kind, 'code');
+  // The item the claim is *about*, never the goal it was observed on: the graph
+  // adopts a job by its origin, so the other answer files the work under somebody
+  // else's goal.
+  assert.equal(job.originRef, 'pr:41');
+  assert.match(job.prompt, /squares the delay/);
+  assert.match(job.prompt, /src\/net\/backoff\.ts:41/);
+  assert.match(job.prompt, /~17 minutes/);
+  assert.match(job.prompt, /Verify it before acting on it/);
+
+  // An open graduation, which is the whole of what a promoted finding did not have:
+  // the sweep reads this and says what became of the job.
+  assert.equal(graduation.exit, 'job');
+  assert.equal(graduation.outcome, null);
+  // A job has no document, and a defaulted one would be a target nothing writes into.
+  assert.equal(graduation.target, null);
+  // And the claim is exactly where it was.
+  assert.equal(system.store.getFact(filed.fact.id)?.reach, 'proposal');
+  await app.close();
+});
+
+test('filing a claim queues a desk job, and the ticket is what lands it', async () => {
+  const system = build();
+  // A real tracker, because the ticket exit is gated on there being one to file into.
+  system.config.integrations.issues = 'github';
+  system.config.github = { owner: 'a', repo: 'b' } as never;
+  const app = await serve(system);
+  const fact = injectedClaim(system);
+
+  const res = await app.inject({
+    method: 'POST',
+    url: `/api/knowledge/facts/${fact.id}/exit`,
+    payload: { exit: 'ticket' },
+  });
+  assert.equal(res.statusCode, 200);
+  const { job } = res.json() as { job: { id: string; kind: string; title: string; prompt: string } };
+  // Desk, not code: filing touches no repository, so a worktree and a branch would
+  // be cut for a task that never writes a file.
+  assert.equal(job.kind, 'desk');
+  assert.match(job.title, /^File ticket: /);
+  // Rendered from the operator's template book — how a ticket reads is house style.
+  assert.match(job.prompt, /link_ticket/);
+  assert.match(job.prompt, /never reads the request/);
+  // The two placeholders the taxonomy left behind are still filled, because
+  // `renderTemplate` leaves an unfilled `{token}` in the prompt verbatim and an
+  // override written against the older book still names them.
+  assert.doesNotMatch(job.prompt, /\{\w+\}/);
+
+  const graduation = system.store.listGraduations()[0]!;
+  assert.equal(graduation.exit, 'ticket');
+  assert.equal(graduation.ticketRef, null);
+  // Two states because filing is asynchronous: the click queues a job, and the item
+  // exists only once the agent has written it. The claim is still delivered until
+  // then — collapsing them would take it out of every prompt for a ticket that does
+  // not exist yet.
+  assert.equal(system.store.getFact(fact.id)?.reach, 'injected');
+
+  // And the sweep is not the thing that ends it: a ticket exit has no pull request
+  // to watch, and a sweep reading one anyway would be a second answer to a question
+  // `link_ticket` already answers.
+  assert.deepEqual(system.store.openGraduations(), []);
+
+  const linked = system.store.linkGraduationTicket(graduation.id, 'issue:314');
+  assert.equal(linked?.ticketRef, 'issue:314');
+  assert.equal(linked?.outcome, 'landed');
+  // The item existing *is* the exit being taken, so the claim leaves every prompt on
+  // the same call — one write, because a ticket recorded over a claim still injected
+  // pays context for a sentence the backlog now carries.
+  assert.equal(system.store.getFact(fact.id)?.reach, 'graduated');
+  // Idempotent in the write: an agent that calls `link_ticket` twice links once.
+  assert.equal(system.store.linkGraduationTicket(graduation.id, 'issue:999'), null);
+  await app.close();
+});
+
+test('with no tracker configured there is nothing to file into, and the other exits still work', async () => {
+  const system = build();
+  const app = await serve(system);
+  const fact = injectedClaim(system);
+  const refused = await app.inject({
+    method: 'POST',
+    url: `/api/knowledge/facts/${fact.id}/exit`,
+    payload: { exit: 'ticket' },
+  });
+  // The same gate all four filing arms ask. The cockpit hides the control, so
+  // reaching here means a direct call.
+  assert.equal(refused.statusCode, 409);
+  assert.match((refused.json() as { error: string }).error, /no issue tracker is configured/);
+  assert.deepEqual(system.store.listGraduations(), []);
+
+  const queued = await app.inject({
+    method: 'POST',
+    url: `/api/knowledge/facts/${fact.id}/exit`,
+    payload: { exit: 'job' },
+  });
+  assert.equal(queued.statusCode, 200);
+  await app.close();
+});
+
+test('one exit at a time, whichever it is', async () => {
+  const system = build();
+  const app = await serve(system);
+  const fact = injectedClaim(system);
+  const send = (exit: string) =>
+    app.inject({ method: 'POST', url: `/api/knowledge/facts/${fact.id}/exit`, payload: { exit } });
+
+  assert.equal((await send('job')).statusCode, 200);
+  // Two jobs on one claim is two agents on one piece of work, and a documentation
+  // pull request opened beside an open job is two chances to land a half of it. The
+  // refusal names the exit already going, so the operator knows what to wait for.
+  const second = await send('docs');
+  assert.equal(second.statusCode, 409);
+  assert.match((second.json() as { error: string }).error, /already on its way out by its job exit/);
+  assert.equal(system.store.listGraduations().length, 1);
+  await app.close();
+});
+
 // -- the landing --------------------------------------------------------------
 
-test('a claim reaches committed when its pull request lands, and not when the job is queued', async () => {
+test('a claim reaches graduated when its pull request lands, and not when the job is queued', async () => {
   const system = build();
   const app = await serve(system);
   const fact = injectedClaim(system);
@@ -406,7 +569,7 @@ test('the three verdicts, and the fourth that is not one', () => {
   assert.equal(graduationReading(graduation({ outcome: 'abandoned' }), [pr({ status: 'merged' })]), 'abandoned');
 });
 
-test('what may be committed, and the wording of each refusal', () => {
+test('what may be sent on, by which exit, and the wording of each refusal', () => {
   const base: KnowledgeFact = {
     id: 'fact_1',
     claim: CLAIM,
@@ -423,12 +586,28 @@ test('what may be committed, and the wording of each refusal', () => {
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
   };
-  assert.equal(committableFact(base).ok, true);
-  assert.equal(committableFact({ ...base, reach: 'lookup' }).ok, true);
+  assert.equal(exitableFact(base, 'docs').ok, true);
+  assert.equal(exitableFact({ ...base, reach: 'lookup' }, 'docs').ok, true);
   for (const reach of ['proposal', 'graduated', 'rejected', 'superseded'] as const) {
-    assert.equal(committableFact({ ...base, reach }).ok, false, `${reach} is committable`);
+    assert.equal(exitableFact({ ...base, reach }, 'docs').ok, false, `${reach} is committable`);
   }
-  assert.equal(committableFact({ ...base, lifetime: 'expiring', expiresAt: '2026-09-01T00:00:00.000Z' }).ok, false);
+  const notice = { ...base, lifetime: 'expiring' as const, expiresAt: '2026-09-01T00:00:00.000Z' };
+  assert.equal(exitableFact(notice, 'docs').ok, false);
+
+  // The two refusals a `docs` exit makes are the two a `job` or a `ticket` does
+  // not, and that asymmetry is why the check takes the exit. `docs` **asserts** the
+  // claim in a document that outlives the afternoon; the other two **act on** it,
+  // which asserts nothing — and a proposal is exactly what every finding an
+  // operator ever clicked "Queue job" on was.
+  for (const exit of ['job', 'ticket'] as const) {
+    assert.equal(exitableFact({ ...base, reach: 'proposal' }, exit).ok, true, `${exit} refuses a proposal`);
+    assert.equal(exitableFact(notice, exit).ok, true, `${exit} refuses a notice`);
+    // The terminal reaches are refused by every exit alike: there is nothing left
+    // to send anywhere.
+    for (const reach of ['graduated', 'rejected', 'superseded', 'retired'] as const) {
+      assert.equal(exitableFact({ ...base, reach }, exit).ok, false, `${exit} takes a ${reach} claim`);
+    }
+  }
 });
 
 test('the note says what the landing costs the claim, whichever target it names', () => {
