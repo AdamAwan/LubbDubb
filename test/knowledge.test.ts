@@ -71,6 +71,7 @@ function proposal(overrides: Partial<FactProposal> = {}): FactProposal {
     expiresInHours: null,
     evidence: 'check failed on an exported type nothing imported.',
     supersedes: null,
+    resolvesWhen: null,
     ...overrides,
   };
 }
@@ -269,7 +270,10 @@ test('an ask reaches nothing that is only one agent’s claim, and nothing that 
   expired.proposeFact(proposal({ lifetime: 'expiring', expiresInHours: 1 }), seenOn('issue:88'));
   const stale = expired.listFacts()[0]!;
   expired.close();
-  assert.equal(stale.reach, 'lookup');
+  // `injected` since phase 4 — a notice is what two goals agreeing *can* inject —
+  // and out of every read all the same. That is the point of the pair: the clock
+  // is what bounds the tier, not the reach.
+  assert.equal(stale.reach, 'injected');
 });
 
 test('an ask is answered from the scopes it names, and matched on the words a question shares', () => {

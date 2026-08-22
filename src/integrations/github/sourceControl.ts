@@ -115,6 +115,9 @@ export class GitHubSourceControlIntegration
             title: p.title,
             branch: p.branch,
             baseBranch: p.baseBranch,
+            // The commit the checks above ran against — what tells a check that was
+            // fixed from one that flaked (`src/knowledge/noticeDesk.ts`).
+            headSha: p.headSha,
             ciStatus: aggregateCiStatus(checks, status),
             ciChecks: listCiChecks(checks, status),
             unresolvedComments: buildUnresolvedComments(comments, viewer, threads),

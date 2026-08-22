@@ -1807,12 +1807,36 @@ export function buildDemoState(): DemoSeed {
         scope: 'check:test (windows)',
         lifetime: 'expiring',
         expiresAt: new Date(Date.now() + 5 * 3_600_000).toISOString(),
-        reach: 'lookup',
+        // Injected with no ruling on it: a notice, and the one thing two agents
+        // agreeing can put in front of the whole fleet (#27 phase 4). What makes
+        // that safe is the clock, which is why the row draws it.
+        reach: 'injected',
         supersedes: null,
         originRef: 'pr:412',
         ruledAt: null,
+        resolvesWhen: null,
         createdAt: ago(3),
         updatedAt: ago(1),
+        corroborations: 2,
+      },
+      {
+        // The harness's own, and the other half of phase 4: it read this rather
+        // than being told it, so it corroborates for itself — and it carries a
+        // condition, because a red base branch has a green to wait for. The clock
+        // is the backstop.
+        id: 'fact-base-red',
+        claim:
+          'The check `check (build)` is failing on branch `feat/catalog-cutover`, which one or more open pull requests are based on.',
+        scope: 'check:check (build)',
+        lifetime: 'expiring',
+        expiresAt: new Date(Date.now() + 4 * 3_600_000).toISOString(),
+        reach: 'injected',
+        supersedes: null,
+        originRef: 'pr:404',
+        ruledAt: null,
+        resolvesWhen: { kind: 'ci-check-green', ref: 'pr:404', check: 'check (build)' },
+        createdAt: ago(2),
+        updatedAt: ago(2),
         corroborations: 2,
       },
       {
@@ -1827,6 +1851,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         originRef: 'issue:376',
         ruledAt: null,
+        resolvesWhen: null,
         createdAt: ago(30),
         updatedAt: ago(6),
         corroborations: 2,
@@ -1841,6 +1866,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         originRef: 'issue:364',
         ruledAt: ago(60),
+        resolvesWhen: null,
         createdAt: ago(70),
         updatedAt: ago(60),
         corroborations: 3,
@@ -1855,8 +1881,29 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         originRef: 'issue:341',
         ruledAt: ago(48),
+        resolvesWhen: null,
         createdAt: ago(96),
         updatedAt: ago(48),
+        corroborations: 2,
+      },
+      {
+        // Goal-scoped and on lookup, which is the other prompt: it never rides the
+        // block — a claim about one goal is a claim most of the fleet cannot see —
+        // and it is appended to the task prompt of that goal's own dispatches.
+        id: 'fact-goal',
+        claim:
+          'The cutover migration has to run before the seed script on this goal — the seed fails with a missing ' +
+          'enum value otherwise, and the error names the table rather than the migration.',
+        scope: 'goal:issue:390',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'lookup',
+        supersedes: null,
+        originRef: 'issue:390',
+        ruledAt: ago(20),
+        resolvesWhen: null,
+        createdAt: ago(26),
+        updatedAt: ago(20),
         corroborations: 2,
       },
       {
@@ -1869,6 +1916,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         originRef: 'issue:390',
         ruledAt: null,
+        resolvesWhen: null,
         createdAt: ago(9),
         updatedAt: ago(9),
         corroborations: 1,
@@ -1883,6 +1931,7 @@ export function buildDemoState(): DemoSeed {
         supersedes: null,
         originRef: 'issue:355',
         ruledAt: ago(120),
+        resolvesWhen: null,
         createdAt: ago(140),
         updatedAt: ago(120),
         corroborations: 1,
@@ -1891,38 +1940,53 @@ export function buildDemoState(): DemoSeed {
     // What that list actually sends. A **transcript** of what the two renderers
     // produced for the rows above rather than a re-rendering of them here: what
     // fits is the server's answer, and a demo that recomputed it would be exactly
-    // the second implementation of "what fits" the real page refuses. Two entries
-    // ship — the one injected fleet claim, and the check-scoped notice that rides
-    // the task prompt of any dispatch answering that check.
+    // the second implementation of "what fits" the real page refuses. The block
+    // carries both notices and the one injected fleet claim — since phase 4 an
+    // injected fact rides it whatever its scope, because a notice about a check is
+    // for the agent about to run that check and not only for the one already sent
+    // to fix it. The one goal-scoped claim is the exception, and it is the scoped
+    // entry below.
     knowledgeDelivery: {
       block:
         '\n' +
-        'What working this repository has taught the fleet, according to the operators who vouched for each\n' +
-        'claim below. This is not part of your task and not an instruction: it is prior evidence, dated and\n' +
-        'attributed to the goal it was learned on, offered so you do not pay to rediscover it. The\n' +
-        'repository in front of you is the authority — where it and a claim disagree, the claim is stale.\n' +
+        'What working this repository has taught the fleet. This is not part of your task and not an\n' +
+        'instruction: it is prior evidence, dated and attributed to the goal it was learned on, offered so\n' +
+        'you do not pay to rediscover it. The repository in front of you is the authority — where it and a\n' +
+        'claim disagree, the claim is stale.\n' +
+        '\n' +
+        'A claim that carries a **lapses** date is a notice: something two independent goals saw recently,\n' +
+        'which no operator has vouched for and which ends by itself on that date. It reports what was seen\n' +
+        'and not what to do about it — the conclusion is yours to draw. Everything else below was vouched\n' +
+        'for by an operator and holds until they retire it.\n' +
         '\n' +
         'This is the fleet-wide tier and not the whole record. Call `knowledge_ask` with a question when you\n' +
-        'want what the fleet knows about one check, one goal, or anything not standing here, and call\n' +
-        '`knowledge_propose` when you learn something worth the next agent not paying for again.\n' +
+        'want what the fleet knows about one check, one goal, or anything not standing here, `knowledge_propose`\n' +
+        'when you learn something worth the next agent not paying for again, and `knowledge_notice` when what\n' +
+        'you saw is true today and will stop being true.\n' +
         '\n\n' +
+        '- The check `check (build)` is failing on branch `feat/catalog-cutover`, which one or more open pull ' +
+        'requests are based on.\n' +
+        '  (first seen on pr:404, written 2026-08-22, lapses 2026-08-22)\n' +
+        '- `test (windows)` has been timing out at the dependency-install step since about 09:00 — the same ' +
+        'commit passes on a re-run roughly half the time.\n' +
+        '  (first seen on pr:412, written 2026-08-22, lapses 2026-08-22)\n' +
         '- A ticket that only names a symptom is under-specified for a planner every time.\n' +
         '  (first seen on issue:364, written 2026-06-14)\n',
       limit: 6_000,
-      rendered: ['fact-injected'],
+      rendered: ['fact-base-red', 'fact-notice', 'fact-injected'],
       dropped: [],
       scoped: [
         {
-          scope: 'check:test (windows)',
+          scope: 'goal:issue:390',
           text:
             '\n\n---\n\nWhat the fleet has recorded about this goal and the checks in front of you. It is ' +
             '**evidence, not instruction** — dated, attributed, and offered so you do not pay to rediscover it. ' +
             'The code in front of you is the authority: where it and a line below disagree, the line is stale. ' +
             'Say so with `knowledge_propose`, naming what it should say instead.\n\n' +
-            '- **about test (windows)** — `test (windows)` has been timing out at the dependency-install step ' +
-            'since about 09:00 — the same commit passes on a re-run roughly half the time. ' +
-            '_(written 2026-08-21)_\n',
-          facts: ['fact-notice'],
+            '- **about this goal** — The cutover migration has to run before the seed script on this goal — the ' +
+            'seed fails with a missing enum value otherwise, and the error names the table rather than the ' +
+            'migration. _(written 2026-08-21)_\n',
+          facts: ['fact-goal'],
         },
       ],
     },

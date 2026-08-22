@@ -189,6 +189,13 @@ interface HarnessDeps {
    */
   fleet?: { resumeExpiredParks(): LimitResumeFailure[]; completeExpiredStalls(): string[] };
   /**
+   * Raises the notices the harness can see for itself, and ends the ones the world
+   * has settled. Absent = no harness notices (tests that do not care), and then
+   * the only expiring facts are the ones agents raise. It writes `knowledge_facts`
+   * rows, decides no dispatch, and nothing but a prompt reads what it writes.
+   */
+  notices?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
+  /**
    * Clears "Needs you" items whose agent has died. Absent = no sweep (tests that
    * do not care), and then only the terminal-state listeners tidy. It settles
    * inbox rows, decides no dispatch, and no rule reads what it writes.
@@ -285,7 +292,13 @@ export class Harness extends EventEmitter {
     try {
       const { store } = this.deps;
       const world = await this.deps.connector.getState();
-      this.recordWorldChanges(store, world);
+      // Read before the diff records it, because the notice desk below needs the
+      // same *pair* the diff is taken from — and `recordWorldChanges` moves the
+      // baseline on. Seeded from the persisted baseline for its reason too: a
+      // restart that read null here would go blind to every transition that
+      // straddled it.
+      const previousWorld = this.prevWorld ?? store.getWorldBaseline();
+      this.recordWorldChanges(store, world, previousWorld);
       // Fold observed reality onto the plan-part rows before anything reads them:
       // the store holds intent, the outside world stays the source of truth, and a
       // part this moves to `ready` is dispatchable in this same cycle.
@@ -377,6 +390,19 @@ export class Harness extends EventEmitter {
       // already closed. Beside the other bookkeeping and not in the dispatcher for
       // `closeOuts`' reason: it staffs nothing and no rule reads what it writes.
       await this.deps.environments?.run(world);
+      // What the harness has seen for itself that the fleet would otherwise pay to
+      // rediscover: a check that went red and green on one commit, a check red on a
+      // branch other pull requests are based on — and the notices a green reading
+      // has since settled.
+      //
+      // **Above `decide` and above the executor, and that ordering is what it is
+      // for.** The block a dispatch carries is rendered at launch, a few lines
+      // below: run under that and a notice raised on this pulse is a notice the
+      // agents dispatched on this pulse are not told, and one settled on this pulse
+      // is one they are still told. Beside the other bookkeeping and not in the
+      // dispatcher for `closeOuts`' reason — it staffs nobody, holds nothing, and
+      // no rule reads a fact.
+      this.deps.notices?.run(previousWorld, world);
       // An agent parked because the *account* ran out is resumed once the window
       // `claude` named has turned over — the one park with a known end, so the
       // ordinary case needs no operator (issue #318). Beside the other bookkeeping
@@ -734,9 +760,13 @@ export class Harness extends EventEmitter {
    * transition, and stream them to the cockpit. The very first cycle over a fresh
    * store has no baseline → it only records the baseline (no diff, no spurious
    * "everything is new" flood).
+   *
+   * `prev` is passed in rather than read here because the pulse has a second
+   * reader of the same pair — the knowledge notice desk — and this call moves the
+   * baseline on. One read, handed to both, so the two cannot come to be looking at
+   * different pulses.
    */
-  private recordWorldChanges(store: HarnessDeps['store'], world: WorldSnapshot): void {
-    const prev = this.prevWorld ?? store.getWorldBaseline();
+  private recordWorldChanges(store: HarnessDeps['store'], world: WorldSnapshot, prev: WorldSnapshot | null): void {
     if (prev) {
       const changes = diffWorlds(prev, world);
       if (changes.length) {

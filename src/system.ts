@@ -39,6 +39,7 @@ import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
 import { McpDesktopServer } from './mcp/desktop.js';
 import { KNOWLEDGE_READ_LIMIT, renderKnowledgeBlock } from './knowledge/block.js';
+import { KnowledgeNoticeDesk } from './knowledge/noticeDesk.js';
 import { PrNamingDesk } from './prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
 import { ValidationAskDesk } from './validation/askDesk.js';
@@ -449,9 +450,13 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // This closure is the whole of what knows the knowledge base exists on the
   // launch path. `agentProtocol.ts` is handed the finished string and never sees
   // the store — `test/knowledge.test.ts` asserts structurally that it cannot.
+  //
+  // Every scope is read, not just `fleet`: since notices (phase 4) an injected
+  // fact rides this block whatever its scope, and `renderKnowledgeBlock` is what
+  // decides which — narrowing the *query* here would be a second opinion about
+  // delivery, and the one that silently won.
   const knowledgeBlock = (): string =>
-    renderKnowledgeBlock(store.askFacts({ scopes: ['fleet'], limit: KNOWLEDGE_READ_LIMIT }), config.knowledgeBlockChars)
-      .text;
+    renderKnowledgeBlock(store.askFacts({ limit: KNOWLEDGE_READ_LIMIT }), config.knowledgeBlockChars).text;
 
   type ArgsBuilder = (opts: {
     sessionId: string;
@@ -879,6 +884,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // under `src/dispatcher/` reads it, and the tab it feeds is a lens.
   const tickets = new TicketSweep({ store, source: connector, errors });
 
+  // What the harness has seen for itself, written down where the fleet reads it
+  // (issue #27 phase 4). Always wired: with nothing to report it writes nothing,
+  // and there is no configuration under which the fleet is better off paying twice
+  // to rediscover a flake the pulse already watched happen.
+  const notices = new KnowledgeNoticeDesk({ store, errors });
+
   const harness = new Harness({
     store,
     connector,
@@ -913,6 +924,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     escalations,
     // Resumes the agents parked on a usage limit whose window has turned over.
     fleet: agents,
+    notices,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     errors,
     runtime: runtimeControl,

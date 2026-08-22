@@ -22,7 +22,7 @@ re-litigated:
 | A test suite        | `npm run check` runs on every branch. This is the layer above: checks needing a running harness, a real environment, a browser, or a person. |
 | Acceptance criteria | Those are per **part**, ticked by a reviewer reading a diff ([08](08-planning.md)). A check is executed against the delivered goal.          |
 | CI                  | Nothing here gates a merge, and **no result is ever inferred from a build**.                                                                 |
-| A credential store  | `validationRoot` holds fixtures and reference material. Which account a check needs is a line in its `do`; the account stays where it is.   |
+| A credential store  | `validationRoot` holds fixtures and reference material. Which account a check needs is a line in its `do`; the account stays where it is.    |
 | A blocker           | Nothing a check says holds a dispatch, a merge, a conclusion or a close. It changes what closing a goal _looks like_, and nothing else.      |
 
 ## The bar

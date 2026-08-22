@@ -131,7 +131,7 @@ list asks about **one agent** (`listFiles`); the overlap panel asks which agents
 goal** has been, through `Store.listGoalFiles` ([14](14-persistence.md#flags-and-files)) — the rows of a
 whole `issue:<n>` subtree, code tasks only, folded to one row per path and newest write first; and that
 same briefing then asks the table **the other way round**, through `Store.listGoalNeighbours`: given
-those paths, which *other* goals have been in them and have a retrospective to show for it.
+those paths, which _other_ goals have been in them and have a retrospective to show for it.
 
 Those last two are why the capture path is worth more than the drawer it was built for: the paths a
 goal has already been edited in are the cheapest orientation a fresh agent can be given, and the goals

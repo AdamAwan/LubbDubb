@@ -385,7 +385,7 @@ folding them would make one of the two a lie every time they disagree.
 | Status      | Court                         | When                                                                                                                                                                                                                                                                                                  |
 | ----------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `done`      | nobody — off the board        | `prState(pr) !== 'open'`.                                                                                                                                                                                                                                                                             |
-| `unwatched` | nobody — nobody opted it in   | `!isPrWatched(pr, watchLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire.                                                                                                                                 |
+| `unwatched` | nobody — nobody opted it in   | `!isPrWatched(pr, watchLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire.                                                                                                                                  |
 | `you`       | yours                         | A **pending proposal** whose ref names this PR; an agent on the branch **parked waiting**; a failing check the **CI policy holds** (rule `pr-ci-blocked` handed it to a human); or a concern whose **attempt cap is spent** (rule `cooldown-escalate` did).                                           |
 | `harness`   | the harness's                 | An agent is **running or queued** on the branch; an unstaffed **concern** (rules `pr-ci-failing`/`pr-ci-gate`/`pr-base-update`/`pr-review-comment`) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window. |
 | `settled`   | nobody — you already answered | Merge-ready, and a **rejection still stands** on `pr:<n>:merge`. The reason quotes the note you left.                                                                                                                                                                                                 |
@@ -580,7 +580,7 @@ recognises it, and "the link you asked for is there" is not an entry the operato
 A permission failure — a PAT without **Work Items (write)** — is not absorbed, and surfaces as itself.
 
 **The `workItems` policy kind stays `off` by default** ([15](15-integrations.md)). Nothing about this
-changes what the harness *dispatches* for; it changes whether the gate is ever unsatisfied. An operator
+changes what the harness _dispatches_ for; it changes whether the gate is ever unsatisfied. An operator
 who wants the policy visible as a check can now promote it knowing the fleet clears it mechanically.
 
 ## The PR rules end to end

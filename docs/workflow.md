@@ -167,18 +167,18 @@ reached rather than the whole plan parking on one part that was never going to p
 Every stage below is a point of variation. The middle column is the question a team answers
 differently; the right column is how that answer is expressed.
 
-| Stage                    | What varies                                     | Expressed as                                                    |
-| ------------------------ | ----------------------------------------------- | --------------------------------------------------------------- |
-| Intake                   | which tickets are in scope at all               | the watch tag, tracker workflow states                          |
-| Enough information       | how strict the bar is, and who sets it          | on/off, plus an operator verdict that overrides it              |
-| Plan                     | whether work is decomposed before it starts     | on/off                                                          |
-| Plan accepted            | whether a human sees it first                   | a proposal a human settles — in LubbDubb, always, with no switch |
-| Work kind                | what a deliverable may be                       | the terminal an agent declares when it finishes                 |
-| Quality gates            | which checks exist and what each failure means  | a per-check rule set, as in the table above                     |
-| Human review             | whether a reply goes out unattended             | a confidence threshold plus an allow-list, else a human accepts |
-| Readiness to merge into  | what must be true of the target before landing  | a check on the pull request, held by its rule until it clears   |
-| Merge                    | when a pull request is allowed to land          | health predicates plus the stack rules                          |
-| Report and ticket update | what a finished piece of work must leave behind | prompts, which are operator-overridable files                   |
+| Stage                    | What varies                                                         | Expressed as                                                                                   |
+| ------------------------ | ------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Intake                   | which tickets are in scope at all                                   | the watch tag, tracker workflow states                                                         |
+| Enough information       | how strict the bar is, and who sets it                              | on/off, plus an operator verdict that overrides it                                             |
+| Plan                     | whether work is decomposed before it starts                         | on/off                                                                                         |
+| Plan accepted            | whether a human sees it first                                       | a proposal a human settles — in LubbDubb, always, with no switch                               |
+| Work kind                | what a deliverable may be                                           | the terminal an agent declares when it finishes                                                |
+| Quality gates            | which checks exist and what each failure means                      | a per-check rule set, as in the table above                                                    |
+| Human review             | whether a reply goes out unattended                                 | a confidence threshold plus an allow-list, else a human accepts                                |
+| Readiness to merge into  | what must be true of the target before landing                      | a check on the pull request, held by its rule until it clears                                  |
+| Merge                    | when a pull request is allowed to land                              | health predicates plus the stack rules                                                         |
+| Report and ticket update | what a finished piece of work must leave behind                     | prompts, which are operator-overridable files                                                  |
 | After the merge          | where work travels once it lands, and what arriving somewhere means | a list of environments, each naming the commit it is at, and optionally what its arrival opens |
 
 The pattern across the rows is the same one: **the harness owns the loop, the operator owns the

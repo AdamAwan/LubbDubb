@@ -426,10 +426,16 @@ dispatch prompt whenever the goal carries an instruction nobody has concluded ye
 knowledge base's claims whose **scope matches this dispatch**: the `goal:` claims for the goal it is
 for, and the `check:` claims for the checks it answers → [27](27-knowledge.md#delivery-two-prompts-not-one).
 
-- **Here rather than in the system prompt**, and that split is the whole of delivery. The fleet-wide
+- **Here rather than in the system prompt**, and that split is the whole of delivery. The injected
   claims are identical for every agent, so they are a cached prefix paid once
   ([10](10-agent-runtimes.md#the-knowledge-block)); these vary per dispatch by construction and would
   destroy that prefix. What varies goes in the task prompt, always.
+- **Whatever the block is already carrying is not here.** Since #27 phase 4 an injected claim rides
+  the system prompt whatever its scope — a check that flakes flakes for the agent about to run it, not
+  only for the one dispatched to fix it — so what this appends is the `lookup` claims in scope, plus
+  the goal's own, which never ride the block. One predicate decides both, `ridesSystemPrompt`, read
+  here inverted: two lists that merely agreed today would send one sentence twice or drop it entirely,
+  and neither is visible from either renderer alone.
 - **In the executor rather than in a rule**, the attachments' placement for the attachments' reason —
   every dispatch passes through `recordDispatchTask` whatever composed it — and for one more: **no
   rule, desk or gate reads a fact**, asserted structurally over `src/dispatcher/` by

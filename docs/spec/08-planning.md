@@ -285,25 +285,25 @@ For an amendment:
 
 `src/plans/parts.ts` — all pure.
 
-| Function                                                 | Answers                                                                                                     |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `bySlug(parts)`                                          | An index for the dependency walks.                                                                          |
-| `dependenciesOf(part, index)`                            | The declared dependencies, in declared order, skipping slugs the index no longer holds.                     |
-| `partDepth(part, index)`                                 | How deep in a stack — **longest path**, so a rejoin never sorts ahead of what it waits on. Cycle-guarded.   |
-| `partSettled(part)`                                      | `merged` \| `concluded` — has this part reached a terminal. The one place that says so.                     |
-| `partOutcomeKind(part)`                                  | `code` (derived from `merged`), the stored kind for `concluded`, else null.                                 |
-| `dependencySatisfied(dep, pushed)`                       | `partSettled` unconditionally; `dispatched`/`in_review` only when the branch carries commits beyond base.   |
-| `partBase(part, index, n, defaultBranch)`                | The one unsettled dependency's branch; the integration branch once all have settled or when there are none. |
-| `liveParts(parts)`                                       | Everything not `retired`. **Every** count, roll-up, prompt and rule reads this.                             |
-| `planProgress(parts)`                                    | `{settled, total}` over live parts.                                                                         |
-| `partHasWork(part)`                                      | `dispatched` \| `in_review` \| `partSettled`.                                                               |
-| `partOutcomeNote(part)`                                  | What a non-code part is told, appended to its rendered prompt. Empty for a code or unstated part.           |
-| `partDeclarationNote(part)`                              | The part's `touches` and `acceptance`, appended to its prompt — an agent judged on a criterion is shown it. |
-| `acceptanceCriteria(part)`                               | `acceptance` as the checklist the sheet draws, each criterion's tick folded in.                             |
-| `partsToRetire(existing, declared)`                      | Which parts an amendment retires.                                                                           |
-| `currentPlanSummary(plan, parts)`                        | The current plan rendered for a replanning agent — slug, status, PR/branch, dependency, scope.              |
-| `siblingContext(parts, current)`                         | `{done, remaining}` for the part prompt.                                                                    |
-| `observePartPr(part, branch, openPrs, closedPrs)`        | The pure core of PR observation (below).                                                                    |
+| Function                                          | Answers                                                                                                     |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `bySlug(parts)`                                   | An index for the dependency walks.                                                                          |
+| `dependenciesOf(part, index)`                     | The declared dependencies, in declared order, skipping slugs the index no longer holds.                     |
+| `partDepth(part, index)`                          | How deep in a stack — **longest path**, so a rejoin never sorts ahead of what it waits on. Cycle-guarded.   |
+| `partSettled(part)`                               | `merged` \| `concluded` — has this part reached a terminal. The one place that says so.                     |
+| `partOutcomeKind(part)`                           | `code` (derived from `merged`), the stored kind for `concluded`, else null.                                 |
+| `dependencySatisfied(dep, pushed)`                | `partSettled` unconditionally; `dispatched`/`in_review` only when the branch carries commits beyond base.   |
+| `partBase(part, index, n, defaultBranch)`         | The one unsettled dependency's branch; the integration branch once all have settled or when there are none. |
+| `liveParts(parts)`                                | Everything not `retired`. **Every** count, roll-up, prompt and rule reads this.                             |
+| `planProgress(parts)`                             | `{settled, total}` over live parts.                                                                         |
+| `partHasWork(part)`                               | `dispatched` \| `in_review` \| `partSettled`.                                                               |
+| `partOutcomeNote(part)`                           | What a non-code part is told, appended to its rendered prompt. Empty for a code or unstated part.           |
+| `partDeclarationNote(part)`                       | The part's `touches` and `acceptance`, appended to its prompt — an agent judged on a criterion is shown it. |
+| `acceptanceCriteria(part)`                        | `acceptance` as the checklist the sheet draws, each criterion's tick folded in.                             |
+| `partsToRetire(existing, declared)`               | Which parts an amendment retires.                                                                           |
+| `currentPlanSummary(plan, parts)`                 | The current plan rendered for a replanning agent — slug, status, PR/branch, dependency, scope.              |
+| `siblingContext(parts, current)`                  | `{done, remaining}` for the part prompt.                                                                    |
+| `observePartPr(part, branch, openPrs, closedPrs)` | The pure core of PR observation (below).                                                                    |
 
 `dependencySatisfied` is why `dispatched` is not enough on its own: a dispatched part's branch exists
 the moment its worktree does, and basing on an empty branch gains nothing.
@@ -537,7 +537,7 @@ the first writes (`src/store/store.ts`):
 
 | Step                 | What happens                                                                                                                                                                                                                                       |
 | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The plan lands       | Ingestion writes `awaiting_approval`. Parts are written normally: the gate holds scheduling, not the record of the plan.                                                                                                                                                                  |
+| The plan lands       | Ingestion writes `awaiting_approval`. Parts are written normally: the gate holds scheduling, not the record of the plan.                                                                                                                           |
 | Rule `plan-approval` | Emits `propose_plan` for an `awaiting_approval` plan whose issue is open and watched, unless `planProposalHold` finds a pending one. Read off `ctx.plans`, not `eligibleIssues` — a replan of a live plan is re-approved while its parts have PRs. |
 | The executor         | Creates an `approve_change` escalation plus a `plan` proposal with ref `issue:<n>:plan`, and re-asks the same hold (every path that reaches the executor is covered, not just the one that checks first).                                          |
 | Accept               | `ProposalDesk.accept` → `ActionExecutor.runAuthorized` → `releasePlan`: the plan becomes `active`, audited under `human:<proposal id>` as `authorized by you`.                                                                                     |

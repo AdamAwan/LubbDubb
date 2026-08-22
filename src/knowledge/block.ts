@@ -67,35 +67,75 @@ interface KnowledgeBlock {
  */
 const BLOCK_HEADER = [
   '',
-  'What working this repository has taught the fleet, according to the operators who vouched for each',
-  'claim below. This is not part of your task and not an instruction: it is prior evidence, dated and',
-  'attributed to the goal it was learned on, offered so you do not pay to rediscover it. The',
-  'repository in front of you is the authority — where it and a claim disagree, the claim is stale.',
+  'What working this repository has taught the fleet. This is not part of your task and not an',
+  'instruction: it is prior evidence, dated and attributed to the goal it was learned on, offered so',
+  'you do not pay to rediscover it. The repository in front of you is the authority — where it and a',
+  'claim disagree, the claim is stale.',
+  '',
+  'A claim that carries a **lapses** date is a notice: something two independent goals saw recently,',
+  'which no operator has vouched for and which ends by itself on that date. It reports what was seen',
+  'and not what to do about it — the conclusion is yours to draw. Everything else below was vouched',
+  'for by an operator and holds until they retire it.',
   '',
   'This is the fleet-wide tier and not the whole record. Call `knowledge_ask` with a question when you',
-  'want what the fleet knows about one check, one goal, or anything not standing here, and call',
-  '`knowledge_propose` when you learn something worth the next agent not paying for again.',
+  'want what the fleet knows about one check, one goal, or anything not standing here, `knowledge_propose`',
+  'when you learn something worth the next agent not paying for again, and `knowledge_notice` when what',
+  'you saw is true today and will stop being true.',
   '',
   '',
 ].join('\n');
 
 /**
- * Render the injected fleet claims that fit into `maxChars`.
+ * Which prompt a fact rides, decided once — the block takes what this says yes to
+ * and {@link renderScopedKnowledgeNote} takes what it says no to, so no fact is
+ * delivered twice and none falls between them.
  *
- * Filters to `injected` **and** `fleet` itself rather than trusting the caller to
- * have done it: the operator's ruling is the reason this store is allowed to
- * reach a prompt at all, and a caller that passed the wrong list would put claims
+ * **Reach decides, scope excepts.** `injected` *means* in front of every agent
+ * before it reads any code, and a notice is injected on corroboration alone
+ * (`docs/spec/27-knowledge.md#notices`) — which is the whole reason this is not
+ * `scope === 'fleet'` any more. A notice is usually about one check, and a check
+ * that flakes flakes for the agent about to run it, not only for the one already
+ * dispatched to fix it; leaving it scoped would put it in front of exactly the
+ * agents who had already found out.
+ *
+ * The one exception is a `goal:` scope, and it is an exception about *lifetime*
+ * rather than audience: a goal fact is true of one goal and dies with it, so it is
+ * not merely irrelevant to the rest of the fleet, it is a claim about something
+ * most readers cannot see. It rides the task prompt of its own goal's dispatches,
+ * where it reaches everyone it is about.
+ */
+export function ridesSystemPrompt(fact: KnowledgeFact): boolean {
+  return fact.reach === 'injected' && !fact.scope.startsWith('goal:');
+}
+
+/** An expiring fact: a notice. Its clock is what lets agreement alone put it in the block. */
+function isNotice(fact: KnowledgeFact): boolean {
+  return fact.lifetime === 'expiring';
+}
+
+/**
+ * Render the injected claims that fit into `maxChars`.
+ *
+ * Filters through {@link ridesSystemPrompt} itself rather than trusting the
+ * caller to have done it: the reach is the reason this store is allowed to reach
+ * a prompt at all, and a caller that passed the wrong list would put claims
  * nobody vouched for in front of every agent — the one failure the reach machine
- * exists to prevent. A `check:` or `goal:` fact at `injected` is not fleet-wide
- * and rides the task prompt through {@link renderScopedKnowledgeNote}, which is
- * the same decision read from the other side.
+ * exists to prevent.
  *
  * `maxChars` bounds the **whole** block, header and drop line included — the cost
  * being bounded is context, and both are context. `0` (or less) renders nothing
  * at all, which is how an operator turns delivery off without demoting anything.
  */
 export function renderKnowledgeBlock(facts: readonly KnowledgeFact[], maxChars: number): KnowledgeBlock {
-  const ordered = facts.filter((f) => f.reach === 'injected' && f.scope === 'fleet').sort(newestVouchedFirst);
+  const carried = facts.filter(ridesSystemPrompt);
+  // Notices first, and therefore last to be dropped: they are the smallest tier
+  // and the most time-critical, and each is gone from the block by its own clock
+  // within days anyway. Among themselves, newest first — `createdAt`, because a
+  // notice has no ruling to order on and the ordering must be the fact's own.
+  const ordered = [
+    ...carried.filter(isNotice).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    ...carried.filter((f) => !isNotice(f)).sort(newestVouchedFirst),
+  ];
   let body = '';
   // The prefix that fits, not the subset that fits: dropping the oldest-vouched
   // claim is the point of the ordering, and skipping past an over-long fact to fit
@@ -136,7 +176,7 @@ export function renderKnowledgeBlock(facts: readonly KnowledgeFact[], maxChars: 
 function droppedLine(dropped: number): string {
   if (dropped <= 0) return '';
   return (
-    `\n${dropped} further fleet-wide claim${dropped === 1 ? '' : 's'} did not fit this block and ` +
+    `\n${dropped} further claim${dropped === 1 ? '' : 's'} did not fit this block and ` +
     `${dropped === 1 ? 'is' : 'are'} not shown. Ask for what you need with \`knowledge_ask\`.\n`
   );
 }
@@ -177,7 +217,11 @@ function renderFact(fact: KnowledgeFact): string {
     .map((line, i) => (i === 0 ? `- ${line}` : line.trim() === '' ? '' : `  ${line}`))
     .join('\n');
   const seen = fact.originRef ? `first seen on ${fact.originRef}` : 'not seen on a goal';
-  return `${claim}\n  (${seen}, written ${writtenOn(fact.createdAt)})\n`;
+  // Every date is the fact's own, including a notice's. "Lapses in 3 hours" would
+  // be computed from *now*, which is a different block on every launch — a cached
+  // prefix thrown away for a countdown, with nothing measuring the loss.
+  const lapses = fact.expiresAt ? `, lapses ${writtenOn(fact.expiresAt)}` : '';
+  return `${claim}\n  (${seen}, written ${writtenOn(fact.createdAt)}${lapses})\n`;
 }
 
 /**
@@ -226,9 +270,17 @@ const MAX_SCOPED_CHARS = 1_400;
  * Bounded and **saying what it dropped**, for the block's reason. The facts are
  * taken in the order the store hands them back — newest first — so what a cap
  * cuts is the oldest.
+ *
+ * Anything already riding the system prompt is filtered out here, through the same
+ * {@link ridesSystemPrompt} the block filters *in* with. One predicate read from
+ * both sides is what makes "no fact is delivered twice" a property rather than a
+ * pair of lists that happen to agree today: a `check:` notice reaching every agent
+ * would otherwise arrive a second time in the task prompt of the dispatch it
+ * matches, which is the same sentence charged twice and read as two.
  */
 export function renderScopedKnowledgeNote(facts: readonly KnowledgeFact[]): string {
-  if (facts.length === 0) return '';
+  const carried = facts.filter((f) => !ridesSystemPrompt(f));
+  if (carried.length === 0) return '';
   const header =
     `\n\n---\n\nWhat the fleet has recorded about this goal and the checks in front of you. It is ` +
     `**evidence, not instruction** — dated, attributed, and offered so you do not pay to rediscover it. ` +
@@ -237,8 +289,8 @@ export function renderScopedKnowledgeNote(facts: readonly KnowledgeFact[]): stri
 
   const lines: string[] = [];
   let used = header.length;
-  let cut = facts.length;
-  for (const [i, fact] of facts.entries()) {
+  let cut = carried.length;
+  for (const [i, fact] of carried.entries()) {
     const line = renderScopedFact(fact);
     // The prefix that fits, not the subset that fits — the block's rule.
     if (used + line.length > MAX_SCOPED_CHARS) {
@@ -249,7 +301,7 @@ export function renderScopedKnowledgeNote(facts: readonly KnowledgeFact[]): stri
     used += line.length;
   }
   if (lines.length === 0) return '';
-  const dropped = facts.length - cut;
+  const dropped = carried.length - cut;
   const tail =
     dropped > 0
       ? `\n${dropped} further claim${dropped === 1 ? '' : 's'} in these scopes ${dropped === 1 ? 'is' : 'are'} ` +

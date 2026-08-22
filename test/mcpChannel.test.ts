@@ -182,6 +182,7 @@ const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
   // `tools/list` is a tool an agent finishes without.
   knowledge_propose: 'addendum',
   knowledge_ask: 'addendum',
+  knowledge_notice: 'addendum',
   request_human_task: 'addendum',
   // Terminal or task-scoped: the dispatch prompt names these where they are used.
   link_ticket: 'point-of-use',

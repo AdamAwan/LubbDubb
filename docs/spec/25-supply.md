@@ -125,13 +125,13 @@ issue, and the lens re-reads that one function's answer — it never asks the wo
 of its own, which is what stops it and rule `issue-pickup` coming to different conclusions about the
 same issue.
 
-| Bucket        | Pickup status                                | What it means                                                        |
-| ------------- | -------------------------------------------- | -------------------------------------------------------------------- |
-| **Inflight**  | `active` · `has_pr` · `planning`             | The fleet is on it. Drains over time.                                |
-| **Queued**    | `eligible` · `blocked` · `cooldown` · `assay`\* | Unstarted supply the fleet may take.                                 |
-| **Reservoir** | `unwatched`                                  | Not supply. One watch write away from being it.                      |
-| **Held**      | `escalated` · `delivered` · `retained` · `assay`\* | Parked on a person. The fleet cannot drain it.                   |
-| **Gone**      | `done`                                       | —                                                                    |
+| Bucket        | Pickup status                                      | What it means                                   |
+| ------------- | -------------------------------------------------- | ----------------------------------------------- |
+| **Inflight**  | `active` · `has_pr` · `planning`                   | The fleet is on it. Drains over time.           |
+| **Queued**    | `eligible` · `blocked` · `cooldown` · `assay`\*    | Unstarted supply the fleet may take.            |
+| **Reservoir** | `unwatched`                                        | Not supply. One watch write away from being it. |
+| **Held**      | `escalated` · `delivered` · `retained` · `assay`\* | Parked on a person. The fleet cannot drain it.  |
+| **Gone**      | `done`                                             | —                                               |
 
 `blocked` is in **queued** and it is the healthiest number on the card: it means more work than
 slots, which is the condition this whole module exists to keep a deployment in. A count that dropped
@@ -196,11 +196,11 @@ the machine to say what the wording already says.
 
 What the bench holds splits three ways, by what answering a row actually does:
 
-| Split             | Rows                                         | Answering it…                                                  |
-| ----------------- | -------------------------------------------- | -------------------------------------------------------------- |
-| **Latent supply** | plans awaiting approval · profile gates · `escalated` goals | puts work **back in the fleet**.                  |
-| Stalled inflight  | escalations · permissions · usage-limit parks | restores throughput; supply is unchanged.                      |
-| Human debt        | close-outs · validations · bench asks         | returns nothing to the fleet.                                  |
+| Split             | Rows                                                        | Answering it…                             |
+| ----------------- | ----------------------------------------------------------- | ----------------------------------------- |
+| **Latent supply** | plans awaiting approval · profile gates · `escalated` goals | puts work **back in the fleet**.          |
+| Stalled inflight  | escalations · permissions · usage-limit parks               | restores throughput; supply is unchanged. |
+| Human debt        | close-outs · validations · bench asks                       | returns nothing to the fleet.             |
 
 **Latent supply leads the sentence** on every arm that means the fleet has stopped. Telling an
 operator with three plans awaiting approval to go and find more work would be wrong twice over: there
@@ -310,12 +310,12 @@ surfaces cannot word one reading differently.
 
 → [02](02-configuration.md#runway)
 
-| Key                   | Default | Effect                                                            |
-| --------------------- | ------- | ----------------------------------------------------------------- |
-| `runway.enabled`      | `true`  | Master switch. Off files nothing and drains standing rows.        |
-| `runway.warnHours`    | `1`     | Runway below which a row is filed.                                |
-| `runway.clearHours`   | `3`     | Runway a standing row must be back above. Must exceed `warnHours`. |
-| `runway.minimumRuns`  | `5`     | Completed goals before the median lead time is trusted.           |
+| Key                  | Default | Effect                                                             |
+| -------------------- | ------- | ------------------------------------------------------------------ |
+| `runway.enabled`     | `true`  | Master switch. Off files nothing and drains standing rows.         |
+| `runway.warnHours`   | `1`     | Runway below which a row is filed.                                 |
+| `runway.clearHours`  | `3`     | Runway a standing row must be back above. Must exceed `warnHours`. |
+| `runway.minimumRuns` | `5`     | Completed goals before the median lead time is trusted.            |
 
 An hour is roughly one goal's work on a three-wide fleet at this repo's own median, which is the
 point: late enough that a fleet dipping between goals never trips it, early enough that there is

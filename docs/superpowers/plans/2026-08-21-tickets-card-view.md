@@ -18,7 +18,7 @@ Every task's requirements implicitly include all of these. They are drawn from
 
 - **ESM with explicit `.js` import extensions**, even from `.ts` sources: `import { Store } from './store/store.js';`. New files must follow this or module resolution breaks.
 - **`npm run check` must pass** before every commit: `format:check`, `lint`, `typecheck`, `typecheck:web`, `knip`, `test`. Two typecheckers — a change spanning `src/` and `web/` must satisfy both.
-- **On Windows, `check` is red before you start.** A clean tree reports every source file unformatted (line endings) and a block of failing tests that have nothing to do with this work. **Take a baseline first** — run `npm run check` on the untouched branch and keep the output — then read each task's `check` step as "no *new* failures against that baseline". Never run `prettier --write` across the repo to make `format:check` pass; it rewrites every file and buries the change. The per-task `npx tsx --test <file>` commands are the real signal, and they are exact.
+- **On Windows, `check` is red before you start.** A clean tree reports every source file unformatted (line endings) and a block of failing tests that have nothing to do with this work. **Take a baseline first** — run `npm run check` on the untouched branch and keep the output — then read each task's `check` step as "no _new_ failures against that baseline". Never run `prettier --write` across the repo to make `format:check` pass; it rewrites every file and buries the change. The per-task `npx tsx --test <file>` commands are the real signal, and they are exact.
 - **knip runs with every rule at `error`.** `test/**/*.test.ts` is an entry point, so an export consumed only by a test is used. But `files: "error"` means **a new source file nothing imports fails the build** — a new component must land in the same commit as the import that renders it.
 - **Comments explain _why_, not _what_.** Match the existing terse, high-signal style. Do not add comments restating the code.
 - **Domain types live in `src/types.ts`; the shapes the HTTP routes ship live in `src/wire.ts`**, which `web/src/types.ts` re-exports. `test/wireContract.test.ts` enforces that `src/wire.ts` is the only server module anything under `web/src/` names.
@@ -44,11 +44,13 @@ tier's ▲ mark is missing on the in-progress state. Cosmetic in a table; on the
 columns warn that the fleet will stop, so it is fixed first and on its own.
 
 **Files:**
+
 - Modify: `src/server/routes/tickets.ts:100` (the `pickupStates:` argument to `buildTicketPage`)
 - Test: `test/tickets.test.ts` (append)
 - Docs: `docs/spec/17-cockpit.md` — the `### Three axes, because they are three questions` section, where the ▲ mark is described
 
 **Interfaces:**
+
 - Consumes: `effectivePickupStates(policy)` from `src/dispatcher/issuePickup.js` — signature `(policy: IssuePickupPolicy) => string[] | undefined`, where the fields used here are `{ pickupStates?: string[]; inProgressState?: string }`.
 - Produces: nothing new. `TicketStateFacet.pickup` now means what the dispatcher means.
 
@@ -170,6 +172,7 @@ and that liveness matches an arm — so a half-wired key fails `check` without a
 here is for the part those cannot see: that the value reaches the cockpit.
 
 **Files:**
+
 - Modify: `src/config.ts` (the `issueStateColours` neighbourhood, ~line 117 and the `DEFAULTS` at ~line 636)
 - Modify: `src/configFields.ts` (~line 279, beside the `issueStateColours` entry)
 - Modify: `src/configApply.ts` (~line 84, beside the `issueStateColours` arm)
@@ -180,6 +183,7 @@ here is for the part those cannot see: that the value reaches the cockpit.
 - Docs: `docs/spec/02-configuration.md` — `### Item selection (labels, priority, states)`
 
 **Interfaces:**
+
 - Consumes: nothing from earlier tasks.
 - Produces: `Config.issueBoardStates: string[]` (default `[]`) and `CockpitConfig.boardStates: string[]`, read in the cockpit as `view.state.config.boardStates`.
 
@@ -378,10 +382,11 @@ the one the route asks.
 
 > **Refines the spec.** The design doc says `canSetWorkItemState` is resolved "from
 > `isWorkItemStateCapable(connector)`". That is not reachable — `isWorkItemStateCapable` tests an
-> *integration*, and the route holds a connector. The predicate below is the same fact asked at the
+> _integration_, and the route holds a connector. The predicate below is the same fact asked at the
 > seam that can answer it.
 
 **Files:**
+
 - Modify: `src/sink/actionSink.ts` (the `ActionSink` interface, beside `setWorkItemState` at ~line 182)
 - Modify: `src/integrations/compositeConnector.ts` (~line 206, beside `setWorkItemState`)
 - Modify: `src/connector/fakeConnector.ts` (~line 70, beside `setWorkItemState`)
@@ -391,8 +396,10 @@ the one the route asks.
 - Docs: `docs/spec/17-cockpit.md` — `## The tickets tab`
 
 **Interfaces:**
+
 - Consumes: `Config.issueBoardStates` and `CockpitConfig.boardStates` from Task 2 (for placement only).
 - Produces:
+
   - `ActionSink.canSetWorkItemState(): boolean`
   - `CockpitConfig.canSetWorkItemState: boolean`
   - `CockpitConfig.stateRules: { pickup: string[]; inProgress: string | null; inReview: string | null; returnsTo: string | null } | null`
@@ -613,6 +620,7 @@ guess" contract, same skip-what-we-do-not-hold rule. No schema change: `world_ba
 snapshot and `tracker_items` already has a `work_item_state` column.
 
 **Files:**
+
 - Modify: `src/store/world.ts` (after `patchWorldLabels`, ~line 135)
 - Modify: `src/store/tickets.ts` (after `patchTicketLabels`, ~line 377)
 - Modify: `src/store/store.ts` (delegations, beside `patchWorldLabels` ~line 972 and `patchTicketLabels` ~line 1077)
@@ -620,8 +628,10 @@ snapshot and `tracker_items` already has a `work_item_state` column.
 - Docs: `docs/spec/14-persistence.md` (the store method lists at ~line 631 and ~line 825), `docs/spec/04-harness-cycle.md` (~line 203, the baseline's other writers)
 
 **Interfaces:**
+
 - Consumes: nothing from earlier tasks.
 - Produces:
+
   - `Store.patchWorldState(patch: { number: number; state: string }): void`
   - `Store.patchTicketState(patch: { number: number; state: string }): void`
 
@@ -846,11 +856,13 @@ process template, so a refusal is quoted back rather than pre-empted by a guess 
 a legitimately configured but empty column.
 
 **Files:**
+
 - Modify: `src/server/routes/issues.ts` (a new route, immediately after the watch route's closing `);` at ~line 152)
 - Test: `test/issueState.test.ts` (append)
 - Docs: `docs/spec/16-http-api.md` — a new `### POST /api/issues/:number/state` section, placed after `### POST /api/issues/:number/watch`
 
 **Interfaces:**
+
 - Consumes: `Store.patchWorldState` and `Store.patchTicketState` (Task 4); `ActionSink.canSetWorkItemState()` (Task 3).
 - Produces: `POST /api/issues/:number/state` with body `{ state: string }`, answering `{ ok: true; state: string }` on success and `400 { error: string }` on refusal.
 
@@ -983,53 +995,53 @@ Expected: FAIL — the route is not registered, so the injections come back 404.
 In `src/server/routes/issues.ts`, immediately after the watch route's closing `);`:
 
 ```ts
-  // Move a work item to one of the tracker's own states — the card view's drag, and
-  // the first thing in the cockpit that writes one.
-  //
-  // **The state word is not validated here.** The provider owns its process
-  // template: a check against the states the mirror has seen would refuse a
-  // legitimately configured but still-empty column, and a check against nothing at
-  // all is what lets the provider's own refusal reach the operator intact. The
-  // schema asks only that a state was named.
-  //
-  // The capability *is* checked, because `setWorkItemState` throws when no
-  // integration implements it — an exception the operator would read as the write
-  // failing rather than as the deployment not having the operation.
-  const StateBody = z.object({ state: z.string().trim().min(1, 'state must name a tracker state').max(80) });
-  app.post(
-    '/api/issues/:number/state',
-    checked({ params: IssueNumberParams, body: StateBody }, async ({ params, body, reply }) => {
-      const { number } = params;
-      const { state } = body;
-      if (!connector.canSetWorkItemState()) {
-        return reply
-          .code(400)
-          .send({ error: 'This tracker cannot write work item states, so nothing here can be moved.' });
-      }
+// Move a work item to one of the tracker's own states — the card view's drag, and
+// the first thing in the cockpit that writes one.
+//
+// **The state word is not validated here.** The provider owns its process
+// template: a check against the states the mirror has seen would refuse a
+// legitimately configured but still-empty column, and a check against nothing at
+// all is what lets the provider's own refusal reach the operator intact. The
+// schema asks only that a state was named.
+//
+// The capability *is* checked, because `setWorkItemState` throws when no
+// integration implements it — an exception the operator would read as the write
+// failing rather than as the deployment not having the operation.
+const StateBody = z.object({ state: z.string().trim().min(1, 'state must name a tracker state').max(80) });
+app.post(
+  '/api/issues/:number/state',
+  checked({ params: IssueNumberParams, body: StateBody }, async ({ params, body, reply }) => {
+    const { number } = params;
+    const { state } = body;
+    if (!connector.canSetWorkItemState()) {
+      return reply
+        .code(400)
+        .send({ error: 'This tracker cannot write work item states, so nothing here can be moved.' });
+    }
 
-      try {
-        const result = await connector.setWorkItemState({ number, state });
-        if (!result.ok) {
-          return reply.code(400).send({ error: `The tracker did not take "${state}" for #${number}.` });
-        }
-      } catch (err) {
-        const message = (err as Error).message;
-        errors.record({ source: 'server', message: `Failed to move #${number} to "${state}": ${message}` });
-        return reply.code(400).send({ error: message });
+    try {
+      const result = await connector.setWorkItemState({ number, state });
+      if (!result.ok) {
+        return reply.code(400).send({ error: `The tracker did not take "${state}" for #${number}.` });
       }
+    } catch (err) {
+      const message = (err as Error).message;
+      errors.record({ source: 'server', message: `Failed to move #${number} to "${state}": ${message}` });
+      return reply.code(400).send({ error: message });
+    }
 
-      // Both readings, and in this order, for the watch route's reasons: `/api/state`
-      // serves the baseline, so a broadcast ahead of the write only makes the cockpit
-      // redraw the old column; and the Tickets tab's own list is built from
-      // `tracker_items`, which the sweep would carry only at the end of a cycle that
-      // coalesces away while another is in flight.
-      store.patchWorldState({ number, state });
-      store.patchTicketState({ number, state });
-      hub.broadcast({ type: 'world:changed' });
-      await harness.runCycle('manual');
-      return { ok: true, state };
-    }),
-  );
+    // Both readings, and in this order, for the watch route's reasons: `/api/state`
+    // serves the baseline, so a broadcast ahead of the write only makes the cockpit
+    // redraw the old column; and the Tickets tab's own list is built from
+    // `tracker_items`, which the sweep would carry only at the end of a cycle that
+    // coalesces away while another is in flight.
+    store.patchWorldState({ number, state });
+    store.patchTicketState({ number, state });
+    hub.broadcast({ type: 'world:changed' });
+    await harness.runCycle('manual');
+    return { ok: true, state };
+  }),
+);
 ```
 
 - [ ] **Step 4: Run the tests and watch them pass**
@@ -1069,13 +1081,16 @@ The first of three pure functions in a new `web/src/ticketBoard.ts`. knip treats
 used — the file can land before the board renders anything.
 
 **Files:**
+
 - Create: `web/src/ticketBoard.ts`
 - Test: `test/ticketBoard.test.ts` (new)
 - Docs: none — Task 10 documents the board as a whole, and a function with no screen behind it yet has nothing an operator can read.
 
 **Interfaces:**
+
 - Consumes: `TicketStateFacet` from `web/src/types.js`; `CockpitConfig['stateRules']` shipped in Task 3, reached in the cockpit as `view.state.config.stateRules`.
 - Produces:
+
   ```ts
   export interface BoardColumn {
     state: string;
@@ -1336,12 +1351,15 @@ for every card on screen without a click. Five readings can supply it, so the fu
 which one wins.
 
 **Files:**
+
 - Modify: `web/src/ticketBoard.ts` (append)
 - Test: `test/ticketBoard.test.ts` (append)
 
 **Interfaces:**
+
 - Consumes: `TicketRow` and `Issue` from `web/src/types.js`; `watchBucket` from `web/src/worldBuckets.js`; `relAge` — **not** used here, the frozen arm takes a pre-formatted age string so the function stays free of the clock.
 - Produces:
+
   ```ts
   export type CardReasonTone = 'held' | 'outcome' | 'pickup' | 'frozen' | 'unwatched';
   export function cardReason(
@@ -1436,7 +1454,11 @@ test('otherwise the dispatcher’s own first sentence is quoted, never re-derive
     '3d',
   );
   assert.equal(blocked.tone, 'pickup');
-  assert.equal(blocked.words, 'a work agent is on this', 'quoted whole — a paraphrase would be the only account there is');
+  assert.equal(
+    blocked.words,
+    'a work agent is on this',
+    'quoted whole — a paraphrase would be the only account there is',
+  );
 });
 
 test('a frozen row with nothing else to say names its age', () => {
@@ -1449,7 +1471,12 @@ test('a frozen row with nothing else to say names its age', () => {
 test('a watched item the dispatcher has said nothing about says exactly that', () => {
   // The absence is a reading too. A blank lane would read as a card that failed to
   // draw, which is the one thing the always-drawn lane exists to avoid.
-  const quiet = cardReason(row({ number: 40 }), issue({ pickup: { eligible: true, status: 'ready', reasons: [] } } as Partial<Issue>), 'lubbdubb-watch', '3d');
+  const quiet = cardReason(
+    row({ number: 40 }),
+    issue({ pickup: { eligible: true, status: 'ready', reasons: [] } } as Partial<Issue>),
+    'lubbdubb-watch',
+    '3d',
+  );
   assert.equal(quiet.tone, 'pickup');
   assert.match(quiet.words, /waiting to be picked up/);
 });
@@ -1572,12 +1599,15 @@ Composed clauses rather than enumerated cases, because the facts are independent
 would have to pick one to report.
 
 **Files:**
+
 - Modify: `web/src/ticketBoard.ts` (append)
 - Test: `test/ticketBoard.test.ts` (append)
 
 **Interfaces:**
+
 - Consumes: `BoardColumn` (Task 6); `CockpitConfig['stateRules']` (Task 3).
 - Produces:
+
   ```ts
   export type DropTone = 'none' | 'ok' | 'warn' | 'stop';
   export interface StateRules {
@@ -1800,6 +1830,7 @@ Nothing renders them yet. `Place` is a type, so an unread field breaks no knip r
 `test/cockpitPlace.test.ts` round-trips it.
 
 **Files:**
+
 - Modify: `web/src/cockpit/place.ts` (the `Place` interface, `NOWHERE`, `readPlace`, `placeQuery`, and a new `readStrings` helper beside `readNumbers`)
 - Modify: `web/src/view/viewModel.ts` (the view fields at ~line 97, the input fields at ~line 254, the defaults at ~line 313)
 - Modify: `web/src/cockpit/useCockpit.ts` (~line 307, the pass-through)
@@ -1808,8 +1839,10 @@ Nothing renders them yet. `Place` is a type, so an unread field breaks no knip r
 - Docs: `docs/spec/17-cockpit.md` — `## The address bar`
 
 **Interfaces:**
+
 - Consumes: nothing from earlier tasks.
 - Produces:
+
   - `Place['ticketView']: 'table' | 'card'`, default `'table'`, query parameter `view`
   - `Place['ticketColumns']: string[]` — the **hidden** columns, default `[]`, query parameter `hide`
   - The same two fields on `CockpitView`, and both accepted by `actions.setTicketQuery`
@@ -1938,12 +1971,12 @@ function readStrings(value: string | null): string[] {
 In `placeQuery`, after the `ticketOrder` line:
 
 ```ts
-  if (place.ticketView !== 'table') query.set('view', place.ticketView);
-  // Sorted on the way out as on the way in, so hiding A then B and B then A are one
-  // place rather than two history entries.
-  if (place.ticketColumns.length > 0) {
-    query.set('hide', [...place.ticketColumns].sort((a, b) => a.localeCompare(b)).join(','));
-  }
+if (place.ticketView !== 'table') query.set('view', place.ticketView);
+// Sorted on the way out as on the way in, so hiding A then B and B then A are one
+// place rather than two history entries.
+if (place.ticketColumns.length > 0) {
+  query.set('hide', [...place.ticketColumns].sort((a, b) => a.localeCompare(b)).join(','));
+}
 ```
 
 - [ ] **Step 5: Thread them through the view model and the actions**
@@ -2034,6 +2067,7 @@ card with its reason lane and its clickable watch dot, the toggle, and the rail 
 imports.
 
 **Files:**
+
 - Create: `web/src/components/TicketCard.tsx`
 - Create: `web/src/components/TicketsBoard.tsx`
 - Modify: `web/src/components/TicketsPanel.tsx` (the toggle in the rail, the rail's card-view behaviour, and rendering the board instead of the table)
@@ -2043,6 +2077,7 @@ imports.
 - Docs: `docs/spec/17-cockpit.md` — a new `### The board, and what a card says` subsection under `## The tickets tab`
 
 **Interfaces:**
+
 - Consumes: `boardColumns`, `cardReason` and `BoardColumn` (Tasks 6–7); `view.state.config.boardStates` and `view.state.config.stateRules` (Tasks 2–3); `Place['ticketView'] | ['ticketColumns']` (Task 9); the existing `api.getTickets` and `actions.setIssueWatched`.
 - Produces: `TicketsBoard` and `TicketCard` components, and the `dragged`/`onDrop` props Task 11 fills in.
 
@@ -2053,11 +2088,11 @@ In `web/src/styles.css`, in **both** `:root` blocks (the light one and the dark 
 presets in `theme.css` **and** the print block:
 
 ```css
-  --board-col: color-mix(in srgb, var(--well) 80%, var(--panel) 20%);
-  --board-head: color-mix(in srgb, var(--panel) 88%, var(--text) 12%);
-  --board-drop-ok: color-mix(in srgb, var(--green) 78%, var(--panel) 22%);
-  --board-drop-warn: color-mix(in srgb, var(--amber) 78%, var(--panel) 22%);
-  --board-drop-stop: color-mix(in srgb, var(--red) 78%, var(--panel) 22%);
+--board-col: color-mix(in srgb, var(--well) 80%, var(--panel) 20%);
+--board-head: color-mix(in srgb, var(--panel) 88%, var(--text) 12%);
+--board-drop-ok: color-mix(in srgb, var(--green) 78%, var(--panel) 22%);
+--board-drop-warn: color-mix(in srgb, var(--amber) 78%, var(--panel) 22%);
+--board-drop-stop: color-mix(in srgb, var(--red) 78%, var(--panel) 22%);
 ```
 
 Those five core tokens all exist in both `:root` blocks (`--well`, `--panel`, `--text`, `--green`,
@@ -2209,7 +2244,14 @@ import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { api } from '../api.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import { boardColumns, type BoardColumn } from '../ticketBoard.js';
-import type { Issue, TicketOrder, TicketRow, TicketStateFacet, TicketTrackingFilter, TicketWatchFilter } from '../types.js';
+import type {
+  Issue,
+  TicketOrder,
+  TicketRow,
+  TicketStateFacet,
+  TicketTrackingFilter,
+  TicketWatchFilter,
+} from '../types.js';
 import type { CockpitView } from '../view/viewModel.js';
 import { stateColour } from '../stateColour.js';
 import { RefLinksExtended } from './refs.js';
@@ -2538,16 +2580,18 @@ Note the `state: 'any'` on the way into card view: `ticketState` stops meaning a
 state is a column. Add the notice that says so, beside the existing `tickets-widened` block:
 
 ```tsx
-      {query.view === 'card' && clearedState !== '' && (
-        <div className="tickets-widened">
-          <span>
-            Cards draw every state as a column, so the <b>State</b> narrowing to <b>{clearedState}</b> was cleared.
-          </span>
-          <button type="button" onClick={() => onQuery({ view: 'table', state: clearedState })}>
-            Back to the table
-          </button>
-        </div>
-      )}
+{
+  query.view === 'card' && clearedState !== '' && (
+    <div className="tickets-widened">
+      <span>
+        Cards draw every state as a column, so the <b>State</b> narrowing to <b>{clearedState}</b> was cleared.
+      </span>
+      <button type="button" onClick={() => onQuery({ view: 'table', state: clearedState })}>
+        Back to the table
+      </button>
+    </div>
+  );
+}
 ```
 
 `clearedState` is a `useState<string>('')` set in the toggle's `onClick` when leaving a narrowed table
@@ -2638,6 +2682,7 @@ The write, from the board. Every column is a drop target and every header says w
 costs, because the operator is the one deciding and a dead drop target is one nobody can explain.
 
 **Files:**
+
 - Modify: `web/src/api.ts` (~line 276, beside `setIssueWatched`)
 - Modify: `web/src/demo/demoBackend.ts` (the server class beside `setIssueWatched` ~line 623, and the `demoApi` object ~line 2772)
 - Modify: `web/src/cockpit/actions.ts` (~line 291, beside `setIssueWatched`)
@@ -2648,8 +2693,10 @@ costs, because the operator is the one deciding and a dead drop target is one no
 - Docs: `docs/spec/17-cockpit.md` — extend `### The board, and what a card says`
 
 **Interfaces:**
+
 - Consumes: `dropWarning` and `StateRules` (Task 8); `POST /api/issues/:number/state` (Task 5); `view.state.config.canSetWorkItemState` and `.stateRules` (Task 3).
 - Produces:
+
   - `api.setIssueState(issueNumber: number, state: string): Promise<{ ok: true; state: string }>`
   - `CockpitActions.setIssueState(issueNumber: number, state: string): Promise<void>`
 
@@ -2724,15 +2771,21 @@ Put `onDragStart={onDragStart}` on the `<article>` alongside the existing `dragg
 reason lane:
 
 ```tsx
-      {writing != null && (
-        <p className="tb-writing">
-          <span className="tickets-spin" aria-hidden="true" />
-          writing “{writing}” to the tracker…
-        </p>
-      )}
-      {/* Quoted, never paraphrased: it is the only account of why the card came back,
-          and a snap-back with no sentence reads as the board being broken. */}
-      {refused != null && <p className="tb-refused">{refused}</p>}
+{
+  writing != null && (
+    <p className="tb-writing">
+      <span className="tickets-spin" aria-hidden="true" />
+      writing “{writing}” to the tracker…
+    </p>
+  );
+}
+{
+  /* Quoted, never paraphrased: it is the only account of why the card came back,
+          and a snap-back with no sentence reads as the board being broken. */
+}
+{
+  refused != null && <p className="tb-refused">{refused}</p>;
+}
 ```
 
 - [ ] **Step 3: Drag and drop in the board**
@@ -2743,38 +2796,38 @@ Hold the drag in the board rather than in a column, because the warnings are abo
 once:
 
 ```tsx
-  const [drag, setDrag] = useState<{ number: number; from: string } | null>(null);
-  const [writing, setWriting] = useState<{ number: number; state: string } | null>(null);
-  const [refused, setRefused] = useState<{ number: number; message: string } | null>(null);
+const [drag, setDrag] = useState<{ number: number; from: string } | null>(null);
+const [writing, setWriting] = useState<{ number: number; state: string } | null>(null);
+const [refused, setRefused] = useState<{ number: number; message: string } | null>(null);
 ```
 
 Pass `drag`, `writing`, `refused`, `setDrag` and an `onDrop` down to each `Column`. The drop handler:
 
 ```tsx
-  const drop = async (column: BoardColumn): Promise<void> => {
-    const moving = drag;
-    setDrag(null);
-    if (moving === null || moving.from === column.state) return;
-    // Optimistic, because the write is a round trip to the tracker and a card that
-    // sits still for a second reads as a drop that missed. The card is moved and
-    // says it is still writing.
-    setRefused(null);
-    setWriting({ number: moving.number, state: column.state });
-    try {
-      await actions.setIssueState(moving.number, column.state);
-    } catch (err) {
-      // Back where it came from, with the provider's own words on it.
-      setRefused({ number: moving.number, message: (err as Error).message });
-    } finally {
-      setWriting(null);
-    }
-  };
+const drop = async (column: BoardColumn): Promise<void> => {
+  const moving = drag;
+  setDrag(null);
+  if (moving === null || moving.from === column.state) return;
+  // Optimistic, because the write is a round trip to the tracker and a card that
+  // sits still for a second reads as a drop that missed. The card is moved and
+  // says it is still writing.
+  setRefused(null);
+  setWriting({ number: moving.number, state: column.state });
+  try {
+    await actions.setIssueState(moving.number, column.state);
+  } catch (err) {
+    // Back where it came from, with the provider's own words on it.
+    setRefused({ number: moving.number, message: (err as Error).message });
+  } finally {
+    setWriting(null);
+  }
+};
 ```
 
 A column becomes a drop target only where a write is possible at all:
 
 ```tsx
-  const droppable = view.state.config.canSetWorkItemState && drag !== null;
+const droppable = view.state.config.canSetWorkItemState && drag !== null;
 ```
 
 and on the column's `<section>`:
@@ -2789,9 +2842,11 @@ and on the column's `<section>`:
 The header speaks the moment a card is lifted:
 
 ```tsx
-        {drag !== null && view.state.config.canSetWorkItemState && (
-          <span className={`tb-say ${warning.tone}`}>{warning.words}</span>
-        )}
+{
+  drag !== null && view.state.config.canSetWorkItemState && (
+    <span className={`tb-say ${warning.tone}`}>{warning.words}</span>
+  );
+}
 ```
 
 with `const warning = dropWarning(column, drag?.from ?? null, view.state.config.stateRules);` computed
@@ -2812,13 +2867,27 @@ Task 10 is the whole explanation.
 In `web/src/styles.css`, add rules using the three tokens from Task 10 — nothing new to register:
 
 ```css
-.tb-say.ok { color: var(--board-drop-ok); }
-.tb-say.warn { color: var(--board-drop-warn); }
-.tb-say.stop { color: var(--board-drop-stop); }
-.tb-col.target { border-color: var(--board-drop-ok); }
-.tb-card[draggable='true'] { cursor: grab; }
-.tb-card.writing { opacity: 0.6; }
-.tb-card.refused { border-color: var(--board-drop-stop); }
+.tb-say.ok {
+  color: var(--board-drop-ok);
+}
+.tb-say.warn {
+  color: var(--board-drop-warn);
+}
+.tb-say.stop {
+  color: var(--board-drop-stop);
+}
+.tb-col.target {
+  border-color: var(--board-drop-ok);
+}
+.tb-card[draggable='true'] {
+  cursor: grab;
+}
+.tb-card.writing {
+  opacity: 0.6;
+}
+.tb-card.refused {
+  border-color: var(--board-drop-stop);
+}
 ```
 
 - [ ] **Step 5: Verify the whole path**
@@ -2830,7 +2899,7 @@ npm run typecheck:web && npx tsx --test test/cockpitTheme.test.ts test/issueStat
 Then drive it in the preview, against a config with `issuePickupStates`, `issueInProgressState` and
 `issueInReviewState` set. Check every one of these, because each is a decision this plan made:
 
-- Lifting a card makes **every** header speak, and the in-progress column says *pickup*, not *stops*.
+- Lifting a card makes **every** header speak, and the in-progress column says _pickup_, not _stops_.
 - The review column names where it would come back to and states it as a condition.
 - A column with nothing live says so and claims nothing about closing.
 - The card moves on release, says it is writing, then settles.
@@ -2864,24 +2933,24 @@ git commit -m "Drag a card between columns, and say what the drop costs before i
 
 **Spec coverage** — every section of the design doc maps to a task:
 
-| Spec section | Task |
-| --- | --- |
-| §1 The two views and the toggle | 9 (Place), 10 (toggle, disabled arm) |
-| §2 Where the columns come from | 2 (config key), 6 (`boardColumns`, fallback, empty column, unlisted) |
-| §3 Loading | 10 (one fetch per column, own observer, header counts, three empty states) |
-| §4 The card | 7 (`cardReason`), 10 (markup, watch dot) |
-| §5 Dragging and the write | 3 (capability + rules), 4 (store patches), 5 (route), 8 (`dropWarning`), 11 (the drag) |
-| §5 "One existing inaccuracy this fixes" | 1 |
-| §6 The filter rail in card view | 9 (`ticketColumns`), 10 (Group hidden, Order segment, State→columns, cleared narrowing) |
-| §7 Styling | 10 (tokens as mixes, registry) |
-| §8 Testing | every task's own steps |
-| §9 Specs to update | 1, 2, 3, 4, 5, 9, 10, 11 — folded into each task's commit, per the repo's rule |
-| §10 Files this touches | covered, plus three the spec missed: `src/sink/actionSink.ts` + both connectors (Task 3), `web/src/demo/demoBackend.ts` (Task 11), `docs/spec/04-harness-cycle.md` (Task 4) |
+| Spec section                            | Task                                                                                                                                                                        |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §1 The two views and the toggle         | 9 (Place), 10 (toggle, disabled arm)                                                                                                                                        |
+| §2 Where the columns come from          | 2 (config key), 6 (`boardColumns`, fallback, empty column, unlisted)                                                                                                        |
+| §3 Loading                              | 10 (one fetch per column, own observer, header counts, three empty states)                                                                                                  |
+| §4 The card                             | 7 (`cardReason`), 10 (markup, watch dot)                                                                                                                                    |
+| §5 Dragging and the write               | 3 (capability + rules), 4 (store patches), 5 (route), 8 (`dropWarning`), 11 (the drag)                                                                                      |
+| §5 "One existing inaccuracy this fixes" | 1                                                                                                                                                                           |
+| §6 The filter rail in card view         | 9 (`ticketColumns`), 10 (Group hidden, Order segment, State→columns, cleared narrowing)                                                                                     |
+| §7 Styling                              | 10 (tokens as mixes, registry)                                                                                                                                              |
+| §8 Testing                              | every task's own steps                                                                                                                                                      |
+| §9 Specs to update                      | 1, 2, 3, 4, 5, 9, 10, 11 — folded into each task's commit, per the repo's rule                                                                                              |
+| §10 Files this touches                  | covered, plus three the spec missed: `src/sink/actionSink.ts` + both connectors (Task 3), `web/src/demo/demoBackend.ts` (Task 11), `docs/spec/04-harness-cycle.md` (Task 4) |
 
 **Two refinements the plan makes to the spec**, both from reading the code:
 
 1. **`canSetWorkItemState` is a connector method, not `isWorkItemStateCapable(connector)`.** That
-   predicate tests an *integration*; the route holds a connector, whose `setWorkItemState` throws when
+   predicate tests an _integration_; the route holds a connector, whose `setWorkItemState` throws when
    nothing implements it. Task 3 adds the predicate at the seam that can answer it. Called out in the
    task.
 2. **`boardColumns` takes the effective pickup list rather than reading `facet.pickup`.** A configured

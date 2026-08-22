@@ -30,22 +30,40 @@ test('the block carries the injected fleet claims, newest-vouched first', () => 
   assert.match(block.text, /knowledge_ask/);
 });
 
-test('only an injected fleet claim rides the system prompt', () => {
+test('the reach decides which prompt, and a goal scope is the one exception', () => {
   // The reach machine is the whole governance: `lookup` is where two agents
-  // agreeing puts a claim, and a block that delivered one would make corroboration
-  // an auto-promotion to every agent's context. A `check:` claim at `injected` is
-  // an operator's ruling about *one check* and belongs in the task prompt, so it is
-  // not fleet-wide however far it carries.
-  const block = renderKnowledgeBlock(
-    [
-      fact('a', { reach: 'lookup' }),
-      fact('b', { scope: 'check:test (windows)' }),
-      fact('c', { scope: 'goal:issue:41' }),
-    ],
-    6_000,
-  );
-  assert.equal(block.text, '');
+  // agreeing puts a standing claim, and a block that delivered one would make
+  // corroboration an auto-promotion to every agent's context.
+  const block = renderKnowledgeBlock([fact('a', { reach: 'lookup' }), fact('c', { scope: 'goal:issue:41' })], 6_000);
+  assert.equal(block.text, '', 'neither a lookup claim nor a goal claim rides the system prompt');
   assert.deepEqual(block.rendered, []);
+
+  // An injected `check:` claim *does*, since phase 4: a check that flakes flakes
+  // for the agent about to run it, not only for the one already dispatched to fix
+  // it, and `injected` means in front of every agent whatever the scope says.
+  const scoped = renderKnowledgeBlock([fact('b', { scope: 'check:test (windows)' })], 6_000);
+  assert.deepEqual(
+    scoped.rendered.map((f) => f.id),
+    ['b'],
+  );
+});
+
+test('no fact rides both prompts, and none falls between them', () => {
+  // One predicate read from both sides. Two lists that merely happen to agree
+  // today would send one sentence twice — charged twice and read as two claims —
+  // or drop one entirely, and neither is visible from either renderer alone.
+  const facts = [
+    fact('injected-fleet'),
+    fact('injected-check', { scope: 'check:test (windows)' }),
+    fact('injected-goal', { scope: 'goal:issue:41' }),
+    fact('lookup-check', { reach: 'lookup', scope: 'check:test (windows)' }),
+  ];
+  const block = renderKnowledgeBlock(facts, 6_000);
+  for (const f of facts) {
+    const inBlock = block.rendered.includes(f);
+    const inNote = renderScopedKnowledgeNote([f]) !== '';
+    assert.equal(inBlock !== inNote, true, `${f.id} must ride exactly one prompt`);
+  }
 });
 
 test('the cap drops whole claims, oldest-vouched first, and the block says how many', () => {
@@ -77,7 +95,7 @@ test('the cap drops whole claims, oldest-vouched first, and the block says how m
   // the absence of an entry as the fleet not knowing it. The **count** is the
   // honest part — "some were dropped" tells a reader nothing about whether to go
   // looking — so it has to be the number actually dropped.
-  assert.match(capped.text, new RegExp(`${capped.dropped.length} further fleet-wide claims? did not fit`));
+  assert.match(capped.text, new RegExp(`${capped.dropped.length} further claims? did not fit`));
   // And the sentence saying so is inside the budget, not pushed past it.
   assert.ok(capped.text.length <= whole.text.length - 1, 'the drop line must be costed against the cap');
 
@@ -116,8 +134,12 @@ test('a dispatch matches its goal and its checks, and its goal is not its concer
 
 test('the scoped note says what it is about, and says what it dropped', () => {
   const note = renderScopedKnowledgeNote([
-    fact('one', { scope: 'check:test (windows)', claim: 'The install step times out under four minutes.' }),
-    fact('two', { scope: 'goal:issue:41', claim: 'The seed script leaves two orphan rows.' }),
+    fact('one', {
+      reach: 'lookup',
+      scope: 'check:test (windows)',
+      claim: 'The install step times out under four minutes.',
+    }),
+    fact('two', { reach: 'lookup', scope: 'goal:issue:41', claim: 'The seed script leaves two orphan rows.' }),
   ]);
   // The scope is what earned each line a place in *this* prompt, so a reader can
   // tell a claim about the check it is fixing from one about the goal it is on.
@@ -129,8 +151,41 @@ test('the scoped note says what it is about, and says what it dropped', () => {
   // rather than damaging, which is what lets this be appended unconditionally.
   assert.equal(renderScopedKnowledgeNote([]), '');
 
-  const many = Array.from({ length: 40 }, (_, i) => fact(`f${i}`, { claim: `claim ${i} ${'x'.repeat(80)}` }));
+  const many = Array.from({ length: 40 }, (_, i) =>
+    fact(`f${i}`, { reach: 'lookup', scope: 'goal:issue:41', claim: `claim ${i} ${'x'.repeat(80)}` }),
+  );
   assert.match(renderScopedKnowledgeNote(many), /further claims? in these scopes (is|are) not shown/);
+});
+
+test('a notice is rendered with its own lapse date, and is the last thing dropped', () => {
+  const notice = fact('notice', {
+    lifetime: 'expiring',
+    expiresAt: '2026-03-02T09:15:00.000Z',
+    ruledAt: null,
+    scope: 'check:test (windows)',
+    createdAt: '2026-03-01T00:00:00.000Z',
+  });
+  // Long, so the cap below plainly has no room for it: what is being asserted is
+  // the order things are dropped in, not the arithmetic of one line's length.
+  const standing = fact('standing', { ruledAt: '2026-06-01T00:00:00.000Z', claim: `s ${'x'.repeat(400)}` });
+  const block = renderKnowledgeBlock([standing, notice], 6_000);
+  // Notices first even against a claim vouched for months later: they are the
+  // smallest tier and the most time-critical, and each leaves the block by its own
+  // clock within days.
+  assert.deepEqual(
+    block.rendered.map((f) => f.id),
+    ['notice', 'standing'],
+  );
+  // The **date**, and the fact's own. "Lapses in 3 hours" is computed from now,
+  // which is a different block on every launch — the cached prefix thrown away for
+  // a countdown, with nothing measuring the loss.
+  assert.match(block.text, /lapses 2026-03-02/);
+  assert.equal(/lapses in/.test(block.text), false);
+  const capped = renderKnowledgeBlock([standing, notice], renderKnowledgeBlock([notice], 6_000).text.length + 200);
+  assert.deepEqual(
+    capped.dropped.map((f) => f.id),
+    ['standing'],
+  );
 });
 
 /** An injected fleet claim, unless the overrides say otherwise. */
@@ -145,6 +200,7 @@ function fact(id: string, over: Partial<KnowledgeFact> = {}): KnowledgeFact {
     supersedes: null,
     originRef: 'issue:41',
     ruledAt: '2026-01-01T00:00:00.000Z',
+    resolvesWhen: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...over,

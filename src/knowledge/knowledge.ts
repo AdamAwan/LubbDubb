@@ -1,5 +1,5 @@
 import { claimKey } from '../claims.js';
-import type { FactLifetime, FactScope } from '../types.js';
+import type { FactLifetime, FactResolution, FactScope } from '../types.js';
 
 /**
  * The knowledge base's pure layer: what a scope is, what a proposal is allowed to
@@ -23,6 +23,22 @@ export const MAX_EVIDENCE_CHARS = 4_000;
 
 /** How long an expiring fact may run. A notice is a report on today, not a standing claim wearing a clock. */
 const MAX_NOTICE_HOURS = 168;
+
+/**
+ * What a notice may be, said to the agent raising one.
+ *
+ * The rule binds harder here than anywhere else in this store because a notice is
+ * the one thing that reaches every agent on corroboration alone, with no operator
+ * in the loop — so the sentence that lands there is written under this and nothing
+ * else checks it. An observation can be wrong about the world; an instruction is
+ * wrong about what the reader should do, and the reader cannot tell.
+ */
+export const NOTICE_RULE =
+  'State what you SAW, never what to do about it. "This check went red and then green on the same ' +
+  'commit" is an observation and belongs here. "Do not chase the diff — re-run it" is an instruction ' +
+  'and does not: the next agent reading it skips a check that may be genuinely broken, and it will ' +
+  'have been told to by the fleet. Supply what was seen; let the agent that reads it draw the ' +
+  'conclusion.';
 
 /**
  * How the agent names a scope, and what each one costs to be wrong about — the
@@ -51,6 +67,18 @@ export interface FactProposal {
   evidence: string;
   /** The fact this amends, when it is one. A proposal naming a barred parent is exempt from its bar. */
   supersedes: string | null;
+  /**
+   * What settles this notice before its clock runs out — **the harness's own to
+   * write, and never an agent's**.
+   *
+   * A condition is a mechanism rather than a sentence: settling one means reading
+   * a world object pulse after pulse, and the only party that can promise to do
+   * that is the one already reading it. An agent naming a condition would be
+   * naming a thing nothing watches, and the notice would then quietly be exactly
+   * what it was without one — a clock — while its row claimed otherwise.
+   * {@link validateFactProposal} never fills this in for that reason.
+   */
+  resolvesWhen: FactResolution | null;
 }
 
 /**
@@ -156,8 +184,27 @@ export function validateFactProposal(
       expiresInHours,
       evidence: evidence.slice(0, MAX_EVIDENCE_CHARS),
       supersedes: supersedes || null,
+      resolvesWhen: null,
     },
   };
+}
+
+/**
+ * Validate what `knowledge_notice` was handed.
+ *
+ * A notice is a proposal with the lifetime decided rather than asked for, so this
+ * is {@link validateFactProposal} with `expiring` supplied — one validator, not
+ * two views of what a claim may be. The tool exists as its own tool because the
+ * *description* is the safeguard ({@link NOTICE_RULE}) and because a clock an
+ * agent may forget to ask for is a standing fleet-wide claim filed by accident,
+ * which is the one thing agreement alone must never produce.
+ */
+export function validateFactNotice(
+  raw: unknown,
+  goalRef: string | null,
+): { ok: true; proposal: FactProposal } | { ok: false; error: string } {
+  const args = (raw ?? {}) as Record<string, unknown>;
+  return validateFactProposal({ ...args, lifetime: 'expiring' }, goalRef);
 }
 
 /**

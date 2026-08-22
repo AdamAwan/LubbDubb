@@ -113,11 +113,11 @@ page lands. A header reads `12 of 218` and both numbers are about the same set.
 
 **Three empty states per column, because they are three different facts:**
 
-| Why the column is empty | What it says |
-| --- | --- |
-| Nothing is in this state at all | `Nothing is in this state.` |
+| Why the column is empty                | What it says                                                      |
+| -------------------------------------- | ----------------------------------------------------------------- |
+| Nothing is in this state at all        | `Nothing is in this state.`                                       |
 | Nothing under the current **Tracking** | The `tickets-widened` wording, with the one-click widen to `Any`. |
-| Nothing under **Watch** or **Feature** | Names the narrowing that emptied it. |
+| Nothing under **Watch** or **Feature** | Names the narrowing that emptied it.                              |
 
 A column that simply stops reads as one that failed to load — the table's `footWords` exists for that
 reason, and each column gets the same treatment.
@@ -166,7 +166,7 @@ Precedence, first match wins:
 5. **Unwatched** — nobody has opted this in.
 
 Every one of those is the server's own sentence, quoted and never re-derived — the tab's existing rule,
-and the reason the function is pure: the invariant is about *which of five readings wins*, which no
+and the reason the function is pure: the invariant is about _which of five readings wins_, which no
 render can show. It is unit-tested for `cascadeNote`'s and `watchReading`'s reason.
 
 ### The watch dot is the control
@@ -246,19 +246,19 @@ It **composes clauses rather than enumerating cases**, because the facts are ind
 enumeration would have to pick one to report. The column the card is already in short-circuits to
 `none` / `where it is now`; otherwise:
 
-| Clause | When | Tone | Words |
-| --- | --- | --- | --- |
-| pickup — always exactly one of these two | `column.pickup` | `ok` | `a pickup state — the fleet can work this` |
-| | not `column.pickup` | `stop` | `leaves the pickup states — the fleet stops picking this up` |
-| the in-progress state | `column.state === rules.inProgress` | keeps `ok` | `· a rule moves items here itself once an agent starts` |
-| the review state | `column.state === rules.inReview` | `warn` | `· work-item-back-to-pickup returns it to "<returnsTo>" if a verdict says work is outstanding` |
-| nothing live under it | `column.live === 0` | `warn` | `· nothing under this state is still in the tracker's open set` |
+| Clause                                   | When                                | Tone       | Words                                                                                          |
+| ---------------------------------------- | ----------------------------------- | ---------- | ---------------------------------------------------------------------------------------------- |
+| pickup — always exactly one of these two | `column.pickup`                     | `ok`       | `a pickup state — the fleet can work this`                                                     |
+|                                          | not `column.pickup`                 | `stop`     | `leaves the pickup states — the fleet stops picking this up`                                   |
+| the in-progress state                    | `column.state === rules.inProgress` | keeps `ok` | `· a rule moves items here itself once an agent starts`                                        |
+| the review state                         | `column.state === rules.inReview`   | `warn`     | `· work-item-back-to-pickup returns it to "<returnsTo>" if a verdict says work is outstanding` |
+| nothing live under it                    | `column.live === 0`                 | `warn`     | `· nothing under this state is still in the tracker's open set`                                |
 
 Three things that pin the wording to what the dispatcher actually does, each of which I had wrong on a
 first pass:
 
 - **The in-progress state is a pickup state**, even when `issuePickupStates` does not name it —
-  `effectivePickupStates` folds it in, and `src/config.ts` says it should *not* be listed. So a drop
+  `effectivePickupStates` folds it in, and `src/config.ts` says it should _not_ be listed. So a drop
   onto `"Doing"` must not read as leaving the gate. See the route fix below.
 - **`workItemBackToPickup` fires only on an explicit `more_work` verdict**, never on the mere absence
   of a PR — that was deliberately changed, because a merged PR used to bounce its ticket back to
@@ -311,14 +311,14 @@ separately would teach the operator nothing five times over.
 
 ## 6. The filter rail in card view
 
-| Control | In card view |
-| --- | --- |
-| **Watch** | Unchanged. |
-| **Tracking** | Unchanged, and honest — a column empty only because of it says so and offers the widen. |
-| **Feature** | Unchanged. Still filters the whole board; still the stripe on every card. |
-| **Group** | Hidden. A flat board has no headings to indent under. |
-| **Order** | **New segment**, shown in card view only. The table's sort lives in column headers that do not exist here. |
-| **State** | Becomes column visibility. |
+| Control      | In card view                                                                                               |
+| ------------ | ---------------------------------------------------------------------------------------------------------- |
+| **Watch**    | Unchanged.                                                                                                 |
+| **Tracking** | Unchanged, and honest — a column empty only because of it says so and offers the widen.                    |
+| **Feature**  | Unchanged. Still filters the whole board; still the stripe on every card.                                  |
+| **Group**    | Hidden. A flat board has no headings to indent under.                                                      |
+| **Order**    | **New segment**, shown in card view only. The table's sort lives in column headers that do not exist here. |
+| **State**    | Becomes column visibility.                                                                                 |
 
 The State tier keeps its chips and its counts; `aria-pressed` now means "this column is drawn". The
 hidden columns live in a new `Place` field `ticketColumns: string[]` holding the **hidden** ones — so
@@ -378,30 +378,30 @@ over `src/server/routes/` is satisfied by the route going through `checked`.
 
 **Server**
 
-| File | Change |
-| --- | --- |
-| `src/config.ts` | `issueBoardStates: string[]`, default `[]` |
-| `src/configFields.ts` | one `stringList` entry |
-| `src/configApply.ts` | live apply arm |
-| `src/server/runningConfig.ts` | key in the Integrations group |
-| `src/wire.ts` | `CockpitConfig`: `boardStates`, `canSetWorkItemState`, `stateRules` |
-| `src/server/stateSnapshot.ts` | ship those three |
-| `src/server/routes/issues.ts` | `POST /api/issues/:number/state` |
-| `src/server/routes/tickets.ts` | facets built from `effectivePickupStates`, not the raw list |
-| `src/store/world.ts` | `patchWorldState` |
-| `src/store/tickets.ts` | `patchTicketState` |
-| `src/store/store.ts` | delegate both |
+| File                           | Change                                                              |
+| ------------------------------ | ------------------------------------------------------------------- |
+| `src/config.ts`                | `issueBoardStates: string[]`, default `[]`                          |
+| `src/configFields.ts`          | one `stringList` entry                                              |
+| `src/configApply.ts`           | live apply arm                                                      |
+| `src/server/runningConfig.ts`  | key in the Integrations group                                       |
+| `src/wire.ts`                  | `CockpitConfig`: `boardStates`, `canSetWorkItemState`, `stateRules` |
+| `src/server/stateSnapshot.ts`  | ship those three                                                    |
+| `src/server/routes/issues.ts`  | `POST /api/issues/:number/state`                                    |
+| `src/server/routes/tickets.ts` | facets built from `effectivePickupStates`, not the raw list         |
+| `src/store/world.ts`           | `patchWorldState`                                                   |
+| `src/store/tickets.ts`         | `patchTicketState`                                                  |
+| `src/store/store.ts`           | delegate both                                                       |
 
 **Cockpit**
 
-| File | Change |
-| --- | --- |
-| `web/src/cockpit/place.ts` | `ticketView`, `ticketColumns` |
-| `web/src/cockpit/actions.ts` | `setIssueState` |
-| `web/src/api.ts` | the call |
+| File                                  | Change                                                      |
+| ------------------------------------- | ----------------------------------------------------------- |
+| `web/src/cockpit/place.ts`            | `ticketView`, `ticketColumns`                               |
+| `web/src/cockpit/actions.ts`          | `setIssueState`                                             |
+| `web/src/api.ts`                      | the call                                                    |
 | `web/src/components/TicketsPanel.tsx` | the toggle, the rail changes, renders one view or the other |
-| `web/src/components/TicketsBoard.tsx` | **new** — columns, per-column paging, drag |
-| `web/src/components/TicketCard.tsx` | **new** — the card |
-| `web/src/ticketBoard.ts` | **new** — `boardColumns`, `cardReason`, `dropWarning` |
-| `web/src/styles.css` | board and card styles, new `:root` tokens |
-| `web/src/cockpit/tokens.ts` | register them |
+| `web/src/components/TicketsBoard.tsx` | **new** — columns, per-column paging, drag                  |
+| `web/src/components/TicketCard.tsx`   | **new** — the card                                          |
+| `web/src/ticketBoard.ts`              | **new** — `boardColumns`, `cardReason`, `dropWarning`       |
+| `web/src/styles.css`                  | board and card styles, new `:root` tokens                   |
+| `web/src/cockpit/tokens.ts`           | register them                                               |
