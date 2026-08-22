@@ -12,6 +12,7 @@ import {
   type ToolCallResult,
 } from './protocol.js';
 import { SocketChannel } from './socketChannel.js';
+import { buildCallLog, type McpCallLog } from './callLog.js';
 import { buildDesktopTools, type DesktopSession, type DesktopToolDeps } from './desktopTools.js';
 
 /** Absolute path to the shipped stdio bridge. `--desktop` makes it read the credential file. */
@@ -21,6 +22,8 @@ interface McpDesktopServerOptions extends DesktopToolDeps {
   socketPath: string;
   /** Where the credential is written, 0600. */
   credentialPath: string;
+  /** How long a recorded call's arguments are kept, in days. See `McpCallStore`. */
+  argsRetentionDays?: number;
   errors?: ErrorRecorder;
 }
 
@@ -58,11 +61,13 @@ interface McpDesktopServerOptions extends DesktopToolDeps {
  */
 export class McpDesktopServer {
   private readonly channel: SocketChannel;
+  private readonly calls: McpCallLog;
   /** Minted at {@link listen}, never configured. Null while the channel is down. */
   private token: string | null = null;
   private readonly sessions = new Map<string, DesktopSession>();
 
   constructor(private readonly opts: McpDesktopServerOptions) {
+    this.calls = buildCallLog(opts);
     this.channel = new SocketChannel({
       socketPath: opts.socketPath,
       label: 'MCP desktop channel',
@@ -242,26 +247,60 @@ export class McpDesktopServer {
     }
   }
 
-  /** Answer one frame. Everything above the token check is the tools' business. */
+  /**
+   * Answer one frame. Everything above the token check is the tools' business.
+   *
+   * Calls are recorded here for the fleet channel's reason and with its rules,
+   * on `channel: 'desktop'` — the two are never summed, because they are
+   * different credentials over different tool sets and `validation_report` is two
+   * different tools with one name. A desktop row carries no agent and no task:
+   * nobody dispatched this session.
+   */
   private async dispatch(token: string, connectionId: string, frame: JsonRpcRequest): Promise<JsonRpcResponse | null> {
+    const call = this.calls.callOf(frame);
+    const startedAt = Date.now();
     if (!this.tokenMatches(token)) {
       // `initialize` and `tools/list` are still answered, with an empty tool set,
       // so a stale registration completes its handshake and reports a server with
       // no tools rather than hanging. Only a call needs a real credential.
       if (frame.method === 'tools/call') {
-        return {
-          jsonrpc: '2.0',
-          id: frame.id ?? null,
-          result: toolError(
-            'This credential is not the one this harness is listening for. It is written fresh at every start, ' +
-              `so re-reading ${this.opts.credentialPath} is all that is needed — the MCP registration itself ` +
-              'does not change.',
-          ),
-        };
+        const stale =
+          'This credential is not the one this harness is listening for. It is written fresh at every start, ' +
+          `so re-reading ${this.opts.credentialPath} is all that is needed — the MCP registration itself ` +
+          'does not change.';
+        if (call !== null) {
+          this.calls.record({
+            channel: 'desktop',
+            tool: call.tool,
+            agentId: null,
+            taskId: null,
+            originRef: null,
+            ok: false,
+            error: stale,
+            durationMs: Date.now() - startedAt,
+            args: call.args,
+          });
+        }
+        return { jsonrpc: '2.0', id: frame.id ?? null, result: toolError(stale) };
       }
       return await handleRequest(frame, []);
     }
-    return await handleRequest(frame, buildDesktopTools(this.opts, this.sessionFor(connectionId)));
+    const response = await handleRequest(frame, buildDesktopTools(this.opts, this.sessionFor(connectionId)));
+    if (call !== null) {
+      const refusal = this.calls.refusalOf(response);
+      this.calls.record({
+        channel: 'desktop',
+        tool: call.tool,
+        agentId: null,
+        taskId: null,
+        originRef: null,
+        ok: refusal === null,
+        error: refusal,
+        durationMs: Date.now() - startedAt,
+        args: call.args,
+      });
+    }
+    return response;
   }
 
   /** Constant-time, because this is the only thing between a local process and the store. */

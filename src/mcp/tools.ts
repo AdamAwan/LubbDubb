@@ -1,5 +1,6 @@
 import { MCP_TOOL_NAMES, type McpToolName } from './names.js';
 import type { McpTool } from './protocol.js';
+import { retiredTools } from './retiredTools.js';
 import { buildToolContext, type McpIdentity, type McpToolDeps, type ToolFactory } from './tools/context.js';
 import { assayIssue } from './tools/assayIssue.js';
 import { assessIssue } from './tools/assessIssue.js';
@@ -7,15 +8,11 @@ import { concludePart } from './tools/concludePart.js';
 import { concludeWork } from './tools/concludeWork.js';
 import { escalate } from './tools/escalate.js';
 import { knowledgeAsk } from './tools/knowledgeAsk.js';
-import { knowledgeContradict } from './tools/knowledgeContradict.js';
-import { knowledgeNotice } from './tools/knowledgeNotice.js';
-import { knowledgePropose } from './tools/knowledgePropose.js';
 import { linkTicket } from './tools/linkTicket.js';
 import { noteProgress } from './tools/noteProgress.js';
 import { openPr } from './tools/openPr.js';
 import { planSubmit } from './tools/planSubmit.js';
 import { raise as raiseFact } from './tools/raise.js';
-import { reportFinding } from './tools/reportFinding.js';
 import { reportRemedy } from './tools/reportRemedy.js';
 import { requestHumanTask } from './tools/requestHumanTask.js';
 import { requestPermission } from './tools/requestPermission.js';
@@ -46,7 +43,6 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   plan_submit: planSubmit,
   escalate,
   world_read: worldRead,
-  report_finding: reportFinding,
   request_human_task: requestHumanTask,
   note_progress: noteProgress,
   request_permission: requestPermission,
@@ -63,10 +59,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   validation_report: validationReport,
   report_remedy: reportRemedy,
   raise: raiseFact,
-  knowledge_propose: knowledgePropose,
   knowledge_ask: knowledgeAsk,
-  knowledge_notice: knowledgeNotice,
-  knowledge_contradict: knowledgeContradict,
 };
 
 /**
@@ -83,5 +76,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
  */
 export function buildTools(deps: McpToolDeps, identity: McpIdentity): McpTool[] {
   const ctx = buildToolContext(deps, identity);
-  return MCP_TOOL_NAMES.map((name) => ({ name, ...TOOLS[name](ctx) }));
+  // The retired names ride along: hidden from `tools/list`, still answered. See
+  // `retiredTools.ts` for why a withdrawn name has to stay dispatchable.
+  return [...MCP_TOOL_NAMES.map((name) => ({ name, ...TOOLS[name](ctx) })), ...retiredTools()];
 }

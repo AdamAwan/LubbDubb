@@ -2199,7 +2199,7 @@ export interface Plan {
    * nothing, which is every plan written before the field existed.
    *
    * A root cause with no citation is unfalsifiable, and the harness asks for
-   * testimony to be attributable everywhere else it takes any (`report_finding`).
+   * testimony to be attributable everywhere else it takes any (`raise`).
    */
   evidence: PlanEvidence[];
   /** The full narrative, markdown — the read-in-depth version of this plan. */
@@ -3590,4 +3590,56 @@ export type LocalRunUsageDelta = AgentUsage;
 export interface CostDelta {
   costUsd: number;
   at: string;
+}
+
+/** Which credential a tool call arrived on. Never summed across — see {@link McpCall}. */
+export type McpChannel = 'fleet' | 'desktop';
+
+/**
+ * One recorded MCP tool call.
+ *
+ * The distinction the shape turns on is that a **channel** is not a detail of a
+ * call, it is what the call *is*: the fleet's arrive on a per-agent credential
+ * minted at dispatch and the operator's on a long-lived one in their home
+ * directory, the tool sets are different lists, and `validation_report` is two
+ * different tools with one name. A total that summed them would be a number about
+ * nothing.
+ *
+ * `agentId` / `taskId` / `originRef` are null on a desktop call, which has no
+ * dispatch behind it, and on a fleet call whose credential could not be resolved
+ * — a refusal worth recording precisely because nothing else records it.
+ */
+export interface McpCall {
+  id: string;
+  channel: McpChannel;
+  tool: string;
+  agentId: string | null;
+  taskId: string | null;
+  /** The calling agent's origin as it was at call time, for the phase reading. */
+  originRef: string | null;
+  ok: boolean;
+  /** The refusal in the tool's own words. Null on success. */
+  error: string | null;
+  durationMs: number;
+  /** The arguments as JSON, or null — either none were passed, or {@link argsDropped}. */
+  args: string | null;
+  /** What the arguments measured, kept after the text itself is compacted away. */
+  argsBytes: number;
+  /** Whether the arguments were compacted away, as against never having existed. */
+  argsDropped: boolean;
+  createdAt: string;
+}
+
+/** What a caller states about a call; everything else on {@link McpCall} is the store's. */
+export interface McpCallInput {
+  channel: McpChannel;
+  tool: string;
+  agentId: string | null;
+  taskId: string | null;
+  originRef: string | null;
+  ok: boolean;
+  error: string | null;
+  durationMs: number;
+  /** Serialised by the store, so a caller never has to decide whether to keep them. */
+  args: Record<string, unknown>;
 }

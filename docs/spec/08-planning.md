@@ -229,7 +229,7 @@ for it, and a plan without one renders "no write-up" in the plan sheet rather
 than hiding the tab — a hidden tab would read as "this planner had nothing to add", indistinguishable
 from "this planner ignored the instruction". An over-long `document` is **trimmed and stored, with the
 trim reported**, never refused: refusing would reject the whole plan submission over its prose, the
-`note_progress` trade-off (cheap and frequent beats strict) rather than the `report_finding` one
+`note_progress` trade-off (cheap and frequent beats strict) rather than the claim intake's
 (testimony, so refuse what cannot be attributed).
 
 `plans` carries `diagnosis`/`approach`/`risks`/`out_of_scope`/`document` and `plan_parts` carries

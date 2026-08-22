@@ -12,6 +12,7 @@ import { validateCiPolicy, type CiPolicy } from './ci/ciPolicy.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from './integrations/azure/policyKinds.js';
 import { validateAgentModels, type AgentModels } from './agents/modelPolicy.js';
 import { DEFAULT_FILING_TYPES } from './ticketTypes.js';
+import { DEFAULT_MCP_ARGS_RETENTION_DAYS } from './store/mcpCalls.js';
 import type { PetPolicy } from './pets/keeper.js';
 import { validateEnvironments, type EnvironmentConfig } from './environments/policy.js';
 
@@ -542,6 +543,26 @@ export interface Config {
    * this says.
    */
   knowledgeScopeStaleDays: number;
+  /**
+   * How long a recorded MCP call keeps its **arguments**, in days. `0` records
+   * none at all.
+   *
+   * The row itself is never dropped, and that is the distinction the key is drawn
+   * on. A call without its arguments is about eighty bytes, so every count on the
+   * Insights MCP tab stays exact at every window the page offers — `all`
+   * included — where an aggregate rolled up at some grain would fix today what a
+   * later reading is allowed to ask. What actually grows without bound is the
+   * arguments: a submitted plan document is tens of kilobytes, and it is also the
+   * only part of the row that carries issue text and code, which is the other
+   * reason the operator gets a say rather than a constant.
+   *
+   * Set to `0`, arguments are not written in the first place — the sweep is not
+   * the off switch, this is. Lowering it clears what is already past the new
+   * bound on the next sweep, so turning it off is retroactive rather than merely
+   * prospective.
+   * → `docs/spec/14-persistence.md#mcp-calls`
+   */
+  mcpArgsRetentionDays: number;
   /** Command used to launch an agent session (overridable for tests). */
   claudeCommand: string;
   /** Extra args passed to the agent command. */
@@ -779,6 +800,10 @@ const DEFAULTS: Config = {
   agentResumeAttempts: 3,
   knowledgeBlockChars: 6_000,
   knowledgeScopeStaleDays: 30,
+  // A fortnight: long enough that "how is this tool actually being used" is a
+  // question the tab can still answer about last sprint's work, short enough that
+  // a deployment is not holding a year of agent arguments it will never read.
+  mcpArgsRetentionDays: DEFAULT_MCP_ARGS_RETENTION_DAYS,
   claudeCommand: 'claude',
   claudeArgs: [],
   promptTemplatesDir: '.lubbdubb/prompts',

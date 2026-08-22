@@ -2,7 +2,7 @@
  * The `request_human_task` tool's pure layer: what a well-formed ask looks like.
  * No store, no transport — so the validation is testable on its own and the tool
  * handler is left with nothing but the persist-and-envelope step, exactly as
- * `findings.ts` is for `report_finding`.
+ * `findings.ts` holds the tracker-ref parsing every door shares.
  *
  * ## The gap this closes
  *
@@ -16,7 +16,7 @@
  *
  * ## Does asking for one put work on the fleet? No.
  *
- * `report_finding` queues nothing because a queued job is dispatched ahead of
+ * `raise` queues nothing because a queued job is dispatched ahead of
  * every world-driven rule, so an agent that could queue jobs could spend another
  * agent's slot. This tool is the other side of that same argument and lands
  * differently: it schedules no agent, takes no slot, cuts no worktree and spends

@@ -144,6 +144,42 @@ export class TaskStore {
   }
 
   /**
+   * Per name, how many tasks dispatched inside the window have that name in their
+   * **prompt** — the evidence behind the MCP usage reading's "nothing named it".
+   *
+   * In SQL, and as one scan, for {@link listTasks}' reason turned inside out. The
+   * question genuinely needs the prompt column, which is the 17 MB this store
+   * otherwise never loads; so rather than hand the prompts out, the match is done
+   * where they already are and what comes back is one integer per name. One
+   * conditional sum per name in a single statement rather than a query each: the
+   * cost is one pass over the window's prompts however many names are asked about.
+   *
+   * `instr` is a plain substring match, which is the same question
+   * `addendumNames` asks of the addendum with a word-boundary regex. The looser
+   * form is the safe direction here: over-matching says a tool *was* named, and
+   * the verdict that turns on this ("nothing named it") is the one it would be
+   * wrong to raise falsely.
+   *
+   * The window is taken on the task's **own** `created_at` — when it was
+   * dispatched — rather than on the run instant every other insights fold uses.
+   * That is a deliberate difference and not an oversight: the question here is
+   * *what were agents told in this window*, which is a fact about prompts being
+   * written, where the other folds ask what a run cost or how it ended, which are
+   * facts about runs finishing. Reaching for the run instant would also mean
+   * naming the `agents` table from the module that owns `tasks`, and a
+   * cross-domain read belongs above the persistence layer rather than in a join
+   * here.
+   */
+  countTasksNamingTools(since: string, names: readonly string[]): Map<string, number> {
+    if (names.length === 0) return new Map();
+    const columns = names.map((_, i) => `SUM(CASE WHEN instr(prompt, ?) > 0 THEN 1 ELSE 0 END) AS n${i}`).join(', ');
+    const row = this.ctx.db
+      .prepare(`SELECT ${columns} FROM tasks WHERE created_at >= ?`)
+      .get(...names, since) as Record<string, number | null>;
+    return new Map(names.map((name, i) => [name, row[`n${i}`] ?? 0]));
+  }
+
+  /**
    * Every task whose work is still outstanding — the same `queued`/`running`/`waiting`
    * set the two `findActiveTask*` gates below treat as active, asked as a list rather
    * than as a lookup. Crash recovery is the caller: an outstanding task with no agent

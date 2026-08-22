@@ -272,36 +272,18 @@ function parseAboutRef(raw: string): string | null {
 }
 
 /**
- * Validate what `knowledge_notice` was handed.
- *
- * A notice is a proposal with the lifetime decided rather than asked for, so this
- * is {@link validateFactProposal} with `expiring` supplied — one validator, not
- * two views of what a claim may be. The tool exists as its own tool because the
- * *description* is the safeguard ({@link NOTICE_RULE}) and because a clock an
- * agent may forget to ask for is a standing fleet-wide claim filed by accident,
- * which is the one thing agreement alone must never produce.
- */
-export function validateFactNotice(
-  raw: unknown,
-  goalRef: string | null,
-): { ok: true; proposal: FactProposal } | { ok: false; error: string } {
-  const args = (raw ?? {}) as Record<string, unknown>;
-  return validateFactProposal({ ...args, lifetime: 'expiring' }, goalRef);
-}
-
-/**
  * Validate what the unified intake was handed.
  *
  * `raise` is {@link validateFactProposal} with **every taxonomy question
  * removed** — one validator rather than a second opinion about what a claim may
- * be, exactly as {@link validateFactNotice} is. What changes is only what the
+ * be. What changes is only what the
  * caller has to have decided:
  *
  * - **Lifetime is not asked for.** `until` carries the hours, and *its presence is
  *   the answer*: a claim filed with one is expiring, a claim filed without one
  *   stands. An agent cannot file a notice by picking the wrong word, and cannot
  *   file a standing fleet-wide claim by forgetting the right one — which was the
- *   whole argument for `knowledge_notice` being a separate tool, met here without
+ *   whole argument the notice tier was ever made separate, met here without
  *   a second door.
  * - **Scope defaults to `fleet` rather than being required.** This is the one
  *   default worth arguing: `goal` would be safer to be wrong about and is the
@@ -372,7 +354,7 @@ export function validateRaisedContradiction(
  * So the tool asks for the sentence that would have been right, and what the fleet
  * gets out of the disagreement is a sharper claim rather than one fewer claim.
  */
-export const CONTRADICTION_RULE =
+const CONTRADICTION_RULE =
   'Say what the claim should say INSTEAD. A contradiction with no amendment is refused: nothing here is ' +
   'demoted by count, so "this is wrong" on its own changes nothing and reaches nobody. A claim that is ' +
   'right in general and wrong at one edge is exactly the claim worth sharpening — write the version that ' +
@@ -389,7 +371,7 @@ export interface FactContradiction {
 }
 
 /**
- * Validate what `knowledge_contradict` was handed.
+ * Validate a contradiction — what `raise` builds when the agent names `contradicts`.
  *
  * The amendment is refused **by name and with the reason** rather than defaulted
  * or dropped: an agent told nothing files the same bare objection again, and an
@@ -449,7 +431,7 @@ export function validateContradiction(
  * it would be pointing at something nobody can file a dispute against. And a
  * `rejected` claim has already been answered: it reaches nobody, an operator has
  * said it is not true, and the sharper version an agent has in hand is a claim in
- * its own right — `knowledge_propose` with `supersedes`, which is the one thing
+ * its own right — a `raise` naming it with `contradicts`, which is the one thing
  * that lifts a bar.
  */
 export function contradictableFact(fact: KnowledgeFact, now: string): { ok: true } | { ok: false; error: string } {
@@ -458,8 +440,8 @@ export function contradictableFact(fact: KnowledgeFact, now: string): { ok: true
       ok: false,
       error:
         `an operator has already rejected that claim (${fact.id}), so it reaches no agent and there is ` +
-        `nothing to correct. If your sharper version is worth filing in its own right, propose it with ` +
-        `knowledge_propose and supersedes: "${fact.id}" — an amendment is the one thing exempt from a bar.`,
+        `nothing to correct. If your sharper version is worth filing in its own right, raise it with ` +
+        `contradicts: "${fact.id}" — an amendment is the one thing exempt from a bar.`,
     };
   }
   if (fact.reach === 'proposal') {
@@ -467,8 +449,8 @@ export function contradictableFact(fact: KnowledgeFact, now: string): { ok: true
       ok: false,
       error:
         `that claim is still a proposal (${fact.id}): one agent said it and nothing has agreed, so it ` +
-        `rides no prompt and is answered to nobody. There is nothing to take off the fleet. File what you ` +
-        `saw with knowledge_propose instead.`,
+        `rides no prompt and is answered to nobody. There is nothing to take off the fleet. Raise what you ` +
+        `saw as a claim of its own instead — leave contradicts out.`,
     };
   }
   if (fact.reach === 'retired') {

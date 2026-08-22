@@ -451,10 +451,10 @@ async function callTool(system: System, agent: Agent, name: string, args: Record
   return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
 }
 
-test('knowledge_propose files a claim attributed to the caller’s own goal', async () => {
+test('a raised claim is attributed to the caller’s own goal', async () => {
   const system = build();
   const agent = spawnAgent(system, 'issue:12:part:reader');
-  const res = await callTool(system, agent, 'knowledge_propose', {
+  const res = await callTool(system, agent, 'raise', {
     claim: 'A route handler never reads the request; it is wrapped in checked(schemas, handler).',
     scope: 'fleet',
     evidence: 'The structural test over src/server/routes failed until I used the wrapper.',
@@ -472,16 +472,16 @@ test('a second agent on a second goal is told its call was corroboration, not a 
   const system = build();
   const claim = 'A route handler never reads the request; it is wrapped in checked(schemas, handler).';
   const first = spawnAgent(system, 'issue:12');
-  await callTool(system, first, 'knowledge_propose', { claim, scope: 'fleet', evidence: 'saw it in routes.' });
+  await callTool(system, first, 'raise', { claim, scope: 'fleet', evidence: 'saw it in routes.' });
   const second = spawnAgent(system, 'issue:44');
-  const res = await callTool(system, second, 'knowledge_propose', {
+  const res = await callTool(system, second, 'raise', {
     claim,
     scope: 'fleet',
     evidence: 'again, in mine.',
   });
   const payload = JSON.parse(res.text) as { corroborations: number; note: string };
   assert.equal(payload.corroborations, 2);
-  assert.match(payload.note, /corroboration/i);
+  assert.match(payload.note, /agreeing with a claim already raised/i);
   assert.equal(system.store.listFacts().length, 1);
   system.store.close();
 });
@@ -490,12 +490,12 @@ test('a barred proposal is refused by name, with the amendment that is the way b
   const system = build();
   const claim = 'The dispatcher reads the lessons table before it ranks anything.';
   const first = spawnAgent(system, 'issue:12');
-  await callTool(system, first, 'knowledge_propose', { claim, scope: 'fleet', evidence: 'I assumed so.' });
+  await callTool(system, first, 'raise', { claim, scope: 'fleet', evidence: 'I assumed so.' });
   const rejected = system.store.listFacts()[0]!;
   system.store.setFactReach(rejected.id, 'rejected');
 
   const second = spawnAgent(system, 'issue:44');
-  const res = await callTool(system, second, 'knowledge_propose', {
+  const res = await callTool(system, second, 'raise', {
     claim,
     scope: 'fleet',
     evidence: 'I assumed so too.',
@@ -504,7 +504,7 @@ test('a barred proposal is refused by name, with the amendment that is the way b
   // A silent refusal teaches the fleet nothing and it files the claim again
   // tomorrow, so the refusal names the claim, its id and the amendment arm.
   assert.match(res.text, new RegExp(rejected.id));
-  assert.match(res.text, /supersedes/);
+  assert.match(res.text, /contradicts/);
   system.store.close();
 });
 
@@ -513,7 +513,7 @@ test('knowledge_ask answers from the caller’s own scopes and says so when noth
   const claim = 'The suite wants a built web bundle first.';
   for (const origin of ['issue:12', 'issue:44']) {
     const agent = spawnAgent(system, origin);
-    await callTool(system, agent, 'knowledge_propose', { claim, scope: 'fleet', evidence: 'the suite failed cold.' });
+    await callTool(system, agent, 'raise', { claim, scope: 'fleet', evidence: 'the suite failed cold.' });
   }
   const asker = spawnAgent(system, 'issue:77');
   const answered = await callTool(system, asker, 'knowledge_ask', {});
@@ -525,7 +525,7 @@ test('knowledge_ask answers from the caller’s own scopes and says so when noth
   const empty = await callTool(system, asker, 'knowledge_ask', { question: 'how are worktree slots leased' });
   const none = JSON.parse(empty.text) as { facts: unknown[]; note: string };
   assert.deepEqual(none.facts, []);
-  assert.match(none.note, /knowledge_propose/);
+  assert.match(none.note, /raise it/);
   system.store.close();
 });
 
@@ -694,9 +694,9 @@ test('the cockpit hears a proposal when it is filed, not on the next pulse', asy
   system.agents.on('fact', (e) => heard.push({ filed: e.filed, claim: e.fact.claim }));
   const first = spawnAgent(system, 'issue:12');
   const claim = 'A route handler never reads the request; it is wrapped in checked(schemas, handler).';
-  await callTool(system, first, 'knowledge_propose', { claim, scope: 'fleet', evidence: 'saw it in routes.' });
+  await callTool(system, first, 'raise', { claim, scope: 'fleet', evidence: 'saw it in routes.' });
   const second = spawnAgent(system, 'issue:44');
-  await callTool(system, second, 'knowledge_propose', { claim, scope: 'fleet', evidence: 'again, in mine.' });
+  await callTool(system, second, 'raise', { claim, scope: 'fleet', evidence: 'again, in mine.' });
   assert.deepEqual(
     heard.map((h) => h.filed),
     [true, false],
@@ -708,7 +708,7 @@ test('the cockpit hears a proposal when it is filed, not on the next pulse', asy
   const killed = system.store.listFacts()[0]!;
   system.store.setFactReach(killed.id, 'rejected');
   const third = spawnAgent(system, 'issue:77');
-  await callTool(system, third, 'knowledge_propose', { claim, scope: 'fleet', evidence: 'me too.' });
+  await callTool(system, third, 'raise', { claim, scope: 'fleet', evidence: 'me too.' });
   assert.equal(heard.length, 2);
   system.store.close();
 });
@@ -1165,9 +1165,23 @@ test('the operator arm is bounded by the same rule the intake is, and the bar ho
  * disagreement produces a sharper claim rather than one fewer claim.
  */
 
-/** One contradiction through the tool, as the caller sees it. */
+/**
+ * One contradiction through the tool, as the caller sees it.
+ *
+ * `raise` since the intake: `contradicts` is the discriminator that makes a claim
+ * an amendment, and the claim itself is what the old tool called the amendment.
+ * The mapping lives here rather than at each call site because the *properties*
+ * being asserted below are about contradiction, not about argument names — and
+ * `raise` hands both straight to `validateContradiction`, so the refusals the
+ * tests match on are the same words as before.
+ */
 async function contradict(system: System, agent: Agent, args: Record<string, unknown>) {
-  return callTool(system, agent, 'knowledge_contradict', args);
+  const { factId, amendment, ...rest } = args;
+  return callTool(system, agent, 'raise', {
+    ...rest,
+    contradicts: factId,
+    ...(amendment === undefined ? {} : { claim: amendment }),
+  });
 }
 
 /** Resolve one contradiction through the route, as an operator does. */
@@ -1201,8 +1215,8 @@ test('a contradiction files the amendment it demands, and moves the claim nowher
   });
   assert.equal(res.isError, false);
   const payload = JSON.parse(res.text) as {
-    amendment: { id: string; scope: string; reach: string };
-    contradicted: { reach: string };
+    amendment: { id: string; reach: string };
+    disputed: { id: string; claim: string };
     note: string;
   };
   // The amendment is a claim of its own, on the original's axes, naming it.
@@ -1214,10 +1228,10 @@ test('a contradiction files the amendment it demands, and moves the claim nowher
   const original = system.store.getFact(id);
   assert.equal(original?.reach, 'injected');
   assert.equal(original?.expiresAt, null);
-  assert.equal(payload.contradicted.reach, 'injected');
+  assert.equal(payload.disputed.id, id);
   // Said in the response, because an agent that believes it has just taken a stale
   // claim off the fleet stops looking at it.
-  assert.match(payload.note, /has not moved/i);
+  assert.match(payload.note, /Nothing moved/i);
   system.store.close();
 });
 
@@ -1289,8 +1303,8 @@ test('a contradiction with no amendment is refused by name, and so is one of a r
   assert.equal(dead.isError, true);
   // An operator has already answered it and it reaches nobody, so there is nothing
   // to correct — and the way to file the sharper claim in its own right is named.
-  assert.match(dead.text, /knowledge_propose/);
-  assert.match(dead.text, /supersedes/);
+  assert.match(dead.text, /raise it with contradicts/);
+  assert.match(dead.text, /contradicts/);
 
   const unknown = await contradict(system, agent, {
     factId: 'fact_nope',
@@ -1342,14 +1356,14 @@ test('a superseded claim does not bar the amendment’s own words from being res
   // is being told is the bar leaking through exactly the containment that makes an
   // amendment an amendment.
   const later = spawnAgent(system, 'issue:99');
-  const res = await callTool(system, later, 'knowledge_propose', {
+  const res = await callTool(system, later, 'raise', {
     claim: EDGE_AMENDMENT,
     scope: 'fleet',
     evidence: 'knip stayed red until the method went.',
   });
   assert.equal(res.isError, false);
   const payload = JSON.parse(res.text) as { corroborations: number; note: string };
-  assert.match(payload.note, /corroboration/i);
+  assert.match(payload.note, /agreeing with a claim already raised/i);
   assert.equal(payload.corroborations, 2);
   await app.close();
 });
@@ -1635,7 +1649,7 @@ test('an ask is recorded from the tool, and the cockpit’s own reads of the sam
   const claim = 'The suite wants a built web bundle first.';
   for (const origin of ['issue:12', 'issue:44']) {
     const agent = spawnAgent(system, origin);
-    await callTool(system, agent, 'knowledge_propose', { claim, scope: 'fleet', evidence: 'the suite failed cold.' });
+    await callTool(system, agent, 'raise', { claim, scope: 'fleet', evidence: 'the suite failed cold.' });
   }
   const id = system.store.listFacts()[0]!.id;
   assert.equal(system.store.getFact(id)?.reach, 'lookup');

@@ -24,6 +24,7 @@ import type {
   PetCatalogue,
   PlanHistory,
   McpChannelPayload,
+  McpUsagePayload,
   PromptsPayload,
   RetrospectivePayload,
   RunningConfigPayload,
@@ -200,6 +201,11 @@ const realApi = {
   // life, which they did not when one fold was all-time and the other a fortnight.
   getReliability: (window: InsightsWindow) =>
     authFetch(`/api/reliability?window=${window}`).then((r) => json<ReliabilityPayload>(r)),
+  // The tool channel, fetched on the MCP tab's first visit for the trend's reason:
+  // the naming evidence is a scan of every dispatch prompt inside the window, and
+  // that is the one read in the harness that touches `tasks.prompt` in bulk.
+  getMcpUsage: (window: InsightsWindow) =>
+    authFetch(`/api/mcp/usage?window=${window}`).then((r) => json<McpUsagePayload>(r)),
   // The prompt book, fetched on open for the opposite reason to the work graph:
   // it is read once at boot, so polling it would be paying for a constant.
   /**

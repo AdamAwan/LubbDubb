@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, type JSX, type RefObject } from 'react';
-import type { InsightsWindow, ReliabilityInsights, RemedyInsights, SpendInsights, SpendTrend } from '../types.js';
+import type {
+  InsightsWindow,
+  McpInsights,
+  ReliabilityInsights,
+  RemedyInsights,
+  SpendInsights,
+  SpendTrend,
+} from '../types.js';
 import type { CockpitActions, InsightsView } from '../cockpit/actions.js';
 import { api } from '../api.js';
 import { Downloads } from './Downloads.js';
@@ -8,6 +15,7 @@ import { ReliabilityTab, reliabilityCsv } from './ReliabilityTab.js';
 import { CausesTab } from './CausesTab.js';
 import { SpendTrendTab } from './SpendTrendTab.js';
 import { WorkMixTab } from './WorkMixTab.js';
+import { McpUsageTab, mcpCsv } from './McpUsageTab.js';
 
 /**
  * Insights — one destination, one window, five readings of it.
@@ -50,6 +58,7 @@ const TABS: readonly { id: InsightsView; label: string; note: string }[] = [
   { id: 'causes', label: 'Causes', note: 'what keeps sending the fleet back' },
   { id: 'trend', label: 'Trend', note: 'whether what you changed is working' },
   { id: 'mix', label: 'Work mix', note: 'why this kind of work costs what it does' },
+  { id: 'mcp', label: 'MCP', note: 'which tools the fleet reaches for, and which it never does' },
 ];
 
 /**
@@ -91,6 +100,7 @@ export function InsightsPage({
   const [reliability, setReliability] = useState<Fetched<ReliabilityInsights>>(PENDING);
   const [remedies, setRemedies] = useState<RemedyInsights | null>(null);
   const [trend, setTrend] = useState<Fetched<SpendTrend>>({ state: 'loading', data: null });
+  const [mcp, setMcp] = useState<Fetched<McpInsights>>(PENDING);
   // The trend is fetched on its tab's first visit *for a given window* rather
   // than with the rest, for the reason the settings modal mounts its tabs
   // lazily: it reaches eight windows of world events on top of the same agent
@@ -99,6 +109,11 @@ export function InsightsPage({
   // holding "already fetched" as a boolean is how the trend ends up drawn over
   // one stretch while everything above it describes another.
   const trendFetchedFor = useRef<InsightsWindow | null>(null);
+  // The MCP tab is fetched on first visit for the trend's reason and keyed the
+  // same way: its naming evidence is a scan of every dispatch prompt in the
+  // window, which is the one read in the harness that touches `tasks.prompt` in
+  // bulk. Same ref-per-window shape, because a window change invalidates it.
+  const mcpFetchedFor = useRef<InsightsWindow | null>(null);
   // Both refetch on a window change, and both are re-read from scratch rather
   // than merged: a payload for the old window left standing beside one for the
   // new is the disagreement the single window exists to remove.
@@ -108,6 +123,8 @@ export function InsightsPage({
     setReliability(PENDING);
     trendFetchedFor.current = null;
     setTrend(PENDING);
+    mcpFetchedFor.current = null;
+    setMcp(PENDING);
     api
       .getSpend(chosen)
       .then((res) => live && setSpend({ state: 'ready', data: res.insights }))
@@ -144,6 +161,23 @@ export function InsightsPage({
     };
   }, [view, chosen]);
 
+  // The MCP tab's own, on the same terms and for the same reason — including
+  // hanging off the *place* rather than off the click, so a shared
+  // `?view=mcp` link is a first visit too.
+  useEffect(() => {
+    if (view !== 'mcp' || mcpFetchedFor.current === chosen) return;
+    mcpFetchedFor.current = chosen;
+    let live = true;
+    setMcp(PENDING);
+    api
+      .getMcpUsage(chosen)
+      .then((res) => live && setMcp({ state: 'ready', data: res.insights }))
+      .catch(() => live && setMcp({ state: 'failed', data: null }));
+    return () => {
+      live = false;
+    };
+  }, [view, chosen]);
+
   const note = TABS.find((t) => t.id === view)?.note ?? '';
   // The window as the *server* resolved it, never as this page asked: the caption
   // and the buckets under it must be one window, and a caption derived from the
@@ -162,6 +196,7 @@ export function InsightsPage({
           reliability={reliability.data}
           remedies={remedies}
           trend={trend.data}
+          mcp={mcp.data}
           page={page}
         />
       </div>
@@ -210,6 +245,7 @@ export function InsightsPage({
           reliability={reliability}
           remedies={remedies}
           trend={trend}
+          mcp={mcp}
           windowLabel={resolved?.label ?? 'this window'}
         />
       </div>
@@ -232,6 +268,7 @@ function Body({
   reliability,
   remedies,
   trend,
+  mcp,
   windowLabel,
 }: {
   view: InsightsView;
@@ -239,6 +276,7 @@ function Body({
   reliability: Fetched<ReliabilityInsights>;
   remedies: RemedyInsights | null;
   trend: Fetched<SpendTrend>;
+  mcp: Fetched<McpInsights>;
   windowLabel: string;
 }): JSX.Element {
   if (view === 'economics' || view === 'mix') {
@@ -256,6 +294,12 @@ function Body({
     // came back for no reason.
     if (remedies === null) return <p className="empty">No causes were reported for this window.</p>;
     return <CausesTab remedies={remedies} windowLabel={windowLabel.toLowerCase()} />;
+  }
+
+  if (view === 'mcp') {
+    if (mcp.state === 'loading') return <p className="empty">Reading the tool channel…</p>;
+    if (mcp.data === null) return <p className="empty">Could not read the tool channel.</p>;
+    return <McpUsageTab insights={mcp.data} />;
   }
 
   if (trend.state === 'loading') return <p className="empty">Reading eight windows…</p>;
@@ -279,6 +323,7 @@ function Exports({
   reliability,
   remedies,
   trend,
+  mcp,
   page,
 }: {
   view: InsightsView;
@@ -286,6 +331,7 @@ function Exports({
   reliability: ReliabilityInsights | null;
   remedies: RemedyInsights | null;
   trend: SpendTrend | null;
+  mcp: McpInsights | null;
   page: RefObject<HTMLDivElement | null>;
 }): JSX.Element | null {
   const label = TABS.find((t) => t.id === view)?.label ?? 'Insights';
@@ -294,6 +340,27 @@ function Exports({
     title: 'This tab as it stands, through the browser\u2019s own print — choose “Save as PDF”',
     node: () => page.current,
   };
+  if (view === 'mcp') {
+    if (mcp === null) return null;
+    return (
+      <Downloads
+        name="lubbdubb-mcp"
+        files={[
+          {
+            format: 'csv',
+            title: 'Every table on this tab, in the order it is drawn, headed by the window it was taken over',
+            build: () => mcpCsv(mcp),
+          },
+          {
+            format: 'json',
+            title: 'The exact payload this tab drew, unrounded',
+            build: () => JSON.stringify({ insights: mcp }, null, 2),
+          },
+        ]}
+        sheet={sheet}
+      />
+    );
+  }
   const spendTab = view === 'economics' || view === 'mix' || view === 'trend';
   if (spendTab && spend !== null) {
     return (

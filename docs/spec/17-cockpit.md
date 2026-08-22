@@ -2397,7 +2397,7 @@ version of the other two. The output graph drew a cost row; the yield panel drew
 spend trend drew a completion rate off a second server builder, one click from the first. That is the
 shape of a wrong seam.
 
-**One page, one window, five readings of it.**
+**One page, one window, six readings of it.**
 
 - **Economics** — is the fleet worth what it costs? The ratio headline, the phase split, the timeline,
   the goals and the costliest runs.
@@ -2406,6 +2406,9 @@ shape of a wrong seam.
 - **Causes** — what keeps sending the fleet back? The guard split, both cause tables, and Lately.
 - **Trend** — is what I changed working? The eight-period cohort view.
 - **Work mix** — why does _this kind_ of work cost what it does? By task type, and by failing check.
+- **MCP** — which tools the fleet reaches for, and which it never does. The odd one out, and
+  deliberately: every other tab is a reading about work the harness did, and this is a reading about a
+  **channel**. See [below](#mcp).
 
 Every table the three panels drew lands in exactly one of these, and the duplicates collapse on the way
 in: there is one phase table rather than two, and one completion rate rather than the reliability fold's
@@ -2608,6 +2611,70 @@ in — review comments get a figure of their own here, which no phase can give t
 sent the agent and nothing dispatched a local run, so that money is in the total above the table and in
 none of its rows — stated as a remainder in the shape the checks table states its own
 ([23](23-local-runs.md#what-it-costs)).
+
+### MCP
+
+`web/src/components/McpUsageTab.tsx`, and the tab that does not fit the page's pattern. The other five
+fold records the harness was already keeping for some other purpose; this one folds `mcp_calls`
+([14](14-persistence.md#mcp-calls)), a table that exists only for it — because the failure it is about
+leaves no trace anywhere else.
+
+It is here rather than on the config page's MCP tab because the two answer different questions. That
+one answers _how do I connect my own Claude Code to this_, and is a set of instructions. This answers
+_is the channel doing anything_, and is a reading over a window — which is a thing the config page has
+no way to take.
+
+**It leads with the silence.** Call counts are the least interesting thing on it and are drawn last.
+What comes first is the two ways the channel fails without saying so:
+
+- **A run that called nothing.** An operator `--allowedTools` in `claudeArgs` is appended last, so it
+  beats the harness's and drops every `mcp__lubbdubb__*` grant. The channel connects, every call is
+  refused before it arrives, and the agent finishes on the sentinels with nothing to show it ever tried.
+  A call that never arrives cannot be recorded, so this is measured against the **runs** that settled:
+  a run with no rows against it is the alarm. It is drawn above every table, because it is the reading
+  that invalidates the others — a per-tool count taken over a window in which three runs could not reach
+  the channel is a count with three runs missing from it.
+- **A tool nothing named.** `tools/list` is not an instruction: an agent reaches for what its prompts
+  named, and a tool nothing names loses to `gh` with nothing red anywhere
+  ([11](11-mcp-tools.md#where-a-tool-is-named-to-the-agent)).
+
+**A count of zero is four facts wearing one face, and the server says which.** This is the part that
+earns the tab. `src/mcpInsights.ts` ships a verdict per silent tool with the evidence behind it, rather
+than three numbers for the cockpit to interpret — the same rule `PHASE_COPY` and `OUTCOME_COPY` follow,
+and for the same reason: it is a claim about what the harness did, and a cockpit re-deriving it would
+be a second opinion drawn inches from the first. The ladder, worst first:
+
+| Verdict                  | What it means                                                                                      |
+| ------------------------ | -------------------------------------------------------------------------------------------------- |
+| **Called, always refused** | Agents are reaching for it and its contract turns every one away. The one case where the silence is the tool's own fault. |
+| **Retired, still called**  | A withdrawn name ([11](11-mcp-tools.md#retired-tools)) something still names. Every call spends a turn on a refusal. |
+| **Nothing named it**       | In neither the addendum nor any prompt the window dispatched. Nobody was told it exists.            |
+| **Named, never reached for** | Agents were told and none called it. The job did not come up, or the wording is not landing.       |
+| **No desktop session used it** | A person did not sit down and run one. A reading, and the one verdict with no remedy.           |
+
+The evidence is drawn beside the verdict — whether the addendum names it, and how many dispatch prompts
+did — so the claim is checkable rather than merely stated. That separation is load-bearing:
+`TOOL_NAMING` says where a tool is _supposed_ to be named and the text says whether it was, so a tool
+classified `addendum` whose name is not actually in `MCP_PROTOCOL_ADDENDUM` is a defect the tab names
+outright, where a check of the classification alone would agree it was fine.
+
+**The `--allowedTools` override is reported before it costs a run.** It is a live config read and the
+only thing on the payload that is not a fold of the window, because the point is to catch the flag
+rather than to explain a silent run afterwards.
+
+**The two channels are never summed.** They are different credentials over different tool sets, and
+`validation_report` is two different tools with one name. The desktop channel gets its own section; the
+one graphic that draws both is a *relative* width — which channel this harness's traffic is — never a
+total.
+
+**Naming colour is a token, not a value**, on `.mc` as the phase and outcome palettes are on `.sp` and
+`.rl`. It is a *category* palette rather than a verdict one: `addendum` and `point-of-use` are two
+places a tool can be named and neither is better. The alarm colours are the cockpit's own red and amber,
+because a fleet that cannot reach its tools is the alarm vocabulary.
+
+**It fetches on its own first visit**, keyed by window, exactly as Trend does and for a sharper version
+of the reason: its naming evidence is a scan of every dispatch prompt in the window, which is the one
+query in the harness that reads `tasks.prompt` in bulk.
 
 ## Exporting a reading
 

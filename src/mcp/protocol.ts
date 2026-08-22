@@ -54,6 +54,17 @@ export interface McpTool {
   /** JSON Schema for the arguments, as advertised to the model. */
   inputSchema: Record<string, unknown>;
   handler: (args: Record<string, unknown>) => Promise<ToolCallResult> | ToolCallResult;
+  /**
+   * Answered, but never advertised — what a **retired** name is (`src/mcp/names.ts`).
+   *
+   * The two halves are both load-bearing and pull opposite ways. Out of
+   * `tools/list`, because a withdrawn tool must not be one of the doors an agent
+   * chooses between. Still dispatchable, because a prompt override written before
+   * the withdrawal still names it, and an unknown-method error reaches the agent
+   * as a broken channel and appears in no reading at all — where a refusal that
+   * names the replacement is both an answer and a recorded call.
+   */
+  hidden?: boolean;
 }
 
 /** Parse one newline-delimited frame, or null when it isn't a usable request. */
@@ -113,15 +124,16 @@ export async function handleRequest(req: JsonRpcRequest, tools: McpTool[]): Prom
       return isNotification ? null : rpcResult(id, {});
     case 'tools/list':
       return rpcResult(id, {
-        tools: tools.map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
+        tools: tools
+          .filter((t) => t.hidden !== true)
+          .map((t) => ({ name: t.name, description: t.description, inputSchema: t.inputSchema })),
       });
     case 'tools/call': {
-      const name = req.params?.name;
-      if (typeof name !== 'string') return rpcError(id, RPC_ERRORS.invalidParams, 'tools/call requires a tool name');
+      const call = toolCallFrame(req);
+      if (call === null) return rpcError(id, RPC_ERRORS.invalidParams, 'tools/call requires a tool name');
+      const { tool: name, args } = call;
       const tool = tools.find((t) => t.name === name);
       if (!tool) return rpcError(id, RPC_ERRORS.invalidParams, `unknown tool "${name}"`);
-      const rawArgs = req.params?.arguments;
-      const args = typeof rawArgs === 'object' && rawArgs !== null ? (rawArgs as Record<string, unknown>) : {};
       try {
         return rpcResult(id, await tool.handler(args));
       } catch (err) {
@@ -133,6 +145,26 @@ export async function handleRequest(req: JsonRpcRequest, tools: McpTool[]): Prom
     default:
       return isNotification ? null : rpcError(id, RPC_ERRORS.methodNotFound, `unknown method "${req.method}"`);
   }
+}
+
+/**
+ * The tool name and arguments a frame carries, or null when it is not a
+ * well-formed `tools/call`.
+ *
+ * One parse, reached from three places: this module's own dispatch, and both
+ * channels' call recording. Written separately at each, the recording would be
+ * free to disagree with the dispatch about what was called — which is a usage
+ * reading naming a tool nothing ran, with nothing to catch it.
+ */
+export function toolCallFrame(req: JsonRpcRequest): { tool: string; args: Record<string, unknown> } | null {
+  if (req.method !== 'tools/call') return null;
+  const name = req.params?.name;
+  if (typeof name !== 'string') return null;
+  const rawArgs = req.params?.arguments;
+  return {
+    tool: name,
+    args: typeof rawArgs === 'object' && rawArgs !== null ? (rawArgs as Record<string, unknown>) : {},
+  };
 }
 
 /** A tool result carrying a JSON payload (the shape every LubbDubb tool returns). */

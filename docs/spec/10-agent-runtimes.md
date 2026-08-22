@@ -238,7 +238,7 @@ scoped to one goal or one check ride the **task** prompt for exactly that reason
 - **It is claims, not instructions.** Each fact renders with the goal it was first seen on and the date
   it was written, under a header saying the repository in front of the agent is the authority. That is
   what lets an agent discount a stale one, and it is exactly what a bare block of assertions strips.
-  Since #27 phase 5 that sentence names `knowledge_contradict`, so the invitation and the tool that
+  Since #27 phase 5 that sentence names `raise` with `contradicts`, so the invitation and the call that
   answers it are one sentence rather than an invitation pointing at nothing.
 - **The block does not say which claims are disputed**, and that is a decision rather than an
   omission. A contradiction is one agent's reading, and marking the line would be a hedge in front of

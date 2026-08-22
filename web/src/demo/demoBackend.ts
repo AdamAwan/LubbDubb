@@ -30,6 +30,13 @@ import type {
   JobSchedule,
   KnowledgeFactPayload,
   McpChannelPayload,
+  McpInsights,
+  McpNaming,
+  McpNamingTotal,
+  McpPhaseUsage,
+  McpQuietTool,
+  McpSilentRun,
+  McpToolUsage,
   OpenPullRequest,
   PetCatalogue,
   CiPolicyDescription,
@@ -2626,6 +2633,322 @@ function buildDemoRemedies(): RemedyInsights {
   };
 }
 
+/**
+ * The MCP tab's fixture, authored for `buildDemoSpend`'s reason and one of its own.
+ *
+ * The demo's world is built fresh in the browser on every load, so there is no
+ * `mcp_calls` table behind it and never will be — folded, this tab would draw a
+ * page of zeroes. That is worse here than anywhere else on the page: a page of
+ * zeroes is *precisely* what this tab looks like when a real deployment's grants
+ * have been dropped, so a demo showing one would teach a reader to recognise a
+ * working channel as a broken one.
+ *
+ * The figures are authored to show the tab doing its job rather than to flatter
+ * it: three runs that called nothing, a retired name something is still calling,
+ * a tool nothing named, and a tool whose every call is refused. Those are the
+ * four verdicts, and a demo that showed only healthy traffic would not explain
+ * what the tab is for.
+ */
+function buildDemoMcp(): McpInsights {
+  const now = Date.now();
+  const ago = (mins: number): string => new Date(now - mins * 60_000).toISOString();
+  const fleet = 1_919;
+
+  const tool = (
+    name: string,
+    naming: McpNaming,
+    calls: number,
+    refused: number,
+    medianMs: number,
+    lastMins: number | null,
+    namedInPrompts: number,
+  ): McpToolUsage => ({
+    tool: name,
+    channel: naming === 'desktop' ? 'desktop' : 'fleet',
+    naming,
+    calls,
+    refused,
+    share: Math.round((calls / fleet) * 100) / 100,
+    medianMs: calls === 0 ? null : medianMs,
+    lastCalledAt: lastMins === null ? null : ago(lastMins),
+    namedInAddendum: naming === 'addendum',
+    namedInPrompts,
+    argsBytes: calls * 220,
+  });
+
+  const tools: McpToolUsage[] = [
+    tool('note_progress', 'addendum', 412, 0, 3, 2, 0),
+    tool('scratch_read', 'point-of-use', 208, 0, 5, 6, 31),
+    tool('scratch_append', 'point-of-use', 197, 0, 6, 6, 31),
+    tool('world_read', 'addendum', 173, 0, 41, 11, 0),
+    tool('knowledge_ask', 'addendum', 156, 0, 780, 18, 0),
+    tool('request_permission', 'point-of-use', 149, 0, 1_400, 9, 0),
+    tool('conclude_part', 'point-of-use', 121, 4, 34, 22, 24),
+    tool('raise', 'addendum', 96, 2, 28, 31, 0),
+    tool('plan_submit', 'addendum', 84, 6, 96, 44, 0),
+    tool('open_pr', 'addendum', 71, 5, 2_900, 51, 0),
+    tool('validation_report', 'point-of-use', 58, 3, 22, 62, 12),
+    tool('conclude_work', 'point-of-use', 47, 0, 41, 74, 19),
+    tool('assess_issue', 'point-of-use', 39, 0, 26, 118, 9),
+    tool('link_ticket', 'point-of-use', 31, 2, 310, 190, 7),
+    tool('assay_issue', 'point-of-use', 27, 0, 24, 205, 6),
+    tool('retro_submit', 'point-of-use', 19, 0, 18, 300, 5),
+    tool('escalate', 'addendum', 14, 1, 15, 470, 0),
+    // Called and refused every time — a schema nobody can satisfy, which is the
+    // one verdict where the silence is the tool's own fault.
+    tool('report_remedy', 'point-of-use', 11, 11, 12, 540, 4),
+
+    // Retired, and something is still reaching for it: a prompt override that has
+    // not caught up. Every call is a refusal naming `raise`.
+    tool('report_finding', 'retired', 6, 6, 2, 96, 1),
+    // Advertised on every dispatch and called by nobody.
+    tool('request_human_task', 'addendum', 0, 0, 0, 27_360, 0),
+    // The verdict that matters most: nothing named it at all.
+    tool('validation_amend', 'point-of-use', 0, 0, 0, null, 0),
+    tool('validation_read', 'desktop', 18, 0, 14, 130, 0),
+    tool('validation_claim', 'desktop', 11, 0, 9, 133, 0),
+    tool('validation_report', 'desktop', 9, 0, 21, 140, 0),
+    tool('plan_read', 'desktop', 5, 0, 17, 1_440, 0),
+    tool('local_run', 'desktop', 3, 0, 62, 1_450, 0),
+    tool('plan_amend', 'desktop', 0, 0, 0, null, 0),
+  ];
+
+  const quiet: McpQuietTool[] = [
+    {
+      tool: 'report_remedy',
+      channel: 'fleet',
+      naming: 'point-of-use',
+      verdict: 'always-refused',
+      label: 'Called and always refused',
+      blurb: 'Agents are reaching for it and its contract turns every one of them away.',
+      remedy:
+        'Read the refusals below — a tool refusing every call is either a schema nobody can satisfy or a prompt describing arguments it does not take.',
+      calls: 11,
+      refused: 11,
+      namedInAddendum: false,
+      namedInPrompts: 4,
+      lastCalledAt: ago(540),
+      lastRefusal: 'guard must be one of local_check, documented, undocumented, unpreventable',
+    },
+    {
+      tool: 'report_finding',
+      channel: 'fleet',
+      naming: 'retired',
+      verdict: 'retired',
+      label: 'Retired, and still being called',
+      blurb: 'This name was withdrawn. Something is still naming it, and every call to it spends a turn on a refusal.',
+      remedy: 'Find the prompt override that names it and say `raise` instead. The Setup reading names the file.',
+      calls: 6,
+      refused: 6,
+      namedInAddendum: false,
+      namedInPrompts: 1,
+      lastCalledAt: ago(96),
+      lastRefusal: 'report_finding has been retired. Everything it did is now one call: raise(claim, evidence)',
+    },
+    {
+      tool: 'validation_amend',
+      channel: 'fleet',
+      naming: 'point-of-use',
+      verdict: 'never-named',
+      label: 'Nothing named it',
+      blurb:
+        'Its name is in neither the protocol addendum nor any prompt dispatched in this window, so no agent was told it exists. Being in `tools/list` is not being told.',
+      remedy:
+        'Name it where it is used — in the dispatch prompt for the work it belongs to, or in the addendum if every agent may call it.',
+      calls: 0,
+      refused: 0,
+      namedInAddendum: false,
+      namedInPrompts: 0,
+      lastCalledAt: null,
+      lastRefusal: null,
+    },
+    {
+      tool: 'request_human_task',
+      channel: 'fleet',
+      naming: 'addendum',
+      verdict: 'named-never-called',
+      label: 'Named, never reached for',
+      blurb:
+        'Agents were told about it and none called it. Either the job it does did not come up, or the wording is not landing.',
+      remedy: 'Worth a look if the job it does plainly did come up — otherwise this is the tool waiting for its case.',
+      calls: 0,
+      refused: 0,
+      namedInAddendum: true,
+      namedInPrompts: 0,
+      lastCalledAt: ago(27_360),
+      lastRefusal: null,
+    },
+    {
+      tool: 'plan_amend',
+      channel: 'desktop',
+      naming: 'desktop',
+      verdict: 'desktop-unused',
+      label: 'No desktop session used it',
+      blurb:
+        'A desktop tool is called by a person at their own keyboard, so zero means nobody ran one — not that anything is wrong.',
+      remedy: null,
+      calls: 0,
+      refused: 0,
+      namedInAddendum: false,
+      namedInPrompts: 0,
+      lastCalledAt: null,
+      lastRefusal: null,
+    },
+  ];
+
+  const silentRuns: McpSilentRun[] = [
+    {
+      agentId: 'agent_demo_1174',
+      taskId: 'task_demo_1174',
+      title: 'Build the pagination rung',
+      originRef: 'issue:412',
+      phase: 'build',
+      phaseLabel: PHASE_COPY.build.label,
+      profile: 'reviewer-fast',
+      status: 'done',
+      endedAt: ago(310),
+    },
+    {
+      agentId: 'agent_demo_1181',
+      taskId: 'task_demo_1181',
+      title: 'Answer the red check on #409',
+      originRef: 'pr:409',
+      phase: 'ci',
+      phaseLabel: PHASE_COPY.ci.label,
+      profile: 'reviewer-fast',
+      status: 'done',
+      endedAt: ago(505),
+    },
+    {
+      agentId: 'agent_demo_1206',
+      taskId: 'task_demo_1206',
+      title: 'Extract the settings reader on #390',
+      originRef: 'issue:390',
+      phase: 'build',
+      phaseLabel: PHASE_COPY.build.label,
+      profile: 'reviewer-fast',
+      status: 'done',
+      endedAt: ago(1_180),
+    },
+  ];
+
+  const byPhase: McpPhaseUsage[] = [
+    { phase: 'deliberation', runs: 22, calls: 486, perRun: 22.1, silentRuns: 0 },
+    { phase: 'build', runs: 41, calls: 731, perRun: 17.8, silentRuns: 2 },
+    { phase: 'ci', runs: 28, calls: 213, perRun: 7.6, silentRuns: 1 },
+    { phase: 'landing', runs: 11, calls: 96, perRun: 8.7, silentRuns: 0 },
+    { phase: 'evidence', runs: 19, calls: 268, perRun: 14.1, silentRuns: 0 },
+    { phase: 'local', runs: 3, calls: 37, perRun: 12.3, silentRuns: 0 },
+    { phase: 'job', runs: 8, calls: 88, perRun: 11, silentRuns: 0 },
+  ].map((row) => ({ ...row, phase: row.phase as SpendPhase, label: PHASE_COPY[row.phase as SpendPhase].label }));
+
+  const addendum = tools.filter((t) => t.naming === 'addendum');
+  const point = tools.filter((t) => t.naming === 'point-of-use');
+  const retired = tools.filter((t) => t.naming === 'retired');
+  const namingRow = (naming: McpNaming, label: string, blurb: string, of: readonly McpToolUsage[]): McpNamingTotal => {
+    const calls = of.reduce((sum, t) => sum + t.calls, 0);
+    return {
+      naming,
+      label,
+      blurb,
+      calls,
+      share: Math.round((calls / fleet) * 100) / 100,
+      tools: of.length,
+      toolsCalled: of.filter((t) => t.calls > 0).length,
+    };
+  };
+
+  return {
+    window: demoWindow(now, 7),
+    totals: {
+      calls: fleet,
+      refused: 40,
+      runs: 132,
+      silentRuns: 3,
+      callsPerRun: 14.56,
+      medianCallsPerRun: 11,
+      busiestRunCalls: 68,
+      medianMs: 22,
+      toolsAdvertised: 20,
+      toolsQuiet: 4,
+      argsBytes: 432_300,
+      argsCompacted: 0,
+    },
+    channels: [
+      { channel: 'fleet', calls: fleet, refused: 40, toolsAdvertised: 20, toolsCalled: 19 },
+      { channel: 'desktop', calls: 46, refused: 0, toolsAdvertised: 6, toolsCalled: 5 },
+    ],
+    tools,
+    quiet,
+    silentRuns,
+    byPhase,
+    naming: [
+      namingRow(
+        'addendum',
+        'Addendum',
+        'Named to every agent on every dispatch. Silence here is a broken channel or a prompt that stopped naming it.',
+        addendum,
+      ),
+      namingRow(
+        'point-of-use',
+        'Point of use',
+        'Named by the prompt that dispatches the work it belongs to. Silence tracks what ran.',
+        point,
+      ),
+      namingRow(
+        'retired',
+        'Retired',
+        'A withdrawn name, answered only with a refusal naming `raise`. Any call at all is a prompt out of date.',
+        retired,
+      ),
+    ],
+    refusals: [
+      {
+        tool: 'report_remedy',
+        channel: 'fleet',
+        refused: 11,
+        calls: 11,
+        message: 'guard must be one of local_check, documented, undocumented, unpreventable',
+        at: ago(540),
+      },
+      {
+        tool: 'plan_submit',
+        channel: 'fleet',
+        refused: 6,
+        calls: 84,
+        message: 'a part names no files, so nothing could be dispatched for it',
+        at: ago(44),
+      },
+      {
+        tool: 'report_finding',
+        channel: 'fleet',
+        refused: 6,
+        calls: 6,
+        message: 'report_finding has been retired. Everything it did is now one call: raise(claim, evidence)',
+        at: ago(96),
+      },
+      {
+        tool: 'open_pr',
+        channel: 'fleet',
+        refused: 5,
+        calls: 71,
+        message: 'the branch has no commits the base does not already have',
+        at: ago(51),
+      },
+      {
+        tool: 'conclude_part',
+        channel: 'fleet',
+        refused: 4,
+        calls: 121,
+        message: 'this part has no open pull request, so there is nothing to conclude',
+        at: ago(22),
+      },
+    ],
+    // The flag the demo exists to show off: three runs went dark, and this is why.
+    allowedToolsOverridden: true,
+  };
+}
+
 function buildDemoReliability(): ReliabilityInsights {
   const now = Date.now();
   const day = 24 * 3_600_000;
@@ -3372,6 +3695,11 @@ export const demoApi = {
   // demo's world is built fresh in the browser each load, so there are no settled
   // agents and no CI history to fold.
   getReliability: () => Promise.resolve({ insights: buildDemoReliability(), remedies: buildDemoRemedies() }),
+  // The tool channel, authored for the same reason and one sharper: a page of
+  // zeroes is what this tab looks like when a deployment's grants have been
+  // dropped, so a demo folding the browser's empty store would teach a reader to
+  // read a working channel as a broken one.
+  getMcpUsage: () => Promise.resolve({ insights: buildDemoMcp() }),
   // The prompt book lives in the server's template registry, and the web bundle
   // deliberately imports no server code. Shipping a copy of eighteen prompts here
   // to fill the demo panel would be a duplicate free to drift from the originals

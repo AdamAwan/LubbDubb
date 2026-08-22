@@ -316,6 +316,13 @@ interface BuildOptions {
  */
 export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const store = new Store(config.dbPath);
+  // Recorded MCP-call arguments past their retention, cleared at boot as well as
+  // on the write path. The write path alone would be a retention promise kept
+  // only while the fleet is busy: a harness that goes quiet holds its arguments
+  // until something calls a tool again, which on a paused deployment is never.
+  // `force`, because the write path's hourly rate limit is about a hot loop and
+  // this runs once.
+  store.compactMcpCallArgs(config.mcpArgsRetentionDays, true);
   // The world is assembled from the integrations config selects (default: the
   // fake provider for every capability), composed behind the Connector/ActionSink
   // seams the harness and executor depend on. Swapping a provider is a config
@@ -549,6 +556,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const mcp: McpBridgeServer = new McpBridgeServer({
     store,
     agents: (): AgentManager => agents,
+    argsRetentionDays: config.mcpArgsRetentionDays,
     configDir: defaultConfigDir(),
     socketPath: defaultSocketPath(),
     // What the assayer is offered when it proposes a profile for a goal.
@@ -588,6 +596,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // what keeps a test's system from writing into whoever is running the suite.
   const desktop = new McpDesktopServer({
     store,
+    argsRetentionDays: config.mcpArgsRetentionDays,
     claimMinutes: config.validation.desktopClaimMinutes,
     validationRoot: config.validationRoot,
     // Lazily, for `proposals`' reason: the runner is built further down, and both

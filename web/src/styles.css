@@ -7181,6 +7181,296 @@ a.btn {
   font-size: 12px;
 }
 
+
+/* ============================ MCP usage ==========================
+
+   The Insights MCP tab (`components/McpUsageTab.tsx`). It borrows the whole of
+   the spend panel's chrome — `.sp-tiles`, `.sp-tbl`, `.sp-bar`, `.sp-method` —
+   and adds two things of its own: a palette for *how a tool is named*, and the
+   alarm block.
+
+   **Naming colour is a variable, not a value**, for the phase palette's reason,
+   and the palette is a category one rather than a verdict one: `addendum` and
+   `point-of-use` are two places a tool can be named, neither better than the
+   other. The alarm colours are the cockpit's existing red and amber, because a
+   silent run *is* the alarm vocabulary — a fleet that cannot reach its tools is
+   the thing this tab exists to shout about.
+
+   → docs/spec/17-cockpit.md#mcp */
+
+.mc {
+  display: grid;
+  gap: 4px;
+  /* Where a tool is named. Two categories that must read apart and neither of
+     which is a verdict — so two of the palette's distinguishable hues, and not
+     the alarm ones. */
+  --mc-addendum: var(--blue);
+  --mc-point-of-use: var(--violet);
+  /* A withdrawn name. Grey is doing real work here for the reason it does in the
+     outcome palette: a retired tool is not a fault in itself, and colouring it
+     like one would put an alarm beside every deployment that has never called it. */
+  --mc-retired: var(--grey);
+  --mc-desktop: var(--accent);
+  /* The two channels, on the one graphic that draws them together. The fleet
+     takes the addendum's hue because the fleet's traffic *is* mostly addendum
+     tools; the desktop takes the accent, which is the cockpit's "yours". */
+  --mc-ch-fleet: var(--blue);
+  --mc-ch-desktop: var(--accent);
+}
+
+/* A count that is a fault, and one that is simply absent. Separated because an
+   em dash and a red 4 in the same column are two different readings and the eye
+   has to be able to skip the first. */
+.mc-bad {
+  color: var(--red);
+}
+.mc-none {
+  color: var(--grey);
+}
+
+/* --- the alarm: runs that reached nothing --- */
+
+/* Above every table rather than as a row inside one, because it is the reading
+   that invalidates the others: a per-tool count taken over a window in which
+   three runs could not reach the channel is a count with three runs missing. */
+.mc-alarm {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--red-line);
+  background: var(--red-fill);
+  display: grid;
+  gap: 6px;
+}
+.mc-alarm h3 {
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--red);
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mc-alarm h3 .when {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--muted);
+}
+.mc-alarm p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 96ch;
+}
+.mc-alarm b,
+.mc-alarm code {
+  color: var(--text);
+}
+.mc-alarm code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.mc-runs {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+}
+.mc-runs li {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 5px 0;
+  border-top: 1px solid var(--red-line);
+  font-size: 12px;
+}
+.mc-run-what {
+  color: var(--text);
+}
+.mc-run-meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.mc-more {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* The live config read, and the only thing on the tab that is not a fold of the
+   window. Amber rather than red: nothing has necessarily gone wrong yet, which
+   is the whole point of drawing it before a run goes dark. */
+.mc-hazard {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: 1px solid var(--amber-line);
+  background: var(--amber-fill);
+  font-size: 12px;
+  color: var(--muted);
+  max-width: 96ch;
+}
+.mc-hazard b {
+  color: var(--text);
+}
+.mc-hazard code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text);
+}
+
+/* --- the quiet tools, and why --- */
+
+/* A list rather than a table, because each row is a *verdict with its evidence*
+   and not a set of figures read down a column: the reader wants one tool's whole
+   case at a time, which is the shape a row of cells cannot hold. */
+.mc-quiet {
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+  border-top: 1px solid var(--border);
+}
+.mc-quiet li {
+  display: grid;
+  gap: 3px;
+  padding: 9px 0 10px 11px;
+  border-bottom: 1px solid var(--border-lo);
+  /* The severity stripe. One property set per verdict below, so the row's
+     urgency reads before any of its words do. */
+  border-left: 2px solid var(--verdict, var(--grey));
+}
+.mc-quiet li:last-of-type {
+  border-bottom: 0;
+}
+/* Ordered by what wants doing about it: a tool refusing every call and a retired
+   name still being reached for are both live faults; a tool nothing named is a
+   gap; the last two are readings. */
+.mc-q-always-refused {
+  --verdict: var(--red);
+}
+.mc-q-retired {
+  --verdict: var(--accent);
+}
+.mc-q-never-named {
+  --verdict: var(--amber);
+}
+.mc-q-named-never-called {
+  --verdict: var(--blue);
+}
+.mc-q-desktop-unused {
+  --verdict: var(--grey);
+}
+.mc-q-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.mc-q-tool {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text);
+}
+.mc-q-verdict {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--verdict, var(--text));
+}
+.mc-q-when {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--grey);
+}
+.mc-quiet p {
+  margin: 0;
+  max-width: 96ch;
+}
+.mc-q-why {
+  font-size: 12px;
+  color: var(--muted);
+}
+/* The evidence the verdict was reached on, in the figures' own typeface so it
+   reads as a reading rather than as more prose. A verdict without it is a claim
+   the operator has to take on trust. */
+.mc-q-ev {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--grey);
+}
+.mc-q-ev b {
+  color: var(--muted);
+  font-weight: 600;
+}
+/* The tool's own words. Quoted and dimmed, because it is testimony rather than
+   the cockpit speaking. */
+.mc-q-refusal {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--red);
+}
+.mc-q-fix {
+  font-size: 11.5px;
+  color: var(--text);
+}
+
+/* Where a tool is named, as a chip. Bordered in its own colour so the bar, the
+   chip and the stripe are one vocabulary rather than three. */
+.cls {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+.cls.addendum {
+  color: var(--mc-addendum);
+}
+.cls.point-of-use {
+  color: var(--mc-point-of-use);
+}
+.cls.retired {
+  color: var(--mc-retired);
+}
+.cls.desktop {
+  color: var(--mc-desktop);
+}
+
+/* A refusal inside a table cell. Wrapped rather than truncated: the message is
+   the whole reason the row is there, and an elided one sends the reader to the
+   export to learn what a tool actually said. */
+.mc-refusal {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.mc-split-key {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin: 5px 0 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--muted);
+}
+.mc-split-key .sw {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 6px;
+  vertical-align: -1px;
+}
+
 /* ---------------------------------------------------------------------------
    Insights — the page that replaced the Spend, Yield and Output panels.
 
@@ -7352,4 +7642,17 @@ a.btn {
 }
 .sp-tile.sp-leak .vl {
   color: var(--red);
+}
+/* The second alarm tone, and the only tile on the page that carries it: a tool
+   the fleet cannot reach is a fault (`sp-leak`, red), while a tool nothing has
+   named is a gap somebody has to close — amber, because the fleet is working and
+   something is being left on the table. Beside `sp-leak` rather than in the MCP
+   block because it is the same family of tile and the pair is only legible read
+   together. */
+.sp-tile.sp-watch {
+  border-color: var(--amber-line);
+  background: var(--amber-fill);
+}
+.sp-tile.sp-watch .vl {
+  color: var(--amber);
 }

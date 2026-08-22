@@ -212,6 +212,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'How long a check scope may match nothing before the Knowledge page says so. A reading — nothing is demoted by it. 0 turns it off.',
   },
   {
+    path: 'mcpArgsRetentionDays',
+    type: 'number',
+    access: 'plain',
+    why: 'How long a recorded MCP call keeps its arguments, in days. The call itself is kept for ever — only the arguments go. 0 records none at all.',
+  },
+  {
     path: 'whitelistedApprovals',
     type: 'json',
     access: 'fileOnly',

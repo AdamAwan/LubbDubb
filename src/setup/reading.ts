@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import type { Config } from '../config.js';
 import type { ConfigChange } from '../configApply.js';
 import type { PromptTemplates } from '../dispatcher/promptTemplates.js';
-import { SUPERSEDED_TOOL_NAMES } from '../mcp/names.js';
+import { RETIRED_TOOL_NAMES } from '../mcp/names.js';
 import type { Store } from '../store/store.js';
 import { isWatched, watchLabelFor } from '../watchLabels.js';
 import { credentialVar } from './remote.js';
@@ -190,7 +190,7 @@ export async function buildSetupReading(deps: {
     ...watchChecks(config, store),
     await agentCheck(config, probes),
     billingCheck(probes),
-    ...supersededToolChecks(prompts),
+    ...retiredToolChecks(prompts),
   ]) {
     const waiting = awaitingRestart(check, pending);
     checks.push(waiting ?? check);
@@ -579,28 +579,32 @@ function watchChecks(config: Config, store: Store): SetupCheck[] {
 }
 
 /**
- * Whether an operator's own prompt overrides still name a tool the intake
- * replaced.
+ * Whether an operator's own prompt overrides still name a **retired** tool.
  *
  * `report_finding`, `knowledge_propose`, `knowledge_notice` and
- * `knowledge_contradict` are registered, granted and named nowhere: `raise` is
- * the one door now, and advertising six ways to file one observation is the
- * taxonomy the intake removed. They were kept rather than deleted for one reason
- * — an operator's override written before the intake may still name one, and a
- * **withdrawn** tool name fails silently: the call comes back refused with
- * nothing in the logs, on exactly the deployments that customised most
- * ([27](27-knowledge.md)). Unlike a `PromptId`, whose removal turns a deployment
- * into a harness that will not boot and says so.
+ * `knowledge_contradict` are gone: `raise` is the one door now, and advertising
+ * six ways to file one observation is the taxonomy the intake removed
+ * ([27](27-knowledge.md)).
  *
- * That shim is doing nothing until somebody can see whether it is still needed,
- * which is the whole of this check: it turns "we cannot know who still names
- * these" into a reading an operator can act on, and the withdrawal into something
- * that can be taken safely.
+ * They spent a release registered-but-named-nowhere rather than deleted, for one
+ * reason — an operator's override written before the intake may still name one,
+ * and a withdrawn tool name fails *silently*: the call comes back as an unknown
+ * method with nothing in the logs, on exactly the deployments that customised
+ * most. Unlike a `PromptId`, whose removal turns a deployment into a harness that
+ * will not boot and says so.
  *
- * **`warn`, never `bad`.** Nothing is broken — the call still works. What is true
- * is that the deployment is one withdrawal away from breaking, which is a
- * discrepancy between what an override says and what the channel advertises,
- * rather than a fault in what is running.
+ * **This check is what let the withdrawal be taken.** It turns "we cannot know
+ * who still names these" into a reading an operator can act on; the names
+ * outliving their implementations (`RETIRED_TOOL_NAMES`) is what keeps it
+ * answerable, and what keeps the call itself answered rather than lost.
+ *
+ * **`bad`, since the withdrawal.** While the four were still registered this was
+ * a `warn`: nothing was broken, and the deployment was one withdrawal away from
+ * breaking. The withdrawal has happened, so an override naming one now sends
+ * every agent it dispatches at a tool that answers only with a refusal — the
+ * agent recovers (it is told to say `raise` instead, and the call is recorded so
+ * the Insights MCP tab shows it), but a prompt of the operator's own is spending
+ * a turn on nothing, every dispatch.
  *
  * **Only the overrides are read, and a deployment with none draws no check at
  * all** rather than an `ok` row about a thing it does not do. The built-ins name
@@ -612,15 +616,15 @@ function watchChecks(config: Config, store: Store): SetupCheck[] {
  *
  * The names come from `src/mcp/names.ts`, which is also where the grants come
  * from: two lists that merely agreed today would let a withdrawal reach the
- * grants without reaching this row. → `docs/spec/26-setup.md#an-override-that-names-a-superseded-tool`
+ * grants without reaching this row. → `docs/spec/26-setup.md#an-override-that-names-a-retired-tool`
  */
-function supersededToolChecks(prompts: PromptTemplates): SetupCheck[] {
+function retiredToolChecks(prompts: PromptTemplates): SetupCheck[] {
   const overrides = prompts.describe().filter((template) => template.overridden);
   if (overrides.length === 0) return [];
   const naming = overrides
     .map((template) => ({
       id: template.id,
-      tools: SUPERSEDED_TOOL_NAMES.filter((tool) => template.template.includes(tool)),
+      tools: RETIRED_TOOL_NAMES.filter((tool) => template.template.includes(tool)),
     }))
     .filter((entry) => entry.tools.length > 0);
   if (naming.length === 0) {
@@ -629,7 +633,7 @@ function supersededToolChecks(prompts: PromptTemplates): SetupCheck[] {
         id: 'prompt-tools',
         label: 'Prompt overrides',
         verdict: 'ok',
-        detail: `${overrides.length} override(s), none naming a tool the intake replaced`,
+        detail: `${overrides.length} override(s), none naming a retired tool`,
       },
     ];
   }
@@ -641,8 +645,8 @@ function supersededToolChecks(prompts: PromptTemplates): SetupCheck[] {
     {
       id: 'prompt-tools',
       label: 'Prompt overrides',
-      verdict: 'warn',
-      detail: `${describeNaming(named)} — tools \`raise\` replaced. They still work, and they are the next thing to be withdrawn.`,
+      verdict: 'bad',
+      detail: `${describeNaming(named)} — retired tools. A call to one is refused, so every dispatch on that prompt spends a turn on nothing.`,
       remedy: 'Say `raise` instead: it takes any observation and the harness works out where it goes.',
       fix: { kind: 'goto', label: 'Open Prompts', to: 'prompts' },
     },

@@ -35,7 +35,7 @@ import type { ToolFactory } from './context.js';
  */
 export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
   // Read once, here, so an agent with no goal behind it is not offered a scope it
-  // would be refused for using — `knowledge_propose`'s rule, kept.
+  // would be refused for using — the proposal intake's rule, kept.
   const goalRef = corroborationGoal(task.originRef);
   const scopes = goalRef ? ['fleet', 'goal', 'check:<name>'] : ['fleet', 'check:<name>'];
   return {
@@ -154,7 +154,7 @@ export const raise: ToolFactory = ({ deps, agent, task, ok }) => {
       if (!result.ok) return toolError(result.error);
       const outcome = result.outcome;
       if (outcome.outcome === 'barred') {
-        // Refused by name, with the way back — `knowledge_propose`'s rule, and its
+        // Refused by name, with the way back — the proposal intake's rule, and its
         // reason: a silent refusal teaches the fleet nothing and it raises the same
         // claim again tomorrow.
         return toolError(

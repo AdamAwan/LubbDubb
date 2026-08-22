@@ -11,7 +11,7 @@ import {
   loadPromptTemplates,
   type PromptTemplates,
 } from '../src/dispatcher/promptTemplates.js';
-import { SUPERSEDED_TOOL_NAMES } from '../src/mcp/names.js';
+import { RETIRED_TOOL_NAMES } from '../src/mcp/names.js';
 import { buildSetupReading } from '../src/setup/reading.js';
 import { parseRemote, credentialVar } from '../src/setup/remote.js';
 import { resolveFromRepo } from '../src/setup/resolve.js';
@@ -374,14 +374,16 @@ async function reading(prompts: PromptTemplates) {
   });
 }
 
-test('an override that still names a tool the intake replaced says which, and what to say instead', async () => {
+test('an override that still names a retired tool says which, and what to say instead', async () => {
   const found = await reading(
     withOverride('pr-ci-fix', 'Fix the failing check. If you notice anything else, call report_finding.\n'),
   );
   const check = found.checks.find((c) => c.id === 'prompt-tools');
-  // `warn`, not `bad`: nothing is broken — the call still works. What is true is
-  // that this deployment is one withdrawal away from breaking.
-  assert.equal(check?.verdict, 'warn');
+  // `bad` since the withdrawal. While the four were still registered this was a
+  // `warn` — nothing was broken and the deployment was one withdrawal away from
+  // breaking. The withdrawal has happened, so this prompt now sends every agent it
+  // dispatches at a name that answers only with a refusal.
+  assert.equal(check?.verdict, 'bad');
   // Named rather than counted: the whole remedy is which file to open and which
   // word to change in it, so a count would be a row nobody can act on.
   assert.match(check?.detail ?? '', /pr-ci-fix\.md names report_finding/);
@@ -407,11 +409,11 @@ test('a deployment with no overrides draws no such check at all', async () => {
   assert.equal(clean.checks.find((c) => c.id === 'prompt-tools')?.verdict, 'ok');
 });
 
-test('every superseded name is scanned for, not just the one that is remembered', async () => {
+test('every retired name is scanned for, not just the one that is remembered', async () => {
   // The list is `src/mcp/names.ts`', which is also where the grants come from: two
   // lists that merely agreed today would let a withdrawal reach the grants without
   // reaching this row.
-  for (const tool of SUPERSEDED_TOOL_NAMES) {
+  for (const tool of RETIRED_TOOL_NAMES) {
     const found = await reading(withOverride('pr-ci-fix', `Fix the check, then call ${tool}.\n`));
     assert.match(found.checks.find((c) => c.id === 'prompt-tools')?.detail ?? '', new RegExp(tool));
   }

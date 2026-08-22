@@ -71,11 +71,11 @@ const FLAKE = 'The install step failed once and passed on the identical commit m
 test('two goals seeing one notice put it in front of every agent; two seeing a standing claim do not', async () => {
   const system = build();
   const first = spawnAgent(system, 'pr:412:ci');
-  const filed = await callTool(system, first, 'knowledge_notice', {
+  const filed = await callTool(system, first, 'raise', {
     claim: FLAKE,
     scope: 'check:test (windows)',
     evidence: 'Red at 09:02 and green at 09:14 with nothing pushed.',
-    expiresInHours: 8,
+    until: 8,
   });
   assert.equal(filed.isError, false);
   const one = JSON.parse(filed.text) as { fact: { id: string; reach: string }; corroborations: number };
@@ -87,11 +87,11 @@ test('two goals seeing one notice put it in front of every agent; two seeing a s
   assert.equal(system.store.askFacts({ limit: 50 }).length, 0);
 
   const second = spawnAgent(system, 'pr:517:ci');
-  const agreed = await callTool(system, second, 'knowledge_notice', {
+  const agreed = await callTool(system, second, 'raise', {
     claim: FLAKE,
     scope: 'check:test (windows)',
     evidence: 'Same thing on my pull request an hour later.',
-    expiresInHours: 8,
+    until: 8,
   });
   const two = JSON.parse(agreed.text) as { fact: { id: string; reach: string }; corroborations: number };
   assert.equal(two.corroborations, 2);
@@ -104,24 +104,39 @@ test('two goals seeing one notice put it in front of every agent; two seeing a s
   // The same two goals agreeing about a *standing* claim stop at lookup. Nothing
   // ends a standing claim by itself, so nothing but an operator may put one there.
   const claim = 'A route handler never reads the request; it is wrapped in checked(schemas, handler).';
-  await callTool(system, first, 'knowledge_propose', { claim, scope: 'fleet', evidence: 'the wrapper.' });
-  const standing = await callTool(system, second, 'knowledge_propose', { claim, scope: 'fleet', evidence: 'me too.' });
+  await callTool(system, first, 'raise', { claim, scope: 'fleet', evidence: 'the wrapper.' });
+  const standing = await callTool(system, second, 'raise', { claim, scope: 'fleet', evidence: 'me too.' });
   assert.equal((JSON.parse(standing.text) as { fact: { reach: string } }).fact.reach, 'lookup');
   system.store.close();
 });
 
-test('a notice without a clock is refused', async () => {
+test('the clock is what makes a claim a notice, and without one it is standing', async () => {
+  // This asserted a refusal while `knowledge_notice` was its own tool: a notice
+  // arriving with no clock would have been a standing fleet-wide claim filed by
+  // accident, so the tool refused it. `raise` has no such failure to guard —
+  // there is one door and `until` is the discriminator, so the same words with
+  // and without it are two different kinds of claim rather than one kind filed
+  // wrongly. What still has to hold is that the discriminator *works*: the clock
+  // is the entire safety argument for a tier that reaches every agent on
+  // agreement alone, so a claim raised without one must not land in it.
   const system = build();
   const agent = spawnAgent(system, 'pr:412:ci');
-  const res = await callTool(system, agent, 'knowledge_notice', {
+  const bounded = await callTool(system, agent, 'raise', {
     claim: FLAKE,
     scope: 'check:test (windows)',
     evidence: 'saw it.',
+    until: 8,
   });
-  // The clock is the entire safety argument for the tier, so a notice that could
-  // arrive without one would be a standing fleet-wide claim filed by accident.
-  assert.equal(res.isError, true);
-  assert.match(res.text, /expiresInHours/);
+  assert.equal(bounded.isError, false);
+  assert.equal((JSON.parse(bounded.text) as { fact: { lifetime: string } }).fact.lifetime, 'expiring');
+
+  const standing = await callTool(system, spawnAgent(system, 'pr:517:ci'), 'raise', {
+    claim: 'The settings reader resolves paths against repoRoot.',
+    scope: 'fleet',
+    evidence: 'read it.',
+  });
+  assert.equal(standing.isError, false);
+  assert.equal((JSON.parse(standing.text) as { fact: { lifetime: string } }).fact.lifetime, 'standing');
   system.store.close();
 });
 

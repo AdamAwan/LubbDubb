@@ -1153,7 +1153,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
 
   /**
    * File what this agent learned about working the repository, or record that it
-   * saw what somebody else had already filed (the `knowledge_propose` tool).
+   * saw what somebody else had already filed (a `raise` matching a standing claim).
    *
    * **The observer is the credential's**, exactly as a finding's reporter is, and
    * for a stronger reason: corroboration is what carries a claim out of one
@@ -1222,7 +1222,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
 
   /**
    * Say that a claim this agent was shown is contradicted by what it is looking
-   * at, with the sentence it should have said instead (the `knowledge_contradict`
+   * at, with the sentence it should have said instead (a `raise` naming `contradicts`
    * tool).
    *
    * The observer is the credential's, exactly as {@link proposeFact}'s is and for
