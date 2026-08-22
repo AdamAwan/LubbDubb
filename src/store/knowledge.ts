@@ -1,10 +1,22 @@
 import { nanoid } from 'nanoid';
 import { claimKey, claimsMatch } from '../claims.js';
-import { corroborationGoal, distinctCorroborators, questionScore, type FactProposal } from '../knowledge/knowledge.js';
+import {
+  amendmentProposal,
+  contradictableFact,
+  contradictionRatio,
+  corroborationGoal,
+  distinctCorroborators,
+  questionScore,
+  type FactContradiction,
+  type FactProposal,
+} from '../knowledge/knowledge.js';
 import type {
+  ContradictionResolution,
+  ContradictionRuling,
   FactObservation,
   FactReach,
   FactResolution,
+  KnowledgeContradiction,
   KnowledgeCorroboration,
   KnowledgeFact,
   Lesson,
@@ -78,13 +90,28 @@ export class KnowledgeStore {
    */
   proposeFact(proposal: FactProposal, observer: FactObservation): FactProposalOutcome {
     const key = claimKey(proposal.claim);
-    const barredBy = this.matchingFacts(proposal.scope, key, ['rejected']).find((f) => f.id !== proposal.supersedes);
+    // An amendment always lands as its own row *rather than its parent's*. It
+    // usually **contains** the claim it sharpens — that is what amending is — so
+    // folding it into its parent as a corroboration would silently discard the
+    // correction and leave the blunter claim standing with one more voice behind it.
+    //
+    // Which is the parent alone, and not everything: the second agent to hit the
+    // same edge writes the same sharper sentence, and that call is agreement with
+    // the amendment already standing. Skipping the match entirely — as this did
+    // until amendments began arriving in volume — files each of them as its own
+    // one-voice proposal, so three agents sharpening a claim carry nothing anywhere.
+    const existing =
+      this.matchingFacts(proposal.scope, key, LIVE_REACHES).find((f) => f.id !== proposal.supersedes) ?? null;
+    // A rejected claim bars a re-proposal — **unless what this proposal matches is
+    // a live fact descended from that rejection**. An amendment is exempt by naming
+    // its parent, and a later agent restating the amendment's own words has no id
+    // to name: without this, the bar swallows the corrected claim through exactly
+    // the containment that makes it an amendment, and the fleet is refused by the
+    // name of a claim nobody is being told.
+    const barredBy = this.matchingFacts(proposal.scope, key, ['rejected']).find(
+      (f) => f.id !== proposal.supersedes && !(existing !== null && this.descendsFrom(existing, f.id)),
+    );
     if (barredBy) return { outcome: 'barred', barredBy };
-    // An amendment always lands as its own row. It usually *contains* the claim it
-    // sharpens — that is what amending is — so folding it into its parent as a
-    // corroboration would silently discard the correction and leave the blunter
-    // claim standing with one more voice behind it.
-    const existing = proposal.supersedes ? null : (this.matchingFacts(proposal.scope, key, LIVE_REACHES)[0] ?? null);
     // The standing claim's own axes win: an agent agreeing with a fact does not get
     // to restate its scope or put a clock on it, which would let a re-proposal
     // quietly convert a standing claim into an expiring one and back.
@@ -211,6 +238,167 @@ export class KnowledgeStore {
   }
 
   /**
+   * An agent says an injected claim is contradicted by the code in front of it —
+   * **and says what it should say instead**.
+   *
+   * The amendment is the whole of the call. A contradiction count punishes exactly
+   * the wrong claims: one that is right in general and wrong at one edge attracts
+   * contradictions *because it is being used*, so under a count the most valuable
+   * claims in the store are the first to go. What comes out of a disagreement here
+   * is therefore a sharper claim rather than one fewer claim, and the fact named is
+   * left exactly where it was — nothing below demotes, lapses or deletes it, and
+   * only an operator or its own clock ever will.
+   *
+   * The amendment is filed **through {@link proposeFact}** with `supersedes` set,
+   * never a hand-rolled insert: the bar exemption, the claim matching that lets a
+   * second agent's identical sharpening land as agreement rather than as a third
+   * one-voice proposal, and the corroboration row are all that call's, and a second
+   * writer would get one of the three wrong without failing anything.
+   *
+   * One transaction, because a contradiction with no amendment is refused and an
+   * amendment with no contradiction behind it is a proposal nobody asked for.
+   */
+  contradictFact(input: FactContradiction, observer: FactObservation): FactContradictionOutcome {
+    const fact = this.getFact(input.factId);
+    if (!fact) return { outcome: 'unknown' };
+    const allowed = contradictableFact(fact, this.ctx.now());
+    if (!allowed.ok) return { outcome: 'refused', error: allowed.error };
+    const write = this.ctx.db.transaction((): FactContradictionOutcome => {
+      const amended = this.proposeFact(amendmentProposal(fact, input, this.ctx.now()), observer);
+      // The amendment is exempt from its *parent's* bar and from nothing else, so a
+      // sharper version an operator has separately killed is still refused — and
+      // refused before any contradiction row names it, since a row pointing at an
+      // amendment that was never filed is a dispute with nothing behind it.
+      if (amended.outcome === 'barred') {
+        return {
+          outcome: 'refused',
+          error:
+            `an operator has rejected that amendment already: "${amended.barredBy.claim}" ` +
+            `(${amended.barredBy.id}). Rejected means it was judged not true, so writing it again as a ` +
+            `contradiction does not change the answer.`,
+        };
+      }
+      this.ctx.db
+        .prepare(
+          `INSERT INTO knowledge_contradictions
+             (id, fact_id, amendment_id, agent_id, task_id, goal_ref, session_id, words, resolution,
+              resolved_at, created_at)
+           VALUES (@id, @factId, @amendmentId, @agentId, @taskId, @goalRef, @sessionId, @words, NULL,
+                   NULL, @createdAt)`,
+        )
+        .run({
+          id: `knx_${nanoid(10)}`,
+          factId: fact.id,
+          amendmentId: amended.fact.id,
+          agentId: observer.agentId,
+          taskId: observer.taskId,
+          goalRef: observer.goalRef,
+          sessionId: observer.sessionId,
+          // What the agent saw that the claim does not fit — the same words the
+          // amendment's own corroboration carries, because they are the same
+          // observation read from the two sides it speaks to.
+          words: observer.words,
+          createdAt: this.ctx.now(),
+        });
+      return {
+        outcome: 'recorded',
+        fact,
+        amendment: amended.fact,
+        contradictions: distinctCorroborators(this.listContradictions(fact.id)),
+      };
+    });
+    return write();
+  }
+
+  /** One claim's contradictions, oldest first — resolved ones included, for `listFacts`' reason. */
+  listContradictions(factId: string): KnowledgeContradiction[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM knowledge_contradictions WHERE fact_id=? ORDER BY created_at ASC, rowid ASC`)
+      .all(factId) as ContradictionRow[];
+    return rows.map(rowToContradiction);
+  }
+
+  /**
+   * The operator's answer to a contradiction — and, for two of the three, the move
+   * it makes on the claim, in **one call**.
+   *
+   * One call rather than two because adopting an amendment is one act: the
+   * amendment reaching the original's reach and the original leaving it are two
+   * halves of a single decision, and a pair of calls can half-land — the sharper
+   * claim injected beside the blunter one it was written to replace, both in the
+   * same block, saying different things to every agent until somebody notices.
+   *
+   * `amended` and `narrowed` answer **every** open contradiction on the claim,
+   * because both move the claim itself and a dispute about a sentence that no
+   * longer stands is not a decision anybody can still make. `dismissed` answers one
+   * row and touches nothing else — the only move that leaves the fact where it was.
+   */
+  resolveContradiction(id: string, input: ContradictionRuling): ContradictionOutcome {
+    const row = this.ctx.db.prepare(`SELECT * FROM knowledge_contradictions WHERE id=?`).get(id) as
+      | ContradictionRow
+      | undefined;
+    if (!row) return { outcome: 'unknown' };
+    if (row.resolution !== null) return { outcome: 'refused', error: 'this contradiction has already been answered' };
+    const fact = this.getFact(row.fact_id);
+    if (!fact) return { outcome: 'unknown' };
+    if (fact.reach === 'rejected' || fact.reach === 'superseded') {
+      return {
+        outcome: 'refused',
+        error: `the claim this disputes is ${fact.reach} — it reaches no agent, so there is nothing left to decide`,
+      };
+    }
+    const at = this.ctx.now();
+    // Read out here rather than inside the transaction: narrowing a parameter does
+    // not survive into a closure, and the alternative is a cast over the one field
+    // whose absence would make this call silently do nothing.
+    const narrowedTo = input.resolution === 'narrowed' ? input.claim : null;
+    const write = this.ctx.db.transaction((): ContradictionOutcome => {
+      if (input.resolution === 'dismissed') {
+        this.stampContradiction(row.id, 'dismissed', at);
+        // The amendment is left exactly where it is — a proposal reaching nobody.
+        // Rejecting it here would look tidy and would bar the claim it sharpens: an
+        // amendment usually *contains* its original, and `claimsMatch` is
+        // containment, so the next agent to corroborate the standing claim would be
+        // refused by the name of the amendment nobody is being told. An operator who
+        // wants it killed has the ordinary control, and pays that cost knowingly.
+        return { outcome: 'resolved', fact };
+      }
+      if (input.resolution === 'amended') {
+        const amendment = this.getFact(row.amendment_id);
+        if (!amendment) return { outcome: 'refused', error: 'the amendment behind this contradiction is gone' };
+        if (amendment.reach === 'rejected' || amendment.reach === 'superseded') {
+          return { outcome: 'refused', error: `that amendment is ${amendment.reach} and cannot be adopted` };
+        }
+        // The amendment takes the claim's place *exactly* — the same reach, so
+        // adopting a sharper version of an injected claim does not quietly promote
+        // a lookup one into every agent's prompt, or quietly demote an injected one
+        // out of it. Ruled, because an operator did it.
+        this.moveReach(amendment.id, fact.reach, at);
+        // Superseded and never rejected: the claim was not judged untrue, and a
+        // rejection would bar the amendment's own words — which contain it — from
+        // ever being restated by the next agent to hit the same edge.
+        this.moveReach(fact.id, 'superseded', at);
+        this.stampOpenContradictions(fact.id, 'amended', at);
+        return { outcome: 'resolved', fact: this.getFact(fact.id) ?? fact };
+      }
+      this.ctx.db
+        .prepare(`UPDATE knowledge_facts SET claim=?, updated_at=?, ruled_at=? WHERE id=?`)
+        .run(narrowedTo, at, at, fact.id);
+      // Every amendment the narrowing answered is superseded by it: the operator
+      // has written the sentence themselves, so those proposals are replaced rather
+      // than untrue — and leaving them live would grow a near-duplicate of the
+      // narrowed claim that a later agent can corroborate into a second version of it.
+      for (const open of this.listContradictions(fact.id).filter((c) => c.resolution === null)) {
+        const amendment = this.getFact(open.amendmentId);
+        if (amendment && amendment.reach !== 'rejected') this.moveReach(amendment.id, 'superseded', at);
+      }
+      this.stampOpenContradictions(fact.id, 'narrowed', at);
+      return { outcome: 'resolved', fact: this.getFact(fact.id) ?? fact };
+    });
+    return write();
+  }
+
+  /**
    * Where a claim stands, on an operator's say-so — and the record that they said
    * so, which is the second half of this call rather than a detail of it.
    *
@@ -233,28 +421,62 @@ export class KnowledgeStore {
   }
 
   /**
-   * How many independent corroborators every fact has, in one read.
+   * What has been said about every fact, in one read: how many independent voices
+   * agree, how many dispute it, and what fraction of them that is.
    *
-   * The count the page draws, and it is {@link distinctCorroborators}' — never
-   * `rows.length`. A second count in the view layer is free to disagree with the
-   * one that promotes, and the disagreement would be invisible: both numbers look
-   * like counts of the same rows.
+   * **One method rather than two, because the ratio's denominator is the
+   * agreement count.** Two methods each scanning the corroboration table would
+   * produce two corroborator counts under one name, and the page would draw one
+   * beside a ratio computed from the other — the disagreement invisible, since
+   * both are counts of the same rows.
    *
-   * Batched rather than a `listCorroborations` per fact because the snapshot is
-   * polled: one query grouped in memory, rather than a query per row per poll per
-   * connected cockpit.
+   * Every count here is {@link distinctCorroborators}' — never `rows.length`, on
+   * either table: two observations are one voice if they share a goal or a
+   * session, which is as true of a dispute as of an agreement, and an agent that
+   * contradicted its own predecessor across a re-dispatch is one voice twice.
+   *
+   * Batched rather than a query per fact because the snapshot is polled: two
+   * queries grouped in memory, rather than three per row per poll per connected
+   * cockpit.
    */
-  corroborationCounts(): Map<string, number> {
-    const rows = this.ctx.db
-      .prepare(`SELECT * FROM knowledge_corroborations ORDER BY created_at ASC, rowid ASC`)
-      .all() as CorroborationRow[];
-    const byFact = new Map<string, KnowledgeCorroboration[]>();
+  factCounts(): Map<string, FactCounts> {
+    const agreed = this.groupVoices(
+      this.ctx.db
+        .prepare(`SELECT * FROM knowledge_corroborations ORDER BY created_at ASC, rowid ASC`)
+        .all() as CorroborationRow[],
+    );
+    const disputes = this.ctx.db
+      .prepare(`SELECT * FROM knowledge_contradictions ORDER BY created_at ASC, rowid ASC`)
+      .all() as ContradictionRow[];
+    const disputed = this.groupVoices(disputes);
+    const counts = new Map<string, FactCounts>();
+    for (const factId of new Set([...agreed.keys(), ...disputed.keys()])) {
+      const corroborations = distinctCorroborators(agreed.get(factId) ?? []);
+      const contradictions = distinctCorroborators(disputed.get(factId) ?? []);
+      counts.set(factId, {
+        corroborations,
+        contradictions,
+        contradictionRatio: contradictionRatio(corroborations, contradictions),
+        // The queue rather than the reading, and a raw row count rather than a
+        // count of voices: what an operator has left to answer is a number of
+        // decisions, and two agents on one goal disputing a claim are still two
+        // rows to read before ruling on it.
+        openContradictions: disputes.filter((d) => d.fact_id === factId && d.resolution === null).length,
+      });
+    }
+    return counts;
+  }
+
+  private groupVoices<T extends { fact_id: string; id: string; goal_ref: string | null; session_id: string | null }>(
+    rows: readonly T[],
+  ): Map<string, { id: string; goalRef: string | null; sessionId: string | null }[]> {
+    const byFact = new Map<string, { id: string; goalRef: string | null; sessionId: string | null }[]>();
     for (const row of rows) {
       const list = byFact.get(row.fact_id) ?? [];
-      list.push(rowToCorroboration(row));
+      list.push({ id: row.id, goalRef: row.goal_ref, sessionId: row.session_id });
       byFact.set(row.fact_id, list);
     }
-    return new Map([...byFact].map(([factId, list]) => [factId, distinctCorroborators(list)]));
+    return byFact;
   }
 
   /**
@@ -272,8 +494,12 @@ export class KnowledgeStore {
     const updatedAt = this.ctx.now();
     const result = this.ctx.db
       .prepare(
+        // Both terminal states are guarded, for the same reason and two different
+        // ones: a rejection is the bar, and nothing lifts it but an amendment; a
+        // superseded claim has a sharper version standing in its place, and moving
+        // it back would put the two in one block saying different things.
         `UPDATE knowledge_facts SET reach=?, updated_at=?, ruled_at=COALESCE(?, ruled_at)
-           WHERE id=? AND reach<>'rejected'`,
+           WHERE id=? AND reach NOT IN ('rejected','superseded')`,
       )
       .run(reach, updatedAt, ruledAt, id);
     if (result.changes === 0) return null;
@@ -349,6 +575,38 @@ export class KnowledgeStore {
     if (amended) return;
     this.ctx.db.prepare(`DELETE FROM knowledge_corroborations WHERE fact_id=?`).run(id);
     this.ctx.db.prepare(`DELETE FROM knowledge_facts WHERE id=?`).run(id);
+  }
+
+  private stampContradiction(id: string, resolution: ContradictionResolution, at: string): void {
+    this.ctx.db
+      .prepare(`UPDATE knowledge_contradictions SET resolution=?, resolved_at=? WHERE id=? AND resolution IS NULL`)
+      .run(resolution, at, id);
+  }
+
+  private stampOpenContradictions(factId: string, resolution: ContradictionResolution, at: string): void {
+    this.ctx.db
+      .prepare(`UPDATE knowledge_contradictions SET resolution=?, resolved_at=? WHERE fact_id=? AND resolution IS NULL`)
+      .run(resolution, at, factId);
+  }
+
+  /**
+   * Whether one fact is an amendment of another, at any depth.
+   *
+   * The chain is walked rather than the one link read, because an amendment can
+   * itself be amended — and a `seen` set rather than a depth bound, because a
+   * cycle in `supersedes` is a corrupt row and this must return an answer rather
+   * than spin on the delivery path.
+   */
+  private descendsFrom(fact: KnowledgeFact, ancestorId: string): boolean {
+    const seen = new Set<string>([fact.id]);
+    let current: KnowledgeFact | null = fact;
+    while (current !== null && current.supersedes !== null) {
+      if (current.supersedes === ancestorId) return true;
+      if (seen.has(current.supersedes)) return false;
+      seen.add(current.supersedes);
+      current = this.getFact(current.supersedes);
+    }
+    return false;
   }
 
   /**
@@ -432,6 +690,41 @@ export class KnowledgeStore {
 export type FactProposalOutcome =
   | { outcome: 'filed' | 'corroborated'; fact: KnowledgeFact; corroborations: number }
   | { outcome: 'barred'; barredBy: KnowledgeFact };
+
+/**
+ * What a contradiction did. `refused` carries the reason in the words the agent is
+ * given: a contradiction the store will not take is one the agent would otherwise
+ * believe it had made, and an agent that believes it has taken a stale claim off
+ * the fleet stops looking at it.
+ */
+export type FactContradictionOutcome =
+  | { outcome: 'recorded'; fact: KnowledgeFact; amendment: KnowledgeFact; contradictions: number }
+  | { outcome: 'refused'; error: string }
+  | { outcome: 'unknown' };
+
+/** What resolving one did, and the claim as it now stands. */
+export type ContradictionOutcome =
+  | { outcome: 'resolved'; fact: KnowledgeFact }
+  | { outcome: 'refused'; error: string }
+  | { outcome: 'unknown' };
+
+/**
+ * What has been said about one claim: the count that promotes it, the count that
+ * disputes it, the fraction that is, and how many of the disputes are still an
+ * operator's to answer.
+ *
+ * All four taken together in `factCounts`, and all four shipped on the row, so
+ * nothing in the browser divides one by another.
+ */
+export interface FactCounts {
+  corroborations: number;
+  /** Distinct voices disputing it, over the whole life of the claim — resolved disputes included. */
+  contradictions: number;
+  /** {@link contradictionRatio}'s answer: disputing voices over every voice that has spoken. */
+  contradictionRatio: number;
+  /** Disputes nobody has ruled on. The queue, where the ratio above is the reading. */
+  openContradictions: number;
+}
 
 /** What an agent (or the cockpit) is asking the knowledge base for. */
 export interface FactQuery {
@@ -542,6 +835,36 @@ interface CorroborationRow {
   session_id: string | null;
   words: string;
   created_at: string;
+}
+
+interface ContradictionRow {
+  id: string;
+  fact_id: string;
+  amendment_id: string;
+  agent_id: string | null;
+  task_id: string | null;
+  goal_ref: string | null;
+  session_id: string | null;
+  words: string;
+  resolution: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
+function rowToContradiction(r: ContradictionRow): KnowledgeContradiction {
+  return {
+    id: r.id,
+    factId: r.fact_id,
+    amendmentId: r.amendment_id,
+    agentId: r.agent_id,
+    taskId: r.task_id,
+    goalRef: r.goal_ref,
+    sessionId: r.session_id,
+    words: r.words,
+    resolution: r.resolution as ContradictionResolution | null,
+    resolvedAt: r.resolved_at,
+    createdAt: r.created_at,
+  };
 }
 
 function rowToCorroboration(r: CorroborationRow): KnowledgeCorroboration {

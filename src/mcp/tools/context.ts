@@ -25,8 +25,8 @@ import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
 import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAssayVerdictName } from '../goalAssay.js';
 import type { RemedySubmission } from '../../remedies/remedies.js';
-import type { FactProposal } from '../../knowledge/knowledge.js';
-import type { FactProposalOutcome } from '../../store/knowledge.js';
+import type { FactContradiction, FactProposal } from '../../knowledge/knowledge.js';
+import type { FactContradictionOutcome, FactProposalOutcome } from '../../store/knowledge.js';
 import { issueOrigin, originIssueNumber } from '../../plans/planning.js';
 import { type McpTool, toolJson, type ToolCallResult } from '../protocol.js';
 
@@ -116,6 +116,10 @@ export interface AgentToolTarget {
     agentId: string,
     proposal: FactProposal,
   ): { ok: true; outcome: FactProposalOutcome } | { ok: false; error: string };
+  contradictFact(
+    agentId: string,
+    contradiction: FactContradiction,
+  ): { ok: true; outcome: FactContradictionOutcome } | { ok: false; error: string };
   askKnowledge(
     agentId: string,
     query: { question: string | null; scopes: readonly string[] | null },

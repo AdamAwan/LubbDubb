@@ -11,7 +11,15 @@ import { PriorityStore } from './priority.js';
 import { ProfileOverrideStore } from './profileOverrides.js';
 import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { LessonStore } from './lessons.js';
-import { KnowledgeStore, KNOWLEDGE_COLUMNS, type FactProposalOutcome, type FactQuery } from './knowledge.js';
+import {
+  KnowledgeStore,
+  KNOWLEDGE_COLUMNS,
+  type ContradictionOutcome,
+  type FactContradictionOutcome,
+  type FactCounts,
+  type FactProposalOutcome,
+  type FactQuery,
+} from './knowledge.js';
 import { RemedyStore } from './remedies.js';
 import { HumanTaskStore, HUMAN_TASK_COLUMNS } from './humanTasks.js';
 import { absorbSinglePlanStatus, backfillWholePlanParts, PlanStore, PLAN_COLUMNS } from './plans.js';
@@ -81,6 +89,8 @@ import type {
   Job,
   JobAttachment,
   JobSchedule,
+  ContradictionRuling,
+  KnowledgeContradiction,
   KnowledgeCorroboration,
   KnowledgeFact,
   Lesson,
@@ -509,8 +519,17 @@ export class Store {
   listCorroborations(factId: string): KnowledgeCorroboration[] {
     return this.knowledge.listCorroborations(factId);
   }
-  corroborationCounts(): Map<string, number> {
-    return this.knowledge.corroborationCounts();
+  factCounts(): Map<string, FactCounts> {
+    return this.knowledge.factCounts();
+  }
+  contradictFact(...args: Parameters<KnowledgeStore['contradictFact']>): FactContradictionOutcome {
+    return this.knowledge.contradictFact(...args);
+  }
+  listContradictions(factId: string): KnowledgeContradiction[] {
+    return this.knowledge.listContradictions(factId);
+  }
+  resolveContradiction(id: string, input: ContradictionRuling): ContradictionOutcome {
+    return this.knowledge.resolveContradiction(id, input);
   }
   askFacts(query: FactQuery): KnowledgeFact[] {
     return this.knowledge.askFacts(query);

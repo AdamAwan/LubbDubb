@@ -1805,6 +1805,46 @@ a.btn {
   white-space: pre-wrap;
 }
 
+/* A dispute reads differently from an agreement, because it is asking for a
+   decision rather than recording one. The edge is amber for the same reason the
+   chip on the row is: it is the one observation on a claim that is waiting on the
+   operator, and an answered dispute drops back to the ground everything else sits
+   on. */
+.kn-dispute {
+  border-left: 2px solid var(--amber-line);
+}
+.kn-dispute.resolved {
+  border-left-color: var(--border);
+  opacity: 0.6;
+}
+/* The sentence being offered in place of the claim. Set apart from what the agent
+   saw, because they are two different things to read and the decision is between
+   the amendment and the claim above, not between the two halves of this row. */
+.kn-amendment {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  margin-top: 6px;
+  overflow-wrap: anywhere;
+  padding: 6px 8px;
+}
+.kn-narrow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+.kn-narrow textarea {
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font: inherit;
+  padding: 6px 8px;
+  resize: vertical;
+  width: 100%;
+}
+
 /* What the injected block costs against its cap. A bar rather than a bare pair of
    numbers because the reading an operator wants is "how much room is left", which
    a ratio answers at a glance and two figures do not. */

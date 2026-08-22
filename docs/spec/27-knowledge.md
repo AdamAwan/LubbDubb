@@ -1,12 +1,13 @@
 # 27 — Knowledge
 
-> **Status: partly built — phases 5–7 outstanding.** The store, its three axes, the corroboration
+> **Status: partly built — phases 6 and 7 outstanding.** The store, its three axes, the corroboration
 > count, the rejection bar and `supersedes` are running; any agent can write to and read from them
-> (`knowledge_propose`, `knowledge_ask`, `knowledge_notice`); delivery is wired, so an injected claim
-> is in every agent's system prompt and a scope-matched one is in the task prompt of the dispatch it
-> matches; notices run, including the two the harness raises for itself; and the cockpit page is where
-> an operator governs all of it. What is outstanding is contradiction, graduation and the cost reading
-> — the sections marked below describe behaviour that does not exist.
+> (`knowledge_propose`, `knowledge_ask`, `knowledge_notice`, `knowledge_contradict`); delivery is
+> wired, so an injected claim is in every agent's system prompt and a scope-matched one is in the task
+> prompt of the dispatch it matches; notices run, including the two the harness raises for itself;
+> contradiction and amendment run, so a stale claim is sharpened rather than counted down; and the
+> cockpit page is where an operator governs all of it. What is outstanding is graduation and the cost
+> reading — the sections marked below describe behaviour that does not exist.
 > [The phases](#the-phases) says what lands when. Per `docs/README.md`, a module that does not exist
 > yet is named in italics where a real one is backticked, and a phase landing deletes its row and
 > unmarks the part of this document it makes true. When the last row goes, so does this banner.
@@ -135,6 +136,7 @@ Reach is the state machine, and it is the whole of the governance.
 | `lookup`    | Answered when asked; injected on a matching scope. | Two independent corroborations, or you. |
 | `injected`  | In front of every agent, before it reads any code. | **You** — or two goals, for a notice.   |
 | `committed` | In the repository. **Out of every prompt.**        | A docs pull request landing.            |
+| `superseded` | Nowhere. A sharper claim naming it stands in its place. | **You**, adopting an amendment.    |
 | `rejected`  | Nowhere, and barred from coming back.              | You.                                    |
 
 Two of those transitions belong to the fleet: an agent proposing, and corroboration carrying a
@@ -208,17 +210,16 @@ operator reads to decide whether it should have.
 
 ## Contradiction, and why it does not delete
 
-> **Not yet built — [phase 5](#the-phases).** `supersedes` and the rejection bar's exemption for it are
-> in the store already, which is the half that had to be right in the schema; `knowledge_contradict`
-> and the contradiction ratio are not.
-
-An agent that finds an injected fact contradicted by the code in front of it says so. This is the
-half `lessons` never had: today staleness rests on an agent mentioning it in a retrospective and a
-human noticing, which is why the lesson block's header had to ask for it in prose.
+An agent that finds a fact contradicted by the code in front of it says so, through
+`knowledge_contradict`. This is the half `lessons` never had: staleness there rested on an agent
+mentioning it in a retrospective and a human noticing, which is why the lesson block's header had to
+ask for it in prose.
 
 **A contradiction demands an amendment.** The contradicting agent must say what the claim should say
-instead, and that amendment is filed as a new proposal linked to the original. Nothing is demoted by
-count alone.
+instead, and that amendment is filed as a new proposal naming the original in `supersedes` — through
+`proposeFact` like any other, because the bar exemption, the claim matching and the corroboration row
+are all that call's. A contradiction with no amendment is **refused, by name and with the reason**.
+Nothing is demoted by count alone.
 
 The reason is that a contradiction count punishes exactly the wrong claims. A claim that is right in
 general and wrong at one edge attracts contradictions **because it is being used**, and those are the
@@ -227,9 +228,76 @@ keyword rather than delete it_ is true of a type or a helper and false of a clas
 analysis is name-based. Three agents hitting that edge should sharpen the claim, not delete it. Under
 a count, they delete it.
 
+Which is also why the **second** agent to hit an edge matters as much here as it does for a proposal.
+Its amendment is the same sentence, so it lands as corroboration on the amendment already standing —
+`claimsMatch` again, with the parent alone excluded from the match, since folding an amendment into
+the claim it sharpens would discard the correction. Filing each identical sharpening as its own
+one-voice proposal would carry nothing anywhere and would look exactly like the design working.
+
+**A contradiction lives in its own table**, `knowledge_contradictions`, and not as a discriminated row
+in `knowledge_corroborations` whose shape it otherwise shares exactly. `distinctCorroborators` counts
+the rows of that table, so a stance column would be counted as agreement by any reader that forgot the
+filter — a contradiction promoting the claim it disputes, with nothing red. Two tables make that
+unreachable rather than merely wrong. It is counted by the same union over goal and session, because
+an agent disputing its own predecessor's claim across a re-dispatch is one voice twice.
+
+**Any fact an agent could have been shown may be contradicted**, which is `lookup` and `injected` and
+not lapsed — `askFacts`' own answer rather than a second opinion about it. This section used to say
+"an injected fact", but a `lookup` fact reaches agents through the task prompt of every dispatch its
+scope matches and through `knowledge_ask`, and it is contradicted by the same reading of the same
+code; refusing there would leave the fleet's one way of saying "this is stale" working for some of
+what it was told and not the rest, with no way for the agent to tell which. A `proposal` reaches
+nobody, so nothing could have been shown one; a `committed` fact is in the repository, where the way
+to correct it is a change to the documentation. And a **rejected** claim is refused by name: an
+operator has already said it is not true and it reaches nobody, so there is nothing to correct — what
+the agent has in hand is a claim in its own right, which is `knowledge_propose` with `supersedes`.
+
+**The block does not say a claim is disputed**, and that is a decision rather than an omission. Both
+answers cost something: saying so puts a hedge in front of the whole fleet on one agent's say-so, and
+not saying so means every agent reads a claim two agents have contradicted as though nobody had. It is
+not said because a marker with no amendment behind it hands the reader a doubt it can do nothing with
+— the stance [the cap](#the-cap-and-saying-what-it-dropped) takes about a count an agent cannot act on
+— and because delivery moving on an agent's say-so is exactly what the reach machine reserves for a
+clock or an operator. What closes the gap instead is that the block's header names
+`knowledge_contradict` where it says the code is the authority, so the invitation and the tool that
+answers it are one sentence; and that the page draws the ratio and the unanswered count on the row,
+where the person who can act on them is.
+
 An operator resolving a contradiction has three moves: promote the amendment and supersede the
 original, narrow the original by hand, or reject the contradiction. Only the last leaves the fact
 where it was.
+
+**Adopting an amendment is one call, not two.** The amendment reaching the claim's place and the claim
+leaving it are two halves of one decision, and two calls can half-land: the sharper claim injected
+beside the blunter one it was written to replace, both in the same block, saying different things to
+every agent until somebody notices. `POST /api/knowledge/contradictions/:id/resolve` carries all three
+moves and the store makes both writes in one transaction.
+
+The adopted claim goes to **`superseded`**, a reach of its own and deliberately not `rejected`. It was
+not judged untrue — and a rejection would bar the amendment's own words, since an amendment usually
+*contains* the claim it sharpens, so the next agent to hit that edge would be refused by the name of a
+claim nobody is being told. `superseded` is out of every read exactly as `committed` is, bars nothing,
+and is terminal in both directions. For the same reason **the bar yields to a live descendant**: a
+rejected claim does not refuse a proposal whose words match a live fact that supersedes it, which is
+the `supersedes` exemption extended from the amendment itself to the later agent with no id to name.
+And for the same reason again, dismissing a contradiction leaves its amendment exactly where it is
+rather than rejecting it: an operator who wants it killed has the ordinary control and pays that cost
+knowingly.
+
+Narrowing rewrites the claim in place, and supersedes the amendments it answered — the operator wrote
+the sentence themselves, so those proposals are replaced rather than untrue, and leaving them live
+would grow a near-duplicate of the narrowed claim that a later agent could corroborate into a second
+version of it. Both moves answer **every** open contradiction on the claim, because both move the
+claim and a dispute about a sentence that no longer stands is not a decision anybody can still make.
+
+**The ratio is disputing voices over every voice that has spoken**, over the whole life of the claim
+and no window, taken server-side beside the rows it counts. No window because the count beside it — the
+one that carries a proposal to `lookup` — is over every corroboration a fact ever had, and a ratio over
+a shorter window would be a second number drawn from the same rows under a different rule, free to
+disagree with the one that governs while looking like the same arithmetic. Server-side for
+`distinctCorroborators`' reason exactly: both counts are counts of *voices*, so a division taken in
+the browser would be arithmetic over numbers whose rule the view layer does not know. It is a
+**reading and never a trigger** — nothing is demoted, lapsed or deleted by it.
 
 ## Rejection bars a claim — and amendment is how a barred claim comes back
 
@@ -399,7 +467,7 @@ nothing until somebody vouches, and the gate is unchanged.
 | ---------------------- | --------------- | ---------------------------------------------------------------------------------------- |
 | `knowledge_propose`    | **Any agent**   | Files a claim with its scope, lifetime and evidence — or records the caller as agreeing. |
 | `knowledge_ask`        | **Any agent**   | Returns facts matching a scope or a question.                                            |
-| _knowledge_contradict_ | **Any agent**   | Says an injected fact is contradicted, **with the amendment**. [Phase 5](#the-phases).   |
+| `knowledge_contradict` | **Any agent**   | Says a fact it was shown is contradicted, **with the amendment**.                        |
 | `knowledge_notice`     | **Any agent**   | Raises an expiring observation, with the clock it is bounded by.                         |
 
 Before this, only `retro_submit` and `report_remedy` could propose a lesson, and the remedy arm only
@@ -415,7 +483,7 @@ description is where the observation-not-instruction rule is actually enforced, 
 downstream can check it. What it validates is `validateFactProposal` with the lifetime supplied, not
 a second opinion about what a claim may be.
 
-All three live tools are named in `MCP_PROTOCOL_ADDENDUM` rather than at a point of use — the choice
+All four are named in `MCP_PROTOCOL_ADDENDUM` rather than at a point of use — the choice
 `test/mcpChannel.test.ts` forces on every tool. Every agent may write to this store and every agent
 may read it, so there is no one dispatch prompt that could name them.
 
@@ -445,9 +513,17 @@ harness raises its own, and that a row carrying a resolution condition ends when
 rather than when its clock runs out. The page reads top to bottom in the order things demand
 attention: **Live notices** with their clocks,
 **Needs you** — the corroborated claims waiting on the one decision that is yours — then **Injected**,
-**On lookup**, **One voice**, **Committed to the repository**, and the **Rejected** tail. A row
-carries the claim, its scope as a reference, its corroboration count and its provenance, with the
-observers' own words a click away.
+**On lookup**, **One voice**, **Committed to the repository**, **Superseded**, and the **Rejected**
+tail. A row carries the claim, its scope as a reference, its corroboration count, its contradiction
+count and ratio, and its provenance, with the observers' own words a click away.
+
+**A disputed claim stays in the section its reach puts it in**, and that is the page's own statement
+of the invariant: nothing is demoted by a count, so lifting a contradicted claim out of **Injected**
+would draw a demotion that did not happen. What it carries instead is the ratio and, while any dispute
+is unanswered, a count of what is left to answer. The three moves are inside the row's provenance,
+beside the words that ask for them — an operator choosing between the claim and the amendment has to
+be able to read both, and a control that sat where only one of them was visible would be asking for
+the decision with half of it hidden.
 
 **The page draws what it stopped**, which is why the last two sections are there. A surface showing
 only what it let through cannot tell an operator that a claim was killed — and the rejection bar,
@@ -461,8 +537,10 @@ carries a claim to `lookup`.
 
 **Nothing on the page auto-promotes anything, and it files nothing.** Agents propose through the tool
 channel on a scoped MCP credential; the cockpit's bearer token reaches four verbs — promote, demote,
-reject, keep — and none of them is available to an agent. There is no un-reject: a rejection is
-terminal, and what comes back is an amendment naming the barred claim.
+reject, keep — plus the three answers to a contradiction, and none of them is available to an agent.
+Nothing here files an amendment either: an agent wrote that through `knowledge_contradict`, with an
+observation behind it. There is no un-reject: a rejection is terminal, and what comes back is an
+amendment naming the barred claim.
 
 **Promoted lessons are mirrored in, so the Lessons panel and this page show the same claims.** The
 page says so in as many words rather than leaving a reader to work out which surface is authoritative.
@@ -483,6 +561,9 @@ actually being sent"); a store this size cannot be governed without it.
 
 ## What nothing does
 
+- **A contradiction neither deletes, lapses nor demotes the fact it names.** The only things that end
+  a fact are its own clock and an operator, and the only thing a contradiction does on its own is put
+  a sharper claim beside the one it disputes.
 - **No rule, desk or gate reads a fact.** Nothing is dispatched, held, or ranked because of one. A
   fact feeds prompts and a panel, and that is the whole of it — `src/remedies/remedies.ts` takes this
   stance already and it survives unchanged.
@@ -500,8 +581,8 @@ rest of the cockpit uses — against the same window as Insights ([18](18-observ
 than in tokens, which mean nothing at a glance.
 
 There is no way to measure whether an injected line was _read_. Cost is measurable, the corroboration
-count is measurable, and the contradiction ratio is measurable; the page shows those three and does
-not pretend to the fourth. A `lookup` fact has the better signal — how often it was actually asked for
+count is measurable, and the contradiction ratio is measurable; the page shows the last two already
+and will show the first, and it does not pretend to the fourth. A `lookup` fact has the better signal — how often it was actually asked for
 — and that is drawn on its row.
 
 ## Committing to the repository
@@ -526,12 +607,11 @@ of this document it makes true.
 
 | #   | Lands                                                                                                                                                  | Depends on |
 | --- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
-| 5   | Contradiction and amendment. `knowledge_contradict`, the amendment proposal, the contradiction ratio on the page.                                      | 2, 3       |
 | 6   | Graduation. Committing a fact opens a documentation pull request through the `docs`-finding machinery, and the fact leaves every prompt when it lands. | 2          |
 | 7   | Cost and drift. Dollars per dispatch on the page; stale `check:` scopes surfaced; lookup ask-counts.                                                   | 3          |
 
-Phases 1 to 4 — `src/store/knowledge.ts`, the axes, the bar, the three tools, the page an operator
-governs them from, `src/knowledge/block.ts` with the two prompts it renders, and
-`src/knowledge/noticeDesk.ts` with the notices the harness raises for itself — have landed. That is
-the whole spine: a claim can be written, ruled on, delivered, and expire. 5 through 7 are independent
-of each other and can land in any order.
+Phases 1 to 5 — `src/store/knowledge.ts`, the axes, the bar, the four tools, the page an operator
+governs them from, `src/knowledge/block.ts` with the two prompts it renders,
+`src/knowledge/noticeDesk.ts` with the notices the harness raises for itself, and contradiction with
+the amendment it demands — have landed. That is the whole spine: a claim can be written, ruled on,
+delivered, sharpened, and expire. 6 and 7 are independent of each other and can land in either order.

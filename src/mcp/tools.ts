@@ -7,6 +7,7 @@ import { concludePart } from './tools/concludePart.js';
 import { concludeWork } from './tools/concludeWork.js';
 import { escalate } from './tools/escalate.js';
 import { knowledgeAsk } from './tools/knowledgeAsk.js';
+import { knowledgeContradict } from './tools/knowledgeContradict.js';
 import { knowledgeNotice } from './tools/knowledgeNotice.js';
 import { knowledgePropose } from './tools/knowledgePropose.js';
 import { linkTicket } from './tools/linkTicket.js';
@@ -63,6 +64,7 @@ const TOOLS: Record<McpToolName, ToolFactory> = {
   knowledge_propose: knowledgePropose,
   knowledge_ask: knowledgeAsk,
   knowledge_notice: knowledgeNotice,
+  knowledge_contradict: knowledgeContradict,
 };
 
 /**

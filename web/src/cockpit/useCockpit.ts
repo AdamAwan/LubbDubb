@@ -274,6 +274,7 @@ export function useCockpit(): CockpitStatus {
       // A read, so no refetch: the evidence behind one claim rides its own route
       // precisely because it must not be pulled along by the state poll.
       factDetail: (id) => api.knowledgeFact(id),
+      resolveContradiction: (id, ruling) => then(api.resolveContradiction(id, ruling)),
       completeHumanTask: (id, note) => then(api.completeHumanTask(id, note)),
       declineHumanTask: (id, note) => then(api.declineHumanTask(id, note)),
       dismissHumanTask: (id) => then(api.dismissHumanTask(id)),

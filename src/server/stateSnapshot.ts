@@ -154,7 +154,11 @@ export function buildStateSnapshot(
   // they share a goal or a session — and a `rows.length` in the view layer would
   // be free to disagree with the count that actually promotes a claim.
   const facts = store.listFacts();
-  const factCorroborations = store.corroborationCounts();
+  // Every count on a fact row, taken together in the store: the agreement count,
+  // the dispute count and the fraction that is. One read rather than three, so the
+  // ratio the page draws and the count beside it cannot be answers to two
+  // different questions about the same rows.
+  const factCounts = store.factCounts();
   // Work only a person can do. Read here rather than only in the panel for
   // findings' reason: each row's `originRef` names the work it belongs to, and the
   // panel links it through the same ref map as everything else.
@@ -739,7 +743,14 @@ export function buildStateSnapshot(
     // surface drawing only what it let through cannot show that a claim was
     // killed. Nothing in the dispatcher reads one — a fact feeds prompts (phase 3)
     // and this panel, and that is the whole of it.
-    knowledge: facts.map((fact) => ({ ...fact, corroborations: factCorroborations.get(fact.id) ?? 0 })),
+    knowledge: facts.map((fact) => ({
+      ...fact,
+      corroborations: 0,
+      contradictions: 0,
+      contradictionRatio: 0,
+      openContradictions: 0,
+      ...factCounts.get(fact.id),
+    })),
     // What that list actually sends, from the renderers that send it.
     knowledgeDelivery: delivery,
     // Bugs raised from a story row: `filing` while the desk agent writes one, `filed`

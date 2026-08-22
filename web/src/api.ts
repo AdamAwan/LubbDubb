@@ -16,6 +16,7 @@ import type {
   CiPolicyPayload,
   FilingTargetProbe,
   IssueFiled,
+  ContradictionRuling,
   FactRuling,
   KnowledgeFactPayload,
   PetCatalogue,
@@ -474,6 +475,13 @@ const realApi = {
     authFetch(`/api/knowledge/facts/${encodeURIComponent(id)}`).then((r) => json<KnowledgeFactPayload>(r)),
   setFactReach: (id: string, reach: FactRuling) =>
     post<{ ok: true }>(`/api/knowledge/facts/${encodeURIComponent(id)}/reach`, { reach }),
+  // Answering a contradiction (#27 phase 5). **One call**, because adopting an
+  // amendment is one act: promoting it and superseding the claim it replaces are
+  // two halves of one decision, and a pair of calls can half-land — the sharper
+  // claim injected beside the blunter one, both in the same block, saying
+  // different things to every agent.
+  resolveContradiction: (id: string, body: ContradictionRuling) =>
+    post<{ ok: true }>(`/api/knowledge/contradictions/${encodeURIComponent(id)}/resolve`, body),
   // Work only a person can do. `done` settles it and concludes any plan step it
   // backs, which releases whatever was waiting; `decline` settles it the other way
   // and deliberately does not conclude the step, so nothing downstream starts.

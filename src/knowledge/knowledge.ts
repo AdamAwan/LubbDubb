@@ -1,5 +1,5 @@
 import { claimKey } from '../claims.js';
-import type { FactLifetime, FactResolution, FactScope } from '../types.js';
+import type { FactLifetime, FactResolution, FactScope, KnowledgeFact } from '../types.js';
 
 /**
  * The knowledge base's pure layer: what a scope is, what a proposal is allowed to
@@ -205,6 +205,181 @@ export function validateFactNotice(
 ): { ok: true; proposal: FactProposal } | { ok: false; error: string } {
   const args = (raw ?? {}) as Record<string, unknown>;
   return validateFactProposal({ ...args, lifetime: 'expiring' }, goalRef);
+}
+
+/**
+ * What a contradiction is for, said to the agent raising one.
+ *
+ * The amendment is the whole of it. A bare "this claim is wrong" is a count, and
+ * nothing in this store is demoted by count — a claim that is right in general and
+ * wrong at one edge attracts contradictions **because it is being used**, which
+ * makes the most valuable claims in the store the ones a count would kill first.
+ * So the tool asks for the sentence that would have been right, and what the fleet
+ * gets out of the disagreement is a sharper claim rather than one fewer claim.
+ */
+export const CONTRADICTION_RULE =
+  'Say what the claim should say INSTEAD. A contradiction with no amendment is refused: nothing here is ' +
+  'demoted by count, so "this is wrong" on its own changes nothing and reaches nobody. A claim that is ' +
+  'right in general and wrong at one edge is exactly the claim worth sharpening — write the version that ' +
+  'covers what you just saw, and keep whatever of it still holds.';
+
+/** One contradiction, validated — what the store is handed beside the amendment it demands. */
+export interface FactContradiction {
+  /** The claim being disputed. */
+  factId: string;
+  /** What it should say instead. Filed as a proposal of its own, naming the original in `supersedes`. */
+  amendment: string;
+  /** What the agent saw that the claim does not fit. Recorded as the contradiction's own words. */
+  evidence: string;
+}
+
+/**
+ * Validate what `knowledge_contradict` was handed.
+ *
+ * The amendment is refused **by name and with the reason** rather than defaulted
+ * or dropped: an agent told nothing files the same bare objection again, and an
+ * agent whose objection was silently recorded without one believes it has taken a
+ * claim off the fleet when it has changed nothing at all.
+ */
+export function validateContradiction(
+  raw: unknown,
+): { ok: true; contradiction: FactContradiction } | { ok: false; error: string } {
+  const args = (raw ?? {}) as Record<string, unknown>;
+  const factId = typeof args.factId === 'string' ? args.factId.trim() : '';
+  if (!factId) {
+    return {
+      ok: false,
+      error:
+        'factId is required: the id of the claim you are disputing, as it was given to you — every claim ' +
+        'in your prompt and every answer from knowledge_ask carries one',
+    };
+  }
+  const amendment = typeof args.amendment === 'string' ? args.amendment.trim() : '';
+  if (!amendment) return { ok: false, error: `amendment is required. ${CONTRADICTION_RULE}` };
+  if (amendment.length > MAX_CLAIM_CHARS) {
+    return {
+      ok: false,
+      error: `amendment must be ${MAX_CLAIM_CHARS} characters or fewer — it is a claim, a line or two`,
+    };
+  }
+  const evidence = typeof args.evidence === 'string' ? args.evidence.trim() : '';
+  if (!evidence) {
+    return {
+      ok: false,
+      error:
+        'evidence is required: what you actually saw that the claim does not fit — the file, the command, ' +
+        'the output. It is what an operator reads to decide between the claim and your amendment',
+    };
+  }
+  return { ok: true, contradiction: { factId, amendment, evidence: evidence.slice(0, MAX_EVIDENCE_CHARS) } };
+}
+
+/**
+ * Whether this claim is one an agent may contradict, and why not when it is not.
+ *
+ * **You may contradict what you could have been shown**, which is `askFacts`'
+ * answer and not a second opinion about it: `lookup` and `injected`, and not
+ * lapsed. The spec says "an injected fact", but a `lookup` fact reaches agents
+ * through the task prompt of every dispatch its scope matches and through
+ * `knowledge_ask`, and it is contradicted by the same reading of the same code —
+ * refusing there would leave the fleet's one way of saying "this is stale" working
+ * for some of the claims it was told and not others, with no way for the agent to
+ * tell which.
+ *
+ * A `proposal` reaches nobody, so nothing could have been shown one. A `committed`
+ * fact is in the repository, where the way to correct it is a pull request. And a
+ * `rejected` claim has already been answered: it reaches nobody, an operator has
+ * said it is not true, and the sharper version an agent has in hand is a claim in
+ * its own right — `knowledge_propose` with `supersedes`, which is the one thing
+ * that lifts a bar.
+ */
+export function contradictableFact(fact: KnowledgeFact, now: string): { ok: true } | { ok: false; error: string } {
+  if (fact.reach === 'rejected') {
+    return {
+      ok: false,
+      error:
+        `an operator has already rejected that claim (${fact.id}), so it reaches no agent and there is ` +
+        `nothing to correct. If your sharper version is worth filing in its own right, propose it with ` +
+        `knowledge_propose and supersedes: "${fact.id}" — an amendment is the one thing exempt from a bar.`,
+    };
+  }
+  if (fact.reach === 'proposal') {
+    return {
+      ok: false,
+      error:
+        `that claim is still a proposal (${fact.id}): one agent said it and nothing has agreed, so it ` +
+        `rides no prompt and is answered to nobody. There is nothing to take off the fleet. File what you ` +
+        `saw with knowledge_propose instead.`,
+    };
+  }
+  if (fact.reach === 'committed' || fact.reach === 'superseded') {
+    return {
+      ok: false,
+      error:
+        `that claim is out of every prompt already (${fact.id}, ${fact.reach}). A committed fact lives in ` +
+        `the repository, where the way to correct it is a change to the documentation; a superseded one has ` +
+        `been replaced. Contradict the claim you were actually shown.`,
+    };
+  }
+  if (fact.expiresAt !== null && fact.expiresAt <= now) {
+    return {
+      ok: false,
+      error:
+        `that notice lapsed at ${fact.expiresAt} and is already out of every read — nothing is being told ` +
+        `it. A notice ends by itself, which is what makes it a notice.`,
+    };
+  }
+  return { ok: true };
+}
+
+/**
+ * The proposal an amendment is filed as: the agent's sentence, on the original's
+ * own axes.
+ *
+ * **The axes are the original's and never arguments.** Matching is inside a scope,
+ * so an amendment filed in another scope would not be an amendment of anything —
+ * and a contradiction of one check's claim that could name `fleet` would be a
+ * fleet-wide claim filed off the back of a note about one job. The lifetime is the
+ * original's for the same reason, and an expiring claim's amendment inherits what
+ * is *left* of its clock: a correction to what is true today is true for as long
+ * as the thing it corrects is, and a fresh week would outlive the notice it
+ * sharpens.
+ */
+export function amendmentProposal(fact: KnowledgeFact, contradiction: FactContradiction, now: string): FactProposal {
+  const remaining =
+    fact.lifetime === 'expiring' && fact.expiresAt !== null
+      ? Math.max(1, Math.ceil((new Date(fact.expiresAt).getTime() - new Date(now).getTime()) / 3_600_000))
+      : null;
+  return {
+    claim: contradiction.amendment,
+    scope: fact.scope,
+    lifetime: fact.lifetime,
+    expiresInHours: remaining,
+    evidence: contradiction.evidence,
+    supersedes: fact.id,
+    // An agent never writes a condition, amendment or not: a condition is a
+    // mechanism the harness has to keep watching, and nothing watches this one.
+    resolvesWhen: null,
+  };
+}
+
+/**
+ * How much of what has been said about a claim disputes it.
+ *
+ * **Distinct voices on both sides, over the whole life of the claim, and no
+ * window.** The count beside it — the one that carries a proposal to `lookup` — is
+ * taken over every corroboration a fact ever had, so a ratio taken over a window
+ * would be a second number drawn from the same rows under a different rule, free
+ * to disagree with the one that governs while looking like the same arithmetic. A
+ * claim nobody hit the edge of this week is not a claim nobody has contradicted.
+ *
+ * It is a **reading and never a trigger**: nothing in this store is demoted,
+ * lapsed or deleted by it, and the ratio's whole job is to put the claims worth an
+ * operator's attention in front of them.
+ */
+export function contradictionRatio(corroborators: number, contradictors: number): number {
+  const total = corroborators + contradictors;
+  return total === 0 ? 0 : contradictors / total;
 }
 
 /**

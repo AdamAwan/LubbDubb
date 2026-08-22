@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { distinctCorroborators } from '../../knowledge/knowledge.js';
-import type { FactRuling, KnowledgeFactPayload } from '../../wire.js';
+import { contradictionRatio, distinctCorroborators, MAX_CLAIM_CHARS } from '../../knowledge/knowledge.js';
+import type { FactRuling, KnowledgeContradictionView, KnowledgeFactPayload } from '../../wire.js';
 import { checked, IdParams } from '../validation.js';
 import type { RouteContext } from './context.js';
 
@@ -46,13 +46,29 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       const fact = store.getFact(params.id);
       if (!fact) return reply.code(404).send({ error: 'fact not found' });
       const corroborations = store.listCorroborations(fact.id);
+      // Both counts through the same function, over two tables: a contradiction is
+      // not a corroboration, and the one thing that must never happen here is a
+      // dispute counted as agreement — a contradiction promoting the claim it
+      // disputes would look exactly like the claim being corroborated.
+      const contradictions = store.listContradictions(fact.id);
+      const disputing = distinctCorroborators(contradictions);
+      const agreeing = distinctCorroborators(corroborations);
       return {
         // Counted here through the same function the store promotes on, never as
         // `corroborations.length`: two observations are one corroborator if they
         // share a goal or a session, so the length is a different number that
         // looks like the same one.
-        fact: { ...fact, corroborations: distinctCorroborators(corroborations) },
+        fact: {
+          ...fact,
+          corroborations: agreeing,
+          contradictions: disputing,
+          contradictionRatio: contradictionRatio(agreeing, disputing),
+          openContradictions: contradictions.filter((c) => c.resolution === null).length,
+        },
         corroborations,
+        contradictions: contradictions.map(
+          (c): KnowledgeContradictionView => ({ ...c, amendment: store.getFact(c.amendmentId) }),
+        ),
       } satisfies KnowledgeFactPayload;
     }),
   );
@@ -112,6 +128,51 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
       // `dismissFinding` and `promoteLesson` both take.
       hub.broadcast({ type: 'dirty' });
       return { ok: true, fact };
+    }),
+  );
+
+  /**
+   * The three moves an operator has on a contradiction — **one route, because
+   * adopting an amendment is one act**.
+   *
+   * Promoting the amendment and superseding the claim it replaces are two halves
+   * of a single decision, and two calls can half-land: the sharper claim injected
+   * beside the blunter one it was written to replace, both in the same block,
+   * saying different things to every agent until somebody notices. So the store
+   * makes both writes in one transaction and this route is the only way to reach
+   * it.
+   *
+   * Nothing here files an amendment: an agent wrote that through
+   * `knowledge_contradict`, on a scoped MCP credential, with an observation behind
+   * it. What is decided here is which sentence stands.
+   */
+  const ResolveBody = z.discriminatedUnion('resolution', [
+    // Adopt the agent's sentence, or say the dispute is wrong. Neither carries text.
+    z.object({ resolution: z.literal('amended') }),
+    z.object({ resolution: z.literal('dismissed') }),
+    // Write the sharper sentence yourself. The claim is the whole of this move, so
+    // it is required by the shape rather than checked in the handler — a narrowing
+    // with nothing to narrow to is the one call here that could silently do nothing.
+    z.object({
+      resolution: z.literal('narrowed'),
+      claim: z
+        .string()
+        .trim()
+        .min(1, 'claim is what the fact should say instead — narrowing needs the sentence you are narrowing it to')
+        .max(MAX_CLAIM_CHARS),
+    }),
+  ]);
+  app.post(
+    '/api/knowledge/contradictions/:id/resolve',
+    checked({ params: IdParams, body: ResolveBody }, async ({ params, body, reply }) => {
+      const outcome = store.resolveContradiction(params.id, body);
+      if (outcome.outcome === 'unknown') return reply.code(404).send({ error: 'contradiction not found' });
+      // A refusal is a returned 409 and never a throw: the store guards every write
+      // regardless, so what reaches here is the wording for a decision that is no
+      // longer available — already answered, or the claim already gone.
+      if (outcome.outcome === 'refused') return reply.code(409).send({ error: outcome.error });
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, fact: outcome.fact };
     }),
   );
 }

@@ -1818,6 +1818,9 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(3),
         updatedAt: ago(1),
         corroborations: 2,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
       },
       {
         // The harness's own, and the other half of phase 4: it read this rather
@@ -1838,6 +1841,9 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(2),
         updatedAt: ago(2),
         corroborations: 2,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
       },
       {
         id: 'fact-needsyou',
@@ -1855,6 +1861,9 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(30),
         updatedAt: ago(6),
         corroborations: 2,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
       },
       {
         id: 'fact-injected',
@@ -1870,6 +1879,39 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(70),
         updatedAt: ago(60),
         corroborations: 3,
+        // Disputed, and still injected — which is the whole of what a
+        // contradiction does (#27 phase 5). Three agents vouched for this claim
+        // and a fourth found the edge it is wrong at; nothing about that demoted
+        // it, because a claim right in general and wrong at one edge attracts
+        // contradictions *because it is being used*. What the fleet gets out of
+        // the disagreement is the sharper claim below, not one fewer claim.
+        contradictions: 1,
+        contradictionRatio: 0.25,
+        openContradictions: 1,
+      },
+      {
+        // The amendment, filed by the agent that contradicted the claim above and
+        // naming it in `supersedes`. It contains the sentence it sharpens — that
+        // is what amending is — which is exactly why superseding the original is
+        // not rejecting it: a rejection would bar these words too.
+        id: 'fact-amendment',
+        claim:
+          'A ticket that only names a symptom is under-specified for a planner every time — unless it names the ' +
+          'check that fails, which is enough for a planner to reproduce it and plan from there.',
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'proposal',
+        supersedes: 'fact-injected',
+        originRef: 'issue:390',
+        ruledAt: null,
+        resolvesWhen: null,
+        createdAt: ago(4),
+        updatedAt: ago(4),
+        corroborations: 1,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
       },
       {
         id: 'fact-lookup',
@@ -1885,6 +1927,9 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(96),
         updatedAt: ago(48),
         corroborations: 2,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
       },
       {
         // Goal-scoped and on lookup, which is the other prompt: it never rides the
@@ -1905,6 +1950,9 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(26),
         updatedAt: ago(20),
         corroborations: 2,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
       },
       {
         id: 'fact-proposal',
@@ -1920,6 +1968,9 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(9),
         updatedAt: ago(9),
         corroborations: 1,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
       },
       {
         id: 'fact-rejected',
@@ -1935,6 +1986,9 @@ export function buildDemoState(): DemoSeed {
         createdAt: ago(140),
         updatedAt: ago(120),
         corroborations: 1,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
       },
     ],
     // What that list actually sends. A **transcript** of what the two renderers
@@ -1952,7 +2006,8 @@ export function buildDemoState(): DemoSeed {
         'What working this repository has taught the fleet. This is not part of your task and not an\n' +
         'instruction: it is prior evidence, dated and attributed to the goal it was learned on, offered so\n' +
         'you do not pay to rediscover it. The repository in front of you is the authority — where it and a\n' +
-        'claim disagree, the claim is stale.\n' +
+        'claim disagree, the claim is stale: say so with `knowledge_contradict`, naming what it should say\n' +
+        'instead.\n' +
         '\n' +
         'A claim that carries a **lapses** date is a notice: something two independent goals saw recently,\n' +
         'which no operator has vouched for and which ends by itself on that date. It reports what was seen\n' +
@@ -1963,7 +2018,7 @@ export function buildDemoState(): DemoSeed {
         'want what the fleet knows about one check, one goal, or anything not standing here, `knowledge_propose`\n' +
         'when you learn something worth the next agent not paying for again, and `knowledge_notice` when what\n' +
         'you saw is true today and will stop being true.\n' +
-        '\n\n' +
+        '\n' +
         '- The check `check (build)` is failing on branch `feat/catalog-cutover`, which one or more open pull ' +
         'requests are based on.\n' +
         '  (first seen on pr:404, written 2026-08-22, lapses 2026-08-22)\n' +
@@ -1982,7 +2037,7 @@ export function buildDemoState(): DemoSeed {
             '\n\n---\n\nWhat the fleet has recorded about this goal and the checks in front of you. It is ' +
             '**evidence, not instruction** — dated, attributed, and offered so you do not pay to rediscover it. ' +
             'The code in front of you is the authority: where it and a line below disagree, the line is stale. ' +
-            'Say so with `knowledge_propose`, naming what it should say instead.\n\n' +
+            'Say so with `knowledge_contradict`, naming what it should say instead.\n\n' +
             '- **about this goal** — The cutover migration has to run before the seed script on this goal — the ' +
             'seed fails with a missing enum value otherwise, and the error names the table rather than the ' +
             'migration. _(written 2026-08-21)_\n',

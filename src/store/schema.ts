@@ -285,6 +285,32 @@ CREATE TABLE IF NOT EXISTS knowledge_corroborations (
   created_at TEXT NOT NULL
 );
 
+-- Who says a fact is *wrong*, and what they say it should say instead: one row per
+-- contradiction, each naming the amendment filed with it.
+--
+-- Its own table rather than a stance column on knowledge_corroborations, whose
+-- shape it otherwise shares exactly. distinctCorroborators counts the rows of that
+-- table, so a discriminated row would be counted as agreement by any reader that
+-- forgot the filter — a contradiction promoting the claim it disputes, with
+-- nothing red. Two tables make that unreachable rather than merely wrong.
+--
+-- Nothing here demotes, lapses or deletes the fact named: the resolution column is
+-- an operator's answer, and the reach machine is still the only thing that moves a
+-- claim.
+CREATE TABLE IF NOT EXISTS knowledge_contradictions (
+  id           TEXT PRIMARY KEY,
+  fact_id      TEXT NOT NULL,      -- the claim being disputed
+  amendment_id TEXT NOT NULL,      -- the fact filed as what it should say instead; supersedes fact_id
+  agent_id     TEXT,
+  task_id      TEXT,
+  goal_ref     TEXT,               -- the goal it was seen on — the unit the contradiction ratio counts over
+  session_id   TEXT,
+  words        TEXT NOT NULL,      -- what the agent saw that the claim does not fit
+  resolution   TEXT,               -- amended | narrowed | dismissed; null while it is still open
+  resolved_at  TEXT,
+  created_at   TEXT NOT NULL
+);
+
 -- Why the fleet had to come back to a pull request, and what settled it: one row
 -- per CI failure or review round an agent answered, written by that agent through
 -- the report_remedy tool.

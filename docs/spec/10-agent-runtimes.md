@@ -238,6 +238,15 @@ scoped to one goal or one check ride the **task** prompt for exactly that reason
 - **It is claims, not instructions.** Each fact renders with the goal it was first seen on and the date
   it was written, under a header saying the repository in front of the agent is the authority. That is
   what lets an agent discount a stale one, and it is exactly what a bare block of assertions strips.
+  Since #27 phase 5 that sentence names `knowledge_contradict`, so the invitation and the tool that
+  answers it are one sentence rather than an invitation pointing at nothing.
+- **The block does not say which claims are disputed**, and that is a decision rather than an
+  omission. A contradiction is one agent's reading, and marking the line would be a hedge in front of
+  the whole fleet on that say-so — delivery moving without an operator, which is what the reach
+  machine reserves for a clock or a person. It would also hand the reader a doubt it can do nothing
+  with: the amendment is a proposal, so there would be nothing to read instead. What a contradiction
+  does to this block is **nothing**, and the operator's page is where it is visible
+  → [27](27-knowledge.md#contradiction-and-why-it-does-not-delete).
 - **The block is re-appended on every launch, `--resume` included**, exactly as the protocol prompt is.
   So injecting or demoting a claim reaches a running agent at its **next** launch, never mid-run — an
   agent already running keeps the block it started with until it is relaunched or resumed.

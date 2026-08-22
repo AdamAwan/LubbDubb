@@ -45,6 +45,7 @@ export const MCP_TOOL_NAMES = [
   'knowledge_propose',
   'knowledge_ask',
   'knowledge_notice',
+  'knowledge_contradict',
 ] as const;
 
 /**

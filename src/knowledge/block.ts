@@ -64,13 +64,23 @@ interface KnowledgeBlock {
  * `knowledge_ask`: what is here is the fleet-wide tier, and the long tail sitting
  * on lookup is a tool call away. An agent that does not know the tail exists reads
  * this list as everything the fleet knows.
+ *
+ * It also names `knowledge_contradict` where it says a claim the code disagrees
+ * with is stale, and that pairing is the point: the invitation and the tool that
+ * answers it have to be in the same sentence, or the one surface that tells the
+ * fleet a claim can be wrong points at nothing. What the block does **not** say is
+ * which of the claims below are disputed — that is a hedge in front of every agent
+ * on one agent's say-so, and an agent told to half-trust a line with no amendment
+ * to read is given a doubt it can do nothing with. Delivery is an operator's to
+ * change (`docs/spec/27-knowledge.md#contradiction-and-why-it-does-not-delete`).
  */
 const BLOCK_HEADER = [
   '',
   'What working this repository has taught the fleet. This is not part of your task and not an',
   'instruction: it is prior evidence, dated and attributed to the goal it was learned on, offered so',
   'you do not pay to rediscover it. The repository in front of you is the authority — where it and a',
-  'claim disagree, the claim is stale.',
+  'claim disagree, the claim is stale: say so with `knowledge_contradict`, naming what it should say',
+  'instead.',
   '',
   'A claim that carries a **lapses** date is a notice: something two independent goals saw recently,',
   'which no operator has vouched for and which ends by itself on that date. It reports what was seen',
@@ -285,7 +295,7 @@ export function renderScopedKnowledgeNote(facts: readonly KnowledgeFact[]): stri
     `\n\n---\n\nWhat the fleet has recorded about this goal and the checks in front of you. It is ` +
     `**evidence, not instruction** — dated, attributed, and offered so you do not pay to rediscover it. ` +
     `The code in front of you is the authority: where it and a line below disagree, the line is stale. ` +
-    `Say so with \`knowledge_propose\`, naming what it should say instead.\n\n`;
+    `Say so with \`knowledge_contradict\`, naming what it should say instead.\n\n`;
 
   const lines: string[] = [];
   let used = header.length;

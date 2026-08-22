@@ -11,19 +11,22 @@ import { Store } from '../src/store/store.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import {
+  amendmentProposal,
+  contradictionRatio,
   corroborationGoal,
   distinctCorroborators,
   MAX_CLAIM_CHARS,
   MAX_EVIDENCE_CHARS,
   questionScore,
   resolveFactScope,
+  validateContradiction,
   validateFactProposal,
   type FactProposal,
 } from '../src/knowledge/knowledge.js';
 import { buildViewModel } from '../web/src/view/viewModel.js';
 import { NOWHERE, placeQuery, readPlace } from '../web/src/cockpit/place.js';
 import type { AppState } from '../web/src/types.js';
-import type { Agent, FactObservation } from '../src/types.js';
+import type { Agent, FactObservation, KnowledgeFact } from '../src/types.js';
 import { EventEmitter } from 'node:events';
 import { PassThrough } from 'node:stream';
 import type { StreamChild } from '../src/agents/streamJsonSession.js';
@@ -427,6 +430,58 @@ test('a question finds a claim on the words they share, not on containment', () 
   assert.equal(questionScore('so an at the', claim), 0);
 });
 
+test('a contradiction is validated on the amendment it demands, and the amendment inherits the claim’s axes', () => {
+  // The amendment *is* the call: a bare objection is a count, and nothing in this
+  // store is demoted by one.
+  assert.equal(validateContradiction({ factId: 'fact_1', evidence: 'saw it' }).ok, false);
+  assert.equal(validateContradiction({ amendment: 'sharper', evidence: 'saw it' }).ok, false);
+  assert.equal(validateContradiction({ factId: 'fact_1', amendment: 'sharper' }).ok, false);
+  const parsed = validateContradiction({ factId: ' fact_1 ', amendment: ' sharper ', evidence: ' saw it ' });
+  assert.ok(parsed.ok);
+  assert.deepEqual(parsed.contradiction, { factId: 'fact_1', amendment: 'sharper', evidence: 'saw it' });
+
+  // The axes are the original's and never arguments: matching is inside a scope,
+  // so an amendment filed in another one would not be an amendment of anything.
+  const now = '2026-08-22T12:00:00.000Z';
+  const standing: KnowledgeFact = {
+    id: 'fact_1',
+    claim: 'the original',
+    scope: 'check:test (windows)',
+    lifetime: 'standing',
+    expiresAt: null,
+    reach: 'injected',
+    supersedes: null,
+    originRef: 'issue:41',
+    ruledAt: now,
+    resolvesWhen: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const amended = amendmentProposal(standing, parsed.contradiction, now);
+  assert.equal(amended.scope, 'check:test (windows)');
+  assert.equal(amended.lifetime, 'standing');
+  assert.equal(amended.expiresInHours, null);
+  assert.equal(amended.supersedes, 'fact_1');
+  // An agent never writes a resolution condition, amendment or not.
+  assert.equal(amended.resolvesWhen, null);
+
+  // A notice's amendment inherits what is *left* of its clock: a fresh week would
+  // outlive the notice it sharpens.
+  const notice = {
+    ...standing,
+    lifetime: 'expiring' as const,
+    expiresAt: '2026-08-22T17:30:00.000Z',
+  };
+  assert.equal(amendmentProposal(notice, parsed.contradiction, now).expiresInHours, 6);
+});
+
+test('the contradiction ratio is disputing voices over every voice that has spoken', () => {
+  assert.equal(contradictionRatio(2, 1), 1 / 3);
+  assert.equal(contradictionRatio(3, 0), 0);
+  // A claim nobody has said anything about is not a claim everybody disputes.
+  assert.equal(contradictionRatio(0, 0), 0);
+});
+
 // -- the tools ----------------------------------------------------------------
 
 interface ToolResultText {
@@ -810,13 +865,14 @@ test('the page draws every reach, the rejected tail included', async () => {
         refUrls: state.refUrls,
         viewingFact: null,
         onReach: () => undefined,
-        onDetail: () => Promise.resolve({ corroborations: [] }),
+        onDetail: () => Promise.resolve({ corroborations: [], contradictions: [] }),
+        onResolveContradiction: () => undefined,
         onViewFact: () => undefined,
       }),
     }),
   );
 
-  for (const heading of ['Live notices', 'Needs you', 'Injected', 'On lookup', 'One voice', 'Rejected']) {
+  for (const heading of ['Live notices', 'Needs you', 'Injected', 'On lookup', 'One voice', 'Superseded', 'Rejected']) {
     assert.ok(html.includes(heading), `the page draws no ${heading} section`);
   }
   // The claim an operator killed is on the page. A governance surface that drew
@@ -825,6 +881,12 @@ test('the page draws every reach, the rejected tail included', async () => {
   assert.ok(html.includes('The dispatcher reads the lessons table'), 'a rejected claim is not drawn');
   // A scope is a place a reader can go, not a label.
   assert.ok(html.includes('goal <'), 'a goal scope is not drawn as a reference');
+  // A disputed claim is drawn where its reach puts it, carrying the reading and
+  // not a demotion: nothing here is moved by a count, so a contradicted claim
+  // lifted out of Injected would draw something that did not happen.
+  assert.ok(html.includes('1 dispute'), 'the contradiction count is not drawn');
+  assert.ok(html.includes('25%'), 'the contradiction ratio is not drawn');
+  assert.ok(html.includes('1 to answer'), 'an unanswered dispute is not drawn');
   // And the one thing an operator must not be able to do from here.
   assert.ok(!/>File a claim</.test(html), 'nothing on this page files a claim');
 });
@@ -979,6 +1041,288 @@ test('a promoted lesson still reaches agents, as the fact it is mirrored into', 
   await app.close();
 });
 
+// -- contradiction and amendment (phase 5) ------------------------------------
+
+/**
+ * The properties here are again the negative ones, and the sharpest is that a
+ * contradiction moves **nothing**. A claim that is right in general and wrong at
+ * one edge attracts contradictions *because it is being used*, so the store's most
+ * valuable claims are the first a count would kill — the whole design is that
+ * disagreement produces a sharper claim rather than one fewer claim.
+ */
+
+/** One contradiction through the tool, as the caller sees it. */
+async function contradict(system: System, agent: Agent, args: Record<string, unknown>) {
+  return callTool(system, agent, 'knowledge_contradict', args);
+}
+
+/** Resolve one contradiction through the route, as an operator does. */
+async function answer(app: FastifyInstance, id: string, body: Record<string, unknown>) {
+  const res = await app.inject({ method: 'POST', url: `/api/knowledge/contradictions/${id}/resolve`, payload: body });
+  return { status: res.statusCode, error: (res.json() as { error?: string }).error ?? '' };
+}
+
+/** An injected fleet claim with the corroborations behind it, ready to be disputed. */
+function injectedClaim(system: System, claim: string): string {
+  const filed = system.store.proposeFact(proposal({ claim }), seenOn('issue:41'));
+  assert.ok(filed.outcome !== 'barred');
+  system.store.proposeFact(proposal({ claim }), seenOn('issue:42'));
+  system.store.setFactReach(filed.fact.id, 'injected');
+  return filed.fact.id;
+}
+
+const EDGE_CLAIM = 'Drop the export keyword rather than deleting the declaration when knip reports it unused.';
+const EDGE_AMENDMENT =
+  'Drop the export keyword rather than deleting the declaration when knip reports it unused — except on a class ' +
+  'member, where the analysis is name-based and the member itself has to go.';
+
+test('a contradiction files the amendment it demands, and moves the claim nowhere', async () => {
+  const system = build();
+  const id = injectedClaim(system, EDGE_CLAIM);
+  const agent = spawnAgent(system, 'issue:77');
+  const res = await contradict(system, agent, {
+    factId: id,
+    amendment: EDGE_AMENDMENT,
+    evidence: 'knip stayed red on a class member until I deleted the method.',
+  });
+  assert.equal(res.isError, false);
+  const payload = JSON.parse(res.text) as {
+    amendment: { id: string; scope: string; reach: string };
+    contradicted: { reach: string };
+    note: string;
+  };
+  // The amendment is a claim of its own, on the original's axes, naming it.
+  const amendment = system.store.getFact(payload.amendment.id);
+  assert.equal(amendment?.supersedes, id);
+  assert.equal(amendment?.scope, 'fleet');
+  assert.equal(amendment?.reach, 'proposal');
+  // And the claim it disputes has not moved — not demoted, not lapsed, not gone.
+  const original = system.store.getFact(id);
+  assert.equal(original?.reach, 'injected');
+  assert.equal(original?.expiresAt, null);
+  assert.equal(payload.contradicted.reach, 'injected');
+  // Said in the response, because an agent that believes it has just taken a stale
+  // claim off the fleet stops looking at it.
+  assert.match(payload.note, /has not moved/i);
+  system.store.close();
+});
+
+test('a contradiction is not a corroboration, and never reaches the count that promotes', async () => {
+  const system = build();
+  const filed = system.store.proposeFact(proposal({ claim: EDGE_CLAIM }), seenOn('issue:41'));
+  assert.ok(filed.outcome !== 'barred');
+  const id = filed.fact.id;
+  assert.equal(system.store.getFact(id)?.reach, 'proposal');
+  system.store.setFactReach(id, 'injected');
+
+  // Two goals dispute it — the same shape and the same number that carries a
+  // proposal to lookup, on the other table.
+  for (const [i, origin] of ['issue:77', 'issue:88'].entries()) {
+    const agent = spawnAgent(system, origin);
+    await contradict(system, agent, {
+      factId: id,
+      amendment: `${EDGE_AMENDMENT} (${i})`,
+      evidence: 'the analysis is name-based here.',
+    });
+  }
+  // The funniest possible failure, and an entirely silent one: a dispute counted
+  // as agreement promotes the claim it disputes.
+  assert.equal(system.store.listCorroborations(id).length, 1);
+  const counts = system.store.factCounts().get(id);
+  assert.equal(counts?.corroborations, 1);
+  assert.equal(counts?.contradictions, 2);
+  assert.equal(counts?.openContradictions, 2);
+  assert.equal(counts?.contradictionRatio, 2 / 3);
+  system.store.close();
+});
+
+test('the second agent to hit the edge corroborates the amendment rather than filing a second one', async () => {
+  const system = build();
+  const id = injectedClaim(system, EDGE_CLAIM);
+  for (const origin of ['issue:77', 'issue:88']) {
+    const agent = spawnAgent(system, origin);
+    await contradict(system, agent, { factId: id, amendment: EDGE_AMENDMENT, evidence: `saw it on ${origin}.` });
+  }
+  const amendments = system.store.listFacts().filter((f) => f.supersedes === id);
+  // Three agents hitting one edge must *sharpen* the claim. Filing each identical
+  // amendment as its own one-voice proposal carries nothing anywhere, and looks
+  // exactly like the design working.
+  assert.equal(amendments.length, 1);
+  assert.equal(system.store.factCounts().get(amendments[0]!.id)?.corroborations, 2);
+  assert.equal(amendments[0]!.reach, 'lookup');
+  system.store.close();
+});
+
+test('a contradiction with no amendment is refused by name, and so is one of a rejected claim', async () => {
+  const system = build();
+  const id = injectedClaim(system, EDGE_CLAIM);
+  const agent = spawnAgent(system, 'issue:77');
+  const bare = await contradict(system, agent, { factId: id, evidence: 'it did not hold here.' });
+  assert.equal(bare.isError, true);
+  assert.match(bare.text, /amendment is required/);
+  // The reason, not only the refusal: nothing is demoted by count, so a bare
+  // objection changes nothing and the agent has to be told that.
+  assert.match(bare.text, /demoted by count/i);
+
+  const killed = system.store.proposeFact(proposal({ claim: 'The seed script is idempotent.' }), seenOn('issue:41'));
+  assert.ok(killed.outcome !== 'barred');
+  system.store.setFactReach(killed.fact.id, 'rejected');
+  const dead = await contradict(system, agent, {
+    factId: killed.fact.id,
+    amendment: 'The seed script is idempotent only after the migration has run.',
+    evidence: 'it left two rows behind.',
+  });
+  assert.equal(dead.isError, true);
+  // An operator has already answered it and it reaches nobody, so there is nothing
+  // to correct — and the way to file the sharper claim in its own right is named.
+  assert.match(dead.text, /knowledge_propose/);
+  assert.match(dead.text, /supersedes/);
+
+  const unknown = await contradict(system, agent, {
+    factId: 'fact_nope',
+    amendment: EDGE_AMENDMENT,
+    evidence: 'saw it.',
+  });
+  assert.equal(unknown.isError, true);
+  system.store.close();
+});
+
+test('adopting an amendment is one call: it takes the reach and the claim is superseded together', async () => {
+  const system = build();
+  const app = await serve(system);
+  const id = injectedClaim(system, EDGE_CLAIM);
+  const agent = spawnAgent(system, 'issue:77');
+  await contradict(system, agent, { factId: id, amendment: EDGE_AMENDMENT, evidence: 'on a class member.' });
+  const contradiction = system.store.listContradictions(id)[0]!;
+
+  assert.deepEqual(await answer(app, contradiction.id, { resolution: 'amended' }), { status: 200, error: '' });
+  // Two calls could half-land, and the half-landed state is the amendment injected
+  // beside the blunter claim it was written to replace — both in one block, saying
+  // different things. One call, so it cannot exist.
+  assert.equal(system.store.getFact(id)?.reach, 'superseded');
+  assert.equal(system.store.getFact(contradiction.amendmentId)?.reach, 'injected');
+  const block = (await app.inject({ method: 'GET', url: '/api/state' })).json() as {
+    knowledgeDelivery: { block: string };
+  };
+  assert.ok(block.knowledgeDelivery.block.includes('except on a class member'));
+  assert.equal(block.knowledgeDelivery.block.includes(EDGE_CLAIM), false);
+  // Superseded and not rejected, which is the load-bearing half: an amendment
+  // *contains* the claim it sharpens, so a rejection would bar its own words.
+  assert.equal(system.store.listContradictions(id)[0]?.resolution, 'amended');
+  // And it is terminal in both directions — a claim with a sharper version standing
+  // does not come back into the block beside it.
+  assert.equal(system.store.setFactReach(id, 'injected'), null);
+  await app.close();
+});
+
+test('a superseded claim does not bar the amendment’s own words from being restated', async () => {
+  const system = build();
+  const app = await serve(system);
+  const id = injectedClaim(system, EDGE_CLAIM);
+  const first = spawnAgent(system, 'issue:77');
+  await contradict(system, first, { factId: id, amendment: EDGE_AMENDMENT, evidence: 'on a class member.' });
+  await answer(app, system.store.listContradictions(id)[0]!.id, { resolution: 'amended' });
+
+  // A third agent hits the same edge and writes the sharper claim, with no id to
+  // name. It has to land as agreement: refusing it by the name of a claim nobody
+  // is being told is the bar leaking through exactly the containment that makes an
+  // amendment an amendment.
+  const later = spawnAgent(system, 'issue:99');
+  const res = await callTool(system, later, 'knowledge_propose', {
+    claim: EDGE_AMENDMENT,
+    scope: 'fleet',
+    evidence: 'knip stayed red until the method went.',
+  });
+  assert.equal(res.isError, false);
+  const payload = JSON.parse(res.text) as { corroborations: number; note: string };
+  assert.match(payload.note, /corroboration/i);
+  assert.equal(payload.corroborations, 2);
+  await app.close();
+});
+
+test('narrowing rewrites the claim in place and supersedes the amendments it answered', async () => {
+  const system = build();
+  const app = await serve(system);
+  const id = injectedClaim(system, EDGE_CLAIM);
+  const agent = spawnAgent(system, 'issue:77');
+  await contradict(system, agent, { factId: id, amendment: EDGE_AMENDMENT, evidence: 'on a class member.' });
+  const contradiction = system.store.listContradictions(id)[0]!;
+
+  const narrowed = 'Drop the export keyword for a type or a helper; a class member knip reports unused has to go.';
+  assert.equal((await answer(app, contradiction.id, { resolution: 'narrowed', claim: narrowed })).status, 200);
+  const fact = system.store.getFact(id);
+  assert.equal(fact?.claim, narrowed);
+  // Still injected, and still the same row — the operator sharpened it rather than
+  // replacing it, so nothing about delivery changed but the sentence.
+  assert.equal(fact?.reach, 'injected');
+  assert.notEqual(fact?.ruledAt, null);
+  assert.equal(system.store.getFact(contradiction.amendmentId)?.reach, 'superseded');
+  assert.equal(system.store.listContradictions(id)[0]?.resolution, 'narrowed');
+  // A narrowing with nothing to narrow to is the one shape of this call that could
+  // silently do nothing, so the route refuses it.
+  const agent2 = spawnAgent(system, 'issue:88');
+  await contradict(system, agent2, { factId: id, amendment: `${narrowed} Except on a generic.`, evidence: 'again.' });
+  const second = system.store.listContradictions(id).find((c) => c.resolution === null)!;
+  assert.equal((await answer(app, second.id, { resolution: 'narrowed', claim: '  ' })).status, 400);
+  await app.close();
+});
+
+test('dismissing a contradiction is the only move that leaves the fact where it was', async () => {
+  const system = build();
+  const app = await serve(system);
+  const id = injectedClaim(system, EDGE_CLAIM);
+  const agent = spawnAgent(system, 'issue:77');
+  await contradict(system, agent, { factId: id, amendment: EDGE_AMENDMENT, evidence: 'on a class member.' });
+  const contradiction = system.store.listContradictions(id)[0]!;
+
+  assert.equal((await answer(app, contradiction.id, { resolution: 'dismissed' })).status, 200);
+  const fact = system.store.getFact(id);
+  assert.equal(fact?.reach, 'injected');
+  assert.equal(fact?.claim, EDGE_CLAIM);
+  // The amendment is left exactly where it is rather than rejected. Rejecting it
+  // would look tidy and would bar the claim it sharpens — an amendment contains its
+  // original, and `claimsMatch` is containment — so the next agent to corroborate
+  // the standing claim would be refused by the name of the amendment.
+  assert.equal(system.store.getFact(contradiction.amendmentId)?.reach, 'proposal');
+  assert.equal(system.store.listContradictions(id)[0]?.resolution, 'dismissed');
+  // Answered once and not twice: an already-answered dispute is a decision nobody
+  // can still make.
+  assert.equal((await answer(app, contradiction.id, { resolution: 'amended' })).status, 409);
+  assert.equal((await answer(app, 'knx_nothing', { resolution: 'dismissed' })).status, 404);
+  await app.close();
+});
+
+test('the contradiction ratio is the server’s, and rides the row', async () => {
+  const system = build();
+  const app = await serve(system);
+  const id = injectedClaim(system, EDGE_CLAIM);
+  const agent = spawnAgent(system, 'issue:77');
+  await contradict(system, agent, { factId: id, amendment: EDGE_AMENDMENT, evidence: 'on a class member.' });
+
+  const snap = (await app.inject({ method: 'GET', url: '/api/state' })).json() as {
+    knowledge: { id: string; corroborations: number; contradictions: number; contradictionRatio: number }[];
+  };
+  const row = snap.knowledge.find((f) => f.id === id);
+  // Two goals agree and one disputes, so a third of what has been said about the
+  // claim disputes it — the division taken beside the rows it counts, because two
+  // counts of *voices* divided in the browser would be arithmetic over numbers
+  // whose rule the view layer does not know.
+  assert.equal(row?.corroborations, 2);
+  assert.equal(row?.contradictions, 1);
+  assert.equal(row?.contradictionRatio, 1 / 3);
+
+  // And the words behind both sides come back together, because the decision is
+  // between them.
+  const detail = (await app.inject({ method: 'GET', url: `/api/knowledge/facts/${id}` })).json() as {
+    corroborations: { id: string }[];
+    contradictions: { words: string; amendment: { claim: string } | null }[];
+  };
+  assert.equal(detail.corroborations.length, 2);
+  assert.equal(detail.contradictions.length, 1);
+  assert.equal(detail.contradictions[0]?.amendment?.claim, EDGE_AMENDMENT);
+  await app.close();
+});
+
 // -- what nothing does --------------------------------------------------------
 
 test('no rule, desk or gate reads a fact', () => {
@@ -993,7 +1337,9 @@ test('no rule, desk or gate reads a fact', () => {
       if (entry.isDirectory()) walk(path);
       else if (
         entry.name.endsWith('.ts') &&
-        /\b(askFacts|listFacts|proposeFact|setFactReach)\b/.test(readFileSync(path, 'utf8'))
+        /\b(askFacts|listFacts|proposeFact|setFactReach|contradictFact|listContradictions|resolveContradiction|factCounts)\b/.test(
+          readFileSync(path, 'utf8'),
+        )
       )
         readers.push(path);
     }
