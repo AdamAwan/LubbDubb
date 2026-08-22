@@ -221,8 +221,8 @@ operator reads to decide whether it should have.
 
 ## Contradiction, and why it does not delete
 
-An agent that finds a fact contradicted by the code in front of it says so, through
-`knowledge_contradict`. This is the half `lessons` never had: staleness there rested on an agent
+An agent that finds a fact contradicted by the code in front of it says so, through `raise`'s
+`contradicts` argument. This is the half `lessons` never had: staleness there rested on an agent
 mentioning it in a retrospective and a human noticing, which is why the lesson block's header had to
 ask for it in prose.
 
@@ -263,7 +263,7 @@ to correct it is a change to the documentation — and the refusal names `report
 as the rail for one, rather than the pull request that put the claim there, which is a merged diff
 nobody can file against. And a **rejected** claim is refused by name: an
 operator has already said it is not true and it reaches nobody, so there is nothing to correct — what
-the agent has in hand is a claim in its own right, which is `knowledge_propose` with `supersedes`.
+the agent has in hand is a claim in its own right, which is `raise` naming the barred one.
 
 **The block does not say a claim is disputed**, and that is a decision rather than an omission. Both
 answers cost something: saying so puts a hedge in front of the whole fleet on one agent's say-so, and
@@ -271,9 +271,9 @@ not saying so means every agent reads a claim two agents have contradicted as th
 not said because a marker with no amendment behind it hands the reader a doubt it can do nothing with
 — the stance [the cap](#the-cap-and-saying-what-it-dropped) takes about a count an agent cannot act on
 — and because delivery moving on an agent's say-so is exactly what the reach machine reserves for a
-clock or an operator. What closes the gap instead is that the block's header names
-`knowledge_contradict` where it says the code is the authority, so the invitation and the tool that
-answers it are one sentence; and that the page draws the ratio and the unanswered count on the row,
+clock or an operator. What closes the gap instead is that the block's header names the
+way to say so where it says the code is the authority, so the invitation and the call that answers it
+are one sentence; and that the page draws the ratio and the unanswered count on the row,
 where the person who can act on them is.
 
 An operator resolving a contradiction has three moves: promote the amendment and supersede the
@@ -473,44 +473,99 @@ ran, and nothing is red when it does.
 
 ## What the fleet writes with
 
-Four tools, and the widening of who may write is the cheap half of this design — proposals cost
-nothing until somebody vouches, and the gate is unchanged.
+Two tools an agent chooses between, and the choice is *read or write* rather than a taxonomy.
 
-| Tool                   | Who may call it | Does                                                                                     |
-| ---------------------- | --------------- | ---------------------------------------------------------------------------------------- |
-| `knowledge_propose`    | **Any agent**   | Files a claim with its scope, lifetime and evidence — or records the caller as agreeing. |
-| `knowledge_ask`        | **Any agent**   | Returns facts matching a scope or a question.                                            |
-| `knowledge_contradict` | **Any agent**   | Says a fact it was shown is contradicted, **with the amendment**.                        |
-| `knowledge_notice`     | **Any agent**   | Raises an expiring observation, with the clock it is bounded by.                         |
+| Tool            | Who may call it | Does                                                                                 |
+| --------------- | --------------- | ------------------------------------------------------------------------------------ |
+| `raise`         | **Any agent**   | Records anything the agent learned — or records the caller as agreeing with a claim. |
+| `knowledge_ask` | **Any agent**   | Returns facts matching a scope or a question.                                        |
 
-Before this, only `retro_submit` and `report_remedy` could propose a lesson, and the remedy arm only
-under one of four guard verdicts — so a planning agent, an assayer, a validator or an issue-work agent
-could not record what it learned at all except by surviving to a retrospective. That narrowness had no
-argument behind it.
+Widening *who* may write was the cheap half of this design: proposals cost nothing until somebody
+vouches, and the gate is unchanged. Narrowing what a writer has to *decide* is the other half, and it
+is the one that took a surface away rather than adding one.
 
-`knowledge_notice` is deliberately its own tool rather than a flag on `knowledge_propose`, and for
-two reasons that are the same reason: the clock is required where `knowledge_propose` defaults to
-standing, so a notice cannot be filed without one by forgetting a field — which would be a standing
-fleet-wide claim filed by accident, the one thing agreement alone must never produce — and the
-description is where the observation-not-instruction rule is actually enforced, since nothing
-downstream can check it. What it validates is `validateFactProposal` with the lifetime supplied, not
-a second opinion about what a claim may be.
+### The intake asks nothing an agent cannot answer
 
-All four are named in `MCP_PROTOCOL_ADDENDUM` rather than at a point of use — the choice
+Filing an observation used to mean choosing a door: `report_finding` — and then which of its four
+kinds — `knowledge_propose`, `knowledge_notice`, `knowledge_contradict`, or a retrospective's
+`lessons` field. Six, sorted by **what an operator would do about it**, which is the operator's
+knowledge and not the agent's. The discriminator that sorted them was stated in three places
+([13](13-jobs-and-findings.md#where-a-lesson-does-not-go)) precisely because it did not stick, and
+each restatement was somewhere it could drift.
+
+So the axis is inverted. The agent says what it saw; **where the claim goes is the harness's to work
+out and the operator's to settle**. `raise` takes no kind, no lifetime word and no destination:
+
+| The agent supplies | And the harness reads it as                                                    |
+| ------------------ | ------------------------------------------------------------------------------ |
+| `claim`, `evidence` | Required. The claim, and the observation that is the argument for it.         |
+| `where`            | What locates it — file and line, package, service. Optional.                   |
+| `ref`              | The world item it is **about** (`issue:41`, `pr:412`) — never the caller's own origin. |
+| `until`            | Present → the claim is a notice, bounded by that clock. Absent → it stands.     |
+| `contradicts`      | Present → the claim is an amendment, and the dispute is recorded.               |
+| `scope`            | Optional. Defaults to `fleet`.                                                  |
+
+**Presence is the answer, on both of the fields that used to be a tool.** A notice cannot be filed by
+picking the wrong word, and — the thing `knowledge_notice` existed as its own tool to prevent — a
+standing fleet-wide claim cannot be filed by forgetting the right one. There is no field to forget:
+an agent that supplies a clock has filed a notice, and an agent that supplies none has filed a
+standing claim, which is what it meant either way.
+
+**`contradicts` is routed rather than folded into `supersedes`**, because the two are not the same
+act and the store already knows it. A bare `supersedes` files a sharper claim beside a blunter one
+and records no disagreement; a contradiction says *the claim you gave me does not fit what I am
+looking at*, and that dispute is what an operator reads to decide whether the original was ever
+right. Folding them would leave the contradiction ratio reading zero on a claim the fleet keeps
+walking into — a silence, and the expensive kind. The claim being raised **is** the amendment: an
+agent that has seen a claim fail has, in the same breath, said what it should say instead.
+
+**Scope defaults to `fleet`, and that default is the one worth arguing.** `goal` is cheaper to be
+wrong about and is still the wrong default, because a goal-scoped claim dies with its goal — so an
+agent that did not think about scope would have its observation buried on exactly the run that
+learned it. What makes `fleet` safe is the gate rather than the guess: a proposal reaches nobody, two
+*different* goals agreeing is itself evidence a claim is not goal-local, and the scope is on the row
+in front of the operator. A default an agent never has to think about, which an agent who has thought
+about it can still override, is not a taxonomy question.
+
+**`aboutRef` is never `originRef`**, and the case where they differ is the case that matters: an agent
+on `issue:41` reporting that `pr:412` duplicates `pr:398` has an origin of the first and is talking
+about the second. Attributing such a claim to its origin files it under somebody else's goal — the
+defect `findingJobRequest` already refuses by carrying `finding.ref` rather than `finding.originRef`
+([13](13-jobs-and-findings.md#promotion--post-apifindingsidpromote)). Both columns are additive and
+carry null on every row from before the intake, which is the only true value: nothing before `raise`
+could name either.
+
+What has **not** changed is everything the gate rests on. A raised claim reaches nobody on its
+author's say-so; two goals agreeing carries it as far as `lookup`; only an operator carries it
+further; nothing in the dispatcher reads it at any reach; and a claim an operator rejected is still
+refused by name, with `contradicts` as the one way back. Making it easier to file costs nothing
+because filing has never been what puts a sentence in front of the fleet.
+
+Both are named in `MCP_PROTOCOL_ADDENDUM` rather than at a point of use — the choice
 `test/mcpChannel.test.ts` forces on every tool. Every agent may write to this store and every agent
 may read it, so there is no one dispatch prompt that could name them.
 
-**A proposal is refused by name when it is barred**, with the id of the rejected claim and the
-`supersedes` argument that is the way back. A silent refusal teaches the fleet nothing, and it files
+**A raised claim is refused by name when it is barred**, with the id of the rejected claim and the
+`contradicts` argument that is the way back. A silent refusal teaches the fleet nothing, and it files
 the same claim again tomorrow.
 
-> **Not yet built:** the proposal arm on the two tools below. `report_remedy` still proposes a
-> `lessons` row under an `undocumented` guard, and a `docs` finding is still only a finding. Both are
-> a small change now that delivery has moved, and neither was worth making before it: they would have
-> been writing into a store nothing read.
+### What is not folded in, and why
 
-`report_remedy` and `report_finding` keep their own jobs and gain a proposal arm: a remedy is still
-the event record, and a `docs` finding is still the thing that becomes a documentation pull request.
+The discipline that keeps one door from becoming the catch-all `findings` deliberately never had. Each
+of these is a claim-shaped thing that stayed out for a stated reason rather than an oversight:
+
+| Stays its own | Because                                                                                                    |
+| ------------- | ---------------------------------------------------------------------------------------------------------- |
+| `knowledge_ask` | It is a read. The one axis worth making an agent choose is whether it is telling or asking.               |
+| `escalate`      | It **parks the agent**. A request for an answer is not an observation, and `raise` parks nobody.           |
+| `request_human_task` | It is a request for a person to act, not information. It files durable work, and it too parks nobody. |
+| `scratch_append` | A conversation between siblings on one goal: chronological, unstructured, nothing to corroborate.         |
+| `report_remedy` | The **event** record of one return to a pull request, with its counts and its dollars ([18](18-observability.md)). |
+
+> **Not yet built:** the `raise` arm on `report_remedy` and `report_finding`. A remedy still proposes a
+> `lessons` row under an `undocumented` guard, and a `docs` finding is still only a finding. Both are a
+> small change now that the intake exists, and both keep their own jobs either way: a remedy is the
+> event record, and a `docs` finding is the thing that becomes a documentation pull request.
 
 ## In the cockpit
 
@@ -560,8 +615,8 @@ carries a claim to `lookup`.
 **Nothing on the page auto-promotes anything, and it files nothing.** Agents propose through the tool
 channel on a scoped MCP credential; the cockpit's bearer token reaches four verbs — promote, demote,
 reject, keep — plus the three answers to a contradiction and the two of graduation, and none of them is
-available to an agent. Nothing here files an amendment either: an agent wrote that through
-`knowledge_contradict`, with an observation behind it. There is no un-reject: a rejection is terminal,
+available to an agent. Nothing here files an amendment either: an agent wrote that through `raise`,
+naming the claim it contradicts, with an observation behind it. There is no un-reject: a rejection is terminal,
 and what comes back is an amendment naming the barred claim.
 
 **A committable row carries a "Commit to the repository" control**, which asks where the claim goes

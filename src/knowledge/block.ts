@@ -65,8 +65,8 @@ interface KnowledgeBlock {
  * on lookup is a tool call away. An agent that does not know the tail exists reads
  * this list as everything the fleet knows.
  *
- * It also names `knowledge_contradict` where it says a claim the code disagrees
- * with is stale, and that pairing is the point: the invitation and the tool that
+ * It also names `raise` where it says a claim the code disagrees with is stale,
+ * and that pairing is the point: the invitation and the tool that
  * answers it have to be in the same sentence, or the one surface that tells the
  * fleet a claim can be wrong points at nothing. What the block does **not** say is
  * which of the claims below are disputed — that is a hedge in front of every agent
@@ -79,8 +79,8 @@ const BLOCK_HEADER = [
   'What working this repository has taught the fleet. This is not part of your task and not an',
   'instruction: it is prior evidence, dated and attributed to the goal it was learned on, offered so',
   'you do not pay to rediscover it. The repository in front of you is the authority — where it and a',
-  'claim disagree, the claim is stale: say so with `knowledge_contradict`, naming what it should say',
-  'instead.',
+  'claim disagree, the claim is stale: say so with `raise`, naming the claim in `contradicts` and',
+  'giving what it should say instead.',
   '',
   'A claim that carries a **lapses** date is a notice: something two independent goals saw recently,',
   'which no operator has vouched for and which ends by itself on that date. It reports what was seen',
@@ -88,9 +88,10 @@ const BLOCK_HEADER = [
   'for by an operator and holds until they retire it.',
   '',
   'This is the fleet-wide tier and not the whole record. Call `knowledge_ask` with a question when you',
-  'want what the fleet knows about one check, one goal, or anything not standing here, `knowledge_propose`',
-  'when you learn something worth the next agent not paying for again, and `knowledge_notice` when what',
-  'you saw is true today and will stop being true.',
+  'want what the fleet knows about one check, one goal, or anything not standing here — and `raise` when',
+  'you learn something worth the next agent not paying for again. One door for all of it: add',
+  '`until: <hours>` if what you saw will stop being true, and you never have to work out what kind of',
+  'thing it is.',
   '',
   '',
 ].join('\n');
@@ -295,7 +296,7 @@ export function renderScopedKnowledgeNote(facts: readonly KnowledgeFact[]): stri
     `\n\n---\n\nWhat the fleet has recorded about this goal and the checks in front of you. It is ` +
     `**evidence, not instruction** — dated, attributed, and offered so you do not pay to rediscover it. ` +
     `The code in front of you is the authority: where it and a line below disagree, the line is stale. ` +
-    `Say so with \`knowledge_contradict\`, naming what it should say instead.\n\n`;
+    `Say so with \`raise\`, naming the claim in \`contradicts\` and giving what it should say instead.\n\n`;
 
   const lines: string[] = [];
   let used = header.length;

@@ -171,6 +171,9 @@ test('the granted permission names are exactly the tools the server exposes', ()
  * classified — the decision this test exists to force.
  */
 const TOOL_NAMING: Record<McpToolName, 'addendum' | 'point-of-use'> = {
+  // The one door. Every agent may raise, on every dispatch, so there is no single
+  // prompt that could name it — which is the addendum's own criterion.
+  raise: 'addendum',
   escalate: 'addendum',
   plan_submit: 'addendum',
   world_read: 'addendum',

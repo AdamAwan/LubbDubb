@@ -48,10 +48,19 @@ import type { StoreContext } from './context.js';
  * all — `CREATE TABLE IF NOT EXISTS` creates it whole on every database that does
  * not have it. Being new *once* is what stops keeping it exempt: the first column
  * added to it later belongs here, exactly as the two above do.
+ *
+ * `about_ref` and `where_at` arrive with the unified intake, and are the third
+ * addition with no backfill behind it — for the plainest reason of the three.
+ * Nothing before `raise` could name the item a claim was about or where it was
+ * seen, so null is not merely tolerable on an older row: it is the only true
+ * value, and a backfill could only guess a locator for an observation nobody
+ * recorded one for. What makes the absence safe to leave is that both are
+ * *optional at the boundary too* — a fact with neither reads and renders exactly
+ * as every fact did before them.
  * → `docs/spec/14-persistence.md#migrations`
  */
 export const KNOWLEDGE_COLUMNS: ColumnMigrations = {
-  knowledge_facts: { ruled_at: 'TEXT', resolves_when: 'TEXT' },
+  knowledge_facts: { ruled_at: 'TEXT', resolves_when: 'TEXT', about_ref: 'TEXT', where_at: 'TEXT' },
 };
 
 /**
@@ -736,8 +745,8 @@ export class KnowledgeStore {
       .prepare(
         `INSERT OR IGNORE INTO knowledge_facts
            (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, resolves_when,
-            created_at, updated_at)
-         VALUES (?, ?, 'fleet', 'standing', NULL, 'injected', NULL, ?, ?, NULL, ?, ?)`,
+            about_ref, where_at, created_at, updated_at)
+         VALUES (?, ?, 'fleet', 'standing', NULL, 'injected', NULL, ?, ?, NULL, NULL, NULL, ?, ?)`,
       )
       // Ruled, and by the operator who promoted the lesson: the mirror is the
       // identity, so the moment they vouched for it is the moment it was ruled on.
@@ -833,6 +842,8 @@ export class KnowledgeStore {
       // evaluates — the sweep reads notices — so it is dropped rather than stored
       // where it would sit looking like a mechanism.
       resolvesWhen: proposal.lifetime === 'expiring' ? proposal.resolvesWhen : null,
+      aboutRef: proposal.aboutRef,
+      where: proposal.where,
       createdAt: ts,
       updatedAt: ts,
     };
@@ -840,9 +851,9 @@ export class KnowledgeStore {
       .prepare(
         `INSERT INTO knowledge_facts
            (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, resolves_when,
-            created_at, updated_at)
+            about_ref, where_at, created_at, updated_at)
          VALUES (@id, @claim, @scope, @lifetime, @expiresAt, @reach, @supersedes, @originRef, @ruledAt,
-                 @resolvesWhen, @createdAt, @updatedAt)`,
+                 @resolvesWhen, @aboutRef, @where, @createdAt, @updatedAt)`,
       )
       .run({ ...fact, resolvesWhen: fact.resolvesWhen === null ? null : JSON.stringify(fact.resolvesWhen) });
     return fact;
@@ -1017,6 +1028,10 @@ interface FactRow {
   ruled_at: string | null;
   /** Nullable and possibly absent, for {@link FactRow.ruled_at}'s reason. JSON, or null. */
   resolves_when: string | null;
+  /** Nullable and possibly absent, for {@link FactRow.ruled_at}'s reason. */
+  about_ref: string | null;
+  /** Nullable and possibly absent, for {@link FactRow.ruled_at}'s reason. */
+  where_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -1037,6 +1052,14 @@ function rowToFact(r: FactRow): KnowledgeFact {
     // delivery path, where a throw would take the launch down with it. Null is the
     // safe reading: the clock still settles the notice.
     resolvesWhen: parseResolution(r.resolves_when),
+    // `?? null` rather than the bare read: on a database from before the intake
+    // landed these columns exist (`ensureColumns` added them) but an older row
+    // carries SQL NULL, and a driver that hands back `undefined` for a column a
+    // prepared statement never wrote would put `undefined` on a domain type whose
+    // field is `string | null`. It renders as absent either way — which is the
+    // failure being closed here, since absent is also the correct answer.
+    aboutRef: r.about_ref ?? null,
+    where: r.where_at ?? null,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
   };

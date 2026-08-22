@@ -1339,6 +1339,28 @@ export interface KnowledgeFact {
    * → `docs/spec/27-knowledge.md#notices`
    */
   resolvesWhen: FactResolution | null;
+  /**
+   * The world item the claim is *about* (`issue:41`, `pr:412`), or null.
+   *
+   * Never {@link KnowledgeFact.originRef}, which names the goal the observing
+   * agent was working when it learned this. The two are different questions and
+   * the answer differs exactly when it matters most: an agent on `issue:41` that
+   * says `pr:412` duplicates `pr:398` has an origin of the first and is talking
+   * about the second. Attributing such a claim to its origin files it under
+   * somebody else's goal — the defect `findingJobRequest` already refuses by
+   * carrying `finding.ref` rather than `finding.originRef`.
+   */
+  aboutRef: string | null;
+  /**
+   * What locates the claim — a file and line, a package, a service, an endpoint.
+   *
+   * Free text rather than a closed vocabulary because "where" means a different
+   * thing for a duplicate, a flaky check and an undocumented seam, and a schema
+   * for it would be guessed at. Optional for {@link KnowledgeFact.aboutRef}'s
+   * reason: a required field an agent has nothing for comes back as "N/A", and a
+   * list of those is worse than an absence.
+   */
+  where: string | null;
   createdAt: string;
   /** When it last moved — for anything but a fresh proposal, when its reach changed. */
   updatedAt: string;

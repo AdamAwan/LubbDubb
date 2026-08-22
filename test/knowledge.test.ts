@@ -78,6 +78,8 @@ function proposal(overrides: Partial<FactProposal> = {}): FactProposal {
     evidence: 'check failed on an exported type nothing imported.',
     supersedes: null,
     resolvesWhen: null,
+    aboutRef: null,
+    where: null,
     ...overrides,
   };
 }
@@ -457,6 +459,8 @@ test('a contradiction is validated on the amendment it demands, and the amendmen
     originRef: 'issue:41',
     ruledAt: now,
     resolvesWhen: null,
+    aboutRef: null,
+    where: null,
     createdAt: now,
     updatedAt: now,
   };

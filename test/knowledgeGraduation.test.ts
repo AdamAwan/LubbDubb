@@ -72,6 +72,8 @@ function injectedClaim(system: System, claim = CLAIM): KnowledgeFact {
     evidence: 'the route cast the body and the 400 came out of setErrorHandler.',
     supersedes: null,
     resolvesWhen: null,
+    aboutRef: null,
+    where: null,
   };
   const filed = system.store.proposeFact(proposal, seen('issue:41'));
   assert.ok(filed.outcome !== 'barred');
@@ -202,6 +204,8 @@ test('what the store will not commit, and why', async () => {
       evidence: 'saw it once.',
       supersedes: null,
       resolvesWhen: null,
+      aboutRef: null,
+      where: null,
     },
     { agentId: null, taskId: null, goalRef: 'issue:9', sessionId: null, words: 'saw it once.' },
   );
@@ -223,6 +227,8 @@ test('what the store will not commit, and why', async () => {
       evidence: 'two runs, same step.',
       supersedes: null,
       resolvesWhen: null,
+      aboutRef: null,
+      where: null,
     },
     { agentId: null, taskId: null, goalRef: 'pr:1', sessionId: null, words: 'two runs, same step.' },
   );
@@ -236,6 +242,8 @@ test('what the store will not commit, and why', async () => {
       evidence: 'again.',
       supersedes: null,
       resolvesWhen: null,
+      aboutRef: null,
+      where: null,
     },
     { agentId: null, taskId: null, goalRef: 'pr:2', sessionId: null, words: 'again.' },
   );
@@ -408,6 +416,8 @@ test('what may be committed, and the wording of each refusal', () => {
     originRef: 'issue:41',
     ruledAt: null,
     resolvesWhen: null,
+    aboutRef: null,
+    where: null,
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
   };
@@ -431,6 +441,8 @@ test('the note says what the landing costs the claim, whichever target it names'
     originRef: 'issue:41',
     ruledAt: null,
     resolvesWhen: null,
+    aboutRef: null,
+    where: null,
     createdAt: '2026-08-01T00:00:00.000Z',
     updatedAt: '2026-08-01T00:00:00.000Z',
   };
