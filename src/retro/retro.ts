@@ -31,7 +31,7 @@
  * happen that they cannot do by reading the issue.
  */
 
-import { validateLessonText } from '../lessons.js';
+import { validateClaimText } from '../knowledge/knowledge.js';
 
 /** A document long enough to be a real write-up, short enough not to be a pasted transcript. */
 export const MAX_RETRO_DOCUMENT = 20_000;
@@ -159,7 +159,7 @@ function parseLessons(raw: unknown): { lessons: string[]; dropped: number } {
   const lessons: string[] = [];
   let dropped = 0;
   for (const entry of raw) {
-    const parsed = validateLessonText(entry);
+    const parsed = validateClaimText(entry);
     if (!parsed.ok) {
       dropped += 1;
       continue;
@@ -171,7 +171,7 @@ function parseLessons(raw: unknown): { lessons: string[]; dropped: number } {
       dropped += 1;
       continue;
     }
-    lessons.push(parsed.text);
+    lessons.push(parsed.claim);
   }
   return { lessons, dropped };
 }

@@ -30,8 +30,7 @@ let socketPath = process.env.LUBBDUBB_MCP_SOCKET;
 let token = process.env.LUBBDUBB_MCP_TOKEN;
 
 if (desktop) {
-  const path =
-    process.env.LUBBDUBB_DESKTOP_CREDENTIAL || join(homedir(), '.lubbdubb', 'desktop.json');
+  const path = process.env.LUBBDUBB_DESKTOP_CREDENTIAL || join(homedir(), '.lubbdubb', 'desktop.json');
   try {
     const credential = JSON.parse(readFileSync(path, 'utf8'));
     socketPath = credential.socket;

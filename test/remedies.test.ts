@@ -319,10 +319,10 @@ test('a remedy under the undocumented guard raises a fact, not a lesson', async 
     raised: { recorded: string; id: string; reach: string; corroborations: number };
     note: string;
   };
-  // The claim is a fact now: the lessons store has no agent-facing writer left
-  // outside `retro_submit`, so the same sentence cannot reach two stores under two
-  // gates depending on which tool the agent was holding.
-  assert.equal(system.store.listLessons().length, 0);
+  // The claim is a fact, and there is nowhere else it could be: the lessons store
+  // is gone, so the same sentence cannot reach two stores under two gates depending
+  // on which tool the agent happened to be holding.
+  assert.equal(system.store.listFacts().length, 1);
   const fact = system.store.getFact(payload.raised.id);
   assert.equal(fact?.claim, CLAIM);
   assert.equal(fact?.scope, 'fleet');

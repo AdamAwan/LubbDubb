@@ -89,12 +89,13 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   takes the build. A backfill run on _every_ boot is the same silence pointed the other way: it opens
   the eggs they were saving. Both look like the feature working.
   → [14](docs/spec/14-persistence.md#when-a-null-means-something)
-- **`VIVARIUM_RESET` in `src/pets/keeper.ts` is never edited in place.** The string names one
-  clearance, and `resetOnce` runs it on any database holding no `pet_resets` row under that name —
-  so changing it is not a rename, it is a second clearance that releases every operator's whole pet
-  collection on the boot after they take the build. A wipe that ran as designed reports nothing, and
-  `check` has no opinion about a constant. A further clearance is a further id, added deliberately.
-  → [22](docs/spec/22-pets.md#clearing-the-vivarium)
+- **A one-shot id is never edited in place** — `VIVARIUM_RESET` in `src/pets/keeper.ts`, and every id
+  passed to `runOnce`. The string names _that_ clearance or _that_ migration, so changing it is not a
+  rename: it declares a second one, which every database that already ran the first then runs again —
+  releasing every operator's pet collection, or re-creating rows they have since ruled on, on the boot
+  after they take the build. A pass that ran as designed reports nothing, and `check` has no opinion
+  about a constant. A further pass is a further id, added deliberately.
+  → [22](docs/spec/22-pets.md#clearing-the-vivarium), [14](docs/spec/14-persistence.md#a-migration-that-must-run-once)
 - **A new issue-verdict writer goes through `IssueVerdictStore.recordVerdict`, never a hand-rolled
   `DELETE`.**
   Which of `issue_conclusions` / `issue_deliveries` / `issue_shortfalls` / `issue_assays` may coexist
@@ -150,7 +151,7 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   instead, each is only as reliable as its memory of one line — and every failure is silent: a
   blueprint's ticket without the watch label is created, linked, shown complete in the cockpit, and
   **never dispatched for**; an Azure bug without its relation is a bug nobody can trace back.
-  → [13](docs/spec/13-jobs-and-findings.md#filing-a-ticket), [15](docs/spec/15-integrations.md)
+  → [13](docs/spec/13-jobs-and-tickets.md#filing-a-ticket), [15](docs/spec/15-integrations.md)
 
 ### Dispatch
 
@@ -163,7 +164,7 @@ A fresh clone needs `npm ci` first — `better-sqlite3` and `node-pty` are nativ
   write `assaying` / `assessing` on the `StageContext` for later stages to read. Moving either
   below its readers compiles fine and silently puts two agents on one issue.
 - **Lenses must stay out of `src/dispatcher/`.** The work graph (`src/graph/`), `buildStacks`,
-  `prAttentionStatus`, `findings` and `overlaps` are all read-only views for the cockpit; a rule
+  `prAttentionStatus`, `knowledge` and `overlaps` are all read-only views for the cockpit; a rule
   consulting one would be a second opinion about a decision made elsewhere. Asserted structurally
   in `test/workGraph.test.ts`, `test/stacks.test.ts` and `test/prAttention.test.ts` — if one fails,
   fix the file it names, not the assertion.

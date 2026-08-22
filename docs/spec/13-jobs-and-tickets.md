@@ -1,17 +1,17 @@
-# 13 — Jobs, findings, lessons and human tasks
+# 13 — Jobs, tickets and human tasks
 
-Four operator-facing queues, split by **who acts on them**. A **job** is work the operator asked for,
-done by an agent. A **finding** is a claim an agent filed, which becomes work only when an operator
-says so. A **lesson** is a claim of a different kind — what working a goal taught about working this
-repository — and it reaches nothing until an operator promotes it. A **human task** is work only a
-person can do, and the operator is the one who does it.
+Three operator-facing queues, split by **who acts on them**. A **job** is work the operator asked
+for, done by an agent — queued by hand, or by a **schedule** on a clock. A **filed ticket** is work
+handed to the tracker so it waits its turn there with everything else. A **human task** is work only
+a person can do, and the operator is the one who does it.
 
-**Two of the four no longer have a door of their own, or a surface of their own.** An agent files a
-finding through `raise` ([27](27-knowledge.md#the-intake-asks-nothing-an-agent-cannot-answer)), which
-takes no kind and no destination — `report_finding` is still registered but named nowhere — and
-findings and lessons are read and ruled on as sections of the Knowledge page rather than as panels
-([17](17-cockpit.md)). What is described below is the stores, the routes and the transitions, all of
-which are unchanged: what moved is where a claim comes in and where it is looked at.
+**Two of what used to be here have gone.** A **finding** was a claim an agent filed and an operator
+ruled on; a **lesson** was a claim of a different kind — what working a goal taught about working
+this repository. Both were the same shape of thing said twice, and both are `knowledge_facts` rows
+now: raised through one intake, matched by one matcher, ruled on through one set of reaches, and
+drawn on one page. What they used to do about an operator's click — become a job, become a ticket —
+is [an exit](27-knowledge.md#sending-a-claim-on), and it is the same machinery this document
+describes below. → [27](27-knowledge.md#what-the-three-stores-became)
 
 ## Jobs
 
@@ -212,8 +212,8 @@ knows or cares that a clock queued this one.
 
 That is the whole containment argument, and it is why there is no config key, no per-schedule
 concurrency limit and no "scheduled" flag anywhere downstream. A recurrence that could dispatch
-around the cap would be the capability escalation `findings` is careful not to be
-([above](#it-queues-nothing)); one that queues is just an operator who is asleep.
+around the cap would be the capability escalation the claim store is careful not to be
+([27](27-knowledge.md#what-nothing-does)); one that queues is just an operator who is asleep.
 
 ### The expression
 
@@ -307,7 +307,7 @@ Two decisions worth keeping:
 
 ### Deleted, not tombstoned
 
-Unlike a dismissed finding or a settled human task, a schedule is **deleted**. Those carry somebody's
+Unlike a rejected claim or a settled human task, a schedule is **deleted**. Those carry somebody's
 judgement about a piece of work and a row that vanished would take the note with it; this carries an
 intention that has ended, and there is no verdict to lose. Its history survives anyway — every job it
 ever queued is still in `jobs`, with the agents and decisions that came of them.
@@ -318,246 +318,12 @@ exempt. → [14](14-persistence.md#migrations)
 
 Tests: `test/jobSchedules.test.ts`.
 
-## Findings
+## Filing a ticket
 
-An agent that discovers something **outside its own task** had nowhere to put it. "This issue
-duplicates #41", "the real fix is in a package I don't own", "there's an unrelated bug in the module I
-touched" all ended up in a PR comment, hoping a human read it: nothing landed in the store, nothing
-surfaced in the cockpit, and nothing could act on it later.
-
-The `docs` kind closes the same gap from the other side (#397). A fact about **the repository** that
-its own documentation does not state is learned _inside_ the task rather than beside it, and its only
-destination was prose in a retrospective read once by a person — the fate #355 opened by objecting to.
-It rides these rails rather than a surface of its own because the shape is identical: a provenanced
-claim an operator promotes or dismisses. Two gates for one problem is how two gates come to disagree
-about what "an operator decided" means.
-
-```ts
-interface Finding {
-  id;
-  agentId;
-  taskId;
-  originRef; // from the credential, never from an argument
-  kind: 'duplicate' | 'blocked' | 'out_of_scope' | 'docs';
-  ref: string | null; // the world item it is about
-  summary; // the claim, one line — validation refuses a newline
-  where: string | null; // what locates it: file and line, package, service
-  detail: string | null; // the evidence, markdown
-  status: 'open' | 'promoted' | 'dismissed' | 'filing' | 'filed';
-  jobId: string | null; // the job it became — working it, or filing it
-  ticketRef: string | null; // the ticket it was filed as ("issue:314")
-  createdAt;
-  updatedAt;
-}
-```
-
-### The four kinds
-
-Four, taken from four concrete gaps rather than invented as a taxonomy. What earns each a slot is
-that it implies a **different operator action** — that is the axis worth splitting on:
-
-| Kind           | Means                                                                                             | The operator…                                         |
-| -------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
-| `duplicate`    | This work item is the same work as another one.                                                   | closes or links one of them.                          |
-| `blocked`      | The fix needs a change outside what the agent can touch — another repo, a package it doesn't own. | unblocks it or parks it.                              |
-| `out_of_scope` | Something real, not the agent's task — an unrelated bug, a gap nobody has filed.                  | decides whether it becomes a job.                     |
-| `docs`         | Something true of this repository that its own documentation does not say.                        | promotes it, and an agent opens a docs PR against it. |
-
-There is still deliberately **no catch-all**: a bucket implying no action is where findings rot, and
-the summary is free text already. `docs` clears the bar rather than widening it — "an agent writes the
-documentation change and opens a pull request" is a genuinely different action from the other three,
-and the row already carries what a docs claim needs: `summary` is the fact, `where` is the document
-that should say it, `detail` is the evidence, and attribution is structural.
-
-**The tension worth stating rather than hiding.** The first three are things noticed _outside_ the
-agent's own task; a repo fact is learned _inside_ it, at the cost of learning it, which is exactly why
-it is worth writing down. So `report_finding`'s description no longer says "NOT your task" as though
-it covered every kind — it names both directions, and the `docs` bullet says to file the fact the
-moment it is learned rather than saving it for a write-up that may summarise it away.
-
-### The three text fields
-
-`summary` was once the only one, and its description asked for what it is, where, and why it matters,
-plus the evidence — four things in one string. What arrived was one undifferentiated block, with the
-claim, the identifier and the stack trace at the same weight, which is a wall to read and no faster to
-skim than the PR comment it replaced. The structure was never in the text, so no renderer could put it
-there; only naming the parts can.
-
-| field     | required | holds                                                       |
-| --------- | -------- | ----------------------------------------------------------- |
-| `summary` | yes      | the claim, one line, ≤160 characters                        |
-| `where`   | no       | what locates it — file and line, package, service, endpoint |
-| `detail`  | no       | the evidence — error, repro, reasoning — as markdown        |
-
-Everything past `summary` is **optional on purpose**. A required field an agent has nothing for comes
-back as "N/A", and a list of those is worse than a blob. `where` is free text rather than a closed
-vocabulary because "where" means a different thing per kind, and a schema for it would be guessed at.
-
-### Validation
-
-`validateFinding(args)` (`src/mcp/findings.ts`), pure:
-
-- `kind` must be one of the three; the error lists all three with their help text.
-- `summary` is required, at most 160 characters, and **must not contain a newline**. That refusal is
-  the load-bearing part of the split: the only cheap moment to fix a blob is the agent's own turn, and
-  a rejection there costs one tool call, where an unreadable card costs an operator every time they
-  open it. Both refusals name the field the text belongs in — an error that only said "too long" would
-  get the same paragraph back, shortened.
-- `where` is optional, at most 200 characters. `detail` is optional, at most 2000 — the cap that used
-  to be on `summary`, which is where a paragraph now legitimately goes.
-- `ref` is optional. `parseFindingRef` accepts the closed `pr:` / `issue:` vocabulary,
-  suffix-tolerant so an origin ref passes back verbatim. A **bare number is refused** — unlike
-  `world_read` there is no `kind` argument to disambiguate issue #41 from PR #41, and a duplicate
-  report must not guess. Anything else is refused with "omit ref and describe it in the summary": an
-  open-ended ref field becomes an unqueryable junk drawer.
-
-Note what is **not** validated because it does not exist: no agent, task, issue or author argument.
-Identity is structural.
-
-### Recording
-
-`AgentManager.recordFinding` routes it — not straight to the store — for the same reason a flag does:
-the cockpit should hear the moment it is filed, not on the next pulse, and the `finding` event is what
-carries it. The `Hub` broadcasts `agent:finding` plus a `dirty`.
-
-Unlike `escalate`, it does **not** require a live session: a finding is a durable note, and one filed on
-an agent's last breath is still true.
-
-### Finding the finding that already exists
-
-A report does not become a row until the store has looked for the claim it makes. Two lookups, in
-this order:
-
-1. **The standing claim** — any finding with the same `kind` and `ref` whose summary reduces to the
-   same claim, and whose status is **not `dismissed`**, oldest first. The comparison is on a
-   normalised key: lower-cased, with markdown emphasis, backticks, quotes and punctuation dropped and
-   whitespace collapsed. Two keys match when they are equal, or when one wholly contains the other on
-   word boundaries and the shorter is at least 24 characters — a restatement that appends its own
-   qualifier is the same claim, while a short key would be a substring of far too much, and a wrong
-   merge is worse than a duplicate because it hides one agent's report inside another's. The matcher
-   itself is `src/claims.ts` rather than this store's own, because `knowledge_facts` matches claims the
-   same way and by the same rule: a claim dismissed here and re-proposed there has to look like the
-   same sentence to both, or the knowledge base's rejection bar leaks. → [27](27-knowledge.md)
-2. **The author's own repeat** — same agent, kind, ref and summary, whatever its status. At this
-   point that can only be a row someone dismissed, since a live one would have matched above.
-
-Dismissed rows are out of the first lookup on purpose: a dismissed finding is a claim an operator has
-already answered, and folding a fresh report into it would file it straight into the bin. They stay
-in the second because an agent repeating its _own_ dismissed claim should still land back on that
-row — dismissing one has to mean something, and it means nothing if the next turn refiles it.
-
-The first lookup is what the exact key alone could never see. Two agents on two tasks land in the
-same file and see the same unrelated bug, and neither the agent id nor the character-for-character
-summary matches; before it existed, that pair arrived in the cockpit as two cards saying one thing.
-
-On a match the row is refreshed rather than inserted, and `updated_at` moves. The status is **not**
-reset. Evidence follows authorship: the **author** of the matched row may overwrite its `where` and
-`detail` — the summary is the claim and those are its supporting text, so a repeat carrying better
-evidence replaces the thinner version rather than being filed beside it — while **another agent** may
-only backfill fields the row has none for. It does not get to rewrite words on a card that carries
-someone else's name.
-
-The tool tells the agent which happened: a merged report comes back saying the claim was already on
-the operator's list, so an agent does not read a returned id as proof it filed something new and does
-not say it again, louder.
-
-**Rows filed before the split are not migrated.** They hold a whole report in `summary` and null in
-both new columns. No content migration guesses at where the seams were; the card clamps the headline
-instead, so an old row reads as a slightly tall card rather than a lie about its own structure.
-
-### It queues nothing
-
-**Nothing in the dispatcher reads `findings`.** A queued job is dispatched by rule `manual-job` ahead of every
-world-driven rule, so an agent that could queue jobs could put agents on the fleet — one agent's hunch
-would spend another agent's slot, budget and worktree with nothing in between saying yes. That is a
-capability escalation, not a convenience, and it is exactly the shape the proposal seam exists to
-gate.
-
-So a finding is a **claim, not work**. The tool's description _and_ its response say so outright, so an
-agent does not report a bug and then assume its fix is scheduled. Filing is the same rule: it is an
-operator's click that dispatches the filing agent, and `report_finding` cannot file its own ticket.
-
-### Promotion — `POST /api/findings/:id/promote`
-
-The only path from a finding to an agent, and it starts with an operator's click.
-
-- 404 when the finding is absent; 409 when it is not `open`.
-- `findingJobRequest(finding)` derives the default title and prompt. The title is
-  `[<kind>] <ref> <first line>` capped at 80 characters. The prompt carries the finding's
-  **provenance** — which agent saw it, on what origin, what the kind means — because the promoted
-  agent's first question is always "says who, and were they looking at this or at something else?",
-  and that is the one thing a PR comment could never be trusted to keep attached. It ends by telling
-  the agent to verify the claim before acting on it, and to say so and stop if it does not hold rather
-  than inventing work to justify the dispatch.
-- **`where` and `detail` reach the promoted and filing agents through the existing `{summary}` value,
-  not through placeholders of their own.** `findingReport` recomposes the three fields into one block,
-  which both `findingJobRequest` and `findingTicketFields` pass as `summary`. A new `{token}` would be
-  silently dropped by every operator override that never learned about it — precisely the deployments
-  that customised most — and there is no fallback to get wrong here. → [05](05-dispatcher.md#prompt-templates)
-- The operator may override `title`, `prompt` and `kind` in the request body.
-- The job carries **`originRef: finding.ref`** — the world item the finding is _about_, and never
-  `finding.originRef`, which names what the _reporting_ agent was working on when it noticed. The
-  promoted job stands in for the former; attributing it to the latter would file the work under
-  somebody else's goal. This is structural rather than decorative: the work graph adopts a job by its
-  origin, so a promotion without one is emitted parentless and the unrecorded-work detector offers to
-  file a tracker item for work `pr:31251` already accounts for. The ref was reaching the cockpit
-  before — glued into the job's _title_ by `findingJobRequest` — which is the shape of the defect:
-  readable on screen, queryable by nothing. → [16](16-http-api.md#get-apiwork)
-- The job is created **first**, then the finding is resolved to `promoted` with the job id — so a
-  failed create leaves the finding open.
-- A cycle is kicked.
-
-#### Promoting a `docs` claim
-
-The one arm that does not take the derived prompt. A `docs` finding ends in a **pull request against
-the worked repository**, and how a documentation change should be worded and where in a tree it
-belongs is exactly the house style an override exists for — so it renders `docs-change` from the
-template book, the way filing renders `finding-ticket`. `findingDocsFields(finding)` (pure,
-`src/mcp/findings.ts`) supplies its `{ref}`, `{summary}` and `{originRef}`; the report's `where` and
-`detail` ride in on `{summary}` like everywhere else, so an override that predates them still renders
-them.
-
-- **A `code` job, not a `desk` one.** It writes files in a tree and pushes a branch to open the pull
-  request from, and a desk job would cut neither. The body's `kind` defaults to `code`, which is why
-  nothing here forces it — the cockpit sends no body at all, so every promotion from the page is a
-  code job, and the override stays available for the operator who wants otherwise, the same as for
-  every kind.
-- The title is `Document: <first line>`, capped at 80 characters. It is the **job's** title, not the
-  document's: what the docs end up saying is the judgement being delegated, and this only has to be
-  recognisable in Up next.
-- **The prompt ends in a pull request, and nothing else finishes it.** Never a direct push, never a
-  commit to the integration branch, never a documentation change the harness makes to a repository it
-  merely operates. If the pull request is not opened, nothing has happened — which is correct: a
-  lesson lives in SQLite because it is _ours_, and a repo fact is _theirs_.
-- It also tells the agent to **check the claim against the code first** and to say so and stop if it
-  does not hold. A document is the wrong place to record a plausible mistake, because everyone after
-  reads it as settled; stopping costs one dispatch and saves a false line nothing would go red about.
-  And to change documentation only — a defect turned up while checking is a separate `report_finding`,
-  not a fix smuggled into a docs PR.
-
-**This machinery has a second caller.** Committing a knowledge fact to the repository
-([27](27-knowledge.md#committing-to-the-repository)) renders the **same** `docs-change` template into
-the **same** kind of job, from `POST /api/knowledge/facts/:id/commit`, because a graduating claim and a
-promoted `docs` finding are the same errand: a fact about the repository that its own documentation
-does not state, worked by a code agent that opens a pull request. One template and not two — a second
-`PromptId` would be a second copy of an operator's "where documentation lives here" override to keep in
-step, diverging in silence on exactly the deployments that customised most. What graduation needs on
-top of it (the observations behind the claim, the target the operator named, and the fact that landing
-takes the claim out of every prompt) is **appended** by `graduationNote` (`src/knowledge/graduation.ts`)
-rather than given placeholders, exactly as the duplicate candidates are appended on `/file`.
-
-The argument at the top of this section carries over whole: **nothing auto-commits**, because an agent
-that could queue this work could put agents on the fleet. Both callers start with an operator's click,
-on the cockpit's bearer token and never the tool channel.
-
-Tests: `test/docsFindings.test.ts`, `test/knowledgeGraduation.test.ts`.
-
-### Filing a ticket
-
-Four cockpit clicks file a tracker item: a deferred **finding**, unrecorded **work**, a **blueprint**,
-and a **bug** an operator raised. All four go through `ActionSink.createIssue`
-([15](15-integrations.md)), and none of them asks a model to run a `gh` / `az` command any more
-(issue #394).
+Four cockpit clicks file a tracker item: a deferred **claim**
+([27](27-knowledge.md#sending-a-claim-on)), unrecorded **work**, a **blueprint**, and a **bug** an
+operator raised. All four go through `ActionSink.createIssue` ([15](15-integrations.md)), and none of
+them asks a model to run a `gh` / `az` command any more (issue #394).
 
 - **What the harness must supply is the one thing nothing else can infer: which tracker.**
   `trackerCoordinates(config)` (pure, `src/mcp/findings.ts`) names it from the same config block the
@@ -578,9 +344,28 @@ and a **bug** an operator raised. All four go through `ActionSink.createIssue`
   and two keep an agent to write one. Nothing about the change moves that judgement into the harness.
 - **Two arms keep a desk agent, and two do not.** Where the whole body is already harness- or
   operator-composed text (unrecorded work, a blueprint), a desk agent was spending a slot on one API
-  call. Where the body is a judgement — verifying a finding's report against the repository, writing up
-  a symptom an operator observed — the agent stays, narrowed to composing the title and body and
-  handing both to `link_ticket` ([11](11-mcp-tools.md)).
+  call. Where the body is a judgement — verifying a claim against the repository, writing up a symptom
+  an operator observed — the agent stays, narrowed to composing the title and body and handing both to
+  `link_ticket` ([11](11-mcp-tools.md)).
+
+**A claim's arm is the one whose writing is most of the value**, which is why it kept its agent.
+The body is one agent's report, and turning that into something a stranger can act on — verifying
+what of it holds against the repository, and saying which parts are confirmed and which are the
+raising agent's word — is judgement, not mechanism. `finding-ticket` is an ordinary overridable entry
+in the template book, so how tickets are worded is changed by dropping a file in `promptTemplatesDir`
+rather than by patching a route. It still carries `{kind}` and `{kindHelp}` as placeholders, filled
+with what is true of every claim now, because a placeholder cannot be withdrawn the way a value can:
+`renderTemplate` leaves an unfilled `{token}` in the prompt verbatim, so an override written against
+the older book would ship a literal `{kind}` to the agent.
+
+**It is asynchronous, and that is why the exit is two states rather than one.** The click queues a
+desk job; the ticket exists only once the agent has written it and called `link_ticket`. An open
+`ticket` graduation is the honest reading in between, and the claim stays exactly where it was until
+the item exists — collapsing them would take it out of every prompt for a ticket that does not exist
+yet, and leave nothing to show for an agent that died before creating one. `link_ticket` closes it
+from the credential (`agent → task → its job:<id> origin → the graduation that job was created for`),
+so the tool takes no argument naming what it is filing, and idempotence lives in the write.
+
 - **A surviving agent is handed its dedupe candidates**, rather than told to go and search. The
   harness mirrors the tracker ([14](14-persistence.md#the-ticket-mirror)), so the adjacent items are
   computable: `dedupeCandidates` ranks the mirror by title-token overlap and `renderCandidates`
@@ -590,47 +375,13 @@ and a **bug** an operator raised. All four go through `ActionSink.createIssue`
 
 Tests: `test/ticketFiling.test.ts`.
 
-### Filing — `POST /api/findings/:id/file`
-
-The **defer** arm, beside promotion's "work it now". Promotion puts an agent on the problem; filing
-puts an agent on the **writing up**, so the problem waits its turn in the backlog with everything else.
-It is the one thing promotion could not express: a queued job either runs or is cancelled, and neither
-of those is "deal with this later".
-
-- **This is the arm where the writing is most of the value**, which is why it kept its agent. The body
-  is one agent's prose report, and turning that into something a stranger can act on — verifying what
-  of it holds against the repository, and saying which parts are confirmed and which are the reporting
-  agent's word — is judgement, not mechanism. `finding-ticket` is an ordinary overridable entry in the
-  template book (`src/dispatcher/promptTemplates.ts`), so how tickets are worded is changed by dropping
-  a file in `promptTemplatesDir`, not by patching a route. The template book is therefore not only the
-  rule dispatcher's — `loadPromptTemplates` is hoisted in `system.ts` and exposed as `System.prompts`.
-- **The agent writes; the harness files.** `link_ticket` takes `title` + `body` and creates the item,
-  or takes `ref` alone when the agent decided an existing item already covers it. An override written
-  against the older book still works: it tells the agent to run `gh` and report the ref, and
-  `link_ticket({ref})` is still exactly that call.
-- **A desk job, not a code one.** Filing touches no repository, so cutting a worktree and a branch
-  would be pure cost.
-- **Two statuses, because this arm is asynchronous.** The click queues a job; the ticket exists only
-  once the agent has written it. `filing` is the honest reading in between, and `filed` is the one that
-  carries `ticketRef`. Collapsing them would have the card claim a ticket that does not exist yet, and
-  leave nothing to show for an agent that died before writing one — which is why the cockpit draws a
-  `filing` finding among the open ones rather than in the resolved tail.
-- **`link_ticket` closes it** — see [11](11-mcp-tools.md). The finding is resolved from the agent's
-  credential (`agent → task → its job:<id> origin → the finding that job was created for`), so the
-  tool takes no finding argument, and idempotence lives in the write (`WHERE status='filing'`).
-- `job_id` is reused for the filing job: a finding is terminal either way, so only ever one job hangs
-  off it. `ticket_ref` is a **column on an existing table**, so it needs a `migrate()` entry — see
-  [14](14-persistence.md).
-
-Tests: `test/findingTickets.test.ts`.
-
-### The third filing kind — a bug the operator raised
+### The other filing kind — a bug the operator raised
 
 `POST /api/issues/:number/bug` ([16](16-http-api.md#post-apiissuesnumberbug)) is the same machinery
-with a different author. A finding is an agent's testimony and a work-item filing is the harness
+with a different author. A claim is an agent's testimony and a work-item filing is the harness
 accounting for its own work; this one is the **operator's** — they ran the thing and it does not do
 what they expect, which is the one fact about a goal no agent on it can derive, since none of them ran
-it. Everything the finding arm establishes holds: the same tracker gate, a desk job, an overridable
+it. Everything the claim arm establishes holds: the same tracker gate, a desk job, an overridable
 template (`raise-bug`), two statuses, and `link_ticket` closing the loop from the credential by
 carrying the title and body the agent wrote.
 
@@ -657,198 +408,6 @@ Four things differ, each for a reason worth keeping:
   own words as the goal.
 
 Tests: `test/raiseBug.test.ts`.
-
-### Dismissal — `POST /api/findings/:id/dismiss`
-
-The finding stays in the list, muted, rather than being deleted: "we looked at this" is information.
-409 when absent or already resolved.
-
-Tests: the `report_finding` block in `test/mcpChannel.test.ts`.
-
-## Lessons
-
-A finding is a defect the fleet noticed. A **lesson** is what working the goal taught about _working
-this repository_ — "the suite wants a built web bundle first", "this subsystem's tests sit at an odd
-seam", "a ticket that names only a symptom is under-specified for a planner every time". Before
-this, that knowledge had exactly one destination: a retrospective a person read once. The next goal
-started from zero and the fleet relearned the same thing at full price (#355). The retrospective now
-proposes them directly, which is where most lessons come from.
-
-```ts
-interface Lesson {
-  id;
-  text; // the lesson, markdown
-  originRef: string | null; // the goal it was learned on ("issue:41"), or null
-  status: 'proposed' | 'promoted' | 'retired';
-  createdAt;
-  updatedAt;
-}
-```
-
-### Why it is a claim, and not a pad
-
-The obvious version of this feature — an append-only note surface every agent reads — is the thing
-`docs/README.md` argues against most strongly about `CLAUDE.md`. A surface loaded into every agent's
-context has length as a recurring fleet-wide cost and accuracy as a _correctness_ concern: a stale
-line there is a false instruction handed to every agent before it reads any code, and it fails
-silently. Nothing goes red, no test can see it, and in a year the block is forty stale assertions
-making every agent quietly worse.
-
-So a lesson is a **claim**, in exactly the shape a finding already has, and the four properties that
-make the claim safe are the reason the store is allowed to exist at all:
-
-| Property        | What holds it                                                                                       |
-| --------------- | --------------------------------------------------------------------------------------------------- |
-| **Gated**       | `proposed` until a human promotes it. There is no way to write a promoted lesson directly.          |
-| **Provenanced** | `originRef` and `createdAt` on every row — what taught it, and when, which is what dates the claim. |
-| **Prunable**    | `retired`, from either live status, with a cockpit surface to prune from → [17](17-cockpit.md).     |
-| **Bounded**     | 2,000 characters. Not a storage bound: a wall of text is the row nobody reads before promoting it.  |
-
-### Where a lesson does _not_ go
-
-The question that decides it is: does this describe **the repository**, or **working the
-repository**?
-
-| The lesson is…                                                      | Destination                | Why                                                  |
-| ------------------------------------------------------------------- | -------------------------- | ---------------------------------------------------- |
-| A fact about working the goal                                       | The lesson store, promoted | Ours, not theirs; no business in someone else's tree |
-| A fact about the code, or a defect noticed in passing               | `raise` → [27](27-knowledge.md) | One call, and the harness routes it             |
-| Something true only of this goal                                    | The goal's scratchpad      | Dies with the goal, correctly                        |
-
-**The table used to have four rows, and shrinking it is the point.** Rows one and three were
-`report_finding` kind `docs` and kind `out_of_scope` — two destinations the writer had to tell apart
-by what an operator would do about each, which is the operator's knowledge and not the writer's. They
-are one row now because `raise` is one call: the agent says what it saw and the routing is the
-harness's. What is left is the only question a writer is actually placed to answer — is this about
-_working_ the repository, about this goal alone, or neither.
-
-The discriminator is still stated in **two** places, and that duplication is deliberate:
-`issue-retro`'s template is operator-overridable, so a deployment running an override written before
-this would otherwise dispatch an agent that never hears the distinction, and `retro_submit`'s tool
-description always arrives. It used to be three, and the third — `report_finding`'s description — went
-with the door: an agent that never gets to a retrospective now reads `raise`'s description instead,
-which asks it to sort nothing.
-
-### The three states, and the two that are one-way
-
-`proposed` → `promoted` is the gate. `proposed` or `promoted` → `retired` is the prune. There is no
-un-retire: retiring must always be available because it is the safety valve, while promoting is the
-risk, so it starts from a proposal every time. A lesson retired in error is written again, which
-re-dates it — and a claim worth bringing back is worth reading first.
-
-Both transitions are guarded **in the write** (`WHERE id=? AND status=…`), the discipline
-`linkFindingTicket` and `decideProposal` use, so two racing clicks cannot both find a promotable row.
-
-### The two writers
-
-A lesson is proposed from one of two places, and both land `proposed`. There is no arm that writes a
-promoted lesson.
-
-| Writer               | Reaches the store through                  | Provenance                                      |
-| -------------------- | ------------------------------------------ | ----------------------------------------------- |
-| The operator, typing | `POST /api/lessons`                        | Whatever `originRef` they give, or null         |
-| The retrospective    | `retro_submit`'s `lessons` field (phase 2) | The issue it wrote up — `issue:<n>`, never null |
-
-Both go through `validateLessonText` in `src/lessons.ts`, which is where the 2,000-character bound
-lives. It is there rather than in either writer because a bound written twice is a bound that
-drifts, and it drifts in the direction that matters: whichever writer is looser decides what an
-operator ends up being asked to read.
-
-`proposeLesson` **dedupes against the live rows on the same goal** — `recordFinding`'s shape, for its
-reason. `retro_submit` upserts its document on `origin_ref`, so a retrospective filed twice revises
-one write-up; without the dedupe it would leave two of every lesson behind it. Scoped to `proposed`
-and `promoted` only, so a retired lesson can be written again — which is the re-proposal "no
-un-retire" rests on, and it re-dates the claim.
-
-### The routes
-
-| Route                           | Does                                                               |
-| ------------------------------- | ------------------------------------------------------------------ |
-| `POST /api/lessons`             | Writes one down. Lands `proposed`; 400 on empty or over-long text. |
-| `POST /api/lessons/:id/promote` | The gate. 404 unknown, 409 already ruled on.                       |
-| `POST /api/lessons/:id/retire`  | The prune. 404 unknown, 409 already retired.                       |
-
-There is no list route: the lessons ride on `/api/state` with everything else the cockpit polls,
-which is what `findings` does and for the same reason — the section draws them beside refs the
-snapshot's own link map resolves. All three broadcast `dirty` rather than `world:changed` and run no
-cycle: nothing in the world moved.
-
-### What a retrospective may file
-
-The `lessons` field on `retro_submit` is optional, and a run that taught nothing general is the
-ordinary case. What it may not be is unbounded: the scarce resource is not storage but the reader's
-attention, since every lesson is worth nothing until a person has vouched for it, and fifteen
-plausible claims are read less carefully than two. So at most five land, and the prompt asks for the
-one or two a reader would thank the agent for.
-
-Two rules decide what happens to the rest, and they differ from the document's on purpose:
-
-| Not filed because…    | What happens        | Why                                                                                                                                              |
-| --------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Over the length bound | **Dropped whole**   | Half a write-up is a shorter write-up; half a lesson is a _different claim_, still promotable — and the safeguard is a person reading the claim. |
-| Over the count cap    | **Dropped whole**   | Same reason, one level up: the cap exists to protect the reading, so trimming to fit would defeat it.                                            |
-| Anything at all       | **Never a refusal** | The write-up must not sink after the work of assembling it — `MAX_RETRO_DOCUMENT`'s rule, applied to the field beside it.                        |
-
-Every drop is counted back to the agent as `lessonsDropped`. A lesson that did not land is one an
-operator will never be asked about, and an agent that believes it filed eight has no other way to
-find out — which is the silence this whole feature is built to avoid, in miniature.
-
-The **discriminator** — repository, or _working_ the repository? — is stated in two places, and that
-duplication is deliberate. `issue-retro`'s template is operator-overridable, so a deployment running
-an override written before phase 2 would otherwise dispatch an agent that never hears the store
-exists: the customised deployments losing the feature silently. `retro_submit`'s tool description
-always arrives.
-
-### What a promoted lesson reaches, and what it does not
-
-**No dispatcher rule reads a lesson, and no dispatch prompt renders one.** A promoted lesson reaches
-agents through exactly one channel, and since #27 phase 3 that channel is the **knowledge base**: the
-lesson is mirrored in as an injected fleet claim (`KnowledgeStore.adoptLessons`), and the fleet's
-system-prompt block renders that → [27](27-knowledge.md#delivery-two-prompts-not-one),
-[10](10-agent-runtimes.md#the-knowledge-block). Filing a proposal is all the tool channel got;
-promotion is still a click in the cockpit and stays one.
-
-**Rendering both blocks would have sent every promoted lesson twice** — once as a lesson and once as
-its own mirror — so delivery moved rather than doubling. The adoption runs at every boot _and_ on the
-promote and retire routes themselves, which is what keeps the crossing invisible: a lesson vouched for
-now reaches agents at the next launch, exactly as it did before, rather than at the next restart. A
-lesson that silently stopped reaching agents would look precisely like one nobody promoted.
-
-`test/lessons.test.ts` asserts the structure: `src/dispatcher/` and `src/executor/` never touch the
-lesson store in any direction, and `src/mcp/` and `src/agents/` reach `proposeLesson` and nothing else
-— never `listLessons` or `getLesson`. Which is why the launch seam is a **rendered string** passed
-through `ClaudeArgsOptions` rather than a store handed to `agentProtocol.ts`: the launch path stays
-unable to read either store, and `src/system.ts` — already the composition root — is the only module
-on it that knows they exist. A change that needs that assertion relaxed has the seam wrong.
-
-That structural test used to ban the _word_, across four directories. It matches the store's methods
-instead as of phase 2, because a prompt that tells an agent the channel exists is the dispatcher
-describing a tool rather than a rule consulting the table — and the thing that would actually break
-the invariant is a call.
-
-### What the block is, and what bounds it
-
-The four properties the table above rests on are carried through to the render, and they are the
-knowledge block's now → [10](10-agent-runtimes.md#the-knowledge-block): only what an operator vouched
-for renders, each claim carries the goal it was learned on and the date it was written, the cost is
-bounded by `knowledgeBlockChars`, and what the cap drops is visible to the operator — on the Knowledge
-page, per row and against the budget, since that is where the block that ships is drawn.
-
-The Lessons section still says per row whether a promoted lesson is reaching agents, and that flag is
-the knowledge block's own answer read back through the fact the lesson was adopted into
-→ [17](17-cockpit.md#the-console). One block is delivered, and since the fold-in one page describes it.
-
-With nothing injected, nothing is appended at all — not a header, not a newline — and the launch
-arguments are byte-identical to a build without the feature. A retired lesson stops appearing at the
-agent's **next** launch, not mid-run: the block is re-appended on every launch, `--resume` included,
-so an agent already running keeps the block it started with.
-
-What the lesson store deliberately does **not** hold: a fact about the _code_. That is a `docs`
-finding (#397, split out of #355 phase 4) — it becomes a proposed documentation change against the
-worked repository rather than a store row, and it reaches no agent's context at all. The cap and the
-visible drop above bound this block; that route touches none of it.
-
-Tests: `test/lessons.test.ts`, and the lessons block in `test/retrospective.test.ts`.
 
 ## Human tasks
 
@@ -939,8 +498,8 @@ ones already on the panel: **Replan**, or **abandon the decomposition**. No esca
 the decline itself — the operator is the one who declined, and the buttons are in front of them.
 
 An amendment that drops a human part settles its open task `declined` too, with "an amended plan no
-longer includes this step". Declining rather than deleting for the reason a dismissed finding stays
-in the list: the alternative is an open obligation pointing at a part no plan schedules, which
+longer includes this step". Declining rather than deleting for the reason a rejected claim stays
+on the page: the alternative is an open obligation pointing at a part no plan schedules, which
 nothing will ever settle.
 
 ### The step after the launch: the close-out
@@ -1088,7 +647,7 @@ the second. A `done` on a task backing a part settles the task **first** and the
 failed part write then leaves a settled task an operator can see, where the other order would leave a
 concluded part nothing accounts for.
 
-Settled tasks stay in the list rather than being deleted, for the reason a dismissed finding does: a
+Settled tasks stay in the list rather than being deleted, for the reason a rejected claim does: a
 row that vanished on being settled would take the operator's own note with it, and on a decline that
 note is the whole account of why the work below it stopped.
 

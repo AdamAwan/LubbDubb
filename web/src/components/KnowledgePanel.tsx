@@ -2,7 +2,7 @@ import { Fragment, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import type {
   ContradictionRuling,
-  FactCommitment,
+  FactExit,
   FactRuling,
   GraduationOutcome,
   KnowledgeContradictionView,
@@ -11,16 +11,12 @@ import type {
   KnowledgeDeliveryView,
   KnowledgeFactView,
   KnowledgeGraduationView,
-  Finding,
-  LessonView,
 } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
 import { renderMarkdown } from './markdown.js';
 import { absDate, fmtTokens, fmtUsd, relTime, untilTime } from './util.js';
 import { Ref } from './refs.js';
-import { FindingsSection } from './FindingsSection.js';
-import { LessonsSection } from './LessonsSection.js';
 import {
   groupFor,
   inShow,
@@ -54,11 +50,12 @@ import {
  * The order is the order things demand attention rather than the order of the
  * state machine: the notices with clocks on them, then the corroborated claims
  * waiting on the one decision that is yours, then what you have already vouched
- * for, then the long tails — which are **folded until asked for**, because a tail
- * is a list somebody goes looking for and nine paragraphs of preamble between an
- * operator and the rows they came to rule on is the page's real cost. What each
- * heading used to say underneath it, it says in a tooltip now; `KNOWLEDGE_GROUPS`
- * holds the words.
+ * for, then the long tails — **each of which an operator may fold away, and none
+ * of which starts folded**: a claim hidden by default would leave no way to tell a
+ * list you have finished with from one that lost rows. What each heading used to
+ * say in a paragraph underneath it, it says in a tooltip now, which is where the
+ * page's real cost was — nine of them between an operator and the rows they came
+ * to rule on. `KNOWLEDGE_GROUPS` holds the words.
  *
  * **The filter narrows and never moves.** *Waiting on you* gathers a reading from
  * four reach states — an unanswered dispute, a cap drop, a drifted scope, a
@@ -84,8 +81,6 @@ export function KnowledgePanel({
   graduations,
   delivery,
   cost,
-  findings,
-  lessons,
   canFileTickets,
   now,
   refUrls,
@@ -93,17 +88,12 @@ export function KnowledgePanel({
   query,
   onQuery,
   onReach,
-  onCommit,
+  onExit,
+  onRaise,
   onSettleGraduation,
   onDetail,
   onResolveContradiction,
   onViewFact,
-  onPromoteFinding,
-  onFileFinding,
-  onDismissFinding,
-  onProposeLesson,
-  onPromoteLesson,
-  onRetireLesson,
 }: {
   facts: KnowledgeFactView[];
   /** Every attempt to put a claim in the repository, with the sweep's own reading of each. */
@@ -120,7 +110,10 @@ export function KnowledgePanel({
   query: KnowledgeQuery;
   onQuery: (next: Partial<KnowledgeQuery>) => void;
   onReach: (id: string, reach: FactRuling) => Promise<unknown> | unknown;
-  onCommit: (id: string, commitment: FactCommitment) => Promise<unknown> | unknown;
+  /** Send a claim on — a documentation pull request, a job, or a ticket. */
+  onExit: (id: string, exit: FactExit) => Promise<unknown> | unknown;
+  /** Write one down. The one write here that is not a ruling; it lands a proposal. */
+  onRaise: (claim: string, originRef: string | null) => Promise<unknown>;
   onSettleGraduation: (id: string, outcome: GraduationOutcome) => Promise<unknown> | unknown;
   onDetail: (id: string) => Promise<{
     corroborations: KnowledgeCorroboration[];
@@ -128,18 +121,8 @@ export function KnowledgePanel({
   }>;
   onResolveContradiction: (id: string, ruling: ContradictionRuling) => Promise<unknown> | unknown;
   onViewFact: (id: string | null) => void;
-  /** What agents filed for an operator, still on their own store until the intake merges them. */
-  findings: Finding[];
-  /** What working a goal taught, still on its own store; a promoted one is already a fact above. */
-  lessons: LessonView[];
-  /** False when no real tracker is configured — there is nowhere to file a finding into. */
+  /** False when no real tracker is configured — there is nowhere to file a claim into. */
   canFileTickets: boolean;
-  onPromoteFinding: (id: string) => Promise<unknown> | unknown;
-  onFileFinding: (id: string) => Promise<unknown> | unknown;
-  onDismissFinding: (id: string) => Promise<unknown> | unknown;
-  onProposeLesson: (text: string, originRef: string | null) => Promise<unknown>;
-  onPromoteLesson: (id: string) => Promise<unknown> | unknown;
-  onRetireLesson: (id: string) => Promise<unknown> | unknown;
 }) {
   // Which injected claims the cap left out, as the renderer that ran reported it.
   // Never a character count taken here: a second implementation of "what fits" is
@@ -159,13 +142,14 @@ export function KnowledgePanel({
     if (why !== null) waiting.set(fact.id, why);
   }
   const shown = facts.filter((fact) => inShow(query.show, fact, waiting.get(fact.id) ?? null));
-  const opened = new Set(query.open);
+  const folded = new Set(query.fold);
   const shared = {
     now,
     refUrls,
     viewingFact,
+    canFileTickets,
     onReach,
-    onCommit,
+    onExit,
     onSettleGraduation,
     onDetail,
     onResolveContradiction,
@@ -177,10 +161,15 @@ export function KnowledgePanel({
   return (
     <div className="kn">
       <p className="muted small kn-note">
-        What the fleet knows about working this repository, and how far each claim carries. Agents raise them and never
-        choose a destination; nothing but a person puts a standing claim in front of every agent. Every heading carries
-        its own rule — hover one to read it.
+        Everything the fleet has raised about working this repository, and how far each claim carries. Agents write them
+        down through one call — <code>raise</code> — and do not choose a destination: two of them on two different goals
+        carry a claim as far as <b>on lookup</b>, and nothing but a person puts a standing one in front of every agent.
+        The one exception is a <b>notice</b> — an observation with a clock on it — which agreement alone injects,
+        because it ends by itself. What an agent noticed outside its own task and what working a goal taught are here
+        too, on the same rows: they were three stores and one question, and three places to answer it was two places to
+        forget. Every heading below carries its own rule — hover one to read it.
       </p>
+      <ClaimComposer onRaise={onRaise} />
       <KnowledgeBar
         query={query}
         onQuery={onQuery}
@@ -191,8 +180,8 @@ export function KnowledgePanel({
           settled: facts.filter((f) => inShow('settled', f, null)).length,
         }}
       />
-      {/* The budget is the page's, not a section's, since #27 phase 8 gave the page
-          a filter and a second view: a reading about what every agent receives that
+      {/* The budget is the page's, not a section's, since the page grew a filter
+          and a second view: a reading about what every agent receives that
           disappears because somebody narrowed to the settled tail is a reading they
           would have to un-narrow to find. The per-row marking of what the cap left
           out stays on the cards, which is the half of it an operator acts on. */}
@@ -216,10 +205,10 @@ export function KnowledgePanel({
               key={group.id}
               group={group}
               facts={inGroup}
-              open={!group.tail || opened.has(group.id)}
+              open={!group.tail || !folded.has(group.id)}
               onToggle={() =>
                 onQuery({
-                  open: opened.has(group.id) ? query.open.filter((id) => id !== group.id) : [...query.open, group.id],
+                  fold: folded.has(group.id) ? query.fold.filter((id) => id !== group.id) : [...query.fold, group.id],
                 })
               }
               {...shared}
@@ -227,50 +216,6 @@ export function KnowledgePanel({
           );
         })
       )}
-      {/* The two surfaces that used to be panels of their own. They sit with the
-          claims because they ask the same question of the same person in the same
-          sitting — a claim an agent filed, and what it is for — and an operator who
-          has to remember two more places to look is an operator who rules on one of
-          them and not the others. Outside the filter, because neither is a claim:
-          narrowing to what is reaching agents is not a statement about a finding. */}
-      <section className="kn-section">
-        <h3 className="kn-head">
-          Reported by agents <span className="muted small">· {findings.filter((f) => f.status === 'open').length}</span>
-        </h3>
-        <p className="muted small">
-          What an agent noticed that was not its own task — a duplicate, work blocked outside its reach, a defect it
-          worked around — and facts about the repository its documentation does not state. These reach no agent at any
-          status: the buttons are the only thing that turns one into work, because an agent that could queue jobs could
-          put agents on the fleet.
-        </p>
-        <FindingsSection
-          findings={findings}
-          now={now}
-          refUrls={refUrls}
-          canFileTickets={canFileTickets}
-          onPromote={onPromoteFinding}
-          onFile={onFileFinding}
-          onDismiss={onDismissFinding}
-        />
-      </section>
-      <section className="kn-section">
-        <h3 className="kn-head">
-          Lessons <span className="muted small">· {lessons.filter((l) => l.status === 'proposed').length}</span>
-        </h3>
-        <p className="muted small">
-          What working a goal taught about <em>working</em> this repository. A promoted one is mirrored into the claims
-          above as an injected fleet fact and is delivered from there, so a row here that says it is reaching agents is
-          this page&rsquo;s own answer read back — govern a mirrored claim wherever you first vouched for it.
-        </p>
-        <LessonsSection
-          lessons={lessons}
-          now={now}
-          refUrls={refUrls}
-          onPropose={onProposeLesson}
-          onPromote={onPromoteLesson}
-          onRetire={onRetireLesson}
-        />
-      </section>
       <Receives delivery={delivery} />
     </div>
   );
@@ -359,7 +304,7 @@ const SHOW_OPTIONS: ReadonlyArray<{ value: KnowledgeQuery['show']; label: string
     value: 'settled',
     label: 'Settled',
     title:
-      'Committed, superseded, retired, rejected. Drawn rather than dropped: a surface that shows only what it let through cannot show you what it stopped',
+      'Gone somewhere better, superseded, retired, rejected. Drawn rather than dropped: a surface that shows only what it let through cannot show you what it stopped',
   },
 ];
 
@@ -698,12 +643,109 @@ function Receives({ delivery }: { delivery: KnowledgeDeliveryView }): JSX.Elemen
   );
 }
 
+/**
+ * Writing a claim down by hand — the operator's own arm of the store, and the one
+ * write on this page that is not a ruling.
+ *
+ * **It lands a proposal.** The surface is one gate, not one gate and a bypass for
+ * whoever happens to be at the keyboard: a claim an operator typed is a claim with
+ * one voice behind it, and putting it in front of the fleet is the same second
+ * click they would make on an agent's. This is `LessonComposer`, kept: what it
+ * writes is a `knowledge_facts` row now rather than a `lessons` one, which is the
+ * whole of the change.
+ *
+ * Two fields, and the second is the provenance — the goal it was learned on, which
+ * is what lets a reader in six months date the claim against the repository it is
+ * about. Optional, because an operator writing down what they already know has no
+ * goal behind it, and a defaulted one would date the claim to work that did not
+ * teach it.
+ *
+ * A failed post keeps the text, the one outcome worth writing code to prevent.
+ */
+function ClaimComposer({ onRaise }: { onRaise: (claim: string, originRef: string | null) => Promise<unknown> }) {
+  const [text, setText] = useState('');
+  const [goal, setGoal] = useState('');
+  const [failed, setFailed] = useState(false);
+
+  async function submit() {
+    if (text.trim().length === 0) return;
+    setFailed(false);
+    try {
+      // Typed as `41` or `issue:41`; the harness's colon form is what every ref in
+      // the cockpit is, so the bare number is normalised into one here rather than
+      // stored as a second spelling nothing can link.
+      const number = /^#?(\d+)$/.exec(goal.trim())?.[1];
+      const ref = goal.trim() === '' ? null : number ? `issue:${number}` : goal.trim();
+      await onRaise(text.trim(), ref);
+      setText('');
+      setGoal('');
+    } catch (err) {
+      setFailed(true);
+      // Rethrown so the button flashes its own error ring, as everywhere else:
+      // swallowing it would leave the control reporting a success the line below
+      // denies.
+      throw err;
+    }
+  }
+
+  return (
+    <div className="lesson-compose">
+      <label className="rb-label" htmlFor="claim-text">
+        Write one down yourself
+      </label>
+      <textarea
+        id="claim-text"
+        className="rb-text"
+        rows={3}
+        value={text}
+        placeholder="The web bundle has to be built before the suite passes — `npm run build:web` first, or the console tests fail on a stale dist."
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={(e) => {
+          // ⌘/Ctrl+Enter submits, matching every other composer in the cockpit.
+          if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+            e.preventDefault();
+            void submit();
+          }
+        }}
+      />
+      <div className="lesson-compose-foot">
+        <label className="muted small" htmlFor="claim-goal">
+          Learned on
+        </label>
+        <input
+          id="claim-goal"
+          className="lesson-goal"
+          value={goal}
+          placeholder="issue:41 — optional"
+          onChange={(e) => setGoal(e.target.value)}
+        />
+        <span className="spacer" />
+        <AsyncButton className="primary" disabled={text.trim().length === 0} onClick={submit}>
+          Write it down
+        </AsyncButton>
+      </div>
+      <p className="muted small">
+        It lands as <b>one voice</b>, like anything an agent raises — nothing here puts a claim in front of the fleet
+        without a second decision.
+      </p>
+      {failed && (
+        <p className="launch-error" role="alert">
+          That didn&rsquo;t go through. Your text is still here — try again.
+        </p>
+      )}
+    </div>
+  );
+}
+
 interface RowProps {
   now: number;
   refUrls: Record<string, string>;
   viewingFact: string | null;
+  /** False when no real tracker is configured — the ticket exit is not drawn at all. */
+  canFileTickets: boolean;
   onReach: (id: string, reach: FactRuling) => Promise<unknown> | unknown;
-  onCommit: (id: string, commitment: FactCommitment) => Promise<unknown> | unknown;
+  /** Send a claim on — a documentation pull request, a job, or a ticket. */
+  onExit: (id: string, exit: FactExit) => Promise<unknown> | unknown;
   onSettleGraduation: (id: string, outcome: GraduationOutcome) => Promise<unknown> | unknown;
   /** The graduation each fact carries, if any — the live one, or the last that did not land. */
   graduationOf: Map<string, KnowledgeGraduationView>;
@@ -719,6 +761,16 @@ interface RowProps {
   waiting: Map<string, string>;
 }
 
+/**
+ * One heading and what is under it.
+ *
+ * The blurb is a tooltip rather than a paragraph: the words are the page's only
+ * statement of several of its invariants and none is dropped, but nine of them
+ * stacked between an operator and the rows they came to rule on is what the page
+ * was costing. A tail may be folded away by the operator who has finished with it
+ * and starts open, so nothing is hidden by default; the count stays on the heading
+ * either way, so a tail somebody has collapsed still says what it holds.
+ */
 function KnowledgeSection({
   group,
   facts,
@@ -777,8 +829,9 @@ function FactCard({
   now,
   refUrls,
   viewingFact,
+  canFileTickets,
   onReach,
-  onCommit,
+  onExit,
   onSettleGraduation,
   onDetail,
   onResolveContradiction,
@@ -800,7 +853,7 @@ function FactCard({
   // the address bar draws (`docs/spec/17-cockpit.md#the-address-bar`).
   const [committing, setCommitting] = useState(false);
   const settled =
-    fact.reach === 'rejected' || fact.reach === 'committed' || fact.reach === 'superseded' || fact.reach === 'retired';
+    fact.reach === 'rejected' || fact.reach === 'graduated' || fact.reach === 'superseded' || fact.reach === 'retired';
   return (
     <div className={`kn-card${settled ? ' resolved' : ''}`}>
       {/* Markdown, and handed the ref map so a goal named inside the claim is
@@ -951,16 +1004,18 @@ function FactCard({
           {open ? 'Hide what was seen' : 'What was seen'}
         </button>
         <span className="spacer" />
-        <FactCommitControl
+        <FactExits
           fact={fact}
           graduation={graduation}
+          canFileTickets={canFileTickets}
           committing={committing}
           onCommitting={setCommitting}
+          onExit={onExit}
           onSettle={onSettleGraduation}
         />
         <FactRulings fact={fact} onReach={onReach} />
       </div>
-      {committing && <FactCommitForm fact={fact} onCommit={onCommit} onDone={() => setCommitting(false)} />}
+      {committing && <FactCommitForm fact={fact} onExit={onExit} onDone={() => setCommitting(false)} />}
       {open && <FactProvenance id={fact.id} now={now} onDetail={onDetail} onResolve={onResolveContradiction} />}
     </div>
   );
@@ -983,15 +1038,33 @@ function FactCard({
  * being paid for twice.
  */
 function GraduationChip({ graduation }: { graduation: KnowledgeGraduationView }): JSX.Element {
-  const where = graduation.target === 'claudeMd' ? 'CLAUDE.md' : 'the document that owns it';
+  // Where the claim went, said in the terms of the exit it took. One chip for
+  // three, because the reading is the same question of each — did this actually
+  // arrive — and three chips would be three places to keep the wording true.
+  const where =
+    graduation.exit === 'docs'
+      ? graduation.target === 'claudeMd'
+        ? 'CLAUDE.md'
+        : 'the document that owns it'
+      : graduation.exit === 'ticket'
+        ? 'the tracker'
+        : 'a job';
   const label =
     graduation.reading === 'landed'
-      ? `committed to ${where}`
+      ? graduation.exit === 'ticket'
+        ? 'filed in the tracker'
+        : graduation.exit === 'job'
+          ? 'worked, and the work landed'
+          : `committed to ${where}`
       : graduation.reading === 'abandoned'
-        ? 'a docs pull request for this did not land'
+        ? `the work to take this to ${where} did not land`
         : graduation.reading === 'unknown'
-          ? 'its docs pull request left the world unseen'
-          : `being written up for ${where}`;
+          ? 'its pull request left the world unseen'
+          : graduation.exit === 'ticket'
+            ? 'being written up for the tracker'
+            : graduation.exit === 'job'
+              ? 'being worked now'
+              : `being written up for ${where}`;
   const tone = graduation.reading === 'landed' ? 'ok' : graduation.reading === 'waiting' ? 'info' : 'warn';
   return (
     <span className="cn-refs">
@@ -999,45 +1072,68 @@ function GraduationChip({ graduation }: { graduation: KnowledgeGraduationView })
         className={`chip small ${tone}`}
         title={
           graduation.reading === 'waiting'
-            ? 'An operator committed this to the repository and the documentation work is open. The claim keeps reaching every agent it already reached until that pull request merges — a claim taken out of prompts for a pull request still in review is one nobody is told and nobody can read.'
+            ? 'An operator sent this on and the work is open. The claim keeps reaching every agent it already reached until that work actually lands — a claim taken out of prompts for a pull request still in review is one nobody is told and nobody can read.'
             : graduation.reading === 'abandoned'
-              ? 'The pull request was closed without merging, so nobody committed the claim. It is exactly where it was, and you can commit it again.'
+              ? 'It did not land, so nobody took the claim anywhere. It is exactly where it was, and you can send it again.'
               : graduation.reading === 'unknown'
                 ? 'The pull request stopped being reported without ever being seen closed, so the harness will not say whether it merged. Guessing either way is silent: merged takes the claim out of every prompt, not-merged goes on paying for a sentence the repository may already state.'
-                : 'The pull request merged, so the claim is in the repository and out of every prompt.'
+                : 'The exit was taken, so the claim is somewhere better than a prompt and out of every one of them.'
         }
       >
         {label}
       </span>
+      {/* A row that names a pull request or a ticket and offers no way there is
+          the cockpit's most repeated bug. Whichever the exit produced is drawn as
+          a reference beside the chip rather than inside it — one click cannot have
+          two destinations. */}
       {graduation.prRef !== null && <Ref to={graduation.prRef} />}
+      {graduation.ticketRef !== null && <Ref to={graduation.ticketRef} />}
     </span>
   );
 }
 
 /**
- * Committing a claim to the repository: **one control and one call**, because
- * "this belongs in the repository" is one decision from an operator's side.
+ * The three ways a claim leaves this store, as three controls on the row.
  *
- * The control is only offered where the store would take it — a standing claim at
- * `lookup` or `injected`. A proposal nobody has agreed with and a notice that ends
- * by itself are refused by name there; the page simply does not ask.
+ * **They sit beside the reach buttons and not above them**, because they are the
+ * same kind of decision made at the same moment: how far this claim carries, and
+ * whether it belongs here at all. What used to be two panels' worth of buttons —
+ * "Queue job", "File ticket", "Dismiss" on a finding; "Promote", "Retire" on a
+ * lesson — is one row of controls, because there is one claim.
+ *
+ * **There is no "Dismiss" here, and its absence is the point.** Dismissing a
+ * finding meant *an operator answered this and a later report is not folded
+ * silently into it*, which is exactly what `Reject` already does and says. What
+ * dismissing did **not** mean is now sayable separately: `Retire` prunes a claim
+ * nobody has to be wrong about. Two words for two acts, where the old surfaces had
+ * one word each meaning both.
+ *
+ * Each control is offered only where the store would take it, so a control that
+ * would be refused is not drawn: `docs` needs a standing claim that reaches
+ * somebody, `ticket` needs a tracker, and all three need a claim that has not
+ * already left. The wording of every refusal lives in `exitableFact`; this only
+ * decides what to draw.
  *
  * The two settle buttons are the answer to the one reading the harness will not
  * take. They appear only where a pull request was actually opened, which is what
  * makes saying "it merged" put the claim in a place rather than nowhere — the
- * objection that keeps `committed` off the ordinary reach control.
+ * objection that keeps `graduated` off the ordinary reach control.
  */
-function FactCommitControl({
+function FactExits({
   fact,
   graduation,
+  canFileTickets,
   committing,
   onCommitting,
+  onExit,
   onSettle,
 }: {
   fact: KnowledgeFactView;
   graduation: KnowledgeGraduationView | null;
+  canFileTickets: boolean;
   committing: boolean;
   onCommitting: (open: boolean) => void;
+  onExit: (id: string, exit: FactExit) => Promise<unknown> | unknown;
   onSettle: (id: string, outcome: GraduationOutcome) => Promise<unknown> | unknown;
 }): JSX.Element | null {
   if (graduation !== null && graduation.reading === 'unknown') {
@@ -1046,7 +1142,7 @@ function FactCommitControl({
         <AsyncButton
           className="ghost"
           onClick={() => onSettle(graduation.id, 'landed')}
-          title="It merged. The claim goes to committed and leaves every prompt — an agent reads it from the repository now"
+          title="It merged. The claim leaves every prompt — an agent reads it from the repository now"
         >
           It merged
         </AsyncButton>
@@ -1060,18 +1156,54 @@ function FactCommitControl({
       </>
     );
   }
+  // One at a time, whichever exit: two agents writing the same paragraph into two
+  // pull requests is two chances to land a half of it, and two jobs on one claim is
+  // two agents on one piece of work.
   if (graduation !== null && graduation.reading === 'waiting') return null;
-  if (!committableHere(fact)) return null;
+  if (!sendableHere(fact)) return null;
   return (
-    <button
-      type="button"
-      className="ghost"
-      onClick={() => onCommitting(!committing)}
-      title="Open a documentation pull request for this claim. It keeps reaching agents until that pull request merges, and leaves every prompt when it does"
-    >
-      {committing ? 'Not now' : 'Commit to the repository'}
-    </button>
+    <>
+      <AsyncButton
+        className="ghost"
+        onClick={() => onExit(fact.id, { exit: 'job' })}
+        title="Queue this as a job — an agent verifies the claim and works it now. Nothing here says the claim is true; the prompt tells it to check first and stop if it does not hold"
+      >
+        Queue job
+      </AsyncButton>
+      {canFileTickets && (
+        <AsyncButton
+          className="ghost"
+          onClick={() => onExit(fact.id, { exit: 'ticket' })}
+          title="File it in the tracker so it can wait its turn there — an agent writes it up, and the claim leaves every prompt once the item exists"
+        >
+          File ticket
+        </AsyncButton>
+      )}
+      {committableHere(fact) && (
+        <button
+          type="button"
+          className="ghost"
+          onClick={() => onCommitting(!committing)}
+          title="Open a documentation pull request for this claim. It keeps reaching agents until that pull request merges, and leaves every prompt when it does"
+        >
+          {committing ? 'Not now' : 'Commit to the repository'}
+        </button>
+      )}
+    </>
   );
+}
+
+/**
+ * Whether this claim can be sent anywhere at all — the store's own refusal, asked
+ * here only so a control that would be refused is not drawn.
+ *
+ * The terminal reaches, and nothing else: `graduated` has already gone, and
+ * `rejected`, `superseded` and `retired` reach nobody, so there is nothing left to
+ * act on. `exitableFact` is where the rule lives and where the wording that
+ * explains it lives.
+ */
+function sendableHere(fact: KnowledgeFactView): boolean {
+  return fact.reach === 'proposal' || fact.reach === 'lookup' || fact.reach === 'injected';
 }
 
 /**
@@ -1092,14 +1224,14 @@ function FactCommitControl({
  */
 function FactCommitForm({
   fact,
-  onCommit,
+  onExit,
   onDone,
 }: {
   fact: KnowledgeFactView;
-  onCommit: (id: string, commitment: FactCommitment) => Promise<unknown> | unknown;
+  onExit: (id: string, exit: FactExit) => Promise<unknown> | unknown;
   onDone: () => void;
 }): JSX.Element {
-  const [target, setTarget] = useState<FactCommitment['target']>('spec');
+  const [target, setTarget] = useState<'spec' | 'claudeMd'>('spec');
   const [bar, setBar] = useState('');
   return (
     <div className="kn-commit">
@@ -1136,7 +1268,10 @@ function FactCommitForm({
           className="primary"
           disabled={target === 'claudeMd' && bar.trim() === ''}
           onClick={async () => {
-            await onCommit(fact.id, target === 'claudeMd' ? { target, bar: bar.trim() } : { target });
+            await onExit(
+              fact.id,
+              target === 'claudeMd' ? { exit: 'docs', target, bar: bar.trim() } : { exit: 'docs', target },
+            );
             onDone();
           }}
           title="Queue the documentation job. Nothing leaves any prompt until its pull request merges"
@@ -1149,13 +1284,17 @@ function FactCommitForm({
 }
 
 /**
- * Whether the page offers to commit this claim at all.
+ * Whether the page offers the **`docs`** exit on this claim.
  *
- * The store's own refusals, asked here only so a control that would be refused is
- * not drawn — `committableFact` is where the rule lives and where the wording that
- * explains it lives. A **standing** claim that reaches somebody: a proposal reaches
- * nobody, and a notice is a report on today while the repository is for what stays
- * true.
+ * Narrower than {@link sendableHere}, and the two refusals are the reason the exits
+ * take a control each rather than sharing one. A `docs` exit **asserts** the claim,
+ * in a document that outlives the afternoon: so a proposal is refused because
+ * nobody has agreed with it, and a notice because it is a report on today. A job
+ * and a ticket **act on** it, which asserts nothing and is exactly what an operator
+ * clicking "Queue job" on one agent's report has always been doing.
+ *
+ * `exitableFact` is where the rule lives and where the wording that explains it
+ * lives; this only decides what to draw.
  */
 function committableHere(fact: KnowledgeFactView): boolean {
   return (fact.reach === 'lookup' || fact.reach === 'injected') && fact.lifetime === 'standing';
@@ -1191,7 +1330,7 @@ function FactRulings({
   // Nothing to say about a claim that is settled. `superseded` is terminal for a
   // second reason: a sharper version of it is standing, and bringing this one back
   // would put the two in one block saying different things.
-  if (fact.reach === 'rejected' || fact.reach === 'committed' || fact.reach === 'superseded') return null;
+  if (fact.reach === 'rejected' || fact.reach === 'graduated' || fact.reach === 'superseded') return null;
   // A retired claim is the one non-live reach that offers anything, because
   // retiring is a prune and not a bar: it was never judged untrue, so bringing it
   // back is an ordinary ruling rather than an appeal.

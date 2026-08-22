@@ -73,13 +73,15 @@ export interface Place {
   knowledgeSort: 'reach' | 'claim' | 'scope' | 'observers' | 'disputes' | 'asks' | 'age';
   knowledgeDesc: boolean;
   /**
-   * The tails an operator has **opened**, by group id.
+   * The Knowledge tails an operator has **folded away**, by group id.
    *
-   * Opened rather than folded, for `collapsed`'s reason inverted: the default is
-   * every tail shut and so a bare URL, and a group added later is shut on arrival
-   * instead of being opened by a list written before it existed.
+   * Folded rather than opened, for `collapsed`'s reason exactly: the default is
+   * every heading drawn — a retired claim that vanished would leave no way to tell
+   * a list you have finished with from one that lost rows, and *retired* would read
+   * as *deleted* — so the empty list is the page as it stands and a bare URL.
+   * → `docs/spec/27-knowledge.md#in-the-cockpit`
    */
-  knowledgeOpen: string[];
+  knowledgeFolded: string[];
   /** Which section of the config page is in front. */
   configTab: ConfigTab;
   /** The config group the page is showing, or null for the first one. */
@@ -181,7 +183,7 @@ export const NOWHERE: Place = {
   knowledgeShow: 'all',
   knowledgeSort: 'reach',
   knowledgeDesc: false,
-  knowledgeOpen: [],
+  knowledgeFolded: [],
   configTab: 'values',
   configGroup: null,
   insightsView: 'economics',
@@ -328,7 +330,7 @@ export function readPlace(search: string): Place {
     knowledgeView: KNOWLEDGE_VIEW.find((v) => v === param(query, 'kn')) ?? 'list',
     knowledgeShow: KNOWLEDGE_SHOW.find((s) => s === param(query, 'show')) ?? 'all',
     ...readKnowledgeSort(param(query, 'sort')),
-    knowledgeOpen: readStrings(param(query, 'open')),
+    knowledgeFolded: readStrings(param(query, 'fold')),
     configTab: CONFIG_TABS.find((t) => t === param(query, 'section')) ?? 'values',
     // `keys`, not `group`: the tickets tab already owns `?group=` (its feature
     // heading mode), and two places reading one parameter is a place that opens
@@ -551,10 +553,10 @@ export function placeQuery(place: Place): string {
   if (place.knowledgeSort !== 'reach' || place.knowledgeDesc) {
     query.set('sort', `${place.knowledgeDesc ? '-' : ''}${place.knowledgeSort}`);
   }
-  // Sorted on the way out as on the way in, so opening A then B and B then A are
+  // Sorted on the way out as on the way in, so folding A then B and B then A are
   // one place rather than two history entries.
-  if (place.knowledgeOpen.length > 0) {
-    query.set('open', [...place.knowledgeOpen].sort((a, b) => a.localeCompare(b)).join(','));
+  if (place.knowledgeFolded.length > 0) {
+    query.set('fold', [...place.knowledgeFolded].sort((a, b) => a.localeCompare(b)).join(','));
   }
   if (place.configTab !== 'values') query.set('section', place.configTab);
   if (place.configGroup !== null) query.set('keys', place.configGroup);

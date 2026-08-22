@@ -114,14 +114,14 @@ flowchart TD
 
    Immediately after it, `validationReady.run(world)` files the obligation those resources are _for_:
    a delivered goal with checks a person still has to run says so on the bench
-   ([13](13-jobs-and-findings.md#the-other-step-after-the-launch-the-validation)). It settles itself as
+   ([13](13-jobs-and-tickets.md#the-other-step-after-the-launch-the-validation)). It settles itself as
    the results are recorded, the close-out's asymmetry — the check rows are ones the harness reads
    every pulse. Re-filed on every pulse it is still owed rather than only when absent, which is what
    keeps the row's detail stating what is outstanding _now_.
 
    And then `closeOuts.run(world)`: a goal with a standing delivery whose tracker item is still open
    owes a person one close, and that obligation is a `close_out` human task
-   ([13](13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)). The pass files one, and
+   ([13](13-jobs-and-tickets.md#the-step-after-the-launch-the-close-out)). The pass files one, and
    settles a standing one the moment the tracker stops listing the item open.
 
    **The close-out is last, and that ordering is load-bearing.** It is not filed while the goal's
@@ -131,7 +131,7 @@ flowchart TD
    → [24](24-environments.md#the-bench-asks-for-one-thing-at-a-time)
 
 7. **Fire due schedules** — `schedules.run()`. A recurrence whose slot has come round queues a `jobs`
-   row ([13](13-jobs-and-findings.md#schedules)). Positioned **above** step 8's `listQueuedJobs`, which
+   row ([13](13-jobs-and-tickets.md#schedules)). Positioned **above** step 8's `listQueuedJobs`, which
    is what makes a firing dispatch on the pulse it fires rather than the next one; and beside the other
    bookkeeping rather than in the dispatcher for `closeOuts`' reason — it staffs nothing, and what it
    writes is an ordinary job that rule `manual-job` drains under the same cap and pause flag as one the

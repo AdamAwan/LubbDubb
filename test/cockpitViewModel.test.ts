@@ -127,19 +127,26 @@ test('proposals are keyed by their escalation', () => {
   assert.equal(view.proposalFor.get('e2'), undefined);
 });
 
-test('only open escalations and findings count toward the nudges', () => {
+test('only open escalations and unruled corroborated claims count toward the nudges', () => {
   const view = build(
     stateWith({
       escalations: [
         { id: 'e1', status: 'open', context: {} },
         { id: 'e2', status: 'answered', context: {} },
       ] as never,
-      findings: [{ status: 'open' }, { status: 'dismissed' }, { status: 'open' }] as never,
+      // One claim two agents agreed on and nobody has ruled on, one an operator
+      // has already answered, and one nothing has seconded. Only the first is
+      // waiting on the person reading this.
+      knowledge: [
+        { reach: 'lookup', ruledAt: null },
+        { reach: 'lookup', ruledAt: '2026-08-01T00:00:00.000Z' },
+        { reach: 'proposal', ruledAt: null },
+      ] as never,
       overlaps: [{ live: true }, { live: false }] as never,
     }),
   );
   assert.equal(view.openEscalations.length, 1);
-  assert.equal(view.openFindingCount, 2);
+  assert.equal(view.factsNeedingYou, 1);
   assert.equal(view.liveOverlapCount, 1);
 });
 

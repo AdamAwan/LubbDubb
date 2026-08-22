@@ -75,7 +75,7 @@ than a cut — asking by last-changed brings back older items that are still ali
 
 `IssueCreateCapable` **creates** a tracker item — the seam the four filing arms had no answer for, so
 each of them composed a `gh`/`az` command as a string and spent a desk agent typing it back
-([13](13-jobs-and-findings.md#filing-a-ticket)). Its input is provider-neutral and every provider
+([13](13-jobs-and-tickets.md#filing-a-ticket)). Its input is provider-neutral and every provider
 answers the parts it has:
 
 | Field       | GitHub                                                    | Azure DevOps                                          |

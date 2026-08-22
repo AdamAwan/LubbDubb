@@ -219,7 +219,7 @@ Deriving one of those twice is exactly how two rules come to disagree about an i
 the `originRef` of every job standing in for one (`DispatchContext.standingJobs`). A crash recovery's
 requeue retires the task and files a job, whose own origin is `job:<id>` — so without the second half
 the rule that produced the original sees nothing in flight and staffs the same work twice (#249). The
-job's side of it is [13](13-jobs-and-findings.md#standing-in-for-another-origin).
+job's side of it is [13](13-jobs-and-tickets.md#standing-in-for-another-origin).
 
 **Two rules may act on a retained run; the rest say so themselves.** `ctx.world.issues` is the live
 tracker unioned with the runs it has forgotten (#234 — see
@@ -388,7 +388,7 @@ is no second list to keep in step with it. What each stage contributes:
    nothing for the headroom cut to hold. It is deliberately not "queued and held" the way `capped`
    and `unapproved` are, because those two say _the fleet will get to this_ and this one never will —
    it is waiting on a person, and the cockpit's bench is where it is visible.
-   → [13](13-jobs-and-findings.md#human-tasks)
+   → [13](13-jobs-and-tickets.md#human-tasks)
 8. **Issue pickups** (`issue-pickup`), ordered by label-encoded priority then issue number.
 9. **Handed-over validation checks** (`validate-check`), last of everything. Validation's standing
    promise is that it blocks nothing, so a check must never take the final slot from a blocked part
@@ -1057,11 +1057,11 @@ renders it is on the desktop channel ([20](20-validation.md#getting-the-applicat
 
 Not every entry is a prompt. `pr-title` is rendered straight onto a pull request, and the two
 `*-ticket-body` ids are written straight into the tracker: the harness files those two items itself
-([13](13-jobs-and-findings.md#filing-a-ticket)), so what stays overridable is the item's **body**
+([13](13-jobs-and-tickets.md#filing-a-ticket)), so what stays overridable is the item's **body**
 rather than an instruction to an agent.
 
 **Retired ids stay in the book.** `work-item-ticket` and `blueprint-ticket` are no longer rendered —
-[#394](13-jobs-and-findings.md#filing-a-ticket) replaced the desk agents they were sent to — and
+[#394](13-jobs-and-tickets.md#filing-a-ticket) replaced the desk agents they were sent to — and
 neither is `local-run`, whose instruction moved to the `localRun.instruction` config field so an
 operator could edit it in the cockpit without a restart ([23](23-local-runs.md#the-instruction-is-config-not-a-prompt)). But
 deleting them would make `loadPromptTemplates` throw on a deployment that had overridden one, which is

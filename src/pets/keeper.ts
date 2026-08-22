@@ -1,6 +1,7 @@
 import type { Store } from '../store/store.js';
 import type { Pet, PetActionKind, PetReset, PetWallet } from '../types.js';
 import type { PetState, PetView } from '../wire.js';
+import { foldedFactId } from '../store/knowledge.js';
 import { VIVARIUM_SLOTS } from '../store/pets.js';
 import { attestPet, provenanceOf, replayBarren, replayChain, type PetLedger } from './attest.js';
 import { buildStamp, type PetBuildStamp } from './build.js';
@@ -400,7 +401,13 @@ export class PetKeeper {
       ['plan', this.store.planLabels(ids('plan'))],
       ['landing', this.store.landingLabels(ids('landing'))],
       ['job', this.store.jobLabels(ids('job'))],
-      ['finding', this.store.findingLabels(ids('finding'))],
+      // Both claim kinds in one read, because they are one table. `finding` is the
+      // retired name: nothing hatches one any more, and every pet carrying it is
+      // one somebody has had for months. The store it was read from is gone, and
+      // the label survives it because the fold copied every finding across under an
+      // id derived from its own — so the lookup goes forward through
+      // `foldedFactId` and the answer comes back keyed on the id the pet carries.
+      ...claimLabels(this.store.factLabels([...ids('claim'), ...ids('finding').map(foldedFactId)])),
     ];
     const out = new Map<string, string>();
     for (const [kind, found] of read) {
@@ -441,6 +448,31 @@ export class PetKeeper {
  * the only thing that may ever draw this. A label that is nothing but whitespace
  * is no label at all.
  */
+/**
+ * One read of the claim store, split back into the two kinds a pet can carry.
+ *
+ * The one place the fold's derivation is read backwards. A creature hatched from a
+ * triaged finding carries that finding's id in its seed, and the row that names it
+ * is `fact_<that id>` — so a key that still spells a folded finding is handed back
+ * under the id the pet actually has, and everything else is a claim raised since,
+ * whose id is already the pet's. Keyed the other way round, the map would answer
+ * for a key nothing asks about and every such creature would be drawn unnamed,
+ * which is exactly the failure a label exists to prevent.
+ */
+function claimLabels(labels: Map<string, string>): [PetActionKind, Map<string, string>][] {
+  const claims = new Map<string, string>();
+  const findings = new Map<string, string>();
+  for (const [id, label] of labels) {
+    const folded = /^fact_(find_.+)$/.exec(id)?.[1];
+    if (folded) findings.set(folded, label);
+    else claims.set(id, label);
+  }
+  return [
+    ['claim', claims],
+    ['finding', findings],
+  ];
+}
+
 function clampLabel(raw: string): string | null {
   const line = raw.replace(/\s+/g, ' ').trim();
   if (line === '') return null;

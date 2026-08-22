@@ -1,7 +1,7 @@
 import type {
   Decision,
   Escalation,
-  Finding,
+  KnowledgeFact,
   IssueAssay,
   IssueConclusion,
   IssueDelivery,
@@ -42,7 +42,7 @@ import type {
  * three hundred mechanical rows writes a worse retrospective than one handed the arc.
  *
  * So every list here is capped, **per list rather than against one byte budget**: a
- * goal with three hundred decisions and two findings must not lose the findings.
+ * goal with three hundred decisions and two claims must not lose the claims.
  * `priorWork.ts` sets the pattern this follows — a stated maximum, and **what the cap
  * dropped is named**, because a truncated record read as a complete one is how a
  * write-up ends up explaining an absence that was never there.
@@ -59,7 +59,12 @@ export interface RetroDossierInput {
   decisions: Decision[];
   escalations: Escalation[];
   proposals: Proposal[];
-  findings: Finding[];
+  /**
+   * The claims agents raised while working this goal — what they noticed that was
+   * not their own task, and what the run taught. One list because there is one
+   * store: the write-up reads them as one section because an operator does.
+   */
+  claims: KnowledgeFact[];
   /** How many agents were spawned under this goal. */
   agentCount: number;
   delivery: IssueDelivery | null;
@@ -96,7 +101,7 @@ const MAX_ROUTINE_DECISIONS = 10;
 /** Sparse lists where each row is a thing a human did or an agent noticed. Newest survive. */
 const MAX_ESCALATIONS = 12;
 const MAX_PROPOSALS = 12;
-const MAX_FINDINGS = 15;
+const MAX_CLAIMS = 15;
 
 /** What survived a cap, and how much did not. Which end goes is the caller's call. */
 interface Capped<T> {
@@ -273,11 +278,11 @@ export function retroDossier(input: RetroDossierInput): string {
       : `- Reported spend: $${input.costUsd.toFixed(2)}.`,
   );
 
-  if (input.findings.length > 0) {
-    lines.push('', '### Reported outside the task');
-    const findings = cap(input.findings, MAX_FINDINGS, 'oldest');
-    for (const f of findings.shown) lines.push(`- ${f.kind}${f.ref ? ` (${f.ref})` : ''}: ${f.summary}`);
-    lines.push(...droppedNote(findings, 'findings', 'oldest'));
+  if (input.claims.length > 0) {
+    lines.push('', '### Raised while working this');
+    const claims = cap(input.claims, MAX_CLAIMS, 'oldest');
+    for (const f of claims.shown) lines.push(`- ${f.aboutRef ? `(${f.aboutRef}) ` : ''}${f.claim}`);
+    lines.push(...droppedNote(claims, 'claims', 'oldest'));
   }
 
   return lines.join('\n');

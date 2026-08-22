@@ -1,6 +1,6 @@
 import type {
   ContradictionRuling,
-  FactCommitment,
+  FactExit,
   FactRuling,
   GraduationOutcome,
   FilingTargetProbe,
@@ -323,27 +323,6 @@ export interface CockpitActions {
   placePet(id: string, placed: boolean): Promise<void>;
   blendPet(id: string): Promise<void>;
 
-  promoteFinding(id: string): Promise<void>;
-  fileFinding(id: string): Promise<void>;
-  dismissFinding(id: string): Promise<void>;
-
-  /**
-   * Write down what working a goal taught about working this repository (#355).
-   * `originRef` is the goal it was learned on, or null when it was not learned on
-   * one — the provenance a reader dates the claim by, and the reason it is a
-   * parameter rather than something inferred from wherever the panel was opened.
-   */
-  proposeLesson(text: string, originRef: string | null): Promise<void>;
-  /**
-   * Vouch for a proposed lesson. The operator gate, and the whole of what makes
-   * a lesson store something other than the stale fleet-wide instruction block
-   * `docs/README.md` argues against — so it is a click, never a tool an agent
-   * could reach.
-   */
-  promoteLesson(id: string): Promise<void>;
-  /** Prune one, from either live status. Terminal: there is no un-retire. */
-  retireLesson(id: string): Promise<void>;
-
   /**
    * Narrow, re-order or re-draw the Knowledge page.
    *
@@ -354,36 +333,49 @@ export interface CockpitActions {
    * a link an operator sends someone.
    */
   setKnowledgeQuery(
-    next: Partial<Pick<Place, 'knowledgeView' | 'knowledgeShow' | 'knowledgeSort' | 'knowledgeDesc' | 'knowledgeOpen'>>,
+    next: Partial<
+      Pick<Place, 'knowledgeView' | 'knowledgeShow' | 'knowledgeSort' | 'knowledgeDesc' | 'knowledgeFolded'>
+    >,
   ): void;
   /**
    * Where a claim stands, on the operator's say-so (#27 phase 2) — promote,
    * demote, reject, or keep it exactly where it is.
    *
-   * The whole write surface the Knowledge page has. Nothing here *files* a fact:
-   * agents propose through the tool channel, and a page that could file one would
-   * be filing a claim with no observation behind it. Naming the reach a fact
+   * Nothing here files a claim on an *agent's* behalf: agents raise through the
+   * tool channel, and a page that could file one for them would be filing a claim
+   * with no observation behind it. Naming the reach a fact
    * already has is a ruling rather than a no-op — it is how an operator says a
    * corroborated claim belongs where it is, and the only way the page's "Needs
    * you" section ever empties.
    */
   setFactReach(id: string, reach: FactRuling): Promise<void>;
   /**
-   * Commit a claim to the repository (#27 phase 6): open the documentation work
-   * for it, and record where the operator says it belongs.
+   * Write a claim down. The operator's own arm of the store, and the one write on
+   * this page that is not a ruling.
+   *
+   * It lands a **proposal**, like everything else: the surface is one gate, not one
+   * gate and a bypass for whoever happens to be at the keyboard. `originRef` is the
+   * goal it was learned on, or null when it was not learned on one — the provenance
+   * a reader dates the claim by, and the reason it is a parameter rather than
+   * something inferred from wherever the page was opened.
+   */
+  raiseFact(claim: string, originRef: string | null): Promise<void>;
+  /**
+   * Send a claim on: a documentation pull request, a job that works it now, or a
+   * ticket that files it for later.
    *
    * **One call, and the reach does not move.** The claim is still true and still
-   * delivered while its pull request sits in review — a page that took it out of
-   * every prompt at the click would stop the fleet being told something nobody has
-   * committed and nobody can yet read. It reaches `committed` when the pull request
-   * lands, which the harness sweeps for.
+   * delivered while the work is in flight — a page that took it out of every prompt
+   * at the click would stop the fleet being told something nobody has acted on and
+   * nobody can yet read. It reaches `graduated` when the exit is actually taken,
+   * which the harness sweeps for.
    */
-  commitFact(id: string, commitment: FactCommitment): Promise<void>;
+  exitFact(id: string, exit: FactExit): Promise<void>;
   /**
    * Say what became of a graduation the harness will not guess about — a pull
    * request that left the world without ever being seen closed.
    *
-   * The one place `committed` is an operator's own word rather than a reading, and
+   * The one place `graduated` is an operator's own word rather than a reading, and
    * it is available only where a pull request was actually opened.
    */
   settleGraduation(id: string, outcome: GraduationOutcome): Promise<void>;

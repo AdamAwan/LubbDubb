@@ -40,7 +40,7 @@ test('every place round-trips through the query string', () => {
     // pair is one parameter, so `reach` ascending is a bare URL and `reach`
     // descending has to still be a place.
     at({ tab: 'knowledge', knowledgeDesc: true }),
-    at({ tab: 'knowledge', knowledgeOpen: ['rejected', 'retired'] }),
+    at({ tab: 'knowledge', knowledgeFolded: ['rejected', 'retired'] }),
     at({
       tab: 'knowledge',
       knowledgeView: 'table',
@@ -48,7 +48,7 @@ test('every place round-trips through the query string', () => {
       knowledgeSort: 'disputes',
       knowledgeDesc: true,
     }),
-    at({ tab: 'knowledge', fact: 'fact_abc', knowledgeOpen: ['committed'] }),
+    at({ tab: 'knowledge', fact: 'fact_abc', knowledgeFolded: ['graduated'] }),
     at({ panel: 'faults' }),
     at({ panel: 'launch' }),
     at({ panel: { ask: 'esc-9' } }),

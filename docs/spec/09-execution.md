@@ -414,7 +414,7 @@ dispatch prompt whenever the goal carries an instruction nobody has concluded ye
   agent is the only party that can tell "this changes the goal" from "this says how to do work the goal
   already asks for". So `ticketAmendCommands(config, number)` supplies the one thing an agent cannot
   infer (which tracker, read-then-write, both halves) and the judgement stays the agent's. That is
-  `trackerCoordinates`' arrangement exactly ([13](13-jobs-and-findings.md)). Null under the `fake`
+  `trackerCoordinates`' arrangement exactly ([13](13-jobs-and-tickets.md)). Null under the `fake`
   provider, where the note says there is nothing to update rather than naming a command that would
   fail.
 - **An untouched goal appends nothing**, so its prompt is byte-identical to one composed before this

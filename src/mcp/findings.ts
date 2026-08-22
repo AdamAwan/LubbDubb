@@ -1,109 +1,23 @@
 /**
- * The `report_finding` tool's pure layer: what kinds exist, what a `ref` may be,
- * and what a well-formed report looks like. No store, no transport — so the
- * vocabulary and the validation are testable on their own, and the tool handler
- * is left with nothing but the persist-and-envelope step.
+ * Two pure answers the tracker arms share: what a world-item ref may be, and
+ * **which** tracker the harness files into.
  *
- * ## The gap this closes
+ * What used to be here — the four finding kinds, the three-field validation, and
+ * the prompts a promoted or filed finding was worked from — went with the store it
+ * belonged to. There is one claim store now
+ * (`docs/spec/27-knowledge.md#what-the-three-stores-became`), so the validation is
+ * the intake's, and what a claim becomes when an operator sends it somewhere is
+ * `src/knowledge/graduation.ts`.
  *
- * An agent that discovers something *outside its own task* had nowhere to put it.
- * "This issue duplicates #41", "the real fix is in a package I don't own",
- * "there's an unrelated bug in the module I touched" all ended up in a PR comment,
- * hoping a human read it: nothing landed in the store, nothing surfaced in the
- * cockpit, and nothing could act on it later.
- *
- * The `docs` kind (#397) closes the same gap from the other side: a fact about
- * the repository that its own documentation does not state is learned *inside*
- * the task rather than outside it, and had nowhere to go but prose in a
- * retrospective read once by a person. It rides these rails because the shape is
- * identical — a provenanced claim an operator promotes or dismisses — and two
- * gates for one problem is how two gates come to disagree.
- *
- * ## Does a finding become work? No — deliberately.
- *
- * #108 floats "optionally becomes a queued job". It does not, and the reason is
- * not caution for its own sake: a queued job is dispatched by rule `manual-job` *ahead of
- * every world-driven rule*, so an agent that could queue jobs could put agents on
- * the fleet. That is a capability escalation, not a convenience — one agent's
- * hunch would spend another agent's slot, budget and worktree, with nothing in
- * between saying yes. It is exactly the shape the auto-send seam exists to gate,
- * and an ungated back door round it is what issue #108's own open question 3
- * warns about.
- *
- * So a finding is a **claim, not work**. Nothing in the dispatcher reads the
- * `findings` table. The conservative arm is operator-driven promotion: the
- * cockpit's Findings panel turns one into a queued job on a click
- * (`POST /api/findings/:id/promote`), which is the same `Store.createJob` path the
- * Launch panel already uses — so the operator's authority stays the only thing
- * that puts an agent on the fleet, and the finding records which job it became.
- * The tool's description says this outright, so an agent does not report a bug and
- * then assume it is now being handled.
+ * The file keeps its name because both survivors have five callers between them
+ * across the routes, the snapshot and the tool channel, and a rename is a diff
+ * across all of them for no reading anybody gains.
  */
 
 import type { Config } from '../config.js';
-import type { Finding, FindingInput, FindingKind } from '../types.js';
 
 /**
- * The kinds a finding can be.
- *
- * The first three are taken from the three things agents concretely could not
- * say (Exhibit C of #108) rather than invented as a taxonomy. What earns each one
- * a slot is that it implies a *different operator action* — that is the axis
- * worth splitting on, and it is why there is still no catch-all: a bucket that
- * implies no action is a place for findings to rot, and the summary already
- * carries the detail.
- *
- * `docs` (#397) clears that bar rather than widening it. "Promote → an agent
- * writes the documentation change and opens a pull request against the worked
- * repository" is a genuinely different action from closing a duplicate,
- * unblocking work, or scheduling a bug. It is the fourth answer to the
- * retrospective's discriminator — does this describe **the repository**, or
- * **working the repository**? — and the only one that had no rail: a lesson goes
- * to the store, a defect here, a goal-local fact to the pad, and a fact about the
- * *code* went into a document read once by a person.
- *
- * It is also the one kind that is **not** something noticed outside the agent's
- * own task. A repo fact is learned *inside* it, at the cost of learning it, which
- * is exactly why it is worth writing down — and why `report_finding`'s
- * description can no longer say "NOT your task" as though it covered every kind.
- * The row needs nothing new to carry one: `summary` is the fact, `where` is the
- * file that should say it, `detail` is the evidence, and attribution is already
- * structural.
- */
-export const FINDING_KINDS = ['duplicate', 'blocked', 'out_of_scope', 'docs'] as const satisfies readonly FindingKind[];
-
-/** What each kind means, as told to the agent — the description *is* the vocabulary. */
-export const FINDING_KIND_HELP: Record<FindingKind, string> = {
-  duplicate: 'this work item is the same work as another one (the operator closes or links one of them)',
-  blocked: "the fix needs a change outside what you can touch — another repo, a package you don't own",
-  out_of_scope: 'something real you found that is not your task — an unrelated bug, a gap nobody has filed',
-  docs:
-    'something true of this repository that its own documentation does not say — a seam, an invariant, ' +
-    'a second place a thing must be registered (the operator promotes it and an agent opens a docs PR)',
-};
-
-/**
- * The three text fields, and what each may hold.
- *
- * A finding used to be one `summary` asked for "what it is, where, and why it
- * matters" plus the evidence — four things in one string, which is how it
- * arrived in the cockpit as a single undifferentiated block with the claim, the
- * identifier and the stack trace all at the same weight. Naming the parts is
- * what separates them; nothing else can, because the structure was never in the
- * text to begin with.
- *
- * `summary` is capped short and refuses a newline, and that refusal is the
- * load-bearing part of the split: it turns a blob into a tool error the agent
- * fixes inside its own turn rather than something an operator reads hours later.
- * `where` and `detail` are optional, because a required field an agent has
- * nothing for comes back as "N/A" and noise is worse than a blob.
- */
-const MAX_SUMMARY = 160;
-const MAX_WHERE = 200;
-const MAX_DETAIL = 2000;
-
-/**
- * Normalise the item a finding is *about*.
+ * Normalise the world item a claim or a ticket names.
  *
  * Deliberately the same closed vocabulary the rest of the harness writes
  * (`pr:42`, `issue:12`), suffix-tolerant for the same reason
@@ -114,10 +28,10 @@ const MAX_DETAIL = 2000;
  * argument here to say which list it belongs to, and guessing between issue #41
  * and PR #41 is exactly the sort of quiet wrong that a duplicate report must not
  * make. Anything else is rejected too: an open-ended ref field becomes an
- * unqueryable junk drawer, and a finding about something the harness does not
- * track belongs in the summary with no ref at all.
+ * unqueryable junk drawer, and a claim about something the harness does not track
+ * belongs in the claim itself with no ref at all.
  */
-export function parseFindingRef(ref: unknown): { ok: true; ref: string | null } | { ok: false; error: string } {
+export function parseItemRef(ref: unknown): { ok: true; ref: string | null } | { ok: false; error: string } {
   if (ref === undefined || ref === null) return { ok: true, ref: null };
   if (typeof ref !== 'string') return { ok: false, error: 'ref must be a string like "issue:41", or omitted.' };
   const raw = ref.trim();
@@ -142,110 +56,6 @@ export function parseFindingRef(ref: unknown): { ok: true; ref: string | null } 
   const head = rest.split(':')[0]?.replace(/^#/, '') ?? '';
   if (!/^\d+$/.test(head)) return { ok: false, error: `ref "${raw}" does not contain a ${kind} number.` };
   return { ok: true, ref: `${kind}:${Number(head)}` };
-}
-
-/** How long a promoted finding's job title may be before it stops being a title. */
-const MAX_TITLE = 80;
-
-/**
- * The three fields recomposed into one block of prose, for the places a finding
- * is handed to *another agent* rather than drawn on a card.
- *
- * It exists so `where` and `detail` reach the promoted and the filing agent
- * without either gaining a `{token}` of its own. Prompt templates are
- * operator-overridable and `loadPromptTemplates` rejects only *unknown*
- * placeholders, so a new one is silently dropped by every override that never
- * learned about it — folding the new fields into the existing `summary` value
- * has no such fallback to get wrong. → CLAUDE.md, "Prompts and templates".
- *
- * A legacy row is its own report: null `where` and `detail` collapse to the
- * summary alone, which is exactly what those rows used to render as.
- */
-function findingReport(finding: Finding): string {
-  return [
-    finding.summary,
-    finding.where ? `\nWhere: ${finding.where}` : '',
-    finding.detail ? `\n${finding.detail}` : '',
-  ]
-    .join('')
-    .trim();
-}
-
-/** The one line a finding is titled by — its summary, or the first line of a pre-split blob. */
-function findingHeadline(finding: Finding): string {
-  return finding.summary.split('\n')[0]?.trim() ?? finding.summary;
-}
-
-/**
- * What a finding becomes when an operator promotes it: the title and prompt of a
- * queued job. Pure, so the wording is testable and the route is left with the
- * `Store.createJob` call.
- *
- * The prompt carries the finding's *provenance* — which agent saw it, on what
- * origin — because the promoted agent's first question is always "says who, and
- * were they looking at this or at something else?", and the answer is the one
- * thing a PR comment could never be trusted to keep attached.
- *
- * A `docs` finding is promoted through {@link findingDocsFields} and the
- * `docs-change` template instead, because *how* a documentation change is worded
- * and where it belongs is house style rather than harness logic. This function
- * still renders one correctly — `FINDING_KIND_HELP` covers every kind — so an
- * operator who overrides the prompt by hand gets a sane default and nothing here
- * has an arm that would go stale unnoticed.
- */
-export function findingJobRequest(finding: Finding): { title: string; prompt: string } {
-  const label = `[${finding.kind}]${finding.ref ? ` ${finding.ref}` : ''} `;
-  const title = `${label}${findingHeadline(finding)}`.slice(0, MAX_TITLE);
-  const about = finding.ref ? ` about ${finding.ref}` : '';
-  const prompt = [
-    `An operator promoted a finding${about} into work. It was reported by an agent working ` +
-      `${finding.originRef ?? 'an unrelated task'}, who ${finding.kind === 'docs' ? 'learned it doing that work' : 'found it outside its own scope'} ` +
-      `(kind: ${finding.kind} — ${FINDING_KIND_HELP[finding.kind]}).`,
-    '',
-    'The report, verbatim:',
-    '',
-    findingReport(finding),
-    '',
-    'Verify it before acting on it — it is one agent’s reading, not an established fact. If it turns out ' +
-      'not to hold, say so and stop rather than inventing work to justify the dispatch.',
-  ].join('\n');
-  return { title, prompt };
-}
-
-/**
- * What a promoted `docs` finding is rendered with — the fourth answer to the
- * retrospective's discriminator, and the only one that ends outside the harness.
- *
- * A lesson lives in SQLite because it is **ours**: the harness's operating notes
- * have no business in someone else's tree. A repo fact is the opposite — it is
- * **theirs** — so the only honest destination is a pull request a human merges.
- * Never a direct push, never a commit to the integration branch, never a
- * documentation change the harness makes to a repository it merely operates. If
- * that pull request is not opened, nothing has happened, which is correct.
- *
- * Pure and template-driven for `finding-ticket`'s reason: *how* a documentation
- * change should be worded and *where in a tree* it belongs is exactly the house
- * style an operator override exists for, so it is an entry in the template book
- * rather than a string built here. Which also means the fields ride in on
- * placeholders the `docs-change` entry declares, and the whole report goes
- * through `{summary}` — the same recomposition {@link findingTicketFields} uses,
- * so an override that never learned about `where` and `detail` still renders
- * them. → CLAUDE.md, "Prompts and templates".
- *
- * `title` is the job's, not the document's: a title in the Up next queue only has
- * to be recognisable, while what the docs actually end up saying is the judgement
- * being delegated.
- */
-export function findingDocsFields(finding: Finding): { title: string; vars: Record<string, string> } {
-  const title = `Document: ${findingHeadline(finding)}`.slice(0, MAX_TITLE);
-  return {
-    title,
-    vars: {
-      ref: finding.ref ?? 'nothing the harness tracks',
-      summary: findingReport(finding),
-      originRef: finding.originRef ?? 'an untracked task',
-    },
-  };
 }
 
 /**
@@ -276,87 +86,4 @@ export function trackerCoordinates(config: Config): string | null {
     return `the Azure DevOps project "${project}" in organization "${organization}"`;
   }
   return null;
-}
-
-/**
- * The values the `finding-ticket` prompt is rendered with — pure, so the wording
- * an agent acts on is testable without a server, and so the route is left with
- * nothing but `render` + `createJob`.
- *
- * `title` is the job's, not the ticket's: the agent writes the ticket's title
- * (that is the judgement being delegated), while this one only has to be
- * recognisable in the Up next queue.
- */
-export function findingTicketFields(
-  finding: Finding,
-  tracker: string,
-): { title: string; vars: Record<string, string> } {
-  const title = `File ticket: ${findingHeadline(finding)}`.slice(0, MAX_TITLE);
-  return {
-    title,
-    vars: {
-      kind: finding.kind,
-      kindHelp: FINDING_KIND_HELP[finding.kind],
-      ref: finding.ref ?? 'nothing the harness tracks',
-      // The whole report, not the headline: the `{summary}` placeholder is what
-      // every override already renders, so the new fields ride in on it.
-      summary: findingReport(finding),
-      originRef: finding.originRef ?? 'an untracked task',
-      tracker,
-    },
-  };
-}
-
-/**
- * Validate one `report_finding` call at the boundary, the way every other typed
- * payload in the harness is validated — and, unlike the file-based side channels,
- * hand the reason back to the caller so it can fix it inside the same turn.
- *
- * Note what is *not* here: no agent, task, issue or author argument. Identity is
- * structural (see {@link file://./tools.ts}), so there is nothing to validate.
- */
-export function validateFinding(
-  args: Record<string, unknown>,
-): { ok: true; input: FindingInput } | { ok: false; error: string } {
-  const kind = typeof args.kind === 'string' ? args.kind.trim() : '';
-  if (!(FINDING_KINDS as readonly string[]).includes(kind)) {
-    const help = FINDING_KINDS.map((k) => `"${k}" (${FINDING_KIND_HELP[k]})`).join('; ');
-    return { ok: false, error: `kind must be one of: ${help}. Got ${JSON.stringify(args.kind)}.` };
-  }
-  const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
-  if (!summary) {
-    return { ok: false, error: 'summary is required: one line an operator can act on without asking you.' };
-  }
-  // Both refusals name the field the text belongs in. An error that only says
-  // "too long" gets the same paragraph back, shortened.
-  if (/[\r\n]/.test(summary)) {
-    return {
-      ok: false,
-      error:
-        'summary must be a single line — the claim on its own. Put the error, the repro and the ' +
-        'reasoning in detail, and the file or package in where.',
-    };
-  }
-  if (summary.length > MAX_SUMMARY) {
-    return {
-      ok: false,
-      error:
-        `summary is ${summary.length} characters; keep it under ${MAX_SUMMARY}. It is the one line an ` +
-        'operator scans — move the rest into detail.',
-    };
-  }
-  const where = typeof args.where === 'string' ? args.where.trim() : '';
-  if (where.length > MAX_WHERE) {
-    return { ok: false, error: `where is ${where.length} characters; keep it under ${MAX_WHERE}.` };
-  }
-  const detail = typeof args.detail === 'string' ? args.detail.trim() : '';
-  if (detail.length > MAX_DETAIL) {
-    return { ok: false, error: `detail is ${detail.length} characters; keep it under ${MAX_DETAIL}.` };
-  }
-  const ref = parseFindingRef(args.ref);
-  if (!ref.ok) return { ok: false, error: ref.error };
-  return {
-    ok: true,
-    input: { kind: kind as FindingKind, ref: ref.ref, summary, where: where || null, detail: detail || null },
-  };
 }

@@ -251,7 +251,7 @@ Three things consume the list — the world diff (above), plan reconciliation (s
   usage (`costUsd`/`inputTokens`/`outputTokens`/`numTurns`), and the progress `note` + `notedAt`.
   Status: `starting` \| `running` \| `waiting` \| `done` \| `killed` \| `interrupted` \| `failed`.
   Live means `starting`, `running` or `waiting`.
-- **`Job`**, **`Finding`**, **`Plan`**, **`PlanPart`** — see [13](13-jobs-and-findings.md) and
+- **`Job`**, **`Finding`**, **`Plan`**, **`PlanPart`** — see [13](13-jobs-and-tickets.md) and
   [08](08-planning.md).
 - **`Escalation`** — `type` (`approve_change` \| `answer_question` \| `resolve_ambiguity` \|
   `review_reply`), `status` (`open` \| `answered` \| `dismissed`), `prompt`, `context`, optional

@@ -117,6 +117,17 @@ const POOLS: Record<PetActionKind, Record<PetRarity, readonly PetSpecies[]>> = {
     rare: ['ingot'],
     mythic: ['forge'],
   },
+  // A claim an operator ruled on, and — under the name the word used to have —
+  // a finding they triaged. The same table twice on purpose: a pet hatched from a
+  // finding last year and one hatched from a claim today came from the same act,
+  // so the two must draw the same animals or the vivarium would say the category
+  // changed when only its name did.
+  claim: {
+    common: ['pip', 'mote', 'speck'],
+    uncommon: ['bramble', 'nocturne'],
+    rare: ['cairn'],
+    mythic: ['lodestone'],
+  },
   finding: {
     common: ['pip', 'mote', 'speck'],
     uncommon: ['bramble', 'nocturne'],

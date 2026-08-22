@@ -166,18 +166,16 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
       // the ask that sent you here came from. The claim whose provenance is open
       // rides in from `Place` (`view.viewingFact`), so a link to one opens on it.
       //
-      // Findings and lessons ride in as sections of the same page rather than as
-      // panels of their own. They are the same act — reading a claim an agent
-      // filed and saying what it is for — and three surfaces asking one question
-      // is how an operator ends up ruling on the same claim twice.
+      // One page and one card, because there is one store: what an agent noticed,
+      // what working a goal taught and what the fleet knows are the same act read
+      // by the same person, and three surfaces asking one question is how an
+      // operator ends up ruling on the same claim twice.
       return (
         <KnowledgePanel
           facts={view.state.knowledge}
           graduations={view.state.knowledgeGraduations}
           delivery={view.state.knowledgeDelivery}
           cost={view.state.knowledgeCost}
-          findings={view.state.findings}
-          lessons={view.state.lessons}
           canFileTickets={view.state.config.canFileTickets}
           now={view.now}
           refUrls={view.state.refUrls}
@@ -187,7 +185,7 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
             show: view.knowledgeShow,
             sort: view.knowledgeSort,
             desc: view.knowledgeDesc,
-            open: view.knowledgeOpen,
+            fold: view.knowledgeFolded,
           }}
           onQuery={(next) =>
             actions.setKnowledgeQuery({
@@ -195,21 +193,16 @@ function tabBody(tab: ConsoleTab, view: CockpitView, actions: CockpitActions): J
               ...(next.show !== undefined && { knowledgeShow: next.show }),
               ...(next.sort !== undefined && { knowledgeSort: next.sort }),
               ...(next.desc !== undefined && { knowledgeDesc: next.desc }),
-              ...(next.open !== undefined && { knowledgeOpen: next.open }),
+              ...(next.fold !== undefined && { knowledgeFolded: next.fold }),
             })
           }
           onReach={(id, reach) => actions.setFactReach(id, reach)}
-          onCommit={(id, commitment) => actions.commitFact(id, commitment)}
+          onExit={(id, exit) => actions.exitFact(id, exit)}
+          onRaise={(claim, originRef) => actions.raiseFact(claim, originRef)}
           onSettleGraduation={(id, outcome) => actions.settleGraduation(id, outcome)}
           onDetail={(id) => actions.factDetail(id)}
           onResolveContradiction={(id, ruling) => actions.resolveContradiction(id, ruling)}
           onViewFact={(id) => actions.viewFact(id)}
-          onPromoteFinding={(id) => actions.promoteFinding(id)}
-          onFileFinding={(id) => actions.fileFinding(id)}
-          onDismissFinding={(id) => actions.dismissFinding(id)}
-          onProposeLesson={(text, originRef) => actions.proposeLesson(text, originRef)}
-          onPromoteLesson={(id) => actions.promoteLesson(id)}
-          onRetireLesson={(id) => actions.retireLesson(id)}
         />
       );
     case 'pets':

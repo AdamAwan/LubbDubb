@@ -483,6 +483,9 @@ const KIND_LABEL: Record<PetActionKind, string> = {
   plan: 'plan',
   landing: 'landing',
   job: 'job',
+  claim: 'claim',
+  // The name the act had before the three claim stores became one. Nothing
+  // hatches from it any more, and the pets that did still carry the word.
   finding: 'finding',
   upgrade: 'upgrade',
 };
@@ -493,6 +496,7 @@ const KIND_NOTE: Record<PetActionKind, string> = {
   plan: 'Accepting a plan',
   landing: 'Landing a stack',
   job: 'Launching a job',
+  claim: 'Ruling on a claim',
   finding: 'Triaging a finding',
   upgrade: 'The harness updating itself',
 };

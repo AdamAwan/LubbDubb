@@ -1,5 +1,5 @@
 import type {
-  FactCommitment,
+  FactExit,
   GraduationReading,
   KnowledgeCorroboration,
   KnowledgeFact,
@@ -8,9 +8,9 @@ import type {
 } from '../types.js';
 
 /**
- * Graduation's pure layer: whether a claim may leave for the repository, what the
- * agent writing it is told, and what the work graph says became of the pull
- * request (`docs/spec/27-knowledge.md#committing-to-the-repository`).
+ * Graduation's pure layer: whether a claim may leave this store, what the agent
+ * taking it there is told, and what the work graph says became of the attempt
+ * (`docs/spec/27-knowledge.md#sending-a-claim-on`).
  *
  * No store and no transport, `src/knowledge/knowledge.ts`'s shape and for its
  * reason — every rule here is one an operator's click rests on, and the reading at
@@ -19,13 +19,21 @@ import type {
  *
  * **Nothing here commits anything.** A documentation pull request is a dispatch a
  * person promotes: an agent that could queue this work could put agents on the
- * fleet, which is the capability escalation `src/mcp/findings.ts` refuses on
- * `report_finding`'s behalf. What this module produces is the words that dispatch
- * carries and the verdict on what came back.
+ * fleet, which is the capability escalation the tool channel refuses on every arm.
+ * What this module produces is the words that dispatch carries and the verdict on
+ * what came back.
  */
 
-/** How long the job's title may be before it stops being a title. `findingDocsFields`' bound. */
+/** How long the job's title may be before it stops being a title. */
 const MAX_TITLE = 80;
+
+/**
+ * The `docs` arm of {@link FactExit}, narrowed out of the union rather than
+ * written again — this module composes the prompt for a documentation pull
+ * request and nothing else, and a second spelling of the arm would be free to
+ * drift from the one the route validates.
+ */
+type DocsExit = Extract<FactExit, { exit: 'docs' }>;
 
 /**
  * How many of a claim's observations ride the prompt.
@@ -44,48 +52,64 @@ const MAX_OBSERVATIONS = 6;
 const MAX_OBSERVATION_CHARS = 1_000;
 
 /**
- * Whether this claim is one an operator may commit, and why not when it is not.
+ * Whether this claim is one an operator may send out by this exit, and why not
+ * when it is not.
  *
- * Two refusals, and both are about the claim being the wrong *kind* of thing to
- * put in a tree rather than about anybody's authority:
+ * **The refusals differ per exit, and that is the whole reason this takes one.**
+ * The three exits ask different things of a claim, because what they do with it is
+ * different: `docs` **asserts** it, in a document that outlives the afternoon;
+ * `job` and `ticket` **act on** it, which is a decision about spending a slot
+ * rather than a statement that the claim is true.
+ *
+ * So a `docs` exit refuses two shapes of claim:
  *
  * - **A proposal reaches nobody.** One agent said it and nothing has agreed, so
- *   committing it would put an unvouched claim into the repository through an
- *   agent — the auto-promotion this store is built to prevent, arriving through
- *   the one door that ends outside the harness. Rule on it first; `lookup` is one
- *   click away and costs nothing.
+ *   writing it into the repository through an agent is the auto-promotion this
+ *   whole design refuses, arriving through the one door that ends outside the
+ *   harness. Rule on it first; `lookup` is one click away and costs nothing.
  * - **A notice is a report on today.** An expiring fact is true until its clock
  *   runs out, and the repository is where things that stay true go. Committing one
  *   would write "this check flaked this afternoon" into a document that outlives
  *   the afternoon by years, and the fact's own lapse would then take the claim out
  *   of prompts it is no longer in while the document went on saying it.
  *
- * The terminal reaches are refused because there is nothing left to commit:
- * `committed` is already there, and `rejected`, `superseded` and `retired` reach
+ * A `job` or a `ticket` refuses **neither**, and refusing them would be the
+ * regression this merge must not make: a `proposal` is exactly what every finding
+ * was, and turning one agent's report into work is precisely what an operator
+ * clicking "Queue job" has always been doing. Nothing is asserted by queueing it —
+ * the prompt tells the agent to verify the claim first and to stop if it does not
+ * hold. A notice is fair game for the same reason pointed at time rather than
+ * truth: *doing something about today* is what a job is for.
+ *
+ * Every exit refuses the terminal reaches, because there is nothing left to send:
+ * `graduated` has already gone, and `rejected`, `superseded` and `retired` reach
  * nobody. `retired` is refused for the weakest of the reasons and still refused:
  * it was not judged untrue, but an operator has just said the fleet does not need
- * carrying it — writing it into the repository in the same breath would commit a
- * claim to a document on the strength of a decision to stop telling anyone.
+ * carrying it, and acting on it in the same breath would spend a slot on the
+ * strength of a decision to stop telling anyone.
  */
-export function committableFact(fact: KnowledgeFact): { ok: true } | { ok: false; error: string } {
+export function exitableFact(fact: KnowledgeFact, exit: FactExit['exit']): { ok: true } | { ok: false; error: string } {
+  if (fact.reach === 'graduated') return { ok: false, error: 'this claim has already left for somewhere else' };
+  if (fact.reach === 'rejected' || fact.reach === 'superseded' || fact.reach === 'retired') {
+    return { ok: false, error: `this claim is ${fact.reach} — it reaches nobody, and there is nothing to send on` };
+  }
+  if (exit !== 'docs') return { ok: true };
   if (fact.reach === 'proposal') {
     return {
       ok: false,
       error:
         'one agent said this and nothing has agreed, so it reaches nobody — putting it in the repository ' +
-        'would commit a claim no one has vouched for. Rule on it first: “Put on lookup” costs nothing.',
+        'would commit a claim no one has vouched for. Rule on it first: “Put on lookup” costs nothing, ' +
+        'and queueing a job or filing a ticket for it needs no ruling at all.',
     };
-  }
-  if (fact.reach === 'committed') return { ok: false, error: 'this claim is in the repository already' };
-  if (fact.reach === 'rejected' || fact.reach === 'superseded' || fact.reach === 'retired') {
-    return { ok: false, error: `this claim is ${fact.reach} — it reaches nobody, and there is nothing to commit` };
   }
   if (fact.lifetime === 'expiring') {
     return {
       ok: false,
       error:
         'a notice is a report on today and ends by itself; the repository is for what stays true. If what ' +
-        'it says has turned out to be permanent, the claim to commit is the standing one that says so.',
+        'it says has turned out to be permanent, the claim to commit is the standing one that says so — ' +
+        'and if something needs doing about it now, that is a job or a ticket rather than a document.',
     };
   }
   return { ok: true };
@@ -132,6 +156,114 @@ export function factDocsFields(fact: KnowledgeFact): { title: string; vars: Reco
 }
 
 /**
+ * What a claim becomes when an operator queues a **job** for it: the title and
+ * prompt of that job. Pure, so the wording is testable without a server and the
+ * route is left with nothing but `Store.exitFact`.
+ *
+ * Derived in code rather than rendered from the template book, and that split is
+ * the same one it always was. A `docs` exit ends in a documentation change, where
+ * *how a change is worded and which document owns it* is exactly the house style an
+ * override exists to carry; a job is provenance plus "verify before you act", which
+ * has no house style and no opinion to override. Nothing here would be improved by
+ * being a `PromptId`, and one more id is one more copy of an override to keep in
+ * step.
+ *
+ * The prompt carries the claim's **provenance** — where it was first seen, how many
+ * independent observers say so, and what they saw — because the agent's first
+ * question is always "says who, and were they looking at this or at something
+ * else?", which is the one thing a PR comment could never be trusted to keep
+ * attached. It ends by telling the agent to check the claim before acting on it and
+ * to stop rather than invent work, which is what makes queueing a `proposal`
+ * safe: nothing here asserts the claim is true.
+ */
+export function factJobRequest(
+  fact: KnowledgeFact,
+  observations: readonly KnowledgeCorroboration[],
+): { title: string; prompt: string } {
+  const about = fact.aboutRef !== null ? ` about ${fact.aboutRef}` : '';
+  const title = `${fact.aboutRef !== null ? `${fact.aboutRef} ` : ''}${headline(fact.claim)}`.slice(0, MAX_TITLE);
+  const prompt = [
+    `An operator turned a claim${about} from the harness's knowledge base into work. It is scoped to ` +
+      `${scopePhrase(fact.scope)} and was first seen on ${fact.originRef ?? 'an untracked task'}.`,
+    '',
+    'The claim, verbatim:',
+    '',
+    fact.claim,
+    ...(fact.where !== null ? ['', `Where: ${fact.where}`] : []),
+    '',
+    observed(observations),
+    '',
+    'Verify it before acting on it — it is what the fleet believes, not an established fact. If it turns ' +
+      'out not to hold, say so and stop rather than inventing work to justify the dispatch. Raising what ' +
+      'you found instead is the useful ending.',
+  ].join('\n');
+  return { title, prompt };
+}
+
+/**
+ * The values the `finding-ticket` prompt is rendered with for a claim an operator
+ * is filing — pure, for {@link factJobRequest}'s reason.
+ *
+ * `title` is the **job's**, not the ticket's: the agent writes the ticket's title,
+ * which is the judgement being delegated, while this one only has to be
+ * recognisable in the Up next queue.
+ *
+ * **`kind` and `kindHelp` are still supplied, and are the interesting part.** They
+ * were a finding's four-word taxonomy, which the unified intake removed and this
+ * merge finishes removing — but a placeholder cannot be withdrawn the way a value
+ * can. `renderTemplate` leaves an unfilled `{token}` in the prompt verbatim, so an
+ * operator override written against the older book would ship a literal `{kind}` to
+ * the agent. So the two names stay declared and stay filled, with what is true of
+ * every claim now: it is a claim an agent raised. The default body no longer names
+ * either. → CLAUDE.md, "Prompts and templates"
+ */
+export function factTicketFields(
+  fact: KnowledgeFact,
+  tracker: string,
+  observations: readonly KnowledgeCorroboration[],
+): { title: string; vars: Record<string, string> } {
+  return {
+    title: `File ticket: ${headline(fact.claim)}`.slice(0, MAX_TITLE),
+    vars: {
+      kind: 'claim',
+      kindHelp: 'something an agent raised about working this repository',
+      ref: fact.aboutRef ?? 'nothing the harness tracks',
+      // The claim and what was seen, through the one placeholder every override
+      // already renders — never a new `{token}`, which an override that never
+      // learned about it would drop in silence.
+      summary: [fact.claim, fact.where !== null ? `\nWhere: ${fact.where}` : '', `\n\n${observed(observations)}`]
+        .join('')
+        .trim(),
+      originRef: fact.originRef ?? 'an untracked task',
+      tracker,
+    },
+  };
+}
+
+/**
+ * What the fleet actually saw, as one block both non-`docs` exits carry.
+ *
+ * Bounded exactly as {@link graduationNote}'s list is and for its reason: a claim
+ * an operator sat on for a month carries dozens of near-identical observations, and
+ * a prompt that grew with the count would be a dispatch priced by how popular the
+ * claim was.
+ */
+function observed(observations: readonly KnowledgeCorroboration[]): string {
+  if (observations.length === 0) return 'Nothing was recorded about how it was observed.';
+  const seen = observations.slice(0, MAX_OBSERVATIONS).map((row) => {
+    const where = row.goalRef !== null ? ` (seen on ${row.goalRef})` : '';
+    return `- ${row.words.slice(0, MAX_OBSERVATION_CHARS)}${where}`;
+  });
+  const more = observations.length - seen.length;
+  return [
+    `${observations.length === 1 ? 'One observation was' : `${observations.length} observations were`} recorded against it. What they saw, in their own words:`,
+    '',
+    ...seen,
+    ...(more > 0 ? ['', `(${more} further ${more === 1 ? 'observation' : 'observations'} said much the same.)`] : []),
+  ].join('\n');
+}
+
+/**
  * What is appended to the rendered `docs-change` prompt: that this is a
  * graduation, what was actually seen, and where the operator says it belongs.
  *
@@ -145,7 +277,7 @@ export function factDocsFields(fact: KnowledgeFact): { title: string; vars: Reco
  */
 export function graduationNote(
   fact: KnowledgeFact,
-  commitment: FactCommitment,
+  commitment: DocsExit,
   observations: readonly KnowledgeCorroboration[],
 ): string {
   const seen = observations.slice(0, MAX_OBSERVATIONS).map((row) => {

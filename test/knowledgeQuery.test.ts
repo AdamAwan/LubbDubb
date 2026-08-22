@@ -55,9 +55,11 @@ function fact(over: Partial<KnowledgeFactView> = {}): KnowledgeFactView {
 const graduation = (reading: KnowledgeGraduationView['reading']): KnowledgeGraduationView => ({
   id: 'grad-1',
   factId: 'fact-1',
+  exit: 'docs',
   target: 'spec',
   bar: null,
   prRef: 'pr:9',
+  ticketRef: null,
   jobId: 'job-1',
   outcome: null,
   settledAt: null,
@@ -70,7 +72,7 @@ test('every reach a fact can carry has a heading to sit under', () => {
     'proposal',
     'lookup',
     'injected',
-    'committed',
+    'graduated',
     'superseded',
     'retired',
     'rejected',
@@ -140,7 +142,7 @@ test('every claim is in All, and the three narrowings partition nothing away by 
     fact({ id: 'a', reach: 'proposal' }),
     fact({ id: 'b', reach: 'lookup', ruledAt: null }),
     fact({ id: 'c', reach: 'injected' }),
-    fact({ id: 'd', reach: 'committed' }),
+    fact({ id: 'd', reach: 'graduated' }),
     fact({ id: 'e', reach: 'rejected' }),
   ];
   assert.equal(rows.filter((f) => inShow('all', f, null)).length, rows.length);
@@ -200,9 +202,11 @@ test('a count column opens on the end worth reading, and clicking it again flips
   assert.deepEqual(nextSort('asks', false, 'asks'), { knowledgeSort: 'asks', knowledgeDesc: true });
 });
 
-test('only the tails fold, and everything that reaches an agent stays open', () => {
-  const open = KNOWLEDGE_GROUPS.filter((group) => !group.tail).map((group) => group.id);
-  assert.deepEqual(open, ['notices', 'needsYou', 'injected']);
+test('only the tails may be folded, and nothing that reaches an agent may be', () => {
+  // A page that can hide what the fleet is being told is not a governance surface,
+  // so these three carry no fold at all — and the tails that do start open.
+  const fixed = KNOWLEDGE_GROUPS.filter((group) => !group.tail).map((group) => group.id);
+  assert.deepEqual(fixed, ['notices', 'needsYou', 'injected']);
   // Every heading carries the paragraph it used to say out loud: the words are the
   // page's only statement of several of these invariants, and a tooltip with
   // nothing in it is how they would be lost.

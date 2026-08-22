@@ -12,13 +12,12 @@ import type {
   AgentFlag,
   AgentStatus,
   AgentUsage,
-  Finding,
-  FindingInput,
   HumanTask,
   HumanTaskInput,
   IssueConclusion,
   IssueConclusionVerdict,
   KnowledgeFact,
+  KnowledgeGraduation,
   PartOutcomeKind,
   PlanPart,
   Remedy,
@@ -36,8 +35,8 @@ import type {
  * filled.
  */
 type LinkTicketResult =
-  | { ok: true; finding: Finding; bug?: undefined }
-  | { ok: true; bug: BugFiling; finding?: undefined }
+  | { ok: true; graduation: KnowledgeGraduation; bug?: undefined }
+  | { ok: true; bug: BugFiling; graduation?: undefined }
   | { ok: false; error: string };
 
 /**
@@ -46,7 +45,7 @@ type LinkTicketResult =
  * work item type nor the relation is ever an argument an agent could get wrong.
  */
 type FilingTargetResult =
-  | { ok: true; kind: 'finding' | 'bug'; storyNumber: number | null }
+  | { ok: true; kind: 'claim' | 'bug'; storyNumber: number | null }
   | { ok: false; error: string };
 import { conclusionOrigin } from '../issueConclusion.js';
 import { assessmentOrigin, type AssessmentVerdict } from '../mcp/assessment.js';
@@ -247,7 +246,6 @@ interface AgentManagerEvents {
   /** The agent surfaced an artifact/link mid-run (already persisted, deduped by ref). */
   flag: [{ agentId: string; taskId: string; flag: AgentFlag }];
   /** The agent filed something outside its own task (already persisted). `created` is false for a verbatim repeat. */
-  finding: [{ agentId: string; taskId: string; finding: Finding; created: boolean }];
   /** The agent asked for work only a person can do (already persisted). `created` is false for a repeat. */
   humanTask: [{ agentId: string; taskId: string; humanTask: HumanTask; created: boolean }];
   /** The agent said what it is working on (already persisted onto its row, replacing the previous note). */
@@ -295,6 +293,42 @@ interface AgentManagerEvents {
    * prose. `resetsAt` is null when `claude` did not say when the window turns over.
    */
   limited: [{ agentId: string; taskId: string; reason: string; resetsAt: string | null }];
+}
+
+/**
+ * What a retrospective's claim carries as its observation.
+ *
+ * A retrospective has no separate evidence to give — the write-up beside it *is*
+ * the evidence — so the corroboration says where the claim came from instead,
+ * which is what an operator reads when deciding whether one voice should have been
+ * two. Stated once for the reason the operator's own sentence is: two rows in one
+ * table have to be comparable, and a sentence composed at the call site is free to
+ * say something else next time.
+ */
+const RETRO_EVIDENCE = 'Written up in the retrospective for this goal, as something working it taught.';
+
+/**
+ * A retrospective's claim as a proposal.
+ *
+ * Fleet-scoped and standing because that is what a write-up's lesson is: something
+ * working *this repository* taught, with no scope and no clock the retrospective
+ * ever had to give. `report_remedy` builds its own in `validateRemedy`, where the
+ * knowledge store's bounds can refuse before anything is written; this one has
+ * nothing to refuse that `validateClaimText` has not already refused inside
+ * `parseRetro`.
+ */
+function retroClaim(claim: string): FactProposal {
+  return {
+    claim,
+    scope: 'fleet',
+    lifetime: 'standing',
+    expiresInHours: null,
+    evidence: RETRO_EVIDENCE,
+    supersedes: null,
+    resolvesWhen: null,
+    aboutRef: null,
+    where: null,
+  };
 }
 
 /**
@@ -799,33 +833,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   }
 
   /**
-   * File something an agent noticed outside its own task (the `report_finding`
-   * tool). It goes through the manager rather than straight to the store for the
-   * same reason a flag does: the cockpit should hear about it the moment it is
-   * filed, not on the next pulse, and the `finding` event is what carries it.
-   *
-   * The agent id comes from the caller's credential, so `agentId -> task ->
-   * origin` is the whole attribution and there is nothing an argument could
-   * forge. Unlike {@link ask} this does not require a *live* session — a finding
-   * is a durable note, and one filed on an agent's last breath is still true.
-   */
-  recordFinding(
-    agentId: string,
-    input: FindingInput,
-  ): { ok: true; finding: Finding; created: boolean } | { ok: false; error: string } {
-    return this.withCaller(agentId, ({ task }) => {
-      const { finding, created } = this.store.recordFinding(agentId, task.id, task.originRef, input);
-      this.emit('finding', { agentId, taskId: task.id, finding, created });
-      // `created` reaches the tool too: an agent told its report merged into a
-      // standing one knows the claim is already on an operator's list, which is
-      // the answer to "should I say this again, louder".
-      return { ok: true, finding, created };
-    });
-  }
-
-  /**
    * Ask for work only a person can do (the `request_human_task` tool). Routed
-   * through the manager for {@link recordFinding}'s reason: the cockpit should
+   * through the manager for {@link proposeFact}'s reason: the cockpit should
    * hear about it the moment it is filed, and the `humanTask` event is what
    * carries it.
    *
@@ -863,8 +872,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   filingTarget(agentId: string): FilingTargetResult {
     return this.withCaller(agentId, ({ task }): FilingTargetResult => {
       const jobId = task.originRef?.startsWith('job:') ? task.originRef.slice('job:'.length) : null;
-      const finding = jobId ? this.store.findFindingByJobId(jobId) : null;
-      if (finding) return { ok: true, kind: 'finding', storyNumber: null };
+      const graduation = jobId ? this.store.findGraduationByJobId(jobId) : null;
+      if (graduation && graduation.exit === 'ticket') return { ok: true, kind: 'claim', storyNumber: null };
       const bug = jobId ? this.store.findBugFilingByJobId(jobId) : null;
       if (bug) {
         // `issue:12` — the story the operator raised it from, and the one number
@@ -875,7 +884,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       return {
         ok: false,
         error:
-          `link_ticket is only for a job dispatched to file a finding as a ticket or to raise a bug ` +
+          `link_ticket is only for a job dispatched to file a claim as a ticket or to raise a bug ` +
           `an operator reported. This task's origin is ${task.originRef ?? '(none)'}, which was ` +
           `created from neither.`,
       };
@@ -883,29 +892,30 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   }
 
   /**
-   * Record the ticket a filing job produced (the `link_ticket` tool): the finding
-   * or bug it was dispatched for moves `filing -> filed`.
+   * Record the ticket a filing job produced (the `link_ticket` tool): the claim's
+   * graduation lands, or the bug it was dispatched for moves `filing -> filed`.
    *
    * The row is reached from the credential exactly as {@link filingTarget} reaches
    * it, so the tool takes only a ref. An agent on any other task resolves to
    * nothing and is told so, which is the whole access check.
    *
-   * Routed through the manager for the same reason as {@link recordFinding}: the
+   * Routed through the manager for the same reason as {@link proposeFact}: the
    * `finding` event is what repaints the cockpit now rather than next pulse.
    */
   linkTicket(agentId: string, ticketRef: string): LinkTicketResult {
     return this.withCaller(agentId, ({ task }): LinkTicketResult => {
       const jobId = task.originRef?.startsWith('job:') ? task.originRef.slice('job:'.length) : null;
-      const finding = jobId ? this.store.findFindingByJobId(jobId) : null;
+      const graduation = jobId ? this.store.findGraduationByJobId(jobId) : null;
+      const filing = graduation && graduation.exit === 'ticket' ? graduation : null;
       // A job is created for at most one of the two, so there is nothing to
-      // disambiguate — the credential resolves to a finding, a bug filing, or
-      // neither, and neither is the whole access check.
-      const bug = jobId && !finding ? this.store.findBugFilingByJobId(jobId) : null;
-      if (!finding && !bug) {
+      // disambiguate — the credential resolves to a filing graduation, a bug
+      // filing, or neither, and neither is the whole access check.
+      const bug = jobId && !filing ? this.store.findBugFilingByJobId(jobId) : null;
+      if (!filing && !bug) {
         return {
           ok: false,
           error:
-            `link_ticket is only for a job dispatched to file a finding as a ticket or to raise a bug ` +
+            `link_ticket is only for a job dispatched to file a claim as a ticket or to raise a bug ` +
             `an operator reported. This task's origin is ${task.originRef ?? '(none)'}, which was ` +
             `created from neither.`,
         };
@@ -932,22 +942,30 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         return { ok: true, bug: linked };
       }
 
-      // Idempotence lives in the write, not in a read-then-check here.
-      const linked = this.store.linkFindingTicket(finding!.id, ticketRef);
+      // Idempotence lives in the write, not in a read-then-check here. The same
+      // call is what takes the claim to `graduated`: the ticket existing *is* the
+      // exit being taken, and the store makes both writes in one transaction.
+      const linked = this.store.linkGraduationTicket(filing!.id, ticketRef);
       if (!linked) {
         return {
           ok: false,
-          error: `finding ${finding!.id} is ${finding!.status}, not awaiting a ticket — nothing to link.`,
+          error: `the filing for ${filing!.factId} has already been answered — nothing left to link.`,
         };
       }
-      this.emit('finding', { agentId, taskId: task.id, finding: linked, created: false });
-      return { ok: true, finding: linked };
+      this.emit('fact', {
+        agentId,
+        taskId: task.id,
+        fact: this.store.getFact(linked.factId)!,
+        filed: false,
+        corroborations: distinctCorroborators(this.store.listCorroborations(linked.factId)),
+      });
+      return { ok: true, graduation: linked };
     });
   }
 
   /**
    * Record what an agent says it is working on (the `note_progress` tool). Like
-   * {@link recordFinding} it goes through the manager rather than straight to the
+   * {@link proposeFact} it goes through the manager rather than straight to the
    * store, so the cockpit repaints on the note rather than on the next pulse —
    * a note that lands twenty minutes late has already failed at its one job.
    *
@@ -1043,7 +1061,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     document: string,
     lessons: string[],
   ): { ok: true; issueOrigin: string; lessonsFiled: number } | { ok: false; error: string } {
-    return this.withCaller(agentId, ({ task }) => {
+    return this.withCaller(agentId, (caller) => {
+      const { task } = caller;
       const origin = retroSubmitOrigin(task.originRef);
       if (!origin.ok) return { ok: false, error: origin.error };
       this.store.recordRetrospective({
@@ -1053,14 +1072,19 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         agentId,
         taskId: task.id,
       });
-      // Deduped in the store against the live rows on this goal, so a resubmission
-      // revises the document without leaving a second copy of every lesson behind
-      // it. `lessonsFiled` counts what was asked for rather than what was new: an
-      // agent told "3 filed" on a resubmission has not been lied to about what the
-      // operator will see, and the alternative reads as two of them having failed.
-      for (const text of lessons) this.store.proposeLesson({ text, originRef: origin.issueOrigin });
+      // Raised as claims, through the one store that now holds them. A
+      // resubmission revises the document and lands its claims as corroborations
+      // of the rows already standing rather than as second copies — `claimsMatch`
+      // is what decides, so the dedupe `proposeLesson` did by exact text on one
+      // goal is now the matching every other writer gets.
+      //
+      // Counted by what actually landed. A claim an operator rejected is refused
+      // by name and reaches nobody however many times it is filed, and telling the
+      // agent it filed one is exactly the silence the by-name refusal exists to
+      // remove.
+      const filed = lessons.filter((claim) => this.fileFact(caller, retroClaim(claim)).outcome !== 'barred').length;
       this.emit('retrospective', { agentId, taskId: task.id, issueOrigin: origin.issueOrigin });
-      return { ok: true, issueOrigin: origin.issueOrigin, lessonsFiled: lessons.length };
+      return { ok: true, issueOrigin: origin.issueOrigin, lessonsFiled: filed };
     });
   }
 
@@ -1098,7 +1122,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * `originRef` was, and resolved from the credential rather than asserted.
    *
    * Routed through the manager rather than straight to the store so the cockpit
-   * repaints now rather than on the next pulse — {@link recordFinding}'s reason —
+   * repaints now rather than on the next pulse — {@link proposeFact}'s reason —
    * and, like a finding, it needs no *live* session: a remedy filed on an agent's
    * last breath is still the account of the run.
    */
@@ -1158,10 +1182,16 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * (`docs/spec/27-knowledge.md#the-remedy-arm`), because a second writer that
    * assembled its own observer would be a second answer to *who said this* — and
    * the count that carries a claim to `lookup` is a count of observers. The
-   * caller is already resolved, so the remedy path writes its row and raises its
-   * claim under one credential lookup rather than re-entering the tool seam.
+   * caller is already resolved, so a path that writes a row *and* raises a claim
+   * does both under one credential lookup rather than re-entering the tool seam.
    *
-   * @public the fact-writing seam shared by `raise` and `report_remedy`
+   * Three callers now: `raise`, `report_remedy`, and the retrospective's write-up,
+   * whose claims were `lessons` rows until the stores merged. That is the whole
+   * point of the seam — a claim is attributed identically whatever submission it
+   * rode in on, so nothing about where it came from changes what it takes to carry
+   * it anywhere.
+   *
+   * @public the fact-writing seam shared by `raise`, `report_remedy` and `retro_submit`
    */
   private fileFact(caller: { agent: Agent; task: Task }, proposal: FactProposal): FactProposalOutcome {
     const { agent, task } = caller;
@@ -1285,7 +1315,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * having its verdict quietly scoped to its part.
    *
    * Routed through the manager rather than straight to the store for the same
-   * reason as {@link recordFinding}: the `conclusion` event repaints the cockpit
+   * reason as {@link proposeFact}: the `conclusion` event repaints the cockpit
    * now rather than on the next pulse. Like a finding it needs no *live* session
    * — a verdict cast on an agent's last breath is the one that matters most.
 

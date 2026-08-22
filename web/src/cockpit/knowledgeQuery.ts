@@ -25,7 +25,7 @@ export interface KnowledgeQuery {
   show: Place['knowledgeShow'];
   sort: Place['knowledgeSort'];
   desc: Place['knowledgeDesc'];
-  open: Place['knowledgeOpen'];
+  fold: Place['knowledgeFolded'];
 }
 
 /**
@@ -35,10 +35,13 @@ export interface KnowledgeQuery {
  * the notices with clocks on them, the corroborated claims waiting on the one
  * decision that is theirs, then what is reaching agents now, then the long tails.
  *
- * **`tail` is folded until asked for, and that is the whole of the density change.**
- * A tail is a list an operator reads when they go looking for it, so it costs one
- * line until they do — while every group that reaches an agent stays open, because
- * a page that hides what the fleet is being told is not a governance surface.
+ * **A `tail` may be folded away; none of them starts that way.** A tail is a list
+ * an operator reads when they go looking for it, so it is theirs to collapse once
+ * they have — but nothing on this page is hidden by default, because a retired
+ * claim that vanished would leave no way to tell a list you have finished with
+ * from one that lost rows, and *retired* would read as *deleted*. The headings
+ * that reach an agent cannot be folded at all: a page that can hide what the fleet
+ * is being told is not a governance surface.
  */
 interface KnowledgeGroup {
   /** Stable, and in the address bar once an operator opens a tail — never re-spelled. */
@@ -93,10 +96,10 @@ export const KNOWLEDGE_GROUPS: readonly KnowledgeGroup[] = [
     tail: true,
   },
   {
-    id: 'committed',
-    title: 'Committed to the repository',
+    id: 'graduated',
+    title: 'Gone somewhere better',
     blurb:
-      'In the repository now, and out of every prompt: an agent reads these from the tree, and keeping them injected would pay context twice for one sentence. Each row carries the pull request that put it there — a claim only reaches this section when that pull request actually merged, never when the work was queued. This list growing while Injected shrinks is the number worth watching.',
+      "Out of every prompt, because somewhere else carries these better than a line in front of the fleet does: the repository's own documentation, where an agent reads it from the tree; a job, where somebody is acting on it; a ticket, where it waits its turn. Each row names which, and links to it. A claim only reaches this section when the exit was actually taken — never when the work was queued. This list growing while Injected shrinks is the number worth watching.",
     tail: true,
   },
   {
@@ -151,7 +154,7 @@ export function groupFor(fact: KnowledgeFactView, now: number): string {
  *
  * It crosses one because *waiting on you* is not a place a claim sits: an
  * unanswered dispute is on an injected claim, a cap drop is on an injected claim,
- * an unknown graduation is on whatever the claim was when somebody committed it,
+ * an unknown graduation is on whatever the claim was when somebody sent it on,
  * and a corroborated claim nobody has ruled on is at `lookup`. Four states, one
  * question — and an operator who has to visit four headings to answer it answers
  * three of them.
@@ -162,9 +165,10 @@ export function groupFor(fact: KnowledgeFactView, now: number): string {
  *
  * Settled reaches are excluded, and each for its own reason: a rejection is
  * terminal and a superseded wording has a sharper claim standing in its place, so
- * a dispute against either is not a thing anybody can act on. `committed` stays
- * in, because the reading that asks for an answer — a pull request that left the
- * world unseen — is the one that put it there.
+ * a dispute against either is not a thing anybody can act on, and a retired claim
+ * was pruned rather than judged. `graduated` stays in, because the reading that
+ * asks for an answer — a documentation pull request that left the world unseen —
+ * is the one that would have put it there.
  */
 export function waitingOn(
   fact: KnowledgeFactView,
@@ -203,7 +207,7 @@ export function inShow(show: KnowledgeQuery['show'], fact: KnowledgeFactView, wa
   if (show === 'waiting') return waiting !== null;
   if (show === 'reaching') return fact.reach === 'injected' || fact.reach === 'lookup';
   return (
-    fact.reach === 'committed' || fact.reach === 'superseded' || fact.reach === 'retired' || fact.reach === 'rejected'
+    fact.reach === 'graduated' || fact.reach === 'superseded' || fact.reach === 'retired' || fact.reach === 'rejected'
   );
 }
 

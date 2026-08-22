@@ -1,4 +1,4 @@
-import { parseFindingRef } from '../findings.js';
+import { parseItemRef } from '../findings.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -89,11 +89,11 @@ export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
         return toolError(`The tracker refused the item: ${(err as Error).message}`);
       }
     } else {
-      // The same parser `report_finding` uses for the item a finding is *about*, so
-      // the ref a ticket is recorded under and the ref a finding names are the same
+      // The same parser the intake uses for the item a claim is *about*, so the ref
+      // a ticket is recorded under and the ref a claim names are the same
       // vocabulary — the cockpit links both through one `refUrls` lookup. Only the
       // agent-supplied arm needs it; what the harness filed is its own ref.
-      const parsed = parseFindingRef(ticketRef);
+      const parsed = parseItemRef(ticketRef);
       if (!parsed.ok) return toolError(`Ticket rejected: ${parsed.error}`);
       if (!parsed.ref) return toolError('link_ticket requires the ref of the ticket you created.');
       ticketRef = parsed.ref;
@@ -114,8 +114,17 @@ export const linkTicket: ToolFactory = ({ deps, agent, ok }) => ({
     return ok({
       linked: true,
       filed: ref === '',
-      finding: { id: result.finding.id, status: result.finding.status, ticketRef: result.finding.ticketRef },
-      note: 'Recorded against the finding. Your filing task is done.',
+      claim: {
+        id: result.graduation.factId,
+        ticketRef: result.graduation.ticketRef,
+      },
+      // The claim leaves every prompt on this call, and the agent is told so: it is
+      // the one thing about `link_ticket` that is not obvious from having filed a
+      // ticket, and an agent that files a second one for the same claim would be
+      // told the row was already answered rather than why.
+      note:
+        'Recorded against the claim, which is now in the tracker rather than in front of the fleet. ' +
+        'Your filing task is done.',
     });
   },
 });

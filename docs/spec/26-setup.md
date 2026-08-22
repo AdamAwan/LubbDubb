@@ -135,17 +135,17 @@ outlive the first three minutes on purpose. That is the argument for their being
 operator finds out on a Tuesday that a token expired, and `eligibility` is how they find out that a
 filter of their own is hiding every tagged item on the tracker.
 
-| Check         | Bad when                                                | Why it is silent                                                                                                                 |
-| ------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `pointed`     | both capabilities are still `fake`                      | the invented world reads exactly like a real one                                                                                 |
-| `credential`  | the selected provider's env var is unset                | asked of **both** capabilities, since a deployment may read issues from one provider and PRs from another                        |
-| `identity`    | `userId` is unset                                       | tickets it files go unassigned and its branches are not named as yours ([02](02-configuration.md#userid))                        |
-| `eligibility` | tagged work exists and none of it is yours              | the fleet is idle **and correct**, which is the hardest state to tell from broken                                                |
-| `wiring`      | nothing tagged, and nothing ever picked up              | the same, on the one day an empty panel is unreadable because none has ever been full                                            |
-| `agent`       | `agentMode` is `raw`, or `claudeCommand` is not on PATH | a `raw` dispatch writes a transcript and never calls a model                                                                     |
-| `billing`     | `ANTHROPIC_API_KEY` is in the environment               | agents inherit it and the CLI prefers a key with no prompt, so the whole fleet bills the API ([02](02-configuration.md#secrets)) |
-| `prompt-tools` | a prompt override names a tool `raise` replaced        | the tool still works, so nothing is broken — the deployment is one withdrawal away from a call refused with nothing in the logs |
-| `restart`     | the file holds changes this process is not running      | `warn`, not `bad` — the harness works, it is just not working on what the operator last wrote                                    |
+| Check          | Bad when                                                | Why it is silent                                                                                                                 |
+| -------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `pointed`      | both capabilities are still `fake`                      | the invented world reads exactly like a real one                                                                                 |
+| `credential`   | the selected provider's env var is unset                | asked of **both** capabilities, since a deployment may read issues from one provider and PRs from another                        |
+| `identity`     | `userId` is unset                                       | tickets it files go unassigned and its branches are not named as yours ([02](02-configuration.md#userid))                        |
+| `eligibility`  | tagged work exists and none of it is yours              | the fleet is idle **and correct**, which is the hardest state to tell from broken                                                |
+| `wiring`       | nothing tagged, and nothing ever picked up              | the same, on the one day an empty panel is unreadable because none has ever been full                                            |
+| `agent`        | `agentMode` is `raw`, or `claudeCommand` is not on PATH | a `raw` dispatch writes a transcript and never calls a model                                                                     |
+| `billing`      | `ANTHROPIC_API_KEY` is in the environment               | agents inherit it and the CLI prefers a key with no prompt, so the whole fleet bills the API ([02](02-configuration.md#secrets)) |
+| `prompt-tools` | a prompt override names a tool `raise` replaced         | the tool still works, so nothing is broken — the deployment is one withdrawal away from a call refused with nothing in the logs  |
+| `restart`      | the file holds changes this process is not running      | `warn`, not `bad` — the harness works, it is just not working on what the operator last wrote                                    |
 
 ### A check earns a row for a discrepancy, never a quantity
 
@@ -271,12 +271,12 @@ here names something already silent, so the gap between reading the sentence and
 where the surface used to be lost. A check therefore also carries a `fix`, and which of the three
 kinds it gets is the whole of what the harness is honestly able to do about it.
 
-| Kind     | What it does                                                                  | Why                                                                             |
-| -------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `config` | Writes config leaves through `POST /api/config`.                              | The fix _is_ configuration, so the harness applies it — through the one writer. |
+| Kind     | What it does                                                                                | Why                                                                                    |
+| -------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `config` | Writes config leaves through `POST /api/config`.                                            | The fix _is_ configuration, so the harness applies it — through the one writer.        |
 | `goto`   | Opens the surface where the decision is made (Config at a group or at Prompts, or Tickets). | Which ticket to tag, and what an override should say, are decisions only a person has. |
-| `sheet`  | Opens the confirm sheet.                                                      | What a repository implies is a table and a file, not a value on a button.       |
-| `shell`  | Copies a command. **Never runs it.**                                          | Below.                                                                          |
+| `sheet`  | Opens the confirm sheet.                                                                    | What a repository implies is a table and a file, not a value on a button.              |
+| `shell`  | Copies a command. **Never runs it.**                                                        | Below.                                                                                 |
 
 **A `shell` fix is copied and never executed.** These are exactly the credential and billing checks —
 `export GITHUB_TOKEN=…`, `unset ANTHROPIC_API_KEY`, installing the agent binary — and a button that
