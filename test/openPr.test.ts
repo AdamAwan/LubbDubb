@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveOpenPr, type OpenPrContext } from '../src/mcp/openPr.js';
+import { openPrFailure, resolveOpenPr, type OpenPrContext } from '../src/mcp/openPr.js';
 import type { Issue, Plan, PlanPart } from '../src/types.js';
 
 function issue(number: number, title = 'Ticket sync rewrite'): Issue {
@@ -143,4 +143,44 @@ test('a part origin whose issue has no plan is refused rather than guessed onto 
   const target = resolveOpenPr('issue:182:part:cursor', ctx());
   assert.ok('error' in target);
   assert.match(target.error, /no plan/);
+});
+
+// What GitHub actually returned on issue #508's part, verbatim — the refusal this
+// classification exists for. Kept whole so a reworded matcher is caught by the
+// real string rather than by one written to fit it.
+const HEAD_INVALID =
+  'Validation Failed: {"resource":"PullRequest","field":"head","code":"invalid"} - ' +
+  'https://docs.github.com/rest/pulls/pulls#create-a-pull-request';
+
+test('an unpushed head is named as such, and answered with the push rather than the fallback', () => {
+  const message = openPrFailure(HEAD_INVALID, 'issue/508/complete-the-kill-reap', 'main');
+  assert.match(message, /has no branch issue\/508\/complete-the-kill-reap/);
+  assert.match(message, /git push -u origin issue\/508\/complete-the-kill-reap/);
+  assert.match(message, /call open_pr again/);
+  // The generic fallback is the bug: opening it by hand fails identically while
+  // the branch is only local, which is what cost three refusals and a human.
+  assert.doesNotMatch(message, /Open it yourself/);
+});
+
+test('any other create failure keeps the fallback, rather than guessing at a push', () => {
+  const message = openPrFailure(
+    '403 Resource not accessible by integration',
+    'issue/182/cursor',
+    'issue/182/migrations',
+  );
+  assert.match(message, /403 Resource not accessible by integration/);
+  assert.match(message, /Open it yourself against issue\/182\/cursor -> issue\/182\/migrations/);
+  assert.doesNotMatch(message, /git push/);
+});
+
+test('a head invalid for some other reason than the field is not diagnosed as unpushed', () => {
+  // `base` invalid is the same envelope with a different field, and means the
+  // opposite thing — pushing would not help and saying so would send the agent off.
+  const message = openPrFailure(
+    'Validation Failed: {"resource":"PullRequest","field":"base","code":"invalid"}',
+    'issue/182/cursor',
+    'gone',
+  );
+  assert.doesNotMatch(message, /git push/);
+  assert.match(message, /Open it yourself/);
 });

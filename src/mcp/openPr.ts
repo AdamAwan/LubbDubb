@@ -91,3 +91,41 @@ function partTarget(issueNumber: number, slug: string, ctx: OpenPrContext): Open
     total: ordered.length,
   };
 }
+
+/**
+ * GitHub's answer for a head ref it cannot find, told apart from every other
+ * create failure.
+ *
+ * Nothing in the harness pushes a branch — `git push` is the agent's, and until
+ * this landed no prompt said so — so an agent that committed and called `open_pr`
+ * got `{"resource":"PullRequest","field":"head","code":"invalid"}` back and no way
+ * to read it. The generic failure below quotes that blob and then advises opening
+ * the pull request by hand, which fails identically against a branch the remote
+ * does not have: the observed cost was three refusals and a human opening it.
+ *
+ * The two fields are matched rather than the sentence around them, because the
+ * prose and the docs URL are GitHub's to reword. Azure states an absent source
+ * branch differently and falls through to the generic arm, which is honest —
+ * a wrong diagnosis is worse than none.
+ */
+function isUnpushedHead(message: string): boolean {
+  return /"field"\s*:\s*"head"/.test(message) && /"code"\s*:\s*"invalid"/.test(message);
+}
+
+/**
+ * What an agent is told when the create failed. The unpushed-head arm names the
+ * one command that fixes it and says to call again rather than to open by hand —
+ * the fallback is right for a tool that is unavailable, and wrong for a branch
+ * that is merely not pushed yet.
+ */
+export function openPrFailure(message: string, branch: string, base: string): string {
+  if (isUnpushedHead(message)) {
+    return (
+      `Opening the pull request failed: the provider has no branch ${branch}. Your commits are still ` +
+      'local — the harness never pushes, that part is yours. Run `git push -u origin ' +
+      `${branch}\` and then call open_pr again. Do not open it by hand: it fails the same way until the ` +
+      'branch is on the remote.'
+    );
+  }
+  return `Opening the pull request failed: ${message}. Open it yourself against ${branch} -> ${base}.`;
+}
