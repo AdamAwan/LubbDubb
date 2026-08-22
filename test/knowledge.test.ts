@@ -879,8 +879,16 @@ test('the page draws every reach, the rejected tail included', async () => {
   // And the claim being written up is still on lookup, still delivered: nothing
   // moved when the operator clicked.
   assert.ok(html.includes('being written up'), 'a graduation in flight is not drawn');
-  // And the one thing an operator must not be able to do from here.
-  assert.ok(!/>File a claim</.test(html), 'nothing on this page files a claim');
+  // The one write here that is not a ruling, and the sentence that keeps it from
+  // being a bypass: an operator's own claim lands as one voice, exactly as an
+  // agent's does, and a second decision is what puts either in front of the fleet.
+  assert.ok(html.includes('Write it down'), 'the operator cannot write a claim down');
+  // The page renders `<b>one voice</b>`, so the assertion is on the two runs around
+  // it rather than on a string markdown split into elements.
+  assert.ok(html.includes('It lands as ') && html.includes('one voice'), 'the composer does not say what it lands as');
+  // And the thing no control here may do: nothing files a claim on an agent's
+  // behalf, and nothing promotes without somebody saying so.
+  assert.ok(!/>File a claim</.test(html), 'nothing on this page files a claim for an agent');
 });
 
 // -- delivery (phase 3) -------------------------------------------------------
