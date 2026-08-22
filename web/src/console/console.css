@@ -244,44 +244,30 @@
   color: var(--cn-amber);
 }
 
-/* The fleet gauge: what the fleet is allowed to do, with the countdown to its next
-   dispatch decision under it. A column, and aligned to its trailing edge so the
-   countdown sits under the pause button rather than under the word "Fleet" — the
-   pause control is the thing that stops what it is counting down to, and the two
-   read as one gauge only when they are stacked.
+/* The fleet gauge: what the fleet is allowed to do, and the countdown to its next
+   dispatch decision, read left to right as one thing. The countdown is in here rather
+   than a chip of its own further along the bar because Pause is the control that stops
+   what it is counting down to, and two separated chips only make sense together.
 
-   Its own padding, tighter top and bottom than `.cn-read`'s. The bar has one row and
-   has to keep it: a chip taller than the strip's own height grows the whole bar,
-   which reads as the countdown having added a row to the console. What buys the
-   space is `.fleet-control` being compact (`styles.css`) — at the chunky size it
-   was, it alone was half again the height of every reading beside it. */
+   A row, not a column. Stacking the countdown under the pause button was tried and
+   reads worse: the bar is a single row of chips at one height, and a two-row gauge in
+   it is a gauge that has grown a row whatever its measured height says. */
 .cn-cap {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 1px;
-  padding: 2px 9px 3px;
-}
-.cn-caprow {
   display: flex;
   align-items: center;
   gap: 5px;
 }
 /* The countdown, with no label and no chrome of its own — it is inside the fleet
-   reading's, and a second border around it would read as a second gauge.
+   reading's, and a second border around it would read as a second gauge. It wears the
+   face of a reading's value (`.cn-read b`) because that is what it is.
 
    **Selected through its parent, and that is load-bearing.** `.cn button` resets
    `font` to `inherit` at (0,1,1), so a bare `.cn-countdown` loses the shorthand and
-   the countdown renders at the bar's 13px/1.45 — nineteen pixels where thirteen were
-   budgeted, which is the whole of what made this chip grow a row. The line-height is
-   stated with the size for the same reason: the row it sits under has none to spare. */
+   the countdown renders at the bar's 13px/1.45 — taller than the row it sits in, which
+   grows the whole bar. */
 .cn-cap .cn-countdown {
-  padding: 0;
-  /* The pill's own border and padding, so the countdown sits under the word "Pause"
-     rather than under the pill's outer edge — the control it is a caption for is the
-     button, not the enclosure around it. */
-  margin-right: 6px;
-  font: 600 11px/13px var(--cn-mono);
+  padding: 0 0 0 2px;
+  font: 600 12px/1 var(--cn-mono);
   color: var(--cn-fg-dim);
 }
 .cn-cap .cn-countdown:hover {

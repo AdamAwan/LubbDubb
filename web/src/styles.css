@@ -289,29 +289,14 @@ a.btn {
   }
 }
 
-/* The cap nudges and the pause, in the top bar and nowhere else.
- *
- * **Compact, and it has to stay compact.** It is the only control in the strip built
- * from `.btn`, and at the button's ordinary size it stood half again as tall as every
- * reading beside it — which set the height of the whole bar, and left no room under
- * it for the pulse countdown that belongs there (`.cn-cap`, `console.css`). The three
- * rules below are what keep the chip inside the strip's own height; loosening any of
- * them grows the bar rather than the chip, and silently, since nothing here is red.
- * → docs/spec/17-cockpit.md#the-top-bar-and-the-panels
- */
 .fleet-control {
   display: flex;
   align-items: center;
-  gap: 3px;
-  padding: 1px 5px;
+  gap: 4px;
+  padding: 2px 6px;
   border: 1px solid var(--border);
   border-radius: 20px;
   background: var(--panel-2);
-}
-.fleet-control .btn {
-  padding: 1px 8px;
-  font-size: 12px;
-  line-height: 1.3;
 }
 .fleet-control.paused {
   border-color: var(--amber-line);
@@ -328,10 +313,10 @@ a.btn {
   font-size: 13px;
 }
 .fc-step {
-  padding: 0 7px;
-  line-height: 1.3;
+  padding: 2px 8px;
+  line-height: 1;
   border-radius: var(--r-md);
-  font-size: 14px;
+  font-size: 15px;
 }
 
 .inject {

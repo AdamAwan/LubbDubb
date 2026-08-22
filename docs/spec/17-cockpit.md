@@ -128,7 +128,7 @@ Five surfaces and one shell.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────┐
-│ ident ↗issue │ Overview Tickets② Knowledge① Insights │ Fleet ⏸ / 14s  Findings … Record ⚙ │ top bar
+│ ident ↗issue │ Overview Tickets② Knowledge① Insights │ Fleet ⏸ 14s  Findings … Record ⚙ │ top bar
 ├────────────────────────────────────────────────────────────────────────┤
 │ the recovery banner, when a previous run left work orphaned            │
 ├───────────────┬────────────────────────────────────────────────────────┤
@@ -1554,23 +1554,20 @@ The strip carries the ident, the nav, the fleet gauge, and six readings: **Findi
 stated once, in a plain label-and-number face. None reaches `api.js`: every one is a method on
 `CockpitActions`, and the fleet cap is the shared `FleetControl`, which is already on that seam.
 
-**The fleet gauge is two rows, and the pulse countdown is the lower one** (`.cn-cap`, `.cn-caprow`,
-`.cn-countdown`). The two are one subject: Pause is the control that stops the next dispatch decision
-from happening, and the countdown is the clock running down to it — so a reader asking _is anything
-about to happen_ was reading two chips that only mean anything together. The column is aligned to its
-trailing edge, and the countdown carries the pill's own border and padding as a right margin, which is
-what puts it under the word "Pause" rather than under the enclosure around it: the control it captions
-is the button.
+**The fleet gauge holds the pulse countdown, beside the pause control** (`.cn-cap`, `.cn-countdown`).
+The two are one subject: Pause is the control that stops the next dispatch decision from happening, and
+the countdown is the clock running down to it — so as two chips separated along the bar they only meant
+anything together, and a reader asking _is anything about to happen_ had to read both to learn either.
+Inside one reading they are one gauge, left to right: what the fleet is allowed to do, and when it next
+gets to.
 
-**The second row must not cost the bar a row**, and two rules are what keep it from doing so. The chip
-takes tighter padding than `.cn-read`'s; and `.fleet-control` (`styles.css`) is compact, because it is
-the only control on the strip built from `.btn` and at the button's ordinary size it stood half again
-as tall as every reading beside it — it set the height of the whole bar on its own, and left nothing
-underneath it. Loosening either grows the bar rather than the chip, which reads as the countdown having
-added a row to the console, and nothing is red when it happens. The countdown's own type is selected as
-`.cn-cap .cn-countdown` for the same budget: `.cn button` resets `font` to `inherit` at (0,1,1), so a
-bare class loses the shorthand and the line renders at the bar's 13px/1.45 — nineteen pixels where
-thirteen were budgeted.
+**Beside it, and not under it.** Stacking the countdown below the pause button was tried first and reads
+worse whatever the pixels say: the strip is a single row of chips at one height, and a two-row gauge in
+it is a gauge that has grown a row. Inline it costs the bar nothing and stays on the baseline the
+readings share. It is selected as `.cn-cap .cn-countdown` rather than by its bare class, and that is
+load-bearing: `.cn button` resets `font` to `inherit` at (0,1,1), so a single-class rule loses the
+shorthand and the line renders at the bar's 13px/1.45 — taller than the row it sits in, which grows the
+whole bar with nothing red to say so.
 
 **The countdown carries no label.** It read `Scan 14s`, and "Scan" named the mechanism rather than the
 question — `14s`, `paused` and `held` each say what they are, in the one spot on the bar where the only

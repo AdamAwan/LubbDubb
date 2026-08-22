@@ -272,14 +272,19 @@ function Read({
 }
 
 /**
- * The pulse countdown, and the way to force one — drawn **under the fleet's
- * pause control** rather than as a reading of its own beside it.
+ * The pulse countdown, and the way to force one — drawn **inside the fleet reading,
+ * beside the pause control** rather than as a chip of its own further along the bar.
  *
  * The two are one subject. Pause is the control that stops the next dispatch
  * decision from happening and this is the clock counting down to it, so a reader
- * asking "is anything about to happen" was reading two chips that only make sense
- * together. Under the pause button they are one gauge: what the fleet is allowed to
- * do, and when it next gets to.
+ * asking "is anything about to happen" was reading two separated chips that only
+ * make sense together. Beside it they are one gauge, read left to right: what the
+ * fleet is allowed to do, and when it next gets to.
+ *
+ * **Beside and not under.** Stacking it was tried and reads worse: the bar is a
+ * single row of chips at one height, and a two-row gauge in it is a gauge that has
+ * grown a row whatever the pixels say. Inline it costs the bar nothing and stays on
+ * the baseline the readings share.
  *
  * **It carries no label.** "Scan" named the mechanism, and the mechanism is not the
  * question — `47s`, `paused` and `held` each say what they are, in the one spot
@@ -477,15 +482,13 @@ export function TopBar({ view, actions }: { view: CockpitView; actions: CockpitA
 
       <div className="cn-sep" />
 
-      {/* One gauge in two rows: what the fleet is allowed to do, and when it next
-          gets to decide. The countdown is under the pause button rather than beside
-          it because Pause is the control that stops the thing it is counting down
-          to — see {@link Scan}. */}
+      {/* One gauge read left to right: what the fleet is allowed to do, and when it
+          next gets to decide. The countdown is inside this reading rather than a chip
+          of its own because Pause is the control that stops the thing it is counting
+          down to — see {@link Scan}. */}
       <div className="cn-read cn-cap">
-        <div className="cn-caprow">
-          <span>Fleet</span>
-          <FleetControl live={view.live.length} cap={state.control.cap} paused={state.control.paused} />
-        </div>
+        <span>Fleet</span>
+        <FleetControl live={view.live.length} cap={state.control.cap} paused={state.control.paused} />
         <Scan view={view} actions={actions} />
       </div>
 
