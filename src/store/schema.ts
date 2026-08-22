@@ -197,29 +197,6 @@ CREATE TABLE IF NOT EXISTS agent_files (
   UNIQUE (agent_id, path)
 );
 
--- Things agents noticed that were not their own task (the report_finding tool):
--- duplicates, work blocked on something outside the repo, out-of-scope discoveries.
--- Attribution is structural — agent_id/task_id/origin_ref come from the caller's
--- credential, never from an argument. A finding is a claim, not work: it stays
--- 'open' until an operator promotes it into a job (job_id), dismisses it, or has
--- it filed as a tracker ticket (also a job, then ticket_ref via link_ticket).
-CREATE TABLE IF NOT EXISTS findings (
-  id         TEXT PRIMARY KEY,
-  agent_id   TEXT NOT NULL,
-  task_id    TEXT NOT NULL,
-  origin_ref TEXT,
-  kind       TEXT NOT NULL,          -- duplicate | blocked | out_of_scope
-  ref        TEXT,                   -- the world item it is about ("issue:41"), if any
-  summary    TEXT NOT NULL,          -- the claim, one line (validation refuses a newline)
-  where_at   TEXT,                   -- what locates it: file and line, package, service
-  detail     TEXT,                   -- the evidence, markdown
-  status     TEXT NOT NULL,          -- open | promoted | dismissed | filing | filed
-  job_id     TEXT,
-  ticket_ref TEXT,                   -- the ticket it was filed as ("issue:314"), once created
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
 -- What the fleet knows about working *this repository* (docs/spec/27-knowledge.md).
 -- One row per claim, carrying three independent axes that are the thing most
 -- easily folded into one enum: who it is relevant to (scope), how it ends
@@ -870,12 +847,14 @@ CREATE TABLE IF NOT EXISTS work_nodes (
 -- A work item the operator asked an agent to create in the tracker, for work the
 -- harness did that nothing external accounts for (stage 3). Keyed on the node it
 -- is for, so one node has at most one filing and a second click is refused by the
--- write. Two statuses for the reason findings has them: filing is asynchronous, so
--- 'filing' means an agent is creating it and 'filed' is the one carrying a ref.
+-- write. Two statuses for the reason a claim's ticket exit has them: filing is
+-- asynchronous, so 'filing' means an agent is creating it and 'filed' is the one
+-- carrying a ref.
 --
--- Not a findings row: a Finding is testimony, with agent_id/task_id NOT NULL and
--- attribution taken structurally from a credential. A harness-authored row has
--- neither, and forging them is the lie structural identity exists to prevent.
+-- Not a knowledge_facts row: a claim is testimony, attributed to the agent that
+-- raised it through a corroboration taken structurally from a credential. A
+-- harness-authored row has no agent behind it, and forging one is the lie
+-- structural identity exists to prevent.
 CREATE TABLE IF NOT EXISTS work_item_filings (
   target_ref TEXT PRIMARY KEY,
   status     TEXT NOT NULL,          -- filing | filed
@@ -1208,7 +1187,6 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_job_attachments_target ON job_attachments(target_ref);
 CREATE INDEX IF NOT EXISTS idx_job_schedules_next ON job_schedules(enabled, next_run_at);
-CREATE INDEX IF NOT EXISTS idx_findings_status ON findings(status);
 -- Both readers select by date: the panel folds a window, and the prior-remedy note
 -- takes the most recent few. Neither ever asks for a remedy by id.
 CREATE INDEX IF NOT EXISTS idx_remedies_created ON remedies(created_at);

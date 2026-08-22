@@ -9,10 +9,9 @@ import { JobStore, JOB_COLUMNS } from './jobs.js';
 import { JobScheduleStore, JOB_SCHEDULE_COLUMNS } from './schedules.js';
 import { PriorityStore } from './priority.js';
 import { ProfileOverrideStore } from './profileOverrides.js';
-import { FindingStore, FINDING_COLUMNS } from './findings.js';
 import { corroborationGoal } from '../knowledge/knowledge.js';
 import {
-  adoptedFactId,
+  foldedFactId,
   KnowledgeStore,
   KNOWLEDGE_COLUMNS,
   stampGraduationsBeforeExits,
@@ -76,7 +75,6 @@ import type {
   EscalationSpan,
   FactExit,
   FactReach,
-  Finding,
   GoalFile,
   GoalNeighbour,
   HumanTask,
@@ -171,7 +169,6 @@ export class Store {
   private readonly schedules: JobScheduleStore;
   private readonly priority: PriorityStore;
   private readonly profileOverrides: ProfileOverrideStore;
-  private readonly findings: FindingStore;
   private readonly knowledge: KnowledgeStore;
   private readonly remedies: RemedyStore;
   private readonly humanTasks: HumanTaskStore;
@@ -217,7 +214,6 @@ export class Store {
       TASK_COLUMNS,
       AGENT_COLUMNS,
       DECISION_COLUMNS,
-      FINDING_COLUMNS,
       HUMAN_TASK_COLUMNS,
       PLAN_COLUMNS,
       VALIDATION_COLUMNS,
@@ -283,7 +279,6 @@ export class Store {
     this.schedules = new JobScheduleStore(ctx);
     this.priority = new PriorityStore(ctx);
     this.profileOverrides = new ProfileOverrideStore(ctx);
-    this.findings = new FindingStore(ctx);
     this.knowledge = new KnowledgeStore(ctx);
     this.remedies = new RemedyStore(ctx);
     this.humanTasks = new HumanTaskStore(ctx);
@@ -443,13 +438,6 @@ export class Store {
   }
 
   // -- Findings (what an agent noticed outside its own task) ----------------
-
-  listFindings(limit?: number): Finding[] {
-    return this.findings.listFindings(limit);
-  }
-  findingLabels(ids: string[]): Map<string, string> {
-    return this.findings.findingLabels(ids);
-  }
 
   // -- Lessons (what working one goal taught, kept for the next) -------------
 
@@ -1593,7 +1581,7 @@ function foldLessons(db: Database.Database): number {
      VALUES (?, ?, NULL, NULL, ?, NULL, ?, ?)`,
   );
   for (const row of rows) {
-    const id = adoptedFactId(row.id);
+    const id = foldedFactId(row.id);
     fact.run(
       id,
       row.text,
@@ -1612,16 +1600,6 @@ function foldLessons(db: Database.Database): number {
     );
   }
   return rows.length;
-}
-
-/**
- * The fact a finding becomes. Derived from the finding's id rather than minted,
- * for {@link adoptedFactId}'s reason: a derivation is idempotent by construction,
- * so the `INSERT OR IGNORE` above is a second guard behind the named gate rather
- * than the only one.
- */
-function foldedFactId(findingId: string): string {
-  return `fact_${findingId}`;
 }
 
 /**

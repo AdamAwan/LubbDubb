@@ -1270,7 +1270,7 @@ test('the labels are one batched read per kind over the refs the vivarium holds'
     'planLabels',
     'landingLabels',
     'jobLabels',
-    'findingLabels',
+    'factLabels',
   ] as const;
   for (const method of methods) {
     const real = store[method].bind(store);

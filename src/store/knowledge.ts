@@ -864,7 +864,7 @@ export class KnowledgeStore {
    *
    * Narrowed in SQL to the scope and the reaches asked for; the claim comparison
    * is in TypeScript because it is normalisation, not a predicate SQL can index.
-   * `FindingStore.findStandingClaim`'s shape, and the list is short for its reason.
+   * The shape `findings` used for the same job, and the list is short for its reason.
    */
   private matchingFacts(scope: string, key: string, reaches: readonly FactReach[]): KnowledgeFact[] {
     const holes = reaches.map(() => '?').join(',');
@@ -1044,19 +1044,20 @@ function autoReach(fact: KnowledgeFact): FactReach {
 const LIVE_REACHES: readonly FactReach[] = ['proposal', 'lookup', 'injected', 'graduated'];
 
 /**
- * The fact a `lessons` row became when the stores merged. Derived from the
- * lesson's id rather than minted, which is what made the fold idempotent by
- * construction — and, before it, what made the mirror that ran on every boot
- * insert nothing on the second one.
+ * The fact a `findings` or `lessons` row became when the stores merged — derived
+ * from the old row's id rather than minted.
  *
- * Exported because two callers need the same answer from the other side: the fold
- * itself, and the cockpit's Lessons list, which reads whether a promoted lesson is
- * reaching agents by looking the knowledge block's own answer up under this id. A
- * second spelling of the derivation in the view layer would make that chip a claim
- * about a row that might not be the one delivered.
+ * The derivation is what made the fold idempotent by construction, so the named
+ * one-shot gate is not the only thing standing between a database and a second copy
+ * of every claim it holds. And it is what makes the mapping **reversible**, which is
+ * the reason it is exported rather than inlined: a pet hatched from a triaged
+ * finding carries that finding's id in its seed, and putting the derivation back is
+ * how its label is found now that the row it came from is gone. A second spelling of
+ * it anywhere would be a label about a claim that might not be the one the creature
+ * came from.
  */
-export function adoptedFactId(lessonId: string): string {
-  return `fact_${lessonId}`;
+export function foldedFactId(rowId: string): string {
+  return `fact_${rowId}`;
 }
 
 function parseResolution(raw: string | null | undefined): FactResolution | null {

@@ -22,7 +22,7 @@ assembles them (see [How a tool is built](#how-a-tool-is-built)).
 | `plan_submit`          | Submit a decomposition verdict. Replaces writing `.lubbdubb/plan.json`.                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `escalate`             | Ask the human a question and park. The typed form of the WAITING sentinel.                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `world_read`           | Read the harness's own view of a PR or issue.                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
-| `report_finding`       | File a claim for an operator: something noticed outside the agent's own task, or a fact about the repository its docs do not state.                                                                                                                                                                                                                                                                                                                                                                        |
+| `report_finding`       | Superseded by `raise` and named nowhere; still registered, and writing the same claim store. Its `kind` is accepted and ignored.                                                                                                                                                                                                                                                                                                                                                                           |
 | `request_human_task`   | Ask for work only a person can do. Files a durable work item, parks nobody, dispatches nobody.                                                                                                                                                                                                                                                                                                                                                                                                             |
 | `note_progress`        | Say in one line what the agent is working on right now.                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 | `link_ticket`          | File the tracker item for a filed finding or a bug an operator raised: the agent hands over the title and body, or names an existing item it duplicates.                                                                                                                                                                                                                                                                                                                                                   |
@@ -179,16 +179,23 @@ channel contributes to it:
 
 ### `report_finding`
 
-Arguments `{kind: 'duplicate'|'blocked'|'out_of_scope'|'docs', summary, where?, detail?, ref?}`. See
-[13](13-jobs-and-tickets.md) for the full vocabulary and the promotion path. Five properties:
+Arguments `{kind?, summary, where?, detail?, ref?}`, and **it writes a `knowledge_facts` row** like
+everything else — there is one claim store ([27](27-knowledge.md#what-the-three-stores-became)), so
+this door is a translation rather than a second writer: `summary` is the claim, `detail` is the
+evidence the corroboration carries, and `where`/`ref` are the two coordinates a fact already had under
+the same two names. Five properties:
 
-- **The description carries two directions, not one.** It used to open "file something you noticed
-  that is NOT your task", which was true of every kind there was. `docs` is learned _inside_ the task
-  — a fact about this repository its own documentation does not state, the paragraph the agent would
-  have wanted to read before it started — so the description names both and tells the agent to file
-  the fact when it learns it rather than saving it for a write-up. The `where` field's description
-  gains the docs reading too: the document that should say it. The description **is** the vocabulary,
-  so a kind the enum has and the prose does not is a kind no agent ever sends.
+- **`kind` is accepted and ignored**, which is the interesting one. It named a four-word taxonomy
+  sorted by _what an operator would do about the claim_ — the operator's knowledge and not the
+  agent's — and the unified intake is the removal of that question. Refusing a call that supplies one
+  would break the overrides this door is kept alive **for**; storing it would revive a taxonomy nothing
+  else writes and no operator has ever set. So it rides into the evidence, where an operator reads how
+  the claim arrived, and decides nothing.
+
+- **The one-line refusal is kept**, and it is the one this door has that `raise` does not. `raise`
+  bounds a claim and takes a line or two; this asks for the single line an operator scans in a list,
+  because the only cheap moment to fix a blob is the agent's own turn and an unreadable row costs an
+  operator every time they open it. The error names the field the text belongs in.
 
 - **It queues nothing, and that is the design.** A queued job is dispatched by rule `manual-job` ahead of every
   world-driven rule, so an agent that could queue jobs could put agents on the fleet — a capability
@@ -798,9 +805,12 @@ retro agent proposes a lesson.
 
 The same rule decided the docs route the other way (#397). A fact about the repository is _not_ part of
 the retrospective's submission — any agent that learns one can file it, and the one that learns it
-first is rarely the one writing the retrospective — so it is a **kind on `report_finding`** rather than
-a second field on `retro_submit`. Which also means no new tool, no new grant, and no second cap: the
-claim reuses a row and a gate that already exist. → [27](27-knowledge.md)
+first is rarely the one writing the retrospective — so it went on `report_finding` rather than becoming
+a second field on `retro_submit`, and it is `raise` now. Which also means no new tool, no new grant and
+no second cap: it reuses a row and a gate that already exist. What `retro_submit` still carries is what
+_working the goal_ taught, raised as a claim like any other and counted back as `lessonsFiled` — by what
+actually landed, because a claim an operator rejected is refused by name and reaches nobody however many
+times it is filed. → [27](27-knowledge.md)
 
 ## Degradation
 

@@ -35,7 +35,7 @@ change that finds pets convenient:
 They are separate on purpose, and the separation is the whole of what keeps the feature honest.
 
 **Pets drop from operator actions.** Answering an escalation, settling a human task, accepting a
-plan, authorising a stack landing, launching a job, triaging a finding. The fleet cannot earn a pet,
+plan, authorising a stack landing, launching a job, ruling on a claim. The fleet cannot earn a pet,
 at any spend, ever.
 
 **Beats come from fleet spend.** Cumulative `costUsd` across every recorded cost delta — the agents'
@@ -84,7 +84,7 @@ kind_ is worth, and `PET_RULES.rarity` says what a hatch turns out to be. Only t
 action.
 
 Stage 1 is priced roughly **inverse to how often the action comes up**. A single global rate reads as
-fair and is not: the harness settles jobs and findings by the dozen and accepts an upgrade a handful
+fair and is not: the harness settles jobs and claims by the dozen and accepts an upgrade a handful
 of times a year, so one chance in fifty everywhere means a vivarium drawn almost entirely from
 whichever button the deployment happens to press most, and the animals behind the scarce actions are
 never seen by anybody. The gap is wider than it first looks, because an `upgrade` is **one action per
@@ -93,7 +93,7 @@ accepted self-update**, keyed on upstream's tip — not one per commit the pull 
 | Kind         | `dropChance` | `pity` | About                                   |
 | ------------ | -----------: | -----: | --------------------------------------- |
 | `job`        |      `0.015` |  `130` | Launched from the cockpit, many a day.  |
-| `finding`    |       `0.02` |  `100` | Triaged in batches.                     |
+| `claim`      |       `0.02` |  `100` | Ruled on in batches.                    |
 | `human-task` |       `0.03` |   `66` | An ask settled.                         |
 | `escalation` |       `0.04` |   `50` | Answered one at a time.                 |
 | `plan`       |       `0.05` |   `40` | Approved a few times a week.            |
@@ -101,7 +101,7 @@ accepted self-update**, keyed on upstream's tip — not one per commit the pull 
 | `upgrade`    |        `0.2` |   `10` | A self-update accepted. The rarest act. |
 
 **Rarity is rolled once, globally.** It used to be an emergent accident of seven hand-tuned weight
-tables — a triaged finding produced a rare 23% of the time and an answered escalation 5%, so no
+tables — a ruled claim produced a rare 23% of the time and an answered escalation 5%, so no
 sentence beginning "a rare is…" was true of the deployment. Stage 2 makes it one fact:
 `PET_RULES.rarity` is the same table for every action, and only a pool that cannot fill a tier changes
 the answer.
@@ -264,7 +264,7 @@ itself is rolled globally.
 | `beck`      | common   | an escalation answered            |
 | `berth`     | common   | a stack landing authorised        |
 | `stoke`     | common   | a job launched from the cockpit   |
-| `speck`     | common   | a finding triaged                 |
+| `speck`     | common   | a claim ruled on                  |
 | `patch`     | common   | the harness updating itself       |
 | `warden`    | uncommon | an escalation answered            |
 | `cinder`    | uncommon | a job launched, or a self-update  |
@@ -272,17 +272,17 @@ itself is rolled globally.
 | `chit`      | uncommon | a human task settled              |
 | `vellum`    | uncommon | a plan accepted                   |
 | `drift`     | uncommon | a stack landing authorised        |
-| `bramble`   | uncommon | a finding triaged                 |
+| `bramble`   | uncommon | a claim ruled on                  |
 | `lander`    | rare     | a landing, or a self-update       |
 | `quill`     | rare     | an escalation, a plan or a task   |
-| `cairn`     | rare     | an escalation or a finding        |
+| `cairn`     | rare     | an escalation or a claim          |
 | `ingot`     | rare     | a job launched from the cockpit   |
 | `clarion`   | mythic   | an escalation answered            |
 | `covenant`  | mythic   | a human task settled              |
 | `oracle`    | mythic   | a plan accepted                   |
 | `keystone`  | mythic   | a stack landing authorised        |
 | `forge`     | mythic   | a job launched from the cockpit   |
-| `lodestone` | mythic   | a finding triaged                 |
+| `lodestone` | mythic   | a claim ruled on                  |
 | `ouroboros` | mythic   | the harness updating itself       |
 
 **Every action carries three commons**: the two universals `pip` and `mote`, plus one signature of
@@ -323,7 +323,7 @@ feature is guaranteed an audience.
 It fires **once per deployment**, not once per kind, and the distinction is the whole of why the
 rule is worth stating. Per kind it fired seven times — and because stripping the commons leaves most
 tables holding exactly one non-common species by day, each of those seven was a _deterministic
-rare_: a guaranteed `quill` on the first plan and again on the first finding, a guaranteed `lander`
+rare_: a guaranteed `quill` on the first plan and again on the first claim, a guaranteed `lander`
 on the first landing. That inverted the tiers it was meant to decorate. The rare species became the
 easiest in the catalogue to collect, `nib` and `tuft` became the hardest — reachable only through a
 roll that excludes them the one time it is certain to fire — and an afternoon that touched each kind
@@ -700,7 +700,7 @@ because `at` is a different column per source and several of them move under the
 there would lose the ability to record a pre-boundary action at all.
 
 Without it, the first enabled boot of a build that ships pets treats a deployment's entire history as
-this afternoon's work: `pet_actions` is empty, so every escalation, ask, plan, landing, job, finding
+this afternoon's work: `pet_actions` is empty, so every escalation, ask, plan, landing, job, claim
 and upgrade in the database is fresh, is sorted oldest-first, and is rolled in one pass — with
 [the first action ever](#the-first-action-ever) landing on the oldest row in the backlog rather than
 on anything the operator did while the feature was on screen.
@@ -750,8 +750,20 @@ pet's action before it — and a database that has never had a clearance has no 
 | `plan`       | plans that reached `active`                                    | the plan's title               |
 | `landing`    | stack landings recorded                                        | the goal the chain belonged to |
 | `job`        | jobs launched from the cockpit, which carry no `originRef`     | the job's title                |
-| `finding`    | findings triaged — promoted, filed or dismissed                | the claim it made              |
+| `claim`      | claims an operator ruled on — `ruled_at` stamped               | the claim itself               |
+| `finding`    | **retired.** Nothing hatches one; pets already carrying it do  | the claim it made              |
 | `upgrade`    | a self-update applied, keyed on the commit it accepted         | the short sha                  |
+
+**`finding` is a retired kind, and that is why it is still in the union.** Ruling on a claim is what
+triaging a finding was, under the name it has now that the three claim stores are one — but
+`pets.origin_kind` carries the word on the row, and the seed the cockpit derives a creature's colours
+and markings from is `<kind>:<ref>`. Renaming a member does not rename a category; it orphans every
+pet already hatched from one. So the word stays, its rate and its species table are the `claim` ones
+unchanged, and its label is found by putting the fold's own derivation back — the row that named a
+finding is `fact_<that finding's id>` now. And the ledger is stamped once: `spendRuledClaims` records
+every claim already ruled on as an action that paid nothing, because otherwise a deployment taking that
+build pays out for a year of decisions in one afternoon — which looks exactly like the feature working.
+→ [14](14-persistence.md#a-migration-that-must-run-once)
 
 Three exclusions are deliberate. A **declined** human task is the operator saying the ask should not
 have been made, and a **`close_out`** one is the harness's own, which the harness also settles — so
@@ -783,7 +795,7 @@ wallet are all derived for the same reason; this is on that side of the line.
 
 **By id, not by a walk.** `PetKeeper.originLabels` groups the vivarium's refs by kind and asks each
 owning store module for exactly those ids — `escalationLabels`, `humanTaskLabels`, `planLabels`,
-`landingLabels`, `jobLabels`, `findingLabels`, six statements bounded by the collection rather than by
+`landingLabels`, `jobLabels`, `factLabels`, six statements bounded by the collection rather than by
 the deployment's history. `upgrade` reads nothing: its ref is a commit, and the label is that sha
 shortened. Anything that resolved these by re-running `collectActions` would put the seven-table walk
 this subsystem already refused back on every pulse.
@@ -914,7 +926,7 @@ a database from before them keep every pet it holds.
 **There is no scan cursor, and the boundary is not one.** `pet_actions` decides what has _already
 been rolled_: an action whose key is in it is skipped rather than re-rolled, which is stronger than a
 high-water mark and needs nothing kept in step. A source whose own timestamp moves under it — a plan
-re-saved, a finding re-triaged — cannot pay out twice or consume a second slot of its kind's pity
+re-saved, a claim ruled on again — cannot pay out twice or consume a second slot of its kind's pity
 counter. `pet_vivarium` answers a different question, once: _when did this vivarium start counting_.
 Nothing advances it, so it is not a cursor and cannot fall behind one — see
 [The vivarium's start](#the-vivariums-start).
@@ -1111,7 +1123,7 @@ Two things about it are load-bearing:
 ### What is not checked
 
 **That the source row still exists.** Verifying an origin against the live escalations, plans and
-findings would mean `collectActions`' seven-table walk on every snapshot, and it would turn a pruned
+claims would mean `collectActions`' seven-table walk on every snapshot, and it would turn a pruned
 or restored source into an accusation. `pet_actions` is append-only and is taken as the evidence
 instead.
 
@@ -1119,7 +1131,7 @@ The label lookup is not that check wearing a different hat, and must never becom
 tables for a handful of ids and its only possible answers are _a line of words_ or _nothing_: a ref
 with no row yields `originLabel: null`, the card falls back to the ref it drew before, and the
 attestation never sees it. **A missing source row is no label and never a flaw** — an operator who
-pruned a finding or restored an older database has not forged anything.
+pruned a claim or restored an older database has not forged anything.
 
 ## Sharp edges
 

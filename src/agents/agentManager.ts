@@ -12,7 +12,6 @@ import type {
   AgentFlag,
   AgentStatus,
   AgentUsage,
-  Finding,
   HumanTask,
   HumanTaskInput,
   IssueConclusion,
@@ -247,7 +246,6 @@ interface AgentManagerEvents {
   /** The agent surfaced an artifact/link mid-run (already persisted, deduped by ref). */
   flag: [{ agentId: string; taskId: string; flag: AgentFlag }];
   /** The agent filed something outside its own task (already persisted). `created` is false for a verbatim repeat. */
-  finding: [{ agentId: string; taskId: string; finding: Finding; created: boolean }];
   /** The agent asked for work only a person can do (already persisted). `created` is false for a repeat. */
   humanTask: [{ agentId: string; taskId: string; humanTask: HumanTask; created: boolean }];
   /** The agent said what it is working on (already persisted onto its row, replacing the previous note). */
