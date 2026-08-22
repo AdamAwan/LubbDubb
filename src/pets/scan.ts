@@ -54,12 +54,18 @@ export function collectActions(store: Store): PetActionCandidate[] {
     if (job.originRef === null) out.push({ kind: 'job', ref: job.id, at: job.createdAt });
   }
 
-  // A finding is filed by an agent and *triaged* by a person: promoted, filed or
-  // dismissed. `filing` is the in-flight state of the middle one, so it is not yet
-  // a settled act.
-  for (const finding of store.listFindings(ALL)) {
-    if (finding.status !== 'open' && finding.status !== 'filing')
-      out.push({ kind: 'finding', ref: finding.id, at: finding.updatedAt });
+  // A claim is raised by an agent and *ruled on* by a person — put in front of the
+  // fleet, left on lookup, retired, rejected, or sent somewhere. `ruledAt` is the
+  // one stamp that means exactly "an operator decided about this", which is why it
+  // is the reading rather than the reach: two of the reaches an operator can set
+  // are also reaches two agreeing agents reach on their own, and counting those
+  // would pay a person for the fleet's work.
+  //
+  // The kind is `claim` and the old `finding` rows stay as they are: the word is
+  // persisted on every pet already hatched from one, and the seed the cockpit draws
+  // from is `<kind>:<ref>`.
+  for (const fact of store.listFacts(ALL)) {
+    if (fact.ruledAt !== null) out.push({ kind: 'claim', ref: fact.id, at: fact.ruledAt });
   }
 
   // The operator accepting an upgrade of the harness's own build. Keyed on the

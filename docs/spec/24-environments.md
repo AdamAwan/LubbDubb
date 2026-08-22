@@ -201,7 +201,7 @@ declaring neither is refused.
 ### `opens`
 
 The obligations a delivered goal owes a person are filed on the delivery today
-([13](13-jobs-and-findings.md), [20](20-validation.md)): a `validate` row for the checks, and a
+([13](13-jobs-and-tickets.md), [20](20-validation.md)): a `validate` row for the checks, and a
 `close_out` row for the ticket. `opens` moves that moment to the arrival.
 
 ```jsonc

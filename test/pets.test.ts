@@ -75,7 +75,7 @@ function started(store: Store): string {
 }
 
 /** Every action that can roll, which several tests walk. */
-const KINDS: PetActionKind[] = ['escalation', 'human-task', 'plan', 'landing', 'job', 'finding', 'upgrade'];
+const KINDS: PetActionKind[] = ['escalation', 'human-task', 'plan', 'landing', 'job', 'claim', 'upgrade'];
 
 /** A settled `ask`: a second kind of action, for the tests that need two. */
 function settle(store: Store, title: string): string {
@@ -1201,15 +1201,25 @@ function oneOfEachKind(store: Store): Map<PetActionKind, string> {
   refs.set('plan', plan.id);
   refs.set('landing', store.recordStackLanding('stack:413', [411, 412]).id);
   refs.set('job', store.createJob({ title: 'Re-run the flaky worktree suite', prompt: 'go', kind: 'code' }).id);
-  const { finding } = store.recordFinding('agent_1', 'task_1', null, {
-    kind: 'docs',
-    ref: null,
-    summary: 'ingest.ts buffers the whole body',
-    where: null,
-    detail: null,
-  });
-  store.resolveFinding(finding.id, 'dismissed', null);
-  refs.set('finding', finding.id);
+  const raised = store.proposeFact(
+    {
+      claim: 'ingest.ts buffers the whole body',
+      scope: 'fleet',
+      lifetime: 'standing',
+      expiresInHours: null,
+      evidence: 'A 400MB upload took the process down.',
+      supersedes: null,
+      resolvesWhen: null,
+      aboutRef: null,
+      where: null,
+    },
+    { agentId: 'agent_1', taskId: 'task_1', goalRef: null, sessionId: null, words: 'saw it' },
+  );
+  assert.ok(raised.outcome !== 'barred');
+  // Ruling on it is the operator action — `ruledAt` is the one stamp that means
+  // exactly that, which is why the scan reads it rather than the reach.
+  store.setFactReach(raised.fact.id, 'rejected');
+  refs.set('claim', raised.fact.id);
   // Stamped now, not at a fixed date. Every other action here takes its timestamp
   // from the store's clock, and `requestedAt` is the one a caller supplies — so a
   // literal puts this action before the vivarium's start, where it is recorded
@@ -1237,7 +1247,7 @@ test('every origin arrives on the wire as words rather than as a row id', () => 
   assert.equal(byKind.get('plan')?.originLabel, 'Give jobs real names');
   assert.equal(byKind.get('landing')?.originLabel, 'stack:413');
   assert.equal(byKind.get('job')?.originLabel, 'Re-run the flaky worktree suite');
-  assert.equal(byKind.get('finding')?.originLabel, 'ingest.ts buffers the whole body');
+  assert.equal(byKind.get('claim')?.originLabel, 'ingest.ts buffers the whole body');
   // An upgrade is the one kind that reads nothing: its ref is the commit itself.
   assert.equal(byKind.get('upgrade')?.originLabel, '9c1d4a2');
   // And the ref the label stands beside has not moved — it is the seed, the
@@ -1260,7 +1270,7 @@ test('the labels are one batched read per kind over the refs the vivarium holds'
     'planLabels',
     'landingLabels',
     'jobLabels',
-    'findingLabels',
+    'factLabels',
   ] as const;
   for (const method of methods) {
     const real = store[method].bind(store);

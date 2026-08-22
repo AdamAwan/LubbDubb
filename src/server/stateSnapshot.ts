@@ -48,7 +48,6 @@ import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { trackerCoordinates } from '../mcp/findings.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
 import { graduationReading } from '../knowledge/graduation.js';
-import { adoptedFactId } from '../store/knowledge.js';
 import type { Store } from '../store/store.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
 import {
@@ -126,16 +125,6 @@ export function buildStateSnapshot(
   const flags = store.listAllFlags();
   // Hoisted for the same reason: the URL map below is derived from the same rows.
   const attachments = store.listAllAttachments();
-  // What agents noticed outside their own tasks. Read here (not only in the
-  // panel) because their refs feed the link map below: a finding often names an
-  // item that is *not* in the current world — a closed duplicate, say — so its
-  // ref has to be resolved directly rather than looked up off the snapshot.
-  const findings = store.listFindings();
-  // What working a goal taught, kept for the next one. Read here for findings'
-  // reason: each row's `originRef` names the goal it was learned on, and a goal
-  // the world has long since dropped is exactly the one a dated lesson points at,
-  // so its ref has to be resolved directly rather than looked up off the snapshot.
-  const lessons = store.listLessons();
   // What the knowledge base actually delivers (issue #27 phase 3), from the two
   // renderers that deliver it, with the cap the launch reads. Everything the two
   // panels say about what is *sent* comes from here — the block's budget meter,
@@ -167,14 +156,6 @@ export function buildStateSnapshot(
       ),
     }),
   );
-  // Which promoted lessons are actually in the block agents get. A lesson reaches
-  // the fleet as the fact it is mirrored into (`adoptLessons`), so the answer is
-  // the knowledge block's, read back through the adopted id — never a second
-  // rendering of the lessons table, which has not been delivered in its own right
-  // since delivery moved. The agent is never told the list it reads is partial;
-  // this is the surface where that is visible, and the only one from which
-  // something can be retired to make room.
-  const deliveredFacts = new Set(delivery.rendered);
   // What the fleet knows about working this repository, every reach and the
   // rejected tail included (issue #27 phase 2). Read here for lessons' reason
   // twice over: each fact's `originRef` and its `goal:` scope both name a goal the
@@ -393,16 +374,16 @@ export function buildStateSnapshot(
     // `#n` keys are built from — it needs resolving by its canonical ref or the
     // chip the operator just created links nowhere.
     refs: [
-      ...findings.map((f) => f.ref),
-      ...findings.map((f) => f.ticketRef),
-      // The goal a lesson was learned on — usually finished and gone from the
-      // world lists by the time anyone reads the lesson, which is why it is
-      // resolved here rather than borrowed.
-      ...lessons.map((l) => l.originRef),
-      // The goal a fact was first observed on, and the goal a `goal:` scope names —
-      // both are refs the page draws as a way there, and both outlive the world.
+      // Everything a claim draws as a way somewhere, and every one of them outlives
+      // the world lists: the goal it was first observed on and the goal a `goal:`
+      // scope names are both usually long finished by the time anyone reads the
+      // claim, the item it is *about* is often a closed duplicate, and where it
+      // went is a pull request or a ticket the exit only just produced.
       ...facts.map((f) => f.originRef),
+      ...facts.map((f) => f.aboutRef),
       ...facts.map((f) => (f.scope.startsWith('goal:') ? f.scope.slice('goal:'.length) : null)),
+      ...graduations.map((g) => g.prRef),
+      ...graduations.map((g) => g.ticketRef),
       // Both halves of a raised bug: the story it came from, and the bug itself once
       // the filing agent reports it — the chip on the row links the latter.
       ...bugFilings.map((b) => b.originRef),
@@ -761,15 +742,6 @@ export function buildStateSnapshot(
     // once it is running. This is that blind spot, read off rows we already have
     // rather than off an advisory claim an agent has to remember to make.
     overlaps: detectFileOverlaps({ files, agents, tasks }),
-    // Things agents noticed outside their own tasks (the `report_finding` tool).
-    // Operator-facing only: nothing in the dispatcher reads them, and one becomes
-    // work only through `POST /api/findings/:id/promote`.
-    findings,
-    // What working a goal taught about working this repository (issue #355). No
-    // rule reads one — a promoted lesson reaches agents only as a claim in the
-    // fleet's system-prompt append, and `rendered` says which promoted ones the
-    // cap actually let through.
-    lessons: lessons.map((lesson) => ({ ...lesson, rendered: deliveredFacts.has(adoptedFactId(lesson.id)) })),
     // Every fact, the rejected ones included: the page is the governance, and a
     // surface drawing only what it let through cannot show that a claim was
     // killed. Nothing in the dispatcher reads one — a fact feeds prompts (phase 3)

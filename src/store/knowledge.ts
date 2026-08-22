@@ -1,10 +1,10 @@
+import type Database from 'better-sqlite3';
 import { nanoid } from 'nanoid';
 import { claimKey, claimsMatch } from '../claims.js';
 import {
   amendmentProposal,
   contradictableFact,
   contradictionRatio,
-  corroborationGoal,
   distinctCorroborators,
   questionScore,
   type FactContradiction,
@@ -13,17 +13,17 @@ import {
 import type {
   ContradictionResolution,
   ContradictionRuling,
-  FactCommitment,
+  FactExit,
   FactObservation,
   FactReach,
   FactResolution,
+  GraduationExit,
   GraduationOutcome,
   GraduationTarget,
   KnowledgeContradiction,
   KnowledgeCorroboration,
   KnowledgeFact,
   KnowledgeGraduation,
-  Lesson,
 } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
 import type { StoreContext } from './context.js';
@@ -61,7 +61,30 @@ import type { StoreContext } from './context.js';
  */
 export const KNOWLEDGE_COLUMNS: ColumnMigrations = {
   knowledge_facts: { ruled_at: 'TEXT', resolves_when: 'TEXT', about_ref: 'TEXT', where_at: 'TEXT' },
+  knowledge_graduations: { exit: 'TEXT', ticket_ref: 'TEXT' },
 };
+
+/**
+ * The one column here whose **null means something**, and so the one that needs a
+ * backfill as well as an `ALTER TABLE`.
+ *
+ * Every graduation written before the exits merged was a documentation pull
+ * request, because that was the only kind there was. Left null, those rows read as
+ * an exit nothing recognises: the sweep would not know whether to watch the work
+ * graph for them, and the page would draw a claim that went to the repository as
+ * one that went nowhere nameable. So they are stamped `docs`, which is what they
+ * are — the migration asserts history rather than guessing at it.
+ *
+ * **Gated on `ensureColumns` reporting that it added the column**, which is the
+ * whole discipline: run on every boot instead, this would rewrite the exit of every
+ * job and ticket graduation written since, and a wrong exit is silent in both
+ * directions. `ticket_ref` needs no backfill beside it — null there is the only
+ * true value on a row that never had a ticket.
+ * → `docs/spec/14-persistence.md#when-a-null-means-something`
+ */
+export function stampGraduationsBeforeExits(db: Database.Database): void {
+  db.prepare(`UPDATE knowledge_graduations SET exit='docs' WHERE exit IS NULL`).run();
+}
 
 /**
  * The `knowledge_facts` and `knowledge_corroborations` tables: what the fleet
@@ -152,14 +175,31 @@ export class KnowledgeStore {
 
   /**
    * Every fact, newest first — including the rejected ones, for the reason
-   * `listLessons` keeps its retired rows: a governance surface that draws only
-   * what it let through cannot show what it stopped.
+   * the retired ones are kept too: a governance surface that draws only what it
+   * let through cannot show what it stopped.
    */
   listFacts(limit = 200): KnowledgeFact[] {
     const rows = this.ctx.db
       .prepare(`SELECT * FROM knowledge_facts ORDER BY created_at DESC, rowid DESC LIMIT ?`)
       .all(limit) as FactRow[];
     return rows.map(rowToFact);
+  }
+
+  /**
+   * The claim each of these facts makes, by id — the pets panel's label for a
+   * `claim` origin. By id rather than off {@link listFacts}, whose cap is the
+   * reason a client-side join would leave the oldest pets unnamed. A missing id is
+   * absent from the map, never an error.
+   * → `docs/spec/22-pets.md#the-sources`
+   */
+  factLabels(ids: string[]): Map<string, string> {
+    if (ids.length === 0) return new Map();
+    const holes = ids.map(() => '?').join(',');
+    const rows = this.ctx.db.prepare(`SELECT id, claim FROM knowledge_facts WHERE id IN (${holes})`).all(...ids) as {
+      id: string;
+      claim: string;
+    }[];
+    return new Map(rows.map((r) => [r.id, r.claim]));
   }
 
   /** One fact's observations, oldest first — the order they were made in. */
@@ -177,9 +217,10 @@ export class KnowledgeStore {
    * A `proposal` is deliberately unreachable here — it is one agent's claim and
    * nothing has agreed with it, so answering an ask with one would be the
    * auto-promotion the whole design is built to prevent, arriving by the back
-   * door. `committed` is unreachable for the opposite reason: the fact is in the
-   * repository now, and reading it out of a tool would pay context twice for one
-   * sentence.
+   * door. `graduated` is unreachable for the opposite reason: the claim left this
+   * store for somewhere that carries it better — the repository, a job, a ticket —
+   * so answering an ask with one would pay context for a sentence the fleet is
+   * deliberately no longer told.
    */
   askFacts(query: FactQuery): KnowledgeFact[] {
     const now = this.ctx.now();
@@ -480,37 +521,43 @@ export class KnowledgeStore {
   }
 
   /**
-   * Record that an operator has opened documentation work for a claim.
+   * Record that an operator has opened work to take a claim somewhere — a
+   * documentation pull request, a job that works it, or a ticket that files it.
    *
    * **The fact is not touched.** Its reach stays exactly where it was, so it goes
    * on being answered, injected and contradicted while the pull request sits in
    * review — which is the whole of what makes the state between the click and the
    * landing safe. A reach that moved here would stop the fleet being told a claim
-   * nobody has committed and nobody can read yet, and a pull request closed
-   * unmerged would leave it that way with nothing red.
+   * nobody has acted on and nobody can read yet, and an attempt that never landed
+   * would leave it that way with nothing red.
    *
-   * The job is created by the caller that holds both tables — `Store.commitFact`,
+   * The job is created by the caller that holds both tables — `Store.exitFact`,
    * in one transaction with this row — because a store module may not reach a
-   * sibling's tables (`test/storeModules.test.ts`) and a docs job with no
-   * graduation naming it is a pull request that lands and takes nothing out of any
-   * prompt.
+   * sibling's tables (`test/storeModules.test.ts`) and a job with no graduation
+   * naming it is work that lands and takes nothing out of any prompt.
    */
-  recordGraduation(factId: string, jobId: string, commitment: FactCommitment): KnowledgeGraduation {
+  recordGraduation(factId: string, jobId: string, exit: FactExit): KnowledgeGraduation {
     const row: KnowledgeGraduation = {
       id: `kng_${nanoid(10)}`,
       factId,
+      exit: exit.exit,
       jobId,
-      target: commitment.target,
-      bar: commitment.target === 'claudeMd' ? commitment.bar : null,
+      // The document is the `docs` exit's own question. A job and a ticket have
+      // none, and a defaulted `spec` on one would be a target nothing writes into
+      // wearing a name that says an agent will.
+      target: exit.exit === 'docs' ? exit.target : null,
+      bar: exit.exit === 'docs' && exit.target === 'claudeMd' ? exit.bar : null,
       prRef: null,
+      ticketRef: null,
       outcome: null,
       settledAt: null,
       createdAt: this.ctx.now(),
     };
     this.ctx.db
       .prepare(
-        `INSERT INTO knowledge_graduations (id, fact_id, job_id, target, bar, pr_ref, outcome, settled_at, created_at)
-         VALUES (@id, @factId, @jobId, @target, @bar, @prRef, @outcome, @settledAt, @createdAt)`,
+        `INSERT INTO knowledge_graduations
+           (id, fact_id, exit, job_id, target, bar, pr_ref, ticket_ref, outcome, settled_at, created_at)
+         VALUES (@id, @factId, @exit, @jobId, @target, @bar, @prRef, @ticketRef, @outcome, @settledAt, @createdAt)`,
       )
       .run(row);
     return row;
@@ -519,7 +566,7 @@ export class KnowledgeStore {
   /**
    * Every graduation, newest first — the abandoned ones included, for the reason
    * {@link listFacts} keeps the rejected claims: an operator deciding whether to
-   * commit a claim again needs to know one was tried and did not land.
+   * send a claim somewhere again needs to know one was tried and did not land.
    */
   listGraduations(limit = 200): KnowledgeGraduation[] {
     const rows = this.ctx.db
@@ -528,12 +575,76 @@ export class KnowledgeStore {
     return rows.map(rowToGraduation);
   }
 
-  /** The graduations still going: what the sweep has something to ask about. */
+  /**
+   * The graduations still going that the **work graph** can settle: what the sweep
+   * has something to ask about.
+   *
+   * A `ticket` exit is deliberately out. What settles one is the filing agent
+   * reporting the item it created through `link_ticket` — there is no pull request
+   * to watch, and a sweep that read one anyway would call every open filing job
+   * `waiting` forever while a second reader settled it, which is two answers to
+   * one question with nothing to say they agree.
+   */
   openGraduations(): KnowledgeGraduation[] {
     const rows = this.ctx.db
-      .prepare(`SELECT * FROM knowledge_graduations WHERE outcome IS NULL ORDER BY created_at ASC, rowid ASC`)
+      .prepare(
+        `SELECT * FROM knowledge_graduations
+           WHERE outcome IS NULL AND exit <> 'ticket' ORDER BY created_at ASC, rowid ASC`,
+      )
       .all() as GraduationRow[];
     return rows.map(rowToGraduation);
+  }
+
+  /**
+   * The graduation a job was opened for, if it was opened for one — how
+   * `link_ticket` finds the claim back from a filing agent's credential
+   * (`agent -> task -> its job:<id> origin -> this row`), so the tool takes no
+   * argument naming what it is filing.
+   */
+  findGraduationByJobId(jobId: string): KnowledgeGraduation | null {
+    const row = this.ctx.db.prepare(`SELECT * FROM knowledge_graduations WHERE job_id=?`).get(jobId) as
+      | GraduationRow
+      | undefined;
+    return row ? rowToGraduation(row) : null;
+  }
+
+  /**
+   * Record the tracker item a filing agent created, and end the graduation with it:
+   * the `ticket` exit's own landing, and the claim reaches `graduated` in the same
+   * transaction.
+   *
+   * **The ticket existing is the exit being taken**, which is why this is one write
+   * and not two. A ticket recorded over a claim still injected pays context for a
+   * sentence the backlog now carries, and a claim at `graduated` with no ticket ref
+   * beside it is a row out of every prompt pointing nowhere.
+   *
+   * Guarded in the write (`WHERE ... outcome IS NULL`) rather than by a
+   * read-then-check, the discipline `decideProposal` uses and the one
+   * `linkFindingTicket` had before the stores merged — an agent that calls
+   * `link_ticket` twice links once, with no caller obliged to look first. Null
+   * means there was nothing open to settle, which the tool turns into an error the
+   * agent can read.
+   */
+  linkGraduationTicket(id: string, ticketRef: string): KnowledgeGraduation | null {
+    const at = this.ctx.now();
+    const write = this.ctx.db.transaction((): KnowledgeGraduation | null => {
+      const result = this.ctx.db
+        .prepare(
+          `UPDATE knowledge_graduations SET ticket_ref=?, outcome='landed', settled_at=?
+             WHERE id=? AND exit='ticket' AND outcome IS NULL`,
+        )
+        .run(ticketRef, at, id);
+      if (result.changes === 0) return null;
+      const row = this.getGraduation(id);
+      // Ruled, and by the operator: they said the claim belongs in the tracker, and
+      // the item existing is that decision arriving rather than a second one.
+      // `moveReach` refuses a rejected or superseded claim, so a fact an operator
+      // killed while the filing agent was writing stays killed and the graduation
+      // still ends — the honest reading of both.
+      if (row !== null) this.moveReach(row.factId, 'graduated', at);
+      return row;
+    });
+    return write();
   }
 
   getGraduation(id: string): KnowledgeGraduation | null {
@@ -566,17 +677,18 @@ export class KnowledgeStore {
 
   /**
    * End a graduation — and, for the one outcome that means the claim is in the
-   * tree, move the fact to `committed` **in the same transaction**.
+   * claim is somewhere else now, move the fact to `graduated` **in the same
+   * transaction**.
    *
    * One write, because they are one event. Two would half-land in both directions
-   * and both are silent: a fact at `committed` with no graduation saying where it
+   * and both are silent: a fact at `graduated` with no graduation saying where it
    * went is a claim out of every prompt pointing nowhere, and a graduation marked
-   * landed over a fact still injected pays context for a sentence the repository
-   * now states.
+   * landed over a fact still injected pays context for a sentence somebody else is
+   * already carrying.
    *
-   * `abandoned` moves nothing. A pull request closed unmerged means nobody
-   * committed the claim, so it stays exactly where it was, goes on being
-   * delivered, and can be committed again.
+   * `abandoned` moves nothing. An attempt that did not land means nobody took the
+   * claim anywhere, so it stays exactly where it was, goes on being delivered, and
+   * can be sent again.
    *
    * Idempotent through the guard on `outcome IS NULL`, so a sweep that runs twice
    * over one pulse cannot re-settle a row or re-move a reach.
@@ -594,7 +706,7 @@ export class KnowledgeStore {
       // one. `moveReach` refuses a rejected or superseded claim, so a fact an
       // operator killed while its pull request was in review stays killed and the
       // graduation still ends — which is the honest reading of both.
-      if (row !== null && outcome === 'landed') this.moveReach(row.factId, 'committed', at);
+      if (row !== null && outcome === 'landed') this.moveReach(row.factId, 'graduated', at);
       return row;
     });
     return write();
@@ -713,77 +825,6 @@ export class KnowledgeStore {
     return this.getFact(id);
   }
 
-  /**
-   * Mirror the fleet's promoted lessons into this store, and unmirror the ones an
-   * operator has since retired.
-   *
-   * A promoted lesson **is** a fleet-scoped standing fact an operator has vouched
-   * for, reaching every agent's system prompt — which is `injected`, exactly. So
-   * the migration is the identity, not a translation.
-   *
-   * Run on **every** boot rather than once, and idempotent because the fact's id
-   * is derived from the lesson's. Once is not enough: lessons keep their own
-   * surface until delivery moves (phase 3), so a lesson promoted between the two
-   * phases would be a claim that silently stopped reaching agents on the boot the
-   * operator took that build. The unmirror is the same argument backwards — a
-   * lesson retired after it was adopted would otherwise be pruned from one surface
-   * and injected from the other.
-   *
-   * An adopted row is only ever removed while it is still **untouched**: nobody
-   * has corroborated it, nothing amends it, and no operator has moved it. Past
-   * that it is a fact in its own right with its own record, and the lessons panel
-   * is not where it is governed.
-   *
-   * The lessons are passed in rather than read: `src/store/lessons.ts` owns that
-   * table, and a store module that reached a sibling's tables is the cross-domain
-   * read `test/storeModules.test.ts` exists to refuse. The composition root holds
-   * both, so it does the joining.
-   */
-  adoptLessons(lessons: readonly Lesson[]): void {
-    for (const lesson of lessons) {
-      if (lesson.status === 'promoted') this.adoptLesson(lesson);
-      else if (lesson.status === 'retired') this.releaseLesson(lesson);
-    }
-  }
-
-  private adoptLesson(lesson: Lesson): void {
-    const id = adoptedFactId(lesson.id);
-    this.ctx.db
-      .prepare(
-        `INSERT OR IGNORE INTO knowledge_facts
-           (id, claim, scope, lifetime, expires_at, reach, supersedes, origin_ref, ruled_at, resolves_when,
-            about_ref, where_at, created_at, updated_at)
-         VALUES (?, ?, 'fleet', 'standing', NULL, 'injected', NULL, ?, ?, NULL, NULL, NULL, ?, ?)`,
-      )
-      // Ruled, and by the operator who promoted the lesson: the mirror is the
-      // identity, so the moment they vouched for it is the moment it was ruled on.
-      .run(id, lesson.text, lesson.originRef, lesson.updatedAt, lesson.createdAt, lesson.updatedAt);
-    this.ctx.db
-      .prepare(
-        `INSERT OR IGNORE INTO knowledge_corroborations
-           (id, fact_id, agent_id, task_id, goal_ref, session_id, words, created_at)
-         VALUES (?, ?, NULL, NULL, ?, NULL, ?, ?)`,
-      )
-      .run(
-        `knc_${lesson.id}`,
-        id,
-        corroborationGoal(lesson.originRef),
-        'An operator vouched for this as a lesson, before the knowledge base held it.',
-        lesson.updatedAt,
-      );
-  }
-
-  private releaseLesson(lesson: Lesson): void {
-    const id = adoptedFactId(lesson.id);
-    const fact = this.getFact(id);
-    if (!fact || fact.reach !== 'injected') return;
-    if (this.listCorroborations(id).length > 1) return;
-    const amended = this.ctx.db.prepare(`SELECT id FROM knowledge_facts WHERE supersedes=?`).get(id);
-    if (amended) return;
-    this.ctx.db.prepare(`DELETE FROM knowledge_corroborations WHERE fact_id=?`).run(id);
-    this.ctx.db.prepare(`DELETE FROM knowledge_facts WHERE id=?`).run(id);
-  }
-
   private stampContradiction(id: string, resolution: ContradictionResolution, at: string): void {
     this.ctx.db
       .prepare(`UPDATE knowledge_contradictions SET resolution=?, resolved_at=? WHERE id=? AND resolution IS NULL`)
@@ -823,7 +864,7 @@ export class KnowledgeStore {
    *
    * Narrowed in SQL to the scope and the reaches asked for; the claim comparison
    * is in TypeScript because it is normalisation, not a predicate SQL can index.
-   * `FindingStore.findStandingClaim`'s shape, and the list is short for its reason.
+   * The shape `findings` used for the same job, and the list is short for its reason.
    */
   private matchingFacts(scope: string, key: string, reaches: readonly FactReach[]): KnowledgeFact[] {
     const holes = reaches.map(() => '?').join(',');
@@ -1000,21 +1041,23 @@ function autoReach(fact: KnowledgeFact): FactReach {
  * evidence with it. Joining the old row would resurrect a judgement nobody has
  * revisited, wearing the date it was made on.
  */
-const LIVE_REACHES: readonly FactReach[] = ['proposal', 'lookup', 'injected', 'committed'];
+const LIVE_REACHES: readonly FactReach[] = ['proposal', 'lookup', 'injected', 'graduated'];
 
 /**
- * The fact a promoted lesson becomes. Derived from the lesson's id rather than
- * minted, which is the whole of the adoption's idempotence: the second boot
- * inserts nothing, and the row can still be found again when the lesson is retired.
+ * The fact a `findings` or `lessons` row became when the stores merged — derived
+ * from the old row's id rather than minted.
  *
- * Exported because the cockpit needs the same answer from the other side: since
- * delivery moved (phase 3) a lesson reaches agents *as its fact*, so whether a
- * promoted lesson is being sent is the knowledge block's answer looked up under
- * this id. A second spelling of the derivation in the view layer would make the
- * Lessons panel's chip a claim about a row that might not be the one delivered.
+ * The derivation is what made the fold idempotent by construction, so the named
+ * one-shot gate is not the only thing standing between a database and a second copy
+ * of every claim it holds. And it is what makes the mapping **reversible**, which is
+ * the reason it is exported rather than inlined: a pet hatched from a triaged
+ * finding carries that finding's id in its seed, and putting the derivation back is
+ * how its label is found now that the row it came from is gone. A second spelling of
+ * it anywhere would be a label about a claim that might not be the one the creature
+ * came from.
  */
-export function adoptedFactId(lessonId: string): string {
-  return `fact_${lessonId}`;
+export function foldedFactId(rowId: string): string {
+  return `fact_${rowId}`;
 }
 
 function parseResolution(raw: string | null | undefined): FactResolution | null {
@@ -1124,10 +1167,14 @@ function rowToContradiction(r: ContradictionRow): KnowledgeContradiction {
 interface GraduationRow {
   id: string;
   fact_id: string;
+  /** Nullable *and* possibly absent on a row written before the exits merged; `docs` is what those were. */
+  exit: string | null | undefined;
   job_id: string;
-  target: string;
+  target: string | null;
   bar: string | null;
   pr_ref: string | null;
+  /** Nullable and possibly absent, for {@link GraduationRow.exit}'s reason. */
+  ticket_ref: string | null | undefined;
   outcome: string | null;
   settled_at: string | null;
   created_at: string;
@@ -1137,10 +1184,18 @@ function rowToGraduation(r: GraduationRow): KnowledgeGraduation {
   return {
     id: r.id,
     factId: r.fact_id,
+    // `?? 'docs'` and not a bare read: `stampGraduationsBeforeExits` writes the
+    // word onto every row that predates the column, but a database that has the
+    // column and a row the driver hands back as `undefined` would otherwise put
+    // `undefined` on a domain field typed as a closed union — and every row this
+    // could be true of is a documentation pull request, which is what the backfill
+    // says in SQL and this says in the reader.
+    exit: (r.exit ?? 'docs') as GraduationExit,
     jobId: r.job_id,
-    target: r.target as GraduationTarget,
+    target: r.target as GraduationTarget | null,
     bar: r.bar,
     prRef: r.pr_ref,
+    ticketRef: r.ticket_ref ?? null,
     outcome: r.outcome as GraduationOutcome | null,
     settledAt: r.settled_at,
     createdAt: r.created_at,

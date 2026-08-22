@@ -80,7 +80,6 @@ import type {
   ErrorLogEntry,
   Escalation,
   FactReach,
-  Finding,
   GoalArrival,
   GoalAssayVerdict,
   GoalEnvironmentReach,
@@ -107,7 +106,6 @@ import type {
   KnowledgeFact,
   KnowledgeGraduation,
   GraduationReading,
-  Lesson,
   LocalRun,
   Plan,
   PlanPart,
@@ -514,15 +512,6 @@ export interface KnowledgeDeliveryView {
    * through the same renderer in one pass.
    */
   scoped: { scope: string; text: string; facts: string[] }[];
-}
-
-export interface LessonView extends Lesson {
-  /**
-   * Whether this lesson is in the block agents get at their **next** launch.
-   * False for anything not `promoted`, and for a promoted lesson the cap left
-   * out.
-   */
-  rendered: boolean;
 }
 
 /**
@@ -1065,17 +1054,6 @@ export interface CockpitState {
   files: AgentFile[];
   /** Paths two concurrently-running agents both wrote (issue #113). */
   overlaps: FileOverlap[];
-  /** What agents noticed outside their own tasks, newest first. */
-  findings: Finding[];
-  /**
-   * What working a goal taught about working this repository, newest first —
-   * proposals, promotions and the retired tail alike (issue #355).
-   *
-   * The retired ones ship too, and that is the point: the surface that prunes
-   * lessons has to show what it pruned, or "retired" reads as "deleted" and the
-   * operator cannot tell a list they have finished with from one that lost rows.
-   */
-  lessons: LessonView[];
   /**
    * What the fleet's knowledge actually delivers, from the renderers that deliver
    * it (issue #27 phase 3) — the system-prompt block against its budget, and the
@@ -1639,7 +1617,6 @@ export type {
   FactLifetime,
   FactReach,
   FactScope,
-  Finding,
   GoalArrival,
   GoalEnvironmentReach,
   GoalReachStatus,
@@ -1652,7 +1629,7 @@ export type {
   JobSchedule,
   ContradictionResolution,
   ContradictionRuling,
-  FactCommitment,
+  FactExit,
   GraduationOutcome,
   GraduationReading,
   GraduationTarget,
@@ -1660,8 +1637,6 @@ export type {
   KnowledgeCorroboration,
   KnowledgeFact,
   KnowledgeGraduation,
-  Lesson,
-  LessonStatus,
   Plan,
   PlanEvidence,
   PlanNarrative,

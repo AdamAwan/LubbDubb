@@ -62,23 +62,19 @@ export interface CockpitView {
   past: Agent[];
   /** Inbox items still awaiting an answer. */
   openEscalations: Escalation[];
-  /** Findings nobody has ruled on — a finding never becomes work on its own. */
-  openFindingCount: number;
   /**
    * Corroborated claims nobody has ruled on (#27 phase 2). The reading the
-   * Knowledge tile draws, and `lookup`-and-unruled rather than every proposal for
-   * `proposedLessonCount`'s reason: what wants the operator is the claim two
-   * agents already agreed on, and a count that included one agent's unseconded
-   * note would never come down.
+   * Knowledge tile draws, and `lookup`-and-unruled rather than every proposal on
+   * purpose: what wants the operator is the claim two agents already agreed on,
+   * and a count that included one agent's unseconded note would never come down.
+   *
+   * It is the whole badge now that there is one claim store. The two counts that
+   * used to sit beside it — findings nobody had ruled on, lessons nobody had
+   * vouched for — were the same reading of two other tables, and three numbers for
+   * one question is two numbers an operator has to reconcile before acting on any
+   * of them.
    */
   factsNeedingYou: number;
-  /**
-   * Lessons nobody has ruled on (#355). The reading the Lessons tile draws, and
-   * proposals rather than promotions on purpose: what wants the operator is the
-   * undecided claim, and a count of what is already vouched for would tick up on
-   * their own click and never come down.
-   */
-  proposedLessonCount: number;
   /** Human tasks nobody has settled — work waiting on the operator themselves. */
   openHumanTaskCount: number;
   /** Overlaps still in flight, the only ones an operator can still act on. */
@@ -331,8 +327,6 @@ export function buildViewModel(input: ViewInputs): CockpitView {
     deskRuns: buildDeskRuns(state),
     past,
     openEscalations,
-    openFindingCount: (state.findings ?? []).filter((f) => f.status === 'open').length,
-    proposedLessonCount: (state.lessons ?? []).filter((l) => l.status === 'proposed').length,
     // Corroborated claims nobody has ruled on — the reading the Knowledge tile
     // draws. Two agents on two goals carried each of these as far as anything but
     // an operator can carry a claim, and the decision left is theirs alone.

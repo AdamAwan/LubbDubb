@@ -127,29 +127,37 @@ test('a route that answers off the store still does so before reading its body',
   const system = build();
   const { app } = await buildApp(system);
 
-  // Promote reads the finding first: one that does not exist is a 404 whatever
-  // the body says, which is the order the hand-written route answered in.
+  // The exit route reads the claim first: one that does not exist is a 404 whatever
+  // the body says, which is the order the route it replaced answered in.
   const missing = await app.inject({
     method: 'POST',
-    url: '/api/findings/nope/promote',
-    payload: { kind: 'nonsense' },
+    url: '/api/knowledge/facts/nope/exit',
+    payload: { exit: 'nonsense' },
   });
   assert.equal(missing.statusCode, 404);
 
-  const { finding } = system.store.recordFinding('a1', 't1', 'issue:12', {
-    kind: 'duplicate',
-    ref: 'issue:41',
-    summary: 'same as #41',
-    where: null,
-    detail: null,
-  });
+  const raised = system.store.proposeFact(
+    {
+      claim: 'same as #41',
+      scope: 'fleet',
+      lifetime: 'standing',
+      expiresInHours: null,
+      evidence: 'both describe the same rate limiter',
+      supersedes: null,
+      resolvesWhen: null,
+      aboutRef: 'issue:41',
+      where: null,
+    },
+    { agentId: 'a1', taskId: 't1', goalRef: 'issue:12', sessionId: null, words: 'seen once' },
+  );
+  assert.ok(raised.outcome !== 'barred');
   const badBody = await app.inject({
     method: 'POST',
-    url: `/api/findings/${finding.id}/promote`,
-    payload: { kind: 'nonsense' },
+    url: `/api/knowledge/facts/${raised.fact.id}/exit`,
+    payload: { exit: 'nonsense' },
   });
   assert.equal(badBody.statusCode, 400);
-  assert.deepEqual(badBody.json(), { error: "kind must be 'code' or 'desk'" });
+  assert.match((badBody.json() as { error: string }).error, /exit must be one of docs/);
 
   await app.close();
   system.store.close?.();

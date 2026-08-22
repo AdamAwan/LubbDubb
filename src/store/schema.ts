@@ -197,48 +197,6 @@ CREATE TABLE IF NOT EXISTS agent_files (
   UNIQUE (agent_id, path)
 );
 
--- Things agents noticed that were not their own task (the report_finding tool):
--- duplicates, work blocked on something outside the repo, out-of-scope discoveries.
--- Attribution is structural — agent_id/task_id/origin_ref come from the caller's
--- credential, never from an argument. A finding is a claim, not work: it stays
--- 'open' until an operator promotes it into a job (job_id), dismisses it, or has
--- it filed as a tracker ticket (also a job, then ticket_ref via link_ticket).
-CREATE TABLE IF NOT EXISTS findings (
-  id         TEXT PRIMARY KEY,
-  agent_id   TEXT NOT NULL,
-  task_id    TEXT NOT NULL,
-  origin_ref TEXT,
-  kind       TEXT NOT NULL,          -- duplicate | blocked | out_of_scope
-  ref        TEXT,                   -- the world item it is about ("issue:41"), if any
-  summary    TEXT NOT NULL,          -- the claim, one line (validation refuses a newline)
-  where_at   TEXT,                   -- what locates it: file and line, package, service
-  detail     TEXT,                   -- the evidence, markdown
-  status     TEXT NOT NULL,          -- open | promoted | dismissed | filing | filed
-  job_id     TEXT,
-  ticket_ref TEXT,                   -- the ticket it was filed as ("issue:314"), once created
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
--- What working one goal taught about working *this repository*, kept for the next
--- one (#355). A lesson is a claim, exactly as a finding is: it stays 'proposed'
--- until an operator promotes it, and nothing outside the cockpit reads this table
--- — no agent sees a lesson at any status yet.
---
--- The store rather than a file in the tree, because the three properties that
--- make this safe to have at all are properties a markdown pad cannot hold: the
--- gate (status), the provenance (origin_ref + created_at) and the prune
--- (retired). A tracked file is also a file in everyone else's diff, and an
--- ignored one does not survive a clone.
-CREATE TABLE IF NOT EXISTS lessons (
-  id         TEXT PRIMARY KEY,
-  text       TEXT NOT NULL,          -- the lesson, markdown
-  origin_ref TEXT,                   -- the goal it was learned on ("issue:41"), or null
-  status     TEXT NOT NULL,          -- proposed | promoted | retired
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
 -- What the fleet knows about working *this repository* (docs/spec/27-knowledge.md).
 -- One row per claim, carrying three independent axes that are the thing most
 -- easily folded into one enum: who it is relevant to (scope), how it ends
@@ -249,16 +207,16 @@ CREATE TABLE IF NOT EXISTS lessons (
 -- Nothing in the dispatcher reads this table: no rule, desk or gate consults a
 -- fact, exactly as none consults a remedy. It feeds prompts and a panel.
 --
--- A promoted lessons row is mirrored in here as a fleet-scoped standing fact at
--- reach 'injected', under an id derived from the lesson's — which is what makes
--- that adoption idempotent across boots.
+-- This is the one claim store. What an agent noticed outside its own task and what
+-- working a goal taught were the findings and lessons tables; both are rows here,
+-- carried across once by the fold in Store's constructor and never written again.
 CREATE TABLE IF NOT EXISTS knowledge_facts (
   id         TEXT PRIMARY KEY,
   claim      TEXT NOT NULL,        -- the claim itself, markdown
   scope      TEXT NOT NULL,        -- fleet | check:<name> | goal:<ref>
   lifetime   TEXT NOT NULL,        -- standing | expiring
   expires_at TEXT,                 -- when an expiring fact lapses; null for a standing one
-  reach      TEXT NOT NULL,        -- proposal | lookup | injected | committed | rejected
+  reach      TEXT NOT NULL,        -- proposal | lookup | injected | graduated | superseded | retired | rejected
   supersedes TEXT,                 -- the fact this amends; exempts it from that fact's rejection bar
   origin_ref TEXT,                 -- the goal it was first observed on, or null for an operator's own
   ruled_at   TEXT,                 -- when an operator last moved it; null means nobody has ruled on it yet
@@ -340,28 +298,32 @@ CREATE TABLE IF NOT EXISTS knowledge_asks (
   created_at TEXT NOT NULL
 );
 
--- One attempt to put a claim in the repository: the documentation job an operator
--- opened for it, where they said it belongs, and where it got to.
+-- One attempt to put a claim somewhere other than in front of the fleet: the job
+-- an operator opened for it, which exit it took, and where it got to. Three exits,
+-- one shape: a documentation pull request, a job that works the claim now, or a
+-- ticket that files it for later.
 --
 -- Its own table rather than columns on knowledge_facts, because a fact can have
--- more than one of these. A pull request closed unmerged leaves the claim exactly
+-- more than one of these. An attempt that does not land leaves the claim exactly
 -- where it was and the operator free to try again, and columns would overwrite the
 -- record of the attempt that failed — which is the one thing somebody deciding
 -- whether to try again needs to read.
 --
 -- Deliberately not a reach. The claim is still true and still delivered while its
 -- pull request sits in review; a reach that took it out of every prompt at the
--- click would stop the fleet being told something nobody has committed and nobody
--- can yet read, and — if the pull request never merged — would stop telling them
--- forever with nothing red. The reach moves to committed only when the sweep
--- reads the pull request as merged.
+-- click would stop the fleet being told something nobody has acted on and nobody
+-- can yet read, and — if the attempt never landed — would stop telling them
+-- forever with nothing red. The reach moves to graduated only when the sweep, or
+-- the filing agent, says the exit was actually taken.
 CREATE TABLE IF NOT EXISTS knowledge_graduations (
   id         TEXT PRIMARY KEY,
   fact_id    TEXT NOT NULL,
-  job_id     TEXT NOT NULL,        -- the docs job; its branch is how the pull request is found
-  target     TEXT NOT NULL,        -- spec | claudeMd
-  bar        TEXT,                 -- the operator's reason it meets CLAUDE.md's bar; null for a spec graduation
+  exit       TEXT NOT NULL,        -- docs | job | ticket; which way the claim left
+  job_id     TEXT NOT NULL,        -- the job; its branch finds the PR, its origin finds this row back
+  target     TEXT,                 -- spec | claudeMd for a docs exit; null on a job or a ticket
+  bar        TEXT,                 -- the operator's reason it meets CLAUDE.md's bar; null otherwise
   pr_ref     TEXT,                 -- pr:<n>, stamped when the work graph first shows one
+  ticket_ref TEXT,                 -- issue:<n>, reported by a filing agent through link_ticket
   outcome    TEXT,                 -- landed | abandoned; null while it is still going
   settled_at TEXT,
   created_at TEXT NOT NULL
@@ -885,12 +847,14 @@ CREATE TABLE IF NOT EXISTS work_nodes (
 -- A work item the operator asked an agent to create in the tracker, for work the
 -- harness did that nothing external accounts for (stage 3). Keyed on the node it
 -- is for, so one node has at most one filing and a second click is refused by the
--- write. Two statuses for the reason findings has them: filing is asynchronous, so
--- 'filing' means an agent is creating it and 'filed' is the one carrying a ref.
+-- write. Two statuses for the reason a claim's ticket exit has them: filing is
+-- asynchronous, so 'filing' means an agent is creating it and 'filed' is the one
+-- carrying a ref.
 --
--- Not a findings row: a Finding is testimony, with agent_id/task_id NOT NULL and
--- attribution taken structurally from a credential. A harness-authored row has
--- neither, and forging them is the lie structural identity exists to prevent.
+-- Not a knowledge_facts row: a claim is testimony, attributed to the agent that
+-- raised it through a corroboration taken structurally from a credential. A
+-- harness-authored row has no agent behind it, and forging one is the lie
+-- structural identity exists to prevent.
 CREATE TABLE IF NOT EXISTS work_item_filings (
   target_ref TEXT PRIMARY KEY,
   status     TEXT NOT NULL,          -- filing | filed
@@ -1223,8 +1187,6 @@ CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_job_attachments_target ON job_attachments(target_ref);
 CREATE INDEX IF NOT EXISTS idx_job_schedules_next ON job_schedules(enabled, next_run_at);
-CREATE INDEX IF NOT EXISTS idx_findings_status ON findings(status);
-CREATE INDEX IF NOT EXISTS idx_lessons_status ON lessons(status);
 -- Both readers select by date: the panel folds a window, and the prior-remedy note
 -- takes the most recent few. Neither ever asks for a remedy by id.
 CREATE INDEX IF NOT EXISTS idx_remedies_created ON remedies(created_at);

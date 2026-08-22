@@ -275,6 +275,7 @@ function originLine(pet: PetView): string {
       plan: 'Found when you accepted',
       landing: 'Found when you landed',
       job: 'Found when you launched',
+      claim: 'Found when you ruled on',
       finding: 'Found when you triaged',
       upgrade: 'Found when the harness updated itself,',
     };
@@ -289,6 +290,7 @@ function originLine(pet: PetView): string {
     plan: (label) => `Found when you accepted the plan “${label}”`,
     landing: (label) => `Found when you landed the stack for ${label}`,
     job: (label) => `Found when you launched “${label}”`,
+    claim: (label) => `Found when you ruled on “${label}”`,
     finding: (label) => `Found when you triaged “${label}”`,
     upgrade: (label) => `Found when the harness updated itself to ${label}`,
   };

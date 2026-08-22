@@ -29,7 +29,7 @@ filling slots in a shared page.
 What keeps that from swallowing the cockpit's rules is the split on **behaviour weight**:
 
 - **Shared** (`web/src/components/`) — anything with an async flow, a refusal rule or hold semantics:
-  `EscalationCard`, `RecoveryPanel`, `HumanTaskActions`, `FindingsSection`, `LaunchPanel`,
+  `EscalationCard`, `RecoveryPanel`, `HumanTaskActions`, `KnowledgePanel`, `LaunchPanel`,
   `SchedulePanel`, `InjectPanel`, `FleetControl`, `AgentDrawer`, the modals, the buttons and the leaf
   helpers. The escalation 409 rules, the recovery verdicts and the decline-needs-a-note refusal get
   exactly one implementation, and the console **embeds** them rather than redrawing them.
@@ -269,25 +269,25 @@ modals — and nothing that answers _what is true_. It replaced ten independent 
 page on the tickets tab is **one** place, and stepping back out of it has to restore all three at
 once.
 
-| Parameter                            | Carries                                                                                                                                             |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Parameter                            | Carries                                                                                                                                                                                                                  |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | `tab`                                | `tickets` / `knowledge` / `insights`; the overview is the absent value. `backlog` and `work` are aliases for `tickets`, and `?panel=knowledge` for `knowledge`, so links to a deleted tab or a promoted panel still land |
-| `goal`                               | the open goal page, as `issue:<n>`                                                                                                                  |
-| `panel`                              | `findings` / `lessons` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                                   |
-| `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                          |
-| `agent`                              | the open drawer's agent                                                                                                                             |
-| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                      |
-| `fact`                               | the claim whose provenance is open on the Knowledge tab, by fact id                                                                                 |
-| `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                            |
-| `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                   |
-| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                  |
-| `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                      |
-| `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis                       |
-| `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                                           |
-| `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                                     |
-| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                                                 |
-| `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                                        |
-| `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                                       |
+| `goal`                               | the open goal page, as `issue:<n>`                                                                                                                                                                                       |
+| `panel`                              | `knowledge` / `faults` / `launch` / `build` / `record` / `localRun` / `setup` / `pets`                                                                                                                                   |
+| `ask`                                | the queue row a `{ ask }` panel is showing                                                                                                                                                                               |
+| `agent`                              | the open drawer's agent                                                                                                                                                                                                  |
+| `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                           |
+| `fact`                               | the claim whose provenance is open on the Knowledge tab, by fact id                                                                                                                                                      |
+| `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                 |
+| `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                        |
+| `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                       |
+| `tracking`                           | what the harness is doing about it: `any` / `frozen`; `live` is the absent value, since the tab is the surface work happens on                                                                                           |
+| `state`                              | its tracker axis, in the tracker's own word; `any` is the absent value. `open` / `closed` are read as the old `tracking` axis                                                                                            |
+| `feature`                            | one feature by issue number, or `none` for the orphans; every feature is the absent value                                                                                                                                |
+| `group`                              | how the list is arranged: `flat`; `feature` is the absent value                                                                                                                                                          |
+| `order`                              | how the Tickets tab is ordered: `cost`; `added` is the absent value                                                                                                                                                      |
+| `view`                               | the Tickets tab's layout: `card` for the board of state columns; `table` is the absent value                                                                                                                             |
+| `hide`                               | the board columns folded away, as `Closed,Removed` — the **hidden** ones, so an untouched board is a bare URL                                                                                                            |
 
 **The query string rather than the path**, for three reasons that are one reason — nothing else has to
 agree with the console about where it is served from. The token arrives in the fragment and is
@@ -339,9 +339,9 @@ straight back out. A surface that wanted the settled ones would need a route of 
 underneath, named apart because the verdict differs — a permission goes to `/permission`, a proposal
 carries accept/reject, a plain question takes free text. Drawing them as one kind is how a surface ends
 up offering the wrong control. `bench` and `close_out` are human tasks, likewise split, since a
-close-out is the step after a launch and reads as one ([13](13-jobs-and-findings.md#the-step-after-the-launch-the-close-out)).
+close-out is the step after a launch and reads as one ([13](13-jobs-and-tickets.md#the-step-after-the-launch-the-close-out)).
 `validate` is split from both for the same reason one layer on: it is the _other_ step after a launch
-([13](13-jobs-and-findings.md#the-other-step-after-the-launch-the-validation)), and a row that read
+([13](13-jobs-and-tickets.md#the-other-step-after-the-launch-the-validation)), and a row that read
 `Bench` would tell an operator nothing about why it appeared the day the goal was delivered. All three
 are answered the same two ways — done, or declined with a reason — which is why they share a body.
 
@@ -1422,7 +1422,7 @@ of chrome saying so on every visit. Ignored rows stay behind a disclosure at the
 that could only be set would make an accidental click permanent.
 
 That list is only worth a reader's attention while it is **short and true**, and for a time it was
-neither: a job requeued after a crash, and a job promoted from a finding, both named the tracker item
+neither: a job requeued after a crash, and a job queued for a claim, both named the tracker item
 they stood in for and neither was adopted by it, so the panel filled with rows reading
 `Requeued: Plan issue #35699` — a tracker link on the face of the row and a filing button beside it.
 The predicate did not change; the fold's [third adoption arm](16-http-api.md#get-apiwork) did, and the
@@ -1551,9 +1551,9 @@ lands somewhere else entirely, so Back returns to the filter and the list re-rea
 
 The strip carries the ident, the nav, the fleet gauge, and four readings: **Faults**, **Launch**,
 **Local**, **Build** — then **Record**, then the Config cog. Findings and Lessons were two of these
-until they became sections of the Knowledge page; the nav's Knowledge badge is the reading for all
-three now, and one destination with one number is what stops an operator ruling on the same claim in
-two places. Each is one subject
+until the three claim stores became one; the nav's Knowledge badge is the reading for all of it now,
+and one destination with one number is what stops an operator ruling on the same claim in two places.
+Each is one subject
 stated once, in a plain label-and-number face. None reaches `api.js`: every one is a method on
 `CockpitActions`, and the fleet cap is the shared `FleetControl`, which is already on that seam.
 
@@ -1659,7 +1659,7 @@ Three rules hold them:
   glance at the same spot every time rather than hunting for a control that reflows when its number
   happens to hit zero.
 - **The Knowledge count is on the nav, not here.** It counts the corroborated claims nobody has ruled
-  on, which is the Lessons reading's rule one axis over: what wants the operator is the claim two agents
+  on: what wants the operator is the claim two agents
   on two goals already agreed on. A count of what is already vouched for would tick up on their own
   click and never come down, and one that included a single agent's unseconded note would never come
   down either. The number did not change when the page became a destination — only where it is drawn.
@@ -1697,50 +1697,44 @@ Four panels open from the bar, the ask panel opens from a queue row ([the rail](
   here came from. It is described here with the panels because everything below is about the surface
   rather than its placement, and `ConsoleRoot` mounts the same component either way. Reach is a state
   machine rather than a status, so it is a page of sections: **Live notices** with their clocks,
-  **Needs you**, then the two that were panels of their own — **Reported by agents** and **Lessons** —
-  then **Injected**, **On lookup**, **One voice**, **Committed to the repository**, **Superseded**,
-  **Retired**, and the **Rejected** tail. Read top to bottom in the order things demand attention
-  rather than in the order of the machine.
+  **Needs you**, then **Injected**, **On lookup**, **One voice**, **Gone somewhere better**,
+  **Superseded**, **Retired**, and the **Rejected** tail. Read top to bottom in the order things
+  demand attention rather than in the order of the machine.
 
-  **Findings and lessons are sections here rather than panels of their own**, and the argument is the
-  one that put Knowledge on the nav in the first place. All three ask the same question of the same
-  person — *an agent filed a claim; what is it for?* — and they were asking it from three places with
-  three counts on the bar. An operator who has to remember two more surfaces is an operator who rules
-  on one of them and lets the others fill up, which is the failure this page exists to prevent: a
-  claim nobody has ruled on reaches nobody, and looks exactly like a claim nobody filed. They sit
-  directly under **Needs you** because that is the same sitting. `FindingsSection` and `LessonsSection`
-  are the same components under their older names, so nothing about how a card is drawn changed with
-  the move — what changed is that there is one destination and one badge.
+  **One page and one card, because there is one store.** What an agent noticed outside its own task,
+  what working a goal taught, and what the fleet knows were three surfaces asking the same question of
+  the same person — _somebody raised a claim; what is it for?_ — from three places with three counts on
+  the bar. An operator who has to remember two more surfaces is an operator who rules on one of them
+  and lets the others fill up, which is the failure this page exists to prevent: a claim nobody has
+  ruled on reaches nobody, and looks exactly like a claim nobody raised. `FactCard` is the one row now,
+  and the badge is one number.
 
-  **Reported by agents** is `FindingsSection`, with promote / file / dismiss. Nothing in the dispatcher
-  reads `findings`, so those three buttons are the only way one becomes anything. **The promote button
-  says what promoting _this kind_ does**: on a `docs` claim it reads "Queue docs PR", because the click
-  produces a pull request against the worked repository's own documentation and not a fix for the thing
-  described — "Queue job" there would read as scheduling the work the claim names, which is a different
-  decision the operator did not make. Every other kind keeps "Queue job" (`PROMOTE` in
-  `web/src/components/FindingsSection.tsx`, keyed by kind so a fifth kind cannot be added without
-  answering the question). → [13](13-jobs-and-findings.md#the-four-kinds)
+  **The exits sit on the row beside the reach buttons**, because they are the same kind of decision
+  made in the same moment: how far this claim carries, and whether it belongs here at all. What was two
+  panels' worth of buttons — _Queue job_, _File ticket_, _Dismiss_ on a finding; _Promote_, _Retire_ on
+  a lesson — is one group of controls. **Queue job** puts an agent on the claim now; **File ticket**
+  hands it to the tracker so it waits its turn there; **Commit to the repository** opens the
+  documentation pull request. Each is drawn only where the store would take it, so a control that would
+  be refused is not offered: the ticket exit needs a tracker (`config.canFileTickets`), the docs exit
+  needs a standing claim that already reaches somebody, and all three need a claim that has not already
+  left. → [27](27-knowledge.md#sending-a-claim-on)
 
-  **Lessons** is `LessonsSection`: what working a goal taught about working this repository, the
-  composer that writes one down, and the promote / retire buttons that are the only way one moves
-  (#355). Three subsections, because the three statuses are three different questions — _what wants a
-  decision_, _what is vouched for_, _what did we stop believing_. Three things about it are
-  load-bearing rather than presentational. **Retired lessons are drawn**, muted, rather than dropped:
-  this is the surface one prunes from, and a row that vanished on being pruned would leave no way to
-  tell a list you have finished with from one that lost rows. Every card carries its **provenance**,
-  the goal it was learned on drawn as a `<Ref>` and the date beside it, since those are exactly the two
-  things a bare block of assertions strips. Retire is a `ConfirmButton`: it is the one irreversible act
-  on the surface.
+  **There is no Dismiss control, and its absence is the point.** Dismissing a finding meant _an
+  operator answered this, and a later report is not folded silently into it_ — which is exactly what
+  **Reject** already does and says. What dismissing did _not_ mean is now sayable separately, as
+  **Retire**. Two words for two acts, where the old surfaces had one word each meaning both.
 
-  And every **promoted** lesson row says whether agents are actually getting it — a `sent to agents`
-  chip, or `over the cap`. Since #27 phase 3 a promoted lesson reaches agents as the **fact it is
-  mirrored into**, so this flag is the knowledge block's own answer looked up under the adopted id
-  (`LessonView.rendered` in `src/wire.ts`) → [10](10-agent-runtimes.md#the-knowledge-block). One block
-  ships, and now one page describes it — which is the other thing the fold-in bought: the chip and the
-  claim it is about are on the same screen, where before they were a panel apart. Per row rather than
-  as a count, because "two are over the cap" leaves the operator to work out _which_ two before they
-  can act; computed server-side and never re-derived in the browser, since a second implementation of
-  "what fits" would be free to disagree with the one that actually ran.
+  **A claim an operator writes down themselves** goes in the composer at the top of the page — the
+  Lessons panel's, kept, and now writing a `knowledge_facts` row. It lands a **proposal** like anything
+  an agent raises, and the page says so under the button: the surface is one gate, not one gate and a
+  bypass for whoever happens to be at the keyboard. Two fields, and the second is the provenance — the
+  goal it was learned on, optional, because an operator writing down what they already know has no goal
+  behind it and a defaulted one would date the claim to work that did not teach it.
+
+  **A row says where it went**, once it has gone: the exit it took, drawn as a chip, and the pull
+  request or the ticket it produced drawn as a `<Ref>` beside it rather than inside it — one click
+  cannot have two destinations, and a row that names a pull request and offers no way there is this
+  cockpit's most repeated bug.
 
   **Live notices** is the one section drawing rows nobody vouched for. A notice is an expiring
   observation, and it is the one thing agreement alone puts in front of every agent — so the blurb
@@ -1832,12 +1826,12 @@ Four panels open from the bar, the ask panel opens from a queue row ([the rail](
   the section its reach puts it in, and nothing is demoted for want of demand.
   → [27](27-knowledge.md#what-it-costs)
 
-  Promoted lessons are mirrored into this store, so the Lessons panel and this page show the same
+  What working a goal taught is a claim in this store like any other, so this page and the block show the same
   claims; the panel says so at the top rather than leaving a reader to work out which surface is
   authoritative.
 
   **The Injected section carries a budget meter**, drawn against `knowledgeBlockChars`, and marks the
-  claims the cap left out — the same `over the cap` reading the Lessons panel gives, on the store that
+  claims the cap left out — the `over the cap` reading, per row, on the store that
   now delivers. Both are the block renderer's own answer, projected onto the wire
   (`KnowledgeDeliveryView`): a meter drawn from a character count taken in the browser would be exactly
   the second implementation of "what fits" that rule exists to prevent.
@@ -1857,7 +1851,7 @@ Four panels open from the bar, the ask panel opens from a queue row ([the rail](
   dispatch matches its goal and every check it answers at once and the set of dispatches is not a list.
   The reach machine says where a claim _stands_; this says what is _sent_, and the two come apart at
   the cap — silently, since the agent is told a count and never which claims it is missing.
-  The lessons section carries the idea in miniature, per row; a store this size cannot be governed without
+  The per-row `over the cap` chip carries the idea in miniature; a store this size cannot be governed without
   it. → [27](27-knowledge.md#in-the-cockpit)
 
 - **Faults** — the recorded failures, forty rows, the surface you went looking for rather than a crop
@@ -1922,7 +1916,7 @@ recurrence with its next run, its last run, and pause / run now / delete.
   wrote, and this panel is the only surface anywhere that says it exists.
 - **Two times, in two registers.** `relTime` clamps a future instant to "0s ago", so the next run is
   rendered by the panel's own `untilTime` ("in 3h") beside the last run's "ran 2d ago".
-  → [13](13-jobs-and-findings.md#schedules)
+  → [13](13-jobs-and-tickets.md#schedules)
 
 ### Nothing at all when the link drops
 
@@ -2951,7 +2945,7 @@ draw a ref at all — so there is one component and one vocabulary, in
 **`web/src/components/refs.tsx`**.
 
 **The vocabulary is the harness's own colon-form ref** — `issue:212`, `issue:212:part:writes`, `pr:412`
-— which is what tasks, queue items, findings, world events and plan parts already carry. Most call
+— which is what tasks, queue items, claims, world events and plan parts already carry. Most call
 sites pass a value they are already holding rather than re-deriving a number.
 
 **The destination is the ref's own business, not the call site's.** `<Ref to={ref} />` decides:
@@ -3054,7 +3048,7 @@ Nothing new reaches for them; new code draws a reference with `<Ref>`.
 
 **Every reference the UI shows is routed through one of these (#199), with no exceptions.** So the goal
 page's pull requests and its plan waves, the overview's fleet, rack, up-next and world-signal rows, the
-tickets rows, the findings panel, escalations, the plan sheet, the recovery cards, the agent drawer,
+tickets rows, the knowledge page, escalations, the plan sheet, the recovery cards, the agent drawer,
 the spend and reliability tables and the work-tree panel all draw links wherever there is somewhere to
 go.
 
@@ -3082,14 +3076,15 @@ rules, and the split between the first two is the whole of it:
   The same precedent as `ansi.ts` being hand-written rather than pulling in a library, and for a
   sharper reason here: agent-authored text meets a renderer that never interprets HTML, so there is no
   injection surface to reason about at all. Used by the goal page's bench detail, the plan and retro
-  modals, a finding's `detail`, and an escalation's `detail` — everything on the page an agent wrote.
+  modals, a claim's evidence, and an escalation's `detail` — everything on the page an agent wrote.
   The ticket body is the exception, and the section below says why.
 - **Captured output stays `<pre>`.** An escalation's `recentOutput` and a draft reply are what the
   process emitted, and preformatted is what they _are_. Markdown-rendering them would reflow columns
   that mean something.
-- **A field the operator scans is drawn as one line.** A finding's `summary` is validated to be one
-  ([13](13-jobs-and-findings.md#the-three-text-fields)) and clamped to two in CSS regardless, because
-  rows filed before that validation existed hold an entire report in it.
+- **A field the operator scans is drawn as one line.** A claim is a line or two by validation
+  ([27](27-knowledge.md)) and clamped in CSS regardless, because a row filed before the three-field
+  split holds an entire report in it and the fold kept it whole rather than guessing where the seams
+  were.
 
 ### Tracker-authored prose
 
@@ -3199,7 +3194,7 @@ disagree with what the dispatcher does:
 `health.reasons`, `QueueItem.reason`, `pickup.reasons` and the assay summary are quoted, never parsed —
 the rule that keeps the cockpit from holding a second opinion about a decision made elsewhere, drawn
 inches from the first. The **lenses** that produce them — the work graph (`src/graph/`), `buildStacks`,
-`prAttentionStatus`, `findings` and `overlaps` — stay read-only views out of `src/dispatcher/`, asserted
+`prAttentionStatus`, `knowledge` and `overlaps` — stay read-only views out of `src/dispatcher/`, asserted
 structurally in `test/workGraph.test.ts`, `test/stacks.test.ts` and `test/prAttention.test.ts`.
 
 ## What ships and nothing draws
@@ -3249,7 +3244,7 @@ of the production bundle.
 
 **The fixture world is one product, and the product is Markdown Magpie** — a Git-backed Markdown
 knowledge system that indexes documents, answers with citations, clusters the weak answers into gaps and
-publishes improvements as pull requests. Every goal, pull request, plan, finding, transcript and spend
+publishes improvements as pull requests. Every goal, pull request, plan, claim, transcript and spend
 row in `fixtures.ts` and `demoBackend.ts` is work on that one codebase, with its real file paths and its
 real vocabulary. The theme is load-bearing rather than decorative: an operator meeting the cockpit for
 the first time is trying to follow one story across nine panels, and a fixture set drawn from three

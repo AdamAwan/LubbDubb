@@ -14,7 +14,7 @@ import type { HumanTask, Issue, IssueDelivery, IssueShortfall, ValidationVerdict
  * happened.
  *
  * A `close_out` human task is that obligation, and a human task is the right
- * entity for it by the table in [13](../../docs/spec/13-jobs-and-findings.md): it
+ * entity for it by the table in [13](../../docs/spec/13-jobs-and-tickets.md): it
  * is a unit of work rather than a question, it outlives the agents that produced
  * the delivery, and it costs nothing while open. Standalone — no `part_id` — so
  * it blocks nothing, which keeps the rule that only a plan-declared part ever

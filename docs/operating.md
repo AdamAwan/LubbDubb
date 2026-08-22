@@ -275,12 +275,12 @@ you try to work around them:
 
 ## Where to read next
 
-| For                                            | Read                                                             |
-| ---------------------------------------------- | ---------------------------------------------------------------- |
-| The workflow in full, and where yours slots in | [workflow.md](workflow.md)                                       |
-| Every surface in the cockpit                   | [17 — The cockpit](spec/17-cockpit.md)                           |
-| What gets picked up, and why one didn't        | [06 — Issue pickup and labels](spec/06-issue-pickup.md)          |
-| Plans, parts and approval                      | [08 — The planning funnel](spec/08-planning.md)                  |
-| Jobs, findings, schedules and human tasks      | [13 — Jobs, findings, human tasks](spec/13-jobs-and-findings.md) |
-| Spend, yield and the fault log                 | [18 — Observability](spec/18-observability.md)                   |
-| Every config key and its default               | [02 — Configuration](spec/02-configuration.md)                   |
+| For                                            | Read                                                            |
+| ---------------------------------------------- | --------------------------------------------------------------- |
+| The workflow in full, and where yours slots in | [workflow.md](workflow.md)                                      |
+| Every surface in the cockpit                   | [17 — The cockpit](spec/17-cockpit.md)                          |
+| What gets picked up, and why one didn't        | [06 — Issue pickup and labels](spec/06-issue-pickup.md)         |
+| Plans, parts and approval                      | [08 — The planning funnel](spec/08-planning.md)                 |
+| Jobs, findings, schedules and human tasks      | [13 — Jobs, findings, human tasks](spec/13-jobs-and-tickets.md) |
+| Spend, yield and the fault log                 | [18 — Observability](spec/18-observability.md)                  |
+| Every config key and its default               | [02 — Configuration](spec/02-configuration.md)                  |

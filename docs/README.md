@@ -88,7 +88,7 @@ deliberately left unchecked, and why, is in
 | [10](spec/10-agent-runtimes.md)      | Agent runtimes             | Sessions, sentinels, PTY and stream runtimes, transcripts, resume, usage                                                |
 | [11](spec/11-mcp-tools.md)           | The MCP tool channel       | The tools, identity, transport, launch flags, degradation                                                               |
 | [12](spec/12-artifacts-and-files.md) | Artifacts, files, overlaps | Flag sentinel, the file-events hook, artifact serving, file-overlap detection                                           |
-| [13](spec/13-jobs-and-findings.md)   | Jobs, findings, lessons    | The operator job queue, agent findings, durable lessons, and work only a person does                                    |
+| [13](spec/13-jobs-and-tickets.md)    | Jobs, tickets, human tasks | The operator job queue, schedules, filing a tracker item, and work only a person does                                   |
 | [14](spec/14-persistence.md)         | Persistence                | The SQLite schema, migrations, the Store API surface, durability rules                                                  |
 | [15](spec/15-integrations.md)        | Integrations               | The connector/sink seams, and the fake, GitHub and Azure DevOps providers                                               |
 | [16](spec/16-http-api.md)            | HTTP and WebSocket API     | Every route, the state snapshot, the event stream                                                                       |
@@ -102,7 +102,7 @@ deliberately left unchecked, and why, is in
 | [24](spec/24-environments.md)        | Environments               | Where landed work has got to: merge attribution, the probe, the three verdicts, the lens                                |
 | [25](spec/25-supply.md)              | Supply and the runway      | Whether there is work left for the fleet, and whether the reason there is not is you                                    |
 | [26](spec/26-setup.md)               | Configuration health       | The checks that catch a silently-misconfigured harness, the fixes they carry, and the sheet that points it at a project |
-| [27](spec/27-knowledge.md)           | Knowledge                  | What the fleet knows about this repository: scope, reach, corroboration, and delivery                                   |
+| [27](spec/27-knowledge.md)           | Knowledge                  | The one claim store: scope, reach, corroboration, delivery, and the three ways a claim leaves                           |
 
 ## Conventions used throughout
 

@@ -84,6 +84,13 @@ export interface PetActionRate {
 export const PET_RULES: PetRules = Object.freeze({
   rates: Object.freeze({
     job: Object.freeze({ dropChance: 0.015, pity: 130 }),
+    // Ruling on a claim, at the rate triaging a finding paid — it is the same act
+    // under the name it has now, and re-tuning it in the same change that renamed
+    // it would make one indistinguishable from the other.
+    claim: Object.freeze({ dropChance: 0.02, pity: 100 }),
+    // The retired name for the same act. Nothing produces one any more, but a rate
+    // is `Record<PetActionKind, …>` and the kind is still a kind — every pet
+    // already hatched from a triaged finding carries it.
     finding: Object.freeze({ dropChance: 0.02, pity: 100 }),
     'human-task': Object.freeze({ dropChance: 0.03, pity: 66 }),
     escalation: Object.freeze({ dropChance: 0.04, pity: 50 }),

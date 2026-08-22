@@ -58,7 +58,7 @@ import { DISPATCH_RULES, type DispatchRuleId } from './dispatcher/rules.js';
  * a bucket mixes a one-line fix with a goal that touches nine files, and the
  * spread inside one rule is real. Killing on a threshold would eventually kill
  * work that was going to land. So the verdict is a `burn` human task — visible,
- * refreshed every pulse, and **holding nothing** ([13](../docs/spec/13-jobs-and-findings.md)).
+ * refreshed every pulse, and **holding nothing** ([13](../docs/spec/13-jobs-and-tickets.md)).
  * The operator has the transcript and the stop button; what they did not have was
  * the prompt to go and look.
  *

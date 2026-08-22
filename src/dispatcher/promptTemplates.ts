@@ -481,9 +481,9 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
   'finding-ticket': {
     placeholders: ['kind', 'kindHelp', 'ref', 'summary', 'originRef', 'tracker'],
     template:
-      'An operator wants a finding filed as a ticket so it can be dealt with later. **Write it up — ' +
+      'An operator wants a claim filed as a ticket so it can be dealt with later. **Write it up — ' +
       'do not fix it, and do not create it yourself.**\n\n' +
-      'It was reported by an agent working {originRef}, about {ref}, as a "{kind}" finding ({kindHelp}).\n\n' +
+      'It was raised by an agent working {originRef}, about {ref}.\n\n' +
       'The report, verbatim:\n\n{summary}\n\n' +
       'It will be filed in {tracker}. The harness creates the item itself, so the type it is created ' +
       'as, the labels it carries and who it is assigned to are already settled and there is no ' +
@@ -491,25 +491,29 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'Write the ticket for someone who was not there: a title that says what is wrong, and a body ' +
       'carrying the report above, where it was found, and what you were able to verify. Verify what ' +
       'you reasonably can from the repository first, and say in the body which parts you confirmed ' +
-      "and which are the reporting agent's word — it is one agent's reading, not established fact.\n\n" +
+      "and which are the raising agent's word — it is what the fleet believes, not established fact.\n\n" +
       'When you have both, call the link_ticket tool with `title` and `body`. That call is what files ' +
       'the ticket and finishes this task: without it the operator sees a filing that never completed. ' +
       'If an existing item already covers this, do not write a second — call link_ticket with that ' +
       'item\u2019s ref ("issue:314") instead, and it is linked rather than filed.',
     doc:
-      'Sent to a desk agent when an operator clicks "File ticket" on a finding. The agent writes the ' +
+      'Sent to a desk agent when an operator clicks "File ticket" on a claim. The agent writes the ' +
       'ticket; since #394 the **harness** creates it, so this prompt no longer carries a `gh`/`az` ' +
       'command and an agent cannot forget a label, a type or an assignee. Override this to control ' +
       'how tickets are worded. Candidate duplicates from the harness\u2019s ticket mirror are appended ' +
       'after this text rather than interpolated, so an override cannot silently drop them. ' +
+      '{kind} and {kindHelp} are still filled and no longer used by the text above: they named a ' +
+      'four-word taxonomy the harness stopped asking agents for, and a placeholder cannot be ' +
+      'withdrawn the way a value can \u2014 an unfilled one is left in the prompt verbatim, so an ' +
+      'override written against the older book would ship a literal {kind} to the agent. ' +
       'Placeholders: {kind} {kindHelp} {ref} {summary} {originRef} {tracker}.',
   },
   'docs-change': {
     placeholders: ['ref', 'summary', 'originRef'],
     template:
       'An agent working {originRef} learned something about **this repository** that the repository ' +
-      'itself does not say, and an operator promoted it. Write the documentation change and open a ' +
-      'pull request for it.\n\n' +
+      'itself does not say, and an operator has committed it. Write the documentation change and open ' +
+      'a pull request for it.\n\n' +
       'It came up on {ref}. The report, verbatim:\n\n{summary}\n\n' +
       '**Check it against the code before you write a word of it.** It is one agent’s reading of what ' +
       'it happened to touch, not an established fact, and a document is exactly the wrong place to ' +

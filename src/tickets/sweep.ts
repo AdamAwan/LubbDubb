@@ -125,7 +125,7 @@ export class TicketSweep {
  * Reading only the first would leave every Azure item live forever; reading only
  * the second never fires on GitHub. It is the same pair of readings, for the same
  * reason, that the delivery close-out sweep takes.
- * → `docs/spec/13-jobs-and-findings.md`
+ * → `docs/spec/13-jobs-and-tickets.md`
  */
 function liveFacts(issues: readonly Issue[]): LiveTicketFacts[] {
   return issues

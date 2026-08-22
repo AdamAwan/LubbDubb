@@ -206,7 +206,7 @@ scoped to one goal or one check ride the **task** prompt for exactly that reason
   the same trap `--model` does: a builder that accepts the field and forgets to forward it type-checks
   clean and silently drops the block on both runtimes.
 - **With nothing injected, nothing is appended at all** — not a header, not a newline. The argv is
-  byte-identical to a build without the feature, which is what `test/lessons.test.ts` and
+  byte-identical to a build without the feature, which is what `test/knowledge.test.ts` and
   `test/knowledgeBlock.test.ts` pin between them.
 - **Only an `injected` claim is in it, and never a goal-scoped one.** `lookup` is as far as two agents
   agreeing can carry a standing claim, so delivering one here would make corroboration an
@@ -1097,7 +1097,7 @@ Its _dispatch_ origin is `job:<id>`, and the original origin rides on `Job.origi
 job **stands in for**. The gates read that field while the job is queued and while the task it became
 is live, so the rule that produced the original does not staff the same work a second time; without
 it, a requeued retro and a freshly dispatched `issue:249:retro` ran at once (#249). See
-[13](13-jobs-and-findings.md#standing-in-for-another-origin) for the predicate and its two readers.
+[13](13-jobs-and-tickets.md#standing-in-for-another-origin) for the predicate and its two readers.
 The preamble still names the origin in words, because a fresh agent needs to know it is redoing work.
 
 **A requeue of work behind a still-queued job files nothing**, and hands that job back instead. A job
@@ -1106,7 +1106,7 @@ predecessor still `queued` means no agent ever ran and the queue is already hold
 unchanged. A second job for it would not be a requeue but a duplicate, and a duplicate that locks the
 queue: its `originRef` is the task's `job:<predecessor>`, which makes it _stand in_ for the
 predecessor and skips it in `manual-job` for as long as the duplicate is queued. Chains of three were
-observed. See [13](13-jobs-and-findings.md#why-a-requeue-never-stands-in-for-a-queued-job) for the
+observed. See [13](13-jobs-and-tickets.md#why-a-requeue-never-stands-in-for-a-queued-job) for the
 gate this protects and why it is not the thing being changed.
 
 `prior` is the agent that was on the task, or **null** when none ever ran, and the two arms say

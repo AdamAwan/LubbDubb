@@ -1,10 +1,19 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { checkScopeDrift, checkSightings } from '../../knowledge/drift.js';
-import { committableFact, factDocsFields, graduationNote } from '../../knowledge/graduation.js';
-import { MAX_CLAIM_CHARS } from '../../knowledge/knowledge.js';
+import {
+  exitableFact,
+  factDocsFields,
+  factJobRequest,
+  factTicketFields,
+  graduationNote,
+} from '../../knowledge/graduation.js';
+import { corroborationGoal, MAX_CLAIM_CHARS, validateFactProposal } from '../../knowledge/knowledge.js';
+import { trackerCoordinates } from '../../mcp/findings.js';
+import { dedupeCandidates, renderCandidates } from '../../tickets/candidates.js';
+import type { FactExit, KnowledgeFact } from '../../types.js';
 import type { FactRuling, KnowledgeContradictionView, KnowledgeFactPayload } from '../../wire.js';
-import { checked, IdParams } from '../validation.js';
+import { checked, IdParams, optionalText, TicketTitleBody } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 /**
@@ -12,14 +21,15 @@ import type { RouteContext } from './context.js';
  * (issue #27 phase 2): the observations behind one claim, and the reach
  * transitions that are the whole of the governance.
  *
- * **The transitions are the whole write surface here.** Nothing on this page
- * files a fact — agents do that through `knowledge_propose`, on a scoped MCP
- * credential rather than the cockpit's bearer token, which is the same split
- * `lessons.ts` describes between its own two writers. And nothing here promotes
- * on anybody's behalf: the store carries a claim to `lookup` on two independent
- * corroborations and no further, so `injected` is an operator's and only an
- * operator's, and a route that reached past `setFactReach` would be doing what
- * the store refuses to.
+ * **Nothing here files a claim on an agent's behalf, and nothing promotes on
+ * anybody's.** Agents raise through `raise`, on a scoped MCP credential rather
+ * than the cockpit's bearer token; the store carries a claim to `lookup` on two
+ * independent corroborations and no further, so `injected` is an operator's and
+ * only an operator's, and a route that reached past `setFactReach` would be doing
+ * what the store refuses to. The one write below that is not a ruling is an
+ * operator typing a claim of their own, which lands a `proposal` like every other
+ * — the gate is what it always was, and it is not a bypass for whoever happens to
+ * be at the keyboard.
  *
  * **A rejection is terminal, so there is no un-reject route.** The bar is what
  * stops two agents re-proposing next week what an operator killed today; an
@@ -28,13 +38,23 @@ import type { RouteContext } from './context.js';
  * by the agent that found the sharper version — which is a tool call, not a click.
  *
  * There is no list route: the facts ride on `/api/state` with everything else the
- * cockpit polls, exactly as findings and lessons do, so the page draws them beside
- * refs the snapshot's own link map resolves. What does *not* ride there is the
+ * cockpit polls, so the page draws them beside refs the snapshot's own link map
+ * resolves. What does *not* ride there is the
  * evidence — thousands of characters per observation, on a polled snapshot — so
  * the provenance a reader opens a row for is fetched per fact below.
  *
  * → `docs/spec/27-knowledge.md`, `docs/spec/16-http-api.md`
  */
+/**
+ * What an operator's own claim carries as its observation.
+ *
+ * Stated once, as a constant, because it is written into `knowledge_corroborations`
+ * where every other row holds an agent's own words — a reader comparing two rows
+ * has to be able to tell "a person asserted this" from "an agent saw this", and a
+ * sentence composed at the call site would be free to say something else next time.
+ */
+const OPERATOR_EVIDENCE = 'An operator wrote this down from what they already knew — no agent observed it.';
+
 export function register(app: FastifyInstance, { system, hub }: RouteContext): void {
   const { store, harness } = system;
 
@@ -84,6 +104,69 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
           (c): KnowledgeContradictionView => ({ ...c, amendment: store.getFact(c.amendmentId) }),
         ),
       } satisfies KnowledgeFactPayload;
+    }),
+  );
+
+  /**
+   * The operator writing a claim down themselves — the one write on this page that
+   * is not a ruling, and the arm `POST /api/lessons` used to be.
+   *
+   * **It lands a `proposal`, like everything else.** The surface is one gate, not
+   * one gate and a bypass for whoever happens to be at the keyboard: an operator who
+   * wants their own claim in front of the fleet promotes it afterwards, and that
+   * second click is the same one they would make on an agent's. Nothing here is a
+   * shortcut past corroboration either — a claim with one voice behind it is a claim
+   * with one voice behind it, whoever the voice was.
+   *
+   * **The evidence is written by the harness and not asked for.** Every other
+   * corroboration carries what its observer actually saw, and an operator typing
+   * what they already know has no observation to give — a required field they have
+   * nothing for comes back as "N/A", which is the shape `report_finding`'s optional
+   * fields were argued into. What the row carries instead is the one true thing
+   * about it: a person wrote it down, which is exactly what an operator reading the
+   * provenance later needs to know about a claim no agent ever saw.
+   *
+   * `originRef` is the goal it was learned on, and it is optional because a claim
+   * written from what an operator already knows has no goal behind it. A null there
+   * is honest; a defaulted one would date the claim to work that did not teach it.
+   */
+  const ClaimBody = z.object({
+    claim: z.string({ required_error: 'claim is required' }),
+    originRef: optionalText('originRef'),
+  });
+  app.post(
+    '/api/knowledge/facts',
+    checked({ body: ClaimBody }, async ({ body, reply }) => {
+      const goalRef = corroborationGoal(body.originRef ?? null);
+      // Bounded through the shared validator rather than here, which is the whole of
+      // why `src/lessons.ts` existed and is now one file fewer: a bound written twice
+      // drifts, and it drifts in the direction that matters — whichever writer is
+      // looser decides what an operator ends up being asked to read.
+      const parsed = validateFactProposal({ claim: body.claim, evidence: OPERATOR_EVIDENCE, scope: 'fleet' }, goalRef);
+      if (!parsed.ok) return reply.code(400).send({ error: parsed.error });
+      // Attributed to nobody it does not have. A harness-written corroboration
+      // carries the goal it was read on and no agent, task or session
+      // (`KnowledgeNoticeDesk`'s rule); an operator's carries the same, because
+      // there is no agent behind it either.
+      const outcome = store.proposeFact(parsed.proposal, {
+        agentId: null,
+        taskId: null,
+        goalRef,
+        sessionId: null,
+        words: OPERATOR_EVIDENCE,
+      });
+      // The bar holds for an operator too, and saying so is the point: they rejected
+      // this claim, and the way back is an amendment naming it rather than typing it
+      // again.
+      if (outcome.outcome === 'barred') {
+        return reply.code(409).send({
+          error: `this claim was rejected (${outcome.barredBy.id}), and a rejection is terminal — the way back is an amendment naming it`,
+        });
+      }
+      // `dirty` rather than `world:changed`: nothing in the world moved and no cycle
+      // is run — the page simply has a row more to draw.
+      hub.broadcast({ type: 'dirty' });
+      return { ok: true, fact: outcome.fact };
     }),
   );
 
@@ -147,45 +230,72 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   );
 
   /**
-   * Commit a claim to the repository: open the documentation work for it, and
-   * record that it is on its way.
+   * The three arms' one ending: write the job and the graduation together, and
+   * dispatch on this pulse rather than the next.
    *
-   * **One call, because it is one act from the operator's side** — "this belongs in
-   * the repository" is the decision, and opening the work and recording where it
-   * went are its two halves. Two calls could half-land in both directions, and both
-   * are silent: a documentation pull request nothing links to lands and takes the
-   * claim out of no prompt, and a graduation naming no job draws a row on its way
-   * to a repository nothing is writing it into. `Store.commitFact` makes both
-   * writes in one transaction and this route is the only way to reach it.
-   *
-   * **It does not move the reach**, and that is the answer to what a fact is
-   * between the click and the landing. The claim is still true, still injected or
-   * still answerable, and still open to contradiction while its pull request sits
-   * in review — because a claim taken out of every prompt the moment somebody
-   * queues a docs job is a claim the fleet stops being told for a pull request that
-   * may be closed unmerged, and then nobody is told it and nobody can read it. The
-   * reach moves to `committed` when `KnowledgeGraduationDesk` reads the pull
-   * request as merged, and never before.
-   *
-   * **Nothing auto-commits.** This is an operator's click and only an operator's,
-   * for the reason `src/mcp/findings.ts` gives about `report_finding`: an agent
-   * that could queue this work could put agents on the fleet, which is a capability
-   * escalation rather than a convenience. It is the same authority
-   * `POST /api/findings/:id/promote` exercises over a `docs` finding, over the same
-   * machinery.
+   * A queue that only moves on the heartbeat reads as nothing having happened,
+   * which is `POST /api/findings/:id/promote`'s shape and its reason.
    */
-  const CommitBody = z.discriminatedUnion('target', [
+  const send = async (fact: KnowledgeFact, exit: FactExit, work: { title: string; prompt: string }) => {
+    const { job, graduation } = store.exitFact(fact, exit, work);
+    hub.broadcast({ type: 'world:changed' });
+    const report = await harness.runCycle('manual');
+    return { ok: true, fact, job, graduation, report };
+  };
+
+  /**
+   * Send a claim on: open the work that takes it somewhere, and record that it is
+   * on its way.
+   *
+   * **One route for three exits, because it is one act from the operator's side** —
+   * *this claim belongs somewhere other than in front of the fleet* — and because
+   * the two it replaces were one act implemented twice, with the weaker one silent.
+   * `POST /api/findings/:id/promote` stamped a status and never learned what became
+   * of the job it queued; `POST /api/findings/:id/file` carried a ticket ref with
+   * nothing watching whether the filing agent ever created one. Both are a
+   * `knowledge_graduations` row now, which is the shape that already knew how to
+   * end.
+   *
+   * **One call, because opening the work and recording where it went are two halves
+   * of one decision.** Two calls could half-land in both directions, and both are
+   * silent: work nothing links to lands and takes the claim out of no prompt, and a
+   * graduation naming no job draws a row on its way somewhere nothing is taking it.
+   * `Store.exitFact` makes both writes in one transaction and this route is the
+   * only way to reach it.
+   *
+   * **It does not move the reach**, and that is the answer to what a fact is between
+   * the click and the landing. The claim is still true, still injected or still
+   * answerable, and still open to contradiction while its pull request sits in
+   * review — because a claim taken out of every prompt the moment somebody queues a
+   * job is a claim the fleet stops being told for work that may never land, and then
+   * nobody is told it and nobody can read it. The reach moves to `graduated` when
+   * the sweep reads the pull request as merged, or when the filing agent reports the
+   * ticket it created, and never before.
+   *
+   * **Nothing auto-sends.** This is an operator's click and only an operator's: an
+   * agent that could queue this work could put agents on the fleet, which is a
+   * capability escalation rather than a convenience. That was `report_finding`'s
+   * argument about promotion and it is unchanged by there being one store.
+   */
+  const ExitKind = z.object({
+    exit: z.enum(['docs', 'job', 'ticket'], {
+      errorMap: () => ({
+        message:
+          'exit must be one of docs (an agent writes the claim into the repository and opens a pull ' +
+          'request), job (an agent works the claim now) or ticket (an agent writes it up and files it in ' +
+          'the tracker, so it waits its turn)',
+      }),
+    }),
+  });
+  // The `docs` exit's own question, and the one arm of any of this that costs a
+  // sentence. A discriminated union rather than an optional `bar` beside a free
+  // target: CLAUDE.md is loaded into every agent's context on every dispatch and its
+  // length is asserted rather than intended, so an arm that could be taken by
+  // forgetting a field is the arm that gets taken.
+  const DocsBody = z.discriminatedUnion('target', [
     // The ordinary answer, and the one that needs nothing said: `docs/README.md`
     // says which document owns what, and the agent reads it.
     z.object({ target: z.literal('spec') }),
-    // The exception, priced like one. CLAUDE.md is loaded into every agent's
-    // context on every dispatch and its length is asserted rather than intended, so
-    // graduating there grows without bound the exact cost this design exists to
-    // cap. The operator states what breaks *silently* without the claim — that file's
-    // own bar — and the shape of the body is what makes it unskippable, the same
-    // reason `narrowed` carries its claim rather than offering an optional field.
-    // It is not ceremony: the sentence is appended to the agent's prompt, so
-    // whoever writes the entry has the argument in the operator's words.
     z.object({
       target: z.literal('claudeMd'),
       bar: z
@@ -199,55 +309,97 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         .max(MAX_CLAIM_CHARS),
     }),
   ]);
+  // The operator may reword what they queue before it runs; the derived text is
+  // only the default. `TicketTitleBody` is the same override `/api/work/:ref/file`
+  // offers over its own.
+  const JobBody = z.object({ title: optionalText('title'), prompt: optionalText('prompt') });
   app.post(
-    '/api/knowledge/facts/:id/commit',
-    checked({ params: IdParams, body: CommitBody }, async ({ params, body, reply }) => {
+    '/api/knowledge/facts/:id/exit',
+    // Params first, then the store, then the body — the order a reader blames them
+    // in: a claim that does not exist is a 404 whatever the body says, and this
+    // file's nested `checked` is what puts the body's refusal second while keeping
+    // it the same one refusal path as everywhere else.
+    checked({ params: IdParams }, async ({ params, req, reply }) => {
       const fact = store.getFact(params.id);
       if (!fact) return reply.code(404).send({ error: 'fact not found' });
-      // What may be committed is the claim's own business rather than this route's
-      // — a proposal nobody has agreed with, and a notice that ends by itself, are
-      // both the wrong *kind* of thing to put in a tree. Stated once, next to the
-      // rest of graduation's rules.
-      const allowed = committableFact(fact);
-      if (!allowed.ok) return reply.code(409).send({ error: allowed.error });
-      // One at a time. A second docs job for a claim already being written up is two
-      // agents writing the same paragraph into two pull requests, and whichever
-      // landed first would settle a graduation the other one was still working.
-      const inFlight = store.listGraduations().find((g) => g.factId === fact.id && g.outcome === null);
-      if (inFlight) {
-        return reply.code(409).send({
-          error:
-            'a documentation pull request for this claim is already open' +
-            `${inFlight.prRef === null ? '' : ` (${inFlight.prRef})`} — wait for it to land, or say what became of it`,
-        });
-      }
-      const { title, vars } = factDocsFields(fact);
-      // The `docs-change` template a promoted `docs` finding already renders, and
-      // deliberately not a second id: everything it says is as true of a
-      // corroborated claim as of one agent's report, and an operator who overrode it
-      // to say where documentation lives in their repository said that once. What
-      // graduation adds is **appended** rather than interpolated, exactly as the
-      // duplicate candidates are on `POST /api/findings/:id/file` — an override that
-      // never learned about a new `{token}` drops it in silence, on precisely the
-      // deployments that customised most.
-      const prompt = [
-        system.prompts.render('docs-change', vars),
-        graduationNote(fact, body, store.listCorroborations(fact.id)),
-      ].join('\n\n');
-      const { job, graduation } = store.commitFact(fact, body, { title, prompt });
-      hub.broadcast({ type: 'world:changed' });
-      // Dispatched on this pulse rather than the next, `POST /api/findings/:id/promote`'s
-      // shape: the operator clicked, and a queue that only moves on the heartbeat
-      // reads as nothing having happened.
-      const report = await harness.runCycle('manual');
-      return { ok: true, fact, job, graduation, report };
+      return checked({ body: ExitKind }, async ({ body }) => {
+        // What may be sent, and by which exit, is the claim's own business rather than
+        // this route's — stated once, beside the rest of graduation's rules.
+        const allowed = exitableFact(fact, body.exit);
+        if (!allowed.ok) return reply.code(409).send({ error: allowed.error });
+        // One at a time, whichever exit. Two agents writing the same paragraph into
+        // two pull requests is two chances to land a half of it, and two jobs on one
+        // claim is two agents on one piece of work — the thing every other gate in the
+        // harness is built to stop.
+        const inFlight = store.listGraduations().find((g) => g.factId === fact.id && g.outcome === null);
+        if (inFlight) {
+          return reply.code(409).send({
+            error:
+              `this claim is already on its way out by its ${inFlight.exit} exit` +
+              `${inFlight.prRef === null ? '' : ` (${inFlight.prRef})`} — wait for it to land, or say what ` +
+              `became of it`,
+          });
+        }
+        // The arm's own body, read second so the two refusals are told apart: a claim
+        // this exit will not take is a 409 whatever the body says. The nested
+        // `checked` is this file's established shape for that.
+        if (body.exit === 'docs') {
+          return checked({ body: DocsBody }, async ({ body: docs }) => {
+            const { title, vars } = factDocsFields(fact);
+            // The `docs-change` template a promoted `docs` finding already rendered,
+            // and deliberately not a second id: everything it says is as true of a
+            // corroborated claim as of one agent's report, and an operator who
+            // overrode it to say where documentation lives in their repository said
+            // that once. What graduation adds is **appended** rather than
+            // interpolated — an override that never learned about a new `{token}`
+            // drops it in silence, on precisely the deployments that customised most.
+            const prompt = [
+              system.prompts.render('docs-change', vars),
+              graduationNote(fact, { exit: 'docs', ...docs }, store.listCorroborations(fact.id)),
+            ].join('\n\n');
+            return send(fact, { exit: 'docs', ...docs }, { title, prompt });
+          })(req, reply);
+        }
+        if (body.exit === 'job') {
+          return checked({ body: JobBody }, async ({ body: job }) => {
+            const derived = factJobRequest(fact, store.listCorroborations(fact.id));
+            return send(
+              fact,
+              { exit: 'job' },
+              { title: job.title ?? derived.title, prompt: job.prompt ?? derived.prompt },
+            );
+          })(req, reply);
+        }
+        // With no tracker configured there is nowhere to file — the same gate all four
+        // filing arms ask. The cockpit hides the control in this case, so reaching
+        // here means a direct call.
+        const tracker = trackerCoordinates(system.config);
+        if (!tracker) {
+          return reply.code(409).send({
+            error: 'no issue tracker is configured to file into (the issues provider is fake or unconfigured)',
+          });
+        }
+        return checked({ body: TicketTitleBody }, async ({ body: ticket }) => {
+          const derived = factTicketFields(fact, tracker, store.listCorroborations(fact.id));
+          // Rendered from the operator's template book, not built here: how a ticket
+          // should be worded is exactly the sort of house style an override exists
+          // for. The duplicate candidates are **appended** rather than given a
+          // placeholder, so an override that never learned about them cannot silently
+          // drop them.
+          const candidates = renderCandidates(dedupeCandidates(store.listTrackerItems(), derived.vars.summary ?? ''));
+          const prompt = [system.prompts.render('finding-ticket', derived.vars), candidates]
+            .filter((part) => part !== null)
+            .join('\n\n');
+          return send(fact, { exit: 'ticket' }, { title: ticket.title ?? derived.title, prompt });
+        })(req, reply);
+      })(req, reply);
     }),
   );
 
   /**
    * Say what became of a graduation the harness cannot read for itself.
    *
-   * This is the `committed` verb the reach route deliberately does not carry, and
+   * This is the `graduated` verb the reach route deliberately does not carry, and
    * the objection that keeps it out of there does not apply here: the pull request
    * has already been opened, so saying it landed puts the claim in a place rather
    * than nowhere. Its opposite says the pull request is not happening, and leaves

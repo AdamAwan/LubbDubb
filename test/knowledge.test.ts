@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
@@ -297,70 +297,6 @@ test('an ask is answered from the scopes it names, and matched on the words a qu
   assert.equal(store.askFacts({ scopes: ['goal:issue:41'] })[0]?.claim, 'The suite wants a built web bundle first.');
   assert.equal(store.askFacts({ question: 'why does knip fail on an export' })[0]?.scope, 'fleet');
   assert.deepEqual(store.askFacts({ question: 'something nobody has ever written down' }), []);
-});
-
-// -- the lessons that came before --------------------------------------------
-
-test('a promoted lesson is adopted as a fleet fact, once, and stops being one when it is retired', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-knowledge-db-'));
-  const dbPath = join(dir, 'store.db');
-  try {
-    const first = new Store(dbPath);
-    const vouched = first.proposeLesson({ text: 'The suite wants a built web bundle first.', originRef: 'issue:41' });
-    first.proposeLesson({ text: 'Nobody ruled on this one.', originRef: 'issue:41' });
-    first.promoteLesson(vouched.id);
-    first.close();
-
-    // A promoted lesson *is* a fleet-scoped standing claim an operator vouched for,
-    // reaching every agent's system prompt — which is `injected`, exactly.
-    const second = new Store(dbPath);
-    const adopted = second.listFacts();
-    assert.equal(adopted.length, 1, 'a proposal an operator has not ruled on is not a fact');
-    assert.equal(adopted[0]!.claim, 'The suite wants a built web bundle first.');
-    assert.equal(adopted[0]!.reach, 'injected');
-    assert.equal(adopted[0]!.scope, 'fleet');
-    assert.equal(adopted[0]!.originRef, 'issue:41');
-    second.close();
-
-    // Idempotent: the id is derived from the lesson's, so the second boot inserts
-    // nothing rather than a second copy of every vouched claim.
-    const third = new Store(dbPath);
-    assert.equal(third.listFacts().length, 1);
-    assert.equal(third.listCorroborations(adopted[0]!.id).length, 1);
-    third.retireLesson(vouched.id);
-    third.close();
-
-    // Retired on one surface, gone from the other: an adopted row nobody has
-    // touched is a mirror of the lesson, and it is not governed here.
-    const fourth = new Store(dbPath);
-    assert.deepEqual(fourth.listFacts(), []);
-    fourth.close();
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
-
-test('an adopted fact an agent has corroborated is a fact in its own right, and survives the retirement', () => {
-  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-knowledge-db-'));
-  const dbPath = join(dir, 'store.db');
-  try {
-    const first = new Store(dbPath);
-    const lesson = first.proposeLesson({ text: 'The suite wants a built web bundle first.', originRef: 'issue:41' });
-    first.promoteLesson(lesson.id);
-    first.close();
-
-    const second = new Store(dbPath);
-    second.proposeFact(proposal({ claim: 'The suite wants a built web bundle first.' }), seenOn('issue:88'));
-    second.retireLesson(lesson.id);
-    second.close();
-
-    const third = new Store(dbPath);
-    assert.equal(third.listFacts().length, 1);
-    assert.equal(third.listFacts()[0]!.reach, 'injected');
-    third.close();
-  } finally {
-    rmSync(dir, { recursive: true, force: true });
-  }
 });
 
 // -- the pure layer -----------------------------------------------------------
@@ -882,24 +818,17 @@ test('the page draws every reach, the rejected tail included', async () => {
         graduations: state.knowledgeGraduations,
         delivery: state.knowledgeDelivery,
         cost: state.knowledgeCost,
-        findings: state.findings,
-        lessons: state.lessons,
         canFileTickets: state.config.canFileTickets,
         now: Date.now(),
         refUrls: state.refUrls,
         viewingFact: null,
         onReach: () => undefined,
-        onCommit: () => undefined,
+        onExit: () => undefined,
+        onRaise: () => Promise.resolve(undefined),
         onSettleGraduation: () => undefined,
         onDetail: () => Promise.resolve({ corroborations: [], contradictions: [] }),
         onResolveContradiction: () => undefined,
         onViewFact: () => undefined,
-        onPromoteFinding: () => undefined,
-        onFileFinding: () => undefined,
-        onDismissFinding: () => undefined,
-        onProposeLesson: () => Promise.resolve(undefined),
-        onPromoteLesson: () => undefined,
-        onRetireLesson: () => undefined,
       }),
     }),
   );
@@ -910,7 +839,7 @@ test('the page draws every reach, the rejected tail included', async () => {
     'Injected',
     'On lookup',
     'One voice',
-    'Committed to the repository',
+    'Gone somewhere better',
     'Superseded',
     'Rejected',
   ]) {
@@ -944,14 +873,35 @@ test('the page draws every reach, the rejected tail included', async () => {
   // Where a claim went, and where one is going: both drawn as references rather
   // than as text, because a row that names a pull request and offers no way there
   // is a dead end that reads correctly (#27 phase 6).
-  assert.ok(html.includes('committed to the document that owns it'), 'a committed row does not say where it went');
-  assert.ok(html.includes('/pull/409'), 'a committed row does not link to the pull request that put it there');
+  assert.ok(html.includes('committed to the document that owns it'), 'a graduated row does not say where it went');
+  assert.ok(html.includes('/pull/409'), 'a graduated row does not link to the pull request that put it there');
   assert.ok(html.includes('/pull/411'), 'a graduating row does not link to its open pull request');
+  // All three exits, because "three ways a claim leaves" is the page's whole claim
+  // and one chip that only ever says "committed" demonstrates a third of it. The
+  // job hangs off a **proposal**, which is the case the merge turns on: one agent's
+  // report is exactly what every finding was, and queueing work for one asserts
+  // nothing.
+  assert.ok(html.includes('being worked now'), 'a claim queued as a job is not drawn as one');
+  assert.ok(html.includes('filed in the tracker'), 'a claim filed as a ticket is not drawn as one');
+  // And a filed one draws the **item**, not a pull request: a `ticket` exit lands
+  // on `link_ticket` rather than on the sweep, so there is no pull request to
+  // link. It is a `<Ref>` like every other, so with a goal in the world it is the
+  // goal button and without one it links out to the tracker — both keyed, which is
+  // the whole of what stops the row being a dead end.
+  assert.ok(html.includes('>#352<'), 'a filed claim does not draw the ticket it became as a reference');
   // And the claim being written up is still on lookup, still delivered: nothing
   // moved when the operator clicked.
   assert.ok(html.includes('being written up'), 'a graduation in flight is not drawn');
-  // And the one thing an operator must not be able to do from here.
-  assert.ok(!/>File a claim</.test(html), 'nothing on this page files a claim');
+  // The one write here that is not a ruling, and the sentence that keeps it from
+  // being a bypass: an operator's own claim lands as one voice, exactly as an
+  // agent's does, and a second decision is what puts either in front of the fleet.
+  assert.ok(html.includes('Write it down'), 'the operator cannot write a claim down');
+  // The page renders `<b>one voice</b>`, so the assertion is on the two runs around
+  // it rather than on a string markdown split into elements.
+  assert.ok(html.includes('It lands as ') && html.includes('one voice'), 'the composer does not say what it lands as');
+  // And the thing no control here may do: nothing files a claim on an agent's
+  // behalf, and nothing promotes without somebody saying so.
+  assert.ok(!/>File a claim</.test(html), 'nothing on this page files a claim for an agent');
 });
 
 // -- delivery (phase 3) -------------------------------------------------------
@@ -1082,25 +1032,74 @@ test('the page is told what is actually sent, from the renderers that send it', 
   await app.close();
 });
 
-test('a promoted lesson still reaches agents, as the fact it is mirrored into', async () => {
-  // Delivery moved in phase 3 and the lessons table stopped being rendered in its
-  // own right — so this is the crossing that must not break silently: a lesson
-  // vouched for is a claim that reaches agents, and one that quietly stopped
-  // would look exactly like one nobody promoted.
+test('a claim an operator writes down lands as one voice, never in front of the fleet', async () => {
+  // The one write on this page that is not a ruling, and the arm `POST /api/lessons`
+  // used to be. What made a lesson safe was the gate, so the merged surface must not
+  // become one gate and a bypass for whoever happens to be at the keyboard.
   const system = build();
-  const lesson = system.store.proposeLesson({ text: 'Take the devops lock before deploying.', originRef: 'issue:41' });
-  system.store.promoteLesson(lesson.id);
-
   const { app } = await buildApp(system);
+  const res = await app.inject({
+    method: 'POST',
+    url: '/api/knowledge/facts',
+    payload: { claim: 'Take the devops lock before deploying.', originRef: 'issue:41' },
+  });
+  assert.equal(res.statusCode, 200);
+
+  const [fact] = system.store.listFacts();
+  assert.equal(fact?.reach, 'proposal', 'an operator typing a claim is not an operator vouching for one');
+  assert.equal(fact?.scope, 'fleet');
+  // The provenance a reader dates the claim by, and the one thing about this row
+  // that is not true of an agent's: a person asserted it, and the corroboration says
+  // so rather than pretending an agent saw something.
+  assert.equal(fact?.originRef, 'issue:41');
+  assert.match(system.store.listCorroborations(fact!.id)[0]!.words, /An operator wrote this down/);
+  assert.equal(system.store.listCorroborations(fact!.id)[0]!.agentId, null);
+
+  // And it reaches nobody until they say so — the block is the whole check, because
+  // that is where a claim in front of the fleet would show up.
   const snap = (await app.inject({ method: 'GET', url: '/api/state' })).json() as {
     knowledgeDelivery: { block: string };
-    lessons: { id: string; rendered: boolean }[];
   };
-  assert.match(snap.knowledgeDelivery.block, /Take the devops lock before deploying\./);
-  // And the Lessons panel's chip is that same answer read back, never a second
-  // rendering of the lessons table — one block ships, so both panels have to be
-  // describing it.
-  assert.equal(snap.lessons.find((l) => l.id === lesson.id)?.rendered, true);
+  assert.doesNotMatch(snap.knowledgeDelivery.block, /devops lock/);
+
+  // Promoted, it is delivered like any other — the crossing that must not break
+  // silently, since a claim that quietly stopped reaching agents looks exactly like
+  // one nobody promoted.
+  system.store.setFactReach(fact!.id, 'injected');
+  const after = (await app.inject({ method: 'GET', url: '/api/state' })).json() as {
+    knowledgeDelivery: { block: string };
+  };
+  assert.match(after.knowledgeDelivery.block, /Take the devops lock before deploying\./);
+  await app.close();
+});
+
+test('the operator arm is bounded by the same rule the intake is, and the bar holds for them too', async () => {
+  const system = build();
+  const { app } = await buildApp(system);
+  const tooLong = await app.inject({
+    method: 'POST',
+    url: '/api/knowledge/facts',
+    payload: { claim: 'x'.repeat(3_000) },
+  });
+  // One bound, in one place: whichever writer is looser decides what an operator
+  // ends up being asked to read, which is why `validateClaimText` has three callers
+  // and no copies.
+  assert.equal(tooLong.statusCode, 400);
+  assert.match((tooLong.json() as { error: string }).error, /2000 characters or fewer/);
+  assert.equal((await app.inject({ method: 'POST', url: '/api/knowledge/facts', payload: {} })).statusCode, 400);
+
+  const filed = system.store.proposeFact(proposal({ claim: 'Not actually true.' }), seenOn('issue:41'));
+  assert.ok(filed.outcome !== 'barred');
+  system.store.setFactReach(filed.fact.id, 'rejected');
+  const barred = await app.inject({
+    method: 'POST',
+    url: '/api/knowledge/facts',
+    payload: { claim: 'Not actually true.' },
+  });
+  // A rejection is terminal for the person who made it as much as for the fleet:
+  // the way back is an amendment naming the claim, not typing it again.
+  assert.equal(barred.statusCode, 409);
+  assert.match((barred.json() as { error: string }).error, /rejection is terminal/);
   await app.close();
 });
 
@@ -1405,7 +1404,7 @@ test('no rule, desk or gate reads a fact', () => {
       if (entry.isDirectory()) walk(path);
       else if (
         entry.name.endsWith('.ts') &&
-        /\b(askFacts|listFacts|proposeFact|setFactReach|contradictFact|listContradictions|resolveContradiction|factCounts|recordFactAsks|commitFact|listGraduations|openGraduations|settleGraduation)\b/.test(
+        /\b(askFacts|listFacts|getFact|factLabels|proposeFact|setFactReach|contradictFact|listContradictions|resolveContradiction|factCounts|recordFactAsks|exitFact|listGraduations|openGraduations|settleGraduation|findGraduationByJobId|linkGraduationTicket)\b/.test(
           readFileSync(path, 'utf8'),
         )
       )
@@ -1414,6 +1413,58 @@ test('no rule, desk or gate reads a fact', () => {
   };
   walk('src/dispatcher');
   assert.deepEqual(readers, []);
+});
+
+/** Every `.ts` under a directory, so a structural assertion cannot miss a file somebody added. */
+function srcFiles(dir: string): string[] {
+  const out: string[] = [];
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const path = `${dir}/${entry.name}`;
+    if (entry.isDirectory()) out.push(...srcFiles(path));
+    else if (entry.name.endsWith('.ts')) out.push(path);
+  }
+  return out;
+}
+
+/**
+ * Every way a module could touch this store, so the assertion below can say which
+ * of them the tool channel is allowed.
+ *
+ * Named methods rather than the word "fact", which is a word prompts legitimately
+ * use: a prompt that tells an agent the channel exists is the dispatcher describing
+ * a tool, not a rule consulting the table, and the thing that would actually break
+ * the property is a call.
+ */
+const FACT_RULINGS = ['setFactReach', 'exitFact', 'resolveContradiction', 'settleGraduation', 'listFacts'];
+
+test('the tool channel may raise and ask, and never rule', () => {
+  // The half neither merged store's own rule relaxed, and the one that has to
+  // survive there being one store. Raising a claim is a claim an operator still has
+  // to read; **ruling** on one would be the gate deciding for the person it exists
+  // for, and reading the whole list back would hand an agent the fleet's claims
+  // through a side door beside the capped, spec'd block the launch renders.
+  //
+  // `askFacts` is deliberately absent from the list: answering an agent's ask is
+  // what this store is *for*, and it answers only what has reached `lookup`.
+  for (const dir of ['src/mcp', 'src/agents']) {
+    for (const file of srcFiles(dir)) {
+      const source = readFileSync(file, 'utf8');
+      for (const method of FACT_RULINGS) {
+        assert.equal(source.includes(method), false, `${file} calls ${method}; the channel may raise, never rule`);
+      }
+    }
+  }
+  // And the writes it *is* allowed are really there, so this cannot pass by the
+  // whole feature having been deleted.
+  const channel = srcFiles('src/mcp').map((f) => readFileSync(f, 'utf8'));
+  assert.ok(
+    channel.some((s) => s.includes('proposeFact')),
+    'the intake still raises a claim',
+  );
+  assert.ok(
+    channel.some((s) => s.includes('askKnowledge')),
+    'the channel can still be asked',
+  );
 });
 
 // -- what it costs, and what has drifted (phase 7) ----------------------------
