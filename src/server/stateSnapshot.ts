@@ -17,6 +17,7 @@ import type {
 import type {
   CockpitState,
   GoalReachView,
+  KnowledgeGraduationView,
   KnowledgeDeliveryView,
   LocalRunRefFacts,
   LocalRunTargetView,
@@ -46,6 +47,7 @@ import { readRunway } from '../supply/runway.js';
 import { DISPATCH_RULES } from '../dispatcher/rules.js';
 import { trackerCoordinates } from '../mcp/findings.js';
 import { rejectionSignalQuery } from '../proposals/proposals.js';
+import { graduationReading } from '../knowledge/graduation.js';
 import { adoptedFactId } from '../store/knowledge.js';
 import type { Store } from '../store/store.js';
 import { detectFileOverlaps } from '../fileOverlap.js';
@@ -151,6 +153,20 @@ export function buildStateSnapshot(
   // surfaces is silent non-delivery, which a recorder that stopped writing would
   // reproduce rather than reveal.
   const sightings = checkSightings(tasks, world.pullRequests);
+  // The work graph, read once for every graduation in flight rather than a subtree
+  // query each: the list is the operator's own clicks, and this is a polled snapshot.
+  const graduationNodes = store.listWorkNodes();
+  const graduations = store.listGraduations().map(
+    (graduation): KnowledgeGraduationView => ({
+      ...graduation,
+      reading: graduationReading(
+        graduation,
+        // The job's own node and its children: the first is what says a job was
+        // cancelled before it ever opened one, and the second is the pull request.
+        graduationNodes.filter((n) => n.ref === `job:${graduation.jobId}` || n.parentRef === `job:${graduation.jobId}`),
+      ),
+    }),
+  );
   // Which promoted lessons are actually in the block agents get. A lesson reaches
   // the fleet as the fact it is mirrored into (`adoptLessons`), so the answer is
   // the knowledge block's, read back through the adopted id — never a second
@@ -778,6 +794,12 @@ export function buildStateSnapshot(
         scopeLastMatchedAt: drift?.lastMatchedAt ?? null,
       };
     }),
+    // Every attempt to put one in the repository, the abandoned ones included:
+    // committing is one act with two ends, and the operator deciding whether to try
+    // again needs to see the try that did not land. `reading` is the sweep's own
+    // verdict over the work graph, taken here rather than in the browser for the
+    // reason every other count on this row is.
+    knowledgeGraduations: graduations,
     // What that list actually sends, from the renderers that send it.
     knowledgeDelivery: delivery,
     // What sending it costs, over the window Insights opens on. The block's length

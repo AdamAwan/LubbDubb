@@ -1845,6 +1845,41 @@ a.btn {
   width: 100%;
 }
 
+/* Committing a claim to the repository: the two places it can go, asked before
+   anything is opened. A panel rather than a row of buttons, because the choice is
+   the decision and the two answers are not equivalent — one of them is paid for on
+   every dispatch from then on, and a control that read as a toggle would hide
+   that. */
+.kn-commit {
+  background: var(--well);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 8px 10px;
+}
+.kn-commit-target {
+  align-items: flex-start;
+  cursor: pointer;
+  display: flex;
+  gap: 8px;
+}
+.kn-commit-target input {
+  margin-top: 3px;
+}
+.kn-commit textarea {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font: inherit;
+  padding: 6px 8px;
+  resize: vertical;
+  width: 100%;
+}
+
 /* What the injected block costs against its cap. A bar rather than a bare pair of
    numbers because the reading an operator wants is "how much room is left", which
    a ratio answers at a glance and two figures do not. */

@@ -1,18 +1,5 @@
 # 27 — Knowledge
 
-> **Status: partly built — phase 6 outstanding.** The store, its three axes, the corroboration
-> count, the rejection bar and `supersedes` are running; any agent can write to and read from them
-> (`knowledge_propose`, `knowledge_ask`, `knowledge_notice`, `knowledge_contradict`); delivery is
-> wired, so an injected claim is in every agent's system prompt and a scope-matched one is in the task
-> prompt of the dispatch it matches; notices run, including the two the harness raises for itself;
-> contradiction and amendment run, so a stale claim is sharpened rather than counted down; the cockpit
-> page is where an operator governs all of it, and it prices what the block costs, says when a
-> `check:` scope has stopped matching anything and counts how often a lookup claim was asked for. What
-> is outstanding is graduation — the section marked below describes behaviour that does not exist.
-> [The phases](#the-phases) says what lands when. Per `docs/README.md`, a module that does not exist
-> yet is named in italics where a real one is backticked, and a phase landing deletes its row and
-> unmarks the part of this document it makes true. When the last row goes, so does this banner.
-
 Hundreds of agents work this repository and each one starts knowing nothing about it. What they learn
 — that `knip` runs every rule at `error`, that a route handler never reads the request, that
 `test (windows)` has been timing out at the install step all afternoon — is learned again, at full
@@ -152,19 +139,21 @@ untouched — `rejected` means _not true_, and a notice that was true this morni
 
 Reach is the state machine, and it is the whole of the governance.
 
-| Reach       | Where the fact is                                  | What moves it here                      |
-| ----------- | -------------------------------------------------- | --------------------------------------- |
-| `proposal`  | Nowhere. One agent said it and nothing has agreed. | An agent proposing.                     |
-| `lookup`    | Answered when asked; injected on a matching scope. | Two independent corroborations, or you. |
-| `injected`  | In front of every agent, before it reads any code. | **You** — or two goals, for a notice.   |
-| `committed` | In the repository. **Out of every prompt.**        | A docs pull request landing.            |
-| `superseded` | Nowhere. A sharper claim naming it stands in its place. | **You**, adopting an amendment.    |
-| `rejected`  | Nowhere, and barred from coming back.              | You.                                    |
+| Reach        | Where the fact is                                       | What moves it here                      |
+| ------------ | ------------------------------------------------------- | --------------------------------------- |
+| `proposal`   | Nowhere. One agent said it and nothing has agreed.      | An agent proposing.                     |
+| `lookup`     | Answered when asked; injected on a matching scope.      | Two independent corroborations, or you. |
+| `injected`   | In front of every agent, before it reads any code.      | **You** — or two goals, for a notice.   |
+| `committed`  | In the repository. **Out of every prompt.**             | A docs pull request landing.            |
+| `superseded` | Nowhere. A sharper claim naming it stands in its place. | **You**, adopting an amendment.         |
+| `rejected`   | Nowhere, and barred from coming back.                   | You.                                    |
 
 Two of those transitions belong to the fleet: an agent proposing, and corroboration carrying a
 proposal to `lookup` — or, for a [notice](#notices) and only a notice, to `injected`. The rest are the operator's, and the [page](#in-the-cockpit) is what they are
 reached through — promote, demote and reject through `POST /api/knowledge/facts/:id/reach`, and
-`committed` through the documentation pull request that is [phase 6](#the-phases).
+`committed` through the documentation pull request an operator opens with
+`POST /api/knowledge/facts/:id/commit` and the world merges
+([Committing to the repository](#committing-to-the-repository)).
 
 **Naming the reach a claim already has is a ruling, not a no-op.** `lookup` is where two agents
 agreeing puts a claim _and_ where an operator puts one that is true but not worth every agent's
@@ -270,7 +259,9 @@ scope matches and through `knowledge_ask`, and it is contradicted by the same re
 code; refusing there would leave the fleet's one way of saying "this is stale" working for some of
 what it was told and not the rest, with no way for the agent to tell which. A `proposal` reaches
 nobody, so nothing could have been shown one; a `committed` fact is in the repository, where the way
-to correct it is a change to the documentation. And a **rejected** claim is refused by name: an
+to correct it is a change to the documentation — and the refusal names `report_finding` kind `docs`
+as the rail for one, rather than the pull request that put the claim there, which is a merged diff
+nobody can file against. And a **rejected** claim is refused by name: an
 operator has already said it is not true and it reaches nobody, so there is nothing to correct — what
 the agent has in hand is a claim in its own right, which is `knowledge_propose` with `supersedes`.
 
@@ -297,7 +288,7 @@ moves and the store makes both writes in one transaction.
 
 The adopted claim goes to **`superseded`**, a reach of its own and deliberately not `rejected`. It was
 not judged untrue — and a rejection would bar the amendment's own words, since an amendment usually
-*contains* the claim it sharpens, so the next agent to hit that edge would be refused by the name of a
+_contains_ the claim it sharpens, so the next agent to hit that edge would be refused by the name of a
 claim nobody is being told. `superseded` is out of every read exactly as `committed` is, bars nothing,
 and is terminal in both directions. For the same reason **the bar yields to a live descendant**: a
 rejected claim does not refuse a proposal whose words match a live fact that supersedes it, which is
@@ -317,7 +308,7 @@ and no window, taken server-side beside the rows it counts. No window because th
 one that carries a proposal to `lookup` — is over every corroboration a fact ever had, and a ratio over
 a shorter window would be a second number drawn from the same rows under a different rule, free to
 disagree with the one that governs while looking like the same arithmetic. Server-side for
-`distinctCorroborators`' reason exactly: both counts are counts of *voices*, so a division taken in
+`distinctCorroborators`' reason exactly: both counts are counts of _voices_, so a division taken in
 the browser would be arithmetic over numbers whose rule the view layer does not know. It is a
 **reading and never a trigger** — nothing is demoted, lapsed or deleted by it.
 
@@ -537,9 +528,10 @@ attention: **Live notices** with their clocks,
 **Needs you** — the corroborated claims waiting on the one decision that is yours — then **Injected**,
 **On lookup**, **One voice**, **Committed to the repository**, **Superseded**, and the **Rejected**
 tail. A row carries the claim, its scope as a reference, its corroboration count, its contradiction
-count and ratio, and its provenance, with the observers' own words a click away. A `check:` row whose
-scope has stopped matching says so; a `lookup` row says how often it was asked for, including when
-that is never. Both are [readings and never triggers](#what-it-costs).
+count and ratio, its provenance, and — where it has one — where it is going or has gone in the
+repository, with the observers' own words a click away. A `check:` row whose scope has stopped
+matching says so; a `lookup` row says how often it was asked for, including when that is never. Both
+are [readings and never triggers](#what-it-costs).
 
 **A disputed claim stays in the section its reach puts it in**, and so does one whose scope has
 drifted and one nobody has asked for. That is the page's own statement of the invariant: nothing is
@@ -562,19 +554,35 @@ carries a claim to `lookup`.
 
 **Nothing on the page auto-promotes anything, and it files nothing.** Agents propose through the tool
 channel on a scoped MCP credential; the cockpit's bearer token reaches four verbs — promote, demote,
-reject, keep — plus the three answers to a contradiction, and none of them is available to an agent.
-Nothing here files an amendment either: an agent wrote that through `knowledge_contradict`, with an
-observation behind it. There is no un-reject: a rejection is terminal, and what comes back is an
-amendment naming the barred claim.
+reject, keep — plus the three answers to a contradiction and the two of graduation, and none of them is
+available to an agent. Nothing here files an amendment either: an agent wrote that through
+`knowledge_contradict`, with an observation behind it. There is no un-reject: a rejection is terminal,
+and what comes back is an amendment naming the barred claim.
+
+**A committable row carries a "Commit to the repository" control**, which asks where the claim goes
+before it opens anything — the owning document, or `CLAUDE.md` with the sentence that arm costs. It is
+offered on a standing claim at `lookup` or `injected` and nowhere else, because those are the two
+things the store will take. While a graduation is going the row says so and draws its pull request as a
+reference; a graduation that did not land says that instead, and the control comes back. A row whose
+reading is `unknown` draws the two controls that answer it — _it merged_ / _it did not_ — beside the
+pull request they are about, because that reading is the harness declining to guess and the operator is
+who it is asking.
+
+**The reading on a graduation is the sweep's own**, shipped on the row. A page that worked out whether
+a pull request had landed from its status would be a second implementation of the verdict that takes a
+claim out of every prompt, free to disagree with the one that actually ran — `distinctCorroborators`'
+argument, pointed at the other end of the fact's life.
 
 **Promoted lessons are mirrored in, so the Lessons panel and this page show the same claims.** The
 page says so in as many words rather than leaving a reader to work out which surface is authoritative.
 
 **The Injected section carries a character budget** drawn against `knowledgeBlockChars`, and marks the
-claims the cap left out, per row. Beside it is [what the block costs](#what-it-costs) — the characters
-are the cap, and the dollars are the purchase. And the page ends with a second surface: **what an agent actually
-receives** — the system-prompt block verbatim, and the task-prompt append for each `check:` and `goal:`
-scope holding anything deliverable, from the same two renderers the launch and the dispatch use.
+claims the cap left out, per row. Under it is [what the block costs](#what-it-costs): the characters
+are the cap, and the dollars are the purchase.
+
+**And the page ends with a second surface: what an agent actually receives** — the system-prompt block
+verbatim, and the task-prompt append for each `check:` and `goal:` scope holding anything deliverable,
+from the same two renderers the launch and the dispatch use.
 
 Per scope rather than per dispatch, because a dispatch matches its goal and every check it answers at
 once and the set of dispatches is not a list; an agent fixing CI on a goal with claims against both
@@ -596,7 +604,11 @@ actually being sent"); a store this size cannot be governed without it.
 - **Nothing auto-promotes to `injected` except a notice**, and a notice cannot outlive its clock —
   `autoReach` reads the clock itself rather than the lifetime word.
 - **Nothing auto-commits to the repository.** A docs pull request is a dispatch a person promotes,
-  through the machinery `src/mcp/findings.ts` already has.
+  through the machinery `src/mcp/findings.ts` already has — and no agent reaches
+  `POST /api/knowledge/facts/:id/commit`, which is on the cockpit's bearer token and not the tool channel.
+- **Nothing takes a claim out of a prompt because work for it was queued.** Committing opens a pull
+  request and moves the claim nowhere; only an observed merge, or an operator answering a reading the
+  harness would not take, reaches `committed`.
 - **No reading acts.** Nothing is demoted, lapsed, dropped from the block or deprioritised because of
   what it costs, because its `check:` scope has stopped matching, because it is disputed, or because
   nobody has asked for it. Every number on the page is drawn for the person who can act on it, and the
@@ -683,32 +695,121 @@ contradiction ratio is the precedent: it counts and it does not act.
 
 ## Committing to the repository
 
-> **Not yet built — [phase 6](#the-phases).** `committed` is a reach the store holds, and a committed
-> fact is already out of every read; what does not exist is the pull request that puts it in the tree.
+A claim that has held long enough is worth more in the tree than in this store, and moving it there
+is the one transition in this design that ends outside the harness. `POST /api/knowledge/facts/:id/commit`
+opens the documentation work; the fact reaches `committed` — and therefore leaves every prompt — when
+that pull request actually lands.
+
+**It goes through the `docs`-finding machinery, and through the same authority.** A promoted `docs`
+finding is already "a fact about the repository that its own documentation does not state, worked by a
+code agent that opens a pull request", which is what a graduation is. So a graduation renders the same
+`docs-change` template ([05](05-dispatcher.md#prompt-templates)) and creates the same kind of job, and
+`src/mcp/findings.ts`' argument carries over unchanged: **nothing auto-commits**, because an agent that
+could queue this work could put agents on the fleet, which is a capability escalation rather than a
+convenience. The machinery has two callers now and one template — a second `PromptId` would be a
+second copy of an operator's "where documentation lives here" override to keep in step, diverging in
+silence on exactly the deployments that customised most.
+
+What graduation adds to that prompt — the observations behind the claim, where it is going, and what
+the landing costs the claim — is **appended** rather than given placeholders, for the reason every
+addition to a rendered prompt is (CLAUDE.md, "Prompts and templates").
+
+### Which document, and who decides
 
 A fact leaves for one of two places, and they are not interchangeable.
 
-- **The owning spec document** takes almost everything. `docs/README.md` says which document owns
-  what, and a fact that survived long enough to be committed is by definition an invariant of some
-  subsystem.
+- **The owning spec document** takes almost everything, and the agent finds it. `docs/README.md` says
+  which document owns what, and a fact that survived long enough to be committed is by definition an
+  invariant of some subsystem — so naming the file is a judgement made better by the agent that has
+  just read the code than by the operator clicking, and the `docs-change` template already says to
+  follow the repository's own rule about where documentation lives.
 - **`CLAUDE.md` takes only what meets its own bar**: things that, not knowing them, get something
   broken _silently_. That file is loaded into every agent's context on every dispatch, so
   indiscriminate graduation there grows without bound the exact cost this whole design exists to cap —
   and its length is asserted, not intended (`test/docsReferences.test.ts`).
 
-## The phases
+**What stops CLAUDE.md being the cheap default is that it costs a sentence.** The commit body is a
+discriminated union, and the `claudeMd` arm carries the operator's own statement of what breaks
+silently without the claim — required by the body's _shape_, exactly as a `narrowed` contradiction
+carries its claim, because an arm that could be taken by forgetting a field is the arm that gets taken.
+The sentence is not ceremony: it is appended to the prompt, so the agent writing the entry has the
+argument in the operator's words and is told to check that reading the way it checks the claim — and to
+put the fact in the owning document instead, saying so in the pull request, if the failure turns out to
+be a loud one.
 
-Ordered so each lands something usable and nothing before it is wasted. Every phase updates the part
-of this document it makes true.
+### What a fact is between the click and the landing
 
-| #   | Lands                                                                                                                                                  | Depends on |
-| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- |
-| 6   | Graduation. Committing a fact opens a documentation pull request through the `docs`-finding machinery, and the fact leaves every prompt when it lands. | 2          |
+**Nothing changes about it.** The claim keeps its reach, so it is still injected or still answered on
+lookup, still rides the prompts it rode, and can still be contradicted while its pull request is in
+review. That is a decision and not an oversight: a claim taken out of every prompt the moment somebody
+queues a docs job is a claim the fleet stops being told while a pull request sits unreviewed — and if
+that pull request is closed unmerged, it is a claim nobody committed and nobody reads, with nothing red.
 
-Phases 1 to 5 and 7 — `src/store/knowledge.ts`, the axes, the bar, the four tools, the page an
-operator governs them from, `src/knowledge/block.ts` with the two prompts it renders,
-`src/knowledge/noticeDesk.ts` with the notices the harness raises for itself, contradiction with the
-amendment it demands, and `src/knowledge/cost.ts` and `src/knowledge/drift.ts` with the readings that
-say what all of it costs and what has stopped matching — have landed. That is the whole spine: a claim
-can be written, ruled on, delivered, sharpened, priced, and expire. Graduation is what is left, and it
-depends on nothing that is not already here.
+So the intermediate state is **a row beside the fact and never a sixth reach**. Reach is how far a
+claim carries, and a claim being written up carries exactly as far as it did yesterday; a reach would
+have to be added to `askFacts`, to `ridesSystemPrompt` and to `contradictableFact` to mean "delivered",
+and every one of those is a place it could be forgotten silently. `knowledge_graduations`
+([14](14-persistence.md#graduations)) holds the job, the target, the operator's bar sentence and the
+pull request, and a fact may have more than one over its life — a pull request closed unmerged leaves
+the claim exactly where it was and the operator free to commit it again, and a column would have
+overwritten the record of the attempt that failed, which is the one thing somebody deciding whether to
+try again needs to read. A second graduation is refused while one is open: two agents writing the same
+paragraph into two pull requests is two chances to land a half of it.
+
+**A pull request closed unmerged ends the graduation and moves nothing.** Nobody committed the claim,
+so it is still true, still delivered, and still committable. The row stays, drawn on its fact.
+
+### How the landing is detected
+
+**Swept for, never hooked** — [24](24-environments.md#recording-a-landing)'s argument, and it binds
+harder here. A hook on the merge loses the landing to any restart that straddles it, or to a person
+merging in the web UI between two pulses, and what is lost is not a number in a report: it is a claim
+that goes on being injected into every prompt forever, paying context twice for one sentence, which is
+the exact cost this whole subsystem exists to cap.
+
+It takes its **own** reading rather than reusing `EnvironmentArrivalDesk`'s, because the two ask
+different questions. That desk asks whether a commit has reached an environment, which needs the merge
+SHA — a provider fact with a `closedPrWindowMs` shelf life that a squash leaves no ancestry link to. A
+graduation needs no commit at all: it needs what became of one pull request, and the **work graph**
+holds that durably, because it is upsert-only and keeps a merged PR long after `closedPullRequests` has
+forgotten it (`work_nodes`, [14](14-persistence.md)). Reading the graph rather than the world is what makes the sweep
+survive a restart across the merge. `src/knowledge/graduationDesk.ts` runs it, below `graph.record`
+because it reads the graph and above `decide` because a fact it commits has to be out of the block the
+launches on this pulse carry — and outside `src/dispatcher/` for `src/knowledge/noticeDesk.ts`' reason,
+since it is a writer and `test/knowledge.test.ts` matches this store's method names over that directory.
+
+**The reading is three-valued, and `unknown` is never folded into either of the others** — the
+discipline [24](24-environments.md#the-three-verdicts) states. A pull request node the graph marks
+merged with `provenance: 'inferred'` is one that vanished from the world without ever being seen
+closed; absence-means-merged is a sane default for a lens and is not one here, because acting on it
+takes a claim out of every prompt for a pull request that may have been closed unmerged while nothing
+was watching. So the sweep settles on an **observed** merge and on an observed close, and says
+`unknown` otherwise. `POST /api/knowledge/graduations/:id/settle` is the answer to that reading, and it
+is the one place `committed` is an operator's own word: the objection that keeps `committed` off the
+reach route — that it would take the claim out of every prompt while putting it nowhere — does not
+apply once a pull request has actually been opened.
+
+A documentation job that finishes without opening a pull request stays `waiting` rather than being
+called abandoned on a guess. The template says an unopened pull request means nothing happened, the
+page draws the row, and the operator decides.
+
+### What a committed fact keeps
+
+Everything except delivery. Its corroborations, its contradictions, its ratio and its provenance are
+the record of how it got there, and the page draws them on a committed row exactly as on any other —
+plus the pull request that put it in the tree, as a reference rather than as text. What it does not
+keep is a way to be contradicted: an agent holding a sharper version of a committed claim is holding a
+documentation change, and the refusal says so and names `report_finding` kind `docs`, which is a rail
+that now exists rather than a gesture at one.
+
+### What may be committed
+
+A **standing** claim that reaches somebody. Two refusals, and neither is about authority:
+
+- **A proposal reaches nobody.** One agent said it and nothing has agreed, so committing it would put
+  an unvouched claim into the repository through an agent — the auto-promotion this whole design
+  refuses, arriving through the one door that ends outside the harness. `lookup` is one click away.
+- **A notice is a report on today.** An expiring fact is true until its clock runs out and the
+  repository is for what stays true, so committing one would write this afternoon into a document that
+  outlives it by years — and the fact's own lapse would then take the claim out of prompts it is no
+  longer in while the document went on saying it.

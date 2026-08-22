@@ -196,6 +196,16 @@ interface HarnessDeps {
    */
   notices?: { run(prev: WorldSnapshot | null, next: WorldSnapshot): void };
   /**
+   * Ends the graduations the world has settled: a documentation pull request
+   * merged takes its claim to `committed` and out of every prompt, and one closed
+   * unmerged leaves the claim exactly where it was. Absent = nothing sweeps (tests
+   * that do not care), and then a committed claim only ever gets there through the
+   * operator's own answer on the page. It writes `knowledge_graduations` and
+   * `knowledge_facts` rows, decides no dispatch, and nothing but a prompt reads
+   * what it writes.
+   */
+  graduations?: { run(): void };
+  /**
    * Clears "Needs you" items whose agent has died. Absent = no sweep (tests that
    * do not care), and then only the terminal-state listeners tidy. It settles
    * inbox rows, decides no dispatch, and no rule reads what it writes.
@@ -403,6 +413,19 @@ export class Harness extends EventEmitter {
       // dispatcher for `closeOuts`' reason — it staffs nobody, holds nothing, and
       // no rule reads a fact.
       this.deps.notices?.run(previousWorld, world);
+      // What became of the documentation pull requests an operator opened for a
+      // claim — and, for the ones that landed, the claim leaving every prompt
+      // because the repository now says it.
+      //
+      // **Below the graph record and above `decide`**, and both halves matter. It
+      // reads the graph, which is `environments`' reason for sitting where it does:
+      // run above that line and it reads a graph one pulse stale, so a merge is
+      // acted on a pulse late every time. And a fact it commits leaves the block,
+      // which is rendered at launch a few lines below — run under that and the
+      // agents dispatched on this pulse are still told a claim the repository
+      // states. Beside the other bookkeeping and not in the dispatcher for
+      // `notices`' reason: it staffs nobody and no rule reads a fact.
+      this.deps.graduations?.run();
       // An agent parked because the *account* ran out is resumed once the window
       // `claude` named has turned over — the one park with a known end, so the
       // ordinary case needs no operator (issue #318). Beside the other bookkeeping

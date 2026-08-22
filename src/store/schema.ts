@@ -338,6 +338,33 @@ CREATE TABLE IF NOT EXISTS knowledge_asks (
   created_at TEXT NOT NULL
 );
 
+-- One attempt to put a claim in the repository: the documentation job an operator
+-- opened for it, where they said it belongs, and where it got to.
+--
+-- Its own table rather than columns on knowledge_facts, because a fact can have
+-- more than one of these. A pull request closed unmerged leaves the claim exactly
+-- where it was and the operator free to try again, and columns would overwrite the
+-- record of the attempt that failed — which is the one thing somebody deciding
+-- whether to try again needs to read.
+--
+-- Deliberately not a reach. The claim is still true and still delivered while its
+-- pull request sits in review; a reach that took it out of every prompt at the
+-- click would stop the fleet being told something nobody has committed and nobody
+-- can yet read, and — if the pull request never merged — would stop telling them
+-- forever with nothing red. The reach moves to committed only when the sweep
+-- reads the pull request as merged.
+CREATE TABLE IF NOT EXISTS knowledge_graduations (
+  id         TEXT PRIMARY KEY,
+  fact_id    TEXT NOT NULL,
+  job_id     TEXT NOT NULL,        -- the docs job; its branch is how the pull request is found
+  target     TEXT NOT NULL,        -- spec | claudeMd
+  bar        TEXT,                 -- the operator's reason it meets CLAUDE.md's bar; null for a spec graduation
+  pr_ref     TEXT,                 -- pr:<n>, stamped when the work graph first shows one
+  outcome    TEXT,                 -- landed | abandoned; null while it is still going
+  settled_at TEXT,
+  created_at TEXT NOT NULL
+);
+
 -- Why the fleet had to come back to a pull request, and what settled it: one row
 -- per CI failure or review round an agent answered, written by that agent through
 -- the report_remedy tool.

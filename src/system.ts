@@ -39,6 +39,7 @@ import { escalationTypeForAsk, recentOutputExcerpt } from './escalation/context.
 import { defaultConfigDir, defaultSocketPath, McpBridgeServer } from './mcp/server.js';
 import { McpDesktopServer } from './mcp/desktop.js';
 import { KNOWLEDGE_READ_LIMIT, renderKnowledgeBlock } from './knowledge/block.js';
+import { KnowledgeGraduationDesk } from './knowledge/graduationDesk.js';
 import { KnowledgeNoticeDesk } from './knowledge/noticeDesk.js';
 import { PrNamingDesk } from './prNamingDesk.js';
 import { DeliveryCloseOutDesk } from './delivery/closeOutDesk.js';
@@ -890,6 +891,12 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   // to rediscover a flake the pulse already watched happen.
   const notices = new KnowledgeNoticeDesk({ store, errors });
 
+  // What became of the documentation work an operator opened for a claim (issue
+  // #27 phase 6). Always wired, like the notices above: with no graduation in
+  // flight it reads nothing, and a deployment without it is one where a landed
+  // pull request never takes its claim out of the fleet's prompts.
+  const graduations = new KnowledgeGraduationDesk({ store, errors });
+
   const harness = new Harness({
     store,
     connector,
@@ -925,6 +932,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     // Resumes the agents parked on a usage limit whose window has turned over.
     fleet: agents,
     notices,
+    graduations,
     heartbeatIntervalMs: config.heartbeatIntervalMs,
     errors,
     runtime: runtimeControl,

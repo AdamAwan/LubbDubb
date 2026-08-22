@@ -1709,6 +1709,30 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
   _Narrow it yourself_ opens the claim for rewriting in place. _Dismiss_ is the only one of the three
   that leaves the fact where it was.
 
+  **Committing a claim to the repository is one control and one call** (#27 phase 6). It is offered on
+  a standing claim at `lookup` or `injected` — the two the store will take — and it asks where the
+  claim goes before it opens anything: the document that already owns the subject, which the agent
+  finds, or `CLAUDE.md`, which costs a sentence. That asymmetry is the control's whole job. CLAUDE.md
+  is loaded into every agent's context on every dispatch and its length is asserted rather than
+  intended, so the arm that could be taken by clicking past it is the arm that would get taken; the
+  sentence — what breaks _silently_ without the claim — is required by the body's shape and is
+  appended to the agent's prompt, where it is checked rather than obeyed.
+
+  **The click moves nothing.** The claim keeps its reach and goes on being delivered while its
+  documentation pull request is in review, because a claim taken out of every prompt the moment
+  somebody queues a docs job is one the fleet stops being told for a pull request that may be closed
+  unmerged. While a graduation is going the row says so and draws **the pull request as a reference**;
+  a graduation that did not land says that instead, and the control comes back. The **Committed to the
+  repository** section draws the pull request that put each claim there, so the section is a record of
+  where the fleet's knowledge went rather than a list of names.
+
+  **A row whose reading is `unknown` draws the two controls that answer it** — _it merged_ / _it did
+  not_ — beside that pull request. That reading is the harness declining to guess: a pull request that
+  left the world without ever being seen closed reads as merged only by inference, and acting on it
+  would take a claim out of every prompt for something that may never have merged. The reading itself
+  is the sweep's own answer shipped on the row, never worked out here — a second implementation of
+  "did this land" is free to disagree with the one that actually moves a claim.
+
   Four reach controls and no fifth, and none of them files anything — and none of them is what put a notice
   at `injected`, which is the store's own doing: agents propose through the tool channel,
   so a page that could write a claim would be writing one with no observation behind it. Promote,
@@ -1720,19 +1744,21 @@ Six panels open from the bar, the ask panel opens from a queue row ([the rail](#
 
   A row carries the claim, its **scope as a reference** — a `goal:` scope is the goal itself, a
   `check:` scope is the provider's own identifier and says so — its corroboration count, and its
-  provenance. A `check:` row whose scope has matched nothing in `knowledgeScopeStaleDays`, and whose
-  check the provider is not reporting either, is marked **scope has drifted**: a renamed or
-  re-matrixed job stops a claim being delivered *silently*, and this is the only surface that can say
-  so. A `lookup` row says **how often it was asked for**, including when that is never — explicit
-  `knowledge_ask` calls only, never delivery by a matching scope, which is the harness putting a claim
-  in front of an agent that did not want it. Both are **readings and never triggers**: the drifted
-  claim stays in the section its reach puts it in, and nothing is demoted for want of demand.
-  → [27](27-knowledge.md#what-it-costs) The count is `distinctCorroborators`' answer taken server-side (`KnowledgeFactView` in
+  provenance. The count is `distinctCorroborators`' answer taken server-side (`KnowledgeFactView` in
   `src/wire.ts`), never a length counted in the browser: two observations are one corroborator if they
   share a goal or a session, so a second count here would be free to disagree with the one that
   actually promotes. **What the observers saw** is a click and its own fetch — evidence runs to
   thousands of characters per observation and the snapshot is polled — and the open row is `?fact=<id>`
   on `Place`, so it is a link somebody can send.
+
+  **Two further readings on the row, and neither of them acts.** A `check:` row whose scope has matched
+  nothing in `knowledgeScopeStaleDays`, and whose check the provider is not reporting either, is marked
+  **scope has drifted**: a renamed or re-matrixed job stops a claim being delivered _silently_, and this
+  is the only surface that can say so. A `lookup` row says **how often it was asked for**, including
+  when that is never — explicit `knowledge_ask` calls only, never delivery by a matching scope, which
+  is the harness putting a claim in front of an agent that did not want it. The drifted claim stays in
+  the section its reach puts it in, and nothing is demoted for want of demand.
+  → [27](27-knowledge.md#what-it-costs)
 
   Promoted lessons are mirrored into this store, so the Lessons panel and this page show the same
   claims; the panel says so at the top rather than leaving a reader to work out which surface is

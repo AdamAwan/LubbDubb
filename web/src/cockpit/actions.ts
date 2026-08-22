@@ -1,6 +1,8 @@
 import type {
   ContradictionRuling,
+  FactCommitment,
   FactRuling,
+  GraduationOutcome,
   FilingTargetProbe,
   KnowledgeFactPayload,
   InsightsWindow,
@@ -352,6 +354,25 @@ export interface CockpitActions {
    * you" section ever empties.
    */
   setFactReach(id: string, reach: FactRuling): Promise<void>;
+  /**
+   * Commit a claim to the repository (#27 phase 6): open the documentation work
+   * for it, and record where the operator says it belongs.
+   *
+   * **One call, and the reach does not move.** The claim is still true and still
+   * delivered while its pull request sits in review — a page that took it out of
+   * every prompt at the click would stop the fleet being told something nobody has
+   * committed and nobody can yet read. It reaches `committed` when the pull request
+   * lands, which the harness sweeps for.
+   */
+  commitFact(id: string, commitment: FactCommitment): Promise<void>;
+  /**
+   * Say what became of a graduation the harness will not guess about — a pull
+   * request that left the world without ever being seen closed.
+   *
+   * The one place `committed` is an operator's own word rather than a reading, and
+   * it is available only where a pull request was actually opened.
+   */
+  settleGraduation(id: string, outcome: GraduationOutcome): Promise<void>;
   /**
    * One claim with the observations behind it, in the observers' own words.
    *

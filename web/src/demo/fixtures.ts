@@ -2124,6 +2124,36 @@ export function buildDemoState(): DemoSeed {
         scopeLastMatchedAt: null,
       },
       {
+        // Committed, and therefore out of every prompt (#27 phase 6): the claim is
+        // in the repository now, so an agent reads it there and keeping it injected
+        // would pay context twice for one sentence. It reached this reach when the
+        // pull request below actually merged — never when the work was queued.
+        id: 'fact-committed',
+        claim:
+          'A route handler never reads the request: it is wrapped in `checked(schemas, handler)` and handed the ' +
+          'parsed body, and a refusal is a returned 400 rather than a throw.',
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresAt: null,
+        reach: 'committed',
+        supersedes: null,
+        originRef: 'issue:341',
+        ruledAt: ago(150),
+        resolvesWhen: null,
+        createdAt: ago(400),
+        updatedAt: ago(150),
+        corroborations: 3,
+        contradictions: 0,
+        contradictionRatio: 0,
+        openContradictions: 0,
+        // Committed, so out of every prompt — and the ask count with it: nothing
+        // answers an ask with a committed claim, because the repository does.
+        asks: 0,
+        lastAskedAt: null,
+        scopeStale: false,
+        scopeLastMatchedAt: null,
+      },
+      {
         id: 'fact-rejected',
         claim: 'The dispatcher reads the lessons table before it ranks anything.',
         scope: 'fleet',
@@ -2144,6 +2174,38 @@ export function buildDemoState(): DemoSeed {
         lastAskedAt: null,
         scopeStale: false,
         scopeLastMatchedAt: null,
+      },
+    ],
+    // Every attempt to put a claim in the repository (#27 phase 6). Two, because
+    // the interesting half of graduation is the state *between* the click and the
+    // landing: the claim on `fact-lookup` is still on lookup and still answered,
+    // with a pull request open — and only the one whose pull request actually
+    // merged is `committed`. A page that moved a claim at the click would be
+    // showing a claim nobody has committed and nobody can yet read.
+    knowledgeGraduations: [
+      {
+        id: 'kng-lookup',
+        factId: 'fact-lookup',
+        jobId: 'job-docs-1',
+        target: 'spec',
+        bar: null,
+        prRef: 'pr:411',
+        outcome: null,
+        settledAt: null,
+        createdAt: ago(40),
+        reading: 'waiting',
+      },
+      {
+        id: 'kng-committed',
+        factId: 'fact-committed',
+        jobId: 'job-docs-0',
+        target: 'spec',
+        bar: null,
+        prRef: 'pr:409',
+        outcome: 'landed',
+        settledAt: ago(150),
+        createdAt: ago(190),
+        reading: 'landed',
       },
     ],
     // What that list actually sends. A **transcript** of what the two renderers

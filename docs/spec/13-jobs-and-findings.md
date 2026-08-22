@@ -528,7 +528,22 @@ them.
   And to change documentation only — a defect turned up while checking is a separate `report_finding`,
   not a fix smuggled into a docs PR.
 
-Tests: `test/docsFindings.test.ts`.
+**This machinery has a second caller.** Committing a knowledge fact to the repository
+([27](27-knowledge.md#committing-to-the-repository)) renders the **same** `docs-change` template into
+the **same** kind of job, from `POST /api/knowledge/facts/:id/commit`, because a graduating claim and a
+promoted `docs` finding are the same errand: a fact about the repository that its own documentation
+does not state, worked by a code agent that opens a pull request. One template and not two — a second
+`PromptId` would be a second copy of an operator's "where documentation lives here" override to keep in
+step, diverging in silence on exactly the deployments that customised most. What graduation needs on
+top of it (the observations behind the claim, the target the operator named, and the fact that landing
+takes the claim out of every prompt) is **appended** by `graduationNote` (`src/knowledge/graduation.ts`)
+rather than given placeholders, exactly as the duplicate candidates are appended on `/file`.
+
+The argument at the top of this section carries over whole: **nothing auto-commits**, because an agent
+that could queue this work could put agents on the fleet. Both callers start with an operator's click,
+on the cockpit's bearer token and never the tool channel.
+
+Tests: `test/docsFindings.test.ts`, `test/knowledgeGraduation.test.ts`.
 
 ### Filing a ticket
 

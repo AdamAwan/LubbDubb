@@ -1468,6 +1468,88 @@ export type ContradictionResolution = 'amended' | 'narrowed' | 'dismissed';
 export type ContradictionRuling = { resolution: 'amended' | 'dismissed' } | { resolution: 'narrowed'; claim: string };
 
 /**
+ * Where a fact graduates to — the two places named in
+ * `docs/spec/27-knowledge.md#committing-to-the-repository`, and there is no third.
+ *
+ * `spec` leaves *which* document to the agent, because `docs/README.md` already
+ * says which one owns what and a fact that survived long enough to be committed is
+ * by definition an invariant of some subsystem. `claudeMd` is the exception and is
+ * priced like one: that file is loaded into every agent's context on every
+ * dispatch and **its length is asserted, not intended**, so graduating there grows
+ * without bound the exact cost this whole design exists to cap. The operator says
+ * why it meets that file's bar in their own words, and the shape of
+ * {@link FactCommitment} is what makes that unskippable.
+ */
+export type GraduationTarget = 'spec' | 'claudeMd';
+
+/**
+ * The operator's decision to commit a claim: where it goes, and — for the one
+ * target that needs it — the argument that it belongs there.
+ *
+ * A discriminated union rather than an optional `bar` beside a free target, for
+ * {@link ContradictionRuling}'s reason exactly: a CLAUDE.md graduation with no
+ * statement of what breaks silently without the claim is the one shape of this
+ * decision that would silently do the expensive thing. The sentence is not
+ * ceremony — it is appended to the agent's prompt, so whoever writes the entry has
+ * the argument in the operator's words rather than having to invent one.
+ */
+export type FactCommitment = { target: 'spec' } | { target: 'claudeMd'; bar: string };
+
+/**
+ * What became of a graduation. Null on the row means it is still going.
+ *
+ * `abandoned` is not a failure state to be tidied away: a documentation pull
+ * request closed unmerged means **nobody committed the claim**, so the fact stays
+ * exactly where it was and goes on being delivered. The row stays too, because an
+ * operator deciding whether to try again needs to know one was tried.
+ */
+export type GraduationOutcome = 'landed' | 'abandoned';
+
+/**
+ * What the harness can say about a graduation in flight, from the work graph.
+ *
+ * **Three live verdicts and not two**, for `GitObserver.contains`' reason
+ * (`docs/spec/24-environments.md#the-three-verdicts`): a pull request the harness
+ * never saw finish and one it saw merge are different readings, and folding the
+ * first into the second takes a claim out of every prompt for a pull request that
+ * may never have merged. `unknown` is drawn on the page with the two controls that
+ * answer it, and is the one reading that asks the operator for something.
+ */
+export type GraduationReading = 'waiting' | 'unknown' | GraduationOutcome;
+
+/**
+ * One attempt to put a claim in the repository: the docs job an operator opened
+ * for it, where they said it belongs, and where it got to.
+ *
+ * **Its own table rather than columns on `knowledge_facts`.** A pull request
+ * closed unmerged leaves the claim exactly where it was and an operator free to
+ * try again, so a fact can have more than one of these over its life — and columns
+ * would overwrite the record of the attempt that failed, which is precisely what
+ * the operator deciding whether to try again needs to read.
+ *
+ * It is deliberately **not** a reach. The claim is still true and still being
+ * delivered while its pull request sits in review: a reach that took it out of
+ * every prompt at the click would stop the fleet being told a claim that nobody
+ * has committed and that nobody can read yet — and if that pull request is closed
+ * unmerged, would stop telling them forever, with nothing red.
+ */
+export interface KnowledgeGraduation {
+  id: string;
+  factId: string;
+  /** The documentation job the operator opened. Its branch is how the pull request is found. */
+  jobId: string;
+  target: GraduationTarget;
+  /** The operator's statement of what breaks silently without the claim. Null for a `spec` graduation. */
+  bar: string | null;
+  /** The pull request the job produced (`pr:41`), stamped when the work graph first shows one. */
+  prRef: string | null;
+  /** `landed` or `abandoned`, or null while it is still going. */
+  outcome: GraduationOutcome | null;
+  settledAt: string | null;
+  createdAt: string;
+}
+
+/**
  * Which kind of return to a pull request a {@link Remedy} accounts for: its CI
  * going red, or a review asking for changes.
  *

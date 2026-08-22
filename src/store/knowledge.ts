@@ -13,12 +13,16 @@ import {
 import type {
   ContradictionResolution,
   ContradictionRuling,
+  FactCommitment,
   FactObservation,
   FactReach,
   FactResolution,
+  GraduationOutcome,
+  GraduationTarget,
   KnowledgeContradiction,
   KnowledgeCorroboration,
   KnowledgeFact,
+  KnowledgeGraduation,
   Lesson,
 } from '../types.js';
 import type { ColumnMigrations } from './migrate.js';
@@ -40,6 +44,10 @@ import type { StoreContext } from './context.js';
  * merely acceptable on an older row, it is the only true value. The rows that
  * carry one are written by the harness's own notice desk from the pulse it lands
  * on, and a backfill could only invent conditions for notices nobody was watching.
+ * `knowledge_graduations` (phase 6) is a **new table** and so needs no entry at
+ * all — `CREATE TABLE IF NOT EXISTS` creates it whole on every database that does
+ * not have it. Being new *once* is what stops keeping it exempt: the first column
+ * added to it later belongs here, exactly as the two above do.
  * → `docs/spec/14-persistence.md#migrations`
  */
 export const KNOWLEDGE_COLUMNS: ColumnMigrations = {
@@ -460,6 +468,127 @@ export class KnowledgeStore {
    */
   setFactReach(id: string, reach: FactReach): KnowledgeFact | null {
     return this.moveReach(id, reach, this.ctx.now());
+  }
+
+  /**
+   * Record that an operator has opened documentation work for a claim.
+   *
+   * **The fact is not touched.** Its reach stays exactly where it was, so it goes
+   * on being answered, injected and contradicted while the pull request sits in
+   * review — which is the whole of what makes the state between the click and the
+   * landing safe. A reach that moved here would stop the fleet being told a claim
+   * nobody has committed and nobody can read yet, and a pull request closed
+   * unmerged would leave it that way with nothing red.
+   *
+   * The job is created by the caller that holds both tables — `Store.commitFact`,
+   * in one transaction with this row — because a store module may not reach a
+   * sibling's tables (`test/storeModules.test.ts`) and a docs job with no
+   * graduation naming it is a pull request that lands and takes nothing out of any
+   * prompt.
+   */
+  recordGraduation(factId: string, jobId: string, commitment: FactCommitment): KnowledgeGraduation {
+    const row: KnowledgeGraduation = {
+      id: `kng_${nanoid(10)}`,
+      factId,
+      jobId,
+      target: commitment.target,
+      bar: commitment.target === 'claudeMd' ? commitment.bar : null,
+      prRef: null,
+      outcome: null,
+      settledAt: null,
+      createdAt: this.ctx.now(),
+    };
+    this.ctx.db
+      .prepare(
+        `INSERT INTO knowledge_graduations (id, fact_id, job_id, target, bar, pr_ref, outcome, settled_at, created_at)
+         VALUES (@id, @factId, @jobId, @target, @bar, @prRef, @outcome, @settledAt, @createdAt)`,
+      )
+      .run(row);
+    return row;
+  }
+
+  /**
+   * Every graduation, newest first — the abandoned ones included, for the reason
+   * {@link listFacts} keeps the rejected claims: an operator deciding whether to
+   * commit a claim again needs to know one was tried and did not land.
+   */
+  listGraduations(limit = 200): KnowledgeGraduation[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM knowledge_graduations ORDER BY created_at DESC, rowid DESC LIMIT ?`)
+      .all(limit) as GraduationRow[];
+    return rows.map(rowToGraduation);
+  }
+
+  /** The graduations still going: what the sweep has something to ask about. */
+  openGraduations(): KnowledgeGraduation[] {
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM knowledge_graduations WHERE outcome IS NULL ORDER BY created_at ASC, rowid ASC`)
+      .all() as GraduationRow[];
+    return rows.map(rowToGraduation);
+  }
+
+  getGraduation(id: string): KnowledgeGraduation | null {
+    const row = this.ctx.db.prepare(`SELECT * FROM knowledge_graduations WHERE id=?`).get(id) as
+      | GraduationRow
+      | undefined;
+    return row ? rowToGraduation(row) : null;
+  }
+
+  /**
+   * Stamp the pull request the job produced, the first time the work graph shows
+   * one.
+   *
+   * Written down rather than re-derived on every read, because the graph's memory
+   * of the job that produced a pull request is only as long as `listJobs`' window:
+   * the edge is folded from the job's own branch, and an aged-out job stops being
+   * offered to the fold. The ref is what the page draws — a row naming a pull
+   * request and offering no way there is the cockpit's most repeated bug — and it
+   * has to survive the graduation itself.
+   *
+   * Guarded on the row still being open and on nothing having been stamped yet, so
+   * a second pull request opened on the same branch never displaces the one this
+   * graduation is actually waiting on.
+   */
+  noteGraduationPr(id: string, prRef: string): void {
+    this.ctx.db
+      .prepare(`UPDATE knowledge_graduations SET pr_ref=? WHERE id=? AND pr_ref IS NULL AND outcome IS NULL`)
+      .run(prRef, id);
+  }
+
+  /**
+   * End a graduation — and, for the one outcome that means the claim is in the
+   * tree, move the fact to `committed` **in the same transaction**.
+   *
+   * One write, because they are one event. Two would half-land in both directions
+   * and both are silent: a fact at `committed` with no graduation saying where it
+   * went is a claim out of every prompt pointing nowhere, and a graduation marked
+   * landed over a fact still injected pays context for a sentence the repository
+   * now states.
+   *
+   * `abandoned` moves nothing. A pull request closed unmerged means nobody
+   * committed the claim, so it stays exactly where it was, goes on being
+   * delivered, and can be committed again.
+   *
+   * Idempotent through the guard on `outcome IS NULL`, so a sweep that runs twice
+   * over one pulse cannot re-settle a row or re-move a reach.
+   */
+  settleGraduation(id: string, outcome: GraduationOutcome): KnowledgeGraduation | null {
+    const at = this.ctx.now();
+    const write = this.ctx.db.transaction((): KnowledgeGraduation | null => {
+      const result = this.ctx.db
+        .prepare(`UPDATE knowledge_graduations SET outcome=?, settled_at=? WHERE id=? AND outcome IS NULL`)
+        .run(outcome, at, id);
+      if (result.changes === 0) return null;
+      const row = this.getGraduation(id);
+      // Ruled, and by the operator: they said the claim belongs in the repository,
+      // and the pull request landing is that decision arriving rather than a second
+      // one. `moveReach` refuses a rejected or superseded claim, so a fact an
+      // operator killed while its pull request was in review stays killed and the
+      // graduation still ends — which is the honest reading of both.
+      if (row !== null && outcome === 'landed') this.moveReach(row.factId, 'committed', at);
+      return row;
+    });
+    return write();
   }
 
   /**
@@ -950,6 +1079,32 @@ function rowToContradiction(r: ContradictionRow): KnowledgeContradiction {
     words: r.words,
     resolution: r.resolution as ContradictionResolution | null,
     resolvedAt: r.resolved_at,
+    createdAt: r.created_at,
+  };
+}
+
+interface GraduationRow {
+  id: string;
+  fact_id: string;
+  job_id: string;
+  target: string;
+  bar: string | null;
+  pr_ref: string | null;
+  outcome: string | null;
+  settled_at: string | null;
+  created_at: string;
+}
+
+function rowToGraduation(r: GraduationRow): KnowledgeGraduation {
+  return {
+    id: r.id,
+    factId: r.fact_id,
+    jobId: r.job_id,
+    target: r.target as GraduationTarget,
+    bar: r.bar,
+    prRef: r.pr_ref,
+    outcome: r.outcome as GraduationOutcome | null,
+    settledAt: r.settled_at,
     createdAt: r.created_at,
   };
 }

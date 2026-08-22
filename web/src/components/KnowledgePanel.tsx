@@ -2,12 +2,15 @@ import { useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import type {
   ContradictionRuling,
+  FactCommitment,
   FactRuling,
+  GraduationOutcome,
   KnowledgeContradictionView,
   KnowledgeCorroboration,
   KnowledgeCost,
   KnowledgeDeliveryView,
   KnowledgeFactView,
+  KnowledgeGraduationView,
 } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { ConfirmButton } from './ConfirmButton.js';
@@ -53,17 +56,22 @@ import { Ref } from './refs.js';
  */
 export function KnowledgePanel({
   facts,
+  graduations,
   delivery,
   cost,
   now,
   refUrls,
   viewingFact,
   onReach,
+  onCommit,
+  onSettleGraduation,
   onDetail,
   onResolveContradiction,
   onViewFact,
 }: {
   facts: KnowledgeFactView[];
+  /** Every attempt to put a claim in the repository, with the sweep's own reading of each. */
+  graduations: KnowledgeGraduationView[];
   /** What the two renderers actually send, projected server-side. Never recomputed here. */
   delivery: KnowledgeDeliveryView;
   /** What sending it costs, priced server-side against the fleet's own spend. Never divided here. */
@@ -73,6 +81,8 @@ export function KnowledgePanel({
   /** The claim whose provenance is open, from `Place` — never this component's own state. */
   viewingFact: string | null;
   onReach: (id: string, reach: FactRuling) => Promise<unknown> | unknown;
+  onCommit: (id: string, commitment: FactCommitment) => Promise<unknown> | unknown;
+  onSettleGraduation: (id: string, outcome: GraduationOutcome) => Promise<unknown> | unknown;
   onDetail: (id: string) => Promise<{
     corroborations: KnowledgeCorroboration[];
     contradictions: KnowledgeContradictionView[];
@@ -95,7 +105,24 @@ export function KnowledgePanel({
   // Never a character count taken here: a second implementation of "what fits" is
   // free to disagree with the one that shipped, and nothing is red when it does.
   const dropped = new Set(delivery.dropped);
-  const shared = { now, refUrls, viewingFact, onReach, onDetail, onResolveContradiction, onViewFact, dropped };
+  // The graduation a row draws, if any: the one still going, or the last one that
+  // did not land. Taken here rather than in the card so the list is walked once,
+  // and taken from the server's own rows — the reading on each is the sweep's.
+  const graduationOf = new Map<string, KnowledgeGraduationView>();
+  for (const row of [...graduations].reverse()) graduationOf.set(row.factId, row);
+  const shared = {
+    now,
+    refUrls,
+    viewingFact,
+    onReach,
+    onCommit,
+    onSettleGraduation,
+    onDetail,
+    onResolveContradiction,
+    onViewFact,
+    dropped,
+    graduationOf,
+  };
   return (
     <div className="kn">
       <p className="muted small kn-note">
@@ -140,7 +167,7 @@ export function KnowledgePanel({
       />
       <KnowledgeSection
         title="Committed to the repository"
-        blurb="In docs/spec or CLAUDE.md now, and out of every prompt: an agent reads these from the repository, and keeping them injected would pay context twice for one sentence. This list growing while Injected shrinks is the number worth watching."
+        blurb="In the repository now, and out of every prompt: an agent reads these from the tree, and keeping them injected would pay context twice for one sentence. Each row carries the pull request that put it there — a claim only reaches this section when that pull request actually merged, never when the work was queued. This list growing while Injected shrinks is the number worth watching."
         facts={section('committed')}
         {...shared}
       />
@@ -318,6 +345,10 @@ interface RowProps {
   refUrls: Record<string, string>;
   viewingFact: string | null;
   onReach: (id: string, reach: FactRuling) => Promise<unknown> | unknown;
+  onCommit: (id: string, commitment: FactCommitment) => Promise<unknown> | unknown;
+  onSettleGraduation: (id: string, outcome: GraduationOutcome) => Promise<unknown> | unknown;
+  /** The graduation each fact carries, if any — the live one, or the last that did not land. */
+  graduationOf: Map<string, KnowledgeGraduationView>;
   onDetail: (id: string) => Promise<{
     corroborations: KnowledgeCorroboration[];
     contradictions: KnowledgeContradictionView[];
@@ -367,12 +398,20 @@ function FactCard({
   refUrls,
   viewingFact,
   onReach,
+  onCommit,
+  onSettleGraduation,
   onDetail,
   onResolveContradiction,
   onViewFact,
   dropped,
+  graduationOf,
 }: { fact: KnowledgeFactView } & RowProps) {
   const open = viewingFact === fact.id;
+  const graduation = graduationOf.get(fact.id) ?? null;
+  // Transient form state and not `Place`: a half-filled radio group is not a place
+  // anybody would link to or expect the back button to restore, which is the line
+  // the address bar draws (`docs/spec/17-cockpit.md#the-address-bar`).
+  const [committing, setCommitting] = useState(false);
   const settled = fact.reach === 'rejected' || fact.reach === 'committed' || fact.reach === 'superseded';
   return (
     <div className={`kn-card${settled ? ' resolved' : ''}`}>
@@ -486,6 +525,7 @@ function FactCard({
             over the cap
           </span>
         )}
+        {graduation !== null && <GraduationChip graduation={graduation} />}
         {fact.supersedes !== null && (
           <span
             className="chip small info"
@@ -515,11 +555,214 @@ function FactCard({
           {open ? 'Hide what was seen' : 'What was seen'}
         </button>
         <span className="spacer" />
+        <FactCommitControl
+          fact={fact}
+          graduation={graduation}
+          committing={committing}
+          onCommitting={setCommitting}
+          onSettle={onSettleGraduation}
+        />
         <FactRulings fact={fact} onReach={onReach} />
       </div>
+      {committing && <FactCommitForm fact={fact} onCommit={onCommit} onDone={() => setCommitting(false)} />}
       {open && <FactProvenance id={fact.id} now={now} onDetail={onDetail} onResolve={onResolveContradiction} />}
     </div>
   );
+}
+
+/**
+ * Where a claim is between the click and the landing, drawn as the pull request it
+ * is riding on.
+ *
+ * **The reference is a reference.** A row that names a pull request and offers no
+ * way there is the cockpit's most repeated bug, and it is invisible: the row reads
+ * correctly and is simply a dead end. Which is why the chip carrying the ref is not
+ * a button — one click cannot have two destinations — and the controls that answer
+ * an `unknown` reading sit beside it rather than around it.
+ *
+ * `unknown` is the only reading here that asks for something. The pull request left
+ * the world without ever being seen closed, so the harness will not say either way:
+ * calling it merged would take the claim out of every prompt for a pull request
+ * that may never have merged, and calling it closed would leave a committed claim
+ * being paid for twice.
+ */
+function GraduationChip({ graduation }: { graduation: KnowledgeGraduationView }): JSX.Element {
+  const where = graduation.target === 'claudeMd' ? 'CLAUDE.md' : 'the document that owns it';
+  const label =
+    graduation.reading === 'landed'
+      ? `committed to ${where}`
+      : graduation.reading === 'abandoned'
+        ? 'a docs pull request for this did not land'
+        : graduation.reading === 'unknown'
+          ? 'its docs pull request left the world unseen'
+          : `being written up for ${where}`;
+  const tone = graduation.reading === 'landed' ? 'ok' : graduation.reading === 'waiting' ? 'info' : 'warn';
+  return (
+    <span className="cn-refs">
+      <span
+        className={`chip small ${tone}`}
+        title={
+          graduation.reading === 'waiting'
+            ? 'An operator committed this to the repository and the documentation work is open. The claim keeps reaching every agent it already reached until that pull request merges — a claim taken out of prompts for a pull request still in review is one nobody is told and nobody can read.'
+            : graduation.reading === 'abandoned'
+              ? 'The pull request was closed without merging, so nobody committed the claim. It is exactly where it was, and you can commit it again.'
+              : graduation.reading === 'unknown'
+                ? 'The pull request stopped being reported without ever being seen closed, so the harness will not say whether it merged. Guessing either way is silent: merged takes the claim out of every prompt, not-merged goes on paying for a sentence the repository may already state.'
+                : 'The pull request merged, so the claim is in the repository and out of every prompt.'
+        }
+      >
+        {label}
+      </span>
+      {graduation.prRef !== null && <Ref to={graduation.prRef} />}
+    </span>
+  );
+}
+
+/**
+ * Committing a claim to the repository: **one control and one call**, because
+ * "this belongs in the repository" is one decision from an operator's side.
+ *
+ * The control is only offered where the store would take it — a standing claim at
+ * `lookup` or `injected`. A proposal nobody has agreed with and a notice that ends
+ * by itself are refused by name there; the page simply does not ask.
+ *
+ * The two settle buttons are the answer to the one reading the harness will not
+ * take. They appear only where a pull request was actually opened, which is what
+ * makes saying "it merged" put the claim in a place rather than nowhere — the
+ * objection that keeps `committed` off the ordinary reach control.
+ */
+function FactCommitControl({
+  fact,
+  graduation,
+  committing,
+  onCommitting,
+  onSettle,
+}: {
+  fact: KnowledgeFactView;
+  graduation: KnowledgeGraduationView | null;
+  committing: boolean;
+  onCommitting: (open: boolean) => void;
+  onSettle: (id: string, outcome: GraduationOutcome) => Promise<unknown> | unknown;
+}): JSX.Element | null {
+  if (graduation !== null && graduation.reading === 'unknown') {
+    return (
+      <>
+        <AsyncButton
+          className="ghost"
+          onClick={() => onSettle(graduation.id, 'landed')}
+          title="It merged. The claim goes to committed and leaves every prompt — an agent reads it from the repository now"
+        >
+          It merged
+        </AsyncButton>
+        <AsyncButton
+          className="ghost"
+          onClick={() => onSettle(graduation.id, 'abandoned')}
+          title="It did not merge. The claim stays exactly where it is and goes on being delivered"
+        >
+          It did not
+        </AsyncButton>
+      </>
+    );
+  }
+  if (graduation !== null && graduation.reading === 'waiting') return null;
+  if (!committableHere(fact)) return null;
+  return (
+    <button
+      type="button"
+      className="ghost"
+      onClick={() => onCommitting(!committing)}
+      title="Open a documentation pull request for this claim. It keeps reaching agents until that pull request merges, and leaves every prompt when it does"
+    >
+      {committing ? 'Not now' : 'Commit to the repository'}
+    </button>
+  );
+}
+
+/**
+ * Where a committed claim goes, asked before anything is opened — and the two
+ * answers are deliberately not offered evenly.
+ *
+ * The owning document is the ordinary one and needs nothing said: the repository
+ * already states which document owns what, and the agent reads it. CLAUDE.md is
+ * loaded into every agent's context on every dispatch and **its length is asserted
+ * rather than intended**, so graduating there grows without bound the exact cost
+ * this page exists to cap. It therefore costs a sentence — what breaks *silently*
+ * without the claim, which is that file's own bar — and that sentence is not
+ * ceremony: it is appended to the prompt, so the agent writing the entry checks the
+ * operator's reading the way it checks the claim.
+ *
+ * Nothing here moves the claim. It stays exactly where it is, delivered, until the
+ * pull request merges — which is a sweep, not this click.
+ */
+function FactCommitForm({
+  fact,
+  onCommit,
+  onDone,
+}: {
+  fact: KnowledgeFactView;
+  onCommit: (id: string, commitment: FactCommitment) => Promise<unknown> | unknown;
+  onDone: () => void;
+}): JSX.Element {
+  const [target, setTarget] = useState<FactCommitment['target']>('spec');
+  const [bar, setBar] = useState('');
+  return (
+    <div className="kn-commit">
+      <p className="muted small">
+        An agent will check this against the code, write it into the repository and open a pull request. The claim keeps
+        reaching every agent it already reaches until that pull request merges — and leaves every prompt for good when
+        it does, because an agent reads it from the tree from then on. If the pull request is closed unmerged, nothing
+        changes and you can commit it again.
+      </p>
+      <label className="kn-commit-target">
+        <input type="radio" checked={target === 'spec'} onChange={() => setTarget('spec')} />
+        <span>
+          <b>The document that owns it.</b> The agent finds it — the repository states which document owns what.
+        </span>
+      </label>
+      <label className="kn-commit-target">
+        <input type="radio" checked={target === 'claudeMd'} onChange={() => setTarget('claudeMd')} />
+        <span>
+          <b>CLAUDE.md.</b> Loaded into every agent on every dispatch, and its length is asserted rather than intended —
+          so it takes only what, not knowing it, breaks something <em>silently</em>.
+        </span>
+      </label>
+      {target === 'claudeMd' && (
+        <textarea
+          value={bar}
+          rows={3}
+          onChange={(e) => setBar(e.target.value)}
+          aria-label="What breaks silently without this"
+          placeholder="What breaks without this claim, and how it fails without anything going red. The agent writing the entry reads this, and checks it."
+        />
+      )}
+      <div className="kn-acts">
+        <AsyncButton
+          className="primary"
+          disabled={target === 'claudeMd' && bar.trim() === ''}
+          onClick={async () => {
+            await onCommit(fact.id, target === 'claudeMd' ? { target, bar: bar.trim() } : { target });
+            onDone();
+          }}
+          title="Queue the documentation job. Nothing leaves any prompt until its pull request merges"
+        >
+          Open the documentation pull request
+        </AsyncButton>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Whether the page offers to commit this claim at all.
+ *
+ * The store's own refusals, asked here only so a control that would be refused is
+ * not drawn — `committableFact` is where the rule lives and where the wording that
+ * explains it lives. A **standing** claim that reaches somebody: a proposal reaches
+ * nobody, and a notice is a report on today while the repository is for what stays
+ * true.
+ */
+function committableHere(fact: KnowledgeFactView): boolean {
+  return (fact.reach === 'lookup' || fact.reach === 'injected') && fact.lifetime === 'standing';
 }
 
 /** What one more observer would mean, said where the number is. */
