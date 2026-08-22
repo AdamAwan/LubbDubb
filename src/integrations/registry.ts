@@ -11,7 +11,26 @@ import { AzureDevOpsSourceControlIntegration } from './azure/sourceControl.js';
 import { AzureDevOpsWorkItemsIntegration } from './azure/workItems.js';
 import { watchLabelFor } from '../watchLabels.js';
 
-type ProviderFactory = (ctx: IntegrationContext, world: FakeWorldStore) => Integration;
+type ProviderFactory = (ctx: IntegrationContext, world: FakeWorldStore, clients: ProviderClients) => Integration;
+
+/**
+ * The provider clients built for one {@link buildIntegrations} call, so the two
+ * capabilities that select the same provider share one rather than each building
+ * its own.
+ *
+ * Sharing is not tidiness. A GitHub client carries the throttling plugin's view of
+ * the rate limit and the ETag cache behind its GETs, and both are *per instance* —
+ * so two clients fan out into one hourly budget blind to each other, and neither
+ * can be told by the other that it has run out. They also each resolve
+ * `viewerLogin` separately, which is a second `GET /user` per boot for an answer
+ * that is fixed for the token's lifetime.
+ *
+ * Scoped to the call rather than memoised on the context, so a rebuild after a
+ * config change builds against the coordinates the new config states.
+ */
+interface ProviderClients {
+  github?: { api: OctokitGitHubApi; gh: GitHubConfig };
+}
 
 /**
  * The provider registry: capability → provider id → factory. Adding a real
@@ -22,8 +41,8 @@ type ProviderFactory = (ctx: IntegrationContext, world: FakeWorldStore) => Integ
 const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
   sourceControl: {
     fake: (ctx, world) => new FakeGitHubIntegration(world, ctx.config.defaultBranch),
-    github: (ctx) => {
-      const { api, gh } = githubApi(ctx);
+    github: (ctx, _world, clients) => {
+      const { api, gh } = githubApi(ctx, clients);
       return new GitHubSourceControlIntegration({
         api,
         errors: ctx.errors,
@@ -49,8 +68,8 @@ const REGISTRY: Record<Capability, Record<string, ProviderFactory>> = {
   },
   issues: {
     fake: (_ctx, world) => new FakeIssuesIntegration(world),
-    github: (ctx) => {
-      const { api, gh } = githubApi(ctx);
+    github: (ctx, _world, clients) => {
+      const { api, gh } = githubApi(ctx, clients);
       return new GitHubIssuesIntegration({
         api,
         errors: ctx.errors,
@@ -107,11 +126,13 @@ function ownershipLabel(ctx: IntegrationContext): string | undefined {
 }
 
 /**
- * Build the real GitHub client for a `github`-selected capability. The token comes
- * from `GITHUB_TOKEN` (never config) and owner/repo from `config.github`; either
- * missing is a clear, actionable startup error rather than a later network failure.
+ * Build the real GitHub client for a `github`-selected capability, or hand back the
+ * one this call already built ({@link ProviderClients}). The token comes from
+ * `GITHUB_TOKEN` (never config) and owner/repo from `config.github`; either missing
+ * is a clear, actionable startup error rather than a later network failure.
  */
-function githubApi(ctx: IntegrationContext): { api: OctokitGitHubApi; gh: GitHubConfig } {
+function githubApi(ctx: IntegrationContext, clients: ProviderClients): { api: OctokitGitHubApi; gh: GitHubConfig } {
+  if (clients.github) return clients.github;
   const token = process.env.GITHUB_TOKEN;
   if (!token) {
     throw new Error('The github provider needs a token: set the GITHUB_TOKEN environment variable.');
@@ -124,7 +145,8 @@ function githubApi(ctx: IntegrationContext): { api: OctokitGitHubApi; gh: GitHub
   // invisible otherwise, and it is the early warning that the world read has
   // outgrown the heartbeat.
   const log = ctx.errors ? (message: string) => void ctx.errors!.record({ source: 'provider', message }) : undefined;
-  return { api: OctokitGitHubApi.fromToken(token, gh.owner, gh.repo, log), gh };
+  clients.github = { api: OctokitGitHubApi.fromToken(token, gh.owner, gh.repo, log), gh };
+  return clients.github;
 }
 
 /**
@@ -154,6 +176,10 @@ function azureApi(ctx: IntegrationContext): { api: RestAzureDevOpsApi; az: Azure
  */
 export function buildIntegrations(selection: IntegrationSelection, ctx: IntegrationContext): Integration[] {
   const world = new FakeWorldStore(ctx.store);
+  // One per call, for the same reason the fakes share one `FakeWorldStore`: two
+  // capabilities pointed at one provider are two views of one service, and a
+  // client is where this codebase keeps what must be true across both of them.
+  const clients: ProviderClients = {};
   return CAPABILITIES.map((capability) => {
     const providerId = selection[capability];
     const factory = REGISTRY[capability][providerId];
@@ -161,6 +187,6 @@ export function buildIntegrations(selection: IntegrationSelection, ctx: Integrat
       const valid = Object.keys(REGISTRY[capability]).join(', ');
       throw new Error(`Unknown ${capability} provider '${providerId}'. Valid providers: ${valid}.`);
     }
-    return factory(ctx, world);
+    return factory(ctx, world, clients);
   });
 }

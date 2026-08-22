@@ -492,9 +492,50 @@ fleet is absorbing is the early warning that its read has outgrown its heartbeat
   hourly budget, and the world read fans out per open pull request and per open issue on every pulse,
   which is a burst by construction.
 
-Neither retry is a substitute for reading less. The GitHub world read costs on the order of one
-request per open issue plus six per open pull request, every pulse, and nothing caches or conditions
-those reads — a repository open enough will exhaust an hourly budget that no retry can restore.
+### Reading less, before retrying harder
+
+The GitHub world read costs on the order of one request per open issue plus six per open pull
+request, every pulse. A retry cannot make that fit an hourly budget; only not spending the budget
+can. Three things do that, and they are read in this order.
+
+- **Every GET is conditional** (`etagCache.ts`, installed on the client in `fromToken`). The client
+  re-sends the `ETag` of the reading it already holds, and **a `304 Not Modified` does not count
+  against the rate limit at all** — so the timeline of an issue nobody has touched, refetched every
+  pulse forever, costs nothing after the first. This is not a cache with a staleness cost and it has
+  no TTL: correctness comes from GitHub, so a label the harness itself writes changes the resource,
+  changes its ETag, and the very next GET is a 200 carrying the new body. That is what makes it the
+  right shape of cache for reads the harness also writes to.
+
+  Octokit raises a `304` as an error, and neither plugin claims it (retry acts on `status >= 400`,
+  throttling on 403/429), so the hook is registered after both — outermost — and turns it back into
+  an ordinary success. `paginate` cannot tell the difference, because the replay carries the cached
+  `link` header too. A non-GET is never cached, and neither is a `string` body: that is the Actions
+  job log, a whole file fetched once per dispatched CI fix, and holding megabytes to save a request
+  nobody repeats is the wrong trade.
+
+- **One client per repository, not one per capability.** `sourceControl: github` and `issues: github`
+  are two views of one service, so `buildIntegrations` builds the client once and hands it to both
+  (`ProviderClients`). Two would be two ETag caches, two `viewerLogin` resolutions — a second
+  `GET /user` per boot for an answer fixed for the token's lifetime — and, worst, two copies of the
+  throttling plugin's view of the limit, fanning into one hourly budget with no way to tell each
+  other it was gone. The clients are scoped to the call rather than memoised on the context, so a
+  rebuild after a config change builds against the coordinates the new config states.
+
+- **A primary rate limit is refused, not waited out.** `onRateLimit` returns false once GitHub's
+  `retryAfter` exceeds `MAX_PRIMARY_LIMIT_WAIT_S` (60s). The primary limit is not the blip
+  `MAX_RETRIES` was sized for: its `retryAfter` is time-until-the-hour-window-resets, so it arrives
+  in the hundreds of seconds; the snapshot fans out with `Promise.all`, so *every* request in flight
+  parks for it and the pulse is held; and they then all fire again the instant the window reopens,
+  re-exhausting the budget they were waiting on. What the wait buys is already free — the snapshot
+  degrades to `lastGood` with `stale: true` and the next pulse tries again. A wait short enough to be
+  a window turning over anyway is still absorbed, and the **secondary** limit keeps the full budget,
+  because it is burst-triggered, clears in seconds, and backing off *is* the correct response to it.
+  The decision is `waitOutRateLimit(retryAfterS, retryCount)` — pure, so the policy is testable
+  without a clock or a socket — and both outcomes are recorded, worded by which they are.
+
+The harness's `GITHUB_TOKEN` is inherited by every agent it spawns, so `gh` in an agent's own shell
+draws on the same hourly budget. The fleet's read is whatever its agents leave it, which is the other
+reason the snapshot's cost is worth this much attention.
 
 **CI evidence is deliberately not part of that budget.** The failing output of a red check is fetched
 when a CI-fix agent is actually dispatched — one or two requests per failing check, once, in the
