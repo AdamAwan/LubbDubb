@@ -172,7 +172,7 @@ test('an exhausted account parks the agent instead of failing it, and settles no
   system.store.close();
 });
 
-test('the process dying with the limit keeps the park rather than becoming a failure', async () => {
+test('the turn-end limit park keeps its resources through the later process exit', async () => {
   const { system, agent, child } = await fleet();
   child.rateLimit(REJECTED);
   child.result('error_during_execution', true);
@@ -190,6 +190,29 @@ test('the process dying with the limit keeps the park rather than becoming a fai
     'no "Agent … failed" entry for a limit',
   );
   assert.deepEqual(system.agents.limitedAgentIds(), [agent.id], 'and the park survives the exit');
+  system.store.close();
+});
+
+test('a process exit before the turn end still sheds the limit park and resumes on the pulse', async () => {
+  const { system, agent, child, children } = await fleet();
+  child.rateLimit(rejectedIn(-60_000));
+  // The process-exit arm: Claude can die before it emits the result that would
+  // normally declare the park.
+  child.exit(1);
+
+  const row = system.store.getAgent(agent.id)!;
+  assert.equal(row.status, 'waiting', 'still parked after the process is gone');
+  assert.equal(row.pid, null, 'the dead launch was shed');
+  assert.equal(system.agents.isLive(agent.id), false, 'the dead session is not held open');
+  assert.deepEqual(system.agents.limitedAgentIds(), [agent.id]);
+
+  const before = children.length;
+  await system.harness.runCycle('manual');
+
+  assert.equal(children.length, before + 1, 'the expired park reopens a new session');
+  assert.equal(system.store.getAgent(agent.id)!.status, 'running');
+  assert.equal(system.store.getTask(agent.taskId)!.status, 'running');
+  assert.deepEqual(system.agents.limitedAgentIds(), []);
   system.store.close();
 });
 
