@@ -231,6 +231,12 @@ export class HumanTaskStore {
    * which is the silence this whole path exists to break. The row is a *fresh*
    * obligation wearing an id the title dedup will not let it shed.
    *
+   * That is the deliberate opposite of a **refresh**: {@link recordHumanTask}
+   * leaves `created_at` alone precisely so a standing row restated every pulse does
+   * not jump the feed ({@link listHumanTasksOfKind}). A reopen is not a restatement
+   * of a row that never left — it is an obligation that had ended and is owed
+   * again, and the feed should place it where it now belongs.
+   *
    * Returns null when there was nothing to reopen.
    */
   reopenHumanTask(id: string, detail: string): HumanTask | null {
