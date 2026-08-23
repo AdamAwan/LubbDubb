@@ -385,3 +385,31 @@ test('the whole-prompt cap trims the excerpt and says how much it trimmed', () =
   assert.equal(ciEvidenceNote([]), '');
   assert.equal(ciEvidenceNote([{ check: 'test', kind: 'log', lines: [] }]), '');
 });
+
+test('a single line longer than the whole budget is cut mid-line, not admitted whole', () => {
+  // Not a synthetic input: both readers flatten a multi-line message onto one
+  // line, so an Azure task issue carrying a stack trace, or a bundler summary in
+  // a GitHub log, arrives as one line of tens of thousands of characters.
+  const stack = Array.from({ length: 400 }, (_, i) => `at Handler${i}(ct) in /src/Service/Handler${i}.cs:line ${i}`)
+    .join(' ')
+    .concat(' THE-ASSERTION-AT-THE-TAIL');
+
+  const log = ciEvidenceNote([{ check: 'test', kind: 'log', lines: [stack] }]);
+  assert.ok(log.length < 8000, `one oversized log line must still be capped, got ${log.length} characters`);
+  assert.match(log, /cut mid-line to fit/);
+  assert.match(log, /THE-ASSERTION-AT-THE-TAIL/, "a log's tail is the end kept, mid-line as much as line by line");
+
+  const errors = ciEvidenceNote([{ check: 'lint', kind: 'errors', lines: [`FIRST-ERROR ${stack}`] }]);
+  assert.ok(errors.length < 8000, `one oversized error line must still be capped, got ${errors.length} characters`);
+  assert.match(errors, /cut mid-line to fit/);
+  assert.match(errors, /FIRST-ERROR/, "an error's head is the end kept");
+
+  // The per-check split is what made this worse rather than better: three
+  // oversized lines each took their own unbounded pass.
+  const three = ciEvidenceNote([
+    { check: 'a', kind: 'log', lines: [stack] },
+    { check: 'b', kind: 'log', lines: [stack] },
+    { check: 'c', kind: 'log', lines: [stack] },
+  ]);
+  assert.ok(three.length < 8000, `the total must not scale with the check count, got ${three.length} characters`);
+});

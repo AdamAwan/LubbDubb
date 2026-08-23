@@ -76,7 +76,9 @@ directory ([09](09-execution.md#the-checkout-a-local-run-uses)).
 
 - **Outside `worktreeRoot`.** `slots()` counts every _registered_ worktree under that root whatever
   the directory is called, so a preview checkout in there would count toward the pool's bound and be
-  handed to an agent — wiped `git clean -ffdx` on the way.
+  handed to an agent — wiped `git clean -ffdx` on the way. **`loadConfig` refuses the overlapping pair
+  rather than leaving the default value to hold this up** ([02](02-configuration.md)), in either
+  direction and including the two roots being the same path.
 - **Ignored files survive a change of ref.** That wipe is right for an agent's branch and wrong here:
   it would make every swap between goals pay a cold dependency install, which is the whole thing a
   kept checkout is for. `ensurePreview` cleans `-fd`, so `node_modules` and build output stand.

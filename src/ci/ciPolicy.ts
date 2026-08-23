@@ -265,8 +265,15 @@ function ruleClaims(rule: CiCheckRule, check: CiCheck): boolean {
  * *not actionable*, with empty lists — detail was reported, and none of it is
  * something a rule may claim. Rule `pr-ci-failing` does not fire on one either —
  * `ciNeedsAttention` excludes them by the same rule — so the two cannot disagree.
+ *
+ * `detailWithheld` splits the first silence in two, and is the whole reason `off`
+ * is not the weakest of the three policy modes. A provider configured not to emit
+ * a check arrives here indistinguishable from one that could not — same empty
+ * array — so the pre-policy arm would put an agent on every red PR, told nothing
+ * about which check is red and unable to clear one it cannot see. It says the
+ * detail exists and was withheld, which is the operator's instruction not to act.
  */
-export function classifyCiFailures(checks: CiCheck[] | undefined, policy: CiPolicy): CiVerdict {
+export function classifyCiFailures(checks: CiCheck[] | undefined, policy: CiPolicy, detailWithheld = false): CiVerdict {
   const reported = checks ?? [];
   // Advisory checks are dropped up front, so no rule — not even `match: '*'` —
   // can claim one. They are reported for visibility and belong to whatever
@@ -278,7 +285,13 @@ export function classifyCiFailures(checks: CiCheck[] | undefined, policy: CiPoli
     // so a red PR without detail still gets an agent. "Checks were reported and
     // none of the failing ones are actionable" is not that silence — the PR is
     // healthy from this policy's point of view, not merely unreported on.
-    return { actionable: reported.length === 0, dispatch: [], escalate: [], ignored: [], urgent: false };
+    return {
+      actionable: reported.length === 0 && !detailWithheld,
+      dispatch: [],
+      escalate: [],
+      ignored: [],
+      urgent: false,
+    };
   }
 
   const dispatch: CiMatch[] = [];

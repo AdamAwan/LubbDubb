@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, statSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { isAbsolute, relative, resolve } from 'node:path';
 import type { IntegrationSelection } from './integrations/integration.js';
 import { DEFAULT_CONTAINER_TYPES } from './issueRelations.js';
 import { DEFAULT_PLANNING, type PlanningPolicy } from './plans/planning.js';
@@ -1017,8 +1017,27 @@ function refuseRemovedKeys(fromFile: object, filePath: string): void {
   }
 }
 
-/** The nested policy blocks, which merge field by field where everything else replaces. */
-const DEEP_MERGED_BLOCKS = [
+/**
+ * The nested policy blocks, which merge field by field where everything else
+ * replaces.
+ *
+ * **The rule a block must satisfy to stay off this list is that nothing offers a
+ * per-leaf edit over it.** The config form writes exactly the leaf an operator
+ * changed into `lubbdubb.config.json`, so a block that replaces loses every
+ * sibling the layer below it set the moment one leaf arrives — the team's whole
+ * `ci` policy dropped to nothing by an operator saving their own `ci.checks`,
+ * `azureDevOps` reduced to the one field they edited and the next boot refusing
+ * to start over a target that is no longer complete, `github.owner` gone because
+ * they renamed the repo. Each is a `200` from the save route with no row saying
+ * anything.
+ *
+ * `ci` is here for that reason and keeps its replace-when-present semantics
+ * anyway: `checks` is an ordered list with no sensible field-by-field merge, so a
+ * layer that *states* it still replaces it. What a one-deep merge stops is an
+ * **absent** `checks` — the `{"ci": {}}` an edit-then-clear leaves behind —
+ * shadowing the list underneath.
+ */
+export const DEEP_MERGED_BLOCKS = [
   'integrations',
   'planning',
   'pets',
@@ -1028,7 +1047,21 @@ const DEEP_MERGED_BLOCKS = [
   'validation',
   'localRun',
   'auth',
+  'ci',
+  'github',
+  'azureDevOps',
 ] as const;
+
+/**
+ * The blocks inside {@link DEEP_MERGED_BLOCKS} that are themselves nested and
+ * carry a per-leaf edit of their own — `azureDevOps.filters.workItemTag` is the
+ * only one today. One extra level rather than a general recursion, so the depth
+ * stays something a reader can see: `azureDevOps.policyChecks` is edited as a
+ * whole row and is meant to replace.
+ */
+const DEEP_MERGED_SUBBLOCKS: Partial<Record<(typeof DEEP_MERGED_BLOCKS)[number], readonly string[]>> = {
+  azureDevOps: ['filters'],
+};
 
 /**
  * Deep-merge one config layer over another, the way {@link loadConfig} merges a
@@ -1055,7 +1088,14 @@ function mergeLayers(lower: Partial<Config>, upper: Partial<Config>): Partial<Co
     // feature failing silently: an operator's `{"planning": {"gitFetchIntervalMs":
     // 0}}` would arrive carrying the default part cap and shadow the one their
     // team set, and the harness would run a policy no file on the machine states.
-    (merged as Record<string, unknown>)[key] = { ...lower[key], ...upper[key] };
+    const block: Record<string, unknown> = { ...lower[key], ...upper[key] };
+    for (const sub of DEEP_MERGED_SUBBLOCKS[key] ?? []) {
+      const below = (lower[key] as Record<string, unknown> | undefined)?.[sub];
+      const above = (upper[key] as Record<string, unknown> | undefined)?.[sub];
+      if (below === undefined && above === undefined) continue;
+      block[sub] = { ...(below as object), ...(above as object) };
+    }
+    (merged as Record<string, unknown>)[key] = block;
   }
   return merged;
 }
@@ -1258,6 +1298,31 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     );
   }
 
+  // The local run's checkout must stay outside the pool, and until now the only
+  // thing holding that up was the default value. `slots()` counts every
+  // *registered* worktree under `worktreeRoot` whatever the directory is called,
+  // and `ensurePreview` registers one — so a `localRunRoot` in there is a pool
+  // slot: counted toward the bound, leased to the next dispatch, and `git clean
+  // -ffdx`'d with the operator's warm dependencies and their uncommitted preview
+  // work in it. There is no salvage for that: the stash runs at `acquire`'s dead
+  // end, and a free slot being handed over normally is not one.
+  //
+  // Refused rather than warned about, for the reachable-host/auth-off pair's
+  // reason — a warning scrolls past a boot log, and what is lost here is work.
+  // `POST /api/config` validates through `loadConfigFromText`, so the save path
+  // gets the same refusal for free. Both paths are already absolute by here.
+  //
+  // Scoped to these two: `deskRoot`, `attachmentRoot` and `validationRoot` are
+  // plain directories, never registered worktrees, so `slots()` cannot see one
+  // and the pool's own slot names (`slot-<n>`) cannot land on it.
+  if (pathsOverlap(merged.worktreeRoot, merged.localRunRoot)) {
+    throw new Error(
+      `Refusing to start: localRunRoot (${merged.localRunRoot}) overlaps worktreeRoot (${merged.worktreeRoot}). ` +
+        `The pool counts every registered worktree under its root whatever the directory is called, so the local ` +
+        `run's checkout would be leased to an agent and wiped. Point localRunRoot somewhere outside the pool.`,
+    );
+  }
+
   // Agents run in a worktree/scratch cwd, so any relative script path in
   // claudeArgs (e.g. the demo mock-agent) must be made absolute up front or the
   // agent's shell can't find it.
@@ -1272,4 +1337,23 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     return arg;
   });
   return merged;
+}
+
+/**
+ * Do two already-resolved directories occupy the same tree — one inside the
+ * other, or the same path twice?
+ *
+ * Both directions, because both are the same mistake: `worktreeRoot` under
+ * `localRunRoot` cuts the pool's slots inside the preview checkout, and equal
+ * paths are the pair at its worst. A local two-line `relative()` rather than
+ * importing `src/worktree/`, which would pull the manager into the loader for a
+ * predicate.
+ */
+function pathsOverlap(a: string, b: string): boolean {
+  if (a === b) return true;
+  const inside = (root: string, path: string): boolean => {
+    const rel = relative(root, path);
+    return rel !== '' && !rel.startsWith('..') && !isAbsolute(rel);
+  };
+  return inside(a, b) || inside(b, a);
 }

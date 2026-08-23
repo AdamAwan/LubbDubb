@@ -204,8 +204,21 @@ function removeMember(text: string, member: Member): string {
 export function editConfigText(text: string, edits: ConfigEdits): string {
   let out = text.trim() === '' ? '{}\n' : text;
   for (const path of edits.clear ?? []) {
-    const found = locate(out, path.split('.'));
+    const segments = path.split('.');
+    const found = locate(out, segments);
     if (found.member) out = removeMember(out, found.member);
+    // And the parent it emptied, up as far as the emptiness goes. A clear means
+    // "fall back to the layer below", and an empty block does not fall back: a
+    // `"ci": {}` left behind still *states* the key, so it replaces the project
+    // layer's `ci` with nothing at all — the cleared row promises the team's
+    // value returns and it does not. Deepest first, since removing the leaf is
+    // what empties the parent.
+    for (let depth = segments.length - 1; depth > 0; depth -= 1) {
+      const parent = locate(out, segments.slice(0, depth));
+      if (!parent.member) break;
+      if (!/^\{\s*\}$/.test(out.slice(parent.member.valueStart, parent.member.valueEnd).trim())) break;
+      out = removeMember(out, parent.member);
+    }
   }
   for (const [path, value] of Object.entries(edits.set ?? {})) {
     const segments = path.split('.');

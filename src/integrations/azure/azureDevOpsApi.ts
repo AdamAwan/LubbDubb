@@ -366,7 +366,7 @@ export interface AzTimelineRecord {
   name: string;
   /** succeeded | failed | canceled | skipped | succeededWithIssues | null (still running). */
   result: string | null;
-  /** `log.id` — the handle {@link AzureDevOpsApi.getBuildLogLines} reads. Null when the step wrote none. */
+  /** `log.id` — the handle {@link AzureDevOpsApi.getBuildLog} reads. Null when the step wrote none. */
   logId: number | null;
   /** The errors and warnings this step raised. Callers keep the errors. */
   issues: AzTimelineIssue[];

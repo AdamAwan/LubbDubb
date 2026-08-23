@@ -35,12 +35,30 @@ Values are merged in this order, later winning:
 
 Layers 2, 3 and 4 exist only under `loadDeploymentConfig`; `loadConfig` sees 1 and 5.
 
-Nine keys are **deep-merged** rather than replaced, so a config file can set one field of them
+Twelve keys are **deep-merged** rather than replaced, so a config file can set one field of them
 without dropping the rest: `integrations`, `planning`, `pets`, `spendBurn`, `runway`, `selfUpdate`,
-`validation`, `localRun`, `auth`. The deep merge holds _between_ layers as well — an explicit
-`{planning: {maxConcurrentPartsPerIssue: 4}}` keeps the other `planning` fields the operator's file
-set, and an operator's `planning` block keeps the fields their team's set. Everything else —
-including `issuePriorityLabels` and `ci.checks` — is replaced wholesale.
+`validation`, `localRun`, `auth`, `ci`, `github`, `azureDevOps`. The deep merge holds _between_ layers
+as well — an explicit `{planning: {maxConcurrentPartsPerIssue: 4}}` keeps the other `planning` fields
+the operator's file set, and an operator's `planning` block keeps the fields their team's set.
+`azureDevOps.filters` is merged one level deeper again, being the one sub-block with a per-leaf edit of
+its own; `azureDevOps.policyChecks` is edited as a whole row and replaces. Everything else — including
+`issuePriorityLabels` and the `ci.checks` **list** — is replaced wholesale.
+
+**A block the config form offers per-leaf edits over must be deep-merged, or a save of one leaf
+silently drops the rest.** That is the rule the three latecomers are here for: the form writes exactly
+the leaf an operator changed, so a replacing block loses every sibling the layer below it set the
+moment one leaf arrives. `ci` dropped a team's whole CI policy to nothing — and `ci.checks` is a
+_live_ field, so the empty policy took effect on the next pulse; `azureDevOps` was reduced to the one
+field edited and the next boot refused to start over an incomplete target, from a save the page had
+reported `200` for and a restart the same page offers; `github` lost its `owner`. `ci` keeps its
+replace-when-present semantics inside the merge — an ordered list has no field-by-field fold, so a
+layer that _states_ `checks` still replaces it. What the merge stops is an **absent** `checks`
+shadowing the list underneath.
+
+Clearing a row is the same failure pointed the other way, and is fixed at the writer: `editConfigText`
+removes the parent a cleared leaf emptied, up as far as the emptiness goes. A `"ci": {}` left behind
+still states the key, so it would replace the project's `ci` with nothing — which is exactly the
+promise below that it does not.
 
 A layer carries **only what its file said**. The defaults are folded once, at the bottom, by
 `mergeConfig`; `mergeLayers` never folds them in. That is not tidiness — a layer that arrived dense
@@ -99,10 +117,20 @@ is validated, and it is a function rather than a second copy of the env layer fo
 above exists: two lists of environment variables is how a UI comes to offer an edit to a key the
 environment silently beats.
 
-`loadConfig` **throws** for one combination: a `host` that is reachable off this machine together
-with `auth.enabled: false`. Each half alone is a supported deliberate choice; together they expose an
-endpoint that queues jobs — which spawn agents with write access to the repo — to every peer on the
-network. A warning would scroll past in a boot log, so it is refused instead.
+`loadConfig` **throws** for two combinations. The first is a `host` that is reachable off this machine
+together with `auth.enabled: false`. Each half alone is a supported deliberate choice; together they
+expose an endpoint that queues jobs — which spawn agents with write access to the repo — to every peer
+on the network. A warning would scroll past in a boot log, so it is refused instead.
+
+The second is a `localRunRoot` that **overlaps `worktreeRoot`** — one inside the other, in either
+direction, or the same path twice. The pool would lease the local run's checkout to an agent and
+`git clean -ffdx` the operator's warm install and their uncommitted preview work out of it, with no
+salvage: the stash runs at `acquire`'s dead end, and a free slot handed over normally is not one. It is
+refused for the pair above's reason — what a warning would cost here is work. Both refusals are judged
+after path resolution, so a relative override is compared as the absolute path it becomes; and both
+reach the cockpit's save, which validates through `loadConfigFromText`. The rule is scoped to these two
+roots: `deskRoot`, `attachmentRoot` and `validationRoot` are plain directories, never registered
+worktrees, so `slots()` cannot see one and the pool's own slot names (`slot-<n>`) cannot land on it.
 
 No secret is ever a config key. The GitHub token comes from `GITHUB_TOKEN`, and the cockpit token
 from `LUBBDUBB_TOKEN` or a minted 0600 file, so `lubbdubb.config.json` stays safe to paste.
@@ -331,7 +359,7 @@ resolve them against the wrong directory:
 | `worktreeRoot`   | `string` | `.lubbdubb/worktrees`   | Root for the pool of worktree slot directories (`slot-0`, `slot-1`, …).                                                                                                                                                                                                                                                                                                                                                                                                   |
 | `deskRoot`       | `string` | `.lubbdubb/desk`        | Root for desk-task scratch directories (one per task id).                                                                                                                                                                                                                                                                                                                                                                                                                 |
 | `attachmentRoot` | `string` | `.lubbdubb/attachments` | Root for images attached to a blueprint (issue #249) — deliberately outside every worktree, so a screenshot cannot be committed onto a branch. Every agent launch is granted read access to this whole root via `permissions.additionalDirectories`, which is a real widening: an agent working one goal can read another goal's attachments. See [09](09-execution.md) and [10](10-agent-runtimes.md).                                                                   |
-| `localRunRoot`   | `string` | `.lubbdubb/local-run`   | The local run's one checkout, kept warm between goals. **Must not be under `worktreeRoot`**: the pool counts every registered worktree under its root whatever the directory is called, so a preview checkout in there would count toward the bound and be handed to an agent. → [23](23-local-runs.md#the-checkout)                                                                                                                                                      |
+| `localRunRoot`   | `string` | `.lubbdubb/local-run`   | The local run's one checkout, kept warm between goals. **Must not be under `worktreeRoot`**, and is **refused at load** if it is: the pool counts every registered worktree under its root whatever the directory is called, so a preview checkout in there would count toward the bound and be handed to an agent. → [23](23-local-runs.md#the-checkout)                                                                                                                                                      |
 | `validationRoot` | `string` | `.lubbdubb/validation`  | Root for a goal's validation resources — fixtures, reference material, sample data — one directory per goal (`<root>/issue-284/`). `attachmentRoot`'s storage rule, argument for argument: outside every worktree, canonical rather than copied per dispatch, and granted to every agent launch through `permissions.additionalDirectories`. Granted on every launch, so an agent's readable set does not depend on a policy flag it cannot see. → [20](20-validation.md) |
 
 There is no key for how many worktree slots the pool holds. It is the **live** agent cap plus a slack
@@ -957,10 +985,23 @@ classifies into a kind — `build`, `status`, `comments`, `workItems`, `reviewer
 | ---------- | -------------------------------------------------------------------------------------------- |
 | `check`    | An ordinary `CiCheck`: visible, routable by a `ci.checks` rule, dispatchable.                |
 | `advisory` | Visible, and structurally unable to dispatch or escalate — no `ci.checks` rule can claim it. |
-| `off`      | Not emitted.                                                                                 |
+| `off`      | Not emitted, and not acted on.                                                               |
 
 Defaults: `build` and `status` are `check`, `comments` is `advisory`, everything else is `off`. An
 unknown kind or mode throws at load. A **disabled** policy is dropped whatever its mode.
+
+The modes are in order of decreasing effect and `off` is the strongest of the three, which takes one
+extra thing to be true. `off` drops the check from `ciChecks` — and an **empty** `ciChecks` is the one
+input every layer below reads as *the provider reported no per-check detail*, whose right answer is to
+act on the red aggregate generically. Left there, `off` would be the only mode that still dispatches:
+a code agent on every red pull request, carrying the generic CI-fix prompt, naming no check and
+fetching no excerpt, unable to clear a failure it cannot see and ending in a `cooldown-escalate` that
+blames the agent. So a build whose every reportable policy is `off` also carries
+`PullRequest.ciChecksWithheld`, and the two fallback arms — `ciNeedsAttention` and
+`classifyCiFailures` — read it: detail that exists and was withheld is the operator's instruction not
+to act, where detail that was never reported is a provider with nothing else to answer from. Nothing
+here still reaches `ciStatus`, so the pull request reads as red on the health row exactly as before —
+`off` says the failure is not the fleet's to fix, never that it is not there.
 
 `build`/`status` at `check` include **Optional** (non-blocking) policies, which carry
 `blocking: false`. Such a check really does fail and an agent really can fix it, so rule `pr-ci-failing` dispatches

@@ -26,12 +26,13 @@
  * cost one small request instead of a log download.
  *
  * The raw tail is the fallback for the large set of jobs that emit no structured
- * error at all — a bare `npm test` with no problem matcher. Its cost is
- * asymmetric between the providers and the asymmetry is the opposite way round
- * from what it looks: Azure's log endpoint takes a line range, so a tail is a
- * genuine tail, while GitHub's redirects to a blob that must be downloaded whole
- * and mostly discarded. That is a bandwidth cost, not a token cost, and it is
- * why the structured read is tried first rather than second.
+ * error at all — a bare `npm test` with no problem matcher. Both providers cost
+ * a whole download that is then tailed locally: Azure's endpoint does offer a
+ * line range, but a range needs a total line count to take a *tail* from, which
+ * is a second request, so `getBuildLog` fetches the log whole. What differs is
+ * **granularity** — Azure's smallest unit is one failed task, GitHub's is the
+ * entire job. That is a bandwidth cost, not a token cost, and it is why the
+ * structured read is tried first rather than second.
  *
  * ## Why it is bounded, and why the cap is per prompt
  *
@@ -149,7 +150,7 @@ export function ciEvidenceNote(evidence: CiFailureEvidence[]): string {
       'to reproduce the failure to find out what broke — read it first, and reproduce only if it is not enough:',
   ];
   for (const e of included) {
-    const { text, dropped } = trimEvidence(e, perCheck);
+    const { text, dropped, cutMidLine } = trimEvidence(e, perCheck);
     lines.push(
       '',
       `--- ${e.check} (${e.kind === 'errors' ? 'errors reported by the check' : 'end of the job log'}) ---`,
@@ -161,6 +162,9 @@ export function ciEvidenceNote(evidence: CiFailureEvidence[]): string {
     const notes: string[] = [];
     if (e.droppedBefore) notes.push(`${e.droppedBefore} earlier lines were not fetched`);
     if (dropped) notes.push(`${dropped} more ${e.kind === 'errors' ? 'errors were' : 'lines were'} trimmed to fit`);
+    // A third loss, and it needs its own wording: the line the reader is holding
+    // is itself incomplete, which neither of the two above says.
+    if (cutMidLine) notes.push('one line was longer than the budget and was cut mid-line to fit');
     if (notes.length > 0) lines.push(`[${notes.join('; ')} — open the check in the provider for the full output.]`);
   }
 
@@ -183,17 +187,42 @@ export function ciEvidenceNote(evidence: CiFailureEvidence[]): string {
  * bottom — the assertion, the stack, the exit code — and its head is install and
  * setup noise, so the tail is kept. **Errors** are already ranked, and a later
  * error is usually a consequence of the first, so the head is kept.
+ *
+ * **The cap holds against a single line longer than the whole budget**, which is
+ * ordinary provider output rather than a synthetic input: both readers flatten a
+ * multi-line message onto one line so the line arithmetic here stays honest, and
+ * an Azure task issue or a GitHub annotation routinely carries a whole stack
+ * trace. Admitting that line whole — the shape of "always keep at least one" — is
+ * how one check turns 6 000 characters into 46 000, and the per-check split makes
+ * it worse rather than better, since each oversized line gets its own unbounded
+ * pass. So the first line is truncated to what is left rather than admitted, from
+ * the same end the kind is read from, and the cut is reported: a reader who
+ * cannot tell a cut line from a whole one is the exact reader the "name what was
+ * dropped" rule protects.
  */
-function trimEvidence(evidence: CiFailureEvidence, budget: number): { text: string; dropped: number } {
+function trimEvidence(
+  evidence: CiFailureEvidence,
+  budget: number,
+): { text: string; dropped: number; cutMidLine: boolean } {
   const kept: string[] = [];
   let used = 0;
+  let cutMidLine = false;
   // Walk from the end the failure is at, so the cut lands on the noise.
   const ordered = evidence.kind === 'log' ? [...evidence.lines].reverse() : evidence.lines;
   for (const line of ordered) {
-    if (used + line.length + 1 > budget && kept.length > 0) break;
+    if (used + line.length + 1 > budget) {
+      if (kept.length > 0) break;
+      // Nothing kept yet and this one line already overruns: take the budget's
+      // worth from the end that carries the failure — a log's own tail, an
+      // error's head — rather than the whole line.
+      const room = Math.max(budget - 1, 0);
+      kept.push(evidence.kind === 'log' ? line.slice(line.length - room) : line.slice(0, room));
+      cutMidLine = true;
+      break;
+    }
     kept.push(line);
     used += line.length + 1;
   }
   const text = (evidence.kind === 'log' ? kept.reverse() : kept).join('\n');
-  return { text, dropped: evidence.lines.length - kept.length };
+  return { text, dropped: evidence.lines.length - kept.length, cutMidLine };
 }

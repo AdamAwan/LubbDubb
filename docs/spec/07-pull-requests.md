@@ -46,6 +46,14 @@ Is there a CI failure the harness should put an agent on? When `ciChecks` carrie
 false otherwise — the aggregate is not consulted. Only when there is no detail to defer to
 (`ciChecks` `undefined` or empty) does it fall back to `ciStatus === 'failing'`.
 
+**Empty is two different states, and only one of them defers to the aggregate.** The fallback is for a
+provider that had nothing else to answer from; a provider that had the detail and was configured not
+to emit it — every reportable policy at `policyChecks` mode `off` — sets `ciChecksWithheld`, and a
+withheld reading answers `false` rather than falling back. Read as the same silence, `off` would be
+more actionable than `advisory`: the strongest mode the only one that still dispatches, and the agent
+told nothing about which check is red. `classifyCiFailures` splits its own pre-policy arm on the same
+flag, so the predicate and the verdict cannot disagree.
+
 Deliberately **not** the same question as `prHealth`. `ciStatus` answers _can this merge_ and is read
 by `prHealth`'s blocked verdict and the merge rule; this answers _is a fix owed_, and the two have
 different right answers for a check that fails without blocking completion — an Azure "Optional"

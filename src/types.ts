@@ -142,6 +142,20 @@ export interface PullRequest {
    * the pre-policy behaviour — act on the failure generically.
    */
   ciChecks?: CiCheck[];
+  /**
+   * The provider had per-check detail and was **configured** not to emit it —
+   * every check it could have reported was dropped by an `off` policy mode.
+   *
+   * A separate field because an empty {@link ciChecks} already means something
+   * else, and the two are opposite instructions. Empty-because-unreported is the
+   * pre-policy silence: a provider with nothing else to answer from, so a red
+   * aggregate still gets an agent. Empty-because-withheld is the operator saying
+   * this is not the fleet's to act on — and read as the first, `off` becomes the
+   * *most* actionable of the three modes rather than the strongest, dispatching a
+   * code agent on every red PR that names no check for it to look at.
+   * → `docs/spec/02-configuration.md#azuredevopspolicychecks`
+   */
+  ciChecksWithheld?: boolean;
   /** Unresolved review comments waiting on the author. */
   unresolvedComments: PrComment[];
   /**

@@ -418,3 +418,55 @@ test('a save overrides a project value locally and leaves the project’s file a
 
   system.store.close();
 });
+
+/**
+ * The three blocks the config form offers per-leaf edits over that did not merge:
+ * `ci`, `github` and `azureDevOps`. A save of one leaf replaced the whole block,
+ * so everything the team's `lubbdubb.project.json` said under the same key was
+ * gone — `200` from the route, no row saying anything, and for `ci.checks` a live
+ * field, so an empty policy took effect on the next pulse.
+ */
+test('a save of one leaf keeps the project’s siblings in the same block', async () => {
+  const project = {
+    ci: { checks: [{ match: 'build', onFailure: 'dispatch', urgent: true }] },
+    github: { owner: 'acme', repo: 'widgets' },
+  };
+  const { system, file } = fixture({}, project);
+
+  const revision = (await read(system)).revision;
+  const saved = await save(system, { set: { 'github.repo': 'widgets-next' }, baseline: revision });
+  assert.equal(saved.status, 200);
+
+  const cfg = loadConfigFromText(readFileSync(file, 'utf8'), file);
+  assert.equal(cfg.github?.repo, 'widgets-next', 'the leaf the operator edited is theirs');
+  assert.equal(cfg.github?.owner, 'acme', 'and the sibling the team set survives it');
+  assert.deepEqual(cfg.ci.checks, project.ci.checks, 'an untouched block is untouched');
+
+  system.store.close();
+});
+
+test('clearing a leaf the project sets falls back to the project’s value, as the row promises', async () => {
+  const project = { ci: { checks: [{ match: 'lint', onFailure: 'escalate' }] } };
+  const { system, file } = fixture({}, project);
+
+  const first = (await read(system)).revision;
+  const mine = [{ match: 'test', onFailure: 'escalate' }];
+  assert.equal((await save(system, { set: { 'ci.checks': mine }, baseline: first })).status, 200);
+  assert.deepEqual(loadConfigFromText(readFileSync(file, 'utf8'), file).ci.checks, mine, 'theirs wins while it is set');
+
+  const second = (await read(system)).revision;
+  assert.equal((await save(system, { clear: ['ci.checks'], baseline: second })).status, 200);
+
+  // The emptied parent goes with the leaf: a `"ci": {}` left behind still states
+  // the key, so it would replace the team's policy with no policy at all — the
+  // silent one, because `ci.checks` is live and an empty list reads exactly like
+  // a deployment that never configured CI.
+  assert.doesNotMatch(readFileSync(file, 'utf8'), /"ci"/, 'the block the clear emptied goes too');
+  assert.deepEqual(
+    loadConfigFromText(readFileSync(file, 'utf8'), file).ci.checks,
+    project.ci.checks,
+    'and the team’s policy is what clearing leaves',
+  );
+
+  system.store.close();
+});
