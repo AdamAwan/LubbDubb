@@ -14,6 +14,7 @@ import {
   foldedFactId,
   KnowledgeStore,
   KNOWLEDGE_COLUMNS,
+  KNOWLEDGE_REBUILDS,
   stampGraduationsBeforeExits,
   type ContradictionOutcome,
   type FactContradictionOutcome,
@@ -210,7 +211,9 @@ export class Store {
     // out of the way so `SCHEMA`'s own definition creates the new shape, then its
     // rows are copied across resolving the old key into the new one. All in one
     // transaction — a crash halfway leaves the old table exactly as it was.
-    rebuildTables(this.db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS], () => this.db.exec(SCHEMA));
+    rebuildTables(this.db, [...VALIDATION_REBUILDS, ...GRAPH_REBUILDS, ...KNOWLEDGE_REBUILDS], () =>
+      this.db.exec(SCHEMA),
+    );
     // Before any module is constructed, let alone reads: a domain module reading
     // a migrated column on a database created by an older build reads `undefined`.
     const addedColumns: string[] = [];
@@ -277,6 +280,11 @@ export class Store {
     // lesson in the deployment's history would look like an operator action nobody
     // had ever been paid for. See `spendRuledClaims`.
     spendRuledClaims(this.db, clock());
+    // And the graduations the first fold lost to a `NOT NULL` no `ALTER TABLE`
+    // could relax — a second pass, under a second id, because the first is
+    // stamped done and an id is never edited in place. See
+    // `refoldFindingGraduations`.
+    refoldFindingGraduations(this.db, clock());
     const ctx: StoreContext = { db: this.db, now: clock };
     this.tasksStore = new TaskStore(ctx);
     this.jobs = new JobStore(ctx);
@@ -1525,11 +1533,6 @@ function foldFindings(db: Database.Database): number {
        (id, fact_id, agent_id, task_id, goal_ref, session_id, words, created_at)
      VALUES (?, ?, ?, ?, ?, NULL, ?, ?)`,
   );
-  const exit = db.prepare(
-    `INSERT OR IGNORE INTO knowledge_graduations
-       (id, fact_id, exit, job_id, target, bar, pr_ref, ticket_ref, outcome, settled_at, created_at)
-     VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)`,
-  );
   for (const row of rows) {
     const id = foldedFactId(row.id);
     const ruled = row.status === 'open' ? null : row.updated_at;
@@ -1553,31 +1556,83 @@ function foldFindings(db: Database.Database): number {
       findingWords(row),
       row.created_at,
     );
-    // The exit an operator already chose, as the row that now records one. A
-    // `promoted` or `filing` finding gets an **open** graduation, which is the
-    // whole point of the merge: the finding stores stamped a status and never
-    // learned what became of the job, and an open row is what the sweep reads.
-    //
-    // No job means no graduation, and the pair cannot arise — `resolveFinding`
-    // took the job's id on every arm that left `open`. If one somehow exists, the
-    // fact still takes the reach the operator's verdict earned it, and there is
-    // simply nothing to draw beside it.
-    const kind = findingExit(row.status);
-    if (kind !== null && row.job_id !== null) {
-      const landed = row.status === 'filed';
-      exit.run(
-        `kng_${row.id}`,
-        id,
-        kind,
-        row.job_id,
-        row.ticket_ref ?? null,
-        landed ? 'landed' : null,
-        landed ? row.updated_at : null,
-        row.updated_at,
-      );
-    }
   }
+  foldFindingGraduations(db);
   return rows.length;
+}
+
+/**
+ * The graduation half of {@link foldFindings}, on its own — every finding whose
+ * operator already chose an exit, as the row that now records one.
+ *
+ * A `promoted` or `filing` finding gets an **open** graduation, which is the whole
+ * point of the merge: the finding stores stamped a status and never learned what
+ * became of the job, and an open row is what the sweep reads. No job means no
+ * graduation, and the pair cannot arise — `resolveFinding` took the job's id on
+ * every arm that left `open`. If one somehow exists, the fact still takes the
+ * reach the operator's verdict earned it, and there is simply nothing to draw
+ * beside it.
+ *
+ * Its own function because it has to run **twice** on the databases #506 is about:
+ * once inside the fold, and once again under {@link REFOLD_GRADUATIONS} for the
+ * deployments whose first run wrote nothing. `INSERT OR IGNORE` keyed on
+ * `kng_<finding id>` is what makes the second pass safe — it cannot double-write,
+ * and it cannot disturb a graduation recorded since.
+ */
+function foldFindingGraduations(db: Database.Database): number {
+  if (!hasTable(db, 'findings')) return 0;
+  const rows = db.prepare(`SELECT * FROM findings ORDER BY created_at ASC, rowid ASC`).all() as FoldedFinding[];
+  const exit = db.prepare(
+    `INSERT OR IGNORE INTO knowledge_graduations
+       (id, fact_id, exit, job_id, target, bar, pr_ref, ticket_ref, outcome, settled_at, created_at)
+     VALUES (?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?, ?)`,
+  );
+  let written = 0;
+  for (const row of rows) {
+    const kind = findingExit(row.status);
+    if (kind === null || row.job_id === null) continue;
+    const landed = row.status === 'filed';
+    written += exit.run(
+      `kng_${row.id}`,
+      foldedFactId(row.id),
+      kind,
+      row.job_id,
+      row.ticket_ref ?? null,
+      landed ? 'landed' : null,
+      landed ? row.updated_at : null,
+      row.updated_at,
+    ).changes;
+  }
+  return written;
+}
+
+/**
+ * The name of the one-shot that re-runs the graduation half of the fold, and
+ * **never edited in place** for {@link KNOWLEDGE_FOLD}'s reason — least of all by
+ * renaming that one, which would re-fold every claim an operator has since ruled
+ * on.
+ */
+const REFOLD_GRADUATIONS = 'refold-finding-graduations';
+
+/**
+ * Put back the graduations the first fold silently dropped — once per database.
+ *
+ * On every database created in `f07ddda`'s window, `knowledge_graduations.target`
+ * is still `NOT NULL` (see `KNOWLEDGE_REBUILDS`), and the fold's `INSERT OR
+ * IGNORE` — there for the primary-key collision with the lessons mirror —
+ * swallowed the constraint failure on every one of these rows. `runOnce` then
+ * stamped the fold as done, so the loss was permanent: facts sitting at reach
+ * `graduated` with nothing beside them saying where they went, and no open
+ * graduation for the sweep to attribute a pull request or a ticket back to.
+ *
+ * The `findings` rows are still on disk, because the fold copies and deletes
+ * nothing — which is precisely the recoverability that decision paid for.
+ *
+ * Ordering: the rebuild pass runs at the top of the constructor, so by the time
+ * this runs `target` is nullable and the insert can land.
+ */
+function refoldFindingGraduations(db: Database.Database, at: string): void {
+  runOnce(db, REFOLD_GRADUATIONS, at, () => foldFindingGraduations(db));
 }
 
 /**

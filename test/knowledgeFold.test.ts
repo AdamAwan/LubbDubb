@@ -40,6 +40,25 @@ CREATE TABLE IF NOT EXISTS lessons (
 );
 `;
 
+/**
+ * `knowledge_graduations` as the build before the exits merged declared it — one
+ * exit, so `target` is `NOT NULL` and there is no `exit` and no `ticket_ref`.
+ *
+ * Written out for `LEGACY_TABLES`' reason and one more: letting the current
+ * `SCHEMA` create this table is what made #506 invisible. The relaxation of
+ * `target` is not something `ALTER TABLE` can carry, so a fixture that gets the
+ * table from `SCHEMA` is testing the one shape the deployments this fold is for do
+ * not have — and every graduation the fold writes for a `job` or a `ticket` exit
+ * is dropped by an `INSERT OR IGNORE` swallowing the constraint.
+ */
+const LEGACY_GRADUATIONS = `
+DROP TABLE IF EXISTS knowledge_graduations;
+CREATE TABLE knowledge_graduations (
+  id TEXT PRIMARY KEY, fact_id TEXT NOT NULL, job_id TEXT NOT NULL, target TEXT NOT NULL,
+  bar TEXT, pr_ref TEXT, outcome TEXT, settled_at TEXT, created_at TEXT NOT NULL
+);
+`;
+
 function seed(
   dbPath: string,
   rows: { findings?: Record<string, unknown>[]; lessons?: Record<string, unknown>[] },
@@ -50,6 +69,7 @@ function seed(
   new Store(dbPath).close();
   const db = new Database(dbPath);
   db.exec(LEGACY_TABLES);
+  db.exec(LEGACY_GRADUATIONS);
   db.prepare(`DELETE FROM store_migrations`).run();
   for (const finding of rows.findings ?? []) {
     const cols = Object.keys(finding);
@@ -297,5 +317,118 @@ test('a database with nothing to fold is stamped anyway', () => {
     const again = new Store(dbPath);
     assert.deepEqual(again.listFacts(), []);
     again.close();
+  });
+});
+
+test('a database whose target is still NOT NULL is rebuilt, and all three exits work on it', () => {
+  // #506: `f07ddda` relaxed `knowledge_graduations.target` from NOT NULL to
+  // nullable, which is not something `ALTER TABLE` can carry — so every database
+  // built in that window still refuses a `job` or a `ticket` exit, both of which
+  // mean null by it, while `docs` goes on working.
+  withDb((dbPath) => {
+    seed(dbPath, { findings: [finding({ id: 'find_open', summary: 'Nothing done about this yet.' })] });
+    const before = new Database(dbPath);
+    const notnull = (
+      before.prepare(`PRAGMA table_info(knowledge_graduations)`).all() as { name: string; notnull: number }[]
+    ).find((c) => c.name === 'target');
+    assert.equal(notnull?.notnull, 1, 'the fixture is the old shape, or this test asserts nothing');
+    before.close();
+
+    const store = new Store(dbPath);
+    const fact = store.listFacts().find((f) => f.claim === 'Nothing done about this yet.')!;
+    // Two of the three exits threw here — which reads as two broken buttons rather
+    // than as a schema, and is why this is a rebuild.
+    const job = store.exitFact(fact, { exit: 'job' }, { title: 'Do it', prompt: 'do it' });
+    assert.equal(job.graduation.exit, 'job');
+    assert.equal(job.graduation.target, null);
+    const ticket = store.exitFact(fact, { exit: 'ticket' }, { title: 'File it', prompt: 'file it' });
+    assert.equal(ticket.graduation.exit, 'ticket');
+    const docs = store.exitFact(fact, { exit: 'docs', target: 'spec' }, { title: 'Write it', prompt: 'write it' });
+    assert.equal(docs.graduation.target, 'spec');
+    assert.equal(store.listGraduations().length, 3);
+    store.close();
+  });
+});
+
+test('an already-recorded graduation survives the rebuild, and a second boot does not copy it twice', () => {
+  withDb((dbPath) => {
+    seed(dbPath, {});
+    const legacy = new Database(dbPath);
+    legacy
+      .prepare(
+        `INSERT INTO knowledge_graduations (id, fact_id, job_id, target, bar, pr_ref, outcome, settled_at, created_at)
+         VALUES ('kng_old', 'fact_old', 'job_old', 'spec', NULL, 'pr:9', NULL, NULL, ?)`,
+      )
+      .run(T0);
+    legacy.close();
+
+    const store = new Store(dbPath);
+    const rows = store.listGraduations();
+    assert.equal(rows.length, 1, 'the row came across');
+    assert.equal(rows[0]!.target, 'spec');
+    assert.equal(rows[0]!.prRef, 'pr:9');
+    // Every graduation written before there were three exits was a documentation
+    // pull request — the same assertion the `exit` backfill makes, not a guess.
+    assert.equal(rows[0]!.exit, 'docs');
+    store.close();
+
+    const again = new Store(dbPath);
+    assert.equal(again.listGraduations().length, 1, 'the detector is false once rebuilt, so a second boot is a no-op');
+    again.close();
+  });
+});
+
+test('the graduations a swallowed constraint dropped are re-folded, once', () => {
+  // The permanent half: `foldFindings` writes its graduation with INSERT OR IGNORE
+  // — there for the primary-key collision with the lessons mirror — so on those
+  // databases the constraint failure was swallowed silently, and `runOnce` then
+  // stamped the fold as done. The `findings` rows are still on disk, because the
+  // fold copies and deletes nothing, which is what makes this recoverable.
+  withDb((dbPath) => {
+    seed(dbPath, {
+      findings: [
+        finding({ id: 'find_job', status: 'promoted', job_id: 'job_1', summary: 'Work this now.', updated_at: T1 }),
+        finding({
+          id: 'find_filed',
+          status: 'filed',
+          job_id: 'job_3',
+          ticket_ref: 'issue:314',
+          summary: 'Already filed.',
+          updated_at: T1,
+        }),
+      ],
+    });
+    const first = new Store(dbPath);
+    assert.equal(first.listGraduations().length, 2);
+    first.close();
+
+    // The state a deployment in that window is actually in: the facts arrived, the
+    // fold is stamped done, and there is not one graduation beside them.
+    const lost = new Database(dbPath);
+    lost.prepare(`DELETE FROM knowledge_graduations`).run();
+    lost.prepare(`DELETE FROM store_migrations WHERE id='refold-finding-graduations'`).run();
+    assert.ok(
+      lost.prepare(`SELECT id FROM store_migrations WHERE id='findings-and-lessons-into-knowledge-facts'`).get(),
+      'the fold stays stamped — a second id is what carries a second pass, never an edit to the first',
+    );
+    lost.close();
+
+    const store = new Store(dbPath);
+    const rows = new Map(store.listGraduations().map((g) => [g.jobId, g]));
+    assert.equal(rows.size, 2, 'the graduation history is recovered from the findings still on disk');
+    assert.equal(rows.get('job_1')?.exit, 'job');
+    assert.equal(rows.get('job_1')?.outcome, null, 'an open row is what the sweep reads');
+    assert.equal(rows.get('job_3')?.ticketRef, 'issue:314');
+    store.close();
+
+    // And once: an operator who has since settled one of these must not find it
+    // re-created beside itself.
+    const settled = new Store(dbPath);
+    settled.settleGraduation('kng_find_job', 'abandoned');
+    settled.close();
+    const after = new Store(dbPath);
+    assert.equal(after.listGraduations().length, 2);
+    assert.equal(after.getGraduation('kng_find_job')?.outcome, 'abandoned', 'a second pass disturbs nothing');
+    after.close();
   });
 });

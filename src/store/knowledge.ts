@@ -25,7 +25,7 @@ import type {
   KnowledgeFact,
   KnowledgeGraduation,
 } from '../types.js';
-import type { ColumnMigrations } from './migrate.js';
+import { tableColumns, type ColumnMigrations, type TableRebuild } from './migrate.js';
 import type { StoreContext } from './context.js';
 
 /**
@@ -63,6 +63,61 @@ export const KNOWLEDGE_COLUMNS: ColumnMigrations = {
   knowledge_facts: { ruled_at: 'TEXT', resolves_when: 'TEXT', about_ref: 'TEXT', where_at: 'TEXT' },
   knowledge_graduations: { exit: 'TEXT', ticket_ref: 'TEXT' },
 };
+
+/**
+ * The one shape change here that **no `ALTER TABLE` can express**.
+ *
+ * The exits merged (#506's `f07ddda`) changed `knowledge_graduations` twice at
+ * once. Gaining `exit` is additive and has its entry in {@link KNOWLEDGE_COLUMNS}
+ * above. **Relaxing `target` from `NOT NULL` to nullable is not**, and nothing
+ * carries a relaxation: `ADD COLUMN` cannot express one and SQLite has no
+ * `ALTER COLUMN`, so on every database created in that window the column is still
+ * `NOT NULL` — permanently, while `SCHEMA` says otherwise and every reader
+ * believes it.
+ *
+ * Both halves of what that costs are the reason this is a rebuild rather than a
+ * note. A `job` or a `ticket` exit writes `target = NULL`, so `recordGraduation`'s
+ * plain `INSERT` **throws** for two of the three exits and succeeds for the third,
+ * which reads as two broken buttons rather than as a schema. And the fold's
+ * `INSERT OR IGNORE` — there for the primary-key collision with the lessons
+ * mirror — swallows `SQLITE_CONSTRAINT_NOTNULL` just as quietly, so every folded
+ * finding's graduation was dropped without a trace on a pass `runOnce` then
+ * stamped as done.
+ *
+ * Detected on the constraint rather than on a column's presence, which is what
+ * `detect` exists for: nothing is named differently between the two shapes. It is
+ * false the moment the rebuild has run, so a second boot is a no-op.
+ *
+ * The rebuild closes the mirror-image drift for free: `exit` is `NOT NULL` in
+ * `SCHEMA` and nullable on every migrated database, because `ALTER` cannot add a
+ * `NOT NULL` column without a default. Low impact — the backfill stamps every
+ * pre-existing row and every writer supplies one — but it is the same table
+ * disagreeing with the same file.
+ * → `docs/spec/14-persistence.md#rebuilding-a-table-whose-key-changed`
+ */
+export const KNOWLEDGE_REBUILDS: readonly TableRebuild[] = [
+  {
+    table: 'knowledge_graduations',
+    detect: (db) => tableColumns(db, 'knowledge_graduations').some((c) => c.name === 'target' && c.notnull === 1),
+    // The two old shapes differ, and the rebuild runs *before* `ensureColumns`: a
+    // database that has booted a post-merge build already carries `exit` and
+    // `ticket_ref`, and one straight out of the window has neither. Naming them
+    // unconditionally would throw on exactly the oldest databases this is for, so
+    // the missing ones are supplied as the constants they can only be — `docs`,
+    // which is what every graduation written before there were three exits was,
+    // and the same assertion {@link stampGraduationsBeforeExits} makes.
+    copy: (old, db) => {
+      const has = new Set(tableColumns(db, old).map((c) => c.name));
+      const exit = has.has('exit') ? `COALESCE(exit, 'docs')` : `'docs'`;
+      const ticket = has.has('ticket_ref') ? 'ticket_ref' : 'NULL';
+      return `
+      INSERT INTO knowledge_graduations
+        (id, fact_id, exit, job_id, target, bar, pr_ref, ticket_ref, outcome, settled_at, created_at)
+      SELECT id, fact_id, ${exit}, job_id, target, bar, pr_ref, ${ticket}, outcome, settled_at, created_at
+        FROM ${old}`;
+    },
+  },
+];
 
 /**
  * The one column here whose **null means something**, and so the one that needs a

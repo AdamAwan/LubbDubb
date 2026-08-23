@@ -813,6 +813,21 @@ branch is spent, so re-dispatching puts an agent on a branch whose PR is closed.
 "never retire a part with work started" by construction rather than by a check. The plan moves
 `complete` → `active` through the roll-up it already computes.
 
+The slug is resolved against the parts the plan already holds, because "appended" is true by
+construction only while the slot it lands on is empty. `<slug>-followup` **collides on purpose** with
+a follow-up nobody has started — one more shortfall against the same scope re-declares it rather than
+stacking a `-followup-followup`. But `upsertPlanParts` preserves progress on conflict, so a follow-up
+that has since **merged** would swallow the write whole: no row is added, `rollUpPlanStatus` leaves
+the plan `complete`, nothing is ever dispatched, and the declaration recording what that merged pull
+request was for is overwritten with the scope of work nobody did — while every surface, including the
+audit line and the `clearShortfall` that consumes the verdict, reports an append. A follow-up part may
+also **fall short itself**, and there the named part _is_ the collision, so the same thing arrives one
+step sooner. So a slot already taken by anything with work started, a terminal status, or a retirement
+takes the next free number — `<slug>-followup-2`, `-followup-3` — which is the honest form of "this
+scope, again, a second time" and leaves `partDepth`/`partBase` alone, `dependsOn` being empty either
+way. The settlement's `detail` says which of the two happened, since it is copied verbatim into the
+decision log and the accept only settles the verdict when the arm reports `ok`.
+
 **Arm C** files an escalation and schedules nothing. It is deliberately **not** a proposal: a
 proposal whose accept and reject both do nothing is not a decision. It is deduped the way rule `pr-ci-blocked`'s
 escalation is — on an open item for `issue:<n>:shortfall` **and** on a recent executed one in the

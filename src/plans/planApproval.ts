@@ -2,7 +2,7 @@ import type { Store } from '../store/store.js';
 import type { Plan, PlanPart } from '../types.js';
 import { liveParts, partsToRetire } from './parts.js';
 import { REFUSED_PART_RESOLUTION, withdrawPartAsks } from './partAsks.js';
-import { followupPartInput } from '../delivery/shortfall.js';
+import { followupPartInput, followupSlot } from '../delivery/shortfall.js';
 
 /**
  * What a human's verdict *does* to the plan — three functions, one shape: read the
@@ -207,6 +207,12 @@ export function refusePlan(store: Store, planId: string, originRef: string, note
  * rather than by a check. Rule `plan-part` schedules it with no new dispatch path, and the
  * plan moves `complete` → `active` through the roll-up it already computes.
  *
+ * "By construction" holds only while the slug it appends onto is free or unstarted,
+ * which is why the slug is resolved against the plan's parts (`followupSlot`): a
+ * second shortfall whose follow-up has since merged — or a shortfall naming a
+ * `-followup` part itself — would otherwise land *on* a terminal row, schedule
+ * nothing, and rewrite the declaration of work that was already delivered.
+ *
  * Routing arm B to a replan instead was considered and refused: that is precisely
  * the issue's stated failure mode — re-decomposing a plan whose shape was fine —
  * and it would give the surviving parts new slugs unless the planner happened to
@@ -237,14 +243,24 @@ export function actOnShortfall(
   // Seq beyond every existing part, live or retired: rule `plan-part` orders by depth then
   // seq, and a follow-up is the last thing the plan does.
   const seq = Math.max(0, ...parts.map((p) => p.seq)) + 1;
-  const [appended] = store.upsertPlanParts(act.planId, [followupPartInput(target, act.summary, seq)]);
+  // Where the follow-up lands is a question about the plan, not about the slug —
+  // see `followupSlot`. A `-followup` that has already merged would absorb the
+  // write, scheduling nothing and rewriting what that merged part was for.
+  const slot = followupSlot(target, parts);
+  const [written] = store.upsertPlanParts(act.planId, [followupPartInput(target, act.summary, seq, slot.slug)]);
+  if (!written) return { ok: false, detail: `could not append a follow-up part to the plan for ${act.originRef}` };
   // The plan may have rolled up to `complete` when the part that fell short
   // merged. An unsettled part makes that false again, and the roll-up is the one
   // place that reading lives — deriving it here would be a second opinion.
   store.rollUpPlanStatus(act.planId);
+  // The `detail` is copied verbatim into the decision log, so it says which of the
+  // two happened rather than always claiming the append.
+  const what = slot.refreshing
+    ? `refreshed the declaration of the unstarted follow-up part "${written.slug}"`
+    : `appended part "${written.slug}"`;
   return {
     ok: true,
-    detail: `appended part "${appended?.slug ?? act.partSlug}" to the plan for ${act.originRef}; "${target.slug}" is untouched`,
+    detail: `${what} on the plan for ${act.originRef}; "${target.slug}" is untouched`,
   };
 }
 

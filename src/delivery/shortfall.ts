@@ -37,6 +37,7 @@
 import { z } from 'zod';
 import { optionalText } from '../server/validation.js';
 import type { PlanPart, PlanPartInput, ShortfallCause } from '../types.js';
+import { partHasWork } from '../plans/parts.js';
 
 /** What an assessor may say fell short, in the order the tool advertises them. */
 export const SHORTFALL_CAUSES = ['plan', 'part', 'goal'] as const;
@@ -188,16 +189,59 @@ export function shortfallEscalationPrompt(issueNumber: number, title: string, ca
   );
 }
 
+/** Where arm B's part is going to land, and whether that is an append or a refresh. */
+interface FollowupSlot {
+  slug: string;
+  /** An unstarted follow-up already declared for this scope is re-declared in place. */
+  refreshing: boolean;
+}
+
 /**
- * The slug a follow-up part takes.
+ * The slug a follow-up part takes, resolved against the plan's existing parts.
  *
  * Derived from the part that fell short rather than freshly named, so the graph
- * reads as what it is — this scope, again — and so a second shortfall against the
- * same part collides on the primary key (`<plan id>:<slug>`) and refreshes the
- * declaration instead of stacking a `-followup-followup`.
+ * reads as what it is — this scope, again — and so a second shortfall against a
+ * follow-up **nobody has started** collides on the primary key
+ * (`<plan id>:<slug>`) and refreshes the declaration instead of stacking a
+ * `-followup-followup`. That collision is the design while the follow-up is still
+ * a declaration.
+ *
+ * It stops being the design the moment the follow-up has work. `upsertPlanParts`
+ * preserves progress on conflict, so a merged `-followup` absorbs the write:
+ * nothing is scheduled, the plan stays `complete`, and the row recording what a
+ * merged pull request was for is rewritten to describe work nobody did. The same
+ * ordering arrives the short way when the shortfall names a `-followup` part
+ * itself — there the target *is* the collision. So a taken slot takes the next
+ * free number instead, which is the honest form of "this scope, again, a second
+ * time", and leaves `partDepth`/`partBase` unchanged since `dependsOn` is empty
+ * either way.
+ *
+ * A pure `slug -> slug` function cannot answer this: it is a question about what
+ * the plan already holds.
  */
-function followupSlug(slug: string): string {
-  return slug.endsWith('-followup') ? slug : `${slug}-followup`;
+export function followupSlot(part: PlanPart, parts: readonly PlanPart[]): FollowupSlot {
+  const base = part.slug.endsWith('-followup') ? part.slug : `${part.slug}-followup`;
+  const bySlug = new Map(parts.map((p) => [p.slug, p]));
+  // A retired row counts as taken too: re-declaring one lifts the retirement,
+  // which would overwrite a declaration an operator's replan had already dropped.
+  const free = (slug: string): boolean => !bySlug.has(slug);
+  const unstarted = (slug: string): boolean => {
+    const existing = bySlug.get(slug);
+    return (
+      existing !== undefined &&
+      existing.status !== 'retired' &&
+      !partHasWork(existing) &&
+      existing.branch === null &&
+      existing.prNumber === null
+    );
+  };
+  if (free(base)) return { slug: base, refreshing: false };
+  if (unstarted(base)) return { slug: base, refreshing: true };
+  for (let n = 2; ; n += 1) {
+    const candidate = `${base}-${n}`;
+    if (free(candidate)) return { slug: candidate, refreshing: false };
+    if (unstarted(candidate)) return { slug: candidate, refreshing: true };
+  }
 }
 
 /**
@@ -210,13 +254,17 @@ function followupSlug(slug: string): string {
  * forbids touching a part that has work started. Appending meets that criterion by
  * construction rather than by a check, which is the stronger form.
  *
+ * The slug comes from {@link followupSlot}, which is where "appended" stops being
+ * true by construction: a follow-up that has already merged is a collision, not a
+ * blank row, and the append has to go to the next free slot to stay an append.
+ *
  * `dependsOn` is empty on purpose. The part it follows up has already finished, so
  * there is no open branch to stack on; making it depend on a merged sibling would
  * have `partBase` resolve to the default branch anyway, by a longer route.
  */
-export function followupPartInput(part: PlanPart, summary: string, seq: number): PlanPartInput {
+export function followupPartInput(part: PlanPart, summary: string, seq: number, slug: string): PlanPartInput {
   return {
-    slug: followupSlug(part.slug),
+    slug,
     // The part it follows up was priced by the planner that declared it, and this
     // is the same work finishing — so it inherits that price rather than falling
     // back to the goal's, which would quietly downgrade the one part somebody had

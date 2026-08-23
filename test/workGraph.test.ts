@@ -271,6 +271,62 @@ test('a PR seen in the closed list is terminal, and says it was observed', () =>
   assert.equal(node(abandoned, 'pr:40').terminal, true);
 });
 
+test('a PR the harness never saw open is still parented from the closed window', () => {
+  // The whole lifecycle in one pulse — opened and merged between two probes, or
+  // merged across a restart. The closed window is the fold's only sight of it, and
+  // `parent_ref` is write-once, so a null written here is permanent.
+  const byBranch = foldWorkGraph(
+    input({ world: world({ issues: [issue()], closedPullRequests: [pr({ number: 41, state: 'merged' })] }) }),
+  );
+  assert.equal(node(byBranch, 'pr:41').parentRef, 'issue:12', 'the branch match is read over the closed list too');
+
+  const byLink = foldWorkGraph(
+    input({
+      world: world({
+        issues: [issue({ linkedPrNumber: 41 })],
+        closedPullRequests: [pr({ number: 41, branch: 'job/j7', state: 'merged' })],
+      }),
+      jobs: [job({ branch: 'job/j7' })],
+    }),
+  );
+  assert.equal(node(byLink, 'pr:41').parentRef, 'job:j7', 'arm A owns a job branch whichever list it arrives in');
+  assert.equal(node(byLink, 'job:j7').parentRef, 'issue:12', 'and arm B adopts the job one level up');
+});
+
+test('a parent resolved from the closed window survives the window expiring', () => {
+  const merged = pr({ number: 41, state: 'merged' });
+  const first = foldWorkGraph(input({ world: world({ issues: [issue()], closedPullRequests: [merged] }) }));
+  assert.equal(node(first, 'pr:41').parentRef, 'issue:12');
+
+  const store = new Store(':memory:');
+  store.recordWorkGraph(first);
+  // The next pulse: the PR is in neither list, so the fold says nothing about it.
+  store.recordWorkGraph(foldWorkGraph(input({ world: world({ issues: [issue()] }) })));
+  assert.equal(
+    store.listWorkSubtree('issue:12').find((n) => n.ref === 'pr:41')?.parentRef,
+    'issue:12',
+    'the edge is durable once the one shot at it landed',
+  );
+  store.close();
+});
+
+test('two issues linking one closed PR number both adopt their job', () => {
+  const out = foldWorkGraph(
+    input({
+      world: world({
+        issues: [issue({ linkedPrNumber: 41 }), issue({ id: 'i13', number: 13, linkedPrNumber: 41 })],
+        closedPullRequests: [pr({ number: 41, branch: 'job/j7', state: 'merged' })],
+      }),
+      jobs: [job({ branch: 'job/j7' })],
+    }),
+  );
+  assert.equal(
+    node(out, 'job:j7').parentRef,
+    'issue:12',
+    'the first issue to name it wins, and the second is not lost',
+  );
+});
+
 test('a PR that was open and is now absent is inferred merged', () => {
   const existing: WorkNode[] = [
     {
