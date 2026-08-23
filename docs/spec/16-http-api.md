@@ -103,8 +103,13 @@ cockpit's continuous `/api/state` polling can't throttle itself, which is the sa
 rate limiting `global: false`. This is not what makes the token unguessable (256 bits already does,
 and no feasible number of attempts changes that); it bounds the cost of someone hammering the port.
 Once tripped it is indiscriminate — a valid token from a source that has just been guessing waits out
-the window too. The counter lives in the hook, not in `authorizeRequest`, which takes the answer as a
-`throttled` boolean so the verdict stays a pure function of its inputs.
+the window too. **The window is measured over the refusals that read a credential**, and a `429` is
+not one: counting a throttled refusal would stamp a fresh entry into the window that produced it, so
+a client that kept polling — the cockpit reconnects its socket every eight seconds forever — would
+renew its own block with a correct token and never wait anything out. The block is in-process, so a
+restart clears it as well. The counter lives in the hook (`guardRequest`, which is the whole sequence
+in one place because the order of it is the property), not in `authorizeRequest`, which takes the
+answer as a `throttled` boolean so the verdict stays a pure function of its inputs.
 
 The guard matches a **path prefix**, so a route added later is protected without opting in;
 `test/cockpitAuth.test.ts` asserts this by walking the route table out of `src/server/routes/` and
@@ -133,7 +138,11 @@ probing `/ws` would stop the harness shutting down.
 supported local choice — but only while bound to loopback.
 
 An unanticipated throw in any route is caught by `setErrorHandler`, recorded to the error log (which
-mirrors it to stderr and streams it to the cockpit), and returned as a plain `500 {error}`.
+mirrors it to stderr and streams it to the cockpit), and returned as a plain `500 {error}` — **for an
+error that carries no status of its own**. An error that already carries a 4xx is passed through with
+that status and **not** recorded: the framework has classified it as the caller's fault before any
+handler ran, and the body parser's `FST_ERR_CTP_INVALID_JSON_BODY` / `FST_ERR_CTP_EMPTY_JSON_BODY`
+reach every mutating route on the surface.
 
 ## Request validation
 
@@ -159,7 +168,9 @@ Four properties hold across the surface:
 - **A refusal is a value, never a throw.** `setErrorHandler` means "an unanticipated throw" and
   records every one to the error log; a malformed request is neither unanticipated nor the harness's
   fault, so routing it there would bury real faults under other people's typos. `readRequest` returns
-  `{ok: false, error}` and `checked` sends it as a `400 {error}`.
+  `{ok: false, error}` and `checked` sends it as a `400 {error}`. The property is held by the **error
+  handler** as well, because a body that is not JSON is refused by the content-type parser before
+  `checked` can see it: a framework 4xx is returned as-is and recorded nowhere.
 - **Every field states its own refusal in full** — `cap must be a number`, `invalid issue number` —
   because the 400 body joins the schema's messages and drops their field paths. A field declared
   without a message refuses with zod's stock text, which names nothing.

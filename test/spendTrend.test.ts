@@ -205,17 +205,30 @@ test('the current week is partial, and is left out of the comparison', () => {
 });
 
 test('the comparison is withheld rather than drawn off one week a side', () => {
-  const trend = build({
+  // One goal on the whole axis. The window's *shape* clears the floor — it always
+  // does, since the axis is a fixed eight buckets whatever the data — so the count
+  // that decides is of weeks that closed something, and this has one.
+  const thin = build({
     goals: [goal(1, 10)],
     closures: [closed(1, inWeek(6))],
   });
-  // Seven complete weeks gives three a side, which clears the floor — the fold is
-  // refused on the *shape* of the window, so this is the case that must not be
-  // null. The null case is asserted below against a window that has none.
-  assert.ok(trend.comparison);
-  assert.equal(trend.comparison.recent.goalsClosed, 1);
-  assert.equal(trend.comparison.earlier.goalsClosed, 0);
-  assert.equal(trend.comparison.earlier.medianCostUsd, null);
+  assert.equal(thin.comparison, null);
+
+  // One populated week on each side is still one week a side.
+  const oneEach = build({
+    goals: [goal(1, 10), goal(2, 20)],
+    closures: [closed(1, inWeek(1)), closed(2, inWeek(6))],
+  });
+  assert.equal(oneEach.comparison, null);
+
+  // Two either side is the floor, and it is cleared.
+  const enough = build({
+    goals: [goal(1, 10), goal(2, 10), goal(3, 20), goal(4, 20)],
+    closures: [closed(1, inWeek(0)), closed(2, inWeek(1)), closed(3, inWeek(4)), closed(4, inWeek(5))],
+  });
+  assert.ok(enough.comparison);
+  assert.equal(enough.comparison.earlier.goalsClosed, 2);
+  assert.equal(enough.comparison.recent.goalsClosed, 2);
 });
 
 test('the last closure wins, so a goal that came back and landed again counts once', () => {
@@ -335,7 +348,9 @@ test('a period median is the middle goal, never a median of weekly medians', () 
     // Two weeks in the recent half: one closed a single $100 goal, the other
     // closed five cheap ones. Pooling the weeks' own medians — $100 and $2 —
     // would report $100; the middle of the six actual goals is $3.
-    goals: [goal(1, 100), goal(2, 1), goal(3, 1), goal(4, 2), goal(5, 3), goal(6, 3)],
+    // Goals 7 and 8 are only there to give the earlier half the two populated
+    // weeks the comparison is withheld below; the reading under test is `recent`.
+    goals: [goal(1, 100), goal(2, 1), goal(3, 1), goal(4, 2), goal(5, 3), goal(6, 3), goal(7, 9), goal(8, 9)],
     closures: [
       closed(1, inWeek(5)),
       closed(2, inWeek(6)),
@@ -343,6 +358,8 @@ test('a period median is the middle goal, never a median of weekly medians', () 
       closed(4, inWeek(6)),
       closed(5, inWeek(6)),
       closed(6, inWeek(6)),
+      closed(7, inWeek(0)),
+      closed(8, inWeek(1)),
     ],
   });
 
@@ -396,9 +413,9 @@ test('the route answers a full axis on a store with nothing in it', async () => 
   assert.equal(trend.buckets.length, trend.periods);
   assert.equal(trend.buckets.at(-1)?.partial, true);
   assert.ok(trend.buckets.every((w) => w.goalsClosed === 0 && w.medianCostUsd === null));
-  // Too few complete weeks *with* anything in them is not the test here — the
-  // window is full-length, so the halves exist and are simply empty.
-  assert.equal(trend.comparison?.earlier.medianCostUsd, null);
+  // The axis is full-length, so the halves exist — and they are empty, which is
+  // exactly the reading the comparison is withheld for.
+  assert.equal(trend.comparison, null);
 
   await app.close();
   system.store.close();

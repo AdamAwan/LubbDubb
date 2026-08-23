@@ -123,6 +123,49 @@ test('the number-param routes refuse a non-numeric path, each in its own words',
   system.store.close?.();
 });
 
+test('a body that is not JSON is refused 400, and is nobody’s fault but the caller’s', async () => {
+  // The content-type parser refuses before any handler runs, so `checked` never
+  // sees these — the property it holds has to be held by the error handler too.
+  // A 500 here would tell the caller to retry a request it will never fix, and
+  // put a row in the Errors panel for every truncated body on the port.
+  const recorded: string[] = [];
+  const system = buildSystem(testConfig(), {
+    worktrees: new FakeWorktreeManager(),
+    backend: new FakePtyBackend(),
+    errorMirror: (entry) => recorded.push(entry.message),
+  });
+  const { app } = await buildApp(system);
+  // Registered before the first inject, which is what makes the instance listen.
+  app.post('/api/boom', async () => {
+    throw new Error('the harness broke');
+  });
+
+  const routes = [
+    { method: 'POST' as const, url: '/api/issues/12/watch' },
+    { method: 'DELETE' as const, url: '/api/work/issue:12/ignore' },
+  ];
+  for (const route of routes) {
+    for (const payload of ['{"watched":', '']) {
+      const res = await app.inject({
+        ...route,
+        payload,
+        headers: { 'content-type': 'application/json' },
+      });
+      assert.equal(res.statusCode, 400, `${route.method} ${route.url} with ${JSON.stringify(payload)}`);
+    }
+  }
+  assert.deepEqual(recorded, [], 'a malformed request is not a harness fault');
+
+  // A genuine route throw still is one, which is the distinction the handler draws.
+  const boom = await app.inject({ method: 'POST', url: '/api/boom', payload: {} });
+  assert.equal(boom.statusCode, 500);
+  assert.equal(recorded.length, 1);
+  assert.match(recorded[0] ?? '', /POST \/api\/boom failed: the harness broke/);
+
+  await app.close();
+  system.store.close?.();
+});
+
 test('a route that answers off the store still does so before reading its body', async () => {
   const system = build();
   const { app } = await buildApp(system);

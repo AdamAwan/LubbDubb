@@ -550,12 +550,18 @@ to hand it over again belongs.
 
 A hand-back is cleared by the next reading, on the band's terms and for the band's reason: it says
 why the last dispatch came to nothing, and somebody who has since recorded a reading has moved past
-it. Handing the check over again clears it too, since leaving the old reason beside a check now in
-flight would describe the wrong attempt.
+it. Handing the check over again does **not** clear it — the next dispatch is briefed with it, and
+clearing it here would be destroying the only copy of the thing that stops the re-hand-over
+rediscovering the same wall. What stops the old reason being drawn beside a check now in flight is
+the reader: `whoOwesIt` answers on the `actor` first, so a check with the fleet renders
+`(handed to the fleet)` whatever the row still carries.
 
 Off the cockpit, `outstandingChecks` says which of the two a check is in — `(handed to the fleet)` or
-`(the fleet handed this back — …)`. Without them both render as a bare `unrun`, which is the same
-word for "nobody has got to it", "an agent is about to" and "an agent tried and could not".
+`(handed back — …)`. Without them both render as a bare `unrun`, which is the same word for "nobody
+has got to it", "an agent is about to" and "an agent tried and could not". The note is not prefixed
+with who gave it up, because `handbackReason` has already opened it with "An agent" or "A desktop
+session" — and the `by` on that sentence exists precisely because the two mean different things to
+the person reading the row.
 
 ## The desktop channel
 

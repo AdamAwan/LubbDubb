@@ -7,7 +7,13 @@ import { request } from 'node:http';
 import { buildApp } from '../src/server/app.js';
 import { buildSystem } from '../src/system.js';
 import { loadConfig, type Config } from '../src/config.js';
-import { authorizeRequest, describeAuthAttempt, resolveCockpitToken } from '../src/server/auth.js';
+import {
+  authorizeRequest,
+  createAuthThrottle,
+  describeAuthAttempt,
+  guardRequest,
+  resolveCockpitToken,
+} from '../src/server/auth.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
@@ -424,6 +430,30 @@ test('a caller is shut out after repeated refusals, and successes never count to
 
   await app.close();
   system.store.close();
+});
+
+test('a blocked source’s own requests do not extend its block', () => {
+  // The window is what the throttle promises a caller can wait out, and a client
+  // that keeps polling is the normal case — the cockpit reconnects its socket
+  // every eight seconds forever. Counting the 429s it gets back would renew the
+  // window that produced them, and a *correct* token would renew it too, so the
+  // only escape would be to stop asking.
+  const throttle = createAuthThrottle(3, 1_000);
+  const attempt = (token: string) => ({ url: '/api/state', host: '127.0.0.1', authorization: `Bearer ${token}` });
+  const guard = (token: string, now: number) =>
+    guardRequest(attempt(token), { token: 'right', requireLoopbackHost: true, throttle, key: '::1', now });
+
+  for (let i = 0; i < 3; i++) assert.equal(guard('wrong', i).ok, false, `attempt ${i + 1} is answered on its merits`);
+  const shutOut = guard('wrong', 3);
+  assert.equal(shutOut.ok, false);
+  assert.equal(shutOut.ok === false && shutOut.code, 429);
+
+  // Held while the real refusals are still live, whatever the caller sends…
+  assert.equal(guard('right', 500).ok, false, 'still inside the window of the last credential refusal');
+
+  // …and released once they age out, even though the caller never went quiet.
+  for (let now = 4; now < 1_002; now += 100) guard('right', now);
+  assert.equal(guard('right', 1_002).ok, true, 'the window drains whether or not the client kept knocking');
 });
 
 test('a busy cockpit never throttles itself — successes are not counted', async () => {

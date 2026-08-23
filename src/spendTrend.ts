@@ -71,7 +71,7 @@ import { runInstant, trendSpan, windowView, type InsightsWindowView, type Resolv
  * to fix.
  */
 
-/** Two periods either side, below which a comparison is a coin toss — see {@link compare}. */
+/** Two periods *that closed a goal* either side, below which a comparison is a coin toss — see {@link compare}. */
 const MIN_HALF_PERIODS = 2;
 
 /** The endings that are the harness failing, as opposed to a run being stopped. */
@@ -201,10 +201,11 @@ export interface SpendTrend {
   startsAt: string;
   buckets: SpendTrendBucket[];
   /**
-   * The complete weeks split down the middle. Null when the window holds fewer
-   * than {@link MIN_HALF_PERIODS} complete weeks either side — a comparison drawn
-   * off one week of goals is noise with a percentage sign on it, and refusing to
-   * ship it is the only way the panel can be made to refuse to draw it.
+   * The complete weeks split down the middle. Null when either side holds fewer
+   * than {@link MIN_HALF_PERIODS} complete weeks *that closed a goal* — a
+   * comparison drawn off one week of goals is noise with a percentage sign on it,
+   * and refusing to ship it is the only way the panel can be made to refuse to
+   * draw it.
    */
   comparison: SpendTrendComparison | null;
 }
@@ -377,6 +378,11 @@ export function buildSpendTrend(input: SpendTrendInput): SpendTrend {
  * The partial week is dropped rather than folded into the recent half: it is an
  * under-count by construction, and an under-counted recent half is exactly the
  * shape that makes a fleet look like it is improving on the day it is read.
+ *
+ * The count that decides whether there is a comparison at all is of weeks that
+ * *closed something*, not of weeks on the axis. `trendSpan` returns a fixed eight
+ * buckets whatever the data, so counting buckets asks a question with one answer — and the reading it lets through is the one this withholding
+ * exists for: two goals in the whole window, drawn as a percentage.
  */
 function compare(
   buckets: readonly SpendTrendBucket[],
@@ -386,9 +392,21 @@ function compare(
   const complete = buckets.map((week, index) => ({ week, index })).filter((b) => !b.week.partial);
   const half = Math.floor(complete.length / 2);
   if (half < MIN_HALF_PERIODS) return null;
-  const earlier = fold(complete.slice(0, half), cohorts, bucketMs);
-  const recent = fold(complete.slice(complete.length - half), cohorts, bucketMs);
+  const earlierSpan = complete.slice(0, half);
+  const recentSpan = complete.slice(complete.length - half);
+  if (populated(earlierSpan, cohorts) < MIN_HALF_PERIODS) return null;
+  if (populated(recentSpan, cohorts) < MIN_HALF_PERIODS) return null;
+  const earlier = fold(earlierSpan, cohorts, bucketMs);
+  const recent = fold(recentSpan, cohorts, bucketMs);
   return { earlier, recent, phases: shifts(earlier, recent) };
+}
+
+/** How many of a half's weeks closed a goal — the weeks a median is taken over. */
+function populated(
+  span: readonly { week: SpendTrendBucket; index: number }[],
+  cohorts: ReadonlyMap<number, SpendGoal[]>,
+): number {
+  return span.filter(({ index }) => (cohorts.get(index)?.length ?? 0) > 0).length;
 }
 
 /**

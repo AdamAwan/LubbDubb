@@ -70,10 +70,21 @@ export function outstandingChecks(checks: readonly ValidationCheck[]): string[] 
  * The hand-back is the sharper of the two, and it is why the note is quoted
  * rather than summarised: it is usually the one sentence that says what a person
  * would have to do that an agent could not.
+ *
+ * In flight is read *before* the note, and that ordering is what lets the note
+ * survive a re-hand-over: the next dispatch is briefed with it
+ * ([20](../../docs/spec/20-validation.md)), so the row must be able to carry a
+ * reason for a check that is with the fleet again without describing the wrong
+ * attempt. What stops the note being drawn is the check being in flight; what
+ * clears it is the next reading.
  */
 function whoOwesIt(check: ValidationCheck): string {
-  if (check.handbackNote !== null) return ` (the fleet handed this back — ${check.handbackNote})`;
-  return check.actor === 'fleet' ? ' (handed to the fleet)' : '';
+  if (check.actor === 'fleet') return ' (handed to the fleet)';
+  // `handbackReason` already opens with who gave it up — "An agent" or "A desktop
+  // session" — and the two mean different things to the person reading the row,
+  // so naming the fleet here would relabel half of them as the other.
+  if (check.handbackNote !== null) return ` (handed back — ${check.handbackNote})`;
+  return '';
 }
 
 /**

@@ -567,6 +567,11 @@ production, and an open obligation to close its ticket then points at work that 
 task is settled `declined` with that as its note — declined rather than deleted, the settlement an
 amended plan already uses on the human part it dropped.
 
+The retraction reads the **standing rows**, not the deliveries, which makes it the one arm with work
+to do when nothing is delivered at all — a harness working one goal at a time is in that state every
+time it clears one. A short-circuit on an empty delivery list therefore has to read the bench too, or
+the retraction happens only while some unrelated goal is still parked.
+
 Tests: `test/deliveryCloseOut.test.ts`.
 
 ### The other step after the launch: the validation
@@ -606,7 +611,9 @@ here reopens one.
 
 **Clearing the delivery retracts it**, the close-out's rule and for its reason: the goal went back
 into production, so there is nothing delivered to validate and the checks will be asked for again
-against whatever is delivered next. Settled `declined`, with that as the note.
+against whatever is delivered next. Settled `declined`, with that as the note. And for the close-out's
+other reason too: it is the arm that runs when nothing is delivered, so the sweep's own short-circuit
+must read the standing rows before it takes it.
 
 Tests: `test/validationReady.test.ts`.
 

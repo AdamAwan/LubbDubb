@@ -340,6 +340,34 @@ export function createAuthThrottle(limit = FAILURE_LIMIT, windowMs = FAILURE_WIN
 }
 
 /**
+ * The guard's whole sequence: ask the throttle, decide, and count the refusal.
+ *
+ * One function rather than three lines in the hook, because the order of those
+ * three lines is the property: a `429` is a refusal too, so counting it stamps a
+ * fresh entry into the sliding window that produced it. The window then drains
+ * only if the client **stops asking** — a cockpit reconnecting its socket every
+ * eight seconds renews its own block forever, and once tripped a *correct* token
+ * goes on renewing it. What the counter counts is refusals that read a
+ * credential, which is what bounds the cost of guessing while leaving "wait out
+ * the window" the escape it is documented to be.
+ *
+ * The block is in-process, so a restart clears it too.
+ */
+export function guardRequest(
+  attempt: AuthRequest,
+  opts: { token: string; requireLoopbackHost: boolean; throttle: AuthThrottle; key: string; now: number },
+): AuthVerdict {
+  const throttled = opts.throttle.blocked(opts.key, opts.now);
+  const verdict = authorizeRequest(attempt, {
+    token: opts.token,
+    requireLoopbackHost: opts.requireLoopbackHost,
+    throttled,
+  });
+  if (!verdict.ok && !throttled) opts.throttle.fail(opts.key, opts.now);
+  return verdict;
+}
+
+/**
  * The whole access decision, as a value.
  *
  * Order matters: origin and host are answered **before** the token. A rebinding

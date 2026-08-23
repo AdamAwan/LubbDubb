@@ -146,7 +146,9 @@ export function desktopCheckSummary(check: ValidationCheck, now: string, minutes
     // session about to run a check needs to know the wording changed since the
     // last reading, which is the one thing the amber band exists to say.
     amended: check.amendedAt === null ? null : check.amendNote,
-    handback: check.handbackNote,
+    // The same rule the goal line draws by: a note outlives a hand-over now, so a
+    // check back with the fleet must not report the last attempt as standing.
+    handback: check.actor === 'fleet' ? null : check.handbackNote,
     claimedBy: claimIsLive(check, now, minutes) ? check.claimedBy : null,
   };
 }

@@ -149,13 +149,16 @@ export function validationReadyPass(input: ValidationReadyInput): ValidationRead
  * one, which is a check somebody has to do something about, and a **deferred**
  * one, which is the quiet exit the verdict already refuses to let deferral be.
  *
- * A hand-back puts it straight back on the bench, and that is the case worth
- * having the field for: the fleet tried, could not, and left the one sentence
- * saying what a person would have to do instead.
+ * A hand-back puts it straight back on the bench — it sets the actor to `human`
+ * in the same write — and that is the case worth having the field for: the fleet
+ * tried, could not, and left the one sentence saying what a person would have to
+ * do instead. The actor is the whole test: the note outlives a hand-back so the
+ * next dispatch can be briefed with it, so reading it here would put a row on the
+ * bench for a check that is in flight again.
  */
 function owedToAPerson(check: ValidationCheck): boolean {
   if (check.state === 'passed' || check.state === 'waived') return false;
-  return !(check.actor === 'fleet' && check.state === 'unrun' && check.handbackNote === null);
+  return !(check.actor === 'fleet' && check.state === 'unrun');
 }
 
 /**
