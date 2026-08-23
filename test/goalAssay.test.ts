@@ -18,6 +18,7 @@ import type { Agent, Decision, Issue, IssueAssay, Plan, Task, WorldEvent, WorldS
 import type { ActionSink } from '../src/sink/actionSink.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { spentPlannerAttempts } from './support/plans.js';
+import { Store } from '../src/store/store.js';
 
 // Rule `issue-assay` — the goal assay. The one gate in front of an issue that asks about its
 // *content*. What makes it fire, what it must never do (park an issue for good),
@@ -71,8 +72,11 @@ function assay(over: Partial<IssueAssay> = {}): IssueAssay {
     agentId: null,
     taskId: null,
     commentRef: null,
-    decidedAt: EARLIER,
-    updatedAt: EARLIER,
+    decidedAt: over.decidedAt ?? EARLIER,
+    // A verdict nothing has re-cast, where the two instants coincide. `updatedAt`
+    // is what the hold measures against, so a case about a re-cast verdict sets
+    // the two apart deliberately.
+    updatedAt: over.updatedAt ?? over.decidedAt ?? EARLIER,
     ...over,
   };
 }
@@ -711,4 +715,48 @@ test('/api/state ships the verdict beside the pickup reason, not inside it', asy
   // declared one rather than whatever a local cast happened to name.
   assert.equal('goalRef' in shipped, false);
   system.store.close?.();
+});
+
+test('a re-cast refusal holds against the transition that ended the last one', () => {
+  // The delivery park's ordering, on the assay: record → signal → record again,
+  // read through `assaySignalQuery` + `listWorldEventsSince` because the window
+  // is half the defect. The ticket text is left unedited throughout, so arm 1
+  // (`goalFingerprint`) cannot be what any of these answers turns on.
+  let clock = Date.parse('2026-08-01T00:00:00.000Z');
+  const s = new Store(':memory:', () => new Date(clock).toISOString());
+  const goal = issue();
+  const write = (summary: string): IssueAssay =>
+    s.recordAssay({
+      originRef: 'issue:12',
+      verdict: 'unclear',
+      summary,
+      goalRef: goalFingerprint(goal.title, goal.body),
+      by: 'assayer',
+    });
+  const held = (): string | null => {
+    const q = assaySignalQuery(s.listAssays());
+    const signals = q ? s.listWorldEventsSince(q.since, q.refs) : [];
+    return assayHold(s.getAssay('issue:12'), goal, { signals });
+  };
+
+  const first = write('Better how? There is no measure here.');
+  assert.ok(held());
+
+  clock += 60 * 60_000;
+  s.recordWorldEvents([{ kind: 'issue_linked', ref: 'issue:12', summary: 'Issue #12 linked to PR #41' }]);
+  assert.equal(held(), null);
+
+  // Re-refused an hour later, on the same unedited ticket. An `unclear` verdict
+  // costs an agent every time it is re-asked, which is the whole reason this arm
+  // must not evaporate the moment one has been overtaken.
+  clock += 60 * 60_000;
+  const second = write('Still no measure I could tell "done" by.');
+  assert.equal(second.decidedAt, first.decidedAt, 'the row still dates the first judgement');
+  assert.ok(second.updatedAt > first.updatedAt);
+  assert.ok(held(), 'the link predates this verdict — it cannot be what ends it');
+
+  clock += 60 * 60_000;
+  s.recordWorldEvents([{ kind: 'issue_opened', ref: 'issue:12', summary: 'Issue #12 reopened' }]);
+  assert.equal(held(), null);
+  s.close();
 });

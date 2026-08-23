@@ -413,6 +413,16 @@ promise what the next cycle refuses. Two arms, plus a third clearer that is deli
    rejection-expiry pattern, which covers the providers where arm 1 can never fire. "Any" rather
    than a per-kind list, for `expiringSignal`'s reason: a filter here would be a second opinion
    about which changes matter, sitting nowhere near the rule it second-guesses.
+
+   **"The verdict" is the one standing now, not the first one cast.** A delivery row is overwritten
+   in place rather than re-created, so its `decided_at` keeps dating the moment the issue was first
+   judged — which is the fact the chip and the reason string quote — while `updated_at` moves with
+   each re-cast. The expiry, and the event window `deliverySignalQuery` asks for, are both measured
+   against the latter. Against the former, a re-cast verdict is born already expired: the transition
+   that ended the last one is still `>` the preserved timestamp and still inside the never-pruned
+   window, so once an issue's verdict has been overtaken once, no later verdict on it could ever hold
+   again. The re-asked proposal this pattern is inherited from has the property for free, because a
+   re-ask is a **new row**.
 3. **The operator clears it** (`POST /api/issues/:number/delivered` with `{delivered: false}`). A
    delete, which is why it is not an arm — the absence of a verdict keeps exactly one
    representation.
@@ -546,7 +556,10 @@ refuses. Two arms, plus a clearer that is deliberately not an arm:
    forever.
 2. **Any world transition on `issue:<n>` strictly after the verdict.** Issue #109 phase 4's
    rejection-expiry pattern again, and here it is what covers a human who answers the question in a
-   **comment** rather than by editing the body.
+   **comment** rather than by editing the body. "The verdict" is the one standing now — `updated_at`,
+   not the preserved `decided_at` — for [the delivery park's reason](#what-ends-it), and the two are
+   one rule with two copies: fixing either alone leaves the other reading a different definition of
+   "after the verdict".
 3. **The operator clears it** (`{verdict: null}`) — a delete, which is why it is not an arm.
 
 ### The second arm: an unanswered profile proposal (issue #342)

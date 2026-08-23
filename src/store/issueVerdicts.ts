@@ -157,9 +157,16 @@ export class IssueVerdictStore {
    *
    * `decided_at` is preserved across an overwrite, so the row still dates the
    * moment the issue was *first* judged delivered. That is not cosmetic here the
-   * way `created_at` is on a conclusion: it is the instant `deliveryHold` measures
-   * world signal against, and refreshing it on every re-assessment would keep
-   * moving the goalposts a transition has to clear.
+   * way `created_at` is on a conclusion: it is what the cockpit chip and
+   * `deliveryHold`'s reason string quote, and refreshing it on every
+   * re-assessment would lose the fact.
+   *
+   * It is **not** what world signal is measured against — `updated_at` is. The
+   * two are the same instant until the first re-cast and different afterwards,
+   * and a hold read off `decided_at` judges the verdict standing now against a
+   * transition that predates it: the event that expired the *previous* verdict
+   * ends the next one before it is written, and no verdict on that issue can
+   * ever hold again. Same rule on `recordAssay` below.
    *
    * Which standing verdicts this clears — a conclusion and a shortfall, with the
    * argument for each — is declared in {@link VERDICT_EXCLUSIONS} and applied by

@@ -13,6 +13,7 @@ import { pastTheFunnel } from './support/plans.js';
 // ask the same question and get the same answer.
 
 function delivery(over: Partial<IssueDelivery> = {}): IssueDelivery {
+  const decidedAt = over.decidedAt ?? '2026-07-28T10:00:00.000Z';
   return {
     originRef: 'issue:12',
     summary: 'PR #40 merged and covers every acceptance criterion',
@@ -20,8 +21,12 @@ function delivery(over: Partial<IssueDelivery> = {}): IssueDelivery {
     by: 'assessor',
     agentId: 'a1',
     taskId: 't1',
-    decidedAt: '2026-07-28T10:00:00.000Z',
-    updatedAt: '2026-07-28T10:00:00.000Z',
+    decidedAt,
+    // A verdict nothing has re-cast, where the two instants coincide. `updatedAt`
+    // is what the hold measures against — a case about a *re-cast* verdict has to
+    // set it apart from `decidedAt` deliberately, which is what makes the
+    // distinction visible in a fixture rather than invisible in all of them.
+    updatedAt: decidedAt,
     ...over,
   };
 }

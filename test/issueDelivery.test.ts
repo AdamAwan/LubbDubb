@@ -8,6 +8,8 @@ import { loadConfig } from '../src/config.js';
 import { buildSystem, type System } from '../src/system.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { deliveryHold, deliverySignalQuery } from '../src/delivery/delivery.js';
+import type { Issue } from '../src/types.js';
 
 // The `issue_deliveries` table and the mutual exclusion it holds against
 // `issue_conclusions`. Mostly store-level: no world, no dispatcher, no agent —
@@ -169,4 +171,50 @@ test('/api/state drops a delivery the world has overtaken', async () => {
   system.store.recordWorldEvents([{ kind: 'issue_linked', ref: 'issue:12', summary: 'a fresh PR was linked' }]);
   assert.equal(shipped(), null, 'the hold ended, so the reading does too');
   system.store.close?.();
+});
+
+test('a re-cast verdict holds against the transition that ended the last one', () => {
+  // The three-step ordering nothing else drives: record → signal → record again.
+  // Read through the harness's own path — `deliverySignalQuery` feeding
+  // `listWorldEventsSince` — because the query window is half the defect: a
+  // stale event fetched is a stale event compared against.
+  let clock = Date.parse('2026-08-01T00:00:00.000Z');
+  const s = new Store(':memory:', () => new Date(clock).toISOString());
+  const issue: Issue = {
+    id: 'i12',
+    number: 12,
+    title: 'Add the thing',
+    body: 'please',
+    labels: [],
+    state: 'open',
+    linkedPrNumber: null,
+  };
+  const held = (): string | null => {
+    const q = deliverySignalQuery(s.listDeliveries());
+    const signals = q ? s.listWorldEventsSince(q.since, q.refs) : [];
+    return deliveryHold(s.getDelivery('issue:12'), issue, { signals });
+  };
+
+  const first = s.recordDelivery({ originRef: 'issue:12', summary: 'first pass', by: 'assessor' });
+  assert.ok(held(), 'nothing has happened since');
+
+  // A PR mentions the issue. That correctly ends the verdict standing now.
+  clock += 60 * 60_000;
+  s.recordWorldEvents([{ kind: 'issue_linked', ref: 'issue:12', summary: 'Issue #12 linked to PR #41' }]);
+  assert.equal(held(), null);
+
+  // The assessor delivers again, an hour after the link. `decided_at` is
+  // preserved — the row still dates the first judgement — but the verdict being
+  // asked about is the new one, and no transition has happened since it.
+  clock += 60 * 60_000;
+  const second = s.recordDelivery({ originRef: 'issue:12', summary: 'second pass', by: 'assessor' });
+  assert.equal(second.decidedAt, first.decidedAt, 'the chip and the reason string still quote the first judgement');
+  assert.ok(second.updatedAt > first.updatedAt);
+  assert.ok(held(), 'the link predates this verdict — it cannot be what ends it');
+
+  // And the arm still works, now stamped after the *second* verdict.
+  clock += 60 * 60_000;
+  s.recordWorldEvents([{ kind: 'issue_opened', ref: 'issue:12', summary: 'Issue #12 reopened' }]);
+  assert.equal(held(), null);
+  s.close();
 });
