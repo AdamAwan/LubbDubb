@@ -257,10 +257,25 @@ which this is not.
 **The button is offered only when every rung is clear** (`landingReadiness`), and it is disabled
 rather than warned about: offering it while a rung above the bottom is unread would authorize merging
 code whose ladder the operator cannot see. Clear means CI passing, approved, no unresolved comments,
-no conflict. `behind` and `blocked` are deliberately **excluded** — a rung is behind because the one
-beneath it has not landed, and it clears itself on retarget, so counting it would withhold the button
-from every real stack. The line: the operator is authorizing _code they have read_, and `behind` is a
-fact about the queue, not about the code.
+no conflict, not `blocked`, and a `mergeable` the provider has actually computed. `behind` is
+deliberately **excluded** — a rung is behind because the one beneath it has not landed, and it clears
+itself on retarget, so counting it would withhold the button from every real stack. The line: the
+operator is authorizing _code they have read_, and `behind` is a fact about the queue, not about the
+code.
+
+**The offer gate must be no weaker than rule `pr-merge-ready`'s test on anything that does not clear
+itself**, and `behind` is the only thing that does. Where the two disagree there is no exit: the
+button is offered, the click is accepted, the intent is recorded — and then nothing merges, because
+the rule requires `mergeable === true` and a state that is not `blocked`, and nothing stops the
+intent either, because `rungFault` needs a definite adverse verdict. The chain stands at "landing 0
+of N" indefinitely with no escalation and no reason, which is exactly the silence `settleLandings`
+exists to make impossible. So `blocked` is consulted — it is not a fact about the queue, since a rung
+held back by its parent reports `behind`, and `prAttentionStatus` reads `blocked` as a required check
+or reviewer a person has to resolve — and so is an absent `mergeable`, which is the provider still
+computing after a retarget and resolves itself, so the button simply returns on the pulse it does.
+`rungFault` gains neither: the offer gate is strict, the stop gate needs a definite adverse verdict,
+and a `mergeable` that goes null mid-landing is the `pending` case the two predicates exist to differ
+on.
 
 **A rung that goes red stops the intent** (`settleLandings`, run once per pulse from the harness).
 It does not wait, and it does not resume. Rule `pr-merge-ready` already refuses to propose a red rung,

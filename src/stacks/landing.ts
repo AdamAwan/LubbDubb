@@ -27,15 +27,35 @@ interface RungVerdict {
  * button, asked of every rung including the ones that cannot merge for a while
  * yet.
  *
- * **`behind` and `blocked` are deliberately not consulted.** A rung is behind
- * precisely because the rung beneath it has not landed, and it clears itself the
- * moment the provider retargets. Counting it would withhold the button from every
- * real stack, which is the feature not existing. The line this draws is worth
- * keeping: the operator is authorizing *code they have read*, and `behind` is a
- * fact about the queue, not about the code.
+ * **`behind` is the one exclusion, and the argument for it is only about
+ * `behind`.** A rung is behind precisely because the rung beneath it has not
+ * landed, and it clears itself the moment the provider retargets. Counting it
+ * would withhold the button from every real stack, which is the feature not
+ * existing. The line this draws is worth keeping: the operator is authorizing
+ * *code they have read*, and `behind` is a fact about the queue, not about the
+ * code.
  *
- * Everything else that stops a merge is consulted, in the order an operator would
- * ask it, so the sentence the rack shows names the thing furthest from ready.
+ * **Everything else rule `pr-merge-ready` refuses is consulted, because this gate
+ * must be no weaker than that test on anything that does not clear itself.**
+ * Where the two disagree there is no exit: the button is offered, the click is
+ * accepted, no merge is ever proposed — the rule requires `mergeable === true`
+ * and a state that is not `blocked` — and {@link rungFault} does not stop the
+ * intent either, so it stands at "landing 0 of N" forever with no escalation and
+ * no reason. That silence is the exact failure `settleLandings` exists to make
+ * impossible. `blocked` is not a fact about the queue: `prAttentionStatus` reads
+ * it as a required check or reviewer a person has to resolve, and a rung held
+ * back by its parent reports `behind` rather than `blocked`, so excluding it buys
+ * nothing the `behind` exclusion does not already buy. An absent `mergeable` is
+ * the provider still computing — reachable in normal operation, since a retarget
+ * triggers a recompute — and it resolves itself, so the button simply returns on
+ * the pulse it does. → `docs/spec/07-pull-requests.md#landing-a-stack`
+ *
+ * The checks run in the order an operator would ask them, so the sentence the
+ * rack shows names the thing furthest from ready.
+ *
+ * {@link rungFault} deliberately gains neither: the offer gate is strict and the
+ * stop gate needs a *definite* adverse verdict, which is the one state the two
+ * must differ on.
  */
 function rungVerdict(pr: PullRequest): RungVerdict {
   if (pr.ciStatus === 'failing') return { clear: false, blockedBy: `#${pr.number} CI failing` };
@@ -49,6 +69,13 @@ function rungVerdict(pr: PullRequest): RungVerdict {
     };
   if (pr.mergeable === false || pr.mergeableState === 'dirty')
     return { clear: false, blockedBy: `#${pr.number} conflicts with its base` };
+  if (pr.mergeableState === 'blocked')
+    return { clear: false, blockedBy: `#${pr.number} merge blocked (required checks/reviews)` };
+  // Not folded into the conflict arm above: `false` is the provider saying the
+  // merge will not go through, and absent is it not having said. The operator
+  // reads a different sentence and waits rather than goes looking.
+  if (pr.mergeable !== true)
+    return { clear: false, blockedBy: `#${pr.number} — the provider reports no mergeable state` };
   return { clear: true, blockedBy: null };
 }
 

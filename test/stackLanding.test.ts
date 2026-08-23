@@ -255,16 +255,21 @@ test('the intent survives a restart', async () => {
 });
 
 test('the button is withheld until every rung is clear, and "behind" does not withhold it', () => {
-  // The gate in front of the click. `behind`/`blocked` are excluded deliberately:
-  // a rung is behind *because* the one under it has not landed, so counting it
-  // would withhold the button from every real stack.
+  // The gate in front of the click. `behind` is excluded deliberately: a rung is
+  // behind *because* the one under it has not landed, so counting it would
+  // withhold the button from every real stack.
   assert.deepEqual(landingReadiness([rung(1, 'main'), rung(2, 'issue/12/r1', { mergeableState: 'behind' })]), {
     offer: true,
     blockedBy: null,
   });
+  // `blocked` is not (issue #569). It was carried along with `behind` on the same
+  // sentence, but the argument is only about `behind`: a rung held back by its
+  // parent reports `behind`, and `blocked` is a required check or reviewer a
+  // person has to resolve. Rule `pr-merge-ready` refuses to merge it, so offering
+  // the button records an intent that stands forever and stops for nothing.
   assert.deepEqual(landingReadiness([rung(1, 'main'), rung(2, 'issue/12/r1', { mergeableState: 'blocked' })]), {
-    offer: true,
-    blockedBy: null,
+    offer: false,
+    blockedBy: '#2 merge blocked (required checks/reviews)',
   });
 
   // Everything that is a fact about the *code* does withhold it, named in the
@@ -434,4 +439,73 @@ test('a stack ref naming any rung of a standing intent calls it off', async () =
   } finally {
     await app.close();
   }
+});
+
+/**
+ * The offer gate and the merge rule must not disagree about a state that does not
+ * clear itself (issue #569).
+ *
+ * Where they did, there was no exit: the button was offered, the click accepted,
+ * the intent recorded — and then rule `pr-merge-ready` proposed nothing, because
+ * it requires `mergeable === true` and a state that is not `blocked`, while
+ * `rungFault` stopped nothing either. The chain stood at "landing 0 of N"
+ * indefinitely with no escalation and no reason, which is precisely the silence
+ * `settleLandings` exists to make impossible.
+ *
+ * `behind` is the one legitimate disagreement: it clears itself on retarget, and
+ * counting it would withhold the button from every real stack.
+ */
+test('the button is never offered over a rung the merge rule will refuse forever', () => {
+  const ciStatuses: PullRequest['ciStatus'][] = ['passing', 'failing', 'pending'];
+  const approvals = [true, false, undefined];
+  const mergeables = [true, false, undefined];
+  const states: PullRequest['mergeableState'][] = ['clean', 'behind', 'blocked', 'dirty', 'unknown', undefined];
+
+  const stalls: string[] = [];
+  for (const ciStatus of ciStatuses)
+    for (const approved of approvals)
+      for (const mergeable of mergeables)
+        for (const mergeableState of states) {
+          const pr = rung(1, 'main', { ciStatus, approved, mergeable, mergeableState });
+          // The merge rule's own test, reproduced the way `prAttention` reproduces
+          // it — `#1` is based on the integration branch, so `isStackedPr` is false.
+          const mergeReady =
+            pr.ciStatus === 'passing' &&
+            pr.approved === true &&
+            pr.mergeable === true &&
+            pr.mergeableState !== 'behind' &&
+            pr.mergeableState !== 'blocked' &&
+            pr.mergeableState !== 'dirty' &&
+            pr.unresolvedComments.every((c) => c.handled);
+
+          if (!landingReadiness([pr]).offer || mergeReady) continue;
+          // Offered but unmergeable. Legal only for `behind`, which resolves itself.
+          if (mergeableState === 'behind') continue;
+          stalls.push(
+            `ci=${ciStatus} approved=${String(approved)} mergeable=${String(mergeable)} state=${String(mergeableState)}`,
+          );
+        }
+
+  assert.deepEqual(stalls, [], 'every offered-but-unmergeable rung state must clear itself');
+});
+
+/** And the two sentences an operator now gets instead of a button that does nothing. */
+test('a blocked rung and an uncomputed one each say which they are', () => {
+  assert.equal(
+    landingReadiness([rung(1, 'main', { mergeableState: 'blocked' })]).blockedBy,
+    '#1 merge blocked (required checks/reviews)',
+  );
+  assert.equal(
+    landingReadiness([rung(1, 'main', { mergeable: undefined })]).blockedBy,
+    '#1 — the provider reports no mergeable state',
+    'absent is the provider not having said, which is not the same as a conflict',
+  );
+  assert.equal(
+    landingReadiness([rung(1, 'main', { mergeable: false })]).blockedBy,
+    '#1 conflicts with its base',
+    'and `false` keeps its own wording',
+  );
+
+  // `behind` stays clear: it is a fact about the queue, and it resolves on retarget.
+  assert.equal(landingReadiness([rung(1, 'main', { mergeableState: 'behind' })]).offer, true);
 });
