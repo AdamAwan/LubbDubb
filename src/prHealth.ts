@@ -153,7 +153,11 @@ export function basePrOf(pr: PullRequest, openPrs: PullRequest[]): PullRequest |
  */
 export function ciNeedsAttention(pr: PullRequest): boolean {
   const checks = pr.ciChecks;
-  if (checks === undefined || checks.length === 0) return pr.ciStatus === 'failing';
+  // Empty because the provider had nothing to say falls back to the aggregate;
+  // empty because the operator said `off` does not. The fallback exists for a
+  // provider with nothing else to answer from, and a withheld reading is not
+  // that — read as one, `off` becomes more actionable than `advisory`.
+  if (checks === undefined || checks.length === 0) return !pr.ciChecksWithheld && pr.ciStatus === 'failing';
   return checks.some((c) => c.status === 'failing' && !c.advisory);
 }
 

@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { join, resolve } from 'node:path';
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { loadConfig, loadDeploymentConfig } from '../src/config.js';
+import { DEEP_MERGED_BLOCKS, loadConfig, loadDeploymentConfig } from '../src/config.js';
+import { CONFIG_FIELDS } from '../src/configFields.js';
 import { ticketAssignee } from '../src/ticketAssignment.js';
 
 test('loadConfig returns sane defaults with no overrides', () => {
@@ -591,4 +592,53 @@ test('the project config is read from the repoRoot the operator’s layers resol
 
   delete process.env.LUBBDUBB_REPO_ROOT;
   assert.equal(loadDeploymentConfig({ repoRoot: repo }).defaultBranch, 'trunk', 'and so does an explicit override');
+});
+
+test('loadConfig refuses a localRunRoot that overlaps the worktree pool', () => {
+  // The invariant lived only in prose — two specs, CLAUDE.md and a `why` string —
+  // held up by nothing but the shipped defaults being siblings. An operator who
+  // moves the local run "next to the worktrees" gets a config the loader accepts
+  // and the pool then leases, wipes and switches onto an agent's branch.
+  const repoRoot = resolve('/tmp/ld-overlap');
+  const under = () =>
+    loadConfig({ repoRoot, worktreeRoot: '.lubbdubb/worktrees', localRunRoot: '.lubbdubb/worktrees/local-run' });
+  assert.throws(under, /localRunRoot/, 'the refusal names the key the operator set');
+  assert.throws(under, /worktreeRoot/, 'and the one it collides with');
+
+  assert.throws(
+    () => loadConfig({ repoRoot, worktreeRoot: '.lubbdubb/pool', localRunRoot: '.lubbdubb/pool' }),
+    /overlaps/,
+    'the same path twice is the pair at its worst, and `relative()` reads it as neither under the other',
+  );
+  assert.throws(
+    () => loadConfig({ repoRoot, worktreeRoot: '.lubbdubb/local-run/pool', localRunRoot: '.lubbdubb/local-run' }),
+    /overlaps/,
+    'and the containment is refused in both directions',
+  );
+
+  assert.doesNotThrow(() => loadConfig({ repoRoot }), 'the shipped defaults are siblings');
+  assert.doesNotThrow(
+    () => loadConfig({ repoRoot, worktreeRoot: '/tmp/ld-pool', localRunRoot: '/tmp/ld-preview' }),
+    'and so is any pair that does not overlap',
+  );
+});
+
+test('every block the config form edits per leaf is deep-merged', () => {
+  // The structural half of the same defect, and the durable one: three blocks
+  // (`ci`, `github`, `azureDevOps`) offered per-leaf edits while replacing
+  // wholesale, so one saved leaf dropped everything the project layer set under
+  // the same key. Hand-picking the three would leave the next block added free to
+  // re-open it, so the rule is asserted over the whole field list instead.
+  const deep = new Set<string>(DEEP_MERGED_BLOCKS);
+  const perLeaf = new Set(
+    CONFIG_FIELDS.map((field) => field.path)
+      .filter((path) => path.includes('.'))
+      .map((path) => path.split('.')[0] ?? ''),
+  );
+  const replacing = [...perLeaf].filter((key) => !deep.has(key)).sort();
+  assert.deepEqual(
+    replacing,
+    [],
+    'a block the form offers per-leaf edits over must be deep-merged, or a save of one leaf drops the rest',
+  );
 });

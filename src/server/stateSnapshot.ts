@@ -538,7 +538,7 @@ export function buildStateSnapshot(
     // a second first-match-wins ordering sitting nowhere near the rule they
     // duplicate. That drift would fail silently — the cockpit saying *repair* while
     // the harness held. Same call the dispatcher makes, off the same policy.
-    ciVerdict: classifyCiFailures(pr.ciChecks, config.ci),
+    ciVerdict: classifyCiFailures(pr.ciChecks, config.ci, pr.ciChecksWithheld),
   }));
   // Branch → the pull request on it, open rows first so a reopened branch reads as
   // open. Built once: every ref the local-run rows describe looks itself up here,

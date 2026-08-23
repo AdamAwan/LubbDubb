@@ -132,6 +132,7 @@ export class AzureDevOpsSourceControlIntegration
             ...(p.lastMergeSourceCommit ? { headSha: p.lastMergeSourceCommit } : {}),
             ciStatus: aggregatePolicyCiStatus(policyEvals),
             ciChecks: listPolicyCiChecks(policyEvals, this.opts.policyChecks),
+            ciChecksWithheld: policyCiDetailWithheld(policyEvals, this.opts.policyChecks),
             unresolvedComments: buildUnresolvedComments(threads, viewer),
             approved: computeApproved(p.reviewerVotes),
             mergeableState: normalizeMergeState(p.mergeStatus, p.isDraft),
@@ -461,6 +462,36 @@ export function aggregatePolicyCiStatus(evals: AzPolicyEvaluation[]): CiStatus {
  * changes is one thing: `classifyWatchedChecks` watches it with no `ci.checks`
  * rule naming it, so rule `pr-ci-gate` dispatches. → `src\ci\ciPolicy.ts`
  */
+/**
+ * Did `off` drop every check this build's policies could have reported?
+ *
+ * The companion to {@link listPolicyCiChecks}, and the reason it is needed is
+ * that the list it returns comes back **empty** — which is the one input every
+ * layer below reads as *the provider reported no per-check detail*. Both fallback
+ * arms (`ciNeedsAttention`, `classifyCiFailures`) exist for a provider that has
+ * nothing else to answer from; under `off` the provider had the detail and was
+ * told not to emit it. Configured silence and unreported silence are opposite
+ * instructions, and once the array is empty they are indistinguishable.
+ *
+ * Only true when something was actually dropped *and* nothing survived: a build
+ * that reports one `check` kind beside an `off` one already carries detail, so
+ * neither fallback arm is reached and the flag would say nothing.
+ *
+ * Scoped to what {@link listPolicyCiChecks} would have emitted — enabled, with a
+ * status that maps — so a disabled policy, which is stale noise either way, does
+ * not make an unconfigured harness look configured.
+ */
+function policyCiDetailWithheld(evals: AzPolicyEvaluation[], modes?: PolicyCheckModes): boolean {
+  let dropped = false;
+  for (const e of evals) {
+    if (!e.isEnabled) continue;
+    if (!checkStatusOf(e.status)) continue;
+    if (policyCheckMode(policyKindOf(e.typeId), modes) === 'off') dropped = true;
+    else return false;
+  }
+  return dropped;
+}
+
 export function listPolicyCiChecks(evals: AzPolicyEvaluation[], modes?: PolicyCheckModes): CiCheck[] {
   const checks: CiCheck[] = [];
   for (const e of evals) {

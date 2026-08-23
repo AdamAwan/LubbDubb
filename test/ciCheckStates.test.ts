@@ -326,3 +326,63 @@ test('the lens agrees with the dispatcher: the gate is the harness’s court, no
   assert.equal(unwatched.status, 'elsewhere');
   assert.deepEqual(unwatched.reasons, ['CI is still running']);
 });
+
+/**
+ * The open half of #504. `off` is the strongest of the three modes on paper and
+ * was the only one that still dispatched: it drops the check from `ciChecks`
+ * entirely, and an empty array is the one input every layer below reads as "the
+ * provider reported no per-check detail" — a silence whose right answer is to act
+ * on the red aggregate generically. The agent then arrives with the generic
+ * CI-fix prompt, no check named and no excerpt fetched.
+ */
+test('the three policy modes are in order of decreasing effect, and `off` is the strongest', async () => {
+  const evals = [evaluation({ typeId: BUILD_POLICY, displayName: 'CI build', status: 'rejected' })];
+  const dispatchesFor = async (mode: 'check' | 'advisory' | 'off') => {
+    const slice = await new AzureDevOpsSourceControlIntegration({
+      api: fakeApi(evals),
+      policyChecks: { build: mode },
+    }).snapshot();
+    const pullRequests = slice.pullRequests ?? [];
+    const system = build({ checks: [] }, pullRequests);
+    await system.harness.runCycle('manual');
+    const named = system.store
+      .listDecisions()
+      .filter((d) => d.action.type === 'dispatch_code_agent')
+      .map(() => findTask(system.store, (t) => t.originRef === 'pr:31676:ci')?.dispatchReason ?? '');
+    const pr = pullRequests[0];
+    system.store.close();
+    return { pr, named };
+  };
+
+  const asCheck = await dispatchesFor('check');
+  assert.equal(asCheck.named.length, 1, '`check` dispatches');
+  assert.match(asCheck.named[0] ?? '', /CI build/, 'and names the check for the agent to look at');
+
+  const asAdvisory = await dispatchesFor('advisory');
+  assert.deepEqual(asAdvisory.named, [], '`advisory` does nothing');
+
+  const asOff = await dispatchesFor('off');
+  assert.equal(asOff.pr?.ciStatus, 'failing', 'no mode reaches the aggregate, so the PR is still red');
+  assert.deepEqual(asOff.pr?.ciChecks, [], 'and the check is genuinely not emitted');
+  assert.equal(asOff.pr?.ciChecksWithheld, true, 'what separates it from a provider that reported nothing');
+  assert.deepEqual(asOff.named, [], '`off` does nothing either, which is what makes it the strongest');
+});
+
+test('an `off` kind beside a reported one withholds nothing', async () => {
+  // The flag only says anything where the fallback arms are reached. A build that
+  // still reports a `check` kind carries detail, so an unconfigured harness must
+  // not start looking configured.
+  const slice = await new AzureDevOpsSourceControlIntegration({
+    api: fakeApi([
+      evaluation({ typeId: BUILD_POLICY, displayName: 'CI build', status: 'rejected' }),
+      evaluation({ typeId: STATUS_POLICY, displayName: 'lint/status', status: 'rejected' }),
+    ]),
+    policyChecks: { build: 'off' },
+  }).snapshot();
+  const [pr] = slice.pullRequests ?? [];
+  assert.deepEqual(
+    pr?.ciChecks?.map((c) => c.name),
+    ['lint/status'],
+  );
+  assert.equal(pr?.ciChecksWithheld, false);
+});

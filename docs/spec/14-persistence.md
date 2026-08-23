@@ -999,6 +999,16 @@ intent, the relationship `plans` and `plan_parts` already have to the recorder, 
 writer. Setting it is legal because `parent_ref` is write-once _once non-null_, which is equally what stops
 it ever being redone.
 
+A filed ticket the world does not carry gets a **placeholder** node, so the job it adopts stays reachable —
+`listWorkRoots` filters on a null parent and `listWorkSubtree` seeds from a row that must exist. The
+placeholder is **first sight only**: a node the graph already holds always outranks it, whether or not this
+pulse observed one. That follows from the upsert-only rule above — a node absent from this pulse is left
+exactly as it was — and the placeholder is a fabricated observation, not a recomputed one. Keyed on this
+pulse alone it would stop being a stand-in for a ticket the world never spoke about and become a per-pulse
+rewrite of one it has stopped speaking about: both real issue providers list the open set, so an operator
+closing a filed item removes it from the world permanently, and the placeholder would revert its stored node
+to `open`, `terminal: false`, titled with its own ref, on every pulse thereafter.
+
 ### Escalations
 
 `createEscalation`, `answerEscalation(id, response)`, `dismissEscalation(id, context)`,

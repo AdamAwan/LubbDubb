@@ -135,7 +135,7 @@ export function prCiFailing(s: StageContext): void {
     // Which checks failed decides what happens, not merely that CI is red. An
     // unconfigured harness — and a provider that reports no per-check detail —
     // yields `actionable` with empty lists, i.e. exactly the behaviour above.
-    const ciVerdict = classifyCiFailures(pr.ciChecks, s.ci);
+    const ciVerdict = classifyCiFailures(pr.ciChecks, s.ci, pr.ciChecksWithheld);
     // The gate is `ciNeedsAttention`, not the aggregate: a check that fails
     // without blocking completion still wants a fix, and folding it into
     // `ciStatus` would have claimed the PR cannot merge when it can.

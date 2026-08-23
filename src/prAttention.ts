@@ -375,7 +375,7 @@ function ciReading(pr: PullRequest, ctx: PrAttentionContext): CiReading {
   // operator a PR is nobody's turn while an agent is being dispatched for it is
   // the drift this whole file exists to avoid.
   if (!ciNeedsAttention(pr)) return { ...none, watched };
-  const verdict = classifyCiFailures(pr.ciChecks, ctx.ci);
+  const verdict = classifyCiFailures(pr.ciChecks, ctx.ci, pr.ciChecksWithheld);
   if (verdict.actionable) return { ...none, watched, actionable: true };
   const muted = verdict.ignored.map((m) => m.name);
   return {

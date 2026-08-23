@@ -538,6 +538,30 @@ test("the world's own issue row wins the title over a placeholder", () => {
   assert.equal(out.filter((n) => n.ref === 'issue:314').length, 1, 'and only one node is emitted for it');
 });
 
+test('the placeholder is first sight only: a stored ticket node is never overwritten', () => {
+  // Both real issue providers list the open set, so closing a filed work item
+  // removes it from the world permanently. Guarded on this pulse alone, the
+  // placeholder would revert the stored node to open, terminal false and titled
+  // with its own ref — every pulse, forever.
+  const store = new Store(':memory:');
+  const listed = issue({ id: 'i314', number: 314, title: 'Bump the linter' });
+  const pulse = (over: Partial<WorkGraphInput> = {}) =>
+    store.recordWorkGraph(
+      foldWorkGraph(input({ jobs: [job()], filings: [filing()], existing: store.listWorkNodes(), ...over })),
+    );
+
+  pulse({ world: world({ issues: [listed] }) });
+  pulse({ world: world({ issues: [issue({ id: 'i314', number: 314, title: 'Bump the linter', state: 'closed' })] }) });
+  pulse();
+  pulse();
+
+  const node314 = store.listWorkNodes().find((n) => n.ref === 'issue:314');
+  assert.equal(node314?.title, 'Bump the linter', 'the observed title survives every later absence');
+  assert.equal(node314?.status, 'closed', 'as does the tracker status the harness read and never computes');
+  assert.equal(node314?.terminal, true);
+  store.close();
+});
+
 test('a linked filing re-emits a node whose job has aged out of the fold', () => {
   // `listJobs` is windowed, so an old job emits nothing this pulse. The adoption
   // must not be lost with it — `existing` is already in the input and carries it.

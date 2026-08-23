@@ -1119,6 +1119,15 @@ Three properties hold, and each is the answer to a way this fails silently:
 - **The cap is per prompt, not per check**, and names what it dropped. Three red checks split one
   budget rather than taking one each, and a trimmed excerpt says so — an agent that reads a partial
   log as a whole one concludes from an absence this code manufactured.
+
+  **It holds against a single line longer than the whole budget**, which is ordinary provider output:
+  both readers flatten a multi-line message onto one line so the cap's line arithmetic stays honest,
+  and an Azure task issue or a GitHub annotation routinely carries a whole stack trace. Such a line is
+  cut to what is left rather than admitted whole, from the same end its kind is read from — a log's
+  tail, an error's head. That is a **third** loss beside "not fetched" and "trimmed to fit", and it is
+  named as its own: *one line was longer than the budget and was cut mid-line to fit*. Without it a
+  single 46 KB flattened stack rides into a prompt that promised 6 000 characters, and the per-check
+  split multiplies rather than bounds it.
 - **Rule `pr-ci-gate` gets none of it.** A waiting check has produced no failure to excerpt, and an
   **expired** one's last run is against commits the branch has moved past, so its output would point
   an agent at code that no longer exists. What a gate is waiting for is the operator's `guidance`,

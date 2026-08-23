@@ -330,10 +330,17 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
     // lists open items in one repository, and a ticket closed straight away — or
     // filed into another project — is never fetched. Without a node for it the
     // adopted job becomes *unreachable*: `listWorkRoots` filters on a null parent
-    // and `listWorkSubtree` seeds from a row that does not exist. So stand one up,
-    // but only when the world has not already spoken this pulse, or the
-    // placeholder's empty title would clobber the real one.
-    if (filing.ticketRef.startsWith('issue:') && !emitted.has(filing.ticketRef)) {
+    // and `listWorkSubtree` seeds from a row that does not exist. So stand one up.
+    //
+    // **First sight only, which is why the guard is `nodeRefs` and not `emitted`.**
+    // A stored node always outranks the placeholder: the recorder is upsert-only,
+    // so a node absent from this pulse is left as it was, and manufacturing an
+    // observation for it is not a recomputation but a fabrication. Keyed on this
+    // pulse alone, the placeholder stops being a stand-in for a ticket the world
+    // never speaks about and becomes a per-pulse rewrite of one it has stopped
+    // speaking about — reverting a ticket the operator closed to `open`,
+    // `terminal: false`, titled with its own ref, forever.
+    if (filing.ticketRef.startsWith('issue:') && !nodeRefs.has(filing.ticketRef)) {
       const placeholder: WorkNodeObservation = {
         ref: filing.ticketRef,
         kind: 'issue',
@@ -344,6 +351,7 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
       };
       out.push(placeholder);
       emitted.set(placeholder.ref, placeholder);
+      nodeRefs.add(placeholder.ref);
     }
   }
 
