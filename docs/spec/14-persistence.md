@@ -940,7 +940,14 @@ are two `tasks` rows and one node. `parent_ref` follows work lineage (a PR's par
 produced it); stacking is a different relation and lives on `base_ref`, which keeps the table a tree.
 `terminal` is stored rather than derived because terminality depends on kind as well as status — a
 `merged` PR is terminal, a `closed` issue is terminal, a concern node never is — and deriving it at read
-time would put that judgement in both the CTE and the panel, where the two can disagree. `provenance`
+time would put that judgement in both the CTE and the panel, where the two can disagree. For a **part**
+node that judgement is `partSettled(part) || part.status === 'retired'`, and the two halves are separate
+reasons that must not be collapsed into one comparison: `partSettled` is the one place that says a part
+reached a terminal — `merged` for a part that ends in a pull request, `concluded` for one that does not,
+such as a report, a determination or a human step marked done — while `retired` is the graph's own
+reason, that the row stays after a replan so the graph remains readable and nothing schedules it again.
+Comparing to `merged` alone draws every `concluded` part as unfinished forever, on exactly the class of
+part that produces no pull request beneath it to say otherwise. `provenance`
 records how a terminal PR state was learned: `observed` (seen in `closedPullRequests`) or `inferred`
 (it left the open set and the window never showed it).
 

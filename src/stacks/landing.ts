@@ -154,7 +154,16 @@ interface LandingSettlement {
   reason: string | null;
 }
 
-/** The world a settlement is judged against — open and recently-closed pull requests. */
+/**
+ * The world a settlement is judged against — open and recently-closed pull
+ * requests, plus the durable record of what has merged.
+ *
+ * `closedPullRequests` is a **window**: it carries a merge for `closedPrWindowMs`
+ * and then forgets. `merged` is the record that does not, and it is what "left the
+ * open set without merging" has to be judged against — an intent outlives the
+ * window whenever a chain takes more than a few hours to land, which is every
+ * chain tall enough for the feature to be worth using.
+ */
 interface SettleWorld {
   pullRequests: PullRequest[];
   closedPullRequests?: PullRequest[];
@@ -165,6 +174,8 @@ interface SettleWorld {
    * all stops a settle rather than only a stale one.
    */
   staleSources?: string[];
+  /** Pull requests durably recorded as merged — `Store.mergedPrs()`. */
+  merged?: ReadonlySet<number>;
 }
 
 /**
@@ -179,7 +190,9 @@ interface SettleWorld {
  * that never changed, with a reason that is false about it.
  *
  * Both arms skip, not just the stop: "all rungs merged" is just as unsupportable
- * from a world nobody could read as "a rung is gone" is.
+ * from a world nobody could read as "a rung is gone" is. The durable `merged`
+ * record does not rescue it either: it says which rungs landed, never that the
+ * ones missing from an under-reported world have gone.
  * → `docs/spec/03-world-model.md#worldsnapshot`
  */
 function settleable(world: SettleWorld): boolean {
@@ -208,7 +221,10 @@ export function settleLandings(landings: StackLanding[], world: SettleWorld): La
   for (const pr of world.closedPullRequests ?? []) closed.set(pr.number, pr);
   // A merged rung can be reported either way for a pulse or two — merged and
   // still in the open list, or moved to the closed one — so both readings count.
+  // And after that, neither does: the durable record is the only thing left that
+  // remembers, which is why it is asked first.
   const merged = (n: number): boolean => {
+    if (world.merged?.has(n) === true) return true;
     const pr = world.pullRequests.find((p) => p.number === n) ?? closed.get(n);
     return pr !== undefined && (pr.merged === true || pr.state === 'merged');
   };
@@ -223,7 +239,9 @@ export function settleLandings(landings: StackLanding[], world: SettleWorld): La
     // A rung that is neither open nor merged left the chain some other way —
     // closed by hand, or aged out of a world the provider no longer reports. The
     // intent cannot finish, and saying "landed" about a PR nothing observed
-    // merging would be the one lie this record must never tell.
+    // merging would be the one lie this record must never tell. Note this arm is
+    // reached only once the durable record has been asked as well: the window
+    // forgetting a merge is not the chain losing a rung.
     const gone = remaining.find((n) => !open.has(n));
     if (gone !== undefined) {
       settlements.push({
@@ -271,6 +289,9 @@ export function landedCount(landing: StackLanding, world: SettleWorld): number {
   const byNumber = new Map<number, PullRequest>();
   for (const pr of [...(world.closedPullRequests ?? []), ...world.pullRequests]) byNumber.set(pr.number, pr);
   return landing.rungs.filter((n) => {
+    // The durable record first, for `settleLandings`' reason: read off the window
+    // alone, "landing 1 of 3" counts back *down* to 0 of 3 as rungs age out.
+    if (world.merged?.has(n) === true) return true;
     const pr = byNumber.get(n);
     return pr !== undefined && (pr.merged === true || pr.state === 'merged');
   }).length;

@@ -199,6 +199,9 @@ export function buildStateSnapshot(
   // outside the chain only while that rung is still open, or a chain that has
   // shrunk by merging would lose its own landing.
   const openPrNumbers = new Set(world.pullRequests.filter((p) => !p.merged).map((p) => p.number));
+  // Hoisted out of the two `landedCount` call sites below: one read of the durable
+  // merge record per snapshot rather than one per chain.
+  const mergedPrs = store.mergedPrs();
   // Standing *and* stopped: a stopped intent is the one the rack most has to keep
   // showing, since it is the state that says nothing further will merge on its own.
   const landings = store.listStackLandings().filter((l) => l.status === 'standing' || l.status === 'stopped');
@@ -703,7 +706,9 @@ export function buildStateSnapshot(
           ref: stack.ref,
           ...landingReadiness(rungPrs),
           landing,
-          landed: landing ? landedCount(landing, world) : 0,
+          // Counted against the durable record as well as the window, or "landing 1
+          // of 3" counts back down to 0 of 3 as merged rungs age out of it.
+          landed: landing ? landedCount(landing, { ...world, merged: mergedPrs }) : 0,
         };
       }),
       // And the intents no chain above accounts for. A chain of one is not a
@@ -722,7 +727,7 @@ export function buildStateSnapshot(
           offer: false,
           blockedBy: null,
           landing,
-          landed: landedCount(landing, world),
+          landed: landedCount(landing, { ...world, merged: mergedPrs }),
         })),
     ],
     tasks,
@@ -1037,7 +1042,24 @@ function buildEnvironmentReach(store: System['store'], environments: Environment
   // testUk would be the harness announcing a queue it is not in yet.
   const delivered = new Set(store.listDeliveries().map((d) => d.originRef));
   const shortfalls = new Set(store.listShortfalls().map((sf) => sf.originRef));
+  // Resolved before the fold, because it is also what widens the fold's goal set.
+  // A goal delivered with nothing merged has landed nothing to be folded, so
+  // without this it ships no row — and the hold sentence, the release control and
+  // the "not waiting on an environment" line all live inside the card an empty
+  // list stops drawing. Those are exactly the goals the escape hatch was written
+  // for, so it was absent precisely where it was needed. A released goal is kept
+  // for the same reason: the row is where its note is drawn, and a release that
+  // erased its own account would be the lift with nothing left saying it happened.
+  const holds = new Map<string, string>();
+  const gated = new Set<string>();
+  for (const goalRef of delivered) {
+    if (shortfalls.has(goalRef)) continue;
+    const hold = environmentGateHold({ goalRef, environments, arrivals, releases });
+    if (hold !== null) holds.set(goalRef, hold);
+    if (hold !== null || released.has(goalRef)) gated.add(goalRef);
+  }
   return allGoalReach({
+    held: gated,
     landings: store.listGoalLandings(),
     readings: store.listEnvironmentReach(),
     nodes: store.listWorkNodes(),
@@ -1050,10 +1072,7 @@ function buildEnvironmentReach(store: System['store'], environments: Environment
     environments,
   }).map((goal) => ({
     ...goal,
-    gateHold:
-      delivered.has(goal.goalRef) && !shortfalls.has(goal.goalRef)
-        ? environmentGateHold({ goalRef: goal.goalRef, environments, arrivals, releases })
-        : null,
+    gateHold: holds.get(goal.goalRef) ?? null,
     released: released.get(goal.goalRef) ?? null,
   }));
 }

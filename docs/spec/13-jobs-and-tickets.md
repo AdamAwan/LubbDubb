@@ -620,15 +620,26 @@ those it was.
 
 **The detail is refreshed on every pulse**, which is the one place this differs in shape from the
 close-out: the row is re-filed while it is still owed, and `recordHumanTask` folds the repeat onto it,
-so it lists what is outstanding _now_ rather than on the day it was filed. A **settled** row is left
-entirely alone — re-filing would rewrite the detail underneath an operator's own verdict, and nothing
-here reopens one.
+so it lists what is outstanding _now_ rather than on the day it was filed. A row **an operator**
+settled is left entirely alone — re-filing would rewrite the detail underneath their own verdict.
 
 **Clearing the delivery retracts it**, the close-out's rule and for its reason: the goal went back
 into production, so there is nothing delivered to validate and the checks will be asked for again
 against whatever is delivered next. Settled `declined`, with that as the note. And for the close-out's
 other reason too: it is the arm that runs when nothing is delivered, so the sweep's own short-circuit
 must read the standing rows before it takes it.
+
+**And "asked for again" means the row is reopened**, which needs saying because nothing else does it.
+`recordHumanTask`'s dedup ignores status and both titles are deliberately stable, so a re-file folds
+onto the declined row and refreshes its detail — leaving it declined. Read off status alone the
+retraction is therefore permanent, and delivered → shortfall → replan → delivered is the ordinary
+assessor loop rather than an edge: after one round trip the surface written to announce that
+validation has become runnable is gone for that goal, for good, with everything else on the goal still
+reading correctly. What the passes need is who settled the row, and the resolution says so — a desk
+prefixes `DESK_SETTLED` (`src/benchSettlement.ts`), the same marker `runwayPass` already tells its own
+supersedes by. A row wearing it is **reopened** when the obligation comes round again; a row without
+it is a person's answer and stands forever. Absent reads as the operator's, which is the direction
+that leaves standing answers standing.
 
 Tests: `test/validationReady.test.ts`.
 
@@ -658,8 +669,11 @@ Tests: `test/validationReady.test.ts`.
   (`src/mcp/humanTasks.ts`) — a one-line title is a property of the panel row, not of who typed it.
 
 A **repeat** (same agent, same origin, same title, same kind) refreshes the row without resetting status,
-`recordFinding`'s rule and for its reason. Better instructions overwrite thinner ones; a declined
-task asked for again stays declined.
+`recordFinding`'s rule and for its reason. Better instructions overwrite thinner ones; a task **a
+person** declined and which is asked for again stays declined. The exception is a row a desk settled
+itself, which is not a person saying anything about the obligation — see the retraction above: those
+are reopened through `Store.reopenHumanTask`, never through a repeat, precisely because a repeat
+cannot reset status.
 
 ### Settling — `POST /api/human-tasks/:id/done` and `/decline`
 

@@ -64,7 +64,7 @@ export const KNOWLEDGE_GROUPS: readonly KnowledgeGroup[] = [
     id: 'notices',
     title: 'Live notices',
     blurb:
-      'Expiring observations, with the clock they were filed under. A notice states what was seen and never what to do about it; the agent draws the conclusion. These are the one thing agreement alone puts in front of every agent — two goals seeing the same thing is enough, and what makes that safe is that each one ends by itself. The harness raises its own for a check that went red and green on one commit, and for a check red on a branch other pull requests are based on; it reads those rather than being told them, so it counts as an observer.',
+      'Expiring observations, with the clock they were filed under. A notice states what was seen and never what to do about it; the agent draws the conclusion. These are the one thing agreement alone puts in front of every agent — two goals seeing the same thing is enough, and what makes that safe is that each one ends by itself. The harness raises its own for a check that went red and green on one commit, and for a check red on a branch other pull requests are based on — where the voices are the pull requests that branch is holding up; it reads those rather than being told them, so it counts as an observer.',
     tail: false,
   },
   {

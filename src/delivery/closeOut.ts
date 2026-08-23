@@ -1,3 +1,4 @@
+import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
 import type { HumanTask, Issue, IssueDelivery, IssueShortfall, ValidationVerdict } from '../types.js';
 
 /**
@@ -47,7 +48,8 @@ import type { HumanTask, Issue, IssueDelivery, IssueShortfall, ValidationVerdict
 /** What a pass decided, as data — so the decisions are testable without a store. */
 type CloseOutStep =
   | { kind: 'file'; originRef: string; title: string; detail: string }
-  | { kind: 'settle'; taskId: string; status: 'done' | 'declined'; resolution: string };
+  | { kind: 'settle'; taskId: string; status: 'done' | 'declined'; resolution: string }
+  | { kind: 'reopen'; taskId: string; detail: string };
 
 interface CloseOutInput {
   /** The pulse's world issues. Empty means "nothing was read", never "everything closed". */
@@ -124,9 +126,22 @@ export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
     const existing = byOrigin.get(originRef);
     const issue = inWorld.get(originRef);
 
-    // Answered. A settled row is never re-filed and never re-settled — the
-    // whole point of an answer is that it is the last thing said about the row.
-    if (existing && existing.status !== 'open') continue;
+    // Answered. A settled row is never re-filed and never re-settled — the whole
+    // point of an answer is that it is the last thing said about the row. Scoped
+    // to an *operator's* answer: a row the harness retracted below said only that
+    // the obligation was not owed while the goal was back in production, and it is
+    // owed again now that the goal is delivered again. Reopened rather than
+    // re-filed, because `recordHumanTask`'s dedup ignores status and would refresh
+    // the declined row's detail and leave it declined.
+    if (existing && existing.status !== 'open') {
+      if (deskSettled(existing) && issue && issue.state !== 'closed')
+        steps.push({
+          kind: 'reopen',
+          taskId: existing.id,
+          detail: closeOutDetail(issue, delivery, input.validation.get(originRef) ?? null),
+        });
+      continue;
+    }
 
     // Nothing to close: the tracker already stopped listing it open, which is
     // what a GitHub issue a merged "Closes #n" took with it looks like. A row
@@ -183,7 +198,7 @@ export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
       kind: 'settle',
       taskId: task.id,
       status: 'declined',
-      resolution: 'the goal went back into production — there is no delivery to close it out',
+      resolution: DESK_SETTLED + 'the goal went back into production — there is no delivery to close it out',
     });
   }
 

@@ -1,3 +1,4 @@
+import { deskSettled } from '../src/benchSettlement.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
@@ -282,6 +283,45 @@ test('clearing the delivery retracts the obligation rather than leaving it stand
   assert.equal(steps.length, 1);
   assert.equal(steps[0]!.kind === 'settle' && steps[0]!.status, 'declined');
   assert.match(steps[0]!.kind === 'settle' ? steps[0]!.resolution : '', /back into production/);
+});
+
+test('a re-delivered goal is asked again — the retraction was the harness, not an answer', () => {
+  // The ordering the two rules meet in, and the one nothing drove: delivered →
+  // shortfall → replan → delivered is what `issue-assess` and `issue-shortfall`
+  // do for a living. Read off status alone the retraction is permanent, and the
+  // one surface that announces validation has become runnable is gone for good on
+  // a goal that is still `flagged` with its checks still `unrun`.
+  const retracted = pass({ issues: [issue(12)], deliveries: [], checks: checksOn(check()), existing: [task()] });
+  const resolution = retracted[0]!.kind === 'settle' ? retracted[0]!.resolution : '';
+  assert.ok(deskSettled({ ...task(), resolution }), 'the retraction says who settled it');
+
+  const steps = pass({
+    issues: [issue(12)],
+    deliveries: [delivery(12)],
+    checks: checksOn(check()),
+    existing: [task({ status: 'declined', resolution })],
+  });
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0]!.kind, 'reopen');
+  // Reopened, never re-filed: `recordHumanTask` dedups on the title regardless of
+  // status and `validateTitle` is stable, so a repeat would refresh the declined
+  // row's detail and leave it declined.
+  assert.match(steps[0]!.kind === 'reopen' ? steps[0]!.detail : '', /A\. \*\*A squash-merged part branch/);
+});
+
+test('an operator’s own decline on a re-delivered goal still stands', () => {
+  // The other direction, and only one of the two is honest. A person who declined
+  // this must not be asked again next pulse, however many times the goal is
+  // re-delivered.
+  for (const status of ['done', 'declined'] as const) {
+    const steps = pass({
+      issues: [issue(12)],
+      deliveries: [delivery(12)],
+      checks: checksOn(check()),
+      existing: [task({ status, resolution: 'we validated this by hand before the release' })],
+    });
+    assert.deepEqual(steps, [], `a ${status} an operator wrote is the last thing said about the row`);
+  }
 });
 
 // -- through the harness ------------------------------------------------------

@@ -1,3 +1,4 @@
+import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
 import type { EscalationSpan, HumanTask, Issue, IssueRun } from '../types.js';
 import { issuePickupStatus, issueWatchGateReason, type IssuePickupContext } from '../dispatcher/issuePickup.js';
 import { assayHold } from '../intake/assay.js';
@@ -844,13 +845,6 @@ type RunwayStep =
  * starved` files nothing the second time, and the fleet goes quiet with nothing
  * saying so — the exact failure this module exists to break.
  */
-const DESK_SETTLED = 'Settled by the harness — ';
-
-/** Did the desk settle this row itself, rather than a person answering it? */
-function deskSettled(task: HumanTask): boolean {
-  return (task.resolution ?? '').startsWith(DESK_SETTLED);
-}
-
 /**
  * What this pulse owes: at most one open `supply` row, wearing the current
  * state's wording.

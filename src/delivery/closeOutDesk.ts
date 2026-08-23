@@ -71,6 +71,7 @@ export class DeliveryCloseOutDesk {
           agentId: null,
           taskId: null,
         });
+      else if (step.kind === 'reopen') this.store.reopenHumanTask(step.taskId, step.detail);
       else this.store.settleHumanTask(step.taskId, step.status, step.resolution);
     }
   }
