@@ -27,15 +27,35 @@ interface RungVerdict {
  * button, asked of every rung including the ones that cannot merge for a while
  * yet.
  *
- * **`behind` and `blocked` are deliberately not consulted.** A rung is behind
- * precisely because the rung beneath it has not landed, and it clears itself the
- * moment the provider retargets. Counting it would withhold the button from every
- * real stack, which is the feature not existing. The line this draws is worth
- * keeping: the operator is authorizing *code they have read*, and `behind` is a
- * fact about the queue, not about the code.
+ * **`behind` is the one exclusion, and the argument for it is only about
+ * `behind`.** A rung is behind precisely because the rung beneath it has not
+ * landed, and it clears itself the moment the provider retargets. Counting it
+ * would withhold the button from every real stack, which is the feature not
+ * existing. The line this draws is worth keeping: the operator is authorizing
+ * *code they have read*, and `behind` is a fact about the queue, not about the
+ * code.
  *
- * Everything else that stops a merge is consulted, in the order an operator would
- * ask it, so the sentence the rack shows names the thing furthest from ready.
+ * **Everything else rule `pr-merge-ready` refuses is consulted, because this gate
+ * must be no weaker than that test on anything that does not clear itself.**
+ * Where the two disagree there is no exit: the button is offered, the click is
+ * accepted, no merge is ever proposed — the rule requires `mergeable === true`
+ * and a state that is not `blocked` — and {@link rungFault} does not stop the
+ * intent either, so it stands at "landing 0 of N" forever with no escalation and
+ * no reason. That silence is the exact failure `settleLandings` exists to make
+ * impossible. `blocked` is not a fact about the queue: `prAttentionStatus` reads
+ * it as a required check or reviewer a person has to resolve, and a rung held
+ * back by its parent reports `behind` rather than `blocked`, so excluding it buys
+ * nothing the `behind` exclusion does not already buy. An absent `mergeable` is
+ * the provider still computing — reachable in normal operation, since a retarget
+ * triggers a recompute — and it resolves itself, so the button simply returns on
+ * the pulse it does. → `docs/spec/07-pull-requests.md#landing-a-stack`
+ *
+ * The checks run in the order an operator would ask them, so the sentence the
+ * rack shows names the thing furthest from ready.
+ *
+ * {@link rungFault} deliberately gains neither: the offer gate is strict and the
+ * stop gate needs a *definite* adverse verdict, which is the one state the two
+ * must differ on.
  */
 function rungVerdict(pr: PullRequest): RungVerdict {
   if (pr.ciStatus === 'failing') return { clear: false, blockedBy: `#${pr.number} CI failing` };
@@ -49,6 +69,13 @@ function rungVerdict(pr: PullRequest): RungVerdict {
     };
   if (pr.mergeable === false || pr.mergeableState === 'dirty')
     return { clear: false, blockedBy: `#${pr.number} conflicts with its base` };
+  if (pr.mergeableState === 'blocked')
+    return { clear: false, blockedBy: `#${pr.number} merge blocked (required checks/reviews)` };
+  // Not folded into the conflict arm above: `false` is the provider saying the
+  // merge will not go through, and absent is it not having said. The operator
+  // reads a different sentence and waits rather than goes looking.
+  if (pr.mergeable !== true)
+    return { clear: false, blockedBy: `#${pr.number} — the provider reports no mergeable state` };
   return { clear: true, blockedBy: null };
 }
 
@@ -140,8 +167,36 @@ interface LandingSettlement {
 interface SettleWorld {
   pullRequests: PullRequest[];
   closedPullRequests?: PullRequest[];
+  /**
+   * The integrations that served a fallback slice on this pulse. Named per
+   * integration rather than per slice, so there is no way to ask whether it was
+   * the *source-control* half that went old — which is why any stale source at
+   * all stops a settle rather than only a stale one.
+   */
+  staleSources?: string[];
   /** Pull requests durably recorded as merged — `Store.mergedPrs()`. */
   merged?: ReadonlySet<number>;
+}
+
+/**
+ * Whether this pulse's world may end an operator's standing authorization.
+ *
+ * A world with a stale slice is exactly the world in which rungs go missing: a
+ * provider serving its last-good list under-reports, and `settleLandings` reads
+ * every rung it cannot find as gone. Unlike the other folds that read absence, a
+ * settle is **not idempotent** — `settleStackLanding` is a compare-and-set onto a
+ * terminal status, and the next healthy pulse does not put the intent back. So
+ * one bad read would revoke the authorization permanently, over a pull request
+ * that never changed, with a reason that is false about it.
+ *
+ * Both arms skip, not just the stop: "all rungs merged" is just as unsupportable
+ * from a world nobody could read as "a rung is gone" is. The durable `merged`
+ * record does not rescue it either: it says which rungs landed, never that the
+ * ones missing from an under-reported world have gone.
+ * → `docs/spec/03-world-model.md#worldsnapshot`
+ */
+function settleable(world: SettleWorld): boolean {
+  return (world.staleSources ?? []).length === 0;
 }
 
 /**
@@ -155,8 +210,11 @@ interface SettleWorld {
  * set is settled first — merged is progress, anything else is a fact about the
  * chain that outranks whatever the remaining rungs look like — and only then are
  * the survivors examined for a fault.
+ *
+ * **Nothing is settled from a world a provider disowned** ({@link settleable}).
  */
 export function settleLandings(landings: StackLanding[], world: SettleWorld): LandingSettlement[] {
+  if (!settleable(world)) return [];
   const open = new Map<number, PullRequest>();
   for (const pr of world.pullRequests) if (!pr.merged) open.set(pr.number, pr);
   const closed = new Map<number, PullRequest>();
@@ -206,10 +264,24 @@ export function settleLandings(landings: StackLanding[], world: SettleWorld): La
  * The ref would be the obvious key and it is the wrong one: `stack:<bottom PR>`
  * renames itself the instant the bottom rung merges, so a match on it would lose
  * the intent at the first success — exactly when the operator most needs to see
- * "landing 1 of 3". Any overlap is unambiguous, since a PR belongs to one chain.
+ * "landing 1 of 3".
+ *
+ * Overlap alone was unambiguous only while a PR belonged to one chain, which a
+ * **fork** breaks: two paths off one bottom share every rung beneath the split, so
+ * an intent over one path overlaps the other and the sibling would draw a landing
+ * that does not authorize it. `openPrNumbers` closes that — an intent covering a
+ * rung that is *still open* and not in this chain is some other chain's. It has to
+ * be open: a chain shrinks as its rungs merge, and rejecting on a merged rung
+ * would lose the intent at the first success all over again.
  */
-export function landingFor(rungPrNumbers: number[], landings: StackLanding[]): StackLanding | null {
-  return landings.find((l) => l.rungs.some((n) => rungPrNumbers.includes(n))) ?? null;
+export function landingFor(
+  rungPrNumbers: number[],
+  landings: StackLanding[],
+  openPrNumbers?: ReadonlySet<number>,
+): StackLanding | null {
+  const elsewhere = (l: StackLanding): boolean =>
+    openPrNumbers !== undefined && l.rungs.some((n) => openPrNumbers.has(n) && !rungPrNumbers.includes(n));
+  return landings.find((l) => l.rungs.some((n) => rungPrNumbers.includes(n)) && !elsewhere(l)) ?? null;
 }
 
 /** How many of an intent's rungs have landed — the numerator of "landing 1 of 3". */

@@ -33,7 +33,10 @@ interface StackRung {
 }
 
 export interface Stack {
-  /** `stack:<bottom rung's PR number>` — stable while the bottom rung is open. */
+  /**
+   * `stack:<bottom rung's PR number>` — stable while the bottom rung is open, and
+   * `stack:<bottom>:<leaf>` for one path of a fork, whose paths share a bottom.
+   */
   ref: string;
   issueNumber: number | null;
   issueTitle: string | null;
@@ -65,27 +68,65 @@ export function buildStacks(openPrs: PullRequest[], plans: Plan[], parts: PlanPa
   const bottoms = live.filter((pr) => baseOf(pr) === null);
   const stacks: Stack[] = [];
 
+  // Children in list order, so a chain that does not fork is folded in exactly
+  // the order it always was.
+  const childrenOf = (pr: PullRequest): PullRequest[] => live.filter((p) => p.baseBranch === pr.branch);
+
   for (const bottom of bottoms) {
-    const rungs: PullRequest[] = [bottom];
-    const seen = new Set<number>([bottom.number]);
-    for (;;) {
-      const current = rungs[rungs.length - 1];
-      if (!current) break;
-      const next = live.find((p) => p.baseBranch === current.branch && !seen.has(p.number));
-      // `seen` is not tidiness: a malformed world can cycle the base edges, and an
-      // unguarded walk would hang the pulse rather than report a bad stack.
-      if (!next) break;
-      seen.add(next.number);
-      rungs.push(next);
+    // **Every root-to-leaf path, not one child per rung.** A branch with two open
+    // pull requests based on it is a fork, and it is what the planning funnel
+    // produces for a diamond plan: `partBase` returns the first unsettled
+    // dependency's branch, so two parts each depending on the same part are both
+    // dispatched and both based on it. Walked with `find`, the second sibling was
+    // in no chain at all — not a bottom, never reached — so it had no head line,
+    // no readiness verdict and no "land the stack" control, while `isStackedPr`
+    // stayed true for it so no rule would merge it either. Which sibling survived
+    // was the order the provider listed the pull requests in, which is not a fact
+    // about the world. → `docs/spec/07-pull-requests.md`
+    for (const path of pathsFrom(bottom, childrenOf)) {
+      if (path.length < 2) continue;
+      stacks.push(assemble(path, plans, parts, forks(bottom, childrenOf)));
     }
-    if (rungs.length < 2) continue;
-    stacks.push(assemble(rungs, plans, parts));
   }
 
-  return stacks.sort((a, b) => (a.rungs[0]?.prNumber ?? 0) - (b.rungs[0]?.prNumber ?? 0));
+  return stacks.sort(
+    (a, b) =>
+      (a.rungs[0]?.prNumber ?? 0) - (b.rungs[0]?.prNumber ?? 0) ||
+      (a.rungs[a.rungs.length - 1]?.prNumber ?? 0) - (b.rungs[b.rungs.length - 1]?.prNumber ?? 0),
+  );
 }
 
-function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[]): Stack {
+/**
+ * Every root-to-leaf path from this bottom, bottom-first.
+ *
+ * The `seen` set is per path and is not tidiness: a malformed world can cycle the
+ * base edges, and an unguarded walk would hang the pulse rather than report a bad
+ * stack. Per path rather than shared, because two siblings legitimately share
+ * every rung beneath them — a shared set would drop the second one, which is the
+ * bug this function exists to fix.
+ */
+function pathsFrom(bottom: PullRequest, childrenOf: (pr: PullRequest) => PullRequest[]): PullRequest[][] {
+  const out: PullRequest[][] = [];
+  const walk = (path: PullRequest[], seen: Set<number>): void => {
+    const current = path[path.length - 1];
+    if (!current) return;
+    const next = childrenOf(current).filter((p) => !seen.has(p.number));
+    if (next.length === 0) {
+      out.push(path);
+      return;
+    }
+    for (const child of next) walk([...path, child], new Set([...seen, child.number]));
+  };
+  walk([bottom], new Set([bottom.number]));
+  return out;
+}
+
+/** Whether this bottom's tree branches anywhere — what decides how a ref is spelled. */
+function forks(bottom: PullRequest, childrenOf: (pr: PullRequest) => PullRequest[]): boolean {
+  return pathsFrom(bottom, childrenOf).filter((p) => p.length >= 2).length > 1;
+}
+
+function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[], forked: boolean): Stack {
   const bottom = prs[0];
   const partByPr = new Map<number, PlanPart>();
   for (const part of parts) if (part.prNumber !== null) partByPr.set(part.prNumber, part);
@@ -107,8 +148,13 @@ function assemble(prs: PullRequest[], plans: Plan[], parts: PlanPart[]): Stack {
   const planId = planIds.size === 1 ? [...planIds][0]! : null;
   const plan = planId !== null ? (plans.find((p) => p.id === planId) ?? null) : null;
 
+  const leaf = prs[prs.length - 1];
   return {
-    ref: `stack:${bottom?.number ?? 0}`,
+    // `stack:<bottom>` while the bottom carries one chain, which is every stack a
+    // linear plan produces and every ref written before forks were modelled. A
+    // fork's paths share a bottom, so each names its leaf as well or they would
+    // collide — and a click on one path would authorize the other's rungs.
+    ref: forked ? `stack:${bottom?.number ?? 0}:${leaf?.number ?? 0}` : `stack:${bottom?.number ?? 0}`,
     issueNumber: plan ? issueNumberOf(plan.originRef) : null,
     issueTitle: plan?.title ?? null,
     planId,

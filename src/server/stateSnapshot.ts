@@ -195,6 +195,13 @@ export function buildStateSnapshot(
   const plans = store.listPlans();
   const planParts = store.listAllPlanParts();
   const stacks = buildStacks(world.pullRequests, plans, planParts, config.defaultBranch);
+  // Open, not merely present: `landingFor` rejects an intent covering a rung
+  // outside the chain only while that rung is still open, or a chain that has
+  // shrunk by merging would lose its own landing.
+  const openPrNumbers = new Set(world.pullRequests.filter((p) => !p.merged).map((p) => p.number));
+  // Hoisted out of the two `landedCount` call sites below: one read of the durable
+  // merge record per snapshot rather than one per chain.
+  const mergedPrs = store.mergedPrs();
   // Standing *and* stopped: a stopped intent is the one the rack most has to keep
   // showing, since it is the state that says nothing further will merge on its own.
   const landings = store.listStackLandings().filter((l) => l.status === 'standing' || l.status === 'stopped');
@@ -682,25 +689,47 @@ export function buildStateSnapshot(
     environmentArrivals: config.environments.length === 0 ? [] : store.listGoalArrivals().slice(0, 50),
     // The "land the stack" control, one entry per chain above: whether the click
     // may be offered, and the operator's standing intent over it. Joined to a
-    // stack by rung membership rather than by ref — see `landingFor`.
-    stackLandings: stacks.map((stack) => {
-      const rungPrs = stack.rungs.flatMap((rung) => {
-        const pr = world.pullRequests.find((p) => p.number === rung.prNumber);
-        return pr ? [pr] : [];
-      });
-      const landing = landingFor(
-        stack.rungs.map((r) => r.prNumber),
-        landings,
-      );
-      return {
-        ref: stack.ref,
-        ...landingReadiness(rungPrs),
-        landing,
-        // Counted against the durable record as well as the window, or "landing 1
-        // of 3" counts back down to 0 of 3 as merged rungs age out of it.
-        landed: landing ? landedCount(landing, { ...world, merged: store.mergedPrs() }) : 0,
-      };
-    }),
+    // stack by rung membership rather than by ref — see `landingFor`, which needs
+    // the open set to tell one path of a fork from its sibling.
+    stackLandings: [
+      ...stacks.map((stack) => {
+        const rungPrs = stack.rungs.flatMap((rung) => {
+          const pr = world.pullRequests.find((p) => p.number === rung.prNumber);
+          return pr ? [pr] : [];
+        });
+        const landing = landingFor(
+          stack.rungs.map((r) => r.prNumber),
+          landings,
+          openPrNumbers,
+        );
+        return {
+          ref: stack.ref,
+          ...landingReadiness(rungPrs),
+          landing,
+          // Counted against the durable record as well as the window, or "landing 1
+          // of 3" counts back down to 0 of 3 as merged rungs age out of it.
+          landed: landing ? landedCount(landing, { ...world, merged: mergedPrs }) : 0,
+        };
+      }),
+      // And the intents no chain above accounts for. A chain of one is not a
+      // stack, so a two-rung intent whose bottom rung has merged has no stack
+      // left to hang off — and mapped over `stacks` alone the standing intent
+      // over the survivor is invisible, taking the "stop" control with it at
+      // exactly the moment an operator wants it. The row says what is standing;
+      // `offer` is false because there is no chain left to land.
+      // → `docs/spec/07-pull-requests.md#landing-a-stack`
+      ...landings
+        .filter(
+          (l) => l.status === 'standing' && !stacks.some((s) => s.rungs.some((r) => l.rungs.includes(r.prNumber))),
+        )
+        .map((landing) => ({
+          ref: landing.ref,
+          offer: false,
+          blockedBy: null,
+          landing,
+          landed: landedCount(landing, { ...world, merged: mergedPrs }),
+        })),
+    ],
     tasks,
     // Operator-launched jobs (newest first) — the cockpit shows the queued
     // ones and their place in line, plus recently-dispatched/cancelled history.

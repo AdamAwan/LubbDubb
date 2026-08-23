@@ -225,6 +225,24 @@ A chain of one is not a stack. A merged rung is not a base. A cycle in the base 
 rather than hanging the pulse. It takes the **unfiltered** open list, so an unwatched rung does not
 put a hole in the chain.
 
+**A fork is every path, not one of them.** A branch with two open PRs based on it yields one `Stack`
+per root-to-leaf path, sharing the rungs beneath the split. This is not a hypothetical world: it is
+what the planning funnel produces for a diamond plan, since `partBase` returns the first unsettled
+dependency's branch and `dependencySatisfied` clears a part as soon as its dependency has pushed, so
+two parts depending on the same part are both dispatched and both based on it. Walking one child per
+rung dropped the second sibling from **every** chain — it is not a bottom, because `baseOf` resolves,
+and no walk reached it — so it had no head line, no readiness verdict and no landing control, while
+`isStackedPr` stayed true for it so no rule would merge it either. Worse, which sibling survived was
+the provider's list order, and a stack is meant to be a fact about the world.
+
+Because a fork's paths share a bottom, `Stack.ref` names the leaf as well when — and only when — the
+bottom carries more than one chain: `stack:<bottom>:<leaf>`, against `stack:<bottom>` for the linear
+case, which is every ref written before forks were modelled. `landingFor` follows: rung overlap alone
+identified an intent only while a PR belonged to one chain, so it now also rejects an intent covering
+a rung that is **still open** and outside the chain being drawn. Still open is load-bearing — a chain
+shrinks as its rungs merge, and rejecting on a merged rung would lose the intent at its first success,
+which is the thing the rung-keying exists to prevent.
+
 ### Landing a stack
 
 An operator's standing authorization to merge a whole chain: one click, and each rung's merge is
@@ -257,10 +275,25 @@ which this is not.
 **The button is offered only when every rung is clear** (`landingReadiness`), and it is disabled
 rather than warned about: offering it while a rung above the bottom is unread would authorize merging
 code whose ladder the operator cannot see. Clear means CI passing, approved, no unresolved comments,
-no conflict. `behind` and `blocked` are deliberately **excluded** — a rung is behind because the one
-beneath it has not landed, and it clears itself on retarget, so counting it would withhold the button
-from every real stack. The line: the operator is authorizing _code they have read_, and `behind` is a
-fact about the queue, not about the code.
+no conflict, not `blocked`, and a `mergeable` the provider has actually computed. `behind` is
+deliberately **excluded** — a rung is behind because the one beneath it has not landed, and it clears
+itself on retarget, so counting it would withhold the button from every real stack. The line: the
+operator is authorizing _code they have read_, and `behind` is a fact about the queue, not about the
+code.
+
+**The offer gate must be no weaker than rule `pr-merge-ready`'s test on anything that does not clear
+itself**, and `behind` is the only thing that does. Where the two disagree there is no exit: the
+button is offered, the click is accepted, the intent is recorded — and then nothing merges, because
+the rule requires `mergeable === true` and a state that is not `blocked`, and nothing stops the
+intent either, because `rungFault` needs a definite adverse verdict. The chain stands at "landing 0
+of N" indefinitely with no escalation and no reason, which is exactly the silence `settleLandings`
+exists to make impossible. So `blocked` is consulted — it is not a fact about the queue, since a rung
+held back by its parent reports `behind`, and `prAttentionStatus` reads `blocked` as a required check
+or reviewer a person has to resolve — and so is an absent `mergeable`, which is the provider still
+computing after a retarget and resolves itself, so the button simply returns on the pulse it does.
+`rungFault` gains neither: the offer gate is strict, the stop gate needs a definite adverse verdict,
+and a `mergeable` that goes null mid-landing is the `pending` case the two predicates exist to differ
+on.
 
 **A rung that goes red stops the intent** (`settleLandings`, run once per pulse from the harness).
 It does not wait, and it does not resume. Rule `pr-merge-ready` already refuses to propose a red rung,
@@ -292,6 +325,34 @@ unresolved comment, a real conflict — stops the chain. An absent `approved` is
 
 A stopped intent is never resumed. The button returns once the rungs are clear, and that click is the
 operator re-authorizing a chain they have looked at again.
+
+**Revocation is reachable for as long as the intent stands, including after the chain stops being a
+stack.** `DELETE /api/stacks/:ref/land` reads the ref for the rung it names (`stack:<bottom PR>`) and
+finds the intent by what it covers — keyed on a rung end to end, not only in the desk. It must not
+resolve the ref through `landingScope`, because that resolves through `buildStacks` and a chain of
+one is not a stack: the moment a two-rung chain's bottom rung merges, every ref an operator could
+send 404s while the intent goes on authorizing the survivor's merge. That is the same orphaning the
+rung-keying exists to prevent, arriving at the last rung instead of the first, and the 404 body reads
+"no open stack" — which a person reasonably takes to mean nothing is standing. The model may still
+widen the search (a ref whose own rung is in no intent may name a chain whose other rungs are); it
+may never gate it. `POST` keeps going through `landingScope`, because the scope of an authorization
+is the server's own reading of the chain and `DELETE` authorizes nothing.
+
+`StackLandingView` follows: `stackLandings` is the chains above **plus a row for every standing
+intent no chain accounts for**, so the stop control is drawable on a one-rung remainder. Such a row
+carries `offer: false` — there is no chain left to land, only one to stop.
+
+**A settlement is only ever written from a world every source reported fresh.** A settle is the one
+terminal write in the pulse that a later pulse cannot revise — `settleStackLanding` is a
+compare-and-set onto a terminal status, so unlike `observePartPr` or `retainedRunIssues` it does not
+correct itself when the provider recovers. And a world with a stale slice is exactly the world in
+which rungs go missing: a provider serving its last-good list under-reports, and every rung it fails
+to report reads as having left the open set. One bad pulse would otherwise end the operator's chain
+permanently, naming a pull request that never changed. So a pulse carrying any
+[`staleSources`](03-world-model.md#worldsnapshot) settles nothing — the _landed_ arm included, since
+"all rungs merged" is as unsupportable from a world nobody could read as "a rung is gone" is.
+`staleSources` names the integration rather than the slice, so there is no way to ask whether it was
+the source-control half that went old; any stale source at all stops the settle.
 
 `settleLandings` **never calls `buildStacks`** — it re-reads the chain from the intent's own numbers
 and the world, which is what keeps the lens out of the harness's per-pulse decision path. The only
