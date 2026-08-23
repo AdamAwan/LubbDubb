@@ -428,9 +428,59 @@ test('the last call per tool is answered over all time, not over a window', () =
     14,
   );
   const last = store.lastMcpCallByTool();
-  assert.ok(last.get('escalate'));
-  assert.equal(last.get('open_pr'), undefined, 'a tool never called is absent rather than null');
+  assert.ok(last.get('fleet:escalate'));
+  assert.equal(last.get('fleet:open_pr'), undefined, 'a tool never called is absent rather than null');
   store.close();
+});
+
+// #533 — `validation_report` is the one name on both channels, so it is the one
+// name whose two rows can disagree, and the only place a per-tool figure can be
+// taken from the wrong channel.
+test('no per-tool figure on one channel is taken from the other', () => {
+  for (const caller of ['fleet', 'desktop'] as const) {
+    const other = caller === 'fleet' ? 'desktop' : 'fleet';
+    const store = new Store(':memory:');
+    store.recordMcpCall(
+      {
+        channel: caller,
+        tool: 'validation_report',
+        agentId: caller === 'fleet' ? 'a1' : null,
+        taskId: null,
+        originRef: null,
+        ok: true,
+        error: null,
+        durationMs: 3,
+        args: {},
+      },
+      14,
+    );
+    const last = store.lastMcpCallByTool();
+    assert.ok(last.get(`${caller}:validation_report`), `${caller} keeps its own last call`);
+    assert.equal(last.get(`${other}:validation_report`), undefined, `${other} never called it`);
+
+    const insights = buildMcpInsights({
+      calls: store.listMcpCallsSince('1970-01-01T00:00:00.000Z'),
+      agents: [],
+      tasks: [],
+      namedInPrompts: new Map(),
+      lastCallByTool: last,
+      claudeArgs: [],
+      window: resolveWindow('7d', NOW),
+      now: NOW,
+    });
+    const rows = insights.tools.filter((t) => t.tool === 'validation_report');
+    assert.equal(rows.length, 2, 'one row per channel, since the name is on both');
+    for (const row of rows) {
+      if (row.channel === caller) {
+        assert.ok(row.lastCalledAt, 'the channel that called it has the date');
+        assert.equal(row.calls, 1);
+      } else {
+        assert.equal(row.lastCalledAt, null, "and the channel that did not has nothing — not the other's date");
+        assert.equal(row.calls, 0);
+      }
+    }
+    store.close();
+  }
 });
 
 // -- end to end ---------------------------------------------------------------

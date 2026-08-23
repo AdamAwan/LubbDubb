@@ -296,7 +296,11 @@ interface McpInsightsInput {
   tasks: TaskSummary[];
   /** Per tool, how many dispatched prompts in the window name it. See the module note. */
   namedInPrompts: Map<string, number>;
-  /** The last call per tool over all time — a date the window by definition cannot hold. */
+  /**
+   * The last call per tool **per channel**, keyed `channel:tool`, over all time —
+   * a date the window by definition cannot hold. Keyed on the pair because
+   * `validation_report` is two different tools with one name.
+   */
   lastCallByTool: Map<string, string>;
   /** This deployment's operator-supplied `claudeArgs`, for the override check. */
   claudeArgs: readonly string[];
@@ -410,7 +414,7 @@ function toolUsage(
     refused: mine.filter((c) => !c.ok).length,
     share: channelCalls.length === 0 ? 0 : round(mine.length / channelCalls.length),
     medianMs: median(mine.map((c) => c.durationMs)),
-    lastCalledAt: input.lastCallByTool.get(tool) ?? null,
+    lastCalledAt: input.lastCallByTool.get(`${channel}:${tool}`) ?? null,
     namedInAddendum: channel === 'fleet' && addendumNames(tool),
     namedInPrompts: input.namedInPrompts.get(tool) ?? 0,
     argsBytes: mine.reduce((sum, c) => sum + c.argsBytes, 0),

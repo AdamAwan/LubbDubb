@@ -856,8 +856,11 @@ Four rules the recording keeps:
   credential — recorded with a null identity rather than skipped for having no agent behind it.
 - **The origin is copied onto the row at call time**, not joined at read time: a task retargeted later
   would otherwise silently re-file every call it ever made under a different phase.
-- **The two channels are never summed.** Different credentials, different tool sets, and
-  `validation_report` is two different tools with one name.
+- **The two channels are never summed** — and the rule covers every per-tool figure, not just the
+  counts. Different credentials, different tool sets, and `validation_report` is two different tools
+  with one name, which makes it the test case rather than a footnote: its last-call date is read per
+  channel, so an operator's own desktop report never appears on the fleet's row as evidence that the
+  fleet is reporting.
 
 Arguments are the one column that is ever cleared — after `mcpArgsRetentionDays`
 ([02](02-configuration.md)), and the row stays. → [14](14-persistence.md#mcp-calls)
