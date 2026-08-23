@@ -1,3 +1,4 @@
+import { deskSettled } from '../src/benchSettlement.js';
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
@@ -242,6 +243,45 @@ test('clearing the delivery retracts the obligation rather than leaving it stand
   // Declined rather than deleted, for the reason an amended plan declines the
   // human part it dropped: the row is the account of why it stopped being owed.
   assert.match(steps[0]!.kind === 'settle' ? steps[0]!.resolution : '', /back into production/);
+});
+
+test('a re-delivered goal is asked to close again — the retraction was the harness', () => {
+  const retracted = pass({ issues: [issue(12)], deliveries: [], existing: [task()] });
+  const resolution = retracted[0]!.kind === 'settle' ? retracted[0]!.resolution : '';
+  assert.ok(deskSettled({ ...task(), resolution }), 'the retraction says who settled it');
+
+  const steps = pass({
+    issues: [issue(12)],
+    deliveries: [delivery(12)],
+    existing: [task({ status: 'declined', resolution })],
+  });
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0]!.kind, 'reopen');
+  // Worse here than on the validate side: `close_out` is the row that says the goal
+  // is finished, and its absence looks exactly like a goal never delivered at all.
+  assert.match(steps[0]!.kind === 'reopen' ? steps[0]!.detail : '', /issue #12|Close/i);
+
+  // And a retracted row whose ticket has since closed is not reopened to ask for a
+  // close nobody owes — the settle arms above already discharge that one.
+  assert.deepEqual(
+    pass({
+      issues: [issue(12, { state: 'closed' })],
+      deliveries: [delivery(12)],
+      existing: [task({ status: 'declined', resolution })],
+    }),
+    [],
+  );
+});
+
+test('an operator’s own answer on a re-delivered goal still stands', () => {
+  for (const status of ['done', 'declined'] as const) {
+    const steps = pass({
+      issues: [issue(12)],
+      deliveries: [delivery(12)],
+      existing: [task({ status, resolution: 'it stays open until the release goes out' })],
+    });
+    assert.deepEqual(steps, [], `a ${status} an operator wrote is the last thing said about the row`);
+  }
 });
 
 // -- through the harness ------------------------------------------------------

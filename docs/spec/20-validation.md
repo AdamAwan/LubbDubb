@@ -277,6 +277,16 @@ nothing is left for a person, on the close-out's asymmetry: these are rows the h
 pulse, so asking the operator to tick off a second copy of what they have just recorded is asking
 them to tell it something it can see.
 
+**Clearing the delivery retracts the row, and re-delivering brings it back.** The second half is what
+makes the first honest, and it does not happen by itself: `recordHumanTask` dedups on the title
+regardless of status and `validateTitle` is stable, so a re-file would fold onto the declined row and
+leave it declined. The desk therefore settles its retraction with the `DESK_SETTLED` marker
+([13](13-jobs-and-tickets.md#the-six-arms-that-file-one)) and **reopens** the row it recognises when
+the goal is delivered again. Without that, delivered → shortfall → replan → delivered — which is what
+`issue-assess` and `issue-shortfall` do for a living — leaves the goal's one announcement surface gone
+permanently, while the chip, the sheet and the checks all still read `unrun` correctly. An operator's
+own `done` or `declined` is untouched by this and stands forever.
+
 ## Resources
 
 `validationRoot`, default `.lubbdubb/validation`, one directory per goal (`<root>/issue-284/`,

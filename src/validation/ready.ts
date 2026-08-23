@@ -1,3 +1,4 @@
+import { DESK_SETTLED, deskSettled } from '../benchSettlement.js';
 import type { HumanTask, Issue, IssueDelivery, IssueShortfall, ValidationCheck } from '../types.js';
 import { liveChecks, outstandingChecks } from './verdict.js';
 
@@ -34,7 +35,8 @@ import { liveChecks, outstandingChecks } from './verdict.js';
 /** What a pass decided, as data — so the decisions are testable without a store. */
 type ValidationReadyStep =
   | { kind: 'file'; originRef: string; title: string; detail: string }
-  | { kind: 'settle'; taskId: string; status: 'done' | 'declined'; resolution: string };
+  | { kind: 'settle'; taskId: string; status: 'done' | 'declined'; resolution: string }
+  | { kind: 'reopen'; taskId: string; detail: string };
 
 interface ValidationReadyInput {
   /** The pulse's world issues, for the goal's own name and link. Never a gate — see below. */
@@ -108,7 +110,21 @@ export function validationReadyPass(input: ValidationReadyInput): ValidationRead
         });
       continue;
     }
-    if (existing && existing.status !== 'open') continue;
+    if (existing && existing.status !== 'open') {
+      // A row **the harness** retracted is owed again the moment the goal is
+      // delivered again, which is what the retraction arm below says will happen.
+      // Reopened rather than re-filed: `recordHumanTask` dedups on the title
+      // regardless of status — and `validateTitle` is deliberately stable — so a
+      // re-file would refresh the declined row's detail and leave it declined. An
+      // operator's own `done`/`declined` still stands forever.
+      if (deskSettled(existing))
+        steps.push({
+          kind: 'reopen',
+          taskId: existing.id,
+          detail: validateDetail(inWorld.get(originRef) ?? null, live, owed.length),
+        });
+      continue;
+    }
     // Held, not dropped. The settle arms above still run, so a check ticked off
     // early still closes a row that was filed before the gate was configured.
     if (input.opened !== null && !input.opened.has(originRef) && !existing) continue;
@@ -132,7 +148,7 @@ export function validationReadyPass(input: ValidationReadyInput): ValidationRead
       kind: 'settle',
       taskId: task.id,
       status: 'declined',
-      resolution: 'the goal went back into production — there is nothing delivered to validate',
+      resolution: DESK_SETTLED + 'the goal went back into production — there is nothing delivered to validate',
     });
   }
 

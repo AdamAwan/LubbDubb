@@ -333,6 +333,14 @@ close-out would read a bench the validate row had not been filed onto yet and as
 very pulse the delivery landed — the two rows arriving together, which is the thing the sequence
 exists to stop.
 
+**Clearing the delivery retracts the `close_out` row, and re-delivering brings it back**, on the
+validate row's rule and through the same mechanism: the retraction wears the `DESK_SETTLED` marker
+([13](13-jobs-and-tickets.md#the-six-arms-that-file-one)) and the pass reopens the row it recognises.
+Without the second half the retraction is permanent, and a missing `close_out` row is the one absence
+that looks exactly like a goal that was never delivered — worse here than on the validate side, since
+this is the row that says the goal is finished. An operator's own answer on the row still stands
+forever.
+
 ## The desk
 
 `src/environments/environmentDesk.ts`, run from the pulse beside the other bookkeeping and not in the
