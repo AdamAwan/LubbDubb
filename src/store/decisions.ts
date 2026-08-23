@@ -52,6 +52,34 @@ export class DecisionStore {
       .all(limit) as DecisionRow[];
     return rows.map(rowToDecision);
   }
+
+  /**
+   * One goal's decisions, newest first — its `issue:<n>` root and everything under
+   * it, the subtree `retroBriefing`'s `mine` predicate selects.
+   *
+   * A goal-scoped read rather than a filter over {@link listDecisions}, whose
+   * `LIMIT` is fleet-wide and applied **before** any such filter: a goal's rows
+   * survived that read only while no other goal wrote 200 on top of them, so a
+   * busy fleet handed the dossier an empty list and it rendered "No decisions are
+   * recorded against this issue" — a denial, not a truncation.
+   * → `docs/spec/05-dispatcher.md#what-it-is-bounded-by`
+   *
+   * The origin is read off the action's JSON because `decisions` has no column for
+   * it — the same `originRef` `actionOrigin` narrows to, asked of SQLite instead of
+   * of every row in the table. The ref is `issue:<n>`, so it carries no `LIKE`
+   * wildcards and `issue:1` never reaches `issue:12`.
+   */
+  listDecisionsForGoal(goalRef: string, limit = 200): Decision[] {
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT * FROM decisions
+         WHERE json_extract(action, '$.originRef') = ?
+            OR json_extract(action, '$.originRef') LIKE ?
+         ORDER BY created_at DESC LIMIT ?`,
+      )
+      .all(goalRef, `${goalRef}:%`, limit) as DecisionRow[];
+    return rows.map(rowToDecision);
+  }
 }
 
 interface DecisionRow {

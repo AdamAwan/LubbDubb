@@ -36,7 +36,7 @@ import { padOriginFor } from '../scratch/pad.js';
 import { dispatchFactScopes, KNOWLEDGE_READ_LIMIT, renderScopedKnowledgeNote } from '../knowledge/block.js';
 import { retryNote, retryResumeFor, type RetryResume } from './retryResume.js';
 import { isActiveTask } from '../tasks.js';
-import type { Action, DecisionOutcome, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
+import type { Action, DecisionOutcome, Escalation, Proposal, ProposalKind, Task, WorldEvent } from '../types.js';
 
 interface ExecutorDeps {
   store: Store;
@@ -1175,6 +1175,20 @@ function actionOrigin(action: Action): string | null {
   return typeof ref === 'string' ? ref : null;
 }
 
+/**
+ * Which goal an escalation is about, when it carries no task to be asked through.
+ *
+ * A narrowing rather than a parse, in {@link actionOrigin}'s shape and beside it so
+ * the two readings of "which goal is this row about" stay together. It exists
+ * because the harness raises escalations of its own — the plan approval and the
+ * shortfall ask — with no `taskId` at all, and those are the two most consequential
+ * human decisions a goal ever produces.
+ */
+function escalationOrigin(escalation: Escalation): string | null {
+  const ref = escalation.context.originRef;
+  return typeof ref === 'string' ? ref : null;
+}
+
 function retroBriefing(originRef: string | null | undefined, store: Store): string | null {
   const target = originRef ? retroSubmitOrigin(originRef) : { ok: false as const, error: '' };
   if (!target.ok) return null;
@@ -1200,13 +1214,31 @@ function retroBriefing(originRef: string | null | undefined, store: Store): stri
     parts,
     pullRequests: (world?.pullRequests ?? []).filter((pr) => prNumbers.has(pr.number)),
     closedPullRequests: (world?.closedPullRequests ?? []).filter((pr) => prNumbers.has(pr.number)),
+    // Every list oldest-first, which is the order `retroDossier` states for its
+    // decisions and needs for all four: its caps keep the *tail*, so a newest-first
+    // list handed over unreversed kept the earliest rows and said it had dropped
+    // them. The goal-scoped reads are what make the dossier's own named constants
+    // the only cap — `listDecisions`/`listFacts` cut fleet-wide at 200 before any
+    // filter here could run. → docs/spec/05-dispatcher.md#what-it-is-bounded-by
     decisions: store
-      .listDecisions()
+      .listDecisionsForGoal(issueOriginRef)
       .filter((d) => mine(actionOrigin(d.action)))
       .reverse(),
-    escalations: store.listEscalations().filter((e) => (e.taskId ? taskIds.has(e.taskId) : false)),
-    proposals: store.listProposals().filter((p) => mine(p.ref)),
-    claims: store.listFacts().filter((f) => mine(f.originRef)),
+    // Matched on its task **or** its own origin: an agent's escalation carries no
+    // `originRef` of its own, and the harness's carries no task. Selecting on the
+    // task alone dropped every ask the harness put to the operator about the goal.
+    escalations: store
+      .listEscalations()
+      .filter((e) => (e.taskId ? taskIds.has(e.taskId) : mine(escalationOrigin(e))))
+      .reverse(),
+    proposals: store
+      .listProposals()
+      .filter((p) => mine(p.ref))
+      .reverse(),
+    claims: store
+      .listFactsForGoal(issueOriginRef)
+      .filter((f) => mine(f.originRef))
+      .reverse(),
     agentCount: agents.length,
     delivery: store.getDelivery(issueOriginRef),
     shortfall: store.getShortfall(issueOriginRef),

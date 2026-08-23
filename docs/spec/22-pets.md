@@ -682,7 +682,8 @@ no wire change. `rarities` is the tier order, so a fifth tier renders rather tha
 hard-coded four.
 
 `share` is the one figure that carries an assumption, and the page says so: it assumes an even mix
-of the seven actions, which no deployment has, and weighs each of them by its **own** `dropChance` —
+of `PET_ACTION_KINDS` — the seven live actions, which no deployment has — and weighs each of them by
+its **own** `dropChance` —
 counting them evenly would claim the catalogue is thirteen times more upgrade-flavoured than it is,
 now that an upgrade is one action in five and a job one in sixty-six. The weights are read off
 `PET_RULES.rates` rather than written down, so they follow the next time the prices move. The source matrix beside it is the exact
@@ -788,8 +789,21 @@ harness redoing work a crash lost rather than an operator starting something. An
 is written by an agent, not by a person, which is why it is absent from a list it would otherwise
 obviously belong to.
 
+**A retired kind is in `POOLS` and in `PET_RULES.rates`, and out of `PET_ACTION_KINDS`** — which is
+what the catalogue walks. The two readings are different questions. The tables answer "what was this
+pet drawn from", which a `finding` pet still asks every time its card is drawn; the catalogue answers
+"what can I do to earn one", and a retired act is not one of those. Walked into the catalogue it is
+published as a live source — a full four-tier row and its own rate line, labelled _Triaging a
+finding_, an act that has not existed since the three claim stores were folded into one — and it also
+normalises `share` over the claim pool **twice**, under two names, so every other species is
+understated by about four per cent. Nothing is mis-rolled, the shares still sum to one, and there is
+no figure on the page a reader could check any of it against: this page's only job is to publish the
+price, and a page carrying a price the harness does not charge is the failure this section exists to
+name.
+
 Adding a source is an entry in that table and a row in the loot tables. Nothing else changes, and a
-source nobody adds is invisible rather than broken.
+source nobody adds is invisible rather than broken — as is a source nobody can earn, for the same
+reason and by the same filter.
 
 #### The label
 
@@ -1100,6 +1114,22 @@ real limit, and it is why the chain is one check of several rather than the chec
 Recomputed in insertion order, never `hatched_at` — a scan settling a backlog writes several pets
 whose hatch times run backwards against the order they were chained in.
 
+**It is a run of links, and a row from before the column ends one.** `chain` is in `PET_COLUMNS`, so a
+vivarium raised before the authenticity columns gains it by `ALTER TABLE` with every existing row
+reading NULL. The link the _next_ pet writes is hashed onto whatever `lastChain()` hands back, and what
+it hands back for a NULL newest row is `null` — the same answer it gives for an empty table. So the
+replay has to break in the same place: a NULL-`chain` row **resets the running link and is skipped**,
+rather than being hashed in and its result discarded. Skipping is what makes the two readings agree,
+because `lastChain()` never saw those rows either.
+
+Hashing them in instead is the mirror of the failure the tolerance was written for. `attestPet`
+declines to judge a pre-chain pet, so the old collection looks fine — and then the first pet hatched
+after the migration, and **every pet after it**, reads `broken-chain`: unfeedable, unplaceable,
+unblendable, on the day the operator takes the build. What the migration promises is that a database
+from before these columns keeps every pet it holds, and that promise is about the pets it goes on to
+earn as much as the ones already in it. The break costs nothing the chain was buying: a pre-chain row
+is unverifiable either way, and the run after it stays fully linked.
+
 ### The build stamp, and the replay
 
 Taking the rates out of the config stops an operator dialling a vivarium into existence. It stops
@@ -1161,8 +1191,9 @@ pruned a claim or restored an older database has not forged anything.
   are the only `pets.` paths in `configFields.ts` and that `PetPolicy` holds no number — the
   assertion is the fix, not the thing to loosen. A third key is a switch or it is a rate.
 - **A check that could accuse a pet must decline on a database it cannot judge.** Three of the six
-  already do: `broken-chain` skips a null link, `unearned` skips anything not stamped by this same
-  clean build, and `impossible` checks every tier's candidate rather than the rolled one. All three
+  already do: `broken-chain` skips a null link — **and the replay behind it skips that row too**, or
+  the tolerance stops one row short of its own successors — `unearned` skips anything not stamped by
+  this same clean build, and `impossible` checks every tier's candidate rather than the rolled one. All three
   exist for one reason — the worst failure this subsystem has is telling an honest operator their
   collection is fake, and it lands on somebody else's machine, months after the change that caused it,
   with nothing red anywhere.

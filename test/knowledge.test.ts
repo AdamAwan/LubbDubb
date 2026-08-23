@@ -1516,7 +1516,7 @@ test('no rule, desk or gate reads a fact', () => {
       if (entry.isDirectory()) walk(path);
       else if (
         entry.name.endsWith('.ts') &&
-        /\b(askFacts|listFacts|getFact|factLabels|proposeFact|setFactReach|contradictFact|listContradictions|resolveContradiction|factCounts|recordFactAsks|exitFact|listGraduations|openGraduations|settleGraduation|findGraduationByJobId|linkGraduationTicket)\b/.test(
+        /\b(askFacts|listFacts|listFactsForGoal|getFact|factLabels|proposeFact|setFactReach|contradictFact|listContradictions|resolveContradiction|factCounts|recordFactAsks|exitFact|listGraduations|openGraduations|settleGraduation|findGraduationByJobId|linkGraduationTicket)\b/.test(
           readFileSync(path, 'utf8'),
         )
       )

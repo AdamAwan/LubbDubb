@@ -875,7 +875,8 @@ dropped by exactly the overrides that customised most:
 2. **The dossier** (`retroDossier`, `src/retro/dossier.ts`), the record only the harness kept — the
    plan and its parts with their outcomes, the pull requests open and closed, the decisions with the
    rule ids that fired, escalations and how they were answered, proposals, the assay, the delivery,
-   any shortfall, the conclusion, findings, agents spawned and reported spend. It **reads rows the
+   any shortfall, the conclusion, the claims raised while working it, agents spawned and reported
+   spend. It **reads rows the
    pulse already wrote and derives no verdicts**: a fold that computed one would be a second opinion
    about a decision made somewhere else.
 
@@ -888,10 +889,27 @@ watches a prompt get big, and the cost was never only tokens — a writer handed
 mechanical rows writes a worse retrospective than one handed the arc.
 
 Every list is capped by a named constant in `src/retro/dossier.ts`, **per list rather than against one
-byte budget**, so a goal with three hundred decisions and two findings does not lose the findings.
+byte budget**, so a goal with three hundred decisions and two claims does not lose the claims.
 `priorWork.ts` sets the pattern: a stated maximum, and **what the cap dropped is named**, with the
 total beside it — a run long enough to truncate is itself part of the story. A dossier that dropped
 nothing renders exactly the rows it always did.
+
+**Those constants are the only bound, and the newest rows are the ones they keep.** Two things hold
+that up, and neither is visible at the call site:
+
+- **Every list arrives oldest-first.** The caps keep the _tail_, so a list handed over newest-first —
+  which is how every store read orders — keeps the **earliest** rows and then prints a note saying it
+  dropped exactly those. Recent rows are the ones still true of the goal, and a write-up that explains
+  a goal by its first fortnight and never mentions the one it was delivered in reads perfectly well.
+  `RetroDossierInput` states the order on all four lists for that reason; `retroBriefing` reverses
+  each store read.
+- **Every list is scoped to the goal in SQL, not after the fact.** `listDecisions` and `listFacts`
+  carry a fleet-wide `LIMIT 200`, and a client-side `mine` in front of one is a second cap that is not
+  per list, not stated, and names nothing when it drops. It also drops hardest on a busy fleet, where
+  a goal's rows survive only while nobody else writes 200 on top of them — and the decision section
+  renders that as "No decisions are recorded against this issue", a denial rather than a truncation.
+  `listDecisionsForGoal` and `listFactsForGoal` are the goal-scoped reads the dossier uses instead
+  ([14](14-persistence.md)).
 
 The decision log is the one rendered as **shape, then exceptions**, because it is both the noisiest
 list and the least individually informative: a dispatch that was executed says only that the harness
@@ -923,6 +941,14 @@ with `issue:<n>:`. The boundary is the point. A bare `startsWith('issue:1')` als
 `issue:19:plan:plan`, so on any repository with more than nine goals the dossier quietly attributes
 another goal's record to this one — the failure is invisible because the dossier is prose and reads
 perfectly well either way.
+
+**An escalation is matched on its task _or_ its own `context.originRef`**, and needs both arms: an
+agent's escalation carries no origin of its own, and the harness's carries no task. The `taskId`-less
+shape is not an edge case — it is what `propose_plan` and `propose_shortfall` write, the two most
+consequential human decisions a goal ever produces — and selecting on the task alone dropped every one
+of them into a section that renders perfectly well without them. The origin arm goes through `mine`
+like everything else, so it does not reopen the boundary above, and the escalations that carry a pull
+request or a stack ref rather than a goal stay out as they should.
 
 The agent submits with `retro_submit`; the summary is required, the document is trimmed rather than
 refused, and the write upserts on the issue so a revision is one row. Nothing is posted to the

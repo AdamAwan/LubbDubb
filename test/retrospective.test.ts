@@ -499,3 +499,206 @@ test('the snapshot ships the reading and the document is fetched on demand', asy
   await app.close();
   system.store.close();
 });
+
+// -- what the dossier gathers, and what it is bounded by -----------------------
+
+/**
+ * The pair the dossier's caps and its scoping are both about: a goal, and a fleet
+ * busy around it. `issue:19` is the boundary case `mine` exists for — `issue:1` is
+ * a prefix of it — so the noise is filed there rather than on some far-off number.
+ */
+function busyFleet(system: System, rows: number): void {
+  for (let i = 0; i < rows; i++) {
+    system.store.recordDecision({
+      cycleId: `cycle_other_${i}`,
+      action: { type: 'dispatch_code_agent', reason: 'test', originRef: 'issue:19' } as never,
+      outcome: 'executed',
+      detail: `somebody else’s decision ${i}`,
+    });
+    system.store.proposeFact(
+      {
+        claim: `somebody else’s claim ${i}, which is nothing to do with the goal being written up.`,
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresInHours: null,
+        evidence: 'saw it',
+        supersedes: null,
+        resolvesWhen: null,
+        aboutRef: null,
+        where: null,
+      },
+      { agentId: null, taskId: null, goalRef: 'issue:19', sessionId: null, words: 'saw it' },
+    );
+  }
+}
+
+test('the harness’s own asks reach the dossier, and stop at the goal’s ref boundary', async () => {
+  // An escalation the *harness* raises — the plan approval and the shortfall ask —
+  // carries no `taskId` at all, so selecting on the task alone dropped the two most
+  // consequential human decisions a goal ever produces, into a section that renders
+  // perfectly well without them.
+  const system = build();
+  const { store } = system;
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add the thing' });
+  system.connector.inject({ kind: 'new_issue', number: 19, title: 'Somebody else’s goal' });
+
+  const mine = system.escalations.create({
+    type: 'approve_change',
+    prompt: 'Approve this plan? It splits the work three ways.',
+    context: { originRef: 'issue:1', planId: 'plan_one' },
+  });
+  store.answerEscalation(mine.id, 'Rejected: the split is wrong — one part, not three');
+  system.escalations.create({
+    type: 'approve_change',
+    prompt: 'Approve somebody else’s plan?',
+    context: { originRef: 'issue:19', planId: 'plan_nineteen' },
+  });
+
+  store.recordDelivery({
+    originRef: 'issue:1',
+    summary: 'PR #41 delivered it',
+    by: 'assessor',
+    agentId: null,
+    taskId: null,
+  });
+
+  await system.harness.runCycle('manual');
+
+  const retroTask = findTask(store, (t) => t.originRef === 'issue:1:retro');
+  assert.ok(retroTask, 'rule `issue-retro` dispatched a retrospective agent');
+  // The question put to the operator, and its type — neither of which the proposal
+  // row carries, since a proposal holds only the answer.
+  assert.match(retroTask.prompt, /Escalation \(approve_change, answered\): Approve this plan\?/);
+  assert.match(retroTask.prompt, /the split is wrong/);
+  assert.doesNotMatch(retroTask.prompt, /somebody else’s plan/, 'the origin match must not reopen the boundary');
+
+  store.close();
+});
+
+test('a busy fleet does not erase a goal’s decisions and its claims', async () => {
+  // Both reads were capped fleet-wide *before* the goal filter could run, so a
+  // goal's rows survived only while nobody else wrote 200 on top of them — and the
+  // decision section renders a confident denial rather than a short list.
+  const system = build();
+  const { store } = system;
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add the thing' });
+  system.connector.inject({ kind: 'new_issue', number: 19, title: 'Somebody else’s goal' });
+
+  store.recordDecision({
+    cycleId: 'cycle_mine',
+    action: { type: 'dispatch_code_agent', reason: 'test', originRef: 'issue:1' } as never,
+    outcome: 'deferred',
+    detail: 'the decision this goal is about',
+  });
+  store.proposeFact(
+    {
+      claim: 'the retry loop never backs off, which is the claim this goal raised.',
+      scope: 'fleet',
+      lifetime: 'standing',
+      expiresInHours: null,
+      evidence: 'read it',
+      supersedes: null,
+      resolvesWhen: null,
+      aboutRef: null,
+      where: null,
+    },
+    { agentId: null, taskId: null, goalRef: 'issue:1', sessionId: null, words: 'read it' },
+  );
+  busyFleet(system, 250);
+
+  store.recordDelivery({
+    originRef: 'issue:1',
+    summary: 'PR #41 delivered it',
+    by: 'assessor',
+    agentId: null,
+    taskId: null,
+  });
+
+  await system.harness.runCycle('manual');
+
+  const retroTask = findTask(store, (t) => t.originRef === 'issue:1:retro');
+  assert.ok(retroTask, 'rule `issue-retro` dispatched a retrospective agent');
+  assert.match(retroTask.prompt, /the decision this goal is about/);
+  assert.doesNotMatch(retroTask.prompt, /No decisions are recorded against this issue/);
+  assert.match(retroTask.prompt, /### Raised while working this/, 'the section is gated on the list being non-empty');
+  assert.match(retroTask.prompt, /the retry loop never backs off/);
+  assert.doesNotMatch(retroTask.prompt, /somebody else’s/, 'a goal-scoped read is scoped, not merely bigger');
+
+  store.close();
+});
+
+test('the dossier’s caps keep the newest rows of every list it bounds', async () => {
+  // The caps keep the *tail*, and the store's reads are newest-first, so a list
+  // handed over unreversed kept the oldest rows — under a note saying it had
+  // dropped exactly those. A table over the three lists, so a fourth added later
+  // has to declare its end.
+  const system = build();
+  const { store } = system;
+  system.connector.inject({ kind: 'new_issue', number: 1, title: 'Add the thing' });
+
+  for (let i = 0; i < 20; i++) {
+    system.escalations.create({
+      type: 'answer_question',
+      prompt: `ESCALATION-${String(i).padStart(2, '0')}`,
+      context: { originRef: 'issue:1' },
+    });
+    store.createProposal({
+      kind: 'plan',
+      ref: `issue:1:plan:p${String(i).padStart(2, '0')}`,
+      action: { type: 'propose_plan', reason: 'test', originRef: 'issue:1', planId: `plan_${i}` },
+      escalationId: null,
+    });
+    store.proposeFact(
+      {
+        claim: `CLAIM-${String(i).padStart(2, '0')} is a thing an agent noticed on the way past.`,
+        scope: 'fleet',
+        lifetime: 'standing',
+        expiresInHours: null,
+        evidence: 'saw it',
+        supersedes: null,
+        resolvesWhen: null,
+        aboutRef: null,
+        where: null,
+      },
+      { agentId: null, taskId: null, goalRef: 'issue:1', sessionId: null, words: 'saw it' },
+    );
+  }
+
+  store.recordDelivery({
+    originRef: 'issue:1',
+    summary: 'PR #41 delivered it',
+    by: 'assessor',
+    agentId: null,
+    taskId: null,
+  });
+
+  await system.harness.runCycle('manual');
+
+  const retroTask = findTask(store, (t) => t.originRef === 'issue:1:retro');
+  assert.ok(retroTask, 'rule `issue-retro` dispatched a retrospective agent');
+  const kept: [string, string, number, number][] = [
+    // list, row prefix, how many the cap keeps, what the note says was dropped
+    ['escalations', 'ESCALATION-', 12, 8],
+    ['proposals', 'issue:1:plan:p', 12, 8],
+    ['claims', 'CLAIM-', 15, 5],
+  ];
+  for (const [noun, prefix, max, dropped] of kept) {
+    for (let i = 20 - max; i < 20; i++) {
+      assert.match(
+        retroTask.prompt,
+        new RegExp(`${prefix}${String(i).padStart(2, '0')}`),
+        `the newest ${noun} are the ones a cap keeps`,
+      );
+    }
+    for (let i = 0; i < 20 - max; i++) {
+      assert.doesNotMatch(retroTask.prompt, new RegExp(`${prefix}${String(i).padStart(2, '0')}`));
+    }
+    assert.match(
+      retroTask.prompt,
+      new RegExp(`${dropped} of the 20 ${noun} are not shown here — the earliest went first`),
+      'and the note names what actually went',
+    );
+  }
+
+  store.close();
+});

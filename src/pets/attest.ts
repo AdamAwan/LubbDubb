@@ -88,11 +88,34 @@ export function replayBarren(log: PetAction[], rules: PetRules, since: string): 
  * A pet edited or slipped into the middle breaks its own link and every link after
  * it. A pet appended to the end does not — a forger chains onto the newest link as
  * easily as the harness does — which is why this is one check of several.
+ *
+ * **The chain is a run of links, not one link**, and a row from before the `chain`
+ * column is where one run ends and the next begins. `PetStore.lastChain` reads the
+ * newest row's stored `chain`, which on such a database is `NULL` — the same answer
+ * it gives for an empty table — so the first pet hatched after the migration
+ * genuinely chained onto `null`. A replay that hashed the pre-chain rows in anyway
+ * would expect a different link, and would then condemn that pet and **every pet
+ * after it**: on any vivarium raised before the authenticity columns, every
+ * creature earned from the day the build lands reads `broken-chain` and cannot be
+ * fed, put out or blended. That is the failure this subsystem cares about above all
+ * others — telling an honest operator their collection is fake — and it is what the
+ * migration's promise that "a database from before them keeps every pet it holds"
+ * has to mean for the pets that come *after* it too.
+ *
+ * The break costs the chain nothing it was buying: a pre-chain row is unverifiable
+ * either way, and the run after it stays fully linked.
+ * → `docs/spec/22-pets.md#the-chain`
  */
-export function replayChain(log: { id: string; link: ChainInput }[]): Map<string, string> {
+export function replayChain(log: { id: string; chain: string | null; link: ChainInput }[]): Map<string, string> {
   const out = new Map<string, string>();
   let previous: string | null = null;
   for (const row of log) {
+    // Skipped rather than hashed-and-discarded, which is what makes this match
+    // `lastChain()`: that read never saw these rows either.
+    if (row.chain === null) {
+      previous = null;
+      continue;
+    }
     previous = chainLink(previous, row.link);
     out.set(row.id, previous);
   }

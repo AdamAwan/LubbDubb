@@ -46,6 +46,11 @@ import type {
  * `priorWork.ts` sets the pattern this follows — a stated maximum, and **what the cap
  * dropped is named**, because a truncated record read as a complete one is how a
  * write-up ends up explaining an absence that was never there.
+ *
+ * These constants are the **only** bound. Every list arrives here already scoped to
+ * the goal in SQL, because a fleet-wide `LIMIT` in front of the caller's filter is a
+ * second cap that is not per list, not stated, and names nothing when it drops — and
+ * it drops hardest on the busiest fleets, where a retrospective is worth most.
  */
 export interface RetroDossierInput {
   issueNumber: number;
@@ -55,14 +60,26 @@ export interface RetroDossierInput {
   /** Still open at the end: a part whose pull request never merged is worth naming. */
   pullRequests: PullRequest[];
   closedPullRequests: PullRequest[];
-  /** Audit rows for this issue's origins, oldest first. */
+  /**
+   * Audit rows for this issue's origins, **oldest first** — as are `escalations`,
+   * `proposals` and `claims` below, and for the same reason.
+   *
+   * Chronological is the contract every capped list here is read under, because the
+   * caps keep the *tail*: a list handed over newest-first keeps its oldest rows and
+   * the dropped note then says the opposite of what happened. The store's reads are
+   * all newest-first, so a caller reverses. → `docs/spec/05-dispatcher.md`
+   */
   decisions: Decision[];
+  /** Oldest first, per {@link RetroDossierInput.decisions}. */
   escalations: Escalation[];
+  /** Oldest first, per {@link RetroDossierInput.decisions}. */
   proposals: Proposal[];
   /**
    * The claims agents raised while working this goal — what they noticed that was
    * not their own task, and what the run taught. One list because there is one
    * store: the write-up reads them as one section because an operator does.
+   *
+   * Oldest first, per {@link RetroDossierInput.decisions}.
    */
   claims: KnowledgeFact[];
   /** How many agents were spawned under this goal. */
