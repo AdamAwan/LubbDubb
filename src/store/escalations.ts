@@ -84,8 +84,19 @@ export class EscalationStore {
     return new Map(rows.map((r) => [r.id, r.prompt]));
   }
 
+  /**
+   * Every escalation, newest first.
+   *
+   * Tied on `rowid` like `listProposals` and the decision and
+   * world-event reads: several escalations raised in one millisecond are ordinary
+   * — one pulse answering a plan and a shortfall — and without the tiebreak which
+   * of them a capped reader keeps is arbitrary run to run, against the dossier's
+   * stated aim that the same database renders the same page twice.
+   */
   listEscalations(): Escalation[] {
-    const rows = this.ctx.db.prepare(`SELECT * FROM escalations ORDER BY created_at DESC`).all() as EscalationRow[];
+    const rows = this.ctx.db
+      .prepare(`SELECT * FROM escalations ORDER BY created_at DESC, rowid DESC`)
+      .all() as EscalationRow[];
     return rows.map(rowToEscalation);
   }
 

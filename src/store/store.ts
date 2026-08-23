@@ -460,6 +460,9 @@ export class Store {
   listFacts(limit?: number): KnowledgeFact[] {
     return this.knowledge.listFacts(limit);
   }
+  listFactsForGoal(goalRef: string, limit?: number): KnowledgeFact[] {
+    return this.knowledge.listFactsForGoal(goalRef, limit);
+  }
   factLabels(ids: string[]): Map<string, string> {
     return this.knowledge.factLabels(ids);
   }
@@ -1132,6 +1135,9 @@ export class Store {
   }
   listDecisions(limit?: number): Decision[] {
     return this.decisions.listDecisions(limit);
+  }
+  listDecisionsForGoal(goalRef: string, limit?: number): Decision[] {
+    return this.decisions.listDecisionsForGoal(goalRef, limit);
   }
 
   // -- World change history and connector persistence -----------------------

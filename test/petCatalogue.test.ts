@@ -7,7 +7,7 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { PET_CATALOGUE } from '../src/pets/compendium.js';
 import { PET_RULES } from '../src/pets/rules.js';
-import { petStage } from '../src/pets/catalogue.js';
+import { PET_ACTION_KINDS, petStage } from '../src/pets/catalogue.js';
 import { hourWindow } from '../web/src/components/PetsPage.js';
 import type { PetCatalogue, PetRarity } from '../src/wire.js';
 
@@ -61,6 +61,33 @@ test('a species is only listed under an action that can actually draw it', () =>
  * is a card advertising a price the harness does not charge — which looks entirely
  * correct on screen.
  */
+test('the catalogue publishes the acts an operator can take, and no retired one', () => {
+  // The catalogue is the page's *only* job: it publishes the price. A retired kind
+  // walked into it is drawn as a live way to earn a pet — an eighth rate row and a
+  // full four-tier source block for an act the product no longer has — and it also
+  // makes `share` normalise over a pool counted twice under two names, so every
+  // other species is understated. Nothing is mis-rolled, and there is no figure on
+  // the page a reader could check it against.
+  const live = new Set(PET_ACTION_KINDS);
+  assert.equal(live.has('finding' as never), false, 'the retired kind is not an action an operator can take');
+  assert.equal(live.size, 7, 'seven actions, as the rate table in spec 22 lists them');
+
+  const drawn = new Set(PET_CATALOGUE.sources.map((row) => row.kind));
+  assert.deepEqual([...drawn].sort(), [...live].sort(), 'the page draws its actions off the sources');
+  for (const entry of PET_CATALOGUE.species) {
+    assert.equal(entry.kinds.includes('finding' as never), false, `${entry.species} is offered for a retired act`);
+  }
+
+  // The rate *survives* while the source does not, and that asymmetry is the whole
+  // shape of a retirement: a pet already carrying the word still resolves its tier
+  // and still reads its own rate, and nothing renames it.
+  assert.ok(
+    Object.keys(PET_RULES.rates).length > drawn.size,
+    'a retired kind keeps its rate for the pets already hatched from it',
+  );
+  assert.ok(PET_RULES.rates.finding, 'renaming a member does not rename a category, it orphans the pets');
+});
+
 test('the stage thresholds are the ones a pet is actually graded against', () => {
   for (const entry of PET_CATALOGUE.species) {
     assert.equal(petStage(entry.species, entry.juvenileAt - 1), 'hatchling', `${entry.species} below juvenile`);

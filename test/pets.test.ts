@@ -1343,3 +1343,66 @@ test('a source row that has gone leaves no label, and is not an accusation', () 
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a vivarium raised before the chain keeps the pets it earns afterwards', () => {
+  // The migration's promise — "a database from before them keeps every pet it
+  // holds" — has to hold for the pets that come *after* it too, and it did not:
+  // `lastChain()` answers `null` for a pre-chain newest row, so the next pet
+  // honestly chained onto nothing, while `replayChain` hashed that row in and
+  // expected a different link. Every creature earned from the day the build landed
+  // read `broken-chain` — unfeedable, unplaceable, unblendable — while the old ones
+  // looked fine, which reads as the harness accusing the operator of forging the
+  // ones they just earned.
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-pets-chain-'));
+  const file = join(dir, 'before-chain.sqlite');
+  try {
+    // One honestly-earned pet, rolled by the shipped tables rather than hand-picked.
+    const first = new Store(file);
+    const early = new PetKeeper(first, { enabled: true, visible: true }, rules({ dropChance: 1 }), () => BUILD);
+    early.scan();
+    answer(first, 'the one that predates the column');
+    const [old] = early.scan();
+    assert.ok(old, 'the fixture starts from a pet the harness itself rolled');
+    first.close();
+
+    // Now take the column away, which is the one thing `ALTER TABLE` cannot express
+    // and therefore the one state no fixture built from `SCHEMA` can reach. The
+    // reopen below runs the real `ensureColumns`, which adds `chain` back as NULL on
+    // every row already there — exactly what a deployment sees on the boot it takes
+    // the build.
+    const raw = new Database(file);
+    raw.exec(`CREATE TABLE pets_pre AS SELECT id, species, seed, name, fed, origin_kind, origin_ref,
+                hatched_at, opened_at, placed, dissolved_at, built_sha, built_clean FROM pets;
+              DROP TABLE pets;
+              ALTER TABLE pets_pre RENAME TO pets;`);
+    raw.close();
+
+    const store = new Store(file);
+    assert.equal(store.getPet(old.id)?.chain, null, 'the historical row carries no link, as designed');
+    const pets = new PetKeeper(store, { enabled: true, visible: true }, rules({ dropChance: 1 }), () => BUILD);
+    for (let i = 0; i < 4; i++) answer(store, `earned after the upgrade ${i}`);
+    const fresh = pets.scan();
+    assert.equal(fresh.length, 4, 'the vivarium still hatches');
+
+    // The ledger reads the same bent rules the keeper rolled under, or every drop
+    // this test forced reads as `unearned` against the shipped table.
+    const book: PetLedger = {
+      ...ledger(store),
+      barren: replayBarren(store.petActionLog(), rules({ dropChance: 1 }), started(store)),
+    };
+    assert.equal(attestPet(store.getPet(old.id)!, book), null, 'a pet from before the chain is not judged');
+    for (const pet of fresh) {
+      assert.equal(attestPet(pet, book), null, `${pet.id} was earned honestly and must not read as an insertion`);
+    }
+    // And the run after the break is still a run: an edit inside it still shows.
+    const log = store.petChainLog();
+    const victim = log[2]!;
+    const tampered = log.map((row) =>
+      row.id === victim.id ? { ...row, link: { ...row.link, species: 'ouroboros' as const } } : row,
+    );
+    const after = replayChain(tampered);
+    assert.notEqual(after.get(log[log.length - 1]!.id), book.chain.get(log[log.length - 1]!.id));
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

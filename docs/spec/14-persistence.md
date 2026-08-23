@@ -138,6 +138,13 @@ every job and ticket graduation written since, and a wrong exit is silent in bot
 A column whose absence is simply a weaker claim — `built_sha`, `chain`, `dismiss_note` — needs none
 of this. The test is whether _null_ is a value the running code will act on.
 
+`pets.chain` is the one that shows how narrow "weaker claim" is. Null on a historical row is right, and
+the check that reads it declines to judge one — but the **replay** behind that check walks every row in
+order, so a reader that treated a null link as merely absent still hashed the row into the run and
+expected a different link for the one written after it. A weaker claim has to be weaker for the rows
+that come _after_ it as well: the replay resets on a null and skips it, matching `lastChain()`, which
+never saw those rows either. → [22](22-pets.md#the-chain)
+
 `knowledge_facts.where_at` is the one column whose name does not match its field: `where` is SQL, so
 the column is `where_at` and `rowToFact` maps it to `where`. It carried the same name on `findings`
 before the fold, which is one reason that fold is a copy rather than a translation.
@@ -601,8 +608,14 @@ their window with nothing to trigger the sweep. A retention promise kept only wh
 
 `proposeFact(proposal, observer)` → `filed`, `corroborated` or `barred`; `getFact`,
 `listFacts(limit=200)` (rejected and retired ones included — a governance surface that draws only what
-it let through cannot show what it stopped), `factLabels(ids)`, `listCorroborations(factId)`,
-`askFacts({scopes, question, limit})` and `setFactReach(id, reach)`.
+it let through cannot show what it stopped), `listFactsForGoal(goalRef, limit=200)`, `factLabels(ids)`,
+`listCorroborations(factId)`, `askFacts({scopes, question, limit})` and `setFactReach(id, reach)`.
+
+`listFactsForGoal` is `listFacts` with the goal's subtree in the `WHERE` — the `issue:<n>` root or a
+`issue:<n>:%` prefix. It exists for `factLabels`' reason: **a cap in front of a client-side filter is a
+cap on the wrong thing.** A reader that lists 200 rows fleet-wide and then keeps its goal's gets the
+goal's rows only while the rest of the fleet stays quiet, which is a correctness property that turns
+off under load and nowhere else.
 
 **This is the one claim store.** What an agent notices outside its own task and what working a goal
 taught were `findings` and `lessons`, each with its own writer, its own matcher and its own two words
@@ -1014,11 +1027,21 @@ to `open`, `terminal: false`, titled with its own ref, on every pulse thereafter
 `createEscalation`, `answerEscalation(id, response)`, `dismissEscalation(id, context)`,
 `getEscalation`, `listEscalations`, `listOpenEscalations`.
 
+`listEscalations` is newest first, tied on `rowid` like the proposal, decision and world-event reads.
+Several escalations in one millisecond are ordinary — one pulse answering a plan and a shortfall — and
+without the tiebreak which of them a capped reader keeps is arbitrary run to run.
+
 ### Decisions
 
 `recordDecision(input)` — **lifts `action.rule` and `action.admission` into the `rule` and `admission`
 columns** at record time, so the audit log can answer "what proposed this" and "what became of it"
-separately rather than losing the first to the second. `listDecisions(limit=200)`.
+separately rather than losing the first to the second. `listDecisions(limit=200)` and
+`listDecisionsForGoal(goalRef, limit=200)`.
+
+The goal-scoped read matches on `json_extract(action, '$.originRef')` — the same field `actionOrigin`
+narrows to — because `decisions` has no column for the origin and the alternative is asking every row
+in the table. It exists for `listFactsForGoal`'s reason, and the dossier is what needs it
+([05](05-dispatcher.md#what-it-is-bounded-by)).
 
 `admission` is nullable and is set only by the two admissions that emit an action of their own
 (`branch-notify`, `cooldown-escalate`); the held reasons (`cooldown`, `capped`, `unapproved`,

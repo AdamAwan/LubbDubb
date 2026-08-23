@@ -198,6 +198,30 @@ export class KnowledgeStore {
   }
 
   /**
+   * The claims raised on one goal, newest first — its `issue:<n>` root and
+   * everything under it, the subtree `retroBriefing`'s `mine` predicate selects.
+   *
+   * The goal-scoped twin of {@link listFacts}, and for the reason {@link factLabels}
+   * is by id: that read's `LIMIT` is fleet-wide and lands **before** a client-side
+   * filter, so a goal's claims survived it only while the rest of the fleet stayed
+   * quiet. The dossier's section is gated on the list being non-empty, so what a
+   * busy fleet cost was the whole heading.
+   * → `docs/spec/05-dispatcher.md#what-it-is-bounded-by`
+   *
+   * The ref is `issue:<n>`, so it carries no `LIKE` wildcards.
+   */
+  listFactsForGoal(goalRef: string, limit = 200): KnowledgeFact[] {
+    const rows = this.ctx.db
+      .prepare(
+        `SELECT * FROM knowledge_facts
+         WHERE origin_ref = ? OR origin_ref LIKE ?
+         ORDER BY created_at DESC, rowid DESC LIMIT ?`,
+      )
+      .all(goalRef, `${goalRef}:%`, limit) as FactRow[];
+    return rows.map(rowToFact);
+  }
+
+  /**
    * The claim each of these facts makes, by id — the pets panel's label for a
    * `claim` origin. By id rather than off {@link listFacts}, whose cap is the
    * reason a client-side join would leave the oldest pets unnamed. A missing id is

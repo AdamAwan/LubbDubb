@@ -143,16 +143,38 @@ const POOLS: Record<PetActionKind, Record<PetRarity, readonly PetSpecies[]>> = {
 };
 
 /**
- * Every action that can draw something, in the order the pools declare them.
+ * Kinds nothing hatches any more.
+ *
+ * They stay in `POOLS` and in `PET_RULES.rates` because `pets.origin_kind`
+ * persists the word on every creature already hatched from one — renaming a member
+ * does not rename a category, it orphans the pets — and because `resolveTier` is
+ * still asked what a `finding` pet was drawn from when its card is drawn.
+ *
+ * The **catalogue** is a different question: it is a statement about what an
+ * operator can *do*, and a retired act is not one of those. Spec 22 says a source
+ * nobody adds is invisible rather than broken; a source nobody can earn should be
+ * invisible for the same reason, rather than drawn as a control surface for an act
+ * the product no longer has. → `docs/spec/22-pets.md#the-sources`
+ */
+const RETIRED_KINDS: ReadonlySet<PetActionKind> = new Set<PetActionKind>(['finding']);
+
+/**
+ * Every action that can draw something **today**, in the order the pools declare
+ * them.
  *
  * Derived from `POOLS` rather than written out again: a kind added to the record
  * and forgotten here is a whole action the Pets page never mentions, and nothing
- * is red — the page simply draws six columns where there are seven.
+ * is red — the page simply draws six columns where there are seven. Less the
+ * retired ones, which is the same failure pointed the other way: an eighth column
+ * for an act nobody can take, and a `share` normalised over a pool that is counted
+ * twice under two names.
  *
  * @public — walked by `src/pets/compendium.ts`, which asks what every pool of
  * every kind resolves to rather than what one roll landed on.
  */
-export const PET_ACTION_KINDS = Object.keys(POOLS) as readonly PetActionKind[];
+export const PET_ACTION_KINDS = (Object.keys(POOLS) as PetActionKind[]).filter(
+  (kind) => !RETIRED_KINDS.has(kind),
+) as readonly PetActionKind[];
 
 /**
  * The hours a `nocturne` can be drawn in, read off the action's own timestamp.
