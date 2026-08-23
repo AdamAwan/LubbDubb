@@ -139,17 +139,22 @@ export function basePrOf(pr: PullRequest, openPrs: PullRequest[]): PullRequest |
  * into the aggregate instead would claim the PR cannot merge when it can, and
  * would stop the merge rule merging it.
  *
- * The aggregate is still an arm of the test, because a provider reporting no
- * per-check detail at all (and every PR persisted before checks existed) has
- * nothing else to answer from.
+ * The aggregate is a fallback, not a second vote: it only answers when there is
+ * no per-check detail to defer to at all (`ciChecks` undefined or empty — a
+ * provider that hasn't reported per-check detail, or a PR persisted before
+ * checks existed). Once detail exists, it settles the question on its own — a
+ * provider whose aggregate folds a check the per-check list marks `advisory`
+ * (Azure's policy aggregate does this; see `aggregatePolicyCiStatus`) must not
+ * out-vote the detail that says the same check isn't actionable.
  *
  * Advisory checks are excluded for the reason `classifyCiFailures` excludes them:
  * they restate a signal something else already owns at higher fidelity, and
  * dispatching on one would outrank the rule that owns it.
  */
 export function ciNeedsAttention(pr: PullRequest): boolean {
-  if (pr.ciStatus === 'failing') return true;
-  return (pr.ciChecks ?? []).some((c) => c.status === 'failing' && !c.advisory);
+  const checks = pr.ciChecks;
+  if (checks === undefined || checks.length === 0) return pr.ciStatus === 'failing';
+  return checks.some((c) => c.status === 'failing' && !c.advisory);
 }
 
 /**

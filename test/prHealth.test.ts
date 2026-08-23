@@ -36,6 +36,24 @@ test('ciNeedsAttention: true off the aggregate alone, for a provider reporting n
   assert.equal(ciNeedsAttention(pr({ ciStatus: 'passing' })), false);
 });
 
+test('ciNeedsAttention: false for a failing aggregate whose only detailed failure is advisory', () => {
+  // An Azure aggregate that folds a policy the per-check list marks advisory —
+  // the detail must settle this, not be outvoted by the aggregate it disagrees with.
+  const p = pr({
+    ciStatus: 'failing',
+    ciChecks: [{ name: 'build', status: 'failing', blocking: true, advisory: true }],
+  });
+  assert.equal(ciNeedsAttention(p), false);
+});
+
+test('ciNeedsAttention: true for a failing aggregate with a genuine non-advisory failure', () => {
+  const p = pr({
+    ciStatus: 'failing',
+    ciChecks: [{ name: 'build', status: 'failing', blocking: true }],
+  });
+  assert.equal(ciNeedsAttention(p), true);
+});
+
 test('prHealth: an Optional failure alone leaves the PR unblocked', () => {
   // `prHealth` answers "can this merge", and the provider would complete this PR.
   // Dispatching a fix and reporting the PR unmergeable are different claims.

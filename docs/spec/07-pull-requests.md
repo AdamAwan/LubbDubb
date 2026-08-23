@@ -41,15 +41,20 @@ alone does not stop the provider holding the PR on it.
 
 ## `ciNeedsAttention(pr)`
 
-Is there a CI failure the harness should put an agent on? True when `ciStatus === 'failing'` **or**
-any non-advisory check is failing.
+Is there a CI failure the harness should put an agent on? When `ciChecks` carries per-check detail
+(non-empty), the answer is exactly that detail: true when any non-advisory check is failing, and
+false otherwise — the aggregate is not consulted. Only when there is no detail to defer to
+(`ciChecks` `undefined` or empty) does it fall back to `ciStatus === 'failing'`.
 
 Deliberately **not** the same question as `prHealth`. `ciStatus` answers _can this merge_ and is read
 by `prHealth`'s blocked verdict and the merge rule; this answers _is a fix owed_, and the two have
 different right answers for a check that fails without blocking completion — an Azure "Optional"
 branch policy. Folding such a check into the aggregate would claim the PR cannot merge when it can,
-and would stop the harness merging it. The aggregate is still an arm of the test, because a provider
-reporting no per-check detail has nothing else to answer from.
+and would stop the harness merging it. The aggregate is a fallback, not a second vote, because a
+provider reporting no per-check detail has nothing else to answer from — and because a provider's
+aggregate can fold a check its own per-check detail marks `advisory` (Azure's policy aggregate does,
+since it reads raw policy evaluations without consulting `policyChecks`), in which case the detail
+must settle the question rather than be outvoted by the aggregate it disagrees with.
 
 **Three call sites read it and they must not diverge**: rule `pr-ci-failing`'s gate, `inheritedCiFailure`, and
 `prAttentionStatus`'s CI reading. A fourth reader added later uses this predicate, or the cockpit

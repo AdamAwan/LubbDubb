@@ -262,17 +262,23 @@ function ruleClaims(rule: CiCheckRule, check: CiCheck): boolean {
  *
  * A third case is not a silence at all: an **advisory** check is dropped before
  * anything is decided, so a PR whose only failure is advisory classifies into
- * nothing. Rule `pr-ci-failing` does not fire on one either — `ciNeedsAttention` excludes them
- * by the same rule — so the two cannot disagree.
+ * *not actionable*, with empty lists — detail was reported, and none of it is
+ * something a rule may claim. Rule `pr-ci-failing` does not fire on one either —
+ * `ciNeedsAttention` excludes them by the same rule — so the two cannot disagree.
  */
 export function classifyCiFailures(checks: CiCheck[] | undefined, policy: CiPolicy): CiVerdict {
+  const reported = checks ?? [];
   // Advisory checks are dropped up front, so no rule — not even `match: '*'` —
   // can claim one. They are reported for visibility and belong to whatever
   // already models the signal at higher fidelity (a comment policy's threads are
   // rule `pr-review-comment`'s, with the author and body attached).
-  const failing = (checks ?? []).filter((c) => c.status === 'failing' && !c.advisory);
+  const failing = reported.filter((c) => c.status === 'failing' && !c.advisory);
   if (failing.length === 0) {
-    return { actionable: true, dispatch: [], escalate: [], ignored: [], urgent: false };
+    // "No checks reported at all" is the pre-policy silence and stays actionable
+    // so a red PR without detail still gets an agent. "Checks were reported and
+    // none of the failing ones are actionable" is not that silence — the PR is
+    // healthy from this policy's point of view, not merely unreported on.
+    return { actionable: reported.length === 0, dispatch: [], escalate: [], ignored: [], urgent: false };
   }
 
   const dispatch: CiMatch[] = [];
