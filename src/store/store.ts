@@ -37,7 +37,7 @@ import { TranscriptStore } from './transcripts.js';
 import { EscalationStore } from './escalations.js';
 import { StackLandingStore } from './landings.js';
 import { BranchReapStore } from './branchReaps.js';
-import { EnvironmentStore, repairPartRefGoals } from './environments.js';
+import { dropPartialGoalArrivals, EnvironmentStore, repairPartRefGoals } from './environments.js';
 import { LocalRunStore, LOCAL_RUN_COLUMNS } from './localRuns.js';
 import { PrWatchSeedStore } from './prWatchSeeds.js';
 import { WorkItemLinkStore } from './workItemLinks.js';
@@ -269,6 +269,23 @@ export class Store {
     // discarded for the desk to re-derive; see the function for why those are
     // opposite answers.
     repairPartRefGoals(this.db);
+    // The old reach denominator counted only landed work, so a partial planned
+    // goal could be recorded as arrived. Discard those claims; the fixed desk
+    // re-derives the real arrival once every owed part is confirmed.
+    const partialGoalRefs = this.db
+      .prepare(
+        `SELECT DISTINCT plans.origin_ref AS goal_ref
+         FROM plan_parts
+         JOIN plans ON plans.id = plan_parts.plan_id
+         WHERE plans.status <> 'abandoned'
+           AND plan_parts.status NOT IN ('retired', 'merged', 'concluded')
+           AND (plan_parts.expected_kind IS NULL OR plan_parts.expected_kind = 'code')`,
+      )
+      .all() as { goal_ref: string }[];
+    dropPartialGoalArrivals(
+      this.db,
+      partialGoalRefs.map((row) => row.goal_ref),
+    );
     // Every claim an agent ever filed and every lesson an operator ever wrote,
     // carried into the one store that now holds all three — once per database, and
     // gated on a name because both ways of getting that wrong are silent. See

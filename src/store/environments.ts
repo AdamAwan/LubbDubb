@@ -79,6 +79,26 @@ export function repairPartRefGoals(db: Database.Database): void {
   })();
 }
 
+/**
+ * Discard goal arrivals written before the reach denominator counted outstanding
+ * plan parts (#515).
+ *
+ * Those rows claim the goal's whole work arrived while a live code part still
+ * owed a merge. They cannot be corrected: the desk must re-derive the arrival
+ * once every owed part is confirmed, just as `repairPartRefGoals` discards an
+ * arrival filed under a part ref. The composition root supplies the goal refs
+ * from its cross-domain plan query; this module only writes its own table.
+ * Unconditional and idempotent because the fixed fold can never write another
+ * partial goal arrival.
+ */
+export function dropPartialGoalArrivals(db: Database.Database, goalRefs: readonly string[]): void {
+  if (goalRefs.length === 0) return;
+  const remove = db.prepare(`DELETE FROM goal_arrivals WHERE goal_ref=?`);
+  db.transaction((refs: readonly string[]) => {
+    for (const goalRef of refs) remove.run(goalRef);
+  })(goalRefs);
+}
+
 export class EnvironmentStore {
   constructor(private readonly ctx: StoreContext) {}
 
