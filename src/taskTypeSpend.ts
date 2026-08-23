@@ -1,5 +1,5 @@
 import type { Agent, TaskSummary } from './types.js';
-import { roundUsd } from './issueSpend.js';
+import { roundUsd, unmeasured } from './issueSpend.js';
 import { DISPATCH_RULES, type DispatchRuleId } from './dispatcher/rules.js';
 
 /**
@@ -125,7 +125,11 @@ function copyOf(rule: string | null): { label: string; description: string | nul
 }
 
 /**
- * What each kind of work has cost, all-time, costliest first.
+ * What each kind of work has cost over the runs it is handed, costliest first.
+ *
+ * The window is the caller's: `buildSpendInsights` hands it the windowed agents,
+ * as it does {@link rollUpChecks}. Reading this as all-time is how a figure comes
+ * to disagree with the total above it.
  *
  * A partition of every measured run: an agent has exactly one task, a task has
  * at most one rule, and the `null` rule is a row rather than a silence.
@@ -137,7 +141,7 @@ export function rollUpTaskTypes(input: TaskTypeInput): TaskTypeSpend[] {
   for (const agent of input.agents) {
     // The same silence the rest of the spend module keeps: a run that reported
     // nothing is unmeasured, not free, and appears in no figure.
-    if (agent.costUsd === null && agent.inputTokens === null && agent.outputTokens === null) continue;
+    if (unmeasured(agent)) continue;
     const rule = taskOf.get(agent.taskId)?.rule ?? null;
     const row = byRule.get(rule) ?? { rule, ...copyOf(rule), costUsd: 0, runs: 0, perRunUsd: 0 };
     row.costUsd = roundUsd(row.costUsd + (agent.costUsd ?? 0));
@@ -151,7 +155,8 @@ export function rollUpTaskTypes(input: TaskTypeInput): TaskTypeSpend[] {
 }
 
 /**
- * What each CI check has cost the fleet to answer, costliest first.
+ * What each CI check has cost the fleet to answer, costliest first, over the runs
+ * the caller hands it — windowed by `buildSpendInsights` like the table above.
  *
  * Reads `Task.ciChecks`, which only the two CI rules set — so a run that was
  * never about a named check contributes to neither the rows nor
@@ -166,7 +171,7 @@ export function rollUpChecks(input: TaskTypeInput): ChecksSpend {
   let unnamedCostUsd = 0;
 
   for (const agent of input.agents) {
-    if (agent.costUsd === null && agent.inputTokens === null && agent.outputTokens === null) continue;
+    if (unmeasured(agent)) continue;
     const task = taskOf.get(agent.taskId);
     // Only the CI rules record checks, so the rule is what says whether this run
     // is in scope at all — never the presence of the array, which would make a

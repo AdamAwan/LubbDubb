@@ -1,5 +1,5 @@
 import type { Agent, AgentStatus, TaskSummary, UsageEvent, WorldEvent } from './types.js';
-import { prNodeRefOf, roundUsd } from './issueSpend.js';
+import { prNodeRefOf, roundUsd, unmeasured } from './issueSpend.js';
 import { phaseLabel, phaseOf, type SpendPhase } from './spendInsights.js';
 import { ciStatusOf } from './world/worldDiff.js';
 import {
@@ -398,7 +398,7 @@ function buildRunHealth({ agents, tasks }: ReliabilityInput, span: TimelineSpan)
     const phase = phaseOf(originRef);
 
     health.costUsd = roundUsd(health.costUsd + cost);
-    if (agent.costUsd === null) health.unmeasuredRuns += 1;
+    if (unmeasured(agent)) health.unmeasuredRuns += 1;
     if (lost) health.lostCostUsd = roundUsd(health.lostCostUsd + cost);
 
     const total = outcomes.get(outcome) ?? { outcome, ...OUTCOME_COPY[outcome], runs: 0, costUsd: 0 };

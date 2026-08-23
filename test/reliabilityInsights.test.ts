@@ -458,3 +458,18 @@ test('the run half obeys the window, in every table and not only the headline', 
   assert.equal(all.runs.completionRate, 0.5);
   assert.equal(all.runs.lostCostUsd, 99);
 });
+
+// #543 — a run that reported tokens and no dollar figure is measured to the four
+// spend folds, and was unmeasured to this one. `resultUsage` writes
+// `costUsd: ev.total_cost_usd ?? null`, so the shape is one the CLI is permitted
+// to send.
+test('a run that reported tokens and no price is measured, as it is to every spend fold', () => {
+  const priced = agent('a1', 'done');
+  const tokensOnly = agent('a2', 'done', { costUsd: null, inputTokens: 4000, outputTokens: 200 });
+  const silent = agent('a3', 'done', { costUsd: null, inputTokens: null, outputTokens: null });
+  const agents = [priced, tokensOnly, silent];
+  const { runs } = build({ agents, tasks: agents.map((a) => task(a.id, 'issue:12')) });
+
+  assert.equal(runs.settled, 3);
+  assert.equal(runs.unmeasuredRuns, 1, 'only the run that reported nothing at all');
+});

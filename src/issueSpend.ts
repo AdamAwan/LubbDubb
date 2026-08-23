@@ -141,7 +141,7 @@ export function rollUpIssueSpend(input: SpendInput): SpendRollup {
     // first `result`) contributes no row and no agent count — counting it would
     // put "3 agents · $0.00" on a goal three PTY agents have worked, which reads
     // as free rather than as unmeasured.
-    if (agent.costUsd === null && agent.inputTokens === null && agent.outputTokens === null) continue;
+    if (unmeasured(agent)) continue;
     const cost = agent.costUsd ?? 0;
     const issueNumber = issueBehind(originOfTask.get(agent.taskId) ?? null, parentOf);
     attribution.set(agent.id, issueNumber);
@@ -159,7 +159,7 @@ export function rollUpIssueSpend(input: SpendInput): SpendRollup {
   for (const run of input.localRuns) {
     // The silence kept for an agent, kept for a run: one that reported nothing is
     // unmeasured rather than free, and under `agentMode: 'pty'` they all are.
-    if (run.costUsd === null && run.inputTokens === null && run.outputTokens === null) continue;
+    if (unmeasured(run)) continue;
     const issueNumber = issueBehind(run.originRef, parentOf);
     localRunAttribution.set(run.id, issueNumber);
     if (issueNumber === null) {
@@ -199,4 +199,22 @@ function issueBehind(originRef: string | null, parentOf: ReadonlyMap<string, str
  */
 export function roundUsd(n: number): number {
   return Math.round(n * 1e6) / 1e6;
+}
+
+/**
+ * Whether a run reported **no usage at all** — PTY throughout, or dead before its
+ * first `result` event.
+ *
+ * All three fields, not the dollar figure alone: `resultUsage` writes
+ * `costUsd: ev.total_cost_usd ?? null`, so a run that reported tokens and no
+ * price is measured. One predicate because five folds ask this question and a
+ * sixth asking it differently made the same run measured on the Economics tab
+ * and unmeasured on Reliability, with nothing red.
+ */
+export function unmeasured(run: {
+  costUsd: number | null;
+  inputTokens: number | null;
+  outputTokens: number | null;
+}): boolean {
+  return run.costUsd === null && run.inputTokens === null && run.outputTokens === null;
 }
