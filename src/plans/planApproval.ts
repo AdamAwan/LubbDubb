@@ -114,6 +114,12 @@ export function releasePlan(store: Store, planId: string, originRef: string): Pl
   if (plan.status !== 'awaiting_approval')
     return { ok: false, detail: `plan ${planId} is "${plan.status}", not awaiting approval — nothing released` };
   const parts = liveParts(store.listPlanParts(planId));
+  // Every plan has at least one part, so a plan with none is a shape the funnel is
+  // built not to have: released, it schedules nothing, never rolls up to `complete`
+  // and is not wedged, so the goal sits `active` and idle with nothing saying why.
+  // Refusing here turns any future way of reaching that shape into a visible no.
+  if (parts.length === 0)
+    return { ok: false, detail: `plan ${planId} for ${originRef} has no live parts — nothing to release` };
   store.setPlanStatus(planId, 'active');
   return {
     ok: true,

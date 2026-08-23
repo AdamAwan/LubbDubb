@@ -35,6 +35,12 @@ is about.
 | `routes/reliability.ts` | `/api/reliability` — run outcomes, CI health, and why the fleet came back                                                                                                 |
 | `routes/mcpUsage.ts`    | `/api/mcp/usage` — which MCP tools the fleet reached for, and which it never did                                                                                          |
 | `routes/work.ts`        | The work graph and its ignore / file verdicts                                                                                                                             |
+| `routes/tickets.ts`     | Every item the tracker has returned since the harness first swept, and the filters over it                                                                                |
+| `routes/localRun.ts`    | The machine's one dev environment: start it on a goal, stop it, read what is holding it up                                                                                |
+| `routes/stacks.ts`      | The one verdict on a whole chain of stacked pull requests: land it, or call that off                                                                                      |
+| `routes/upgrade.ts`     | Asking the harness to take a build, and the interrupt that overrides its refusal                                                                                          |
+| `routes/pets.ts`        | The vivarium: opening a shell, feeding, naming, standing and blending                                                                                                     |
+| `routes/setup.ts`       | The first-run surface's two reads, before there is a deployment to configure                                                                                              |
 | `stateSnapshot.ts`      | `buildStateSnapshot` and the readings it folds                                                                                                                            |
 
 Each module exports one `register(app, ctx)` — the `RouteModule` type in `routes/context.ts` — and
@@ -174,10 +180,21 @@ Four properties hold across the surface:
 - **Every field states its own refusal in full** — `cap must be a number`, `invalid issue number` —
   because the 400 body joins the schema's messages and drops their field paths. A field declared
   without a message refuses with zod's stock text, which names nothing.
+
+  The trap is that a message on the **refinement** looks like a message on the field:
+  `z.string().min(1, 'slug is required')` words the _blank_ case and leaves absence and a wrong type
+  stock, and `z.enum([...], {required_error, invalid_type_error})` words absence and a non-string and
+  leaves the arm an operator actually hits — a string that is not one of the values — stock. So a
+  required string takes `requiredText`, which words all three arms alike, and an enum takes an
+  `errorMap`, which is the only option that reaches the enum arm at all.
+  `test/requestValidation.test.ts` drives every declared `POST`/`DELETE` with an empty body and with
+  a junk one, and every `/api/tickets` filter with a bad value, and refuses any 400 whose message
+  opens in zod's words — structural for the same reason the two greps above are: the module written
+  next is covered on the day it is written.
 - **Params are read first, then the query, then the body**, so a request naming no such item is
   refused for that whatever else it got wrong. Where a route answers 404/409 off the store first (`/api/knowledge/facts/:id/exit`,
-  `/api/work/:ref/file`), it reads the params, asks the store, and reads the body after — a finding
-  that does not exist is a 404 whatever the body says. Those three apply `checked` **a second time,
+  `/api/work/:ref/file`), it reads the params, asks the store, and reads the body after — a claim
+  that does not exist is a 404 whatever the body says. Those two apply `checked` **a second time,
   by hand**, inside the outer handler (`return checked({body: X}, inner)(req, reply)`) rather than
   reaching past it, so the ordering costs nothing in refusal paths.
 - **A missing body is read as `{}`**, so a route whose fields are all optional may be called with no
@@ -185,8 +202,11 @@ Four properties hold across the surface:
 
 The shared shapes are `IssueNumberParams` / `PrNumberParams` (a `:number` path segment parsed with
 the same `Number` + `Number.isInteger` pair the seven hand-written copies used, so no path the old
-check accepted is now refused), `IdParams`, `RefParams`, `TicketTitleBody`, `requiredBoolean` and
-`optionalText`.
+check accepted is now refused), `IdParams`, `RefParams`, `TicketTitleBody`, `requiredBoolean`,
+`requiredText` and `optionalText`.
+`requiredText(message, max?)` is `requiredBoolean`'s argument applied to the type most of this
+surface is made of: `required_error`, `invalid_type_error` and the `min(1)` message are one sentence,
+and the value is trimmed, so `"   "` refuses as blank rather than passing as a value.
 Optional text — a note, a summary, an operator's reworded title — is **trimmed, with blank read as
 absent**, which every route taking one already did before falling back to its own default.
 

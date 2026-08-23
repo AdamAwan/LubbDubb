@@ -47,13 +47,23 @@ the goal occupied the fleet, which is what the drain is a drain of.
 | Close-out           | `human_tasks` `close_out`, `created_at → resolved_at` |
 | Validation          | `human_tasks` `validate`, same span                   |
 | A step for a person | `human_tasks` `ask` **with a `part_id`**              |
-| The profile gate    | `issue_assays`, `decided_at → profile_answered_at`    |
+| The profile gate    | `issue_assays`, `decided_at → profile_answered_at`\*\* |
 | A standing delivery | `issue_deliveries`, `decided_at →` the end of the run |
 | An escalation       | `escalations`, `created_at → answered_at`             |
 
 **The tail stays in.** This subtracts human-wait, never work. A CI fix, a review thread and a
 write-up are all still inside the span, which is exactly why agent durations remain the wrong
 substitute.
+
+**\*\* The profile gate is the hold `assayHold` reports, and its span is closed or it is nothing.**
+Two things follow, and both were once got wrong together. It is asked through `assayHold`
+(`src/intake/assay.ts`) rather than re-tested here — the same pure function the pickup gate and the
+`assay` bucket ask — so a gate the world has **released** is not a hold: a ticket rewritten since the
+assay no longer fingerprints to what the assayer read, and that is precisely how a goal with an
+unanswered proposal comes to ship at all. And an **unanswered** proposal is subtracted as nothing
+rather than run to the end of the run: it has no end, so clamped it erases the whole span of a goal
+that demonstrably completed — the completion being the evidence the fleet was not held. The
+open-ended treatment is spec'd for the standing delivery below and for nothing else.
 
 **A `burn` row is not a hold**, and it is the one worth stating: a burn notice kills nothing
 ([18](18-observability.md)) — the expensive agent carries straight on while the row stands, so the
@@ -241,7 +251,17 @@ Joining the bench is what gets the notification for free — `NeedKind` gains `s
 and its group is **yours**: a gate rather than a fault, and no agent is parked on it.
 
 **Exactly one open row, and a state change replaces it.** `recordHumanTask` dedups on the title, so a
-row whose wording changed is a _new_ row rather than a refreshed one. That is what the notification
+row whose wording changed is a _new_ row rather than a refreshed one.
+
+**Which is why the title is a function of the state alone, and every figure lives in the detail.**
+The title is both that dedup key and the identity the notification chain diffs on, so a headline
+carrying the runway or the idle-slot count settles the row and files a new one every time the queue
+moves by one issue — a fresh banner per pulse on a fleet that never left the band, and then, once
+every wording in range has been spent, silence for good. That is exactly the flap `validateRunwayPolicy`
+refuses a `clearHours` at or below `warnHours` to prevent, reintroduced through the wording. So there
+is one title per state — two for the latent/non-latent split, which is a different thing to say and
+not the same thing with a different number in it — and the cockpit's band draws its figures off the
+`RunwayReading` fields directly rather than off the sentence. That is what the notification
 chain needs — a standing row is already in the previous snapshot and cannot re-announce, so
 `thin → dry` gets one further banner and nothing else does — and it is also what makes settling the
 old one obligatory, since leaving both would put two rows describing one fleet on the bench.

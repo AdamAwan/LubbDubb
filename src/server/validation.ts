@@ -171,6 +171,25 @@ export function requiredBoolean(message: string): z.ZodBoolean {
 }
 
 /**
+ * A string a route requires, wording absence, a wrong type and a blank value in
+ * the same sentence — {@link requiredBoolean}'s argument, applied to the type
+ * eleven declarations across seven route modules got wrong.
+ *
+ * `z.string().min(1, '…')` is the trap this replaces: the message lands on the
+ * refinement, so the *blank* case names the field and absence and a wrong type
+ * fall through to zod's stock `Required` / `Expected string, received number`.
+ * The 400 body joins messages and drops their paths, so those two arms name
+ * nothing at all. Which arm was hit is a distinction no caller of these routes
+ * can act on differently, so all three say the one thing.
+ *
+ * Trimmed, so `"   "` refuses as blank rather than passing as a value.
+ */
+export function requiredText(message: string, max?: { length: number; message: string }): z.ZodType<string> {
+  const base = z.string({ required_error: message, invalid_type_error: message }).trim().min(1, message);
+  return max ? base.max(max.length, max.message) : base;
+}
+
+/**
  * Optional free text — a note, a summary, an operator's reworded title. Trimmed,
  * with blank read as absent, because every route taking one already treated `''`
  * and "not given" as the same thing and fell back to its own default.
@@ -206,7 +225,7 @@ export const TicketTitleBody = z.object({ title: optionalText('title') });
  * job, not the schema's: it is a fact about the part, and this is a request shape.
  */
 export const AcceptanceBody = z.object({
-  slug: z.string().min(1, 'slug is required'),
-  criterion: z.string().min(1, 'criterion is required'),
+  slug: requiredText('slug is required — the part the criterion belongs to'),
+  criterion: requiredText('criterion is required — the text of the criterion being ticked'),
   met: requiredBoolean('met must be true or false'),
 });

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { checked } from '../validation.js';
+import { checked, optionalText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 /**
@@ -44,7 +44,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
      * accepted any string and a runner that trusted it would make this route a way
      * to check out anything in the repository.
      */
-    ref: z.string().min(1).optional(),
+    ref: optionalText('ref'),
   });
 
   app.post(

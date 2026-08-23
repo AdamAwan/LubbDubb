@@ -14,7 +14,7 @@ import { watchLabelFor } from '../../watchLabels.js';
 import { fleetWorksUpstream, UPSTREAM_REPO } from '../../tickets/upstream.js';
 import { modelLabelsFor } from '../../modelLabels.js';
 import { watchCascadeTargets } from '../../issueRelations.js';
-import { checked, IssueNumberParams, optionalText, requiredBoolean } from '../validation.js';
+import { checked, IssueNumberParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 import type { FilingTargetProbe, IssueFiled } from '../../wire.js';
 
@@ -163,7 +163,12 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // The capability *is* checked, because `setWorkItemState` throws where no
   // integration implements it — an exception the operator would read as this write
   // failing rather than as the deployment not having the operation at all.
-  const StateBody = z.object({ state: z.string().trim().min(1, 'state must name a tracker state').max(80) });
+  const StateBody = z.object({
+    state: requiredText('state must name a tracker state', {
+      length: 80,
+      message: 'state must be at most 80 characters',
+    }),
+  });
   app.post(
     '/api/issues/:number/state',
     checked({ params: IssueNumberParams, body: StateBody }, async ({ params, body, reply }) => {

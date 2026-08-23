@@ -701,6 +701,19 @@ have cost that discipline its meaning.
 (merges on slug, **never deletes**), `listPlanParts(planId)`, `listAllPlanParts`, `updatePlanPart`,
 `markPartDispatched(id, taskId, branch)`.
 
+`upsertPlanParts` merges **declaration over progress**, and which side of that split each column sits
+on is the whole of what it decides. The declaration is `seq`/`title`/`scope`/`touches`/`size`/
+`expected_kind`/`profile`/`depends_on`, refreshed every time; the progress is `branch`, `pr_number`,
+`task_id`, the outcome columns and `acceptance_met`, which an amendment must never wipe because the
+part may already be in flight.
+
+`status` is progress **for every value but one**. `retired` is a *declaration verdict* — it records
+that a document stopped declaring the slug — so a document that declares it again lifts it, back to
+`pending` with `blocked_reason` cleared, since that reason explained a status which is going away. The
+alternative is what the Reject → Replan loop used to do: a replan must reuse slugs, every re-declared
+part merged onto a retired row, and the plan was released with nothing live in it.
+→ [08](08-planning.md#ingestion)
+
 ### Validation
 
 `ingestValidation(originRef, {checks, resources, supersededReason, amendNote})` (merges on check id,

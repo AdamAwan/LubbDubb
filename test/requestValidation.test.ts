@@ -273,6 +273,102 @@ test('no route reads a request itself — every one takes checked input', () => 
   assert.deepEqual(callers, [], 'wrap the handler in `checked` instead of reading the request');
 });
 
+// #524 — the 400 body joins the schema's messages and drops their field paths, so
+// a field declared without one refuses with zod's stock text, which names nothing.
+// Spec 16 lists that among the properties that hold across the surface rather than
+// among its aspirations, and eleven declarations across seven modules did not.
+//
+// A structural sweep rather than eleven assertions, for the reason the two greps
+// above are structural: the value is in closing the class, and the route module
+// written next is covered on the day it is written.
+const STOCK = /^(Required|Expected |Invalid enum value|Invalid discriminator|String must|Number must|Array must)/;
+
+/**
+ * One body that gets every arm wrong at once — absent by omission, and the wrong
+ * type for every field name the surface declares. Which arm a given route takes is
+ * not the point: no arm may answer in zod's words.
+ */
+const JUNK: Record<string, unknown> = {
+  state: 1,
+  slug: 1,
+  criterion: 1,
+  ref: 1,
+  note: 1,
+  until: 1,
+  reason: 1,
+  title: 1,
+  prompt: 1,
+  claim: 1,
+  bar: 1,
+  response: 1,
+  answers: [1],
+  met: 'yes',
+  interrupt: 'yes',
+  resolution: 'zzz',
+  target: 'zzz',
+  kind: 'zzz',
+  exit: 'zzz',
+  result: 'zzz',
+  to: 'zzz',
+  reach: 'zzz',
+  outcome: 'zzz',
+  cause: 'zzz',
+  action: 'zzz',
+};
+
+test('no route refuses in zod stock text — every field states its own refusal', async () => {
+  const system = build();
+  const { app } = await buildApp(system);
+  const stock: string[] = [];
+  for (const url of writeRoutes()) {
+    for (const payload of [{}, JUNK]) {
+      for (const method of ['POST', 'DELETE'] as const) {
+        const res = await app.inject({ method, url, payload });
+        if (res.statusCode !== 400) continue;
+        const { error } = res.json() as { error: string };
+        for (const message of error.split('; ')) if (STOCK.test(message)) stock.push(`${method} ${url} :: ${message}`);
+      }
+    }
+  }
+  assert.deepEqual(stock, [], 'give each of these fields a message that names it');
+
+  // The query half, which spec 16 calls the one that most wants validating: a
+  // filter is what an operator hand-edits in the address bar.
+  const filters = [
+    'watch=maybe',
+    'tracking=zzz',
+    'order=random',
+    'state=' + 'x'.repeat(81),
+    'feature=' + 'x'.repeat(21),
+    'cursor=' + 'x'.repeat(65),
+  ];
+  for (const filter of filters) {
+    const res = await app.inject({ method: 'GET', url: `/api/tickets?${filter}` });
+    assert.equal(res.statusCode, 400, `?${filter} should refuse`);
+    const { error } = res.json() as { error: string };
+    assert.ok(!STOCK.test(error), `?${filter} refuses in zod's words: ${error}`);
+    assert.ok(error.startsWith(filter.split('=')[0] ?? ''), `?${filter} must name its parameter: ${error}`);
+  }
+
+  await app.close();
+  system.store.close?.();
+});
+
+/** Every `POST`/`DELETE` path the route modules declare, with its params filled in. */
+function writeRoutes(): string[] {
+  const urls = new Set<string>();
+  for (const [, source] of routeSources()) {
+    for (const m of source.matchAll(/app\.(?:post|delete)\(\s*\n?\s*'([^']+)'/g)) {
+      const path = m[1];
+      if (path === undefined) continue;
+      // A number where the route says one, an opaque key where it does not — the
+      // point is to reach the body's schema, not to find a real row.
+      urls.add(path.replace(/:(\w+)/g, (_, name: string) => (name === 'number' ? '12' : 'zzz')));
+    }
+  }
+  return [...urls].sort();
+}
+
 /** Every source that declares a route, as `[name relative to src/server/, text]`. */
 function routeSources(): [string, string][] {
   const server = new URL('../src/server/', import.meta.url);

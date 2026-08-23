@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { checked } from '../validation.js';
+import { checked, requiredBoolean } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 /**
@@ -41,7 +41,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
      * them without asking — but it is the operator's call to make, so the default is
      * the refusal and this is how it is overridden.
      */
-    interrupt: z.boolean().optional(),
+    interrupt: requiredBoolean('interrupt must be true or false').optional(),
   });
   app.post(
     '/api/upgrade',

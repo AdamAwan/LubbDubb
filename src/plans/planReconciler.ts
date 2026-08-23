@@ -163,8 +163,14 @@ export class PlanReconciler {
     // already picked up unplanned has (`backfillWholePlanParts`), and blocking it
     // against its own branch would wedge exactly the plans the backfill exists to
     // keep moving.
+    //
+    // A human part is skipped for the reason the fold loop skips it: it is never
+    // cut, so it is outside the branch namespace entirely and the flat branch is
+    // not in its way. Without the skip it falls through the `??` to a hypothetical
+    // branch nothing will ever ask git for, compares unequal, and is parked with a
+    // git instruction that is false about that part.
     const collidesWith = (part: PlanPart): boolean =>
-      flatTaken && (part.branch ?? partBranch(issueNumber, part.slug)) !== flat;
+      flatTaken && !partIsHuman(part) && (part.branch ?? partBranch(issueNumber, part.slug)) !== flat;
 
     for (const part of observed) {
       if (part.status !== 'pending' && part.status !== 'ready' && part.status !== 'blocked') continue;

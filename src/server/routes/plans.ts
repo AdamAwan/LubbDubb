@@ -5,7 +5,7 @@ import { planProposalRef } from '../../proposals/proposals.js';
 import { acceptanceCriteria } from '../../plans/parts.js';
 import { latestPlanDiff } from '../../plans/planDiff.js';
 import type { PlanHistory } from '../../wire.js';
-import { AcceptanceBody, checked, IdParams, optionalText } from '../validation.js';
+import { AcceptanceBody, checked, IdParams, optionalText, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 /** The ways out of a plan verdict an operator does not want to simply accept or reject, plus its history. */
@@ -114,7 +114,10 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // and for the same reason: this is the surface that cannot produce a bad value,
   // as distinct from a plan document, which is agent-authored and falls back
   // instead.
-  const PartProfileBody = z.object({ slug: z.string().min(1), profile: optionalText('profile') });
+  const PartProfileBody = z.object({
+    slug: requiredText('slug is required — the part being pinned'),
+    profile: optionalText('profile'),
+  });
   app.post(
     '/api/plans/:id/part-profile',
     checked({ params: IdParams, body: PartProfileBody }, async ({ params, body, reply }) => {

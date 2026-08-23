@@ -19,29 +19,46 @@ import type { RouteContext } from './context.js';
  * have to agree about what an absent parameter means.
  */
 const TicketQuery = z.object({
-  watch: z.enum(['any', 'watched', 'unwatched']).default('any'),
+  watch: z
+    .enum(['any', 'watched', 'unwatched'], {
+      errorMap: () => ({ message: "watch must be 'any', 'watched' or 'unwatched'" }),
+    })
+    .default('any'),
   /**
    * Defaults to `live`, and that is a deliberate change of what a bare
    * `/api/tickets` means: the tab is a work surface now rather than a record of
    * one, and opening it on a thousand closed rows would bury the ninety that are
    * still work. The history is one click away and still all there.
    */
-  tracking: z.enum(['any', 'live', 'frozen']).default('live'),
+  tracking: z
+    .enum(['any', 'live', 'frozen'], { errorMap: () => ({ message: "tracking must be 'any', 'live' or 'frozen'" }) })
+    .default('live'),
   /**
    * Free-form because it is the *tracker's* word, validated only for length.
    * `open` and `closed` are accepted as aliases for the old two-valued `state`
    * axis (below) — no tracker spells a state that way, and a saved link that
    * silently matched nothing would be worse than an alias that is written down.
    */
-  state: z.string().max(80).default('any'),
+  state: z
+    .string({ invalid_type_error: 'state must be a tracker state name' })
+    .max(80, 'state must be at most 80 characters')
+    .default('any'),
   /** A feature number, or `none` for the items the tracker says have no parent. */
-  feature: z.string().max(20).optional(),
-  order: z.enum(['added', 'changed', 'cost']).default('added'),
+  feature: z
+    .string({ invalid_type_error: 'feature must be a feature number, or none' })
+    .max(20, 'feature must be at most 20 characters')
+    .optional(),
+  order: z
+    .enum(['added', 'changed', 'cost'], { errorMap: () => ({ message: "order must be 'added', 'changed' or 'cost'" }) })
+    .default('added'),
   // Opaque to the caller and validated only for length: it is this route's own
   // output handed back, and a malformed one restarts the list rather than refusing
   // the request (see `afterCursor`) — repeating rows is a failure a reader can see,
   // a refused scroll is one they can only report.
-  cursor: z.string().max(64).optional(),
+  cursor: z
+    .string({ invalid_type_error: 'cursor must be a page cursor from an earlier response' })
+    .max(64, 'cursor must be at most 64 characters')
+    .optional(),
 });
 
 /**
