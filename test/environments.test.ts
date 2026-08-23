@@ -810,6 +810,93 @@ test('an arrival the harness merely discovered is stamped, and says nothing', as
   );
 });
 
+/**
+ * A deployment with history: twelve goals that landed and were confirmed a week
+ * ago, under whatever `environments` names. The store's clock is handed in so the
+ * landings and readings are genuinely old rather than stamped now.
+ */
+function establishedDeployment(environments: EnvironmentConfig[], now: number) {
+  const comments: IssueCommentInput[] = [];
+  const sink = {
+    async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
+      comments.push(input);
+      return { ok: true, ref: `comment_${comments.length}` };
+    },
+  } as unknown as ActionSink;
+  let clock = new Date(now - 7 * 24 * 60 * 60_000).toISOString();
+  const store = new Store(':memory:', () => clock);
+  for (let n = 1; n <= 12; n += 1) {
+    store.recordGoalLanding({ prNumber: n, goalRef: `issue:${n}`, sha: `sha${n}` });
+    for (const env of environments) {
+      store.recordEnvironmentReach({ sha: `sha${n}`, environment: env.name, status: 'reached', detail: null });
+      store.recordGoalArrival({ goalRef: `issue:${n}`, environment: env.name, arrivedAt: clock });
+      store.markArrivalAnnounced(`issue:${n}`, env.name);
+    }
+  }
+  clock = new Date(now).toISOString();
+  const desk = (envs: EnvironmentConfig[]) =>
+    new EnvironmentDesk({
+      store,
+      environments: envs,
+      prober: new FakeEnvironmentProber(),
+      git: new FakeGitObserver(),
+      sink,
+      probeIntervalMs: 60_000,
+      now: () => now,
+    });
+  return { store, comments, desk, clock: () => clock };
+}
+
+test('a renamed environment catches the deployment up silently', async () => {
+  // #516: readings and arrivals are keyed on the *name*, so a name the harness has
+  // never used before finds every landing due, probes them all now, and reads every
+  // one of its own first readings as an arrival it watched. Twelve tickets, and the
+  // comments cannot be unsent.
+  const now = Date.parse('2026-08-20T12:00:00.000Z');
+  const { store, comments, desk, clock } = establishedDeployment(TESTUK, now);
+  assert.deepEqual(comments, [], 'the history was announced under the old name, before this test starts');
+
+  const renamed: EnvironmentConfig[] = [{ name: 'test-uk', at: 'unused', arrival: { comment: true } }];
+  for (let n = 1; n <= 12; n += 1)
+    store.recordEnvironmentReach({ sha: `sha${n}`, environment: 'test-uk', status: 'reached', detail: null });
+  for (let n = 1; n <= 12; n += 1)
+    store.recordGoalArrival({ goalRef: `issue:${n}`, environment: 'test-uk', arrivedAt: clock() });
+
+  await desk(renamed).run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
+
+  assert.deepEqual(comments, [], 'nothing about the work changed — the operator edited a string');
+  const under = store.listGoalArrivals().filter((a) => a.environment === 'test-uk');
+  assert.equal(under.length, 12);
+  assert.ok(
+    under.every((a) => a.announcedAt !== null),
+    'stamped anyway, so the catch-up happens once rather than on every pulse',
+  );
+});
+
+test('a name with no history still speaks for work that lands after it', async () => {
+  // The other half, and why the landing is asked about as well as the name: a
+  // brand-new deployment's first genuine arrival must not be silenced, and neither
+  // must the first arrival under a name added yesterday.
+  const now = Date.parse('2026-08-20T12:00:00.000Z');
+  const { store, comments, desk } = establishedDeployment(TESTUK, now);
+  const added: EnvironmentConfig[] = [...TESTUK, { name: 'liveEu', at: 'unused', arrival: { comment: true } }];
+  // Landed just now, under a name that has only just started asking.
+  store.recordGoalLanding({ prNumber: 99, goalRef: 'issue:99', sha: 'sha99' });
+  store.recordEnvironmentReach({ sha: 'sha99', environment: 'liveEu', status: 'reached', detail: null });
+  store.recordGoalArrival({ goalRef: 'issue:99', environment: 'liveEu', arrivedAt: new Date(now).toISOString() });
+  // And the deployment's whole history, arriving under the new name at the same time.
+  for (let n = 1; n <= 12; n += 1)
+    store.recordGoalArrival({ goalRef: `issue:${n}`, environment: 'liveEu', arrivedAt: new Date(now).toISOString() });
+
+  await desk(added).run({ issues: [], pullRequests: [], closedPullRequests: [] } as unknown as WorldSnapshot);
+
+  assert.deepEqual(
+    comments.map((c) => c.number),
+    [99],
+    'the work that landed inside the window is announced; the history it was added on top of is not',
+  );
+});
+
 test('an environment that asks for no comment stamps its arrivals silently', async () => {
   const now = Date.parse('2026-08-20T12:00:00.000Z');
   const { store, desk, comments } = announcingDesk([{ name: 'testUk', at: 'unused' }], () => now);

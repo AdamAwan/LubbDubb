@@ -46,6 +46,8 @@
 
 import { ciNeedsHuman, classifyCiFailures, classifyWatchedChecks, type CiPolicy } from './ci/ciPolicy.js';
 import { dispatchVerdict, type CooldownPolicy } from './dispatcher/dispatchCooldown.js';
+import { prCommentsOrigin } from './dispatcher/reviewThreads.js';
+import { concernUrgency, type StageRuleId } from './dispatcher/rules.js';
 import {
   basePrOf,
   ciNeedsAttention,
@@ -190,29 +192,27 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
   // the same court the rules will actually act in.
   const ci = ciReading(pr, ctx);
 
-  // A failure the policy holds is *your* court, and it is asked here — after the
-  // staffed arm, beside the spent attempt cap — because those are the two ways a
-  // failing check stops being the harness's problem without being fixed. Rule
-  // `pr-ci-blocked` has already filed the escalation; what was missing was the PR
-  // row saying so instead of promising an agent that will never be sent.
-  if (ci.heldByPolicy.length > 0) {
-    const names = ci.heldByPolicy.join(', ');
-    return {
-      status: 'you',
-      reasons: [`${names} failing — the CI policy holds it, so no agent will be sent`],
-    };
-  }
-
-  // The concerns rules `pr-ci-failing`/`pr-base-update`/`pr-review-comment` build, in their urgency order (CI > base > comment)
-  // and off their own predicates. Re-derived here rather than shared with the
+  // The concerns rules `pr-review-comment`/`pr-ci-failing`/`pr-base-update` build,
+  // in their urgency order (comments > CI > gate > base) and off their own
+  // predicates. Re-derived here rather than shared with the
   // dispatcher because the rules build prompt-bearing concerns and this needs only
   // the labels and the top origin — the same relationship `issuePickupStatus` has
   // to rule `issue-pickup`, and the same drift risk, which is why 07-pull-requests.md states
   // the order once for both.
   const concerns = prConcerns(pr, ctx, ci);
+  // A failure the policy holds, carried as a *reason* rather than as an arm of its
+  // own when there is a concern under it. `heldByPolicy` says nothing to dispatch
+  // **for the CI failure** — rule `pr-ci-blocked` has filed the escalation — and
+  // says nothing at all about the PR's other concerns, which rules
+  // `pr-review-comment` and `pr-base-update` staff from the same loop iteration
+  // that raised it. Answered above the fold, it printed "no agent will be sent" on
+  // the pulse an agent went out (#564), which is the mirror image of the promise
+  // the arm was added to stop.
+  const heldNames = ci.heldByPolicy.join(', ');
+  const held = ci.heldByPolicy.length > 0 ? [`${heldNames} failing — held by the CI policy`] : [];
   if (concerns.length > 0) {
     const top = concerns[0]!;
-    const others = concerns.slice(1).map((c) => c.label);
+    const others = [...concerns.slice(1).map((c) => c.label), ...held];
     const verdict = dispatchVerdict(top.origin, ctx.now, ctx.recentDecisions, ctx.cooldown);
     if (verdict.kind === 'escalate' || verdict.kind === 'hold') {
       // The attempt cap is the one way a concern stops being the harness's problem
@@ -223,6 +223,17 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
       return { status: 'harness', reasons: [`${top.label} — on cooldown, retrying`, ...others] };
     }
     return { status: 'harness', reasons: [`${top.label} — an agent will be dispatched`, ...others] };
+  }
+
+  // Nothing else outstanding, so the held check is the whole story and the
+  // unqualified sentence is true again: this is one of the two ways a failing
+  // check stops being the harness's problem without being fixed, the other being
+  // the spent attempt cap above.
+  if (ci.heldByPolicy.length > 0) {
+    return {
+      status: 'you',
+      reasons: [`${heldNames} failing — the CI policy holds it, so no agent will be sent`],
+    };
   }
 
   // Merge-readiness, exactly as rule `pr-merge-ready` tests it. Reproduced rather than imported
@@ -303,7 +314,18 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
 
 /** One thing about a PR that would, on its own, warrant a code agent. */
 interface PrConcern {
-  /** The dispatch origin rules `pr-ci-failing`/`pr-base-update`/`pr-review-comment` use — what the cooldown is keyed on. */
+  /**
+   * The pipeline rule that would raise this concern — what {@link concernUrgency}
+   * ranks it by, so the order is read off `DISPATCH_PIPELINE` rather than encoded
+   * in the order the pushes happen to appear in below (#562).
+   */
+  rule: StageRuleId;
+  /**
+   * The dispatch origin rules `pr-ci-failing`/`pr-base-update`/`pr-review-comment`
+   * use — what the cooldown is keyed on. It has to be a ref the dispatcher
+   * actually writes decisions under: a lens reading a key nothing dispatches finds
+   * zero attempts forever and answers `dispatch` forever (#563).
+   */
   origin: string;
   label: string;
 }
@@ -370,41 +392,63 @@ function ciReading(pr: PullRequest, ctx: PrAttentionContext): CiReading {
 }
 
 /**
- * The concerns rules `pr-ci-failing`/`pr-base-update`/`pr-review-comment` would raise for this PR, most urgent first. Same
- * predicates and same order as the dispatcher; the labels are the operator-facing
- * half only, so nothing here can drift into deciding what an agent is *told*.
+ * The concerns rules `pr-review-comment`/`pr-ci-failing`/`pr-ci-gate`/`pr-base-update`
+ * would raise for this PR, most urgent first. Same predicates, same origins and
+ * the same order as the dispatcher — the order asked for rather than restated
+ * (see {@link concernUrgency}); the labels are the operator-facing half only, so
+ * nothing here can drift into deciding what an agent is *told*.
  */
 function prConcerns(pr: PullRequest, ctx: PrAttentionContext, ci: CiReading): PrConcern[] {
   const concerns: PrConcern[] = [];
+  // **One** concern for the whole review, on the origin rule `pr-review-comment`
+  // dispatches under — never one per thread. The per-thread ref is what notify
+  // de-dup keys on and nothing dispatches it (`reviewThreads.ts`), so a lens
+  // reading it asked the ledger about a key with no history and told the operator
+  // an agent was coming on a review whose attempt cap a human already holds.
+  // `prCommentsOrigin` is imported rather than re-typed for exactly that reason.
+  const unhandled = pr.unresolvedComments.filter((c) => !c.handled);
+  if (unhandled.length > 0) {
+    const authors = [...new Set(unhandled.map((c) => c.author))];
+    concerns.push({
+      rule: 'pr-review-comment',
+      origin: prCommentsOrigin(pr.number),
+      label:
+        unhandled.length > 1
+          ? `${unhandled.length} unresolved comments from ${authors.join(', ')}`
+          : `unresolved comment from ${authors[0]}`,
+    });
+  }
   // Gated on the policy verdict, not on `ciStatus` alone: rule `pr-ci-failing` dispatches only
   // when the classification is actionable, so raising the concern off the aggregate
   // promised an agent for a check the policy had already taken off the table. An
   // inherited failure is excluded inside `ciReading` for the reason rule `pr-ci-failing` excludes
   // it — the fix belongs to the PR underneath, and the `elsewhere` arm says so.
   if (ci.actionable) {
-    concerns.push({ origin: `pr:${pr.number}:ci`, label: 'CI is failing' });
+    concerns.push({ rule: 'pr-ci-failing', origin: `pr:${pr.number}:ci`, label: 'CI is failing' });
   }
-  // Rule `pr-ci-gate`'s concern, in its pipeline position: below a red build,
-  // above the base. Its own origin, because the rule's cooldown is keyed on one —
-  // a lens quoting the CI origin here would report the wrong attempt cap.
+  // Rule `pr-ci-gate`'s concern. Its own origin, because the rule's cooldown is
+  // keyed on one — a lens quoting the CI origin here would report the wrong
+  // attempt cap.
   if (ci.watched.length > 0) {
-    concerns.push({ origin: `pr:${pr.number}:ci-gate`, label: `${ci.watched.join(', ')} waiting on an action` });
+    concerns.push({
+      rule: 'pr-ci-gate',
+      origin: `pr:${pr.number}:ci-gate`,
+      label: `${ci.watched.join(', ')} waiting on an action`,
+    });
   }
   if (needsBaseUpdate(pr)) {
     const base = pr.baseBranch ?? ctx.defaultBranch;
     concerns.push({
+      rule: 'pr-base-update',
       origin: `pr:${pr.number}:mergeable`,
       label: pr.mergeableState === 'behind' ? `behind ${base}` : `conflicts with ${base}`,
     });
   }
-  for (const comment of pr.unresolvedComments) {
-    if (comment.handled) continue;
-    concerns.push({
-      origin: `pr:${pr.number}:comment:${comment.id}`,
-      label: `unresolved comment from ${comment.author}`,
-    });
-  }
-  return concerns;
+  // The order is the pipeline's, asked for rather than reproduced. Statement order
+  // is what drifted the last time the pipeline was reordered, and it drifts
+  // silently: both lists still read plausibly, and only a run of the dispatcher
+  // beside the lens shows they disagree.
+  return concerns.sort((a, b) => concernUrgency(a.rule) - concernUrgency(b.rule));
 }
 
 /** How a proposed act reads inside "awaiting your accept/reject of …". */

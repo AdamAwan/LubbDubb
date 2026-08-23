@@ -202,6 +202,8 @@ export class EnvironmentDesk {
     for (const { arrival, comment } of announceableArrivals({
       arrivals: store.listGoalArrivals(),
       environments: this.deps.environments,
+      readings: store.listEnvironmentReach(),
+      landings,
       probeIntervalMs: this.deps.probeIntervalMs,
       now: this.now(),
     })) {

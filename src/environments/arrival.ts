@@ -87,15 +87,65 @@ const ANNOUNCE_WINDOW_INTERVALS = 2;
  * the caller stamps them all. That is deliberate: an environment that grows
  * `arrival.comment` later then announces its *next* arrival rather than its whole
  * history, and the stamp is the only thing that can say so.
+ *
+ * The confirming reading being fresh — {@link ANNOUNCE_WINDOW_INTERVALS} — is what
+ * says the harness watched *something* happen, and on its own it is not enough to
+ * say what. Readings and arrivals are both keyed on the environment's **name**, so
+ * a name the harness has never used before starts with no readings at all: every
+ * landing in the deployment's history is due, every probe writes its reading *now*,
+ * and every arrival is therefore fresh. A rename is that, and so is adding a second
+ * environment to a deployment that has been running for months — a year-old
+ * deployment would comment on every ticket it ever shipped, 200 a pulse until it
+ * had worked through them, and the comments cannot be unsent.
+ *
+ * So a fresh reading is announced when **either** of two things says the deploy is
+ * what was watched rather than the harness's own first look:
+ *
+ * - the **name** was already asking before the window opened, so this reading is
+ *   one of a series rather than the first of them; or
+ * - the **work** landed inside the window, so there is no history for a new name to
+ *   have mistaken this for.
+ *
+ * Either alone would be wrong in one direction. The name test alone silences a
+ * brand-new deployment's first genuine arrival, which is the feature's whole first
+ * impression. The landing test alone silences a slow deploy — a release train, an
+ * environment somebody promotes to on Thursdays — where the merge is days older
+ * than the arrival and the harness watched every pulse of the wait.
+ *
+ * A newly introduced name therefore catches the deployment's *history* up silently
+ * and still speaks for work that lands after it — which is what switching
+ * `arrival.comment` on already does, and for the same reason.
+ * → `docs/spec/24-environments.md#announcing-an-arrival`
  */
 export function announceableArrivals(input: {
   arrivals: readonly GoalArrival[];
   environments: EnvironmentConfig[];
+  /**
+   * Every reading held, `Store.listEnvironmentReach()` — read only for the oldest
+   * `observedAt` per environment name, which is when that name started asking.
+   */
+  readings: readonly { environment: string; observedAt: string }[];
+  /** Every landing, `Store.listGoalLandings()` — read only for each goal's newest. */
+  landings: readonly { goalRef: string; recordedAt: string }[];
   probeIntervalMs: number;
   now: number;
 }): { arrival: GoalArrival; comment: boolean }[] {
   const byName = new Map(input.environments.map((e) => [e.name, e]));
   const floor = input.now - input.probeIntervalMs * ANNOUNCE_WINDOW_INTERVALS;
+  const startedAsking = new Map<string, number>();
+  for (const r of input.readings) {
+    const at = Date.parse(r.observedAt);
+    if (!Number.isFinite(at)) continue;
+    const held = startedAsking.get(r.environment);
+    if (held === undefined || at < held) startedAsking.set(r.environment, at);
+  }
+  const landedAt = new Map<string, number>();
+  for (const l of input.landings) {
+    const at = Date.parse(l.recordedAt);
+    if (!Number.isFinite(at)) continue;
+    const held = landedAt.get(l.goalRef);
+    if (held === undefined || at > held) landedAt.set(l.goalRef, at);
+  }
   const out: { arrival: GoalArrival; comment: boolean }[] = [];
   for (const arrival of input.arrivals) {
     if (arrival.announcedAt !== null) continue;
@@ -106,7 +156,11 @@ export function announceableArrivals(input: {
     const wanted = environment?.arrival?.comment === true;
     const seen = Date.parse(arrival.arrivedAt);
     const fresh = Number.isFinite(seen) && seen >= floor;
-    out.push({ arrival, comment: wanted && fresh });
+    // A name with no reading at all reads as having started asking now, which is
+    // the safe direction: it leaves the landing to say whether this was watched.
+    const established = (startedAsking.get(arrival.environment) ?? input.now) < floor;
+    const justLanded = (landedAt.get(arrival.goalRef) ?? -Infinity) >= floor;
+    out.push({ arrival, comment: wanted && fresh && (established || justLanded) });
   }
   return out;
 }

@@ -300,3 +300,22 @@ export const DISPATCH_RULES = Object.fromEntries(RULES.map(({ id, ...rule }) => 
   DispatchRuleId,
   DispatchRule
 >;
+
+/**
+ * Cross-PR rank of a concern class: review comment beats CI beats base-update.
+ *
+ * Read off the pipeline rather than restated anywhere. It used to be three
+ * hardcoded numbers that happened to agree with the order the concerns are pushed
+ * in and with the registry's own numbering — three copies of one fact, which is
+ * the arrangement the rule numbers rotted under. It lives here, beside the
+ * pipeline it reads, because it has two callers: rule `pr-ci-failing`, which
+ * ranks the concerns it dispatches for, and `prAttention`'s lens, which has to
+ * name the same one (#562 — the lens encoded the pre-reorder order in statement
+ * order and led with CI while the agent went out for the review). A rule with no
+ * pipeline position sorts last rather than throwing: this only orders concerns,
+ * and a wrong order is a worse failure than a late one.
+ */
+export function concernUrgency(rule: DispatchRuleId): number {
+  const at = DISPATCH_PIPELINE.findIndex((r) => r.id === rule);
+  return at === -1 ? Number.MAX_SAFE_INTEGER : at;
+}

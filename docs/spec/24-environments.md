@@ -178,7 +178,14 @@ because each failure is otherwise silent in the same direction:
   written by somebody who meant one and left it for later.
 
 `name` is the display label _and_ the key every reading and arrival is stored against, so renaming an
-environment discards what was known about it rather than migrating it.
+environment discards what was known about it rather than migrating it. What re-learning it does is
+probe the deployment's whole history back — every landing is due again under the new name, and every
+verdict is written down again. What re-learning it does **not** do is announce any of it: the readings
+are new, but the deploys they confirm are not, and that distinction is the announce guard's whole
+subject (below).
+
+Adding an environment to a deployment that has been running is the same event by a different route,
+which is why it has the same answer.
 
 `environmentProbeIntervalMs` (default 5 minutes) is how long an unconfirmed landing rests before its
 environment is asked where it is again. It is also the precision of every "arrived at" the cockpit
@@ -258,6 +265,33 @@ already in it. That is the backfill-on-boot failure a nullable column has
 team as the harness having lost its mind. Two intervals rather than one because a landing confirmed on
 the previous pulse is still an arrival this harness saw, and a probe pass that ran long must not turn
 that into silence.
+
+**A fresh reading is not on its own enough, because a name can be fresher than what it is reading.**
+Readings and arrivals are both keyed on the environment's name, so a name the harness has never used
+before starts with no readings at all: every landing in the deployment's history is due, every probe
+writes its verdict _now_, and every arrival is therefore "fresh" by the test above. That is the third
+way into the harm the guard exists to prevent, alongside the two it already named — a rename, or an
+environment added to a deployment with history, comments on every ticket it has ever shipped, 200 a
+pulse until it has worked through them. Nothing errors, no verdict is wrong, and the harness's own
+state is left correct; the failure lands entirely on other people's ticket threads, where each comment
+is deliberately a new one rather than an edit and so cannot be taken back.
+
+So a fresh reading is announced when **either** of two further things holds:
+
+- the **name** was already asking before the announce window opened — this reading is one of a series
+  rather than the first of them; or
+- the **work** landed inside that window — there is no history for a new name to have mistaken this
+  for.
+
+Either alone is wrong in one direction, which is why it is both. The name test alone silences a
+brand-new deployment's first genuine arrival, which is the feature's whole first impression. The
+landing test alone silences a slow deploy — a release train, an environment somebody promotes to on
+Thursdays — where the merge is days older than the arrival and the harness watched every pulse of the
+wait.
+
+The behaviour that falls out is the one switching `comment` on already had: a name with no history
+catches the deployment's past up **silently**, stamping as it goes, and speaks for the next goal that
+arrives after it.
 
 The stamp goes down **after** the write, so a failed comment leaves the arrival for the next pulse
 rather than marking it said.
