@@ -57,6 +57,11 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
             ...RETIRED_TOOL_NAMES,
           ]),
           lastCallByTool: store.lastMcpCallByTool(),
+          // Unwindowed, and the second read on this payload that is. A run alive
+          // at the instant the window opened made its calls before it; asked the
+          // windowed question it reads as a run that never reached the channel,
+          // which is the tab's loudest alarm firing on a healthy agent.
+          callsEverByAgent: store.countMcpCallsByAgent(),
           // A live config read rather than a fold, and the only one on this
           // payload: an operator `--allowedTools` in `claudeArgs` is the commonest
           // cause of a run that calls nothing, and it is worth reporting before

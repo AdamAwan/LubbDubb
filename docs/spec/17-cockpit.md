@@ -231,11 +231,11 @@ time either moves.
 
 | width     | arrangement                                                                             |
 | --------- | --------------------------------------------------------------------------------------- |
-| < 1100    | one column — rail, then situation area, then vivarium — scrolling as a single page        |
-| 1100–1199 | the rail beside the situation area (360px), vivarium on its floor; situation one column   |
-| 1200–1499 | overview cards in two tracks; Fleet, Goals and Pull requests span both        |
-| 1500–1999 | the goal page gains its right-hand column, and its plan waves go side by side |
-| ≥ 2000    | overview cards in four tracks; the three spanning cards take two each         |
+| < 1100    | one column — rail, then situation area, then vivarium — scrolling as a single page      |
+| 1100–1199 | the rail beside the situation area (360px), vivarium on its floor; situation one column |
+| 1200–1499 | overview cards in two tracks; Fleet, Goals and Pull requests span both                  |
+| 1500–1999 | the goal page gains its right-hand column, and its plan waves go side by side           |
+| ≥ 2000    | overview cards in four tracks; the three spanning cards take two each                   |
 
 **The breakpoints are therefore stated once**, in `console.css`, and each is a statement about a
 different surface: 1100 is the shell, 1200 the overview grid, 1500 the goal page, 2000 the overview
@@ -298,10 +298,10 @@ once.
 | `agent`                              | the open drawer's agent                                                                                                                                                                                                  |
 | `plan` / `retro` / `pad`             | the plan sheet, the retrospective, the notepad                                                                                                                                                                           |
 | `fact`                               | the claim whose provenance is open on the Knowledge tab, by fact id                                                                                                                                                      |
-| `kn`                                 | the Knowledge tab's layout: `table` for one sortable row per claim; `list` is the absent value. Not `view`, which the Tickets tab and Insights already share                                                              |
-| `show`                               | how the Knowledge tab is narrowed: `waiting` / `reaching` / `settled`; `all` is the absent value. A filter, never a move — a claim stays under the heading its reach puts it in                                            |
-| `sort`                               | the Knowledge table's order, `-` for the far end: `-asks` is most-asked-for first; `reach` ascending is the absent value                                                                                                  |
-| `fold`                               | the Knowledge tails an operator has **folded away**, as `rejected,retired` — the folded ones, so the page as it stands is a bare URL and nothing is hidden on arrival                                                     |
+| `kn`                                 | the Knowledge tab's layout: `table` for one sortable row per claim; `list` is the absent value. Not `view`, which the Tickets tab and Insights already share                                                             |
+| `show`                               | how the Knowledge tab is narrowed: `waiting` / `reaching` / `settled`; `all` is the absent value. A filter, never a move — a claim stays under the heading its reach puts it in                                          |
+| `sort`                               | the Knowledge table's order, `-` for the far end: `-asks` is most-asked-for first; `reach` ascending is the absent value                                                                                                 |
+| `fold`                               | the Knowledge tails an operator has **folded away**, as `rejected,retired` — the folded ones, so the page as it stands is a bare URL and nothing is hidden on arrival                                                    |
 | `settings` / `spend` / `reliability` | the three top-bar modals                                                                                                                                                                                                 |
 | `collapsed`                          | the tickets tab's features folded away, as `3,12`                                                                                                                                                                        |
 | `watch`                              | the Tickets tab's harness axis: `watched` / `unwatched`; `any` is the absent value                                                                                                                                       |
@@ -2634,6 +2634,18 @@ What comes first is the two ways the channel fails without saying so:
   a run with no rows against it is the alarm. It is drawn above every table, because it is the reading
   that invalidates the others — a per-tool count taken over a window in which three runs could not reach
   the channel is a count with three runs missing from it.
+
+  **A silence is asked of the run's whole life, and every other figure on the page of the window.** That
+  asymmetry is deliberate and is the one thing here worth writing down. The window admits a run on
+  `runInstant` — where it ended — so a run that opened before the window and finished inside it is in
+  the denominator, and every call it made may be outside. Counted the window's way it is reported as a
+  run that could not reach the channel, and _any_ run alive at the instant the window opens qualifies:
+  up to the concurrency cap's worth of phantoms, every time a 24h view is opened, each carrying the full
+  `claudeArgs` remedy. The failure being reported is a property of the whole run — grants dropped at
+  launch — so the evidence has to be too, which is what `callsEverByAgent` is for. Narrowing the
+  denominator to runs that fit _entirely_ inside the window was the alternative, and it drops runs that
+  legitimately belong to it and quietly changes `callsPerRun`.
+
 - **A tool nothing named.** `tools/list` is not an instruction: an agent reaches for what its prompts
   named, and a tool nothing names loses to `gh` with nothing red anywhere
   ([11](11-mcp-tools.md#where-a-tool-is-named-to-the-agent)).
@@ -2644,13 +2656,13 @@ than three numbers for the cockpit to interpret — the same rule `PHASE_COPY` a
 and for the same reason: it is a claim about what the harness did, and a cockpit re-deriving it would
 be a second opinion drawn inches from the first. The ladder, worst first:
 
-| Verdict                  | What it means                                                                                      |
-| ------------------------ | -------------------------------------------------------------------------------------------------- |
-| **Called, always refused** | Agents are reaching for it and its contract turns every one away. The one case where the silence is the tool's own fault. |
-| **Retired, still called**  | A withdrawn name ([11](11-mcp-tools.md#retired-tools)) something still names. Every call spends a turn on a refusal. |
-| **Nothing named it**       | In neither the addendum nor any prompt the window dispatched. Nobody was told it exists.            |
-| **Named, never reached for** | Agents were told and none called it. The job did not come up, or the wording is not landing.       |
-| **No desktop session used it** | A person did not sit down and run one. A reading, and the one verdict with no remedy.           |
+| Verdict                        | What it means                                                                                                             |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------- |
+| **Called, always refused**     | Agents are reaching for it and its contract turns every one away. The one case where the silence is the tool's own fault. |
+| **Retired, still called**      | A withdrawn name ([11](11-mcp-tools.md#retired-tools)) something still names. Every call spends a turn on a refusal.      |
+| **Nothing named it**           | In neither the addendum nor any prompt the window dispatched. Nobody was told it exists.                                  |
+| **Named, never reached for**   | Agents were told and none called it. The job did not come up, or the wording is not landing.                              |
+| **No desktop session used it** | A person did not sit down and run one. A reading, and the one verdict with no remedy.                                     |
 
 **"Tools to answer for" is a fraction, so both halves count the advertised set.** `toolsAdvertised` is
 what `tools/list` offers and nothing else, and the quiet count is over the same names — a retired name
@@ -2677,11 +2689,11 @@ rather than to explain a silent run afterwards.
 
 **The two channels are never summed.** They are different credentials over different tool sets, and
 `validation_report` is two different tools with one name. The desktop channel gets its own section; the
-one graphic that draws both is a *relative* width — which channel this harness's traffic is — never a
+one graphic that draws both is a _relative_ width — which channel this harness's traffic is — never a
 total.
 
 **Naming colour is a token, not a value**, on `.mc` as the phase and outcome palettes are on `.sp` and
-`.rl`. It is a *category* palette rather than a verdict one: `addendum` and `point-of-use` are two
+`.rl`. It is a _category_ palette rather than a verdict one: `addendum` and `point-of-use` are two
 places a tool can be named and neither is better. The alarm colours are the cockpit's own red and amber,
 because a fleet that cannot reach its tools is the alarm vocabulary.
 

@@ -538,8 +538,16 @@ the row waits until the goal's work has actually reached somewhere a person can 
 gates it on a deployment that configured no environment, which is the default.
 → [24](24-environments.md#what-an-arrival-means)
 
-Both hold the **file** arm only. Everything that settles a row still runs, so a ticket closed by hand
-while a goal is held still discharges an obligation filed before the hold began.
+Both hold the **file** arm only, and only for a row that does not exist yet. Everything that settles a
+row still runs, so a ticket closed by hand while a goal is held still discharges an obligation filed
+before the hold began — and a hold that arrives after the row does never un-files it.
+
+**An owed row is filed on every pulse, not only the first.** Idempotence here is `recordHumanTask`'s
+dedup, which folds the repeat onto the row it already keyed and rewrites `detail`; it is not the pass
+going quiet once a row exists. Only a **settled** row is skipped, because an answer is the last thing
+said about a row. `ValidationReadyDesk` works the same way and for the same reason — a pass that files
+once has frozen its detail at the instant it filed, which is the one thing the detail below must not
+be.
 
 **Why this one may settle itself.** Every other human task is settled by a person clicking Done,
 because the harness cannot observe a console switch being flipped. This one names an item the harness

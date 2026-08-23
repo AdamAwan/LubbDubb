@@ -585,6 +585,9 @@ export class Store {
   listMcpCallsSince(since: string): McpCall[] {
     return this.mcpCalls.listMcpCallsSince(since);
   }
+  countMcpCallsByAgent(): Map<string, number> {
+    return this.mcpCalls.countMcpCallsByAgent();
+  }
   lastMcpCallByTool(): Map<string, string> {
     return this.mcpCalls.lastMcpCallByTool();
   }

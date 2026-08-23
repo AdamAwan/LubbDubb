@@ -345,10 +345,18 @@ export function buildReliabilityInsights(input: ReliabilityInput): ReliabilityIn
   };
   const span = timelineSpan(
     window,
-    windowed.agents.reduce<number | null>((oldest, agent) => {
-      const at = runInstant(agent);
-      return Number.isNaN(at) ? oldest : oldest === null || at < oldest ? at : oldest;
-    }, null),
+    // The oldest thing the axis could be about, over **both** populations the
+    // timeline buckets — `buildSpendTrend` folds its closures and its runs the
+    // same way and for the same reason. Off the agents alone, an unbounded
+    // window draws an axis that starts after CI history it is counting: a
+    // deployment that watched pull requests before it dispatched anything, or
+    // one whose CI history outruns its oldest surviving agent row, gets a graph
+    // that disagrees with the headline printed above it — on the one window
+    // whose entire purpose is to show everything.
+    [...windowed.agents.map(runInstant), ...input.ciEvents.map((e) => Date.parse(e.createdAt))].reduce<number | null>(
+      (oldest, at) => (Number.isNaN(at) ? oldest : oldest === null || at < oldest ? at : oldest),
+      null,
+    ),
   );
   return {
     generatedAt: new Date(now).toISOString(),
@@ -560,6 +568,11 @@ function buildCiHealth({ agents, tasks, ciEvents, usageEvents, now }: Reliabilit
   let landingCostUsd = 0;
   for (const event of usageEvents) {
     const run = prRuns.get(event.agentId);
+    // Against the **span**, deliberately, not against `window.startMs`: the span
+    // is the axis the bars are drawn on, derived from the oldest datum either
+    // population holds, and a cost admitted before it would be in the total and
+    // in no bar. The two coincide on a bounded window; under `all` the span is
+    // the one that can start later than the epoch.
     if (run === undefined || Date.parse(event.at) < span.startMs) continue;
     if (run.phase === 'landing') {
       landingCostUsd = roundUsd(landingCostUsd + event.costUsd);

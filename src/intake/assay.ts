@@ -222,11 +222,28 @@ function unclearHold(assay: IssueAssay): string {
   return `${by} could not act on this goal`;
 }
 
-/** The transition that ended a verdict's standing, or null while it still stands. */
+/**
+ * The transition that ended a verdict's standing, or null while it still stands.
+ *
+ * Against {@link verdictCast} — when the verdict *standing now* was cast — never
+ * against `decided_at`, which dates the first one. One rule with two copies:
+ * `deliveryHold` measures the same thing the same way, and the two reading
+ * different definitions of "after the verdict" is the drift to avoid.
+ */
 function expiringSignal(assay: IssueAssay, signals: WorldEvent[]): WorldEvent | null {
   const item = assayWorldRef(assay.originRef);
   if (!item) return null;
-  return signals.find((e) => e.ref === item && e.createdAt > assay.decidedAt) ?? null;
+  const cast = verdictCast(assay);
+  return signals.find((e) => e.ref === item && e.createdAt > cast) ?? null;
+}
+
+/**
+ * When the verdict that is standing *now* was cast. `decided_at` survives an
+ * overwrite so the row keeps dating the first judgement; `updated_at` moves with
+ * the re-cast, which is what "any transition after the verdict" is about.
+ */
+function verdictCast(assay: IssueAssay): string {
+  return assay.updatedAt ?? assay.decidedAt;
 }
 
 /**
@@ -252,7 +269,10 @@ export function assaySignalQuery(assays: IssueAssay[]): { since: string; refs: s
     const item = assayWorldRef(a.originRef);
     if (!item) continue;
     refs.add(item);
-    if (since === null || a.decidedAt < since) since = a.decidedAt;
+    // The instant the predicate compares against, so the window shrinks with a
+    // re-cast and the event that expired the previous verdict drops out of it.
+    const cast = verdictCast(a);
+    if (since === null || cast < since) since = cast;
   }
   return since !== null && refs.size > 0 ? { since, refs: [...refs] } : null;
 }

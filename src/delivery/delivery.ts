@@ -110,11 +110,34 @@ export function deliveryHold(
   return `${by} marked it delivered${delivery.summary ? ` — "${delivery.summary}"` : ''} (${delivery.decidedAt})`;
 }
 
-/** The transition that ended a verdict's standing, or null while it still stands. */
+/**
+ * The transition that ended a verdict's standing, or null while it still stands.
+ *
+ * Measured against {@link verdictCast} — when the verdict *standing now* was
+ * cast — never against `decided_at`, which dates the first one. A row is
+ * overwritten in place, so after any re-cast the two are different instants, and
+ * reading the older of them judges the live verdict against a transition that
+ * happened before it existed.
+ */
 function expiringSignal(delivery: IssueDelivery, signals: WorldEvent[]): WorldEvent | null {
   const item = deliveryWorldRef(delivery.originRef);
   if (!item) return null;
-  return signals.find((e) => e.ref === item && e.createdAt > delivery.decidedAt) ?? null;
+  const cast = verdictCast(delivery);
+  return signals.find((e) => e.ref === item && e.createdAt > cast) ?? null;
+}
+
+/**
+ * When the verdict that is standing *now* was cast.
+ *
+ * `decided_at` is preserved across an overwrite so the row keeps dating the
+ * moment the issue was first judged — which is what the cockpit chip and the
+ * hold's own reason string quote, and is a different fact from this one.
+ * `updated_at` moves with the re-cast, so it is the instant "any transition
+ * after the verdict" is actually about. Falls back for a row read out of a
+ * database written before the column carried one.
+ */
+function verdictCast(delivery: IssueDelivery): string {
+  return delivery.updatedAt ?? delivery.decidedAt;
 }
 
 /**
@@ -139,7 +162,13 @@ export function deliverySignalQuery(deliveries: IssueDelivery[]): { since: strin
     const item = deliveryWorldRef(d.originRef);
     if (!item) continue;
     refs.add(item);
-    if (since === null || d.decidedAt < since) since = d.decidedAt;
+    // The same instant the predicate compares against, so the window shrinks
+    // with a re-cast and the transition that expired the *previous* verdict
+    // stops being fetched at all. Taken off `decided_at` instead, a stale event
+    // stays inside the window for as long as the row exists — `world_events` is
+    // never pruned — and no verdict on that issue could ever hold again.
+    const cast = verdictCast(d);
+    if (since === null || cast < since) since = cast;
   }
   return since !== null && refs.size > 0 ? { since, refs: [...refs] } : null;
 }

@@ -155,6 +155,28 @@ export class McpCallStore {
       .all() as { channel: string; tool: string; last: string }[];
     return new Map(rows.map((r) => [`${r.channel}:${r.tool}`, r.last]));
   }
+
+  /**
+   * How many calls each agent has ever made, over all time — the companion to
+   * {@link lastMcpCallByTool}, and unwindowed for the same kind of reason.
+   *
+   * The silent-run alarm is about a launch whose `mcp__lubbdubb__*` grants were
+   * dropped, which is a property of a **whole run**: an agent that called the
+   * channel at all did not have that problem, whenever it called. Counted inside
+   * the window instead, a run that opened before the window and ended inside it
+   * is in the denominator with every call it made outside — and is reported as
+   * having called nothing, on the one reading the tab draws above all the others
+   * precisely because it invalidates them.
+   *
+   * An agent that never called is absent from the map rather than present with a
+   * zero, exactly as a never-called tool is above.
+   */
+  countMcpCallsByAgent(): Map<string, number> {
+    const rows = this.ctx.db
+      .prepare(`SELECT agent_id AS agentId, COUNT(*) AS n FROM mcp_calls WHERE agent_id IS NOT NULL GROUP BY agent_id`)
+      .all() as { agentId: string; n: number }[];
+    return new Map(rows.map((r) => [r.agentId, r.n]));
+  }
 }
 
 /** How long a call's arguments are kept when the config states nothing. */

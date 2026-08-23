@@ -473,3 +473,51 @@ test('a run that reported tokens and no price is measured, as it is to every spe
   assert.equal(runs.settled, 3);
   assert.equal(runs.unmeasuredRuns, 1, 'only the run that reported nothing at all');
 });
+
+test('under `all` the axis spans the CI history too, not just the runs', () => {
+  // The unbounded window is the one whose whole purpose is to show everything, so
+  // a graph that starts after history the headline is counting is the one place
+  // the two must not disagree. `timelineSpan` takes the earliest datum the caller
+  // holds — and the caller holds two populations here, not one.
+  const DAY = 24 * 60 * MIN;
+  const events = [
+    ciEvent('pr:41', 'failing', NOW - 45 * DAY),
+    ciEvent('pr:41', 'passing', NOW - 44 * DAY),
+    ciEvent('pr:42', 'failing', NOW - 2 * DAY),
+    ciEvent('pr:42', 'passing', NOW - 1 * DAY),
+  ];
+  const totals = (ci: ReturnType<typeof build>['ci']) => ({
+    red: ci.timeline.buckets.reduce((n, b) => n + b.red, 0),
+    green: ci.timeline.buckets.reduce((n, b) => n + b.green, 0),
+  });
+
+  // No agents at all: a deployment that watched pull requests before it
+  // dispatched anything. The axis used to fall back to the 7-day floor.
+  const bare = build({ ciEvents: events }, 'all').ci;
+  assert.equal(bare.reds, 2);
+  assert.equal(bare.greens, 2);
+  assert.deepEqual(totals(bare), { red: 2, green: 2 }, 'every counted event is on the graph');
+
+  // And with an agent younger than the oldest CI event, which is the commoner
+  // shape: a harness whose CI history outruns its oldest surviving agent row.
+  const young = build(
+    { agents: [agent('a1', 'done', { startedAt: iso(NOW - DAY), endedAt: iso(NOW - DAY) })], ciEvents: events },
+    'all',
+  ).ci;
+  assert.deepEqual(totals(young), { red: young.reds, green: young.greens });
+
+  // The other direction is the case that always worked, kept so the assertion
+  // pins "the earliest of both" rather than "the earliest event".
+  const old = build(
+    {
+      agents: [agent('a1', 'done', { startedAt: iso(NOW - 60 * DAY), endedAt: iso(NOW - 60 * DAY) })],
+      ciEvents: events,
+    },
+    'all',
+  ).ci;
+  assert.deepEqual(totals(old), { red: old.reds, green: old.greens });
+  assert.ok(
+    Date.parse(old.timeline.startsAt) < Date.parse(young.timeline.startsAt),
+    'the older agent still widens the axis past the oldest event',
+  );
+});

@@ -12,7 +12,14 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { Store } from '../src/store/store.js';
-import type { HumanTask, Issue, IssueDelivery } from '../src/types.js';
+import { ingestPlanDocument } from '../src/plans/planIngest.js';
+import { validatePlanDocument } from '../src/plans/planDocument.js';
+import type { GoalValidation } from '../src/validation/goal.js';
+import type { HumanTask, Issue, IssueDelivery, ValidationVerdict } from '../src/types.js';
+
+function verdict(over: Partial<ValidationVerdict> = {}): ValidationVerdict {
+  return { state: 'clear', total: 0, passed: 0, failed: 0, unrun: 0, deferred: 0, waived: 0, ...over };
+}
 
 /**
  * The step after the launch: the ticket a delivered goal leaves open.
@@ -129,9 +136,57 @@ test('a launch the assessor sent back owes nothing', () => {
   assert.deepEqual(steps, []);
 });
 
-test('a pass over a world it has already acted on files nothing', () => {
+test('a standing row is re-filed each pulse, which is what keeps the detail current', () => {
+  // Idempotence here is `recordHumanTask`'s dedup, not silence. The step has to
+  // come back on every pulse, because the detail is where the goal's validation
+  // flag lands and the row is the surface an operator closes the ticket from.
   const steps = pass({ issues: [issue(12)], deliveries: [delivery(12)], existing: [task()] });
-  assert.deepEqual(steps, []);
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0]!.kind, 'file');
+  assert.equal(steps[0]!.kind === 'file' && steps[0]!.originRef, 'issue:12');
+});
+
+test('the re-filed detail follows the verdict, in both directions', () => {
+  const world = { issues: [issue(12)], deliveries: [delivery(12)], existing: [task()] };
+  const detailOf = (validation: Map<string, GoalValidation>): string => {
+    const steps = pass({ ...world, validation });
+    assert.equal(steps.length, 1);
+    assert.equal(steps[0]!.kind, 'file');
+    return steps[0]!.kind === 'file' ? steps[0]!.detail : '';
+  };
+
+  // Filed while the plan was clear. A planner then declares a check nobody has
+  // run — the damaging direction, because the row an operator is about to close
+  // the ticket from would otherwise still say nothing is outstanding.
+  const clear: Map<string, GoalValidation> = new Map([
+    ['issue:12', { verdict: verdict({ state: 'clear', total: 1, passed: 1 }), outstanding: [] }],
+  ]);
+  const flagged: Map<string, GoalValidation> = new Map([
+    [
+      'issue:12',
+      { verdict: verdict({ state: 'flagged', total: 1, unrun: 1 }), outstanding: ['A. **Check a** — unrun'] },
+    ],
+  ]);
+
+  assert.doesNotMatch(detailOf(clear), /Validation is not clear/);
+  assert.match(detailOf(flagged), /Validation is not clear on this goal — 1 never run, of 1\./);
+  assert.match(detailOf(flagged), /- A\. \*\*Check a\*\* — unrun/);
+  // And back: a warning that outlives the checks passing is one nobody reads.
+  assert.doesNotMatch(detailOf(clear), /Validation is not clear/);
+});
+
+test('a gate holds a new row and never un-files a standing one', () => {
+  const held = { issues: [issue(12)], deliveries: [delivery(12)] };
+  // Neither gate lets a first row through …
+  assert.deepEqual(pass({ ...held, opened: new Set<string>() }), []);
+  assert.deepEqual(pass({ ...held, validating: new Set(['issue:12']) }), []);
+  // … and neither takes back one already filed. An arrival that stops being
+  // reported, or a validate row re-opened, must not blank the close-out's detail.
+  for (const over of [{ opened: new Set<string>() }, { validating: new Set(['issue:12']) }]) {
+    const steps = pass({ ...held, existing: [task()], ...over });
+    assert.equal(steps.length, 1, 'the standing row is still re-filed');
+    assert.equal(steps[0]!.kind, 'file');
+  }
 });
 
 test('a settled row is never re-filed — a decline stays declined', () => {
@@ -240,7 +295,10 @@ test('a pulse files the close-out, and the next one settles it once the ticket g
     system.store.listHumanTasksOfKind('close_out').map((t) => t.id),
     [filed[0]!.id],
   );
-  assert.equal(system.store.getHumanTask(filed[0]!.id)!.updatedAt, filed[0]!.updatedAt);
+  // The row is re-filed rather than skipped, so `updated_at` moves — which is
+  // the mechanism, not a side effect. `listHumanTasks` orders on `created_at`,
+  // so the refresh does not reorder the bench.
+  assert.equal(system.store.getHumanTask(filed[0]!.id)!.status, 'open');
 
   // Someone closes it in the tracker, and GitHub's issues provider stops
   // reporting it at all.
@@ -337,4 +395,62 @@ test('a gate never holds a row already filed, so a ticket closed by hand still s
   });
   assert.equal(steps.length, 1);
   assert.equal(steps[0]?.kind, 'settle');
+});
+
+test("through a real store, the standing row's warning follows the goal's checks", () => {
+  // The freeze is only visible with `recordHumanTask` in the loop, so this one
+  // goes through the desk rather than the pass. The damaging direction is the
+  // one it drives: the row is filed while the plan is clear, and a check is
+  // declared afterwards.
+  const store = new Store(':memory:');
+  const world = { issues: [issue(12, { url: 'https://tracker/12' })] };
+  const parsed = validatePlanDocument({
+    version: 1,
+    reason: 'One fix.',
+    parts: [{ slug: 'whole', title: 'The change', scope: 'src/' }],
+    validation: { checks: [{ id: 'a', title: 'Check a', do: 'Do a.', expect: 'It works.' }] },
+  });
+  assert.ok(parsed.ok, parsed.ok ? '' : parsed.error);
+  ingestPlanDocument(store, { doc: parsed.document, originRef: 'issue:12', title: 'Ship it' });
+  store.recordValidationResult('issue:12', 'a', { state: 'passed', note: 'it works', by: 'operator' });
+  store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+
+  const desk = new DeliveryCloseOutDesk(store);
+  desk.run(world);
+  const filed = store.listHumanTasksOfKind('close_out');
+  assert.equal(filed.length, 1);
+  assert.doesNotMatch(filed[0]!.detail ?? '', /Validation is not clear/);
+
+  // A planner amends the block and declares a second check nobody has run. The
+  // goal is flagged from this pulse on, and the row an operator closes the
+  // ticket from has to say so.
+  store.amendValidation('issue:12', {
+    checks: [
+      {
+        id: 'b',
+        title: 'Check b',
+        do: 'Do b.',
+        expect: 'It works.',
+        uses: [],
+        covers: [],
+        fleetCandidate: false,
+        candidateWhy: null,
+      },
+    ],
+    withdraw: [],
+    resources: [],
+    note: 'one more thing to prove',
+  });
+  desk.run(world);
+  assert.deepEqual(
+    store.listHumanTasksOfKind('close_out').map((t) => t.id),
+    [filed[0]!.id],
+    'one row under one id — the refresh is a repeat, not a second obligation',
+  );
+  assert.match(store.getHumanTask(filed[0]!.id)!.detail ?? '', /1 never run, of 2/);
+
+  // And back: a warning that outlives the check passing is one nobody reads.
+  store.recordValidationResult('issue:12', 'b', { state: 'passed', note: 'it works', by: 'operator' });
+  desk.run(world);
+  assert.doesNotMatch(store.getHumanTask(filed[0]!.id)!.detail ?? '', /Validation is not clear/);
 });
