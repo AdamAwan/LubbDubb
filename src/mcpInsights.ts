@@ -311,6 +311,13 @@ interface McpInsightsInput {
    * `validation_report` is two different tools with one name.
    */
   lastCallByTool: Map<string, string>;
+  /**
+   * How many calls each agent has made **over all time**, for the silent-run
+   * alarm alone. Every other figure on this page is a window reading; a silence
+   * is asked of the run's whole life, because the failure it reports — grants
+   * dropped at launch — is a property of the whole run and not of a slice of it.
+   */
+  callsEverByAgent: Map<string, number>;
   /** This deployment's operator-supplied `claudeArgs`, for the override check. */
   claudeArgs: readonly string[];
   window: ResolvedWindow;
@@ -324,8 +331,9 @@ export function buildMcpInsights(input: McpInsightsInput): McpInsights {
 
   // The runs the window covers, on the same instant the spend and reliability
   // folds use: where a run *ended*, and where it started only while it is still
-  // going. A run that opened before the window and finished inside it made its
-  // calls inside it.
+  // going. A run that opened before the window and finished inside it belongs to
+  // the window's denominator — but its calls may all predate the window, which is
+  // why the silence below is asked of `callsEverByAgent` and not of these.
   const settled = input.agents.filter((a) => a.endedAt !== null && inWindow(window, runInstant(a)));
   const callsByAgent = new Map<string, number>();
   for (const call of calls) {
@@ -352,7 +360,15 @@ export function buildMcpInsights(input: McpInsightsInput): McpInsights {
     );
 
   const perRun = settled.map((a) => callsByAgent.get(a.id) ?? 0);
-  const silent = settled.filter((a) => (callsByAgent.get(a.id) ?? 0) === 0);
+  // The one figure on this page taken over the run's whole life rather than over
+  // the window, and the asymmetry is the fix: a run that opened before the window
+  // and ended inside it made every one of its calls outside it, and read against
+  // the windowed count it is reported as a run that could not reach the channel.
+  // Any run alive at the instant the window opens is a candidate, so that is up
+  // to the concurrency cap's worth of phantoms every time a 24h view is opened —
+  // each arriving with the full "check this profile's `claudeArgs`" remedy, on
+  // the reading drawn above the others because it invalidates them.
+  const silent = settled.filter((a) => (input.callsEverByAgent.get(a.id) ?? 0) === 0);
 
   return {
     window: windowView(window, span),
@@ -384,7 +400,7 @@ export function buildMcpInsights(input: McpInsightsInput): McpInsights {
     silentRuns: silent
       .map((agent) => silentRun(agent, tasksById.get(agent.taskId)))
       .sort((a, b) => (b.endedAt ?? '').localeCompare(a.endedAt ?? '')),
-    byPhase: byPhase(settled, tasksById, callsByAgent, fleetCalls),
+    byPhase: byPhase(settled, tasksById, callsByAgent, input.callsEverByAgent, fleetCalls),
     naming: namingTotals(tools, fleetCalls),
     refusals: refusals(calls),
     // `some`, not an exact match: an operator writes `--allowedTools` and
@@ -508,10 +524,17 @@ function silentRun(agent: Agent, task: TaskSummary | undefined): McpSilentRun {
   };
 }
 
+/**
+ * Two call counts, not one, and the split is the same asymmetry the headline
+ * draws: `callsByAgent` is the window's — it feeds `perRun`, which is genuinely
+ * a window reading — and `callsEverByAgent` is the run's whole life, which is
+ * what a silence has to be asked of.
+ */
 function byPhase(
   settled: readonly Agent[],
   tasksById: Map<string, TaskSummary>,
   callsByAgent: Map<string, number>,
+  callsEverByAgent: Map<string, number>,
   fleetCalls: readonly McpCall[],
 ): McpPhaseUsage[] {
   const runs = new Map<SpendPhase, number>();
@@ -519,7 +542,7 @@ function byPhase(
   for (const agent of settled) {
     const phase = phaseOf(tasksById.get(agent.taskId)?.originRef ?? null);
     runs.set(phase, (runs.get(phase) ?? 0) + 1);
-    if ((callsByAgent.get(agent.id) ?? 0) === 0) silent.set(phase, (silent.get(phase) ?? 0) + 1);
+    if ((callsEverByAgent.get(agent.id) ?? 0) === 0) silent.set(phase, (silent.get(phase) ?? 0) + 1);
   }
   // Off the call's **own** origin rather than its agent's task as it stands now:
   // the ref was copied onto the row at call time for exactly this, so a task

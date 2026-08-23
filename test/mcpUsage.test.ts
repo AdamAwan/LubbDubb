@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildMcpInsights } from '../src/mcpInsights.js';
-import { resolveWindow } from '../src/insightsWindow.js';
+import { resolveWindow, sinceOrEpoch } from '../src/insightsWindow.js';
 import { Store } from '../src/store/store.js';
 import { DEFAULT_MCP_ARGS_RETENTION_DAYS } from '../src/store/mcpCalls.js';
 import { RETIRED_TOOL_NAMES } from '../src/mcp/names.js';
@@ -95,12 +95,21 @@ function call(over: Partial<McpCall> = {}): McpCall {
 }
 
 function build(over: Partial<Parameters<typeof buildMcpInsights>[0]> = {}) {
+  // The all-time count, defaulted off whatever calls the case supplies — which is
+  // what a fixture stamped at one clock instant means. A case about a run whose
+  // calls fall *outside* the window passes it explicitly.
+  const callsEverByAgent = new Map<string, number>();
+  for (const call of over.calls ?? []) {
+    if (call.agentId === null) continue;
+    callsEverByAgent.set(call.agentId, (callsEverByAgent.get(call.agentId) ?? 0) + 1);
+  }
   return buildMcpInsights({
     calls: [],
     agents: [],
     tasks: [],
     namedInPrompts: new Map(),
     lastCallByTool: new Map(),
+    callsEverByAgent,
     claudeArgs: [],
     window: resolveWindow('7d', NOW),
     now: NOW,
@@ -465,6 +474,7 @@ test('no per-tool figure on one channel is taken from the other', () => {
       tasks: [],
       namedInPrompts: new Map(),
       lastCallByTool: last,
+      callsEverByAgent: store.countMcpCallsByAgent(),
       claudeArgs: [],
       window: resolveWindow('7d', NOW),
       now: NOW,
@@ -603,4 +613,76 @@ test('the naming classes drop the two rows that are a permanent zero on a health
     false,
     'nothing called a withdrawn or invented name, so neither row is drawn',
   );
+});
+
+test('a run that straddles the window start is not a silent run', () => {
+  // The alarm is drawn above every table because it invalidates the others, so a
+  // false positive is expensive: it tells the operator not to believe the page,
+  // and hands them the full "check this profile's `claudeArgs`" remedy for a
+  // grant problem that does not exist. Any run alive at the instant the window
+  // opens is a candidate, which is up to the concurrency cap's worth of phantoms
+  // every time a 24h view is opened.
+  let clock = Date.parse('2026-08-01T00:00:00.000Z') - 72 * 60 * 60_000;
+  const store = new Store(':memory:', () => new Date(clock).toISOString());
+  const now = Date.parse('2026-08-01T00:00:00.000Z');
+
+  // Starts 72h back, makes three calls immediately, ends 1h back.
+  const long = store.createAgent({ taskId: 'task_long', cwd: '/wt/long', pid: 1 });
+  for (let n = 0; n < 3; n += 1)
+    store.recordMcpCall(
+      {
+        channel: 'fleet',
+        tool: 'note_progress',
+        agentId: long.id,
+        taskId: 'task_long',
+        originRef: 'issue:12',
+        ok: true,
+        error: null,
+        durationMs: 4,
+        args: {},
+      },
+      14,
+    );
+  clock = now - 60 * 60_000;
+  store.updateAgent(long.id, { status: 'done', endedAt: new Date(clock).toISOString() });
+
+  // The true positive, in the same fixture so the assertion pins the distinction
+  // rather than the number: a run wholly inside the window that called nothing.
+  const mute = store.createAgent({ taskId: 'task_mute', cwd: '/wt/mute', pid: 2 });
+  store.updateAgent(mute.id, { status: 'done', endedAt: new Date(clock).toISOString() });
+
+  const insights = (window: string) =>
+    buildMcpInsights({
+      calls: store.listMcpCallsSince(sinceOrEpoch(resolveWindow(window, now).since)),
+      agents: store.listAgents(),
+      tasks: [task('task_long', 'issue:12'), task('task_mute', 'issue:13')],
+      namedInPrompts: new Map(),
+      lastCallByTool: store.lastMcpCallByTool(),
+      callsEverByAgent: store.countMcpCallsByAgent(),
+      claudeArgs: [],
+      window: resolveWindow(window, now),
+      now,
+    });
+
+  for (const window of ['24h', '7d']) {
+    const view = insights(window);
+    assert.equal(view.totals.runs, 2, `${window}: both runs settled inside it`);
+    assert.deepEqual(
+      view.silentRuns.map((r) => r.agentId),
+      [mute.id],
+      `${window}: the straddling run called the channel — whenever it called`,
+    );
+    assert.equal(view.totals.silentRuns, 1);
+    assert.deepEqual(
+      view.byPhase.filter((p) => p.silentRuns > 0).map((p) => p.silentRuns),
+      [1],
+      `${window}: the phase table counts the same silence the headline does`,
+    );
+  }
+
+  // And the window readings *are* still window readings: the calls themselves
+  // fall outside 24h and inside 7d, which is what makes the asymmetry visible.
+  assert.equal(insights('24h').totals.calls, 0);
+  assert.equal(insights('7d').totals.calls, 3);
+  store.close();
 });
