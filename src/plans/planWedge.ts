@@ -1,6 +1,6 @@
 import type { Issue, PlanPart, PullRequest } from '../types.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
-import { liveParts, partBranch } from './parts.js';
+import { liveParts, partBranch, partSettled } from './parts.js';
 
 /**
  * A plan that cannot proceed, and what the harness says about it.
@@ -31,22 +31,59 @@ import { liveParts, partBranch } from './parts.js';
  * left alone.
  */
 
+/** A live part that is doing something, or about to. Its plan is not wedged. */
+function isMoving(part: PlanPart): boolean {
+  return part.status === 'ready' || part.status === 'dispatched' || part.status === 'in_review';
+}
+
 /**
- * Is every live part of this plan blocked?
+ * Is this plan going nowhere — something blocked, and nothing moving?
  *
- * The plan is then doing nothing and will go on doing nothing until someone acts:
- * the only thing that blocks a part is the ref collision (`PlanReconciler.readiness`
- * answers `pending` or `ready` and never `blocked`), and a collision is a branch
- * that will not disappear on its own.
+ * **It used to read "every live part is blocked", and that stopped being true when
+ * the declined human step became the second thing that blocks a part.** A
+ * collision blocks the parts *together*; a decline blocks *one*. The old reading
+ * got each wrong in the opposite direction: it escalated a plan whose only part
+ * was a step the operator had just refused, and it missed a genuine wedge the
+ * moment one sibling had merged, because a settled part is not a blocked one and
+ * `every` then said no. That second case is a goal stalled for good with nothing
+ * in "Needs you" — `plan-part` finds no `ready` part, `rollUpPlanStatus` keeps the
+ * plan `active` so `issue-assess` skips it, and the route stays `parts` so
+ * `issue-pickup` skips it too.
  *
- * **Every** live part, not any: one blocked part among several is a plan still
- * making progress, and the collision blocks all of them together or none. A plan
- * with no live parts is not wedged but empty, which is a different thing and is
- * left to say so itself.
+ * So it judges **movement**, not blocked-ness. A `ready` part is moving even when
+ * it is a *human* part: the bench is where that one is visible, and
+ * [05](docs/spec/05-dispatcher.md) is deliberate that a human part is not "queued
+ * and held".
+ *
+ * **A decline alone is not a wedge**, which is the other half. Specs
+ * [08](docs/spec/08-planning.md) and [13](docs/spec/13-jobs-and-tickets.md) both
+ * state that nothing escalates for a decline — the operator is the one who
+ * declined, and the button is in front of them — so a plan whose live parts are
+ * all declined steps asks nobody anything. What those specs do not cover, and
+ * what this does, is a decline that **strands** work: `[merged, declined, pending]`
+ * leaves a part nobody refused waiting on one somebody did, forever, and that is
+ * the failure `plan-blocked` exists to close. The stranded part is what makes it a
+ * question; {@link wedgedPlanPrompt} then words it for the blocker that is actually
+ * there.
+ *
+ * A part blocked on a database from before `blockedBy` existed is unattributed and
+ * counts, which is the pre-column behaviour and the direction that keeps a real
+ * collision escalating.
+ *
+ * A plan with no live parts is not wedged but empty, which is a different thing
+ * and is left to say so itself.
  */
 export function planIsWedged(parts: PlanPart[]): boolean {
   const live = liveParts(parts);
-  return live.length > 0 && live.every((p) => p.status === 'blocked');
+  if (live.length === 0) return false;
+  if (!live.some((p) => p.status === 'blocked')) return false;
+  if (live.some(isMoving)) return false;
+  // Nothing is moving and something is blocked. It is a question only if something
+  // is actually stuck behind it: a part that is neither settled (`liveParts` keeps
+  // merged and concluded rows, which is why this is not `live` again) nor the
+  // operator's own refusal. That leaves work waiting on one, or a blocker —
+  // the collision — that clearing a branch would release.
+  return live.some((p) => !partSettled(p) && (p.status !== 'blocked' || p.blockedBy !== 'declined'));
 }
 
 /**
@@ -57,9 +94,16 @@ export function planIsWedged(parts: PlanPart[]): boolean {
  * once and read everywhere, and a second rendering here would be the drift that
  * predicate exists to prevent. Null when the rows carry none (an older database),
  * and the caller then says less rather than inventing it.
+ *
+ * Every blocked part's reason, not the first: a decline names the step it refused,
+ * so a plan wedged behind two of them has two sentences and quoting one would drop
+ * the other. Deduplicated, because a collision writes the same sentence onto every
+ * part it blocks.
  */
-function wedgeReason(parts: PlanPart[]): string | null {
-  return liveParts(parts).find((p) => p.blockedReason)?.blockedReason ?? null;
+function wedgeReasons(parts: PlanPart[]): string[] {
+  const seen = new Set<string>();
+  for (const part of liveParts(parts)) if (part.blockedReason) seen.add(part.blockedReason);
+  return [...seen];
 }
 
 /**
@@ -103,8 +147,7 @@ function unclaimedIssuePrs(issue: Issue, parts: PlanPart[], openPrs: PullRequest
  */
 export function planApprovalWarnings(issue: Issue, parts: PlanPart[], openPrs: PullRequest[]): string {
   const lines: string[] = [];
-  const reason = wedgeReason(parts);
-  if (reason) lines.push(`- Its parts are already blocked and cannot be cut. ${reason}`);
+  for (const reason of wedgeReasons(parts)) lines.push(`- Its parts are already blocked and cannot be cut. ${reason}`);
   for (const pr of unclaimedIssuePrs(issue, parts, openPrs)) {
     lines.push(
       `- PR #${pr.number} ("${pr.title}", branch ${pr.branch}) is open for this issue and belongs to no part of ` +
@@ -127,20 +170,42 @@ export function planApprovalWarnings(issue: Issue, parts: PlanPart[], openPrs: P
  */
 export function wedgedPlanPrompt(issueNumber: number, issue: Issue, parts: PlanPart[], openPrs: PullRequest[]): string {
   const live = liveParts(parts);
-  const reason = wedgeReason(parts);
+  // What is left to do: `liveParts` keeps merged and concluded rows, and counting a
+  // part that is finished among the ones that are stuck would be false in the
+  // sentence an operator reads first.
+  const outstanding = live.filter((p) => !partSettled(p));
+  const blocked = outstanding.filter((p) => p.status === 'blocked');
+  // Which blocker is actually there decides both halves of the wording. A decline
+  // is not something "clearing" reaches, and a plan wedged behind one has parts
+  // that are *waiting* rather than blocked — saying every part is blocked would be
+  // false about the ones that are merely stranded.
+  const clearable = blocked.some((p) => p.blockedBy !== 'declined');
+  const stranded = outstanding.filter((p) => p.status !== 'blocked');
   const prs = unclaimedIssuePrs(issue, parts, openPrs).map(
     (pr) =>
       `\n\nPR #${pr.number} ("${pr.title}") is open on ${pr.branch} and belongs to no part of this plan. While it ` +
       `is open the branch cannot be deleted, so it has to be merged or abandoned first — and nothing here knows ` +
       `which part, if any, it satisfies.`,
   );
+  const shape =
+    stranded.length === 0
+      ? `every one of its parts is blocked`
+      : `${blocked.length} of its ${outstanding.length} unfinished parts ` +
+        `${blocked.length === 1 ? 'is' : 'are'} blocked and nothing else is moving`;
+  const wayOut = clearable
+    ? `\n\nTwo ways out, and the harness will not choose between them: clear what is blocking the parts and they ` +
+      `start on the next pulse, or Replan from the plan sheet and let a planner cut the work somewhere the branch ` +
+      `is free.`
+    : `\n\nThere is no branch to clear here — the block is a step you declined, and declining it was a decision, ` +
+      `not a fault. The way out is Replan from the plan sheet, cutting the work so nothing depends on the step ` +
+      `you refused, or abandoning the decomposition to work the issue whole.`;
   return (
-    `The approved ${live.length}-part plan for issue #${issueNumber} ("${issue.title}") is not running: every one ` +
-    `of its parts is blocked, so no agent has been dispatched and none will be.` +
-    (reason ? ` ${reason}` : '') +
+    `The approved ${live.length}-part plan for issue #${issueNumber} ("${issue.title}") is not running: ${shape}, ` +
+    `so no agent has been dispatched and none will be.` +
+    wedgeReasons(parts)
+      .map((r) => ` ${r}`)
+      .join('') +
     prs.join('') +
-    `\n\nTwo ways out, and the harness will not choose between them: clear what is blocking the parts and they ` +
-    `start on the next pulse, or Replan from the plan sheet and let a planner cut the work somewhere the branch ` +
-    `is free.`
+    wayOut
   );
 }

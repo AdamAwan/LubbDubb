@@ -92,6 +92,7 @@ function part(over: Partial<PlanPart> & { slug: string; planId: string }): PlanP
     prNumber: null,
     status: 'dispatched',
     blockedReason: null,
+    blockedBy: null,
     taskId: null,
     createdAt: '2026-07-31T00:00:00.000Z',
     updatedAt: '2026-07-31T00:00:00.000Z',

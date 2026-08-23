@@ -109,6 +109,7 @@ function part(): PlanPart {
     prNumber: null,
     status: 'ready',
     blockedReason: null,
+    blockedBy: null,
     taskId: null,
     createdAt: NOW,
     updatedAt: NOW,

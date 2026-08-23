@@ -418,8 +418,16 @@ Three things about which parks count down:
   no question at all. `handleStalled` arms the clock, and only after `handleWaiting` has actually
   parked: a whitelisted auto-answer left the agent running, and an agent already parked on a question
   of its own keeps that park.
-- **Nor a limit park.** That one has its own ending — the window turning over — and settling it `done`
-  would throw away a conversation the account will be able to continue in an hour.
+- **Nor a limit park** — and the exclusion holds **however the two arrive in order**. That park has its
+  own ending, the window turning over, and settling it `done` would throw away a conversation the
+  account will be able to continue in an hour. `handleStalled`'s arm-time check is the cheap case and
+  not the only one: `handleLimited` drops the clock when the account runs out *after* it was armed,
+  and `completeExpiredStalls` re-checks `limited` before settling anything, so a park added later
+  inherits the exclusion rather than having to remember it.
+- **A park that has ended takes its clock with it.** `respond` and `releasePark` already do this — an
+  answered stop and a dismissed one stop counting down — and `resumeParked` does it on the same terms:
+  the agent is working again, so there is no unanswered stop left to settle. Without it a resumed,
+  demonstrably live agent is killed mid-turn when the old clock fires.
 - **In memory, like `limited`**, because it describes a park _this process_ is holding. A restart
   drops every one of them, at which point the same rows are the recovery desk's question and its
   verdicts are the ones on offer.

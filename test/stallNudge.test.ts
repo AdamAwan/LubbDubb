@@ -46,6 +46,23 @@ class FakeChild extends EventEmitter implements StreamChild {
     this.emitLine({ type: 'assistant', message: { content: [{ type: 'text', text }] } });
     this.emitLine({ type: 'result', subtype: 'success' });
   }
+  /** The reading `claude` emits when the five-hour window is spent. */
+  rateLimit(): void {
+    this.emitLine({
+      type: 'rate_limit_event',
+      rate_limit_info: {
+        status: 'rejected',
+        resetsAt: Math.floor((Date.now() + 3_600_000) / 1000),
+        rateLimitType: 'five_hour',
+        overageStatus: 'allowed',
+        isUsingOverage: false,
+      },
+      uuid: '9d2e1c4a-0000-4000-8000-00000000fead',
+      session_id: 'f0e1d2c3-0000-4000-8000-00000000beef',
+    });
+    this.emitLine({ type: 'result', subtype: 'error_during_execution', is_error: true });
+  }
+
   /** Every message the harness has typed into this agent, prompt included. */
   sent(): string[] {
     return this.writes.map((w) => String((JSON.parse(w) as { message: { content: string } }).message.content));
@@ -246,4 +263,42 @@ test('a question the agent asked never expires, and neither does a stop when the
   assert.equal(off.system.store.listOpenEscalations().length, 1);
   assert.equal(off.system.agents.stallDeadlines().length, 0, '0 restores the park that stands forever');
   off.system.store.close();
+});
+
+test('the account running out takes the stop’s clock with it, whichever arrived first', async () => {
+  // The order the arm-time guard cannot see: the stop parks and arms the countdown,
+  // and the limit lands *after* it. `handleStalled` checked `limited` and found
+  // nothing, because there was nothing yet.
+  const { system, child, agentId } = await dispatched({ agentStallNudges: 0, agentStallParkMs: 1 });
+
+  child.stop('Halfway through the migration.');
+  assert.equal(system.agents.stallDeadlines().length, 1, 'armed by the stop');
+
+  child.rateLimit();
+  assert.deepEqual(system.agents.limitedAgentIds(), [agentId], 'and then the account ran out');
+  assert.equal(system.agents.stallDeadlines().length, 0, 'the limit’s ending is the one that holds');
+
+  await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(system.agents.completeExpiredStalls(), [], 'so nothing settles it');
+  assert.equal(system.store.getAgent(agentId)!.status, 'waiting', 'the conversation is still there to continue');
+  assert.deepEqual(system.agents.limitedAgentIds(), [agentId], 'with the park that has its own ending intact');
+
+  system.store.close();
+});
+
+test('a park the harness resumed takes its clock with it: a working agent is never settled', async () => {
+  const { system, child, agentId } = await dispatched({ agentStallNudges: 0, agentStallParkMs: 1 });
+
+  child.stop('Halfway through the migration.');
+  child.rateLimit();
+  assert.ok(system.agents.resumeParked(agentId).ok, 'the window turned over');
+
+  assert.equal(system.store.getAgent(agentId)!.status, 'running', 'the agent is back at work');
+  assert.equal(system.agents.stallDeadlines().length, 0, 'and no clock is left running over it');
+
+  await new Promise((r) => setTimeout(r, 5));
+  assert.deepEqual(system.agents.completeExpiredStalls(), [], 'so the countdown kills nothing mid-turn');
+  assert.equal(system.store.getAgent(agentId)!.status, 'running');
+
+  system.store.close();
 });

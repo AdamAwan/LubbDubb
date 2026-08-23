@@ -200,6 +200,49 @@ export class HumanTaskStore {
   }
 
   /**
+   * Put a settled row back on the bench, under its own title, with fresh detail —
+   * an obligation that is owed **again**.
+   *
+   * The one caller is `RunwayDesk`, reopening a row it settled itself when the
+   * fleet returns to the state that filed it. {@link recordHumanTask} cannot do
+   * this and must not learn to: its dedup deliberately ignores status, because an
+   * agent repeating itself must not resurrect a task a person declined. So the
+   * distinction lives at the call site that has it — the desk knows which
+   * settlements are its own — and this is the narrow write that acts on it.
+   *
+   * **Only a settled row**, compare-and-set in the write on
+   * {@link settleHumanTask}'s discipline: an open row is already owed and needs
+   * nothing. `resolution` is cleared with the status it explained.
+   *
+   * **A dismissed row is reopened too, and `dismissed_at` is cleared with it.**
+   * That looks like reaching past the operator and is the opposite: dismissing says
+   * "I have read this record and am done with it", which is true of the episode it
+   * recorded and says nothing about the next one. Leaving it dismissed would hide
+   * an obligation that is genuinely owed again — the same silence this whole path
+   * exists to break — and {@link dismissHumanTask} is there to clear it once more.
+   *
+   * **`created_at` moves too**, which is the one field that looks like a lie and is
+   * not. {@link listHumanTasks} feeds the bench newest-first under a hundred-row
+   * cap, so a row keeping the timestamp of an episode that ended months ago is open
+   * in the store and off the end of the wire — the obligation owed and invisible,
+   * which is the silence this whole path exists to break. The row is a *fresh*
+   * obligation wearing an id the title dedup will not let it shed.
+   *
+   * Returns null when there was nothing to reopen.
+   */
+  reopenHumanTask(id: string, detail: string): HumanTask | null {
+    const ts = this.ctx.now();
+    const result = this.ctx.db
+      .prepare(
+        `UPDATE human_tasks SET status='open', resolution=NULL, resolved_at=NULL, dismissed_at=NULL,
+           detail=?, created_at=?, updated_at=? WHERE id=? AND status<>'open'`,
+      )
+      .run(detail, ts, ts, id);
+    if (result.changes === 0) return null;
+    return this.getHumanTask(id);
+  }
+
+  /**
    * Clear a settled task off the bench: the operator has read the record and is
    * done with it.
    *

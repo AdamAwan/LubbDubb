@@ -331,6 +331,9 @@ test('a slot whose branch was reaped is taken before the pool grows', async () =
   const wt = manager(repo, 3);
 
   const first = await wt.ensure('issue/1');
+  // The lease goes first: `deleteBranch` refuses a held slot, which is the whole of
+  // the guard below, and the reap only ever runs on a branch with nothing in flight.
+  await wt.remove('issue/1');
   await wt.deleteBranch('issue/1');
 
   // Detached by the reap: nothing is coming back for it, so it is the slot to take
@@ -477,12 +480,70 @@ test('deleteBranch drops the branch ref and keeps the directory, squash-merged o
   git(repo, ['merge', '-q', '--squash', 'issue/12']);
   git(repo, ['commit', '-q', '-m', 'squashed']);
 
+  await wt.remove('issue/12');
   await wt.deleteBranch('issue/12');
 
   assert.equal(git(repo, ['branch', '--list', 'issue/12']), '', 'the local branch should be gone');
   assert.ok(existsSync(dir), 'the slot is the pool’s, not the branch’s');
   assert.equal(git(dir, ['rev-parse', '--abbrev-ref', 'HEAD']), 'HEAD', 'detached, which is what freed the ref');
   assert.equal(await wt.ensure('issue/13'), dir, 'and it goes straight back into the pool');
+});
+
+test('deleteBranch refuses a slot this run still leases, and leaves it exactly as it was', async () => {
+  const repo = initRepo();
+  // `pool.held` false throughout: the task has settled, which is precisely what
+  // `reapableBranches` reads — and precisely the window in which the agent's
+  // process is still sitting in the directory until `reaped` fires.
+  const wt = manager(repo, 3);
+  const slot = await wt.ensure('issue/12', 'main');
+
+  await assert.rejects(() => wt.deleteBranch('issue/12'), /still held by issue\/12/);
+
+  assert.equal(git(slot, ['rev-parse', '--abbrev-ref', 'HEAD']), 'issue/12', 'the slot is still on the branch');
+  assert.notEqual(git(repo, ['branch', '--list', 'issue/12']), '', 'and the ref still exists');
+  assert.equal(await wt.ensure('issue/12', 'main'), slot, 'the lease survives the refusal');
+});
+
+test('deleteBranch refuses on the durable half of the lease too, with no in-memory lease at all', async () => {
+  const repo = initRepo();
+  // The restart posture: the maps are empty, and outstanding work on the branch is
+  // the only thing that says the slot is occupied.
+  const held = new Set(['issue/12']);
+  const wt = manager(repo, 3, (b) => held.has(b));
+  const slot = await wt.ensure('issue/12', 'main');
+  await wt.remove('issue/12');
+
+  await assert.rejects(() => wt.deleteBranch('issue/12'), /still held by issue\/12/);
+  assert.equal(git(slot, ['rev-parse', '--abbrev-ref', 'HEAD']), 'issue/12');
+
+  held.delete('issue/12');
+  await wt.deleteBranch('issue/12');
+  assert.equal(git(repo, ['branch', '--list', 'issue/12']), '', 'and it reaps once nothing holds it');
+});
+
+test('the reuse arm is scoped to the pool: the operator’s own checkout is never leased', async () => {
+  const repo = initRepo();
+  const wt = manager(repo, 3);
+  // The obvious thing an operator does to read what an agent wrote — and then the
+  // harness re-dispatches onto that branch, which is the pool's ordinary traffic.
+  commitOn(repo, 'issue/12', 'agent.txt');
+  writeFileSync(join(repo, 'uncommitted.txt'), 'mine');
+
+  // Refused by name rather than leased. Git will not check one branch out twice, so
+  // there is no arm that could have handed this over safely — what the fix buys is
+  // that the operator's checkout is neither taken nor damaged, and that the refusal
+  // says which directory is in the way instead of a bare `fatal:`.
+  await assert.rejects(() => wt.ensure('issue/12', 'main'), /already checked out at .*not a pool slot/);
+
+  assert.ok(existsSync(join(repo, 'uncommitted.txt')), 'the operator’s working copy is untouched');
+  assert.equal(git(repo, ['rev-parse', '--abbrev-ref', 'HEAD']), 'issue/12', 'still on their own branch');
+  assert.ok(!existsSync(join(repo, '.wt', 'slot-0')), 'and nothing was minted for it');
+
+  // Off the branch, and the ordinary ladder takes over: a slot of the pool's own.
+  git(repo, ['checkout', '-q', 'main']);
+  const dir = await wt.ensure('issue/12', 'main');
+  assert.notEqual(dir, repo, 'the repo root is never a slot');
+  assert.ok(dir.startsWith(join(repo, '.wt')), 'a directory under the worktree root is');
 });
 
 test('deleteBranch on a branch that does not exist is a no-op', async () => {

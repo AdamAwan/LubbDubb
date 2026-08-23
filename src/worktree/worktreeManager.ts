@@ -300,8 +300,16 @@ export class WorktreeManager implements Worktrees {
     await this.git(['worktree', 'prune']).catch(() => {});
 
     if (!req.readOnly) {
-      const existing = await this.findExisting(req.name);
+      const existing = await this.findExistingSlot(req.name);
       if (existing) return this.lease(req.name, existing);
+      // Checked out somewhere the pool does not own — in practice the repo's own
+      // main worktree, an operator standing on the branch to read what an agent
+      // did. Refused by name rather than leased: handing that directory over runs
+      // an agent in their working copy, and `git worktree add` would refuse the
+      // slot anyway with a `fatal:` naming a path and no reason. This is the same
+      // refusal with the sentence a person can act on.
+      const outside = await this.findExisting(req.name);
+      if (outside !== null) throw new Error(this.checkedOutElsewhere(req.name, outside));
     }
 
     mkdirSync(this.worktreeRoot, { recursive: true });
@@ -333,10 +341,43 @@ export class WorktreeManager implements Worktrees {
     throw new Error(this.exhausted(req, survey.blocked, report, slots));
   }
 
-  /** Path of an existing worktree checked out on the branch, or null. */
+  /**
+   * Path of **any** registered worktree checked out on the branch, or null — the
+   * repo's own main worktree included.
+   *
+   * The wide reading, which is the one {@link deleteBranch} wants: it is asking
+   * "is this ref checked out anywhere", because that is the question `git branch
+   * -D` is about to ask. {@link acquire} wants the narrow one and uses
+   * {@link findExistingSlot} — handing an agent a directory this can see but the
+   * pool does not own is issue #510.
+   */
   async findExisting(branch: string): Promise<string | null> {
     const entries = await this.registered();
     const match = entries.find((e) => e.branch === branch || e.branch === `refs/heads/${branch}`);
+    if (match && existsSync(match.path)) return match.path;
+    return null;
+  }
+
+  /**
+   * Path of a **pool slot** checked out on the branch, or null — `ensure`'s reuse
+   * arm, scoped the way {@link slots} is.
+   *
+   * The scoping is the whole method. `registered()` includes the repository's own
+   * main worktree, so an operator standing on `issue/12` in their own clone — the
+   * obvious thing to do to read what an agent did — would have the next dispatch
+   * onto that branch handed *their checkout* as its cwd: committed into, switched
+   * under them, and released by a `remove` that deletes nothing, so nothing ever
+   * puts it back. It is not a slot, so the bound, the survey, the eviction, the
+   * salvage and the exhaustion refusal are all blind to it as well.
+   *
+   * {@link deleteBranch}'s `repoRoot` guard was the only thing standing between the
+   * fleet and that checkout, and it guards the wrong end.
+   */
+  private async findExistingSlot(branch: string): Promise<string | null> {
+    const entries = await this.registered();
+    const match = entries.find(
+      (e) => isUnder(this.worktreeRoot, e.path) && (e.branch === branch || e.branch === `refs/heads/${branch}`),
+    );
     if (match && existsSync(match.path)) return match.path;
     return null;
   }
@@ -377,10 +418,36 @@ export class WorktreeManager implements Worktrees {
    *
    * A branch that is not there is a no-op rather than a failure: the reap's question
    * is whether the ref is gone, and both answers satisfy it.
+   *
+   * **The lease is asked first, and a held slot is refused rather than damaged.**
+   * This is the one `Worktrees` method that mutates a slot, and it is not a
+   * hand-out, which is presumably how it escaped the rule that the lease is never
+   * reached past. Its caller's guard — `reapableBranches` skipping a branch with an
+   * active task — is the *durable* half of the lease and only that half, so it
+   * evaporates the instant a task settles, while the agent's process is still
+   * sitting in the directory until `reaped` fires. Detaching and freeing the slot in
+   * that window hands a live process's tree to the next branch, which then wipes it
+   * `git clean -ffdx`; on Windows it is the `EBUSY`-forever wedge. A throw is what
+   * the caller already handles: `BranchReapDesk` records it and moves on **without**
+   * writing the `branch_reaps` row, so the reap — local and remote both — is retried
+   * next pulse. One pulse held is the same trade the active-task guard already makes.
    */
   async deleteBranch(branch: string): Promise<void> {
-    await this.remove(branch);
     const holding = await this.findExisting(branch);
+    if (holding !== null && isUnder(this.worktreeRoot, holding)) {
+      // Both halves, for the reason {@link holder} states: this run's own lease
+      // covers the settle→reaped window the durable one cannot, and `pool.held`
+      // covers the restart the in-memory one cannot.
+      const heldBy = this.leaseOn(holding) ?? (this.pool.held(branch) ? branch : null);
+      if (heldBy !== null) {
+        throw new Error(
+          `Cannot reap ${branch}: its slot ${holding} is still held by ${heldBy}, whose process may still be ` +
+            "sitting in that directory. Detaching it now would hand a live agent's tree to the next branch. " +
+            'The reap is retried on the next pulse.',
+        );
+      }
+    }
+    await this.remove(branch);
     if (holding !== null && holding !== resolve(this.repoRoot)) await runGit(holding, ['switch', '--detach']);
     if (!(await this.branchExists(branch))) return;
     await this.git(['branch', '-D', branch]);
@@ -760,6 +827,26 @@ export class WorktreeManager implements Worktrees {
       if (!taken.has(dir)) return dir;
     }
     return null;
+  }
+
+  /**
+   * Why a branch the pool does not hold cannot be leased — a checkout outside
+   * `worktreeRoot` standing on it.
+   *
+   * Written out because the alternative readings are both worse: leasing it runs an
+   * agent in a directory the pool cannot count, evict, wipe or reclaim (issue
+   * #510), and letting `git worktree add` refuse gives a `fatal:` that names a path
+   * and nothing else. The executor records this as a rejected dispatch, and the
+   * dispatch is retried on the next pulse — so the whole fix is the operator
+   * switching their own checkout off the branch.
+   */
+  private checkedOutElsewhere(branch: string, path: string): string {
+    return (
+      `Cannot lease a worktree for ${branch}: it is already checked out at ${path}, which is not a pool slot ` +
+      `(the pool is ${this.worktreeRoot}). Git refuses to check one branch out twice, and this checkout is not ` +
+      `the harness's to switch — it is most likely the repository's own working copy. Switch it to another ` +
+      `branch and the dispatch goes through on the next pulse.`
+    );
   }
 
   /**

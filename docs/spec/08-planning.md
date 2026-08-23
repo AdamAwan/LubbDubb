@@ -402,13 +402,23 @@ readiness then decides when the ask becomes actionable, exactly as it does for a
 `blocked`, with `declinedStepReason` on the row. **Not `concluded`**: concluding it would make
 `partSettled` answer true and release every dependent waiting on the thing that was refused — a plan
 completing on work nobody did. The dependents stay `pending`, the goal page draws the part under
-**Held** with the reason on it, and the way out is Replan, on the plan sheet. Nothing escalates: the
-operator is the one who declined, and the button is in front of them.
+**Held** with the reason on it, and the way out is Replan, on the plan sheet. Nothing escalates for the
+decline itself: the operator is the one who declined, and the button is in front of them. What *does*
+ask is a decline that leaves other work stranded behind it — see [the wedge](#the-ref-collision-guard)
+below, which is a question about the plan rather than about the refusal.
 
 That makes a declined step the **second** thing that can block a part, beside the ref collision. The
 readiness pass is still not one of them — it answers `pending` or `ready` and never `blocked` — and
 each blocking reading states its own reason from its own pure function, so a part is never left
 claiming a collision that has been resolved or a refusal that was withdrawn.
+
+**Which of the two blocked a part is carried on the row**, as `plan_parts.blocked_by`
+(`collision | declined`), written by the reconciler beside the reason and cleared with it. It is on the
+row rather than re-derived because the two blockers now have different consequences and the reconciler
+is the only thing that knows which it wrote: a reader sniffing `blocked_reason`'s prose to tell them
+apart would be one rewording away from escalating the operator's own refusal back at them. Null is
+*unattributed* — every blocked row on a database from before the column — and counts toward the wedge
+the way it did when there was nothing to count.
 
 `concluded` is **not** a kind of retirement. `retired` means "dropped by an amendment before anything
 was started", which `partHasWork` enforces; a concluded part did its work and found there was nothing
@@ -816,12 +826,28 @@ to unplanned pickup. The plan sits there, nothing is dispatched, and nothing say
 it, kept separate because they are two different jobs (`src/plans/planWedge.ts`), and the way _out_ is
 Replan — which is the way out of every plan that is wrong for any other reason too:
 
-- **Noticing** — `planIsWedged(parts)`: every _live_ part blocked, not any. The collision blocks them
-  together or not at all, so a mixture is a plan still making progress. [Rule `plan-blocked`](05-dispatcher.md#the-rules-in-evaluation-order) escalates it once, deduped on an open
+- **Noticing** — `planIsWedged(parts)`: something blocked, and **nothing moving**. It judges movement
+  rather than blocked-ness, and the reason is that the two blockers behave differently. It read "every
+  live part blocked" while the collision was the only one — a collision blocks them together or not at
+  all, so a mixture was a plan still making progress — and that reading broke in both directions once
+  a decline could block one part alone. It escalated a one-part plan whose only part was a step the
+  operator had just refused; and it *missed* a real wedge as soon as one sibling had settled, since a
+  merged part is not a blocked one and `every` then said no. `[merged, blocked, pending]` is the
+  ordinary shape of that, and it stalled the goal permanently with nothing in "Needs you": `plan-part`
+  finds no `ready` part, `rollUpPlanStatus` keeps the plan `active` so `issue-assess` skips it, and the
+  route stays `parts` so `issue-pickup` skips it too. A `ready` part counts as moving even when it is a
+  **human** part, since the bench is where that one is visible
+  ([05](05-dispatcher.md)). And a plan blocked **only** by declines asks nothing, matching the
+  paragraph above: what makes it a question is an **unfinished** part nobody refused waiting behind one
+  somebody did — `liveParts` keeps merged and concluded rows, so "live" and "still to do" are not the
+  same set, and counting a finished part among the stuck ones is what the old reading did in reverse. [Rule `plan-blocked`](05-dispatcher.md#the-rules-in-evaluation-order) escalates it once, deduped on an open
   escalation for `issue:<n>:plan` **and** a recent executed one, exactly as rule `pr-ci-blocked` is. No agent is
   dispatched, because none could help. Only `active` plans: an unapproved one is already in front of
   a human, with the same fact in the ask. `wedgedPlanPrompt(issueNumber, issue, parts, openPrs)`
-  quotes the parts' stored reason and **names any open PR for the issue that no part claims** — its
+  quotes the blocked parts' stored reasons — all of them, since two declines name two different steps —
+  and words its way out for the blocker that is actually there: "clear what is blocking the parts" is
+  offered only when something clearable is blocking them, because a decline is not a branch and
+  clearing reaches nothing. It **names any open PR for the issue that no part claims** — its
   number, title and branch, and that it must be merged or abandoned before the branch can go. It is
   the same `unclaimedIssuePrs` the approval warning uses, private to the module with two callers,
   because approval can be days behind the moment the operator is standing in front of the wedge, and
