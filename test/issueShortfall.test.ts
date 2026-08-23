@@ -606,6 +606,7 @@ function partRow(): PlanPart {
     prNumber: 41,
     status: 'in_review',
     blockedReason: null,
+    blockedBy: null,
     taskId: null,
     createdAt: NOW,
     updatedAt: NOW,

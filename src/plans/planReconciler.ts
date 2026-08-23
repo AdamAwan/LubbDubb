@@ -2,7 +2,7 @@ import type { ErrorRecorder } from '../errorLog.js';
 import type { BranchPresence, GitObserver } from '../git/gitObserver.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
-import type { Plan, PlanPart, PullRequest, TaskSummary, WorldSnapshot } from '../types.js';
+import type { Plan, PlanPart, PlanPartBlocker, PullRequest, TaskSummary, WorldSnapshot } from '../types.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
 import { renderPlanComment } from './planComment.js';
 import {
@@ -189,8 +189,14 @@ export class PlanReconciler {
         : refused
           ? declinedStepReason(part.title)
           : null;
-      if (status !== part.status || blockedReason !== part.blockedReason)
-        next.set(part.slug, { ...next.get(part.slug), status, blockedReason });
+      // Which blocker, beside the sentence about it. `planIsWedged` escalates a
+      // collision and must not escalate a decline, and the reconciler is the one
+      // place that knows which it just wrote — a reader re-deriving it from the
+      // prose would be one rewording away from putting the operator's own refusal
+      // back in front of them. → `docs/spec/08-planning.md`
+      const blockedBy: PlanPartBlocker | null = collision ? 'collision' : refused ? 'declined' : null;
+      if (status !== part.status || blockedReason !== part.blockedReason || blockedBy !== part.blockedBy)
+        next.set(part.slug, { ...next.get(part.slug), status, blockedReason, blockedBy });
     }
 
     let changed = false;

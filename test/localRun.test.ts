@@ -559,6 +559,7 @@ function part(over: Partial<PlanPart> & { slug: string; seq: number }): PlanPart
     prNumber: null,
     status: 'pending',
     blockedReason: null,
+    blockedBy: null,
     taskId: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',

@@ -8,6 +8,7 @@ import type {
   PlanEvidence,
   PlanNarrative,
   PlanPart,
+  PlanPartBlocker,
   PlanPartInput,
   PlanRevision,
   PlanStatus,
@@ -45,6 +46,12 @@ export const PLAN_COLUMNS: ColumnMigrations = {
     outcome_ref: 'TEXT',
     outcome_summary: 'TEXT',
     blocked_reason: 'TEXT',
+    /**
+     * Which blocker — see {@link PlanPart.blockedBy}. Null on an older database's
+     * standing blocked row, and that is the safe reading: an unattributed block
+     * counts toward the wedge exactly as it did before this column existed.
+     */
+    blocked_by: 'TEXT',
   },
   // `plan_revisions` is a brand-new table, so `CREATE TABLE IF NOT EXISTS` is the
   // whole migration and it needs no entry. That is true *once*: a column added to
@@ -254,6 +261,7 @@ export class PlanStore {
         // allowed to change, so an amendment re-declaring a part leaves it alone —
         // except across the un-retirement above, where the status it explains is gone.
         blockedReason: prev?.status === 'retired' ? null : (prev?.blockedReason ?? null),
+        blockedBy: prev?.status === 'retired' ? null : (prev?.blockedBy ?? null),
         taskId: prev?.taskId ?? null,
         createdAt: prev?.createdAt ?? ts,
         updatedAt: ts,
@@ -273,16 +281,17 @@ export class PlanStore {
       `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, touches, rationale, acceptance,
          acceptance_met, size, expected_kind, profile,
          outcome_kind, outcome_ref, outcome_summary, depends_on, branch, pr_number, status, blocked_reason,
-         task_id, created_at, updated_at)
+         blocked_by, task_id, created_at, updated_at)
        VALUES (@id, @planId, @slug, @seq, @title, @scope, @touches, @rationale, @acceptance,
          @acceptanceMet, @size, @expectedKind, @profile,
          @outcomeKind, @outcomeRef, @outcomeSummary, @dependsOn, @branch, @prNumber, @status, @blockedReason,
-         @taskId, @createdAt, @updatedAt)
+         @blockedBy, @taskId, @createdAt, @updatedAt)
        ON CONFLICT(plan_id, slug) DO UPDATE SET seq=excluded.seq, title=excluded.title, scope=excluded.scope,
          touches=excluded.touches, rationale=excluded.rationale, acceptance=excluded.acceptance,
          size=excluded.size, expected_kind=excluded.expected_kind, profile=excluded.profile,
          depends_on=excluded.depends_on, status=excluded.status,
-         blocked_reason=excluded.blocked_reason, updated_at=excluded.updated_at`,
+         blocked_reason=excluded.blocked_reason, blocked_by=excluded.blocked_by,
+         updated_at=excluded.updated_at`,
     );
     const insertAll = this.ctx.db.transaction((all: PlanPart[]) => {
       for (const p of all)
@@ -336,7 +345,7 @@ export class PlanStore {
     this.ctx.db
       .prepare(
         `UPDATE plan_parts SET status=@status, branch=@branch, pr_number=@prNumber, task_id=@taskId,
-           blocked_reason=@blockedReason, updated_at=@updatedAt WHERE id=@id`,
+           blocked_reason=@blockedReason, blocked_by=@blockedBy, updated_at=@updatedAt WHERE id=@id`,
       )
       .run({
         id: next.id,
@@ -345,6 +354,7 @@ export class PlanStore {
         prNumber: next.prNumber,
         taskId: next.taskId,
         blockedReason: next.blockedReason,
+        blockedBy: next.blockedBy,
         updatedAt: next.updatedAt,
       });
     return next;
@@ -440,7 +450,7 @@ export class PlanStore {
     const result = this.ctx.db
       .prepare(
         `UPDATE plan_parts SET status='concluded', outcome_kind='human', outcome_summary=?, blocked_reason=NULL,
-           updated_at=? WHERE id=? AND status IN ('pending','ready','blocked')`,
+           blocked_by=NULL, updated_at=? WHERE id=? AND status IN ('pending','ready','blocked')`,
       )
       .run(summary, this.ctx.now(), id);
     if (result.changes === 0) return null;
@@ -574,10 +584,10 @@ export function backfillWholePlanParts(db: Database.Database, now: string): void
   const insert = db.prepare(
     `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, touches, rationale, acceptance,
        acceptance_met, size, expected_kind, profile, outcome_kind, outcome_ref, outcome_summary,
-       depends_on, branch, pr_number, status, blocked_reason, task_id, created_at, updated_at)
+       depends_on, branch, pr_number, status, blocked_reason, blocked_by, task_id, created_at, updated_at)
      VALUES (@id, @planId, @slug, 1, @title, @scope, '[]', NULL, NULL,
        '[]', NULL, NULL, NULL, NULL, NULL, NULL,
-       '[]', @branch, NULL, @status, NULL, NULL, @at, @at)`,
+       '[]', @branch, NULL, @status, NULL, NULL, NULL, @at, @at)`,
   );
   for (const plan of orphans) {
     const issueNumber = Number(/^issue:(\d+)$/.exec(plan.origin_ref)?.[1]);
@@ -660,6 +670,7 @@ interface PlanPartRow {
   pr_number: number | null;
   status: string;
   blocked_reason: string | null | undefined;
+  blocked_by: string | null | undefined;
   task_id: string | null;
   created_at: string;
   updated_at: string;
@@ -712,6 +723,7 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
     prNumber: r.pr_number,
     status: r.status as PlanPart['status'],
     blockedReason: r.blocked_reason ?? null,
+    blockedBy: partBlockerOf(r.blocked_by),
     taskId: r.task_id,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -738,6 +750,17 @@ function partOutcomeKindOf(raw: string | null | undefined): PartOutcomeKind | nu
 /** Narrowed for {@link partOutcomeKindOf}'s reason — absent on older databases, and hand-editable. */
 function partSizeOf(raw: string | null | undefined): PartSize | null {
   return raw === 's' || raw === 'm' || raw === 'l' ? raw : null;
+}
+
+/**
+ * Narrowed for {@link partOutcomeKindOf}'s reason, and the null it degrades to is
+ * the reading a database from before the column has: *blocked, attribution
+ * unstated*. {@link planIsWedged} counts one toward the wedge exactly as it did
+ * when there was nothing to count — an unattributed block is the pre-column
+ * behaviour, which is the direction that keeps a real collision escalating.
+ */
+function partBlockerOf(raw: string | null | undefined): PlanPartBlocker | null {
+  return raw === 'collision' || raw === 'declined' ? raw : null;
 }
 
 function parseDependsOn(raw: string): string[] {

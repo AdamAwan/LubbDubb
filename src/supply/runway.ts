@@ -826,7 +826,30 @@ function capitalise(s: string): string {
  */
 type RunwayStep =
   | { kind: 'file'; title: string; detail: string }
-  | { kind: 'settle'; taskId: string; status: 'done'; resolution: string };
+  | { kind: 'settle'; taskId: string; status: 'done'; resolution: string }
+  /** A row **this desk** settled, standing again under the same wording. */
+  | { kind: 'reopen'; taskId: string; detail: string };
+
+/**
+ * The mark that says a settlement was the desk's own and not an answer.
+ *
+ * Every resolution {@link runwayPass} writes starts with it, and the same function
+ * is the only thing that reads it back — writer and reader are twenty lines apart,
+ * which is the whole of why identifying a settlement by its sentence is safe here
+ * and would not be across a module boundary.
+ *
+ * It exists because `status: 'done'` cannot tell the two apart. The desk settles
+ * its own rows on every state change, so without a mark the *first* pass through a
+ * state spends that wording for the life of the deployment: `starved → healthy →
+ * starved` files nothing the second time, and the fleet goes quiet with nothing
+ * saying so — the exact failure this module exists to break.
+ */
+const DESK_SETTLED = 'Settled by the harness — ';
+
+/** Did the desk settle this row itself, rather than a person answering it? */
+function deskSettled(task: HumanTask): boolean {
+  return (task.resolution ?? '').startsWith(DESK_SETTLED);
+}
 
 /**
  * What this pulse owes: at most one open `supply` row, wearing the current
@@ -840,9 +863,12 @@ type RunwayStep =
  * one obligatory. Leaving both would put two rows describing one fleet on the
  * bench.
  *
- * A row an operator has already answered is not re-filed: `recordHumanTask` would
- * refresh its detail rather than reopen it, so the settled ones are what the
- * `answered` check below reads.
+ * A row an operator has already **answered** is not re-filed, and that clause is
+ * scoped to the operator: the desk settles its own rows on every state change, and
+ * a superseded row is not an answer to anything. Told apart by {@link DESK_SETTLED},
+ * a row the desk settled is **reopened** when its wording comes round again rather
+ * than left standing as spent — `recordHumanTask` cannot do it, since its dedup
+ * ignores status and would refresh the settled row's detail and leave it `done`.
  */
 export function runwayPass(input: {
   reading: RunwayReading;
@@ -863,9 +889,10 @@ export function runwayPass(input: {
       taskId: row.id,
       status: 'done',
       resolution:
-        wanted === null
+        DESK_SETTLED +
+        (wanted === null
           ? `the queue recovered — ${input.reading.detail}`
-          : `superseded: ${input.reading.headline.toLowerCase()}`,
+          : `superseded: ${input.reading.headline.toLowerCase()}`),
     });
   }
   if (wanted === null) return steps;
@@ -873,8 +900,15 @@ export function runwayPass(input: {
   // the figures, which is what keeps a standing row current, so file it again.
   // Answered already, under this wording: leave it alone. The operator has been
   // told, and being told twice is the failure this module is most able to cause.
-  if (input.existing.some((t) => t.status !== 'open' && t.title === wanted)) return steps;
-  steps.push({ kind: 'file', title: wanted, detail: input.reading.detail });
+  const settled = input.existing.filter((t) => t.status !== 'open' && t.title === wanted);
+  if (settled.some((t) => !deskSettled(t))) return steps;
+  // Settled only by this desk, and the state has come round again. Reopening the
+  // row is what `recordHumanTask` cannot do — its dedup ignores status, so filing
+  // over it would refresh the detail and leave it `done`, which is this bug from
+  // underneath even with the guard above removed.
+  const mine = settled[0];
+  if (mine) steps.push({ kind: 'reopen', taskId: mine.id, detail: input.reading.detail });
+  else steps.push({ kind: 'file', title: wanted, detail: input.reading.detail });
   return steps;
 }
 

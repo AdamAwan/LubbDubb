@@ -78,6 +78,7 @@ function partRow(): PlanPart {
     prNumber: null,
     status: 'ready',
     blockedReason: null,
+    blockedBy: null,
     taskId: null,
     createdAt: 'then',
     updatedAt: 'now',

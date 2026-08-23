@@ -163,6 +163,7 @@ function demoPr(seed: OpenPrSeed): OpenPullRequest {
 type PartSeed = Omit<
   PlanPart,
   | 'blockedReason'
+  | 'blockedBy'
   | 'expectedKind'
   | 'outcomeKind'
   | 'outcomeRef'
@@ -188,6 +189,7 @@ function demoPart(seed: PartSeed): PlanPartView {
     outcomeRef: null,
     outcomeSummary: null,
     blockedReason: null,
+    blockedBy: null,
     ...seed,
   };
   return {

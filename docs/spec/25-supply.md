@@ -270,6 +270,24 @@ A row the operator has already **answered** is not raised again under the same w
 standing under the same wording _is_ re-filed, so `recordHumanTask`'s refresh keeps its figures
 current without moving its id.
 
+**The desk's own settlements are not answers**, and the clause above is scoped to the operator for
+that reason. The desk settles its rows on every state change, and a superseded row is `status: 'done'`
+exactly like an answered one — so reading "settled" as "answered" turns _exactly one open row_ into
+_at most one row, ever_: the first time the fleet passes through a state that wording is spent, and
+`starved → healthy → starved` files nothing the second time. Every deployment would get one starvation
+warning and one dry warning in its life, and after that the fleet goes quiet with nothing saying so,
+which is the failure the module exists to break. So the desk marks its own settlements, tells them
+apart from an operator's, and **reopens** its own row when the state comes round again. Reopening is a
+write of its own (`Store.reopenHumanTask`) rather than a second file: `recordHumanTask`'s dedup ignores
+status deliberately — an agent repeating itself must not resurrect a task a person declined — so filing
+over a settled row refreshes its detail and leaves it `done`, which is this same bug from underneath.
+A row the operator has **dismissed** off the bench is reopened along with the rest, and `dismissed_at`
+clears with it: dismissing says "I have read this record and am done with it", which is true of the
+episode it recorded and says nothing about the next one, and leaving it hidden is the same silence
+again. `created_at` moves with it: the bench draws newest-first under a hundred-row cap, so a reopened
+row wearing the timestamp of an episode that ended months ago is open in the store and off the end of
+the wire.
+
 ### Hysteresis
 
 The condition oscillates hard: a goal completes, the queue dips, one issue gets watched, it recovers.

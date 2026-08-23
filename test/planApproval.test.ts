@@ -18,7 +18,7 @@ import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { PLAN_FILE, parsePlanDocument } from '../src/plans/planDocument.js';
 import { Store } from '../src/store/store.js';
 import type { DispatchVerdict } from '../src/dispatcher/dispatchCooldown.js';
-import type { Agent, Plan, PlanPart, Proposal } from '../src/types.js';
+import type { Agent, Issue, Plan, PlanPart, Proposal } from '../src/types.js';
 import { gitRepo } from './support/gitRepo.js';
 
 // -- the pure half -----------------------------------------------------------
@@ -616,6 +616,7 @@ function partRow(slug: string, seq: number): PlanPart {
     prNumber: null,
     status: 'ready',
     blockedReason: null,
+    blockedBy: null,
     taskId: null,
     createdAt: '2026-07-25T00:00:00.000Z',
     updatedAt: '2026-07-25T00:00:00.000Z',
@@ -696,20 +697,90 @@ function submitPlan(system: System, originRef: string, slugs: string[]): void {
 
 // -- the wedge: a plan approved onto a branch its parts cannot sit beneath -----
 
-test('planIsWedged needs every live part blocked, and ignores retired ones', () => {
-  const blocked = (slug: string, seq: number): PlanPart => ({
-    ...partRow(slug, seq),
-    status: 'blocked',
-    blockedReason: refCollisionReason(12, { local: true, remote: false }),
-  });
-  assert.equal(planIsWedged([blocked('a', 1), blocked('b', 2)]), true);
-  // One part still moving is a plan still making progress. The collision blocks
-  // every part together or none, so a mixture is never the wedge.
-  assert.equal(planIsWedged([blocked('a', 1), partRow('b', 2)]), false);
-  assert.equal(planIsWedged([{ ...partRow('a', 1), status: 'retired' }, blocked('b', 2)]), true);
+const collided = (slug: string, seq: number): PlanPart => ({
+  ...partRow(slug, seq),
+  status: 'blocked',
+  blockedReason: refCollisionReason(12, { local: true, remote: false }),
+  blockedBy: 'collision',
+});
+
+const refused = (slug: string, seq: number): PlanPart => ({
+  ...partRow(slug, seq),
+  status: 'blocked',
+  blockedReason: `"The ${slug} part" is a step for a person, and it was declined.`,
+  blockedBy: 'declined',
+});
+
+test('planIsWedged needs something blocked and nothing moving, and ignores retired ones', () => {
+  assert.equal(planIsWedged([collided('a', 1), collided('b', 2)]), true);
+  // One part still moving is a plan still making progress — a `ready` part is
+  // dispatchable, and a `ready` *human* part is visible on the bench.
+  assert.equal(planIsWedged([collided('a', 1), partRow('b', 2)]), false);
+  assert.equal(planIsWedged([collided('a', 1), { ...partRow('b', 2), status: 'dispatched' }]), false);
+  assert.equal(planIsWedged([{ ...partRow('a', 1), status: 'retired' }, collided('b', 2)]), true);
   // Empty is not wedged but empty — a different thing, left to say so itself.
   assert.equal(planIsWedged([]), false);
   assert.equal(planIsWedged([{ ...partRow('a', 1), status: 'retired' }]), false);
+  // Nothing blocked at all is not a wedge however stuck the plan looks: a `pending`
+  // part is waiting on a sibling, which is the scheduler working.
+  assert.equal(planIsWedged([{ ...partRow('a', 1), status: 'pending' }]), false);
+});
+
+test('a settled sibling no longer hides a wedge, and a decline no longer invents one', () => {
+  // Direction B: `[merged, blocked, pending]`. `every` said no because a merged part
+  // is not a blocked one, and the goal then stalled for good with nothing in
+  // "Needs you" — no `ready` part for `plan-part`, the plan still `active` so
+  // `issue-assess` skips it, the route still `parts` so `issue-pickup` skips it.
+  const merged: PlanPart = { ...partRow('build', 1), status: 'merged' };
+  assert.equal(planIsWedged([merged, collided('sign', 2), { ...partRow('ship', 3), status: 'pending' }]), true);
+
+  // Direction A: the operator declined the only step. Specs 08 and 13 both say
+  // nothing escalates for a decline — the button is in front of the person who
+  // pressed it — and there is nothing else stuck behind it.
+  assert.equal(planIsWedged([refused('sign', 1)]), false);
+  assert.equal(planIsWedged([merged, refused('sign', 2)]), false);
+
+  // But a decline that strands work nobody refused is a plan going nowhere, and
+  // that is the question `plan-blocked` exists to ask.
+  assert.equal(planIsWedged([merged, refused('sign', 2), { ...partRow('ship', 3), status: 'pending' }]), true);
+
+  // A blocked row from before `blocked_by` existed is unattributed, and counts —
+  // the pre-column behaviour, which is the direction that keeps a collision
+  // escalating rather than silently dropping it.
+  const unattributed: PlanPart = { ...collided('a', 1), blockedBy: null };
+  assert.equal(planIsWedged([unattributed]), true);
+});
+
+test('the wedge prompt offers clearing a branch only when a branch is what is blocking', () => {
+  const issue: Issue = {
+    id: 'i12',
+    number: 12,
+    title: 'Big thing',
+    state: 'open',
+    labels: [],
+    body: '',
+    linkedPrNumber: null,
+  };
+  const collision = wedgedPlanPrompt(12, issue, [collided('a', 1), collided('b', 2)], []);
+  assert.match(collision, /every one of its parts is blocked/);
+  assert.match(collision, /clear what is blocking the parts/);
+
+  const decline = wedgedPlanPrompt(
+    12,
+    issue,
+    [{ ...partRow('build', 1), status: 'merged' }, refused('sign', 2), { ...partRow('ship', 3), status: 'pending' }],
+    [],
+  );
+  assert.match(decline, /1 of its 2 unfinished parts is blocked and nothing else is moving/);
+  assert.doesNotMatch(decline, /clear what is blocking/, 'clearing reaches nothing a decline holds');
+  assert.doesNotMatch(decline, /branch is free/, 'and there is no branch problem to describe');
+  assert.match(decline, /the block is a step you declined/);
+  assert.match(decline, /Replan/);
+
+  // Two declines name two different steps, so both sentences are quoted.
+  const two = wedgedPlanPrompt(12, issue, [refused('sign', 1), refused('ack', 2), partRow('ship', 3)], []);
+  assert.match(two, /"The sign part"/);
+  assert.match(two, /"The ack part"/);
 });
 
 test('the approval ask names an open PR that would belong to no part', () => {
