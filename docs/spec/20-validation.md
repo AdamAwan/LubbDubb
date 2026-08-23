@@ -520,6 +520,12 @@ ask — a second inbox item would put the same question to the same person twice
 required `note`. **The check is not an argument**: it is on the origin, one check per dispatch, so
 which check a report concerns is decided by what the agent was sent to do.
 
+A `passed` or `failed` report is refused when the check's `amendedAt` is after the dispatch began. The
+desktop channel compares it with the claim's `claimedAt`; the fleet compares it with the task's
+dispatch timestamp. The refusal clears the desktop session's held check, quotes the amendment note,
+and tells the caller to re-read and claim the current wording. A `handback` is still accepted: it is
+an account of not reaching the environment, not a reading against either version of the procedure.
+
 The origin fence is the **narrow** kind, and deliberately unlike `validation_amend`'s. An amendment
 is a note about how a goal gets tested and the agent best placed to write one is whoever is looking
 at the code; a result is a reading, cast about a procedure somebody was asked to carry out, and it is
@@ -611,9 +617,10 @@ guarantee has to be that there is no code path from a desktop connection to `con
 not that a list is currently short.
 
 `validation_report` exists in both channels and is two tools sharing one schema, one set of store
-writes and one hand-back wording. What differs is where the check comes from: the fleet's from the
-origin it was dispatched on, the desktop's from what the session claimed. Both are the same rule —
-**which check a report is about is settled before the report rather than by it.**
+writes, one hand-back wording and one refusal of a result against wording amended since the run began.
+What differs is where the check comes from: the fleet's from the origin it was dispatched on, the
+desktop's from what the session claimed. Both are the same rule — **which check a report is about is
+settled before the report rather than by it.**
 
 ### The claim
 
@@ -635,7 +642,10 @@ A claim is released three ways, and needs all three:
 
 An **amendment that rewords a claimed check releases the claim**, by exactly the predicate that drops
 the result and the hand-over. Somebody is running that check right now against wording that no longer
-exists, and the amber band is now in front of the operator saying so.
+exists, and the amber band is now in front of the operator saying so. A result from that run is refused
+by `validation_report` rather than clearing the band: the caller must read and claim the new wording
+before reporting `passed` or `failed`. A `handback` remains valid, because it records only that the
+environment could not be reached and no reading was taken.
 
 ### What a desktop reading is worth
 

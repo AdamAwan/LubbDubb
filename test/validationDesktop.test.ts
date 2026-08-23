@@ -539,6 +539,47 @@ test('an amendment that withdraws a claimed check ends the run rather than half-
   }
 });
 
+test('a reworded claimed check refuses a result, clears the session, and keeps the band', async () => {
+  const system = build();
+  const planId = planWith(system, [CHECKS[0]!]);
+  const { server } = await desk(system);
+  try {
+    await call(server, 'c1', 'validation_claim', { issue: 12, check: 'A' });
+    const claimedAt = byId(system, planId, 'csv-opens').claimedAt;
+    assert.ok(claimedAt);
+    while (new Date().toISOString() <= claimedAt) await new Promise((resolve) => setTimeout(resolve, 1));
+    system.store.amendValidation(planId, {
+      note: 'the export moved to the Downloads page',
+      checks: [
+        {
+          ...CHECKS[0]!,
+          do: 'Open Downloads and open the exported file.',
+          uses: [],
+          covers: [],
+          fleetCandidate: false,
+          candidateWhy: null,
+        },
+      ],
+      withdraw: [],
+      resources: [],
+    });
+
+    const reported = await call(server, 'c1', 'validation_report', { result: 'passed', note: 'it opened' });
+    assert.ok(reported.isError);
+    assert.match(reported.text, /reworded by an amendment/);
+    assert.match(reported.text, /the export moved to the Downloads page/);
+    assert.match(reported.text, /Re-read.*claim it again/);
+    const again = await call(server, 'c1', 'validation_report', { result: 'passed', note: 'it opened' });
+    assert.match(again.text, /have not claimed a check/, 'the stale desktop run is no longer held');
+    const after = byId(system, planId, 'csv-opens');
+    assert.equal(after.state, 'unrun');
+    assert.notEqual(after.amendedAt, null, 'the band survives the refused stale reading');
+  } finally {
+    await server.close();
+    system.store.close();
+  }
+});
+
 // -- the fleet gate ----------------------------------------------------------
 
 function issue(): Issue {
