@@ -463,6 +463,21 @@ finished one, and the harness would be waiting where nobody could see it. It is 
 Needs-you row: with a gate on the first environment, every delivered goal is held for as long as a
 deploy takes, and a rail carrying all of them would bury the asks somebody can actually answer.
 
+**So a held goal gets a row _because_ it is held**, and that is the second arm of the goal-set rule —
+one `GoalReachView` per goal that has landed something, has a merge nothing could attribute, **or is
+held right now, or released from one**. Without the third clause the rule and the sentence above contradict each other on
+exactly the goals that matter: a goal delivered with nothing merged has landed nothing to fold, so it
+ships no row, and both the hold sentence and the release control live inside a card an empty list
+stops drawing. Those are the goals the escape hatch was written for — a docs change, a config change,
+work that shipped from another repository — so the control was absent precisely where it was needed,
+and the goal sat delivered with both obligations withheld, reading as finished. The row draws
+`absent 0/0` on each configured environment, which is the honest fraction: nothing has landed, of
+nothing. A **released** goal is kept for the same reason as a held one: the `Not waiting on an
+environment` line and its note are drawn in that card too, so a release that dropped the row would
+lift the gate and erase the only account of why. The arm widens **only** the cockpit's fold — `EnvironmentDesk` passes no `held` set, so
+nothing about which arrivals are recorded or commented on moves — and it cannot bury anything, since a
+hold is non-null only while a goal is delivered, unshortfalled and not yet gated through.
+
 The goal row in the overview carries the **furthest environment** holding the goal whole — last
 declared, not best, since the operator's list is the order the work travels in. `partial` and
 `unknown` are not furthest anything: a chip reading `liveUs` for half a feature is the boolean rollup

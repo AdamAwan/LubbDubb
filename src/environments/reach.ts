@@ -102,6 +102,16 @@ export function goalReach(input: GoalReachInput): GoalEnvironmentReach[] {
  * is a rule about the **goal set**, and the parts a goal still owes do not widen it:
  * a plan whose first part has yet to merge has been nowhere, and the row would say
  * `0/4` on every environment from the day it was cut.
+ *
+ * The one exception is `held` — a goal a gate is holding **right now**. It earns a
+ * row because it is held, not because it has been anywhere, and without the arm the
+ * hold is drawn nowhere: the sentence and the release control both live inside the
+ * card the empty list stops drawing. The goals a gate's escape hatch exists for are
+ * exactly the ones with nothing to land (a docs change, a config change, work that
+ * shipped from another repository), so the drop landed on precisely the goals the
+ * control was written for — held forever, with both obligations withheld and the
+ * goal reading as finished (#514). It cannot bury anything: a hold is non-null only
+ * while a goal is delivered, ungated-through and unshortfalled.
  */
 export function allGoalReach(input: {
   landings: GoalLanding[];
@@ -113,13 +123,23 @@ export function allGoalReach(input: {
   /** Every plan's parts, whichever plan they belong to; filtered per goal below. */
   parts: PlanPart[];
   environments: EnvironmentConfig[];
+  /**
+   * Goals an environment gate is holding right now, plus the ones an operator has
+   * released from one — a row each, whatever they have landed. Both draw only
+   * inside the card, so both need the row to exist.
+   */
+  held?: ReadonlySet<string>;
 }): { goalRef: string; environments: GoalEnvironmentReach[] }[] {
   const goalRefs = new Set(input.landings.map((l) => l.goalRef));
   for (const node of input.nodes) if (node.kind === 'issue') goalRefs.add(node.ref);
+  // A held goal need not be in either — a goal delivered by hand with nothing
+  // merged is held by the gate and known to neither the landings nor a PR node.
+  for (const goalRef of input.held ?? []) goalRefs.add(goalRef);
   const out: { goalRef: string; environments: GoalEnvironmentReach[] }[] = [];
   for (const goalRef of goalRefs) {
     const unattributed = unattributedMerges(goalRef, input.nodes, input.landed);
-    if (unattributed === 0 && !input.landings.some((l) => l.goalRef === goalRef)) continue;
+    if (unattributed === 0 && !input.landings.some((l) => l.goalRef === goalRef) && input.held?.has(goalRef) !== true)
+      continue;
     const outstanding = partsOwed(goalRef, input.plans, input.parts);
     out.push({ goalRef, environments: goalReach({ ...input, goalRef, unattributed, outstanding }) });
   }
