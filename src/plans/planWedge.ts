@@ -32,21 +32,36 @@ import { liveParts, partBranch } from './parts.js';
  */
 
 /**
- * Is every live part of this plan blocked?
+ * Is every live part of this plan blocked **by the ref collision**?
  *
- * The plan is then doing nothing and will go on doing nothing until someone acts:
- * the only thing that blocks a part is the ref collision (`PlanReconciler.readiness`
- * answers `pending` or `ready` and never `blocked`), and a collision is a branch
+ * The plan is then doing nothing and will go on doing nothing until someone acts,
+ * and the someone is not the person who last touched it: a collision is a branch
  * that will not disappear on its own.
  *
+ * **It reads `blockedBy`, not `status`**, and that is the whole of the predicate.
+ * A declined human step blocks a part too, and a plan cut entirely into human
+ * steps — a console-only change, or one whose code parts have merged — is then
+ * every-live-part-blocked on the first decline. Read off the status, this answered
+ * true and rule `plan-blocked` escalated the operator's own refusal back to them,
+ * as a card about a git branch a plan with no branches does not have, offering a
+ * control ("clear what is blocking the parts") that does not exist for it. Nothing
+ * errored: an escalation is the harness working.
+ *
+ * A row the reconciler has not revisited since the column was added carries null
+ * and is therefore not a wedge. That costs at most one pulse — the reconciler
+ * fills it on the next pass over a still-blocked part — and it is the safe
+ * direction, since the failure it replaces was escalating something that is not
+ * one.
+ *
  * **Every** live part, not any: one blocked part among several is a plan still
- * making progress, and the collision blocks all of them together or none. A plan
- * with no live parts is not wedged but empty, which is a different thing and is
- * left to say so itself.
+ * making progress, and the collision blocks all of them together or none — which
+ * is reasoning that holds for the collision alone, and is the second reason this
+ * cannot be asked of `blocked` in general. A plan with no live parts is not wedged
+ * but empty, which is a different thing and is left to say so itself.
  */
 export function planIsWedged(parts: PlanPart[]): boolean {
   const live = liveParts(parts);
-  return live.length > 0 && live.every((p) => p.status === 'blocked');
+  return live.length > 0 && live.every((p) => p.status === 'blocked' && p.blockedBy === 'ref-collision');
 }
 
 /**
@@ -57,9 +72,14 @@ export function planIsWedged(parts: PlanPart[]): boolean {
  * once and read everywhere, and a second rendering here would be the drift that
  * predicate exists to prevent. Null when the rows carry none (an older database),
  * and the caller then says less rather than inventing it.
+ *
+ * Scoped to the collision, because both callers' prose is written about branches:
+ * {@link wedgedPlanPrompt} follows it with "clear what is blocking the parts" and
+ * "somewhere the branch is free", and a declined step's reason quoted into that
+ * frame is two false sentences about a part that has no branch at all.
  */
 function wedgeReason(parts: PlanPart[]): string | null {
-  return liveParts(parts).find((p) => p.blockedReason)?.blockedReason ?? null;
+  return liveParts(parts).find((p) => p.blockedBy === 'ref-collision' && p.blockedReason)?.blockedReason ?? null;
 }
 
 /**

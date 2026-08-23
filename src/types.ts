@@ -2611,6 +2611,12 @@ export type PartSize = 's' | 'm' | 'l';
 type PlanPartStatus = 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'concluded' | 'blocked' | 'retired';
 
 /**
+ * What put a part in `blocked` — the two readings `PlanReconciler` has, kept apart
+ * because they have different owners and different exits.
+ */
+type PlanPartBlocker = 'ref-collision' | 'declined-step';
+
+/**
  * What a part produces. `code` ends in a merged pull request, which the world
  * observes; `report` and `determination` end in a record already durable in the
  * store the moment the agent writes it — which is why the plan reconciler's fold
@@ -2704,6 +2710,19 @@ export interface PlanPart {
    * branch, no PR and no agent to explain it.
    */
   blockedReason: string | null;
+  /**
+   * **What** blocks it, as against {@link PlanPart.blockedReason}'s prose — written
+   * and cleared with the status, and null on an older row the reconciler has not
+   * revisited yet (which reads as neither, deliberately: see `planIsWedged`).
+   *
+   * Two readings produce `blocked`, and folding them together is what let rule
+   * `plan-blocked` escalate an operator's own refusal back to them as a git
+   * problem. A collision is a fact about the world somebody else can clear; a
+   * declined step is a decision the operator already made, and its only exit is
+   * Replan. Nothing reading `status === 'blocked'` alone can tell them apart, and
+   * both look identical on the row.
+   */
+  blockedBy?: PlanPartBlocker | null;
   taskId: string | null;
   createdAt: string;
   updatedAt: string;

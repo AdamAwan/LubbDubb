@@ -601,6 +601,7 @@ CREATE TABLE IF NOT EXISTS plan_parts (
   pr_number   INTEGER,
   status      TEXT NOT NULL,          -- pending | ready | dispatched | in_review | merged | concluded | blocked | retired
   blocked_reason TEXT,                -- why, while status is blocked; cleared with it
+  blocked_by  TEXT,                   -- ref-collision | declined-step; what blocks it, as against why
   task_id     TEXT,
   created_at  TEXT NOT NULL,
   updated_at  TEXT NOT NULL,

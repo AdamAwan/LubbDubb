@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { PlanReconciler, refCollisionReason } from '../src/plans/planReconciler.js';
+import { planIsWedged } from '../src/plans/planWedge.js';
+import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { renderPlanComment } from '../src/plans/planComment.js';
 import { DEFAULT_PLANNING } from '../src/plans/planning.js';
 import { bySlug, partBase } from '../src/plans/parts.js';
@@ -364,6 +366,104 @@ test('the collision guard is scoped to the parts git is actually asked to cut', 
   const reasons = new Map(h.store.listPlanParts(h.planId).map((p) => [p.slug, p.blockedReason]));
   assert.equal(reasons.get('flip'), null);
   assert.equal(reasons.get('code'), refCollisionReason(12, { local: true, remote: false }));
+});
+
+/** The funnel switched on, as `RuleDispatcher` takes it. */
+const PLANNING_ON = { ...DEFAULT_PLANNING, enabled: true };
+
+/** Decline the backing task for a human part, exactly as the bench's control does. */
+function decline(h: Harness, slug: string): void {
+  const part = h.store.listPlanParts(h.planId).find((p) => p.slug === slug)!;
+  const { task } = h.store.recordHumanTask({
+    title: `Do ${slug}`,
+    detail: null,
+    agentId: null,
+    taskId: null,
+    originRef: `${h.planId}:${slug}`,
+    partId: part.id,
+    kind: 'ask',
+  });
+  h.store.settleHumanTask(task.id, 'declined', 'not doing this');
+}
+
+test('a declined step blocks its part without wedging the plan', async () => {
+  // #552: `planIsWedged` answered "every live part is blocked" and knew nothing
+  // about *why*, so a plan whose only live parts are declined human steps read as
+  // wedged — and rule `plan-blocked` escalated the operator's own refusal back to
+  // them, as a card about a git branch a plan with no branches does not have.
+  const h = humanOnlySetup();
+  decline(h, 'flip');
+  await h.reconciler.reconcile(world());
+
+  const parts = h.store.listPlanParts(h.planId);
+  assert.deepEqual(statuses(h), [['flip', 'blocked']], 'the decline still stops the part');
+  assert.equal(parts[0]?.blockedBy, 'declined-step');
+  assert.match(parts[0]?.blockedReason ?? '', /is a step for a person, and it was declined/);
+  assert.equal(planIsWedged(parts), false, 'the operator declined it; there is nothing for them to clear');
+  // The route it points at is the one that exists. "Abandon the decomposition to
+  // work it whole" was removed, so naming it handed out a control that is not there.
+  assert.match(parts[0]?.blockedReason ?? '', /Replan the issue from the plan sheet/);
+  assert.doesNotMatch(parts[0]?.blockedReason ?? '', /abandon the decomposition/i);
+
+  // And the coupling, which is the half a predicate test cannot see: the real
+  // dispatcher over the rows the real reconciler just wrote.
+  const result = await new RuleDispatcher({}, {}, undefined, 'main', PLANNING_ON).decide({
+    world: {
+      takenAt: '2026-07-25T12:00:00.000Z',
+      pullRequests: [],
+      issues: [{ id: 'i12', number: 12, title: 'Turn on the thing', body: '', labels: [], state: 'open' }],
+    } as unknown as WorldSnapshot,
+    tasks: [],
+    agents: [],
+    openEscalations: [],
+    queuedJobs: [],
+    agentHeadroom: 5,
+    recentDecisions: [],
+    plans: [h.store.getPlan(h.planId)!],
+    planParts: parts,
+  });
+  assert.deepEqual(
+    result.actions.filter((a) => a.rule === 'plan-blocked'),
+    [],
+    'the operator declined it — putting the refusal back in "Needs you" is asking them to answer themselves',
+  );
+});
+
+test('the collision still wedges, and a declined step among collisions does not unwedge it', async () => {
+  // The other direction, on rows a real reconciler wrote: `blockedBy` is what the
+  // predicate reads, so it has to be right for the case the escalation exists for.
+  const h = humanAndCodeSetup();
+  h.git.setPresence('issue/12', { local: true });
+  decline(h, 'flip');
+  await h.reconciler.reconcile(world());
+
+  const parts = h.store.listPlanParts(h.planId);
+  const by = new Map(parts.map((p) => [p.slug, p.blockedBy]));
+  assert.deepEqual(statuses(h), [
+    ['flip', 'blocked'],
+    ['code', 'blocked'],
+  ]);
+  assert.equal(by.get('flip'), 'declined-step');
+  assert.equal(by.get('code'), 'ref-collision');
+  // Every live part is blocked and one of them is not the collision, so this is not
+  // the thing "clear the branch and they start on the next pulse" is true of.
+  assert.equal(planIsWedged(parts), false);
+});
+
+test('a row blocked before `blocked_by` existed is filled on the next pulse', async () => {
+  // The column is additive with no backfill, and the transition test includes it so
+  // a still-blocked row does not sit null for as long as it stays blocked — which
+  // is exactly as long as the predicate needs it.
+  const h = humanAndCodeSetup();
+  h.git.setPresence('issue/12', { local: true });
+  await h.reconciler.reconcile(world());
+  const code = h.store.listPlanParts(h.planId).find((p) => p.slug === 'code')!;
+  h.store.updatePlanPart(code.id, { blockedBy: null });
+  assert.equal(h.store.listPlanParts(h.planId).find((p) => p.slug === 'code')?.blockedBy, null);
+
+  await h.reconciler.reconcile(world());
+
+  assert.equal(h.store.listPlanParts(h.planId).find((p) => p.slug === 'code')?.blockedBy, 'ref-collision');
 });
 
 test('a plan of nothing but human steps records no collision and is not wedged', async () => {

@@ -700,6 +700,7 @@ test('planIsWedged needs every live part blocked, and ignores retired ones', () 
   const blocked = (slug: string, seq: number): PlanPart => ({
     ...partRow(slug, seq),
     status: 'blocked',
+    blockedBy: 'ref-collision',
     blockedReason: refCollisionReason(12, { local: true, remote: false }),
   });
   assert.equal(planIsWedged([blocked('a', 1), blocked('b', 2)]), true);
@@ -760,6 +761,7 @@ test('a blocked decomposition warns before it is approved, quoting the stored re
     {
       ...partRow('a', 1),
       status: 'blocked' as const,
+      blockedBy: 'ref-collision' as const,
       blockedReason: refCollisionReason(12, { local: true, remote: false }),
     },
   ];
@@ -792,8 +794,8 @@ test('the wedge escalation names the PR holding the branch', () => {
   };
   const reason = refCollisionReason(12, { local: false, remote: true });
   const parts = [
-    { ...partRow('a', 1), status: 'blocked' as const, blockedReason: reason },
-    { ...partRow('b', 2), status: 'blocked' as const, blockedReason: reason },
+    { ...partRow('a', 1), status: 'blocked' as const, blockedBy: 'ref-collision' as const, blockedReason: reason },
+    { ...partRow('b', 2), status: 'blocked' as const, blockedBy: 'ref-collision' as const, blockedReason: reason },
   ];
 
   const prompt = wedgedPlanPrompt(12, issue, parts, [pr]);
