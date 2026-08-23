@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { Store } from '../src/store/store.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { PlanReconciler, refCollisionReason } from '../src/plans/planReconciler.js';
+import { planIsWedged } from '../src/plans/planWedge.js';
+import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
 import { renderPlanComment } from '../src/plans/planComment.js';
 import { DEFAULT_PLANNING } from '../src/plans/planning.js';
 import { bySlug, partBase } from '../src/plans/parts.js';
@@ -364,6 +366,83 @@ test('the collision guard is scoped to the parts git is actually asked to cut', 
   const reasons = new Map(h.store.listPlanParts(h.planId).map((p) => [p.slug, p.blockedReason]));
   assert.equal(reasons.get('flip'), null);
   assert.equal(reasons.get('code'), refCollisionReason(12, { local: true, remote: false }));
+});
+
+/** The funnel switched on, as `RuleDispatcher` takes it. */
+const PLANNING_ON = { ...DEFAULT_PLANNING, enabled: true };
+
+/** Decline the backing task for a human part, exactly as the bench's control does. */
+function decline(h: Harness, slug: string): void {
+  const part = h.store.listPlanParts(h.planId).find((p) => p.slug === slug)!;
+  const { task } = h.store.recordHumanTask({
+    title: `Do ${slug}`,
+    detail: null,
+    agentId: null,
+    taskId: null,
+    originRef: `${h.planId}:${slug}`,
+    partId: part.id,
+    kind: 'ask',
+  });
+  h.store.settleHumanTask(task.id, 'declined', 'not doing this');
+}
+
+test('a declined step blocks its part without wedging the plan', async () => {
+  // #552/#505, end to end: the predicate half is asserted in `planApproval.test.ts`
+  // over hand-built rows. What only this seam can say is that a *real* reconciler
+  // writes the attribution the predicate reads, and that the *real* dispatcher then
+  // declines to put the operator's own refusal back in "Needs you".
+  const h = humanOnlySetup();
+  decline(h, 'flip');
+  await h.reconciler.reconcile(world());
+
+  const parts = h.store.listPlanParts(h.planId);
+  assert.deepEqual(statuses(h), [['flip', 'blocked']], 'the decline still stops the part');
+  assert.equal(parts[0]?.blockedBy, 'declined');
+  assert.match(parts[0]?.blockedReason ?? '', /is a step for a person, and it was declined/);
+  assert.equal(planIsWedged(parts), false, 'the operator declined it, and nothing is stranded behind it');
+
+  // And the coupling, which is the half a predicate test cannot see: the real
+  // dispatcher over the rows the real reconciler just wrote.
+  const result = await new RuleDispatcher({}, {}, undefined, 'main', PLANNING_ON).decide({
+    world: {
+      takenAt: '2026-07-25T12:00:00.000Z',
+      pullRequests: [],
+      issues: [{ id: 'i12', number: 12, title: 'Turn on the thing', body: '', labels: [], state: 'open' }],
+    } as unknown as WorldSnapshot,
+    tasks: [],
+    agents: [],
+    openEscalations: [],
+    queuedJobs: [],
+    agentHeadroom: 5,
+    recentDecisions: [],
+    plans: [h.store.getPlan(h.planId)!],
+    planParts: parts,
+  });
+  assert.deepEqual(
+    result.actions.filter((a) => a.rule === 'plan-blocked'),
+    [],
+    'the operator declined it — putting the refusal back in "Needs you" is asking them to answer themselves',
+  );
+});
+
+test('a decline beside a collision is still a wedge — the branch is what clearing reaches', async () => {
+  // The other direction, on rows a real reconciler wrote. Both parts are blocked and
+  // one of the blocks *is* clearable, so this is the case rule `plan-blocked` exists
+  // for; a decline sitting beside it does not make the branch go away.
+  const h = humanAndCodeSetup();
+  h.git.setPresence('issue/12', { local: true });
+  decline(h, 'flip');
+  await h.reconciler.reconcile(world());
+
+  const parts = h.store.listPlanParts(h.planId);
+  const by = new Map(parts.map((p) => [p.slug, p.blockedBy]));
+  assert.deepEqual(statuses(h), [
+    ['flip', 'blocked'],
+    ['code', 'blocked'],
+  ]);
+  assert.equal(by.get('flip'), 'declined');
+  assert.equal(by.get('code'), 'collision');
+  assert.equal(planIsWedged(parts), true);
 });
 
 test('a plan of nothing but human steps records no collision and is not wedged', async () => {

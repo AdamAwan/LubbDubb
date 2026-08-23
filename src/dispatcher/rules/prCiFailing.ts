@@ -13,7 +13,7 @@ import {
 } from '../../ci/ciPolicy.js';
 import { mergeProposalRef, proposalHold } from '../../proposals/proposals.js';
 import { dispatchVerdict } from '../dispatchCooldown.js';
-import { DISPATCH_PIPELINE, type DispatchRuleId } from '../rules.js';
+import { concernUrgency, type DispatchRuleId } from '../rules.js';
 import {
   prCommentOrigin,
   prCommentsOrigin,
@@ -37,8 +37,9 @@ import { isActive, type RawAction, type StageContext } from './context.js';
  * `pr-base-update` and `pr-merge-ready` have no stage of their own. They are not
  * independent: the four concern rules feed one per-PR list whose *top* entry
  * alone becomes a dispatch, because one agent works a branch. Their relative
- * urgency is their order in {@link DISPATCH_PIPELINE} — see
- * {@link concernUrgency}, which reads it rather than restating it.
+ * urgency is their order in the pipeline — see {@link concernUrgency}, which
+ * reads it rather than restating it, and which `prAttention`'s lens asks the same
+ * question of so the two cannot end up on different orders.
  *
  * The registration is under `pr-ci-failing` rather than under whichever of the
  * six the pipeline currently puts first, and that is deliberate: they are
@@ -646,21 +647,6 @@ function ciDispatchReason(prNumber: number, verdict: CiVerdict): string {
 function gateDispatchReason(prNumber: number, verdict: CiWatchVerdict): string {
   const names = verdict.watched.map((m) => m.name).join(', ');
   return `PR #${prNumber} has a check waiting on an action (${names}) and no agent is on it.`;
-}
-
-/**
- * Cross-PR rank of a concern class: review comment beats CI beats base-update.
- *
- * Read off the pipeline rather than restated here. It used to be three hardcoded
- * numbers that happened to agree with the order the concerns are pushed in and
- * with the registry's own numbering — three copies of one fact, which is the
- * arrangement the rule numbers rotted under. A rule with no pipeline position
- * sorts last rather than throwing: this only orders concerns, and a wrong order
- * is a worse failure than a late one.
- */
-function concernUrgency(rule: DispatchRuleId): number {
-  const at = DISPATCH_PIPELINE.findIndex((r) => r.id === rule);
-  return at === -1 ? Number.MAX_SAFE_INTEGER : at;
 }
 
 /** The agent state of a PR's branch: a running agent to notify, busy (hold), or free (dispatch). */

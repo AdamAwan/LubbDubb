@@ -387,15 +387,15 @@ folding them would make one of the two a lie every time they disagree.
 
 ### The arms, in the order they are checked
 
-| Status      | Court                         | When                                                                                                                                                                                                                                                                                                  |
-| ----------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `done`      | nobody — off the board        | `prState(pr) !== 'open'`.                                                                                                                                                                                                                                                                             |
-| `unwatched` | nobody — nobody opted it in   | `!isPrWatched(pr, watchLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire.                                                                                                                                  |
-| `you`       | yours                         | A **pending proposal** whose ref names this PR; an agent on the branch **parked waiting**; a failing check the **CI policy holds** (rule `pr-ci-blocked` handed it to a human); or a concern whose **attempt cap is spent** (rule `cooldown-escalate` did).                                           |
-| `harness`   | the harness's                 | An agent is **running or queued** on the branch; an unstaffed **concern** (rules `pr-ci-failing`/`pr-ci-gate`/`pr-base-update`/`pr-review-comment`) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window. |
-| `settled`   | nobody — you already answered | Merge-ready, and a **rejection still stands** on `pr:<n>:merge`. The reason quotes the note you left.                                                                                                                                                                                                 |
-| `elsewhere` | outside the loop              | Stacked on a PR that has to merge first (naming the inherited CI failure when there is one); CI still running; waiting on review; merge blocked by required checks/reviews.                                                                                                                           |
-| `stalled`   | nobody, and that is the point | Everything else: green, approved, unstaffed, unproposed and still not mergeable by rule `pr-merge-ready`'s reading, so no rule will ever act on it and no human has been asked to. The reasons name what is missing — including the **muted-only** case below.                                        |
+| Status      | Court                         | When                                                                                                                                                                                                                                                                                                                                                                 |
+| ----------- | ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `done`      | nobody — off the board        | `prState(pr) !== 'open'`.                                                                                                                                                                                                                                                                                                                                            |
+| `unwatched` | nobody — nobody opted it in   | `!isPrWatched(pr, watchLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire.                                                                                                                                                                                                 |
+| `you`       | yours                         | A **pending proposal** whose ref names this PR; an agent on the branch **parked waiting**; a concern whose **attempt cap is spent** (rule `cooldown-escalate` did); or a failing check the **CI policy holds** (rule `pr-ci-blocked` handed it to a human) **with no other concern under it** — a held check that is one of two problems is a reason, not the court. |
+| `harness`   | the harness's                 | An agent is **running or queued** on the branch; an unstaffed **concern** (rules `pr-ci-failing`/`pr-ci-gate`/`pr-base-update`/`pr-review-comment`) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window.                                                                |
+| `settled`   | nobody — you already answered | Merge-ready, and a **rejection still stands** on `pr:<n>:merge`. The reason quotes the note you left.                                                                                                                                                                                                                                                                |
+| `elsewhere` | outside the loop              | Stacked on a PR that has to merge first (naming the inherited CI failure when there is one); CI still running; waiting on review; merge blocked by required checks/reviews.                                                                                                                                                                                          |
+| `stalled`   | nobody, and that is the point | Everything else: green, approved, unstaffed, unproposed and still not mergeable by rule `pr-merge-ready`'s reading, so no rule will ever act on it and no human has been asked to. The reasons name what is missing — including the **muted-only** case below.                                                                                                       |
 
 Because the first matching arm wins, the ones below it are moot — a PR with an agent on its branch
 reads `an agent is working this branch` whatever its CI says, which is the answer prose about health
@@ -447,6 +447,19 @@ classified the PR first, and asking a pure function twice is one answer rather t
   saying so instead of promising an agent that will never be sent. Asked after the staffed arm, beside
   the spent attempt cap, because those are the two ways a failing check stops being the harness's
   problem without being fixed.
+
+  **Asked _below_ the concern fold, though, and this is the whole of why it sits there.** `ciNeedsHuman`
+  says there is nothing to dispatch _for the CI failure_ and says nothing at all about the PR's other
+  concerns — rules `pr-review-comment` and `pr-base-update` staff those from the same loop iteration
+  that raised the escalation. Answered above the fold, the arm printed _"so no agent will be sent"_ on
+  the pulse an agent went out, which is the mirror image of the promise it was added to stop, and the
+  denial was in the reason text rather than merely implied. So a held check with a concern under it is
+  carried as a trailing reason — `<checks> failing — held by the CI policy` — behind the concern that
+  is actually being staffed, and the unqualified sentence is kept for the case where it is true: the
+  held check is the only thing outstanding. The shape an operator hits this in is long-lived (an infra
+  gate stays red for as long as it takes a person to chase it), so it is the whole of that span the PR
+  row would otherwise understate.
+
 - **Muted only** (every failure `ignore`d) → falls through to **`stalled`**, and the reason says the
   merge gate still reads CI as failing. Nothing dispatches and nothing escalates, yet rule `pr-merge-ready`'s merge
   test reads the aggregate, so nothing will ever move the PR. The old wording — `CI has not reported`
@@ -498,7 +511,17 @@ pulses changes no decision).
 The concern list and the merge-readiness test are re-derived here from the same predicates rather
 than shared with the dispatcher, which builds prompt-bearing concerns it has no use for — the same
 relationship `issuePickupStatus` has to rule `issue-pickup`. The orders are stated once, above and in
-[05](05-dispatcher.md), for both.
+[05](05-dispatcher.md), for both — and **asked for** once, through `concernUrgency`, rather than
+re-derived: three re-derivations of one ordering is the arrangement the rule numbers rotted under, and
+a lens on the wrong one of them drifts silently, because both readings stay individually plausible.
+
+What re-derivation cannot give itself is a check that the two agree, so `test/prAttention.test.ts`
+sweeps a table of PR shapes — {comment present} × {CI arm} × {`mergeableState`} × {decision history} —
+through **both** `prAttentionStatus` and a real `RuleDispatcher.decide`, asserting that an act on a
+`pr:<n>:*` origin implies `harness` naming that same concern, and an escalation with nothing dispatched
+implies `you`. Every defect this section now describes — the stale order, the origin nothing dispatches,
+the held-check denial printed over a dispatch — was green against both suites' own fixtures and red on
+the first cell of that table.
 
 ## Watching
 
@@ -603,8 +626,16 @@ its own warrant a code agent, in urgency order:
 
 Then, by the branch's agent state: notify a running agent, hold for a busy one, or make the most
 urgent concern a dispatch candidate. Candidates from all PRs are ranked together — an operator-flagged
-`urgent` CI check first, then concern class (comment > CI > base), then PR number — before the
+`urgent` CI check first, then concern class (comment > CI > gate > base), then PR number — before the
 headroom cut.
+
+That class ranking is `concernUrgency` (`src/dispatcher/rules.ts`), which **reads the order off
+`DISPATCH_PIPELINE`** rather than restating it, and it lives beside the pipeline because it has two
+callers: the rule, and `prAttentionStatus`'s concern fold. The lens used to encode the order in the
+order its pushes happened to appear in, and so was left on the pre-reorder one when comments moved to
+the front — it led an operator with CI while the agent went out for the review, and, because the top
+concern also decides which cooldown budget is read, flipped the court outright once the two origins'
+histories diverged. One order, asked for in both places, is what keeps the list above true of both.
 
 **Comments lead, and that is the whole ordering decision.** A review is the one PR signal that can
 invalidate the diff rather than report something wrong around it: a reviewer asking for a different
@@ -631,7 +662,13 @@ Two things fall out, and both are load-bearing:
   thread's body) so such an override still renders something true. Same rule as `ciFailureNote`.
 - **De-dup stays per thread, because dispatch granularity and notification granularity are different
   questions.** The dispatch origin `pr:<n>:comments` names the whole review; `pr:<n>:comment:<id>`
-  names one thread and is what `respond_to_agent` de-dup keys on. Keyed on the origin alone, a
+  names one thread and is what `respond_to_agent` de-dup keys on — **and `prAttentionStatus` reads
+  `pr:<n>:comments` for the same reason the dispatcher writes it**, importing `prCommentsOrigin`
+  rather than re-typing the string. The lens keyed its review concern on the per-thread ref instead,
+  which is not a dispatch origin at all: it asked the cooldown ledger about a key no decision row ever
+  carries, found zero attempts on every review, and so promised an agent on a review whose attempt cap
+  rule `cooldown-escalate` had already handed to a human. One origin means one attempt cap means one
+  reading of whose turn it is. Keyed on the origin alone, a
   reviewer's fourth comment would be swallowed by the origin the first three already claimed — the
   signal an operator sends while reviewing an agent's work as it goes. `PrConcern.signals` carries the
   thread refs; `dispatch_code_agent.signalRefs` records the ones a dispatch already put in an agent's

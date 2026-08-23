@@ -11,6 +11,9 @@ import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
+import { RuleDispatcher } from '../src/dispatcher/ruleDispatcher.js';
+import type { CiPolicy } from '../src/ci/ciPolicy.js';
+import type { ValidatedAction } from '../src/dispatcher/actions.js';
 import type { Decision, Proposal, PullRequest, Task, WorldEvent } from '../src/types.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
@@ -244,11 +247,73 @@ test('unstaffed concerns are the harness’s, in rule order, with the rest liste
   });
   const verdict = prAttentionStatus(messy, ctx());
   assert.equal(verdict.status, 'harness');
+  // Comments lead — the pipeline's order, and the concern the dispatcher is
+  // actually sending an agent for. The lens used to lead with CI (#562).
   assert.deepEqual(verdict.reasons, [
-    'CI is failing — an agent will be dispatched',
+    'unresolved comment from reviewer — an agent will be dispatched',
+    'CI is failing',
     'behind main',
-    'unresolved comment from reviewer',
   ]);
+});
+
+test('the review concern reads the origin the dispatcher writes, so a spent cap reads as yours', () => {
+  // #563: keyed on `pr:7:comment:c1` — the notify de-dup ref, which no
+  // `dispatch_code_agent` row ever carries — the lens found zero attempts on every
+  // review and promised an agent on a PR a human had already been handed.
+  const reviewed = pr({ unresolvedComments: [{ id: 'c1', author: 'nina', body: 'nit', handled: false }] });
+  const capped = prAttentionStatus(
+    reviewed,
+    ctx({
+      recentDecisions: [
+        attempt('pr:7:comments', ago(90)),
+        attempt('pr:7:comments', ago(60)),
+        attempt('pr:7:comments', ago(30)),
+      ],
+    }),
+  );
+  assert.deepEqual(capped, {
+    status: 'you',
+    reasons: ['unresolved comment from nina — the attempt cap is spent, escalated to a human'],
+  });
+  const cooling = prAttentionStatus(reviewed, ctx({ recentDecisions: [attempt('pr:7:comments', ago(2))] }));
+  assert.deepEqual(cooling, { status: 'harness', reasons: ['unresolved comment from nina — on cooldown, retrying'] });
+});
+
+test('every open thread is one concern, because one agent answers the whole review', () => {
+  const reviewed = pr({
+    unresolvedComments: [
+      { id: 'c1', author: 'nina', body: 'nit', handled: false },
+      { id: 'c2', author: 'nina', body: 'again', handled: false },
+      { id: 'c3', author: 'omar', body: 'and this', handled: false },
+      { id: 'c4', author: 'omar', body: 'done with', handled: true },
+    ],
+  });
+  assert.deepEqual(prAttentionStatus(reviewed, ctx()), {
+    status: 'harness',
+    reasons: ['3 unresolved comments from nina, omar — an agent will be dispatched'],
+  });
+});
+
+test('a held check denies an agent only when there is no other concern to staff', () => {
+  // #564: the arm answered above the concern fold, so "no agent will be sent" was
+  // printed on the pulse rule `pr-base-update` sent one.
+  const policy = { checks: [{ match: 'infra', onFailure: 'escalate' as const }] };
+  const held = ctx({ ci: policy });
+  const conflicted = pr({
+    ciStatus: 'failing',
+    ciChecks: [{ name: 'infra', status: 'failing' }],
+    mergeableState: 'dirty',
+  });
+  assert.deepEqual(prAttentionStatus(conflicted, held), {
+    status: 'harness',
+    reasons: ['conflicts with main — an agent will be dispatched', 'infra failing — held by the CI policy'],
+  });
+  // Nothing else outstanding and the unqualified sentence is true again.
+  const alone = pr({ ciStatus: 'failing', ciChecks: [{ name: 'infra', status: 'failing' }] });
+  assert.deepEqual(prAttentionStatus(alone, held), {
+    status: 'you',
+    reasons: ['infra failing — the CI policy holds it, so no agent will be sent'],
+  });
 });
 
 test('a concern attempted inside the cooldown says so rather than promising an agent', () => {
@@ -639,4 +704,99 @@ test('folding one PR does not disturb another still waiting', () => {
   assert.equal(store.reviewWaits().get(7), seven);
   assert.equal(store.reviewWaits().get(8), undefined);
   store.close();
+});
+
+// --- the lens beside the dispatcher -----------------------------------------
+
+/**
+ * The cross-check the lens exists for, and the one thing that holds it: a sweep
+ * of PR shapes run through **both** `prAttentionStatus` and a real
+ * `RuleDispatcher.decide`, asserting they name the same concern and the same
+ * court. Every other test in this file drives one side against hand-built
+ * fixtures, which is how #562 (the lens on the pre-reorder urgency order), #563
+ * (the lens reading an origin nothing dispatches) and #564 ("no agent will be
+ * sent" printed on the pulse one went out) all sat green: both halves read
+ * plausibly, and only composing them shows they disagree.
+ */
+const prOrigin = (a: ValidatedAction): string | null => {
+  if ('originRef' in a && typeof a.originRef === 'string' && a.originRef.startsWith('pr:7:')) return a.originRef;
+  if (a.type === 'escalate_to_human') {
+    const ref = (a.context as { originRef?: unknown } | undefined)?.originRef;
+    return typeof ref === 'string' && ref.startsWith('pr:7:') ? ref : null;
+  }
+  return null;
+};
+
+/** What the lens's leading reason must say when the dispatcher acts on this origin. */
+const LABEL_FOR: Record<string, RegExp> = {
+  'pr:7:comments': /^unresolved comments? from /,
+  'pr:7:ci': /^CI is failing/,
+  'pr:7:ci-gate': /waiting on an action/,
+  'pr:7:mergeable': /^(behind|conflicts with) main/,
+};
+
+const CI_ARMS: { name: string; policy: CiPolicy; over: Partial<PullRequest> }[] = [
+  { name: 'green', policy: { checks: [] }, over: {} },
+  { name: 'red-actionable', policy: { checks: [] }, over: { ciStatus: 'failing' } },
+  {
+    name: 'red-escalate',
+    policy: { checks: [{ match: 'infra', onFailure: 'escalate' }] },
+    over: { ciStatus: 'failing', ciChecks: [{ name: 'infra', status: 'failing' }] },
+  },
+  {
+    name: 'red-muted',
+    policy: { checks: [{ match: 'infra', onFailure: 'ignore' }] },
+    over: { ciStatus: 'failing', ciChecks: [{ name: 'infra', status: 'failing' }] },
+  },
+];
+
+test('the lens names the concern the dispatcher acts on, and the court it acts in', async () => {
+  const comment = { id: 'c1', author: 'nina', body: 'nit', handled: false };
+  let checked = 0;
+  for (const arm of CI_ARMS) {
+    for (const comments of [[], [comment]]) {
+      for (const mergeableState of ['clean', 'behind', 'dirty'] as const) {
+        for (const history of [[], ...Object.keys(LABEL_FOR).map((o) => [o])]) {
+          // Three executed attempts is the spent cap; the dispatcher escalates and
+          // the lens must hand the same origin to you.
+          const recentDecisions = history.flatMap((o) => [
+            attempt(o, ago(90)),
+            attempt(o, ago(60)),
+            attempt(o, ago(30)),
+          ]);
+          const subject = pr({ ...arm.over, baseBranch: 'main', mergeableState, unresolvedComments: comments });
+          const lens = prAttentionStatus(subject, ctx({ ci: arm.policy, recentDecisions }));
+          const dispatcher = new RuleDispatcher({}, DEFAULT_COOLDOWN, undefined, 'main', {}, arm.policy);
+          const result = await dispatcher.decide({
+            world: { takenAt: NOW, pullRequests: [subject], issues: [] },
+            tasks: [],
+            agents: [],
+            openEscalations: [],
+            queuedJobs: [],
+            agentHeadroom: 5,
+            recentDecisions,
+          });
+          const acted = result.actions
+            .filter((a) => a.type !== 'escalate_to_human')
+            .map(prOrigin)
+            .filter(Boolean);
+          const escalated = result.actions
+            .filter((a) => a.type === 'escalate_to_human')
+            .map(prOrigin)
+            .filter(Boolean);
+          const where = `${arm.name} comments=${comments.length} ${mergeableState} hist=${history[0] ?? 'fresh'}`;
+          if (acted.length > 0) {
+            assert.equal(lens.status, 'harness', where);
+            assert.match(lens.reasons[0]!, /an agent will be dispatched$/, where);
+            assert.match(lens.reasons[0]!, LABEL_FOR[acted[0]!]!, where);
+          } else if (escalated.length > 0) {
+            assert.equal(lens.status, 'you', where);
+          }
+          checked += 1;
+        }
+      }
+    }
+  }
+  // The sweep is only worth its wall time if it is actually a sweep.
+  assert.equal(checked, 4 * 2 * 3 * 5);
 });
