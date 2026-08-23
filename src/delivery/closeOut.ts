@@ -102,8 +102,10 @@ interface CloseOutInput {
 
 /**
  * What this pulse owes: the tasks to file, and the standing ones the world has
- * settled. Pure, and idempotent by construction — a pass over a world it has
- * already acted on returns nothing.
+ * settled. Pure, and idempotent through `recordHumanTask`'s dedup rather than by
+ * silence — an owed row is re-filed on every pulse, exactly as
+ * {@link validationReadyPass} does it, so the detail states what is outstanding
+ * *now*. Only a settled row is skipped.
  */
 export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
   const byOrigin = new Map(input.existing.map((t) => [t.originRef ?? '', t]));
@@ -122,36 +124,52 @@ export function closeOutPass(input: CloseOutInput): CloseOutStep[] {
     const existing = byOrigin.get(originRef);
     const issue = inWorld.get(originRef);
 
-    if (!existing) {
-      // Nothing to close: the tracker already stopped listing it open, which is
-      // what a GitHub issue a merged "Closes #n" took with it looks like.
-      if (!issue || issue.state === 'closed') continue;
-      // Held, not dropped: the goal is delivered and its ticket is open, but the
-      // work has not reached the environment whose arrival opens this. The
-      // settle arms above still run, so a ticket closed by hand in the meantime
-      // still discharges a row that was already filed.
-      if (input.opened !== null && !input.opened.has(originRef)) continue;
-      // Held for the same reason one step earlier: validation is still somebody's,
-      // and the close is the step after it.
-      if (input.validating.has(originRef)) continue;
-      steps.push({
-        kind: 'file',
-        originRef,
-        title: closeOutTitle(issue.number),
-        detail: closeOutDetail(issue, delivery, input.validation.get(originRef) ?? null),
-      });
+    // Answered. A settled row is never re-filed and never re-settled — the
+    // whole point of an answer is that it is the last thing said about the row.
+    if (existing && existing.status !== 'open') continue;
+
+    // Nothing to close: the tracker already stopped listing it open, which is
+    // what a GitHub issue a merged "Closes #n" took with it looks like. A row
+    // already standing over it discharges.
+    if (issue?.state === 'closed') {
+      if (existing)
+        steps.push({ kind: 'settle', taskId: existing.id, status: 'done', resolution: 'the tracker shows it closed' });
       continue;
     }
-    if (existing.status !== 'open') continue;
-    if (issue?.state === 'closed')
-      steps.push({ kind: 'settle', taskId: existing.id, status: 'done', resolution: 'the tracker shows it closed' });
-    else if (!issue && input.issues.length > 0)
-      steps.push({
-        kind: 'settle',
-        taskId: existing.id,
-        status: 'done',
-        resolution: 'the tracker no longer lists it open',
-      });
+    if (!issue) {
+      // An empty `issues` is a world nobody read — a provider outage, the first
+      // pulse — not a tracker that dropped the item, so it settles nothing.
+      if (existing && input.issues.length > 0)
+        steps.push({
+          kind: 'settle',
+          taskId: existing.id,
+          status: 'done',
+          resolution: 'the tracker no longer lists it open',
+        });
+      continue;
+    }
+
+    // Both gates hold a **new** row only. The goal is delivered and its ticket
+    // is open, but the work has not reached the environment whose arrival opens
+    // this, or validation is still somebody's and the close is the step after
+    // it. Once a row stands, neither un-files it: the settle arms above run
+    // regardless, so a ticket closed by hand in the meantime still discharges.
+    if (!existing) {
+      if (input.opened !== null && !input.opened.has(originRef)) continue;
+      if (input.validating.has(originRef)) continue;
+    }
+
+    // Filed every pulse a row is owed, standing or not. `recordHumanTask` folds
+    // the repeat onto the row it already keyed and rewrites `detail`, which is
+    // the only thing that keeps the validation flag below current — a row filed
+    // while the plan was clear and flagged an hour later would otherwise state,
+    // at the moment an operator closes the ticket, that nothing is outstanding.
+    steps.push({
+      kind: 'file',
+      originRef,
+      title: closeOutTitle(issue.number),
+      detail: closeOutDetail(issue, delivery, input.validation.get(originRef) ?? null),
+    });
   }
 
   // The retraction. An operator who cleared the delivery row put the goal back

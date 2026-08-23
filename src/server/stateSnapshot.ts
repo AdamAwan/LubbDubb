@@ -175,6 +175,10 @@ export function buildStateSnapshot(
   // findings' reason: each row's `originRef` names the work it belongs to, and the
   // panel links it through the same ref map as everything else.
   const humanTasks = store.listHumanTasks();
+  // Every row, capless. The panel takes the feed above; the runway band takes
+  // this, because both of its questions — the debt count and whether a `supply`
+  // notice is standing — are asked of the whole bench.
+  const allHumanTasks = store.listAllHumanTasks();
   // Acts put to a human. Read here for the same reason as findings: a proposal's
   // ref (`pr:42:merge`) names the item its card links to, so it feeds the link
   // map below as well as the cards themselves.
@@ -811,7 +815,11 @@ export function buildStateSnapshot(
     //
     // `standing` is read off the bench rather than assumed: the hysteresis band
     // the card draws has to be the one the desk is actually applying, or the card
-    // reports `healthy` for a queue whose notice is still standing.
+    // reports `healthy` for a queue whose notice is still standing. Off the
+    // *unbounded* read, never the panel's capped feed: `listHumanTasks` is
+    // newest-first with a hundred-row cap, so a hundred rows filed behind a
+    // standing `supply` row push it out of the window and the band silently
+    // starts applying `warnHours` where the desk is applying `clearHours`.
     runway: readRunway({
       policy: config.runway,
       issues: world.issues,
@@ -821,13 +829,13 @@ export function buildStateSnapshot(
       // count, and a hundred-row cap would report "100" to the deployment
       // furthest behind and to the one exactly at the cap alike — and the
       // settled rows are the human holds the median lead time subtracts.
-      humanTasks: store.listAllHumanTasks(),
+      humanTasks: allHumanTasks,
       // The projection, never `listEscalations`: that read is all-time and
       // carries every settled item's transcript tail, and this one is taken on
       // every cockpit refresh.
       escalations: store.listEscalationSpans(),
       cap: control.cap,
-      standing: humanTasks.some((t) => t.kind === 'supply' && t.status === 'open'),
+      standing: allHumanTasks.some((t) => t.kind === 'supply' && t.status === 'open'),
     }),
     worldEvents,
     // Recorded failures (cycle exceptions, provider outages, agent crashes,

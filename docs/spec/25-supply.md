@@ -42,14 +42,14 @@ arithmetic is sound; the input is not.
 So each completed run's calendar span has its **human holds** subtracted. What is left is how long
 the goal occupied the fleet, which is what the drain is a drain of.
 
-| Hold                | Evidence                                              |
-| ------------------- | ----------------------------------------------------- |
-| Close-out           | `human_tasks` `close_out`, `created_at → resolved_at` |
-| Validation          | `human_tasks` `validate`, same span                   |
-| A step for a person | `human_tasks` `ask` **with a `part_id`**              |
+| Hold                | Evidence                                               |
+| ------------------- | ------------------------------------------------------ |
+| Close-out           | `human_tasks` `close_out`, `created_at → resolved_at`  |
+| Validation          | `human_tasks` `validate`, same span                    |
+| A step for a person | `human_tasks` `ask` **with a `part_id`**               |
 | The profile gate    | `issue_assays`, `decided_at → profile_answered_at`\*\* |
-| A standing delivery | `issue_deliveries`, `decided_at →` the end of the run |
-| An escalation       | `escalations`, `created_at → answered_at`             |
+| A standing delivery | `issue_deliveries`, `decided_at →` the end of the run  |
+| An escalation       | `escalations`, `created_at → answered_at`              |
 
 **The tail stays in.** This subtracts human-wait, never work. A CI fix, a review thread and a
 write-up are all still inside the span, which is exactly why agent durations remain the wrong
@@ -302,7 +302,11 @@ hovering. `validateRunwayPolicy` **refuses** a `clearHours` at or below `warnHou
 not fail, it flaps, and a channel that cries wolf is worse than no channel.
 
 The hysteresis needs no stored state. Its one input is whether a `supply` row is standing, which the
-desk reads off the bench and the cockpit reads off the snapshot.
+desk reads off the bench and the cockpit reads off the snapshot — and both must read it off an
+**unbounded** list. `listHumanTasks` is the panel's feed: newest-first, capped at a hundred rows. Ask
+it whether a `supply` row is standing and the answer is right until a hundred rows are filed behind
+that row, at which point the band starts applying `warnHours` while the desk applies `clearHours`,
+and the card reports `healthy` over a row that is still standing.
 
 ## When it stays quiet
 
@@ -330,7 +334,10 @@ happening milliseconds later has already answered.
 The cockpit takes its **own** reading in `buildStateSnapshot` rather than reading a cached one off
 the pulse. A snapshot is served far more often than a cycle runs, and a reading a pulse old would
 show a queue the operator has just topped up as still empty — on exactly the surface they topped it
-up from. The two agree because the lens is one function, not because anything is passed between them.
+up from. The two agree because the lens is one function **and both are handed the same reads**, not
+because anything is passed between them — which makes every input the desk takes off the whole bench
+one the snapshot must take off the whole bench too. `standing` is the one that has to be said out
+loud, since the snapshot holds a capped feed of the same table two lines above it for the panel.
 
 ## In the cockpit
 

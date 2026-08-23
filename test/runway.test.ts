@@ -19,6 +19,7 @@ import { FakeWorldStore } from '../src/integrations/fake/fakeWorld.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { Store } from '../src/store/store.js';
 import { RunwayDesk } from '../src/supply/runwayDesk.js';
 import type { EscalationSpan, HumanTask, Issue, IssueAssay, IssueRun, Plan } from '../src/types.js';
@@ -896,4 +897,121 @@ test('switched off, a pulse files nothing and drains what was standing', async (
   const off = build({ enabled: false });
   await off.harness.runCycle('manual');
   assert.deepEqual(off.store.listHumanTasksOfKind('supply'), []);
+});
+
+/**
+ * The cockpit's band and the desk's bench must apply the *same* hysteresis, and
+ * the only thing that decides which is whether a `supply` row is standing.
+ *
+ * The panel's feed (`listHumanTasks`) is newest-first and capped at a hundred
+ * rows, so asking it that question is right until a hundred rows are filed
+ * behind the standing one — at which point the band silently drops to
+ * `warnHours` while the desk is still applying `clearHours`. It only shows in
+ * the window between the two thresholds, and only on a busy bench, which is why
+ * the fixture builds both deliberately: a runway of 120 minutes, warn at 60 and
+ * clear at 180, is `healthy` read one way and `thin` read the other.
+ */
+test('the band reads a standing supply row off the whole bench, not the hundred-row feed', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-runway-cap-'));
+  const dbPath = join(dir, 'runway.sqlite');
+  const system = buildSystem(
+    loadConfig({
+      auth: { enabled: false } as never,
+      labelPrefix: '',
+      dbPath,
+      agentMode: 'raw',
+      deskRoot: join(dir, 'desk'),
+      worktreeRoot: join(dir, 'wt'),
+      heartbeatIntervalMs: 999_999,
+      maxConcurrentAgents: 2,
+      runway: DEFAULT_RUNWAY,
+    }),
+    {
+      worktrees: new FakeWorktreeManager(),
+      backend: new FakePtyBackend(),
+      gitObserver: new FakeGitObserver(),
+      errorMirror: () => {},
+    },
+  );
+
+  const world = new FakeWorldStore(system.store);
+  const queue = (from: number, to: number): void =>
+    world.mutate((w) => {
+      for (let n = from; n <= to; n += 1)
+        w.issues.push({
+          id: `i${n}`,
+          number: n,
+          title: `Goal ${n}`,
+          body: '',
+          labels: [],
+          state: 'open',
+          linkedPrNumber: null,
+        });
+    });
+
+  // Two goals against two slots: 2 × 40 / 2 = 40 minutes, under `warnHours`.
+  // That is what gets the row onto the bench in the first place.
+  queue(1, 2);
+
+  // The median needs completed runs with a real span, and `recordIssueRun`
+  // stamps the store's clock — so the history is written through a second
+  // handle on the same file whose clock is hand-advanced. Five of them, which
+  // is `minimumRuns`.
+  let clock = Date.parse('2026-08-01T00:00:00.000Z');
+  const history = new Store(dbPath, () => new Date(clock).toISOString());
+  for (let n = 101; n <= 105; n += 1) {
+    const run = {
+      originRef: `issue:${n}`,
+      issueNumber: n,
+      title: `Done ${n}`,
+      body: '',
+      labels: [],
+      linkedPrNumber: null,
+      workItemState: null,
+    };
+    history.recordIssueRun({ ...run, complete: false });
+    clock += 40 * 60_000;
+    history.recordIssueRun({ ...run, complete: true });
+    clock += 60_000;
+  }
+  history.close();
+
+  await system.harness.runCycle('manual');
+  const standing = system.store.listHumanTasksOfKind('supply');
+  assert.equal(standing.length, 1);
+  assert.equal(standing[0]!.status, 'open');
+
+  // A partial recovery, into the band the hysteresis exists for: 6 × 40 / 2 =
+  // 120 minutes, above `warnHours` and below `clearHours`. The desk keeps the
+  // row standing, so the band must keep saying `thin` — this is the reading the
+  // two surfaces have to agree on.
+  queue(3, 6);
+  await system.harness.runCycle('manual');
+  assert.equal(system.store.listHumanTasksOfKind('supply')[0]!.status, 'open');
+  assert.equal(buildStateSnapshot(system).runway.state, 'thin');
+
+  // Now bury it. A fleet doing a close-out and a validation per goal reaches a
+  // hundred rows in a few dozen goals, and the `supply` row stands throughout.
+  for (let n = 0; n < 101; n += 1)
+    system.store.recordHumanTask({
+      title: `Close out ${n}`,
+      detail: 'x',
+      agentId: null,
+      taskId: null,
+      originRef: `issue:${1000 + n}`,
+      kind: 'close_out',
+    });
+  assert.equal(
+    system.store.listHumanTasks().some((t) => t.kind === 'supply' && t.status === 'open'),
+    false,
+    'the capped feed has lost the standing row — which is the whole hazard',
+  );
+
+  // Nothing about the queue changed, so neither reading should have. The desk
+  // still holds the row; the band must still say `thin`.
+  assert.equal(system.store.listHumanTasksOfKind('supply')[0]!.status, 'open');
+  assert.equal(buildStateSnapshot(system).runway.state, 'thin');
+
+  await system.harness.runCycle('manual');
+  assert.equal(system.store.listHumanTasksOfKind('supply')[0]!.status, 'open');
 });

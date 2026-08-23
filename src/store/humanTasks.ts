@@ -171,9 +171,12 @@ export class HumanTaskStore {
    * and for its reason — one row per goal ever delivered, and a count bound would
    * hide the oldest standing obligation rather than the least important one.
    *
-   * Reading the rows back is also why the sweep does not simply call
-   * `recordHumanTask` each pulse and lean on its dedup: that refreshes
-   * `updated_at`, and the panel it feeds is newest-first.
+   * The sweeps read the rows back *and* re-file the owed ones through
+   * `recordHumanTask` each pulse, which is not a contradiction: the read is how a
+   * settled row is recognised and a retraction found, and the re-file is how the
+   * standing row's `detail` stays current. Leaning on the dedup costs nothing on
+   * the panel — a repeat refreshes `updated_at`, and {@link listHumanTasks} orders
+   * on `created_at`, so a refreshed row does not jump the feed.
    */
   listHumanTasksOfKind(kind: HumanTaskKind): HumanTask[] {
     const rows = this.ctx.db.prepare(`SELECT * FROM human_tasks WHERE kind=?`).all(kind) as HumanTaskRow[];
