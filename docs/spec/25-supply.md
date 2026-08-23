@@ -42,14 +42,14 @@ arithmetic is sound; the input is not.
 So each completed run's calendar span has its **human holds** subtracted. What is left is how long
 the goal occupied the fleet, which is what the drain is a drain of.
 
-| Hold                | Evidence                                              |
-| ------------------- | ----------------------------------------------------- |
-| Close-out           | `human_tasks` `close_out`, `created_at → resolved_at` |
-| Validation          | `human_tasks` `validate`, same span                   |
-| A step for a person | `human_tasks` `ask` **with a `part_id`**              |
+| Hold                | Evidence                                               |
+| ------------------- | ------------------------------------------------------ |
+| Close-out           | `human_tasks` `close_out`, `created_at → resolved_at`  |
+| Validation          | `human_tasks` `validate`, same span                    |
+| A step for a person | `human_tasks` `ask` **with a `part_id`**               |
 | The profile gate    | `issue_assays`, `decided_at → profile_answered_at`\*\* |
-| A standing delivery | `issue_deliveries`, `decided_at →` the end of the run |
-| An escalation       | `escalations`, `created_at → answered_at`             |
+| A standing delivery | `issue_deliveries`, `decided_at →` the end of the run  |
+| An escalation       | `escalations`, `created_at → answered_at`              |
 
 **The tail stays in.** This subtracts human-wait, never work. A CI fix, a review thread and a
 write-up are all still inside the span, which is exactly why agent durations remain the wrong
