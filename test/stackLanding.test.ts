@@ -10,7 +10,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 import type { PullRequest } from '../src/types.js';
-import { landingReadiness, rungFault, settleLandings } from '../src/stacks/landing.js';
+import { landedCount, landingReadiness, rungFault, settleLandings } from '../src/stacks/landing.js';
 
 /**
  * "Land the stack": one click that authorizes a whole chain, and then keeps
@@ -314,6 +314,68 @@ test('pending checks wait; they do not stop a chain that is already landing', ()
     settleLandings([standing], { pullRequests: [], closedPullRequests: [rung(1, 'main', { state: 'closed' })] })[0]
       ?.reason,
     '#1 is no longer open and nothing says it merged',
+  );
+});
+
+test('a merged rung ageing out of the closed-PR window does not stop the chain', () => {
+  // `closedPullRequests` is a window, and a chain tall enough to be worth landing
+  // routinely outlives it: each retarget re-runs CI and waits on a review. Read off
+  // the window alone, the rung the harness itself merged reads as neither open nor
+  // merged, and the intent stops with "nothing says it merged" — about its own
+  // first success. The stop is never resumed, so the feature silently reverts to
+  // per-rung clicking.
+  const system = build(countingSink());
+  const landing = system.landings.land('stack:1', [1, 2, 3]);
+  // What the harness recorded when rung 1 merged, hours ago. The graph is
+  // upsert-only, so it still says so long after the world has forgotten.
+  system.store.recordWorkGraph([
+    { ref: 'pr:1', kind: 'pr', title: 'rung 1', status: 'merged', terminal: true, parentRef: null },
+  ]);
+
+  const world = {
+    pullRequests: [rung(2, 'main'), rung(3, 'issue/12/r2')],
+    closedPullRequests: [], // the window has forgotten #1
+  };
+  system.landings.settle(world);
+
+  assert.equal(system.store.listStackLandings()[0]?.status, 'standing', 'the chain is still landing');
+  assert.equal(system.store.listOpenEscalations().length, 0, 'and nothing false was put in front of the operator');
+  assert.equal(
+    landedCount(landing, { ...world, merged: system.store.mergedPrs() }),
+    1,
+    '"landing 1 of 3" counts up, never back down as rungs age out',
+  );
+
+  // The `gone` arm survives: a rung genuinely closed without merging still stops
+  // the chain, durable record or no.
+  system.landings.settle({ pullRequests: [rung(3, 'issue/12/r2')], closedPullRequests: [] });
+  assert.equal(system.store.listStackLandings()[0]?.status, 'stopped');
+  assert.match(system.store.listStackLandings()[0]?.reason ?? '', /#2 is no longer open/);
+});
+
+test('the durable record alone finishes a chain the world no longer mentions', () => {
+  const standing = {
+    id: 'land_1',
+    ref: 'stack:1',
+    rungs: [1, 2],
+    status: 'standing' as const,
+    reason: null,
+    createdAt: 'now',
+    updatedAt: 'now',
+  };
+  assert.deepEqual(
+    settleLandings([standing], { pullRequests: [], closedPullRequests: [], merged: new Set([1, 2]) })[0]?.status,
+    'landed',
+  );
+  // And it is asked before the window, not instead of it: a rung merged this pulse
+  // is still in the world's own lists and settles from there.
+  assert.deepEqual(
+    settleLandings([standing], {
+      pullRequests: [],
+      closedPullRequests: [rung(2, 'main', { merged: true, state: 'merged' })],
+      merged: new Set([1]),
+    })[0]?.status,
+    'landed',
   );
 });
 

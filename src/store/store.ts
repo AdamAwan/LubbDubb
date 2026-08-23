@@ -1194,6 +1194,9 @@ export class Store {
   listWorkNodes(): WorkNode[] {
     return this.graph.listWorkNodes();
   }
+  mergedPrs(): ReadonlySet<number> {
+    return this.graph.mergedPrs();
+  }
   createWorkItemFiling(input: Parameters<GraphStore['createWorkItemFiling']>[0]): WorkItemFiling | null {
     return this.graph.createWorkItemFiling(input);
   }

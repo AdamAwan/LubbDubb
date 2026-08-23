@@ -696,7 +696,9 @@ export function buildStateSnapshot(
         ref: stack.ref,
         ...landingReadiness(rungPrs),
         landing,
-        landed: landing ? landedCount(landing, world) : 0,
+        // Counted against the durable record as well as the window, or "landing 1
+        // of 3" counts back down to 0 of 3 as merged rungs age out of it.
+        landed: landing ? landedCount(landing, { ...world, merged: store.mergedPrs() }) : 0,
       };
     }),
     tasks,

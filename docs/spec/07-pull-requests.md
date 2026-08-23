@@ -272,6 +272,18 @@ it would be re-proposed and retried every cycle after the settle window). Stoppi
 **and raises an escalation**, because a chain that drops below two rungs stops being a stack and its
 head line leaves the rack entirely.
 
+**"Left the open set without merging" is judged against the durable record, never against
+`closedPullRequests`.** That list is a window — it carries a merge for `closedPrWindowMs` and then
+forgets — and an intent routinely outlives it: a three-rung chain where each retarget re-runs CI and
+waits on a review takes longer than the window by design, and the taller the stack the more certain
+it is. Read off the window alone, a rung the harness itself merged reappears as neither open nor
+merged and stops the chain with the reason *"nothing says it merged"* — a stop that is factually
+false, is never resumed, and silently reverts the feature to per-rung clicking. `settleLandings` and
+`landedCount` therefore ask `Store.mergedPrs()` — the work graph, which is upsert-only for exactly
+this reason — before they ask the world. Without it the cockpit's "landing 1 of 3" also counts back
+*down* to 0 of 3 as rungs age out. The `gone` arm itself stays: a rung genuinely closed without
+merging still stops the chain.
+
 **Stopping and offering are asked by different predicates, and must be.** `rungFault` is not the
 negation of `rungVerdict`: retargeting a rung re-runs its checks, so every rung passes through
 `pending` on its way to landing, and stopping there would stop every intent at its first success.
