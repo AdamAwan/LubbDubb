@@ -132,6 +132,27 @@ export class GraphStore {
     return rows.map(rowToWorkNode);
   }
 
+  /**
+   * The pull requests the graph has recorded as merged, by number.
+   *
+   * The durable answer to "did this merge", for the readers that must outlive
+   * `closedPrWindowMs`. The world's `closedPullRequests` is a window: it carries a
+   * merge for a few hours and then forgets, and a reader that treats the forgetting
+   * as evidence reads "nothing says it merged" about a merge the harness performed.
+   * The graph is upsert-only for exactly this reason, so a merged PR node stays.
+   */
+  mergedPrs(): ReadonlySet<number> {
+    const rows = this.ctx.db.prepare(`SELECT ref FROM work_nodes WHERE kind = 'pr' AND status = 'merged'`).all() as {
+      ref: string;
+    }[];
+    const out = new Set<number>();
+    for (const row of rows) {
+      const n = Number(row.ref.slice('pr:'.length));
+      if (Number.isInteger(n)) out.add(n);
+    }
+    return out;
+  }
+
   // -- Work-item filings (stage 3) ------------------------------------------
 
   /**

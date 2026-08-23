@@ -14,6 +14,7 @@ import type {
   WorldSnapshot,
 } from '../src/types.js';
 import { foldWorkGraph, type WorkGraphInput } from '../src/graph/workGraph.js';
+import { partSettled } from '../src/plans/parts.js';
 import { buildSystem } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -189,6 +190,34 @@ test('a retired part stays in the graph and is terminal', () => {
   );
   assert.equal(node(out, 'issue:12:part:schema').status, 'retired');
   assert.equal(node(out, 'issue:12:part:schema').terminal, true);
+});
+
+test("a part's terminality is `partSettled` plus retired, across every status", () => {
+  // The whole enum, so a ninth status cannot be added without deciding this.
+  const statuses: PlanPart['status'][] = [
+    'pending',
+    'ready',
+    'dispatched',
+    'in_review',
+    'merged',
+    'concluded',
+    'blocked',
+    'retired',
+  ];
+  const parts = statuses.map((status, i) =>
+    part({ id: `pl1:p${i}`, slug: `p${i}`, seq: i + 1, title: status, status }),
+  );
+  const out = foldWorkGraph(input({ world: world({ issues: [issue()] }), plans: [plan()], parts }));
+
+  for (const [i, status] of statuses.entries()) {
+    const expected = partSettled(parts[i]!) || status === 'retired';
+    assert.equal(
+      node(out, `issue:12:part:p${i}`).terminal,
+      expected,
+      `a ${status} part's terminal must agree with partSettled plus retired`,
+    );
+  }
+  assert.equal(node(out, 'issue:12:part:p5').terminal, true, 'a concluded part has reached a terminal');
 });
 
 test('the fold is idempotent — the same input twice produces the same output', () => {

@@ -198,7 +198,10 @@ test('a check newly red on a branch other pull requests are based on is raised o
   const seen = harnessNotices(world([baseWas, rung]), world([baseIs, rung]));
   assert.equal(seen.length, 1);
   assert.match(seen[0]!.claim, /feat\/base/);
-  assert.equal(seen[0]!.goalRef, 'pr:404');
+  // The rung, not the base. The count is over goals, so attributing it to the base
+  // left the kind with exactly one possible voice for ever: two red bases are two
+  // different sentences, and one base going red twice is one goal twice.
+  assert.equal(seen[0]!.goalRef, 'pr:405');
   // The condition is the mechanism and the clock the backstop: a base branch that
   // goes green must stop being reported without waiting for a timer, or every
   // agent is told to distrust a check that is now fine.
@@ -207,9 +210,53 @@ test('a check newly red on a branch other pull requests are based on is raised o
   // the base stayed red — the corroboration table is a record of observations, not
   // a counter.
   assert.deepEqual(harnessNotices(world([baseIs, rung]), world([baseIs, rung])), []);
-  // Two rungs on one red base is one reading of that base, not two.
+  // Two rungs on one red base are two voices: each is a separate piece of work the
+  // branch is independently holding up, and counting them is the only way this kind
+  // ever reaches `injected`.
   const second = pr({ number: 406, baseBranch: 'feat/base' });
-  assert.equal(harnessNotices(world([baseWas, rung, second]), world([baseIs, rung, second])).length, 1);
+  const both = harnessNotices(world([baseWas, rung, second]), world([baseIs, rung, second]));
+  assert.equal(both.length, 2);
+  assert.deepEqual(
+    both.map((o) => o.goalRef).sort(),
+    ['pr:405', 'pr:406'],
+    'one observation per rung, attributed to that rung',
+  );
+  assert.equal(both[0]!.claim, both[1]!.claim, 'one sentence, so `claimsMatch` folds them onto one fact');
+});
+
+test('two rungs on one red base carry the notice to injected, and the base going green settles it', () => {
+  const system = build();
+  const desk = new KnowledgeNoticeDesk({ store: system.store });
+  const baseGreen = pr({ number: 404, branch: 'feat/base', ciChecks: [check('check (build)', 'passing')] });
+  const baseRed = pr({ number: 404, branch: 'feat/base', ciChecks: [check('check (build)', 'failing')] });
+  const one = pr({ number: 405, baseBranch: 'feat/base' });
+  const two = pr({ number: 406, baseBranch: 'feat/base' });
+
+  desk.run(world([baseGreen, one, two]), world([baseRed, one, two]));
+  const [fact] = system.store.listFacts();
+  assert.ok(fact);
+  assert.equal(
+    system.store.listCorroborations(fact.id).length,
+    2,
+    'each rung the red base holds up is one voice for it',
+  );
+  // The reason this matters: the resolution condition, the six-hour clock and the
+  // cockpit's promise that these reach every agent were all written for a notice
+  // that ships. On the base it could never leave `proposal`, which reaches nobody.
+  assert.equal(fact.reach, 'injected');
+  assert.equal(
+    system.store.askFacts({ limit: 50 }).some((f) => f.id === fact.id),
+    true,
+  );
+  // The condition stays anchored to the base — that is where the check goes green.
+  assert.deepEqual(fact.resolvesWhen, { kind: 'ci-check-green', ref: 'pr:404', check: 'check (build)' });
+  desk.run(world([baseRed, one, two]), world([baseGreen, one, two]));
+  assert.equal(
+    system.store.askFacts({ limit: 50 }).some((f) => f.id === fact.id),
+    false,
+    'the base going green ends it without waiting for the clock',
+  );
+  system.store.close();
 });
 
 test('a condition is settled by green, by the check going away, and by the pull request going away', () => {

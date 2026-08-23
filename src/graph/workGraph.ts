@@ -8,7 +8,7 @@ import type {
   WorkNodeObservation,
   WorldSnapshot,
 } from '../types.js';
-import { planIssueNumber, partOrigin } from '../plans/parts.js';
+import { planIssueNumber, partOrigin, partSettled } from '../plans/parts.js';
 import { issueOrigin, planOrigin } from '../plans/planning.js';
 import { basePrOf, prState } from '../prHealth.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
@@ -82,9 +82,12 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
       parentRef: issueOrigin(n),
       title: part.title,
       status: part.status,
-      // Retired is terminal in the same way merged is: the row stays so the graph
-      // remains readable after a replan, and nothing schedules it again.
-      terminal: part.status === 'merged' || part.status === 'retired',
+      // Two separate reasons, deliberately not collapsed. `partSettled` is the one
+      // place that says a part reached a terminal — `merged` for one that ends in a
+      // pull request, `concluded` for one that does not. Retired is the graph's own
+      // reason: the row stays so the graph remains readable after a replan, and
+      // nothing schedules it again.
+      terminal: partSettled(part) || part.status === 'retired',
     });
   }
 

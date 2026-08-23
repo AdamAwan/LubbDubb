@@ -19,6 +19,7 @@ import { EnvironmentDesk } from '../src/environments/environmentDesk.js';
 import { GitCliObserver } from '../src/git/gitObserver.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { Store } from '../src/store/store.js';
+import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { gitRepo } from './support/gitRepo.js';
 import type { ActionSink, IssueCommentInput, SendResult } from '../src/sink/actionSink.js';
 import type {
@@ -961,6 +962,52 @@ test('a held goal says what it is waiting for, and a released one says nothing',
       releases: [{ goalRef: 'issue:12', note: 'docs only', releasedAt: '2026-08-20T00:00:00.000Z' }],
     }),
     null,
+  );
+});
+
+test('a delivered goal that merged nothing still draws its hold, and the release lifts it', async () => {
+  // The goals a gate's escape hatch exists for are exactly the ones with nothing
+  // to land — a docs change, a config change, work that shipped from another
+  // repository. Folded off the landings alone they ship no `GoalReachView`, and
+  // both the hold sentence and the release control live inside a card an empty
+  // list stops drawing: held for good, both obligations withheld, and the goal
+  // reading as finished.
+  const environments: EnvironmentConfig[] = [
+    { name: 'testUk', at: 'unused', arrival: { opens: ['validate', 'close_out'] } },
+  ];
+  const system = build(environments, new FakeEnvironmentProber());
+  system.connector.inject({ kind: 'new_issue', number: 7, title: 'the goal' });
+  await system.harness.runCycle();
+  system.store.recordDelivery({
+    originRef: 'issue:7',
+    summary: 'closed out by hand — nothing here merges',
+    by: 'operator',
+  });
+
+  await system.harness.runCycle();
+  assert.equal(system.store.listGoalLandings().length, 0, 'this goal merged nothing — that is the shape');
+
+  const row = buildStateSnapshot(system).environmentReach.find((g) => g.goalRef === 'issue:7');
+  assert.ok(row, 'a held goal earns a row because it is held, not because it has been anywhere');
+  assert.match(row.gateHold ?? '', /waiting for this work to reach testUk/);
+  // `absent 0/0` on each configured environment: the honest fraction is nothing
+  // landed, of nothing.
+  assert.deepEqual(
+    row.environments.map((e) => [e.environment, e.status, e.landed, e.total]),
+    [['testUk', 'absent', 0, 0]],
+  );
+
+  // And the control the row now carries actually lifts it — the mechanism was
+  // always sound, only unreachable.
+  system.store.releaseEnvironmentGate('issue:7', 'nothing here deploys');
+  await system.harness.runCycle();
+  const released = buildStateSnapshot(system).environmentReach.find((g) => g.goalRef === 'issue:7');
+  assert.equal(released?.gateHold, null, 'released, so nothing is holding it any more');
+  assert.equal(released?.released?.note, 'nothing here deploys', 'and the row says on whose word');
+  assert.equal(
+    system.store.listHumanTasksOfKind('close_out').some((t) => t.originRef === 'issue:7'),
+    true,
+    'the close-out the gate was holding is filed on the next pulse',
   );
 });
 

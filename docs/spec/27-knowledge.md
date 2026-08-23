@@ -516,7 +516,13 @@ condition held, and the corroborations are a record of observations rather than 
   own CI is red for its base's reason is the case it exists for. This one names the branch, where the
   flake notice names no goal at all: a different branch being red is a different fact, and folding two
   of them together would let one team's broken base speak for another's. It is also what the
-  `ci-check-green` condition is anchored to.
+  `ci-check-green` condition is anchored to. The **corroborator is the rung, not the base** — each
+  pull request based on the red branch is one voice, because each is a separate piece of work that
+  branch is independently holding up, so the count says how many. Attributed to the base instead, the
+  kind could not be corroborated at all: two red bases are two different sentences `claimsMatch` keeps
+  apart, and one base going red twice is one goal twice, so no sequence of worlds ever reached two and
+  the notice stayed a `proposal` — which reaches nobody, on the one kind the whole resolution
+  mechanism was written for.
 
 The claim a harness notice files carries **no pull request number**, and that is what makes the count
 mean anything: `claimsMatch` compares sentences, so a claim naming the goal it was seen on could

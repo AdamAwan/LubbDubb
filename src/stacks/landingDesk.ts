@@ -66,7 +66,15 @@ export class StackLandingDesk {
    */
   settle(world: SettleWorld): void {
     try {
-      for (const settlement of settleLandings(this.store.listStandingLandings(), world)) {
+      // `mergedPrs` is read here rather than taken from the pulse: the world's
+      // `closedPullRequests` forgets a merge after `closedPrWindowMs`, and an
+      // intent routinely outlives that. Without it a chain that took longer than
+      // the window to land stops itself, with an escalation saying nothing
+      // observed a rung merging — about a rung this harness merged. A graph one
+      // pulse stale is not a gap: a rung merged *this* pulse is still in the
+      // world's own lists, which is what the arms below read.
+      const merged = this.store.mergedPrs();
+      for (const settlement of settleLandings(this.store.listStandingLandings(), { ...world, merged })) {
         if (settlement.status === 'landed') {
           this.store.settleStackLanding(settlement.landing.id, 'landed', null);
           continue;

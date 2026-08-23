@@ -696,7 +696,9 @@ export function buildStateSnapshot(
         ref: stack.ref,
         ...landingReadiness(rungPrs),
         landing,
-        landed: landing ? landedCount(landing, world) : 0,
+        // Counted against the durable record as well as the window, or "landing 1
+        // of 3" counts back down to 0 of 3 as merged rungs age out of it.
+        landed: landing ? landedCount(landing, { ...world, merged: store.mergedPrs() }) : 0,
       };
     }),
     tasks,
@@ -1011,7 +1013,24 @@ function buildEnvironmentReach(store: System['store'], environments: Environment
   // testUk would be the harness announcing a queue it is not in yet.
   const delivered = new Set(store.listDeliveries().map((d) => d.originRef));
   const shortfalls = new Set(store.listShortfalls().map((sf) => sf.originRef));
+  // Resolved before the fold, because it is also what widens the fold's goal set.
+  // A goal delivered with nothing merged has landed nothing to be folded, so
+  // without this it ships no row — and the hold sentence, the release control and
+  // the "not waiting on an environment" line all live inside the card an empty
+  // list stops drawing. Those are exactly the goals the escape hatch was written
+  // for, so it was absent precisely where it was needed. A released goal is kept
+  // for the same reason: the row is where its note is drawn, and a release that
+  // erased its own account would be the lift with nothing left saying it happened.
+  const holds = new Map<string, string>();
+  const gated = new Set<string>();
+  for (const goalRef of delivered) {
+    if (shortfalls.has(goalRef)) continue;
+    const hold = environmentGateHold({ goalRef, environments, arrivals, releases });
+    if (hold !== null) holds.set(goalRef, hold);
+    if (hold !== null || released.has(goalRef)) gated.add(goalRef);
+  }
   return allGoalReach({
+    held: gated,
     landings: store.listGoalLandings(),
     readings: store.listEnvironmentReach(),
     nodes: store.listWorkNodes(),
@@ -1024,10 +1043,7 @@ function buildEnvironmentReach(store: System['store'], environments: Environment
     environments,
   }).map((goal) => ({
     ...goal,
-    gateHold:
-      delivered.has(goal.goalRef) && !shortfalls.has(goal.goalRef)
-        ? environmentGateHold({ goalRef: goal.goalRef, environments, arrivals, releases })
-        : null,
+    gateHold: holds.get(goal.goalRef) ?? null,
     released: released.get(goal.goalRef) ?? null,
   }));
 }
