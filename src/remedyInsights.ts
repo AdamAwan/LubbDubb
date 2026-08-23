@@ -129,11 +129,17 @@ interface RemedyInput {
   /** Every remedy filed inside the window, oldest first (`listRemediesSince`). */
   remedies: readonly Remedy[];
   /**
-   * How many dispatches inside the window were for a red or a review — the
-   * denominator behind {@link RemedyInsights.unaccounted}. Counted by the caller,
-   * which is the only place that can see the tasks.
+   * The task ids of the dispatches inside the window that were for a red or a
+   * review — what {@link RemedyInsights.unaccounted} is counted over. Resolved by
+   * the caller, which is the only place that can see the tasks.
+   *
+   * The **set**, not a count, because the two populations are windowed on
+   * different dates: a dispatch is in on its `createdAt`, a remedy on the date it
+   * was filed. Subtracting one count from the other let a dispatch created just
+   * before the boundary that filed its account just after cancel a genuinely
+   * unaccounted one — a figure moving in the direction that flatters the fleet.
    */
-  returnDispatches: number;
+  returnDispatches: readonly string[];
   /** Dated cost deltas inside the same window. */
   usageEvents: readonly UsageEvent[];
 }
@@ -180,10 +186,10 @@ export function buildRemedyInsights(input: RemedyInput): RemedyInsights {
   return {
     accounts: remedies.length,
     costUsd: roundUsd([...perAccount.values()].reduce((sum, c) => sum + c, 0)),
-    // Never negative: a dispatch can file two accounts, and a count that went
-    // below zero would read as the harness having lost track rather than as the
-    // fleet having been thorough.
-    unaccounted: Math.max(0, input.returnDispatches - countingDispatches(remedies)),
+    // Counted by membership: a dispatch with no account **at all**, which is what
+    // the reading claims to be. Filing two accounts cannot take it below zero, so
+    // no clamp is load-bearing here.
+    unaccounted: unaccounted(input.returnDispatches, remedies),
     byKind,
     byGuard,
     recent: [...remedies]
@@ -234,8 +240,15 @@ function costPerAccount(remedies: readonly Remedy[], usageEvents: readonly Usage
 }
 
 /** How many distinct dispatches filed at least one account. */
-function countingDispatches(remedies: readonly Remedy[]): number {
-  return new Set(remedies.map((r) => r.taskId)).size;
+/**
+ * In-window return dispatches that filed nothing.
+ *
+ * Membership rather than arithmetic, so an account filed inside the window by a
+ * dispatch made before it accounts for *that* dispatch and for no other.
+ */
+function unaccounted(returnDispatches: readonly string[], remedies: readonly Remedy[]): number {
+  const accounted = new Set(remedies.map((r) => r.taskId));
+  return returnDispatches.filter((taskId) => !accounted.has(taskId)).length;
 }
 
 /**

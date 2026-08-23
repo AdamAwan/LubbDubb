@@ -246,7 +246,7 @@ test('cost is the filing agent’s spend, divided where it filed more than one',
   ];
   const insights = buildRemedyInsights({
     remedies,
-    returnDispatches: 3,
+    returnDispatches: ['t_1', 't_2', 't_3'],
     usageEvents: [{ agentId: 'a_1', costUsd: 10, at }],
   });
   assert.equal(insights.accounts, 2);
@@ -265,7 +265,7 @@ test('a cause the fortnight never saw still draws, and the top check is named', 
     { ...input({ taskId: 't_1', checks: ['format:check', 'lint'] }), id: 'r1', createdAt: at, updatedAt: at },
     { ...input({ taskId: 't_2', summary: 'again', checks: ['format:check'] }), id: 'r2', createdAt: at, updatedAt: at },
   ];
-  const insights = buildRemedyInsights({ remedies, returnDispatches: 2, usageEvents: [] });
+  const insights = buildRemedyInsights({ remedies, returnDispatches: ['t_1', 't_2'], usageEvents: [] });
   const ci = insights.byKind.find((k) => k.kind === 'ci');
   assert.ok(ci);
   // "Nothing was a flake this fortnight" is a reading, and a table that dropped
@@ -421,4 +421,23 @@ test('the Causes reading rides on the panel it is a section of', async () => {
   assert.equal(payload.remedies.byKind.find((k) => k.kind === 'ci')?.accounts, 1);
   assert.ok(payload.insights.window.buckets > 0);
   await app.close();
+});
+
+// #543 — the two populations are windowed on different dates, so `unaccounted`
+// has to be counted by membership. Subtracting counts let a straddling dispatch
+// cancel a genuinely unaccounted one, in the direction that flatters the fleet.
+test('an account filed in the window by an older dispatch accounts for that dispatch alone', () => {
+  const at = '2026-01-01T00:00:00.000Z';
+  // Five in-window dispatches, none of which filed anything, plus one account
+  // filed inside the window by a dispatch made before it.
+  const remedies: Remedy[] = [
+    { ...input({ taskId: 't_older', summary: 'from before the window' }), id: 'r1', createdAt: at, updatedAt: at },
+  ];
+  const insights = buildRemedyInsights({
+    remedies,
+    returnDispatches: ['t_1', 't_2', 't_3', 't_4', 't_5'],
+    usageEvents: [],
+  });
+  assert.equal(insights.accounts, 1, 'the account is in the window and counts as one');
+  assert.equal(insights.unaccounted, 5, 'and every in-window dispatch that filed nothing is still unaccounted');
 });

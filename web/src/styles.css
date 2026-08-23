@@ -7210,6 +7210,10 @@ a.btn {
      outcome palette: a retired tool is not a fault in itself, and colouring it
      like one would put an alarm beside every deployment that has never called it. */
   --mc-retired: var(--grey);
+  /* A name that was never a tool. Amber rather than grey: unlike a retired name,
+     traffic here is always a prompt or a model reaching for something that has
+     never existed, and it is the one class that is a finding by existing. */
+  --mc-unknown: var(--amber);
   --mc-desktop: var(--accent);
   /* The two channels, on the one graphic that draws them together. The fleet
      takes the addendum's hue because the fleet's traffic *is* mostly addendum
@@ -7439,6 +7443,10 @@ a.btn {
 }
 .cls.retired {
   color: var(--mc-retired);
+}
+
+.cls.unknown {
+  color: var(--mc-unknown);
 }
 .cls.desktop {
   color: var(--mc-desktop);

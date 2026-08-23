@@ -7,6 +7,7 @@ import { buildMcpInsights } from '../src/mcpInsights.js';
 import { resolveWindow } from '../src/insightsWindow.js';
 import { Store } from '../src/store/store.js';
 import { DEFAULT_MCP_ARGS_RETENTION_DAYS } from '../src/store/mcpCalls.js';
+import { RETIRED_TOOL_NAMES } from '../src/mcp/names.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -428,9 +429,59 @@ test('the last call per tool is answered over all time, not over a window', () =
     14,
   );
   const last = store.lastMcpCallByTool();
-  assert.ok(last.get('escalate'));
-  assert.equal(last.get('open_pr'), undefined, 'a tool never called is absent rather than null');
+  assert.ok(last.get('fleet:escalate'));
+  assert.equal(last.get('fleet:open_pr'), undefined, 'a tool never called is absent rather than null');
   store.close();
+});
+
+// #533 — `validation_report` is the one name on both channels, so it is the one
+// name whose two rows can disagree, and the only place a per-tool figure can be
+// taken from the wrong channel.
+test('no per-tool figure on one channel is taken from the other', () => {
+  for (const caller of ['fleet', 'desktop'] as const) {
+    const other = caller === 'fleet' ? 'desktop' : 'fleet';
+    const store = new Store(':memory:');
+    store.recordMcpCall(
+      {
+        channel: caller,
+        tool: 'validation_report',
+        agentId: caller === 'fleet' ? 'a1' : null,
+        taskId: null,
+        originRef: null,
+        ok: true,
+        error: null,
+        durationMs: 3,
+        args: {},
+      },
+      14,
+    );
+    const last = store.lastMcpCallByTool();
+    assert.ok(last.get(`${caller}:validation_report`), `${caller} keeps its own last call`);
+    assert.equal(last.get(`${other}:validation_report`), undefined, `${other} never called it`);
+
+    const insights = buildMcpInsights({
+      calls: store.listMcpCallsSince('1970-01-01T00:00:00.000Z'),
+      agents: [],
+      tasks: [],
+      namedInPrompts: new Map(),
+      lastCallByTool: last,
+      claudeArgs: [],
+      window: resolveWindow('7d', NOW),
+      now: NOW,
+    });
+    const rows = insights.tools.filter((t) => t.tool === 'validation_report');
+    assert.equal(rows.length, 2, 'one row per channel, since the name is on both');
+    for (const row of rows) {
+      if (row.channel === caller) {
+        assert.ok(row.lastCalledAt, 'the channel that called it has the date');
+        assert.equal(row.calls, 1);
+      } else {
+        assert.equal(row.lastCalledAt, null, "and the channel that did not has nothing — not the other's date");
+        assert.equal(row.calls, 0);
+      }
+    }
+    store.close();
+  }
 });
 
 // -- end to end ---------------------------------------------------------------
@@ -508,3 +559,48 @@ function testSystem(): System {
     { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), errorMirror: () => {} },
   );
 }
+
+// #536 — the tile draws `toolsQuiet` over `toolsAdvertised`, so the two must
+// count the same set. Written as invariants rather than expected numbers, so a
+// tool being added does not rewrite the test.
+test('a window full of retired and never-existed names keeps every fraction a fraction', () => {
+  const calls = [
+    ...RETIRED_TOOL_NAMES.map((tool) => call({ tool, ok: false, error: 'retired' })),
+    call({ tool: 'summon_the_kraken', ok: false, error: 'no such tool' }),
+  ];
+  const insights = build({ calls, agents: [agent('a1')], tasks: [task('a1', 'issue:12')] });
+
+  assert.ok(RETIRED_TOOL_NAMES.length > 0, 'the fixture needs a retired name to be about anything');
+  assert.ok(
+    insights.totals.toolsQuiet <= insights.totals.toolsAdvertised,
+    `${insights.totals.toolsQuiet}/${insights.totals.toolsAdvertised} is not a reading`,
+  );
+  assert.equal(
+    insights.totals.toolsRetiredCalled,
+    RETIRED_TOOL_NAMES.length,
+    'a retired name still being called is counted, just not as a live tool gone quiet',
+  );
+  for (const channel of insights.channels) {
+    assert.ok(
+      channel.toolsCalled <= channel.toolsAdvertised,
+      `${channel.channel} ${channel.toolsCalled}/${channel.toolsAdvertised}`,
+    );
+  }
+
+  // And the traffic that belongs to no advertised row is stated rather than
+  // quietly missing from the shares.
+  const unknown = insights.naming.find((n) => n.naming === 'unknown');
+  assert.ok(unknown, 'a name that was never a tool has a class of its own');
+  assert.equal(unknown.calls, 1);
+  const shares = insights.naming.reduce((sum, n) => sum + n.calls, 0);
+  assert.equal(shares, insights.totals.calls, 'every fleet call is in exactly one naming class');
+});
+
+test('the naming classes drop the two rows that are a permanent zero on a healthy deployment', () => {
+  const insights = build({ calls: [call({ tool: 'note_progress' })] });
+  assert.equal(
+    insights.naming.some((n) => n.naming === 'retired' || n.naming === 'unknown'),
+    false,
+    'nothing called a withdrawn or invented name, so neither row is drawn',
+  );
+});

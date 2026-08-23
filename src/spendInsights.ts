@@ -10,7 +10,7 @@ import type {
   WorldEvent,
 } from './types.js';
 import { issueOriginRole } from './issueOrigins.js';
-import { rollUpIssueSpend, roundUsd } from './issueSpend.js';
+import { rollUpIssueSpend, roundUsd, unmeasured } from './issueSpend.js';
 import { rollUpChecks, rollUpTaskTypes, type ChecksSpend, type TaskTypeSpend } from './taskTypeSpend.js';
 import {
   bucketIndexIn,
@@ -190,8 +190,11 @@ export interface SpendPhaseTotal {
 }
 
 /**
- * One goal's row: the total the card already shows, plus where inside the goal it
- * went and when it last moved.
+ * One goal's row: what the goal has cost inside the window, plus where inside the
+ * goal it went and when it last moved.
+ *
+ * Not the same figure as the goal card's, which is all-time — the panel is
+ * windowed and the card is not, so the two agree only on `window=all`.
  */
 export interface SpendGoal extends IssueSpend {
   /**
@@ -441,7 +444,7 @@ export function buildSpendGoals(input: {
   for (const agent of agents) {
     // The roll-up's own silence about a run that reported nothing, kept here so
     // the phase split is a partition of exactly the money the totals are over.
-    if (agent.costUsd === null && agent.inputTokens === null && agent.outputTokens === null) continue;
+    if (unmeasured(agent)) continue;
     const issueNumber = rollup.attribution.get(agent.id) ?? null;
     if (issueNumber === null) continue;
     const phase = phaseOf(originOfTask.get(agent.taskId) ?? null);
@@ -528,7 +531,7 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
     // The same silence `rollUpIssueSpend` keeps, and for the same reason: a run
     // that reported nothing is unmeasured, not free. It is counted here — once,
     // as a caveat — and appears in no figure.
-    if (agent.costUsd === null && agent.inputTokens === null && agent.outputTokens === null) {
+    if (unmeasured(agent)) {
       totals.unmeasuredRuns += 1;
       continue;
     }
@@ -596,7 +599,7 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
   // is already decided for a local run — the phase is `local` and the goal is its
   // own origin — and a merged walk would carry both sets of lookups over both.
   for (const run of localRuns) {
-    if (run.costUsd === null && run.inputTokens === null && run.outputTokens === null) {
+    if (unmeasured(run)) {
       totals.unmeasuredRuns += 1;
       continue;
     }

@@ -374,8 +374,10 @@ resolved from the credential.
 - **`assessmentOrigin` refuses every agent that is _doing_ the work**, which is `conclusionOrigin`'s
   discipline pointed the other way. There a part agent is refused because the plan speaks for the
   issue; here a pickup, planner or part agent is refused because judging your own delivery is not an
-  assessment — having someone else look is the entire point of the rule. Both refusals name the tool
-  that _is_ the caller's, so an agent reaching for the wrong one is told which is right.
+  assessment — having someone else look is the entire point of the rule. Every refusal names the tool
+  that _is_ the caller's, so an agent reaching for the wrong one is told which is right, and the three
+  are three different tools: a pickup is pointed at `conclude_work`, a planner at `plan_submit`, a part
+  agent at `conclude_part`. One remedy for all three would be refused by name on the next call.
 - **The two verdicts land in two rows of opposite polarity.** `delivered` writes the
   `issue_deliveries` park, which **gates pickup**; `more_work` writes an `issue_shortfalls` row,
   which gates nothing and exists to _release_ work. They are mutually exclusive — writing either
@@ -854,8 +856,11 @@ Four rules the recording keeps:
   credential — recorded with a null identity rather than skipped for having no agent behind it.
 - **The origin is copied onto the row at call time**, not joined at read time: a task retargeted later
   would otherwise silently re-file every call it ever made under a different phase.
-- **The two channels are never summed.** Different credentials, different tool sets, and
-  `validation_report` is two different tools with one name.
+- **The two channels are never summed** — and the rule covers every per-tool figure, not just the
+  counts. Different credentials, different tool sets, and `validation_report` is two different tools
+  with one name, which makes it the test case rather than a footnote: its last-call date is read per
+  channel, so an operator's own desktop report never appears on the fleet's row as evidence that the
+  fleet is reporting.
 
 Arguments are the one column that is ever cleared — after `mcpArgsRetentionDays`
 ([02](02-configuration.md)), and the row stays. → [14](14-persistence.md#mcp-calls)

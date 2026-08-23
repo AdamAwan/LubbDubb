@@ -712,6 +712,13 @@ comparable to `CiHealth.reds`, and the panel never subtracts one from the other 
 account at all, which is the thing an operator can chase. It is drawn with the total rather than in a
 footnote, because every share in the section is a share of what was _reported_.
 
+It is counted **by membership, never by subtracting two counts.** The two populations are windowed on
+different dates — a dispatch is in the window on its `createdAt`, an account on the date it was filed —
+so a dispatch made just before the boundary that filed its account just after appears on one side
+only, and subtracting let it cancel a dispatch that genuinely reported nothing. The route therefore
+passes the in-window return dispatches' **task ids**, and the fold subtracts the ones an account
+names. Same class as the run/call straddle the MCP tab's silence reading has to avoid.
+
 **Money is divided, and the payload says so.** Cost is the filing agent's spend inside the window,
 split evenly across the accounts it filed. One agent answering three unrelated reds genuinely spent
 its money on all three and no reading says which third went where — dividing is the only claim the

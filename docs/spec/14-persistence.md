@@ -575,6 +575,13 @@ worse one here:
 - **The arguments are also the only part of the row that carries issue text and code**, which is why
   the retention is an operator's setting rather than a constant.
 
+The one read over the table that is **not** windowed is the last call per tool, and it is keyed on
+`channel:tool` rather than the tool alone. The silence reading's most useful sentence — "nothing has
+called this in the window, and the last call was nineteen days ago" — is about one channel's tool, and
+`validation_report` lives on both ([11](11-mcp-tools.md#what-is-recorded)): grouped by name only, the
+fleet's row reports a desktop session's call as its own. A tool never called on a channel is absent
+from the map rather than present with a null, so "never" and "not lately" stay apart.
+
 Three properties of the sweep:
 
 - **`0` records no arguments at all**, rather than recording and then clearing them. The setting is the

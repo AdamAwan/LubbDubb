@@ -174,7 +174,10 @@ export function validateAssessment(
  * exists precisely to have someone else look.
  *
  * Refusing beats silently narrowing, for the reason `conclusionOrigin` gives: an
- * agent handed `{ok: true}` would believe it had parked the issue.
+ * agent handed `{ok: true}` would believe it had parked the issue — and each
+ * refusal names the tool that *is* the caller's, so a refused agent's next call
+ * is not refused too: a pickup has `conclude_work`, a planner `plan_submit`, a
+ * part agent `conclude_part`.
  */
 export function assessmentOrigin(
   originRef: string | null,
@@ -183,12 +186,35 @@ export function assessmentOrigin(
   const match = /^issue:(\d+):assess$/.exec(ref);
   if (match) return { ok: true, originRef: ref, issueOrigin: `issue:${match[1]}` };
 
-  const working = /^issue:(\d+)(?::(?:plan|part:.+))?$/.exec(ref);
-  if (working) {
+  // Three arms, not one: each names the tool that *is* this caller's, which a
+  // single "use conclude_work" refuses a planner and a part agent by name one
+  // call later. `conclusionOrigin` splits the same three the same way.
+  const planner = /^issue:(\d+):plan$/.exec(ref);
+  if (planner) {
     return {
       ok: false,
       error:
-        `assess_issue is for an agent dispatched to judge whether issue #${working[1]} is finished, and ` +
+        `assess_issue is for an agent dispatched to judge whether issue #${planner[1]} is finished, and ` +
+        `you are planning it rather than delivering it. Submit your decomposition with plan_submit ` +
+        `instead; the harness assesses the issue once the work is done.`,
+    };
+  }
+  const part = /^issue:(\d+):part:/.exec(ref);
+  if (part) {
+    return {
+      ok: false,
+      error:
+        `assess_issue is for an agent dispatched to judge whether issue #${part[1]} is finished, and you ` +
+        `are working one part of its plan. Close your part with conclude_part — the plan roll-up is what ` +
+        `concludes the issue, and the harness assesses it separately, which is the point.`,
+    };
+  }
+  const worker = /^issue:(\d+)$/.exec(ref);
+  if (worker) {
+    return {
+      ok: false,
+      error:
+        `assess_issue is for an agent dispatched to judge whether issue #${worker[1]} is finished, and ` +
         `you were dispatched to work on it. Use conclude_work to record what you believe you delivered; ` +
         `the harness assesses the issue separately, which is the point — it is not a judgement you make ` +
         `about your own work.`,

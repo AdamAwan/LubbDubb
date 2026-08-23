@@ -134,20 +134,26 @@ export class McpCallStore {
   }
 
   /**
-   * When each tool was last called, on either channel, over all time.
+   * When each tool was last called **on each channel**, over all time, keyed
+   * `channel:tool`.
    *
    * Deliberately *not* windowed, and it is the one read here that is not. The
    * silence reading's most useful sentence is "nothing has called this in the
    * window, and the last call was nineteen days ago" — a date the window by
    * definition cannot contain. A tool never called at all is absent from the map
    * rather than present with a null, so the caller distinguishes the two.
+   *
+   * The channel is in the key because the two are never summed and never
+   * borrowed from each other: `validation_report` is the one name on both, and
+   * grouped by tool alone the fleet's row reported an operator's own desktop
+   * call as its own — a "nothing named it" verdict beside a timestamp from
+   * seconds ago.
    */
   lastMcpCallByTool(): Map<string, string> {
-    const rows = this.ctx.db.prepare(`SELECT tool, MAX(created_at) AS last FROM mcp_calls GROUP BY tool`).all() as {
-      tool: string;
-      last: string;
-    }[];
-    return new Map(rows.map((r) => [r.tool, r.last]));
+    const rows = this.ctx.db
+      .prepare(`SELECT channel, tool, MAX(created_at) AS last FROM mcp_calls GROUP BY channel, tool`)
+      .all() as { channel: string; tool: string; last: string }[];
+    return new Map(rows.map((r) => [`${r.channel}:${r.tool}`, r.last]));
   }
 }
 

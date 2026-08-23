@@ -32,11 +32,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
    * account anyone has of what went wrong. A `passed` result is the one exception:
    * the person clicking through their own checklist is watching it happen.
    */
-  const requiredNote = (what: string): z.ZodType<string, z.ZodTypeDef, unknown> =>
-    z
-      .string({ required_error: `note is required — ${what}`, invalid_type_error: `note is required — ${what}` })
-      .trim()
-      .min(1, `note is required — ${what}`);
+  const requiredNote = (field: string, what: string): z.ZodType<string, z.ZodTypeDef, unknown> => {
+    // The field is a parameter because the 400 body drops field paths and keeps
+    // only the message: a refusal naming `note` on a route whose body field is
+    // `reason` sends the caller to a key zod then strips.
+    const message = `${field} is required — ${what}`;
+    return z.string({ required_error: message, invalid_type_error: message }).trim().min(1, message);
+  };
 
   /**
    * `:number` is the **goal**, `:checkId` the check's author-chosen slug — never
@@ -103,9 +105,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // the count, which is the whole guard. Otherwise it becomes the quiet exit that
   // `unrun` is loud about.
   const DeferBody = z.object({
-    reason: requiredNote('say what it is waiting for'),
+    reason: requiredNote('reason', 'say what it is waiting for'),
     /** Optional: a deferral with no date is honest, and one made to invent a date is not. */
-    until: z.string().trim().min(1).optional(),
+    until: z
+      .string({ invalid_type_error: 'until must be a string saying when, or be left out' })
+      .trim()
+      .min(1, 'until must say when, or be left out — a deferral with no date is honest')
+      .optional(),
   });
   app.post(
     '/api/issues/:number/validation/:checkId/defer',
@@ -125,7 +131,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // deferral, and kept apart from it because collapsing the two would make one of
   // them dishonest: "the test environment is rebuilt on Thursday" is not "I am not
   // going to check this".
-  const WaiveBody = z.object({ reason: requiredNote('say why this one is not being checked') });
+  const WaiveBody = z.object({ reason: requiredNote('reason', 'say why this one is not being checked') });
   app.post(
     '/api/issues/:number/validation/:checkId/waive',
     checked({ params: CheckParams, body: WaiveBody }, async ({ params, body, reply }) => {

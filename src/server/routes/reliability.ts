@@ -54,7 +54,7 @@ export function register(app: FastifyInstance, { system }: RouteContext): void {
         // no reader can see and neither fold can catch.
         remedies: buildRemedyInsights({
           remedies: store.listRemediesSince(since),
-          returnDispatches: tasks.filter((t) => t.createdAt >= since && isReturnOrigin(t.originRef)).length,
+          returnDispatches: tasks.filter((t) => t.createdAt >= since && isReturnOrigin(t.originRef)).map((t) => t.id),
           usageEvents,
         }),
       } satisfies ReliabilityPayload;
