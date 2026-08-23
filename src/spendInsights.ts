@@ -14,8 +14,7 @@ import { rollUpIssueSpend, roundUsd, unmeasured } from './issueSpend.js';
 import { rollUpChecks, rollUpTaskTypes, type ChecksSpend, type TaskTypeSpend } from './taskTypeSpend.js';
 import {
   bucketIndexIn,
-  inWindow,
-  runInstant,
+  runInWindow,
   timelineSpan,
   windowView,
   type InsightsWindowView,
@@ -493,8 +492,8 @@ export function buildSpendInsights(input: SpendInsightsInput): SpendInsights {
   // Both spenders are cut, and by the same rule: a local run is a session that
   // held the dev environment for as long as somebody was looking at it, so it
   // belongs to the window it *finished* in exactly as an agent does.
-  const agents = input.agents.filter((agent) => inWindow(window, runInstant(agent)));
-  const localRuns = input.localRuns.filter((run) => inWindow(window, runInstant(run)));
+  const agents = input.agents.filter((agent) => runInWindow(window, agent));
+  const localRuns = input.localRuns.filter((run) => runInWindow(window, run));
   const originOfTask = new Map(tasks.map((t) => [t.id, t.originRef]));
   const titleOfTask = new Map(tasks.map((t) => [t.id, t.title]));
   // The per-goal totals and the attribution behind them, computed once by the

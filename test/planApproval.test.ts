@@ -10,7 +10,7 @@ import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { resolvePlanRoute } from '../src/plans/planning.js';
-import { describeProposedParts, planApprovalDetail, planApprovalNote } from '../src/plans/planApproval.js';
+import { describeProposedParts, planApprovalDetail, planApprovalNote, refusePlan } from '../src/plans/planApproval.js';
 import { planApprovalWarnings, planIsWedged, wedgedPlanPrompt } from '../src/plans/planWedge.js';
 import { refCollisionReason } from '../src/plans/planReconciler.js';
 import { planProposalHold, planProposalRef } from '../src/proposals/proposals.js';
@@ -181,6 +181,59 @@ test('ingestion persists every verdict as a proposal, and the part count has no 
   // Both wrote their parts: the gate holds scheduling, not the record of the verdict.
   assert.equal(store.listPlanParts(one.plan.id).length, 1);
   assert.equal(store.listPlanParts(many.plan.id).length, 8);
+  store.close();
+});
+
+/**
+ * A refusal retires the parts nothing was started for — and a retired human
+ * part's ask goes with it.
+ *
+ * The bench is the operator's own to-do list, so an open row pointing at a part
+ * no plan schedules is an obligation nothing can ever settle, and it is
+ * indistinguishable there from one they still owe. Ingestion has always done
+ * this for an amendment; both now reach the one `withdrawPartAsks`.
+ */
+test('refusing a plan withdraws the asks behind the steps it retires', () => {
+  const store = new Store(':memory:');
+  const { plan } = ingestPlanDocument(store, {
+    doc: {
+      version: 1,
+      evidence: [],
+      reason: 'A person has to flip it before anything can verify it.',
+      parts: [
+        {
+          slug: 'flip',
+          title: 'Flip the flag in the vendor console',
+          scope: 'the vendor console',
+          dependsOn: [],
+          expectedKind: 'human',
+          acceptance: 'The flag reads on.',
+          touches: [],
+        },
+        { slug: 'code', title: 'Read the flag', scope: 'src/', touches: [], dependsOn: ['flip'] },
+      ],
+    },
+    originRef: 'issue:12',
+    title: 'Issue 12',
+  });
+  const step = store.listPlanParts(plan.id).find((p) => p.slug === 'flip')!;
+  assert.equal(store.listHumanTasksForParts([step.id])[0]!.status, 'open');
+
+  const settled = refusePlan(store, plan.id, 'issue:12', 'not like this');
+  assert.equal(settled.ok, true);
+  assert.deepEqual(
+    store.listPlanParts(plan.id).map((p) => p.status),
+    ['retired', 'retired'],
+  );
+
+  const ask = store.listHumanTasksForParts([step.id])[0]!;
+  assert.equal(ask.status, 'declined');
+  assert.match(ask.resolution ?? '', /sent back to a planner/);
+  assert.equal(
+    store.listHumanTasks().filter((t) => t.status === 'open').length,
+    0,
+    'nothing is left on the bench for a part no plan schedules',
+  );
   store.close();
 });
 

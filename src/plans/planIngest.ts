@@ -5,9 +5,9 @@ import { planNarrative, planPartInputs } from './planDocument.js';
 import { validationCheckInputs, validationResourceInputs } from '../validation/checkDocument.js';
 import { withdrawResourceAsks } from '../validation/ask.js';
 import { partIsHuman, partOrigin, partsToRetire, planIssueNumber } from './parts.js';
+import { AMENDED_PART_RESOLUTION, withdrawPartAsks } from './partAsks.js';
 
 /** What a human task says when the plan that asked for it stopped asking. */
-const RETIRED_PART_RESOLUTION = 'An amended plan no longer includes this step.';
 
 /** The same settlement, one layer down: a check an amended plan stopped declaring. */
 const SUPERSEDED_CHECK_REASON = 'An amended plan no longer includes this check.';
@@ -83,14 +83,7 @@ export function ingestPlanDocument(
   // missing for one that was.
   store.recordPlanRevision(plan.id, { narrative, parts: declared });
   for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
-  // A retired part's ask is withdrawn with it. Declined rather than deleted or a
-  // third terminal of its own: "this is not going to be done, and here is why" is
-  // exactly what declining means, and the alternative — an open task pointing at a
-  // part no plan schedules — is an obligation on the operator that nothing will
-  // ever settle.
-  for (const task of store.listHumanTasksForParts(retire.map((p) => p.id))) {
-    if (task.status === 'open') store.settleHumanTask(task.id, 'declined', RETIRED_PART_RESOLUTION);
-  }
+  withdrawPartAsks(store, retire, AMENDED_PART_RESOLUTION);
   const written = store.upsertPlanParts(plan.id, declared);
   // Back each declared human step with a `human_tasks` row. `recordHumanTask`
   // refreshes on a repeat rather than inserting, so a replan that re-declares the

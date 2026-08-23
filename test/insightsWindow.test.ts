@@ -6,6 +6,7 @@ import {
   inWindow,
   resolveWindow,
   runInstant,
+  runInWindow,
   sinceOrEpoch,
   timelineSpan,
   trendSince,
@@ -97,6 +98,29 @@ test('a run counts where it ended, and where it started only while it is out', (
     endedAt: new Date(NOW - 8 * HOUR).toISOString(),
   };
   assert.equal(inWindow(window, runInstant(longAgo)), false);
+});
+
+/**
+ * The other half of the same sentence, and the half a cut has to read: a run
+ * that has not ended is spending its money *now*, so it is inside every window
+ * drawn now however long it has been out. Read at `runInstant` — its start,
+ * which is the only end a live run has and the right place for it on a timeline
+ * — an eight-hour agent fell out of the six-hour window it was spending in, and
+ * the Economics tab drew "No agent ran in this window" over a working fleet.
+ */
+test('a run that is still out is inside every window, whatever its age', () => {
+  const window = resolveWindow('6h', NOW);
+  const old = { startedAt: new Date(NOW - 8 * HOUR).toISOString(), endedAt: null };
+  assert.equal(inWindow(window, runInstant(old)), false, 'its start is genuinely outside');
+  assert.equal(runInWindow(window, old), true, 'the money it is spending is not');
+
+  const young = { startedAt: new Date(NOW - 20 * 60_000).toISOString(), endedAt: null };
+  assert.equal(runInWindow(young && window, young), true);
+  assert.equal(runInWindow(resolveWindow('all', NOW), old), true);
+
+  // A run that ended is still cut where it ended: this widens nothing else.
+  const longAgo = { startedAt: new Date(NOW - 9 * HOUR).toISOString(), endedAt: new Date(NOW - 8 * HOUR).toISOString() }; // prettier-ignore
+  assert.equal(runInWindow(window, longAgo), false);
 });
 
 test('the last bucket keeps the reading taken at `now`', () => {

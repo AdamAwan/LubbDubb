@@ -95,5 +95,8 @@ function pathIsInside(path: string, touches: string[]): boolean {
 
 /** Repository-relative, forward slashes, no leading `./` — both sides are agent-authored. */
 function normalise(path: string): string {
-  return path.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '').trim();
+  const trimmed = path.replace(/\\/g, '/').replace(/^\.\//, '').replace(/^\/+/, '').trim();
+  // A bare "." is the repository, the same declaration as "./" or "/": none of the
+  // strips above touch it, so without this it survives as a prefix nothing matches.
+  return trimmed === '.' ? '' : trimmed;
 }

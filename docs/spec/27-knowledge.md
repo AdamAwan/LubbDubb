@@ -151,6 +151,16 @@ notices are a different animal in every respect that matters — see [Notices](#
 An expiring fact carries the moment it lapses, and a lapsed fact is answered to nobody — the row
 stays, saying what it said, but it is out of every read.
 
+**Every read, including the writer's.** `proposeFact` decides whether a call is a new claim or
+agreement with a standing one, and a lapsed row is not a row a re-raise may join: it matches only rows
+that have not lapsed, so a re-observation files a fresh notice with its own clock and its own date.
+That is `retired`'s rule for `retired`'s reason — joining the old row would resurrect a claim nobody
+has revisited, wearing the date it was made on and a clock already spent, and the fleet would never be
+told the thing again from its second occurrence onward. A check that flakes again after its twelve
+hours, or a base branch red again after recovering, is exactly that second occurrence. The **bar** is
+not filtered this way: a rejection is a ruling with no clock on it and bars the claim by name however
+old the row is.
+
 An expiring fact may also carry a **resolution condition** the harness can evaluate: a check red on a
 branch other pull requests are based on resolves when that check goes green, not when a timer runs
 out. The clock is the backstop, not the mechanism. A timer alone either drops a notice while it is

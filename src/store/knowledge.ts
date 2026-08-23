@@ -143,14 +143,26 @@ export class KnowledgeStore {
     // the amendment already standing. Skipping the match entirely — as this did
     // until amendments began arriving in volume — files each of them as its own
     // one-voice proposal, so three agents sharpening a claim carry nothing anywhere.
+    //
+    // Lapsed rows are out of the match, for `retired`'s reason and by `askFacts`'
+    // rule: a row a re-raise may join is a row somebody could still be told. A
+    // notice that ran out its clock — or that `resolveNotice` lapsed because its
+    // condition was met — is out of every read, so joining it would bury the
+    // second occurrence on a claim the fleet is never told again, wearing the
+    // first one's date and its spent clock.
     const existing =
-      this.matchingFacts(proposal.scope, key, LIVE_REACHES).find((f) => f.id !== proposal.supersedes) ?? null;
+      this.matchingFacts(proposal.scope, key, LIVE_REACHES, this.ctx.now()).find((f) => f.id !== proposal.supersedes) ??
+      null;
     // A rejected claim bars a re-proposal — **unless what this proposal matches is
     // a live fact descended from that rejection**. An amendment is exempt by naming
     // its parent, and a later agent restating the amendment's own words has no id
     // to name: without this, the bar swallows the corrected claim through exactly
     // the containment that makes it an amendment, and the fleet is refused by the
     // name of a claim nobody is being told.
+    //
+    // No `liveAt` here, deliberately: a rejection is a ruling with no clock on it
+    // and bars the claim by name however old the row is. Filtering it by
+    // `expires_at` would leak the bar the moment a rejected notice's clock went by.
     const barredBy = this.matchingFacts(proposal.scope, key, ['rejected']).find(
       (f) => f.id !== proposal.supersedes && !(existing !== null && this.descendsFrom(existing, f.id)),
     );
@@ -866,11 +878,14 @@ export class KnowledgeStore {
    * is in TypeScript because it is normalisation, not a predicate SQL can index.
    * The shape `findings` used for the same job, and the list is short for its reason.
    */
-  private matchingFacts(scope: string, key: string, reaches: readonly FactReach[]): KnowledgeFact[] {
+  private matchingFacts(scope: string, key: string, reaches: readonly FactReach[], liveAt?: string): KnowledgeFact[] {
     const holes = reaches.map(() => '?').join(',');
+    const lapse = liveAt === undefined ? '' : ' AND (expires_at IS NULL OR expires_at > ?)';
     const rows = this.ctx.db
-      .prepare(`SELECT * FROM knowledge_facts WHERE scope=? AND reach IN (${holes}) ORDER BY created_at ASC, rowid ASC`)
-      .all(scope, ...reaches) as FactRow[];
+      .prepare(
+        `SELECT * FROM knowledge_facts WHERE scope=? AND reach IN (${holes})${lapse} ORDER BY created_at ASC, rowid ASC`,
+      )
+      .all(scope, ...reaches, ...(liveAt === undefined ? [] : [liveAt])) as FactRow[];
     return rows.map(rowToFact).filter((f) => claimsMatch(key, claimKey(f.claim)));
   }
 

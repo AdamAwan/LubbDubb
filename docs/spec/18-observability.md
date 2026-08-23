@@ -274,6 +274,16 @@ started last Tuesday does not draw twenty-five empty buckets in front of itself.
 that opened before the window and finished inside it spent its money inside it, and counting it at its
 start would leave a nine-hour agent out of the six-hour window it in fact dominated.
 
+**A run that has not ended is inside every window that ends at `now`** (`runInWindow`), whatever its age
+— which is the same sentence read to its conclusion. `runInstant` dates a live run at its start because
+the start is the only end it has, and that is right for placing it on a timeline; it is wrong as a cut,
+because the money that run is spending is being spent inside every window drawn now. An eight-hour agent
+still out, read at its start, fell out of the six-hour window while the top bar's chip showed the money
+it had spent — and the Economics tab, short-circuiting on `measuredRuns === 0`, drew "No agent ran in
+this window" over a working fleet. A local run is the case that meets this normally: it is held open for
+as long as somebody is looking at it ([23](23-local-runs.md#what-it-costs)), so outliving the window is
+what it does.
+
 **A reading with no control of its own takes the window the page opens on** (`defaultWindow`). The
 Knowledge page's cost figure ([27](27-knowledge.md#what-it-costs)) is the caller: it draws one number,
 has no time bar, and a second control there would be a second answer to "over what stretch" on a page

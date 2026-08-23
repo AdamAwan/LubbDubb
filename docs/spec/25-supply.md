@@ -165,7 +165,8 @@ Five, and the ordering is load-bearing:
 1. **`starved`** — not paused, nothing queued, and `headroom > 0`. Slots are empty _now_.
 2. **`dry`** — nothing queued. Every slot is full, but the next goal to finish finds nothing behind
    it.
-3. **`unknown`** — fewer than `runway.minimumRuns` completed goals, so there is no median.
+3. **`unknown`** — fewer than `runway.minimumRuns` completed goals **with a measurable fleet-time
+   span**, so there is no median.
 4. **`thin`** — the runway is below the band (see [hysteresis](#hysteresis)).
 5. **`healthy`** — above it.
 
@@ -176,6 +177,16 @@ reporting the weaker one describes a fleet that is _about to_ go idle while it a
 two days old with two empty slots is genuinely starved, and withholding that until five goals have
 completed would silence the warning for exactly the week it is most useful. `unknown` guards only the
 arms that need a _duration_.
+
+**The count `unknown` names is the median's own population**, not the raw completed count. `medianLead`
+drops a run whose span is not finite and positive — a run covered end to end by holds, or one written
+`complete` on its first sighting, where `started_at` and `completed_at` are the same instant — and
+`RunwayReading.completedRuns` is what survived that, with `unmeasuredRuns` carrying what did not. It
+has to be: a card saying "8 goals have completed; a median lead time is taken over more" beside a
+`minimumRuns` of 5 contradicts itself, and an operator who reads the two together can only conclude the
+gauge is broken. Naming both counts instead — "3 of 11 completed goals left fleet time to measure" — is
+the one diagnosis of a runway that has gone permanently dark, which is the state a deployment that
+adopted a repository full of already-closed tickets is in on its first day.
 
 **`unknown` is not folded into anything**, on the reach verdict's grounds
 ([24](24-environments.md#the-three-verdicts)): a deployment two days old and one that has run dry
