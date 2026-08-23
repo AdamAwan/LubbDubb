@@ -85,8 +85,8 @@ export class AzureDevOpsSourceControlIntegration
   readonly capability: Capability = 'sourceControl';
 
   /** Last successful slice, served on a transient failure so PRs don't flap. */
-  private lastGood: PullRequest[] = [];
-  private lastGoodClosed: PullRequest[] = [];
+  private lastGood: PullRequest[] | null = null;
+  private lastGoodClosed: PullRequest[] | null = null;
   /** commitId per PR from the last snapshot — needed to complete a merge later. */
   private mergeCommits = new Map<number, string>();
 
@@ -158,7 +158,10 @@ export class AzureDevOpsSourceControlIntegration
         source: 'provider',
         message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
-      return { pullRequests: this.lastGood, closedPullRequests: this.lastGoodClosed, stale: true };
+      // No successful read yet — nothing to degrade to. An empty slice would make
+      // every open PR look closed; fail the pulse instead.
+      if (this.lastGood === null) throw err;
+      return { pullRequests: this.lastGood!, closedPullRequests: this.lastGoodClosed!, stale: true };
     }
   }
 

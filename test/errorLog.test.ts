@@ -186,7 +186,7 @@ test('the /api/state snapshot carries the error log', async () => {
   system.store.close();
 });
 
-test('a provider snapshot failure is recorded and the last-good slice served', async () => {
+test('a provider failure with no prior success rejects rather than serving an empty world', async () => {
   const store = new Store(':memory:');
   const errors = new ErrorLog(store, () => {});
   const api = {
@@ -195,8 +195,9 @@ test('a provider snapshot failure is recorded and the last-good slice served', a
     },
   } as unknown as GitHubApi;
   const sc = new GitHubSourceControlIntegration({ api, errors });
-  const slice = await sc.snapshot();
-  assert.deepEqual(slice.pullRequests, []);
+  // "Last good" means a read that succeeded — with none, an empty slice would
+  // fabricate a world in which every open PR has vanished. It must fail instead.
+  await assert.rejects(() => sc.snapshot(), /Bad credentials/);
   const recorded = store.listErrors();
   assert.equal(recorded.length, 1);
   assert.equal(recorded[0]!.source, 'provider');

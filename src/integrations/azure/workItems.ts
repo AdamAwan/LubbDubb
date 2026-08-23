@@ -70,7 +70,7 @@ export class AzureDevOpsWorkItemsIntegration
   readonly id = 'issues:azure';
   readonly capability: Capability = 'issues';
 
-  private lastGood: Issue[] = [];
+  private lastGood: Issue[] | null = null;
 
   constructor(private readonly opts: AzureWorkItemsOpts) {}
 
@@ -148,6 +148,9 @@ export class AzureDevOpsWorkItemsIntegration
         source: 'provider',
         message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
+      // No successful read yet — nothing to degrade to. An empty slice would make
+      // every watched work item look gone; fail the pulse instead.
+      if (this.lastGood === null) throw err;
       return { issues: this.lastGood, stale: true };
     }
   }

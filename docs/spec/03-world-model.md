@@ -42,6 +42,10 @@ exists to prevent. Its first consumer is the cycle's rationale row, which is pre
 `[stale: <ids>]` so the Decision log explains a decision the world no longer justifies
 ([18](18-observability.md#the-decision-log)).
 
+**The world-event diff is the second gate.** `recordWorldChanges` takes no diff against — and does not
+move the baseline onto — a world any source reported stale (see [World events](#world-events-the-activity-feed)).
+Dispatching still proceeds on the best world available; only the transition record waits for a whole one.
+
 **One pass does gate on it, and it is the exception that says what the rule is for.** Every other fold
 that reads absence corrects itself on the next healthy pulse; settling a stack landing
 ([07](07-pull-requests.md#landing-a-stack)) does not, because it is a compare-and-set onto a terminal
@@ -204,6 +208,12 @@ as files, so `refs/heads/issue/12` and `refs/heads/issue/12/plan` cannot coexist
 
 `diffWorlds(prev, next)` in `src/world/worldDiff.ts` is pure and infra-free: no ids, no clock. The
 store stamps identity and timestamps when persisting the result.
+
+The diff is never taken against a world any source reported stale (`next.staleSources` non-empty). A
+stale slice is by construction equal to the last one the same source reported, so a diff against it
+loses nothing — but moving the baseline onto it would make the next fresh pulse diff a real world
+against an empty one and re-announce everything, releasing every standing delivery verdict. The
+baseline stays on the last world anybody actually read.
 
 Object identity is by domain `id`. Two standing rules:
 

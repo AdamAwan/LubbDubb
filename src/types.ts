@@ -364,9 +364,11 @@ export interface WorldSnapshot {
    * snapshot rather than only in the error log because the *decision* is what
    * needs the caveat, and a reader of one is not looking at the other.
    *
-   * Nothing gates on it. A stale world is still the best available world, and a
+   * Nothing in `decide` gates on it. A stale world is still the best available world, and a
    * pulse that refused to decide on one would turn a provider blip into a stalled
-   * fleet — the failure mode the fallback exists to prevent.
+   * fleet — the failure mode the fallback exists to prevent. The one gate is the
+   * world-event baseline: `recordWorldChanges` takes no diff against, and does not move
+   * the baseline onto, a world any source reported stale.
    */
   staleSources?: string[];
 }

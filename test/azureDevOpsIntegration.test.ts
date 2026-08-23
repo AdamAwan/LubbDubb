@@ -893,16 +893,11 @@ test('snapshot applies the prAuthor filter client-side', async () => {
   store.close();
 });
 
-test('snapshot returns the last-good slice and records an error event on failure', async () => {
+test('a first-read failure rejects rather than serving an empty world', async () => {
   const store = new Store(':memory:');
-  const good = fakeApi({ pulls: [pull({ pullRequestId: 7 })] });
-  const sc = new AzureDevOpsSourceControlIntegration({ api: good.api });
-  await sc.snapshot(); // warm the last-good cache
-
   const bad = fakeApi({ throwOn: 'listActivePullRequests' });
-  const sc2 = new AzureDevOpsSourceControlIntegration({ api: bad.api });
-  const slice = await sc2.snapshot(); // cold + failing → empty, and it must not throw
-  assert.deepEqual(slice.pullRequests, []);
+  const sc = new AzureDevOpsSourceControlIntegration({ api: bad.api });
+  await assert.rejects(() => sc.snapshot());
   store.close();
 });
 
@@ -1103,12 +1098,11 @@ test('work items snapshot passes the assignee filter through to the API', async 
   store.close();
 });
 
-test('work items snapshot returns the last-good slice and records an error event on failure', async () => {
+test('a first-read failure rejects rather than serving an empty work item list', async () => {
   const store = new Store(':memory:');
   const bad = fakeApi({ throwOn: 'listOpenWorkItems' });
   const issues = new AzureDevOpsWorkItemsIntegration({ api: bad.api });
-  const slice = await issues.snapshot();
-  assert.deepEqual(slice.issues, []);
+  await assert.rejects(() => issues.snapshot());
   store.close();
 });
 

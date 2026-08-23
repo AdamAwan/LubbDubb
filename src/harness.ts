@@ -790,6 +790,12 @@ export class Harness extends EventEmitter {
    * different pulses.
    */
   private recordWorldChanges(store: HarnessDeps['store'], world: WorldSnapshot, prev: WorldSnapshot | null): void {
+    // A stale slice is by construction equal to the last one the same source
+    // reported, so a diff against it loses nothing — but diffing it would, and
+    // moving the baseline onto it would make the next fresh pulse diff a real
+    // world against nothing and re-announce everything. Leave the baseline on the
+    // last world anybody actually read.
+    if (world.staleSources && world.staleSources.length > 0) return;
     if (prev) {
       const changes = diffWorlds(prev, world);
       if (changes.length) {
