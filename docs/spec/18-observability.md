@@ -270,6 +270,14 @@ ends, so `timelineSpan` takes the earliest datum the caller actually holds and d
 the buckets describe the history that exists rather than a span guessed at here, and a harness that
 started last Tuesday does not draw twenty-five empty buckets in front of itself.
 
+**"The earliest datum" means the earliest across every population the timeline buckets**, not the
+earliest of whichever one is handiest. `buildSpendTrend` folds its closures and its runs together for
+this; `buildReliabilityInsights` folds its agents and its `pr_ci` events. Off one of two, the headline
+figures — which are counts over the unbounded window — include history the axis beneath them starts
+after, so the graph disagrees with the number printed above it on the one window whose entire purpose
+is to show everything. Nothing throws and no row is malformed; it only shows when the two populations
+have different oldest members, which no fixture stamping everything at one clock ever does.
+
 **A run counts where it ended**, and where it started only while it is still going (`runInstant`). A run
 that opened before the window and finished inside it spent its money inside it, and counting it at its
 start would leave a nine-hour agent out of the six-hour window it in fact dominated.

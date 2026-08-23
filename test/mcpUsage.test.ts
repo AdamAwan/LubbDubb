@@ -4,7 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildMcpInsights } from '../src/mcpInsights.js';
-import { resolveWindow, sinceOrEpoch } from '../src/insightsWindow.js';
+import { resolveWindow, sinceOrEpoch, type InsightsWindow } from '../src/insightsWindow.js';
 import { Store } from '../src/store/store.js';
 import { DEFAULT_MCP_ARGS_RETENTION_DAYS } from '../src/store/mcpCalls.js';
 import { RETIRED_TOOL_NAMES } from '../src/mcp/names.js';
@@ -651,7 +651,7 @@ test('a run that straddles the window start is not a silent run', () => {
   const mute = store.createAgent({ taskId: 'task_mute', cwd: '/wt/mute', pid: 2 });
   store.updateAgent(mute.id, { status: 'done', endedAt: new Date(clock).toISOString() });
 
-  const insights = (window: string) =>
+  const insights = (window: InsightsWindow) =>
     buildMcpInsights({
       calls: store.listMcpCallsSince(sinceOrEpoch(resolveWindow(window, now).since)),
       agents: store.listAgents(),
@@ -664,7 +664,7 @@ test('a run that straddles the window start is not a silent run', () => {
       now,
     });
 
-  for (const window of ['24h', '7d']) {
+  for (const window of ['24h', '7d'] as const) {
     const view = insights(window);
     assert.equal(view.totals.runs, 2, `${window}: both runs settled inside it`);
     assert.deepEqual(
