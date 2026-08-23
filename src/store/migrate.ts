@@ -17,35 +17,57 @@ export type ColumnMigrations = Record<string, Record<string, string>>;
  * column on a database that predates it would read `undefined`.
  */
 /**
- * A table whose **key** changed, declared by the module that owns it — the same
- * rule {@link ColumnMigrations} follows, for the same reason: the question "did
- * this table's new shape get a migration?" must be answerable without leaving the
- * file the new shape was written in.
+ * A table whose shape changed in a way `ALTER TABLE` cannot express, declared by
+ * the module that owns it — the same rule {@link ColumnMigrations} follows, for
+ * the same reason: the question "did this table's new shape get a migration?"
+ * must be answerable without leaving the file the new shape was written in.
  *
- * A key change is not additive, so `ALTER TABLE ADD COLUMN` cannot express it and
- * SQLite has no `ALTER COLUMN`. The only honest answer is a rebuild: create the
- * new shape, copy the rows across resolving the old key into the new one, drop
- * the old table, and put the new one in its place — all inside one transaction,
- * so a crash halfway leaves the old table exactly as it was rather than a half
- * copy nothing knows is half.
+ * Two kinds reach here, and they are the same problem. A **key** change is not
+ * additive. Neither is a **constraint** change: relaxing a `NOT NULL` to nullable,
+ * or tightening the other way, is invisible to `ALTER TABLE ADD COLUMN`, and
+ * SQLite has no `ALTER COLUMN` at all — so a column declared nullable in `SCHEMA`
+ * stays `NOT NULL` forever on every database created before the relaxation, and
+ * every writer that means null by it is refused. The only honest answer to either
+ * is a rebuild: create the new shape, copy the rows across resolving the old shape
+ * into the new one, drop the old table, and put the new one in its place — all
+ * inside one transaction, so a crash halfway leaves the old table exactly as it
+ * was rather than a half copy nothing knows is half.
  */
-export interface TableRebuild {
+export type TableRebuild = {
   table: string;
   /**
-   * The column whose **presence** means this database still carries the old
-   * shape. This is the whole of the detection: a fresh database gets the new
-   * shape from `SCHEMA` and is never rebuilt, and a rebuilt one no longer has
-   * the column, so a second run is a no-op rather than a second copy.
-   */
-  keyedOn: string;
-  /**
    * `INSERT INTO <table> (…) SELECT …` copying the renamed old table's rows into
-   * the new one, resolving the old key into the new. Every column is named
+   * the new one, resolving the old shape into the new. Every column is named
    * explicitly: `SELECT *` would bind by position and silently shift a row's
-   * columns along the day either shape gains a field.
+   * columns along the day either shape gains a field. The database is passed so a
+   * copy can ask what the old table actually has — a table that gained an
+   * `ALTER TABLE` column between the two shapes carries it on some databases and
+   * not others, and naming it unconditionally throws on exactly the oldest ones.
    */
-  copy: (old: string) => string;
-}
+  copy: (old: string, db: Database.Database) => string;
+} & (
+  | {
+      /**
+       * The column whose **presence** means this database still carries the old
+       * shape. A fresh database gets the new shape from `SCHEMA` and is never
+       * rebuilt, and a rebuilt one no longer has the column, so a second run is a
+       * no-op rather than a second copy.
+       */
+      keyedOn: string;
+      detect?: undefined;
+    }
+  | {
+      /**
+       * What the old shape looks like when no column's presence can say so — a
+       * constraint reads off `PRAGMA table_info`, not off a name. It must be false
+       * once the rebuild has run, which is what keeps a second boot a no-op; one of
+       * the two must be given, which is why they are a union rather than two
+       * optional fields that can both be forgotten.
+       */
+      detect: (db: Database.Database) => boolean;
+      keyedOn?: undefined;
+    }
+);
 
 /**
  * Rebuild every table whose key changed, then create anything still missing.
@@ -61,7 +83,7 @@ export function rebuildTables(
   rebuilds: readonly TableRebuild[],
   createTables: () => void,
 ): void {
-  const stale = rebuilds.filter((r) => hasColumn(db, r.table, r.keyedOn));
+  const stale = rebuilds.filter((r) => (r.detect ? r.detect(db) : hasColumn(db, r.table, r.keyedOn)));
   if (stale.length === 0) {
     createTables();
     return;
@@ -69,14 +91,23 @@ export function rebuildTables(
   db.transaction(() => {
     for (const r of stale) db.exec(`ALTER TABLE ${r.table} RENAME TO ${r.table}__old`);
     createTables();
-    for (const r of stale) db.exec(r.copy(`${r.table}__old`));
+    for (const r of stale) db.exec(r.copy(`${r.table}__old`, db));
     for (const r of stale) db.exec(`DROP TABLE ${r.table}__old`);
   })();
 }
 
 function hasColumn(db: Database.Database, table: string, column: string): boolean {
-  const info = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
-  return info.some((c) => c.name === column);
+  return tableColumns(db, table).some((c) => c.name === column);
+}
+
+/**
+ * `PRAGMA table_info`, as the two things a rebuild ever asks of it: which columns
+ * a table has, and whether one of them is `NOT NULL`. Exported because a
+ * constraint detector lives with the table it is about, in the domain module, and
+ * reading the pragma by hand there would be a second spelling of the same query.
+ */
+export function tableColumns(db: Database.Database, table: string): { name: string; notnull: number }[] {
+  return db.prepare(`PRAGMA table_info(${table})`).all() as { name: string; notnull: number }[];
 }
 
 /**

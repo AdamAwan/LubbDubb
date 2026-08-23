@@ -111,14 +111,20 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
     const branch = jobBranch(job);
     if (branch !== null) jobOfBranch.set(branch, `job:${job.id}`);
   }
-  for (const pr of input.world.pullRequests) {
+  // Parentage is resolved over open **and** recently-closed pull requests, while
+  // emission stays split below. A PR that opened and merged inside one pulse — or
+  // merged across a restart — is only ever seen in the closed window, and
+  // `parent_ref` is write-once, so the window is the fold's one shot at the edge.
+  // Resolve it from the open list alone and the node is a detached root forever.
+  const allPrs = [...input.world.pullRequests, ...(input.world.closedPullRequests ?? [])];
+  for (const pr of allPrs) {
     const owner = jobOfBranch.get(pr.branch);
     if (owner !== undefined && !prParent.has(pr.number)) prParent.set(pr.number, owner);
   }
 
   for (const issue of input.world.issues) {
     const branch = issueBranch(issue.number);
-    for (const pr of input.world.pullRequests) {
+    for (const pr of allPrs) {
       const mine = pr.branch === branch || issue.linkedPrNumber === pr.number;
       if (mine && !prParent.has(pr.number)) prParent.set(pr.number, issueOrigin(issue.number));
     }
@@ -132,10 +138,14 @@ export function foldWorkGraph(input: WorkGraphInput): WorkNodeObservation[] {
   const jobParent = new Map<string, string>();
   for (const issue of input.world.issues) {
     if (issue.linkedPrNumber === null || issue.linkedPrNumber === undefined) continue;
-    const pr = input.world.pullRequests.find((p) => p.number === issue.linkedPrNumber);
-    if (!pr) continue;
-    const owner = jobOfBranch.get(pr.branch);
-    if (owner !== undefined && !jobParent.has(owner)) jobParent.set(owner, issueOrigin(issue.number));
+    // A `for` rather than a `.find`: two issues may link one PR number, and the
+    // first match would drop the sibling. The `!jobParent.has(owner)` guard below
+    // is what keeps the write-once parent write-once either way.
+    for (const pr of allPrs) {
+      if (pr.number !== issue.linkedPrNumber) continue;
+      const owner = jobOfBranch.get(pr.branch);
+      if (owner !== undefined && !jobParent.has(owner)) jobParent.set(owner, issueOrigin(issue.number));
+    }
   }
 
   const priorPr = new Map(input.existing.filter((n) => n.kind === 'pr').map((n) => [n.ref, n]));

@@ -112,7 +112,7 @@ answer without leaving the file you added the column's reader to. Current entrie
 | `tracker_items`                        | `tickets.ts`       | `tracking`, `work_item_state`, `parent_known`, and other fields folded onto the ticket mirror as it evolved to hold labels, parent links and state from the provider — see [The ticket mirror](#the-ticket-mirror) for the reasoning behind each column.
 | `tracker_sweep`                        | `tickets.ts`       | `restated_at` — the one-shot mark that the mirror's history has been read with every row's native state on it. Absence means the mirror has not been restated; presence marks the boot where the re-read happened.
 | `feature_colors`                       | `tickets.ts`       | **None, declared empty.** Still a fresh `CREATE TABLE` with nothing added since. The entry exists so the next column added is noticed here rather than read back as `undefined`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
-| `knowledge_graduations`                | `knowledge.ts`     | `exit` (which way the claim left — `docs`, `job` or `ticket`), `ticket_ref`. The first needs a **backfill** as well as the column, below
+| `knowledge_graduations`                | `knowledge.ts`     | `exit` (which way the claim left — `docs`, `job` or `ticket`), `ticket_ref`. The first needs a **backfill** as well as the column, below. The same change also **relaxed `target` to nullable**, which is not additive and no entry here can carry — that half is a [rebuild](#rebuilding-a-table-whose-key-changed)
 | `knowledge_facts`                      | `knowledge.ts`     | `resolves_when`, `supersedes`, `about_ref`, `where_at` — the JSON condition that settles a notice before its clock, what fact an amendment sharpens, and what a claim is about and where it locates, added across multiple phases as the fleet's knowledge system evolved. See [27](27-knowledge.md) for the reasoning behind each.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 
 ### When a null means something
@@ -160,16 +160,25 @@ crash halfway leaves the old table exactly as it was rather than a half copy not
 like `ensureColumns` deliberately: the entries are a `TableRebuild[]` **declared by the module that
 owns the table**, and the composition root applies them.
 
-- **Detection is the old key column's presence.** A fresh database gets the new shape from `SCHEMA`
-  and is never rebuilt; a rebuilt one no longer has the column, so a second boot is a no-op rather
-  than a second copy.
+- **Detection is the old key column's presence** (`keyedOn`), or a predicate over `PRAGMA table_info`
+  (`detect`) where no column's name differs between the two shapes — the two are a union, so a
+  declaration that gives neither does not compile rather than silently never running. Either way a
+  fresh database gets the new shape from `SCHEMA` and is never rebuilt, and a rebuilt one no longer
+  matches, so a second boot is a no-op rather than a second copy.
+- **A relaxed constraint is the same problem with the same answer.** A key change is the obvious way
+  in and not the only one: relaxing a column from `NOT NULL` to nullable is equally beyond
+  `ADD COLUMN`, so the column stays `NOT NULL` on every database created before the relaxation, while
+  `SCHEMA` says otherwise and every reader believes it. A writer that means null by that column is
+  refused — loudly if it uses a plain `INSERT`, and **silently** if it uses `INSERT OR IGNORE`, which
+  swallows `SQLITE_CONSTRAINT_NOTNULL` exactly as it swallows the primary-key collision it was written
+  for.
 - **The schema's own `CREATE` makes the new table.** The rebuild renames the old one out of the way
   first and then calls `createTables`, which is `db.exec(SCHEMA)`. A second copy of the DDL inside a
   migration would be free to drift from the one every fresh database gets, with nothing to catch it.
 - **Every column is named in the copy.** `SELECT *` binds by position and would silently shift a row's
   columns along the day either shape gains a field.
 
-Two declarations exist. `VALIDATION_REBUILDS` in `validation.ts` moves `validation_checks` and
+Three declarations exist. `VALIDATION_REBUILDS` in `validation.ts` moves `validation_checks` and
 `validation_resources` off `plan_id` and onto the goal's `origin_ref` — the old key resolved through
 the plans table. A row whose plan is gone is dropped by the join rather than carried under a key made
 up for it: it can no longer name a goal, and a check keyed on nothing is worse than one that is not
@@ -185,6 +194,28 @@ agent's credential. Dropping rather than nulling, because `NOT NULL` is not some
 and a column no writer fills would refuse every new filing on every database created before this
 build. Nothing is re-derived in the copy: `target_ref` was already the primary key, so a filing an
 operator made last month keeps its ticket.
+
+`KNOWLEDGE_REBUILDS` in `knowledge.ts` rebuilds `knowledge_graduations`, and it is the constraint case
+rather than the key one — nothing is named differently between the two shapes, so it is detected on
+`target`'s `notnull` flag. The exits merged changed the table twice at once: gaining `exit` is additive
+and has its `KNOWLEDGE_COLUMNS` entry, while relaxing `target` to nullable is not and had nothing.
+On every database created in that window `target` is still `NOT NULL`, so `recordGraduation` **throws**
+for the `job` and `ticket` exits and succeeds for `docs` — which reads as two broken buttons rather
+than as a schema — and the claim fold's `INSERT OR IGNORE` dropped every graduation it wrote, on a pass
+`runOnce` then stamped as done. The copy supplies `docs` for a row whose old shape has no `exit` at all,
+which is the same assertion the `exit` backfill makes rather than a guess, and it closes the
+mirror-image drift for free: `exit` is `NOT NULL` in `SCHEMA` and nullable on every migrated database,
+because `ALTER` cannot add a `NOT NULL` column without a default. Asserted in
+`test/knowledgeFold.test.ts`, whose fixture builds the table in its pre-relaxation shape rather than
+letting `SCHEMA` create it — letting `SCHEMA` create it is what kept the whole defect invisible.
+
+The rows the first fold lost are recovered by a **second one-shot**, `refold-finding-graduations`,
+never by editing the fold's own id: that id names one pass, and renaming it re-folds every claim an
+operator has since ruled on. It re-runs only the graduation half over the `findings` rows still on
+disk — the fold copies and deletes nothing, which is precisely the recoverability that decision paid
+for — and is `INSERT OR IGNORE` keyed on `kng_<finding id>`, so it cannot double-write and cannot
+disturb a graduation recorded since. Ordering is already right: the rebuild pass runs before the
+one-shots, so `target` is nullable by the time it inserts.
 
 **Three migrations are not `ALTER`s.** `adoptFloorCompletions()` carries #203's `floor_completions`
 into `issue_runs` and drops it (#234). A reshape rather than a column: `completed_at` was `NOT NULL`
@@ -969,7 +1000,16 @@ was. That is the whole feature — the world snapshot remembers a merge for `clo
 forgets it, and the graph must not. `parent_ref` is **write-once once non-null**: work lineage does not
 change, and an immutable edge makes a cycle impossible rather than merely guarded, which matters because
 `listWorkSubtree` is recursive. The "once non-null" wrinkle is deliberate — a stray PR can be recorded
-parentless and adopted when its issue link appears, but nothing is ever _re_-parented. It is also what
+parentless and adopted when its issue link appears, but nothing is ever _re_-parented.
+
+Which is why the fold resolves a pull request's **parentage over the open and the recently-closed lists
+together**, though it still emits a node from each separately (the open reading wins, being fresher). A PR
+that opened and merged inside one pulse interval, or merged while the process was restarting, is only ever
+seen in the `closedPrWindowMs` list — so that window is the fold's one and only chance at the edge. Resolve
+parentage from `pullRequests` alone and such a node is written with a null parent, and write-once then means
+_permanently_ detached: its goal's spend reads as unattributed, a knowledge graduation watching for the
+job's PR reads `waiting` forever, and the unrecorded-work detector offers a ticket for work a merged pull
+request already did. The same reason applies to the arm that adopts a **job** by the issue its PR links to. It is also what
 makes a **new adoption arm retroactive**: `COALESCE(work_nodes.parent_ref, excluded.parent_ref)` fills
 a stored null on the next pulse, so a rule that adopts work the fold used to emit parentless needs no
 migration and no backfill — the rows correct themselves. The mirror of that is the reason the write is

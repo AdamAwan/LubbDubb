@@ -10,7 +10,13 @@ import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { resolvePlanRoute } from '../src/plans/planning.js';
-import { describeProposedParts, planApprovalDetail, planApprovalNote, refusePlan } from '../src/plans/planApproval.js';
+import {
+  actOnShortfall,
+  describeProposedParts,
+  planApprovalDetail,
+  planApprovalNote,
+  refusePlan,
+} from '../src/plans/planApproval.js';
 import { planApprovalWarnings, planIsWedged, wedgedPlanPrompt } from '../src/plans/planWedge.js';
 import { refCollisionReason } from '../src/plans/planReconciler.js';
 import { planProposalHold, planProposalRef } from '../src/proposals/proposals.js';
@@ -899,4 +905,133 @@ test('the way out of a wedged plan is a replan, and the ask says so', async () =
   assert.equal(system.store.getPlan(plan.id)!.status, 'planning');
   await app.close();
   system.store.close();
+});
+
+// Issue #559 — arm B once the follow-up it appended has itself finished.
+//
+// `<slug>-followup` collides on purpose while the follow-up is still a
+// declaration; `upsertPlanParts` preserving progress is what turns that same
+// collision into a no-op once the follow-up has merged — nothing scheduled, the
+// merged part's declaration rewritten, and every surface reporting an append.
+
+function shortfallStore(): { store: Store; planId: string } {
+  const store = new Store(':memory:');
+  const doc = parsePlanDocument(
+    JSON.stringify({
+      version: 1,
+      reason: 'One part.',
+      parts: [{ slug: 'api', title: 'Build the API', scope: 'the api', dependsOn: [] }],
+    }),
+  );
+  assert.ok(doc.ok);
+  const { plan } = ingestPlanDocument(store, { doc: doc.document, originRef: 'issue:12', title: 'Add the API' });
+  store.setPlanStatus(plan.id, 'active');
+  return { store, planId: plan.id };
+}
+
+/** Mark a part terminal the way the reconciler does when its PR merges. */
+function merge(store: Store, planId: string, slug: string, prNumber: number): void {
+  const part = store.listPlanParts(planId).find((p) => p.slug === slug)!;
+  store.updatePlanPart(part.id, { status: 'merged', branch: `issue/12/${slug}`, prNumber });
+  store.rollUpPlanStatus(planId);
+}
+
+test('a second shortfall on a part whose follow-up merged appends a new part, not a rewrite', () => {
+  const { store, planId } = shortfallStore();
+  merge(store, planId, 'api', 40);
+  assert.equal(store.getPlan(planId)!.status, 'complete');
+
+  const first = actOnShortfall(store, {
+    planId,
+    originRef: 'issue:12',
+    cause: 'part',
+    partSlug: 'api',
+    summary: 'the endpoint returns 500 on empty input',
+  });
+  assert.equal(first.ok, true);
+  assert.match(first.detail, /appended part "api-followup"/);
+  assert.equal(store.getPlan(planId)!.status, 'active', 'an unsettled part makes the roll-up false again');
+
+  merge(store, planId, 'api-followup', 41);
+  assert.equal(store.getPlan(planId)!.status, 'complete');
+
+  const second = actOnShortfall(store, {
+    planId,
+    originRef: 'issue:12',
+    cause: 'part',
+    partSlug: 'api',
+    summary: 'it still 500s on a null body',
+  });
+  assert.equal(second.ok, true, 'the accept spends an agent, so it must not settle the verdict for nothing');
+  assert.match(second.detail, /appended part "api-followup-2"/);
+
+  const parts = store.listPlanParts(planId);
+  const appended = parts.find((p) => p.slug === 'api-followup-2');
+  assert.ok(appended, 'a real append: the taken slot took the next free number');
+  assert.equal(appended!.status, 'pending');
+  assert.match(appended!.scope, /null body/);
+
+  const merged = parts.find((p) => p.slug === 'api-followup')!;
+  assert.equal(merged.status, 'merged');
+  assert.equal(merged.scope, 'the endpoint returns 500 on empty input', 'a merged declaration is never rewritten');
+  assert.match(merged.title, /Finish "Build the API"/);
+  assert.equal(parts.find((p) => p.slug === 'api')!.scope, 'the api', 'and neither is the part that fell short');
+  assert.equal(store.getPlan(planId)!.status, 'active', 'the plan rolls back to active, which is what dispatches');
+  store.close();
+});
+
+test('a follow-up part that itself falls short is left as it is, and followed up again', () => {
+  const { store, planId } = shortfallStore();
+  merge(store, planId, 'api', 40);
+  actOnShortfall(store, {
+    planId,
+    originRef: 'issue:12',
+    cause: 'part',
+    partSlug: 'api',
+    summary: 'the endpoint returns 500 on empty input',
+  });
+  merge(store, planId, 'api-followup', 41);
+
+  // The short way in: the shortfall names the follow-up, so the slug rule's
+  // idempotence makes the target its own collision.
+  const settled = actOnShortfall(store, {
+    planId,
+    originRef: 'issue:12',
+    cause: 'part',
+    partSlug: 'api-followup',
+    summary: 'and now it 404s',
+  });
+  assert.equal(settled.ok, true);
+  assert.match(settled.detail, /appended part "api-followup-2"/);
+
+  const parts = store.listPlanParts(planId);
+  assert.equal(parts.find((p) => p.slug === 'api-followup-2')!.status, 'pending');
+  assert.equal(
+    parts.find((p) => p.slug === 'api-followup')!.scope,
+    'the endpoint returns 500 on empty input',
+    'the part that fell short is untouched, as the detail says',
+  );
+  assert.equal(store.getPlan(planId)!.status, 'active');
+  store.close();
+});
+
+test('a follow-up nobody has started is still refreshed in place', () => {
+  const { store, planId } = shortfallStore();
+  merge(store, planId, 'api', 40);
+  actOnShortfall(store, { planId, originRef: 'issue:12', cause: 'part', partSlug: 'api', summary: 'first reading' });
+
+  const again = actOnShortfall(store, {
+    planId,
+    originRef: 'issue:12',
+    cause: 'part',
+    partSlug: 'api',
+    summary: 'a better reading of the same gap',
+  });
+  assert.equal(again.ok, true);
+  assert.match(again.detail, /refreshed the declaration of the unstarted follow-up part "api-followup"/);
+
+  const parts = store.listPlanParts(planId);
+  assert.equal(parts.filter((p) => p.slug.startsWith('api-followup')).length, 1, 'no -followup-2 for an idle slot');
+  assert.equal(parts.find((p) => p.slug === 'api-followup')!.scope, 'a better reading of the same gap');
+  store.close();
 });
