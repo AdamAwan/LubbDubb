@@ -275,7 +275,12 @@ For an amendment:
    flag: shape arithmetic and a policy read on the write path, for a decision that is the same one
    every time. An amendment lands the same way whatever it does to the part count.
 3. `store.upsertPlan`, then retire, then `store.upsertPlanParts` (which merges on slug and never
-   deletes).
+   deletes). **A slug the document re-declares is un-retired**, back to `pending` with its
+   `blocked_reason` cleared: retirement is a *declaration* verdict, not progress, so a document that
+   declares a slug again is a plan delivering it again. Every other status is progress and survives
+   untouched, which is the split `upsertPlanParts` is made of. Retirement is therefore reversible by
+   the planner and by nothing else — the operator's Reject retires, and only the replan that follows
+   can lift it.
 4. `store.ingestValidation`, on the same terms one layer down: merged on the check id, letters
    assigned once, and a check the amendment stopped declaring superseded rather than deleted. Written
    whenever the document carries a validation block, which is the only condition there is.
@@ -372,6 +377,8 @@ the only node the harness knows how to make other work wait on, so a human step 
 `dependsOn` and `PlanReconciler.readiness` already have:
 
 - Rule `plan-part` produces no candidate for one (`partIsHuman`), so it is never dispatched.
+- The reconciler folds no pull request onto one, stalls it on no agent, and **does not read it
+  against the ref-collision guard** — three skips, one reason: there is no branch and no agent.
 - It has no branch, so `dependencySatisfied` is false for anything naming it until it is
   `partSettled` — its dependents stay `pending` with no code added anywhere.
 - The operator marking its task **done** writes `concluded` with `outcomeKind: 'human'`
@@ -612,6 +619,15 @@ exactly as they are, because they are not the refusal's to withdraw. A refusal t
 flight is a _replan_ being refused, and the work already running carries on while the planner rewrites
 around it.
 
+**The retirement lifts when the replan re-declares the slug**, and that is what makes the route a route
+rather than a dead end. A replan *must* reuse slugs — the slug is the merge key and has to survive one —
+so a retirement that outlived a re-declaration would merge every part of the new plan onto a retired
+row and release a plan with nothing live in it: rule `plan-part` schedules nothing, `rollUpPlanStatus`
+returns early on no parts, `planIsWedged` is false because nothing is `blocked`, and the goal sits
+`active` and idle for good. `upsertPlanParts` therefore un-retires (see Ingestion above), and
+`releasePlan` **refuses a plan with no live parts** as the backstop: any future route to that shape is
+a visible no on the approval card rather than a silent park.
+
 An operator who wants a _different_ plan without refusing this one can press Replan, on the same panel.
 
 **Both settlements are compare-and-set against `awaiting_approval`**, the same discipline as
@@ -729,8 +745,15 @@ is exactly what a stray push or a PR opened on its branch would otherwise achiev
 `refs/heads/issue/12` and `refs/heads/issue/12/<slug>` cannot coexist. An issue picked up **unplanned**
 first — the funnel's fail-open arm — and planned afterwards has exactly that branch, and every part
 branch would fail to create with a git error nobody can act on. The reconciler checks
-`git presence(issue/<n>)`; if the flat branch exists locally or remotely, every uncut part is parked
-`blocked` and **one** clear error is recorded naming the branch to delete or rename.
+`git presence(issue/<n>)`; if the flat branch exists locally or remotely, every uncut **code** part is
+parked `blocked` and **one** clear error is recorded naming the branch to delete or rename.
+
+**A human part is outside the guard, because it is outside the branch namespace entirely.** It is
+never cut, so the flat branch is not in its way — the same reason the fold loop skips it, and the
+reason a plan of nothing but human steps records no collision at all and is not `planIsWedged` for
+one. Parked by it, such a part carries a reason that reads correctly and is *false about that part*:
+the person is not waiting on git, and their step starts no sooner for the branch going away (it is
+settled by `Store.concludeHumanPart`, not by readiness).
 
 **A part whose branch _is_ the flat one does not collide with it** — it is what is on it. That is the
 shape a plan backfilled onto an issue the funnel had already worked has (`backfillWholePlanParts`),

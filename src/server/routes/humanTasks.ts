@@ -4,7 +4,7 @@ import type { Store } from '../../store/store.js';
 import { validateHumanTask } from '../../mcp/humanTasks.js';
 import { validationHeadline } from '../../delivery/closeOut.js';
 import { goalValidation } from '../../validation/goal.js';
-import { checked, IdParams, optionalText } from '../validation.js';
+import { checked, IdParams, optionalText, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 /**
@@ -23,7 +23,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // channel; this is the same row with no agent behind it, which is exactly what
   // a null `agentId` means.
   const CreateBody = z.object({
-    title: z.string({ required_error: 'title is required' }),
+    title: requiredText('title is required'),
     detail: optionalText('detail'),
     originRef: optionalText('originRef'),
   });
@@ -89,7 +89,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // nobody did. The part is left where it is; the reconciler blocks it on the next
   // pulse with its own account of why, and the ways out are Replan and Abandon.
   const DeclineBody = z.object({
-    note: z.string({ required_error: 'note is required — say why, so a replan has something to go on' }),
+    note: requiredText('note is required — say why, so a replan has something to go on'),
   });
   app.post(
     '/api/human-tasks/:id/decline',

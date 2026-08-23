@@ -560,9 +560,30 @@ function humanHolds(input: RunwayInput): Map<string, Hold[]> {
 
   for (const t of input.humanTasks) if (benchRowHolds(t)) add(t.originRef, t.createdAt, t.resolvedAt);
   // The assay's profile gate — the one hold the harness raises with no row of its
-  // own, and the same predicate `latent.profiles` counts the live ones by.
-  for (const a of input.pickup.assays ?? [])
-    if (a.proposedProfile !== null) add(a.originRef, a.decidedAt, a.profileAnsweredAt);
+  // own, and the only one whose predicate lives in another module. Asked through
+  // `assayHold`, the same pure function the pickup gate and the queue bucket ask,
+  // because two matchers for one claim is how the bucket ends up calling a goal
+  // unheld in the same reading that erases its run as held.
+  const issuesByRef = new Map(input.issues.map((i) => [`issue:${i.number}`, i]));
+  for (const a of input.pickup.assays ?? []) {
+    // **The span is closed or it is nothing.** An unanswered proposal has no end,
+    // and read to the end of the run it subtracts every minute a goal that
+    // demonstrably *shipped* spent shipping — the completion being the evidence it
+    // was not held. Only `decided_at → profile_answered_at` is a hold the input
+    // evidences; the open-ended treatment is spec'd for the standing delivery
+    // below and for nothing else.
+    if (a.profileAnsweredAt === null) continue;
+    const issue = issuesByRef.get(a.originRef);
+    if (!issue) continue;
+    // Asked as of the hold's *start*, which is the only moment there is a hold to
+    // ask about: with the answer in, the gate arm is released by construction and
+    // `assayHold` would say so about every closed span alike. What it still rules
+    // on is the release the re-implementation missed — a ticket rewritten since
+    // the assay was never held by it.
+    if (assayHold({ ...a, profileAnsweredAt: null }, issue, { signals: input.pickup.assaySignals ?? [] }) === null)
+      continue;
+    add(a.originRef, a.decidedAt, a.profileAnsweredAt);
+  }
   // A standing delivery: the harness believes it is finished and is waiting to be
   // told otherwise. It has no end — it stops standing when the world moves, which
   // is not an instant anything records — so it runs to the end of the run, which
@@ -645,6 +666,18 @@ function reservoirClause(reading: Omit<RunwayReading, 'headline' | 'detail'>): s
  * fleet has stopped. That is the whole of "silted": telling an operator with
  * three plans awaiting approval to go and find more work would be wrong twice
  * over — there is work, and they are the reason it is not moving.
+ *
+ * **The headline is a function of the state alone, and every figure lives in the
+ * detail.** It is the bench row's title, which is both `recordHumanTask`'s dedup
+ * key and the identity the notification chain diffs on — so a headline carrying
+ * the runway settles and re-files the row, with a fresh notification, every time
+ * the queue moves by one issue. That is the flap `validateRunwayPolicy` refuses a
+ * `clearHours` at or below `warnHours` to prevent, reintroduced through the
+ * wording. With the title constant per state, a standing row is *refreshed* in
+ * place and its detail's figures come current without its id moving, which is
+ * what makes "a state change replaces it, and nothing else does" literally true.
+ * The latent/non-latent split is a second title per state and not a figure: it is
+ * a different thing to say, not the same thing with a different number in it.
  */
 function say(reading: Omit<RunwayReading, 'headline' | 'detail'>, cap: number): { headline: string; detail: string } {
   const latent = latentClause(reading.latent);
@@ -653,13 +686,12 @@ function say(reading: Omit<RunwayReading, 'headline' | 'detail'>, cap: number): 
     reading.debt === 0 ? null : `${reading.debt} other row${reading.debt === 1 ? '' : 's'} on the bench are open.`;
 
   if (reading.state === 'starved') {
-    const headline = latent
-      ? 'The fleet is waiting on you, not on work'
-      : `${reading.idleSlots} of ${cap} slot${cap === 1 ? '' : 's'} are idle`;
+    const headline = latent ? 'The fleet is waiting on you, not on work' : 'Slots are idle with nothing to take';
     return {
       headline,
       detail: [
-        `Nothing is eligible for pickup and ${reading.idleSlots} slot${reading.idleSlots === 1 ? ' is' : 's are'} empty.`,
+        `Nothing is eligible for pickup and ${reading.idleSlots} of ${cap} slot${cap === 1 ? '' : 's'} ` +
+          `${reading.idleSlots === 1 ? 'is' : 'are'} empty.`,
         latent,
         reservoir === null ? null : `${capitalise(reservoir)}.`,
         debt,
@@ -685,7 +717,7 @@ function say(reading: Omit<RunwayReading, 'headline' | 'detail'>, cap: number): 
 
   if (reading.state === 'thin' && reading.runwayMinutes !== null) {
     return {
-      headline: `About ${humanMinutes(reading.runwayMinutes)} of work queued`,
+      headline: 'The queue is thinning',
       detail: [
         `${reading.inflight} in flight, ${reading.queued} waiting. At ${cap} slot${cap === 1 ? '' : 's'} and a ` +
           `${humanMinutes(reading.medianLeadMinutes ?? 0)} median goal of fleet time, that is ` +
@@ -711,9 +743,10 @@ function say(reading: Omit<RunwayReading, 'headline' | 'detail'>, cap: number): 
     };
   }
   return {
-    headline:
-      reading.runwayMinutes === null ? 'Healthy' : `About ${humanMinutes(reading.runwayMinutes)} of work queued`,
-    detail: `${reading.inflight} in flight, ${reading.queued} waiting.`,
+    headline: 'Healthy',
+    detail:
+      `${reading.inflight} in flight, ${reading.queued} waiting.` +
+      (reading.runwayMinutes === null ? '' : ` About ${humanMinutes(reading.runwayMinutes)} of work queued.`),
   };
 }
 

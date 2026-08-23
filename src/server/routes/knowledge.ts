@@ -13,7 +13,7 @@ import { trackerCoordinates } from '../../mcp/findings.js';
 import { dedupeCandidates, renderCandidates } from '../../tickets/candidates.js';
 import type { FactExit, KnowledgeFact } from '../../types.js';
 import type { FactRuling, KnowledgeContradictionView, KnowledgeFactPayload } from '../../wire.js';
-import { checked, IdParams, optionalText, TicketTitleBody } from '../validation.js';
+import { checked, IdParams, optionalText, requiredText, TicketTitleBody } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 /**
@@ -131,7 +131,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
    * is honest; a defaulted one would date the claim to work that did not teach it.
    */
   const ClaimBody = z.object({
-    claim: z.string({ required_error: 'claim is required' }),
+    claim: requiredText('claim is required'),
     originRef: optionalText('originRef'),
   });
   app.post(
@@ -452,22 +452,29 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
    * `knowledge_contradict`, on a scoped MCP credential, with an observation behind
    * it. What is decided here is which sentence stands.
    */
-  const ResolveBody = z.discriminatedUnion('resolution', [
-    // Adopt the agent's sentence, or say the dispute is wrong. Neither carries text.
-    z.object({ resolution: z.literal('amended') }),
-    z.object({ resolution: z.literal('dismissed') }),
-    // Write the sharper sentence yourself. The claim is the whole of this move, so
-    // it is required by the shape rather than checked in the handler — a narrowing
-    // with nothing to narrow to is the one call here that could silently do nothing.
-    z.object({
-      resolution: z.literal('narrowed'),
-      claim: z
-        .string()
-        .trim()
-        .min(1, 'claim is what the fact should say instead — narrowing needs the sentence you are narrowing it to')
-        .max(MAX_CLAIM_CHARS),
-    }),
-  ]);
+  // The union's own refusal, worded: zod's stock discriminator message lists the
+  // literals and never names the field, and the 400 body drops paths.
+  const RESOLUTION_REFUSAL = { message: "resolution must be 'amended', 'dismissed' or 'narrowed'" };
+  const ResolveBody = z.discriminatedUnion(
+    'resolution',
+    [
+      // Adopt the agent's sentence, or say the dispute is wrong. Neither carries text.
+      z.object({ resolution: z.literal('amended') }),
+      z.object({ resolution: z.literal('dismissed') }),
+      // Write the sharper sentence yourself. The claim is the whole of this move, so
+      // it is required by the shape rather than checked in the handler — a narrowing
+      // with nothing to narrow to is the one call here that could silently do nothing.
+      z.object({
+        resolution: z.literal('narrowed'),
+        claim: z
+          .string()
+          .trim()
+          .min(1, 'claim is what the fact should say instead — narrowing needs the sentence you are narrowing it to')
+          .max(MAX_CLAIM_CHARS),
+      }),
+    ],
+    { errorMap: () => RESOLUTION_REFUSAL },
+  );
   app.post(
     '/api/knowledge/contradictions/:id/resolve',
     checked({ params: IdParams, body: ResolveBody }, async ({ params, body, reply }) => {

@@ -244,10 +244,16 @@ export class PlanStore {
         dependsOn: input.dependsOn,
         branch: prev?.branch ?? null,
         prNumber: prev?.prNumber ?? null,
-        status: prev?.status ?? 'pending',
+        // `retired` is the one status that is a *declaration verdict* rather than
+        // progress: it says this document stopped declaring the slug. A document
+        // that declares it again is delivering it again, so the retirement lifts —
+        // otherwise a replan, which must reuse slugs, merges onto retired rows and
+        // releases a plan with no live parts. Every other status is progress.
+        status: prev?.status === 'retired' ? 'pending' : (prev?.status ?? 'pending'),
         // Progress like the outcome columns: it explains a status this call is not
-        // allowed to change, so an amendment re-declaring a part leaves it alone.
-        blockedReason: prev?.blockedReason ?? null,
+        // allowed to change, so an amendment re-declaring a part leaves it alone —
+        // except across the un-retirement above, where the status it explains is gone.
+        blockedReason: prev?.status === 'retired' ? null : (prev?.blockedReason ?? null),
         taskId: prev?.taskId ?? null,
         createdAt: prev?.createdAt ?? ts,
         updatedAt: ts,
@@ -260,6 +266,10 @@ export class PlanStore {
       // alone. `expected_kind` is part of the declaration, so it does update, and so
       // do `touches` and `size`. `acceptance_met` is not a declaration at all — it
       // is a reviewer's confirmations — so it sits with the outcome columns.
+      // `status` and `blocked_reason` *do* update, which is safe only because the
+      // computed row already carries `prev`'s values for every case but the
+      // un-retirement above: this write is the declaration lifting a retirement,
+      // never the scheduler's progress being overwritten.
       `INSERT INTO plan_parts (id, plan_id, slug, seq, title, scope, touches, rationale, acceptance,
          acceptance_met, size, expected_kind, profile,
          outcome_kind, outcome_ref, outcome_summary, depends_on, branch, pr_number, status, blocked_reason,
@@ -271,7 +281,8 @@ export class PlanStore {
        ON CONFLICT(plan_id, slug) DO UPDATE SET seq=excluded.seq, title=excluded.title, scope=excluded.scope,
          touches=excluded.touches, rationale=excluded.rationale, acceptance=excluded.acceptance,
          size=excluded.size, expected_kind=excluded.expected_kind, profile=excluded.profile,
-         depends_on=excluded.depends_on, updated_at=excluded.updated_at`,
+         depends_on=excluded.depends_on, status=excluded.status,
+         blocked_reason=excluded.blocked_reason, updated_at=excluded.updated_at`,
     );
     const insertAll = this.ctx.db.transaction((all: PlanPart[]) => {
       for (const p of all)

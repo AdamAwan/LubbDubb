@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { isRecoveryVerdict, type RecoveryVerdict } from '../../agents/crashRecovery.js';
 import { formatAnswers } from '../../escalation/questionnaire.js';
-import { checked, IdParams, optionalText, requiredBoolean } from '../validation.js';
+import { checked, IdParams, optionalText, requiredBoolean, requiredText } from '../validation.js';
 import type { RouteContext } from './context.js';
 
 /**
@@ -26,8 +26,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
    */
   const AnswerBody = z
     .object({
-      response: z.string().min(1, 'response required').optional(),
-      answers: z.array(z.string().nullable()).min(1, 'answers required').optional(),
+      response: requiredText('response required').optional(),
+      answers: z
+        .array(z.string({ invalid_type_error: 'each answer must be a string or null' }).nullable())
+        .min(1, 'answers required')
+        .optional(),
     })
     .refine((b) => (b.response === undefined) !== (b.answers === undefined), {
       message: 'send either response (free text) or answers (one per question)',

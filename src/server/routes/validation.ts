@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { ValidationCheckResultBy, ValidationCheckState } from '../../types.js';
-import { checked, IssueNumberParams } from '../validation.js';
+import { checked, IssueNumberParams, optionalText } from '../validation.js';
 import type { RouteContext } from './context.js';
 import { issueOrigin } from '../../plans/planning.js';
 
@@ -73,11 +73,11 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
    */
   const ResultBody = z
     .object({
-      result: z.enum(['passed', 'failed'], {
-        required_error: 'result must be "passed" or "failed"',
-        invalid_type_error: 'result must be "passed" or "failed"',
-      }),
-      note: z.string().trim().optional(),
+      // `errorMap` rather than the two `*_error` options: those cover absence and a
+      // non-string, and leave the arm an operator actually hits — a value that is a
+      // string and not one of these — refusing in zod's words, which name no field.
+      result: z.enum(['passed', 'failed'], { errorMap: () => ({ message: 'result must be "passed" or "failed"' }) }),
+      note: optionalText('note'),
     })
     .superRefine((data, ctx) => {
       if (data.result === 'failed' && (data.note === undefined || data.note.length === 0)) {
@@ -154,10 +154,7 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
    * argument for pressing this; it is not this.
    */
   const HandoverBody = z.object({
-    to: z.enum(['fleet', 'human'], {
-      required_error: 'to must be "fleet" or "human"',
-      invalid_type_error: 'to must be "fleet" or "human"',
-    }),
+    to: z.enum(['fleet', 'human'], { errorMap: () => ({ message: 'to must be "fleet" or "human"' }) }),
   });
   app.post(
     '/api/issues/:number/validation/:checkId/handover',

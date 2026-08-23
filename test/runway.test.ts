@@ -9,6 +9,7 @@ import {
   type RunwayPolicy,
 } from '../src/supply/runway.js';
 import { DEFAULT_COOLDOWN } from '../src/dispatcher/dispatchCooldown.js';
+import { goalFingerprint } from '../src/intake/assay.js';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -116,6 +117,24 @@ function input(over: Partial<RunwayInput> = {}): RunwayInput {
     standing: false,
     ...over,
   };
+}
+
+/**
+ * An assay proposing a profile on issue `n`, fingerprinted against the very
+ * ticket {@link issue} builds — because a stale `goalRef` *releases* the gate,
+ * which is the half `humanHolds` used not to ask about.
+ */
+function gate(n: number, over: Partial<IssueAssay> = {}): IssueAssay {
+  const target = issue(n);
+  return {
+    originRef: `issue:${n}`,
+    verdict: 'workable',
+    proposedProfile: 'deep',
+    goalRef: goalFingerprint(target.title, target.body),
+    decidedAt: at(10),
+    profileAnsweredAt: null,
+    ...over,
+  } as unknown as IssueAssay;
 }
 
 const START = Date.parse('2026-08-20T09:00:00.000Z');
@@ -261,20 +280,14 @@ test('an escalation reaches its goal through the pull request the run recorded',
 });
 
 test('the profile gate is a hold, and the runway row is never one', () => {
-  const assays = [
-    {
-      originRef: 'issue:1',
-      verdict: 'workable',
-      proposedProfile: 'deep',
-      decidedAt: at(10),
-      profileAnsweredAt: at(70),
-    },
-  ] as unknown as IssueAssay[];
   const r = readRunway(
     input({
       policy: ONE_RUN,
       runs: one('issue:1', 100),
-      pickup: { ...input().pickup, assays },
+      // The gate is read through `assayHold`, so the goal it stopped has to be in
+      // front of the lens and the assay has to still be about that ticket.
+      issues: [issue(1)],
+      pickup: { ...input().pickup, assays: [gate(1, { profileAnsweredAt: at(70) })] },
       // A `supply` row carries no origin and could not attach to a goal anyway —
       // asserted here because "the reading must not describe itself" is the rule,
       // not the accident.
@@ -400,7 +413,7 @@ test('thin: below the warn band, with the arithmetic in the detail', () => {
   assert.equal(r.inflight, 3);
   assert.equal(r.queued, 1);
   assert.equal(r.runwayMinutes, 53);
-  assert.match(r.headline, /About 53 minutes of work queued/);
+  assert.match(r.headline, /The queue is thinning/);
 });
 
 test('dry: an empty queue is its own state, not a small runway', () => {
@@ -414,7 +427,7 @@ test('starved beats dry: a free slot with nothing to put in it is already idle',
   const r = readRunway(input({ issues: [], pickup: { ...input().pickup, headroom: 2 } }));
   assert.equal(r.state, 'starved');
   assert.equal(r.idleSlots, 2);
-  assert.match(r.headline, /slots are idle/);
+  assert.match(r.headline, /Slots are idle with nothing to take/);
 });
 
 test('starved and dry need no history at all', () => {
@@ -462,6 +475,93 @@ test('the debt clause never counts the runway row itself', () => {
   assert.equal(r.debt, 1);
 });
 
+test('an unanswered profile proposal is not a hold — the goal shipped, so it was not held', () => {
+  // The failure this pins: `decided_at → null` clamps to the end of the run, so an
+  // assay nobody answered subtracts every minute of a goal that demonstrably
+  // completed. A proposal nobody answers never ends, so the run is dropped from
+  // the median for good and the runway dies on that deployment.
+  const r = readRunway(
+    input({
+      policy: ONE_RUN,
+      runs: one('issue:1', 100),
+      issues: [issue(1)],
+      pickup: { ...input().pickup, assays: [gate(1)] },
+    }),
+  );
+  assert.equal(r.medianHeldMinutes, 0);
+  assert.equal(r.medianLeadMinutes, 100);
+});
+
+test('a rewritten ticket released the gate, and the bucket and the subtraction agree about that', () => {
+  // Two matchers for one claim is the shape: `assayHold` is what the queue bucket
+  // asks, and it releases the hold the moment the ticket no longer fingerprints to
+  // what the assayer read. A subtraction that did not ask would erase the run of a
+  // goal the same reading counts as unheld.
+  const stale = gate(1, { goalRef: 'notthetickettheyread', profileAnsweredAt: at(70) });
+  const held = readRunway(
+    input({
+      policy: ONE_RUN,
+      runs: one('issue:1', 100),
+      issues: [issue(1)],
+      pickup: { ...input().pickup, assays: [gate(1, { profileAnsweredAt: at(70) })] },
+    }),
+  );
+  const released = readRunway(
+    input({
+      policy: ONE_RUN,
+      runs: one('issue:1', 100),
+      issues: [issue(1)],
+      pickup: { ...input().pickup, assays: [stale] },
+    }),
+  );
+  assert.equal(held.medianHeldMinutes, 60);
+  assert.equal(released.medianHeldMinutes, 0);
+  assert.equal(released.medianLeadMinutes, 100);
+});
+
+test('every headline is a function of the state alone, so no figure can move it', () => {
+  // The title is `recordHumanTask`'s dedup key *and* the identity the notification
+  // chain diffs on, so a figure in it re-files the row and re-notifies every time
+  // the queue moves by one. Two readings per state differing only in their figures
+  // must therefore carry the same headline.
+  const cases: { state: string; a: RunwayInput; b: RunwayInput }[] = [
+    {
+      state: 'starved',
+      a: input({ issues: [], pickup: { ...input().pickup, headroom: 1 }, cap: 3 }),
+      b: input({ issues: [], pickup: { ...input().pickup, headroom: 3 }, cap: 3 }),
+    },
+    {
+      state: 'dry',
+      // An unwatched issue moves the reservoir clause without touching the queue,
+      // so both readings are dry and their figures differ.
+      a: input({ issues: [], pickup: { ...input().pickup, headroom: 0 } }),
+      b: input({ issues: [issue(1, { labels: [] })], pickup: { ...input().pickup, headroom: 0 } }),
+    },
+    {
+      state: 'thin',
+      a: input({ issues: [issue(1), issue(2), issue(3)] }),
+      b: input({ issues: [issue(1), issue(2), issue(3), issue(4)] }),
+    },
+    {
+      state: 'healthy',
+      a: input({ issues: Array.from({ length: 9 }, (_, i) => issue(i + 1)) }),
+      b: input({ issues: Array.from({ length: 14 }, (_, i) => issue(i + 1)) }),
+    },
+    {
+      state: 'unknown',
+      a: input({ policy: { ...DEFAULT_RUNWAY, minimumRuns: 50 }, issues: [issue(1)] }),
+      b: input({ policy: { ...DEFAULT_RUNWAY, minimumRuns: 50 }, issues: [issue(1), issue(2)] }),
+    },
+  ];
+  for (const c of cases) {
+    const a = readRunway(c.a);
+    const b = readRunway(c.b);
+    assert.equal(a.headline, b.headline, `${c.state}: the headline moved with the figures`);
+    // The figures did move — otherwise the case above proves nothing.
+    assert.notEqual(a.detail, b.detail, `${c.state}: the two readings are the same reading`);
+  }
+});
+
 // --- the pass --------------------------------------------------------------
 
 test('healthy files nothing and settles a standing row', () => {
@@ -490,6 +590,37 @@ test('a state change replaces the row rather than stacking a second one', () => 
     ['settle', 'file'],
   );
   assert.equal(steps[1]?.kind === 'file' && steps[1].title, 'Nothing is queued behind the fleet');
+});
+
+test('a thin fleet whose queue drifts keeps one row, and so notifies once', () => {
+  // The regression #546 filed: with the runway in the title, every issue added or
+  // removed settled the row and filed a new one under a new id — a fresh desktop
+  // notification per pulse, and, once every wording in range was spent, silence
+  // for good. Driven as a sequence because one pulse cannot show it.
+  const queues = [
+    [1, 2, 3],
+    [1, 2, 3, 4],
+    [1, 2, 3],
+    [1, 2],
+  ];
+  const titles = new Set<string>();
+  let standing: HumanTask | null = null;
+  for (const q of queues) {
+    const reading = readRunway(input({ issues: q.map((n) => issue(n)) }));
+    assert.equal(reading.state, 'thin');
+    const steps = runwayPass({ reading, existing: standing ? [standing] : [], enabled: true });
+    // Never a settle: the state did not change, so the row did not either.
+    assert.deepEqual(
+      steps.map((s) => s.kind),
+      ['file'],
+      `queue of ${q.length}: the row was replaced rather than refreshed`,
+    );
+    const filed = steps[0];
+    if (filed?.kind !== 'file') throw new Error('unreachable');
+    titles.add(filed.title);
+    standing = task({ id: 'ht_x', kind: 'supply', title: filed.title });
+  }
+  assert.equal(titles.size, 1);
 });
 
 test('a row already standing under this wording is re-filed, so its figures refresh', () => {

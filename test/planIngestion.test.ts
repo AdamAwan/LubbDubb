@@ -16,7 +16,9 @@ import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { Store } from '../src/store/store.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
-import type { Agent } from '../src/types.js';
+import type { Agent, PlanPartInput } from '../src/types.js';
+import { refusePlan, releasePlan } from '../src/plans/planApproval.js';
+import { liveParts } from '../src/plans/parts.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 
 // -- the reserved filename ---------------------------------------------------
@@ -205,6 +207,122 @@ test('a plan upserts by issue origin and its parts merge on slug', () => {
   assert.equal(store.getPlanByOrigin('issue:99'), null);
   store.close();
 });
+
+test('a re-declared slug is un-retired, so Reject then Replan is not a goal-killer', () => {
+  // `refusePlan` retires every unstarted part, and a replan **must** reuse the
+  // slugs — the slug is the merge key and spec 08 says it has to survive one. With
+  // `retired` preserved as though it were progress, every re-declared part merged
+  // onto a retired row and the plan was released with nothing live in it: rule
+  // `plan-part` scheduled nothing, `rollUpPlanStatus` returned early, nothing was
+  // wedged, and the goal sat `active` and idle for good.
+  const store = new Store(':memory:');
+  const plan = store.upsertPlan({
+    originRef: 'issue:12',
+    title: 'Big thing',
+    status: 'awaiting_approval',
+    reason: 'Two PRs.',
+  });
+  store.upsertPlanParts(plan.id, [part('schema', 1, 'Schema'), part('reader', 2, 'Reader')]);
+
+  const refused = refusePlan(store, plan.id, 'issue:12', 'the split is wrong');
+  assert.equal(refused.ok, true);
+  assert.deepEqual(
+    store.listPlanParts(plan.id).map((p) => p.status),
+    ['retired', 'retired'],
+  );
+
+  // The replan, with the same slugs and revised titles — what a planner produces.
+  store.upsertPlanParts(plan.id, [part('schema', 1, 'Schema, revised'), part('reader', 2, 'Reader, revised')]);
+  const back = store.listPlanParts(plan.id);
+  assert.deepEqual(
+    back.map((p) => [p.slug, p.status, p.title]),
+    [
+      ['schema', 'pending', 'Schema, revised'],
+      ['reader', 'pending', 'Reader, revised'],
+    ],
+  );
+  assert.equal(liveParts(back).length, 2);
+  store.close();
+});
+
+test('a dropped part re-declared by a later amendment comes back, reason and all', () => {
+  // The same row reached without any rejection: drop `b`, then bring it back. The
+  // tracker comment used to contradict itself — the part carried the amendment's
+  // new title *and* the retired mark, so an operator who approved two parts got
+  // one delivered and the other announced as dropped under a title only the new
+  // declaration ever used.
+  const store = new Store(':memory:');
+  const plan = store.upsertPlan({ originRef: 'issue:13', title: 'Thing', status: 'active', reason: null });
+  store.upsertPlanParts(plan.id, [part('a', 1, 'A'), part('b', 2, 'B')]);
+  // The drop, as ingestion performs it: `partsToRetire` picks the slugs the new
+  // document no longer declares and the retirement is a status write, with
+  // whatever reason the part was carrying left on the row.
+  store.updatePlanPart(`${plan.id}:b`, { status: 'blocked', blockedReason: 'a branch is in the way' });
+  store.updatePlanPart(`${plan.id}:b`, { status: 'retired' });
+  store.upsertPlanParts(plan.id, [part('a', 1, 'A')]);
+  assert.equal(store.listPlanParts(plan.id).find((p) => p.slug === 'b')?.status, 'retired');
+
+  store.upsertPlanParts(plan.id, [part('a', 1, 'A'), part('b', 2, 'B, back again')]);
+  const b = store.listPlanParts(plan.id).find((p) => p.slug === 'b');
+  assert.equal(b?.status, 'pending');
+  assert.equal(b?.title, 'B, back again');
+  // The reason explained a status that is gone. Left standing it would be drawn on
+  // the Held plate beside a part nothing is holding.
+  assert.equal(b?.blockedReason, null);
+  store.close();
+});
+
+test("progress survives an amendment — only retirement is the declaration's to lift", () => {
+  // The un-retirement above must not have widened `upsertPlanParts` into something
+  // that writes progress: a part in flight keeps its status, its branch and its
+  // blocked reason across every re-declaration.
+  const store = new Store(':memory:');
+  const plan = store.upsertPlan({ originRef: 'issue:14', title: 'Thing', status: 'active', reason: null });
+  store.upsertPlanParts(plan.id, [part('a', 1, 'A')]);
+  store.updatePlanPart(`${plan.id}:a`, { status: 'blocked', blockedReason: 'CI is red', branch: 'issue/14/a' });
+
+  store.upsertPlanParts(plan.id, [part('a', 1, 'A, reworded')]);
+  const a = store.listPlanParts(plan.id)[0];
+  assert.equal(a?.status, 'blocked');
+  assert.equal(a?.blockedReason, 'CI is red');
+  assert.equal(a?.branch, 'issue/14/a');
+  assert.equal(a?.title, 'A, reworded');
+  store.close();
+});
+
+test('a plan with no live parts is refused rather than released into silence', () => {
+  const store = new Store(':memory:');
+  const plan = store.upsertPlan({
+    originRef: 'issue:15',
+    title: 'Thing',
+    status: 'awaiting_approval',
+    reason: null,
+  });
+  store.upsertPlanParts(plan.id, [part('a', 1, 'A')]);
+  store.updatePlanPart(`${plan.id}:a`, { status: 'retired' });
+  const released = releasePlan(store, plan.id, 'issue:15');
+  assert.equal(released.ok, false);
+  assert.match(released.detail, /no live parts/);
+  // And the plan is left where it was, so the approval card is still there to press.
+  assert.equal(store.getPlan(plan.id)?.status, 'awaiting_approval');
+  store.close();
+});
+
+/** One declared part — the fields a planner document carries, and nothing else. */
+function part(slug: string, seq: number, title: string): PlanPartInput {
+  return {
+    slug,
+    seq,
+    title,
+    scope: 'src',
+    dependsOn: [],
+    rationale: null,
+    acceptance: null,
+    touches: [],
+    size: null,
+    expectedKind: null,
+  };
+}
 
 // -- end-to-end through the file-events drain --------------------------------
 

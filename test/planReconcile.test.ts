@@ -348,6 +348,36 @@ test('an existing issue/<n> branch blocks the parts, and says so', async () => {
   );
 });
 
+test('the collision guard is scoped to the parts git is actually asked to cut', async () => {
+  // A human part is never cut, so the flat branch is not in its way — the same
+  // reason the fold loop skips it, three lines up. Without the skip it fell through
+  // to a hypothetical `issue/12/<slug>` nobody will ever ask for, compared unequal,
+  // and was parked with a git instruction that is false about that part: the person
+  // is not waiting on a branch, and the step starts no sooner for the branch going.
+  const h = humanAndCodeSetup();
+  h.git.setPresence('issue/12', { local: true });
+  await h.reconciler.reconcile(world());
+  assert.deepEqual(statuses(h), [
+    ['flip', 'ready'],
+    ['code', 'blocked'],
+  ]);
+  const reasons = new Map(h.store.listPlanParts(h.planId).map((p) => [p.slug, p.blockedReason]));
+  assert.equal(reasons.get('flip'), null);
+  assert.equal(reasons.get('code'), refCollisionReason(12, { local: true, remote: false }));
+});
+
+test('a plan of nothing but human steps records no collision and is not wedged', async () => {
+  // The escalation half: with every part read as colliding, `planIsWedged` was true
+  // for a plan whose steps have nothing to do with any branch, and the operator was
+  // told to clear one.
+  const h = humanOnlySetup();
+  h.git.setPresence('issue/12', { local: true });
+  await h.reconciler.reconcile(world());
+  assert.deepEqual(statuses(h), [['flip', 'ready']]);
+  assert.equal(h.errors.length, 0, 'nothing collided, so nothing was recorded');
+  assert.equal(h.store.listPlanParts(h.planId)[0]?.blockedReason, null);
+});
+
 test('the reason names where the branch is, and which delete actually works', () => {
   // The bug this closes: a remote-only collision told the operator to "delete or
   // rename issue/12", they deleted the local ref, and `maybeFetch`'s own
@@ -498,6 +528,40 @@ function partInput(slug: string, seq: number, dependsOn: string[]): PlanPartInpu
     size: null,
     expectedKind: null,
   };
+}
+
+/** One step for a person and one for an agent, on the issue the flat branch is taken on. */
+function humanAndCodeSetup(): Harness {
+  return planOf([human('flip', 1), partInput('code', 2, [])], 'A flip, then the code');
+}
+
+/** Nothing but steps for a person — no part of this plan is ever cut. */
+function humanOnlySetup(): Harness {
+  return planOf([human('flip', 1)], 'A flip, and nothing else');
+}
+
+/** A human part: `expectedKind: 'human'` is the whole of what makes one. */
+function human(slug: string, seq: number): PlanPartInput {
+  return { ...partInput(slug, seq, []), expectedKind: 'human' };
+}
+
+/** An active plan on issue 12 with the given parts, wired to the same fakes as {@link setup}. */
+function planOf(parts: PlanPartInput[], title: string): Harness {
+  const store = new Store(':memory:');
+  const git = new FakeGitObserver();
+  const { sink, comments } = recordingSink();
+  const errors: ErrorLogInput[] = [];
+  const plan = store.upsertPlan({ originRef: 'issue:12', title, status: 'active', reason: null });
+  store.upsertPlanParts(plan.id, parts);
+  const reconciler = new PlanReconciler({
+    store,
+    git,
+    sink,
+    planning: DEFAULT_PLANNING,
+    defaultBranch: 'main',
+    errors: { record: (entry) => (errors.push(entry), {}) as ErrorLogEntry },
+  });
+  return { store, git, comments, errors, reconciler, planId: plan.id };
 }
 
 /**
