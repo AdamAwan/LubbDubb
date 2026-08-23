@@ -410,6 +410,42 @@ test('a check withdrawn while an agent was running it is said plainly, and nothi
   assert.match(res.text, /withdrew it/);
 });
 
+test('a reworded dispatched check refuses a result and keeps the amendment band', async () => {
+  const system = build();
+  const planId = planWith(system, [CHECK]);
+  system.store.setValidationActor(planId, 'csv-opens', 'fleet');
+  const agent = spawnAgent(system, 'issue:12:validate:csv-opens');
+  const task = system.store.getTask(agent.taskId);
+  assert.ok(task);
+  const dispatchedAt = task.createdAt;
+  while (new Date().toISOString() <= dispatchedAt) await new Promise((resolve) => setTimeout(resolve, 1));
+  system.store.amendValidation(planId, {
+    checks: [
+      {
+        ...CHECK,
+        do: 'Open Downloads and open the exported file.',
+        uses: [],
+        covers: [],
+        fleetCandidate: false,
+        candidateWhy: null,
+      },
+    ],
+    withdraw: [],
+    resources: [],
+    note: 'the export moved to the Downloads page',
+  });
+
+  const res = await callTool(system, agent, 'validation_report', { result: 'passed', note: 'it opened' });
+  assert.equal(res.isError, true);
+  assert.match(res.text, /reworded by an amendment/);
+  assert.match(res.text, /the export moved to the Downloads page/);
+  assert.match(res.text, /Re-read.*claim it again/);
+  const after = byId(system, planId, 'csv-opens');
+  assert.equal(after.state, 'unrun');
+  assert.equal(after.resultBy, null);
+  assert.notEqual(after.amendedAt, null, 'the band survives the refused stale reading');
+});
+
 // -- the hand-over itself ----------------------------------------------------
 
 test('handing over is an operator act, and a settled check is refused rather than silently ignored', async () => {

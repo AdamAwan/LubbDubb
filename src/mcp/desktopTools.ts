@@ -16,7 +16,7 @@ import {
   findCheckByRef,
 } from '../validation/desktop.js';
 import { checkBriefing } from '../validation/fleet.js';
-import { handbackReason, validateReport } from '../validation/report.js';
+import { amendedReportReason, amendedSinceRunBegan, handbackReason, validateReport } from '../validation/report.js';
 import { validationGoalDir } from '../validation/resources.js';
 import { liveChecks } from '../validation/verdict.js';
 import { DESKTOP_TOOL_NAMES, type DesktopToolName } from './names.js';
@@ -83,7 +83,7 @@ export interface DesktopSession {
   /** The label claims are taken under, as it appears in the cockpit. */
   label: string;
   /** The check this connection claimed, or null. Set by `validation_claim`. */
-  held: { originRef: string; checkId: string } | null;
+  held: { originRef: string; checkId: string; claimedAt: string | null } | null;
 }
 
 type DesktopToolFactory = (deps: DesktopToolDeps, session: DesktopSession) => Omit<McpTool, 'name'>;
@@ -217,7 +217,7 @@ const validationClaim: DesktopToolFactory = (deps, session) => ({
       );
     }
 
-    session.held = { originRef: plan.originRef, checkId: wanted.id };
+    session.held = { originRef: plan.originRef, checkId: wanted.id, claimedAt: claim.check.claimedAt };
     return toolJson({
       claimed: `${claim.check.letter}. ${claim.check.id}`,
       as: label,
@@ -287,6 +287,11 @@ const validationReport: DesktopToolFactory = (deps, session) => ({
     const parsed = validateReport(args);
     if (!parsed.ok) return toolError(`Report rejected: ${parsed.error}`);
     const { result, note } = parsed.report;
+
+    if (result !== 'handback' && amendedSinceRunBegan(check, held.claimedAt)) {
+      session.held = null;
+      return toolError(amendedReportReason(check));
+    }
 
     if (result === 'handback') {
       const next = deps.store.recordValidationHandback(held.originRef, check.id, handbackReason(note, 'desktop'));

@@ -1,5 +1,11 @@
 import { issueOrigin } from '../../plans/planning.js';
-import { handbackReason, validateReport, validationReportTarget } from '../../validation/report.js';
+import {
+  amendedReportReason,
+  amendedSinceRunBegan,
+  handbackReason,
+  validateReport,
+  validationReportTarget,
+} from '../../validation/report.js';
 import { toolError } from '../protocol.js';
 import type { ToolFactory } from './context.js';
 
@@ -50,6 +56,10 @@ export const validationReport: ToolFactory = ({ deps, task, ok }) => ({
     const parsed = validateReport(args);
     if (!parsed.ok) return toolError(`Report rejected: ${parsed.error}`);
     const { result, note } = parsed.report;
+
+    if (result !== 'handback' && amendedSinceRunBegan(check, task.createdAt)) {
+      return toolError(amendedReportReason(check));
+    }
 
     if (result === 'handback') {
       const next = deps.store.recordValidationHandback(origin, check.id, handbackReason(note, 'agent'));

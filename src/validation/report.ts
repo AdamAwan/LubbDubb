@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { ValidationCheck } from '../types.js';
 import { validateOriginParts } from './fleet.js';
 
 /**
@@ -87,6 +88,20 @@ export function validateReport(args: unknown): { ok: true; report: ParsedReport 
   if (parsed.success) return { ok: true, report: parsed.data };
   const first = parsed.error.errors[0];
   return { ok: false, error: first ? first.message : 'the report could not be read' };
+}
+
+/** Whether an amendment changed the check after this run began. */
+export function amendedSinceRunBegan(check: ValidationCheck, since: string | null): boolean {
+  return since !== null && check.amendedAt !== null && check.amendedAt > since;
+}
+
+/** Explain why a reading against wording the caller did not read is refused. */
+export function amendedReportReason(check: ValidationCheck): string {
+  const note = check.amendNote === null ? '' : ` The amendment says "${check.amendNote}".`;
+  return (
+    `This check was reworded by an amendment while you were running it.${note} Nothing was recorded. ` +
+    'Re-read the current check and claim it again before running it.'
+  );
 }
 
 /**
