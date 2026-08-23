@@ -496,11 +496,19 @@ test('the two verdicts clear each other, so an issue never carries both', async 
 
 test('an agent that did the work cannot assess it, and is told which tool is its own', async () => {
   const system = build();
-  for (const origin of ['issue:12', 'issue:12:plan', 'issue:12:part:schema']) {
+  // Three origins, three different remedies — a planner pointed at conclude_work
+  // is refused by that tool too, which is a second wasted turn contradicting the
+  // first.
+  const remedies: [string, RegExp][] = [
+    ['issue:12', /conclude_work/],
+    ['issue:12:plan', /plan_submit/],
+    ['issue:12:part:schema', /conclude_part/],
+  ];
+  for (const [origin, remedy] of remedies) {
     const agent = spawnAgent(system, origin);
     const res = await callTool(system, agent, 'assess_issue', { status: 'delivered', summary: 'looks fine to me' });
     assert.equal(res.isError, true, `${origin} is doing the work, so judging it is not an assessment`);
-    assert.match(res.text, /conclude_work/, 'refusals name the tool that is theirs');
+    assert.match(res.text, remedy, 'refusals name the tool that is theirs');
   }
   assert.equal(system.store.getDelivery('issue:12'), null, 'and nothing is written');
   system.store.close?.();

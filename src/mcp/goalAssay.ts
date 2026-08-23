@@ -142,7 +142,21 @@ export function assayerOrigin(
     };
   }
 
-  const working = /^issue:(\d+)(?::(?:plan|part:.+))?$/.exec(ref);
+  // The remedy is `escalate` for all three, but a planner is deliberating rather
+  // than working (`src/issueOrigins.ts`), so the sentence saying why differs.
+  const planner = /^issue:(\d+):plan$/.exec(ref);
+  if (planner) {
+    return {
+      ok: false,
+      error:
+        `assay_issue is for an agent dispatched to judge whether issue #${planner[1]}'s goal can be acted ` +
+        `on at all, before any work starts, and you were dispatched to decompose it — which the harness ` +
+        `only asks for once the goal has been read as workable. If it is unclear to you now that you are ` +
+        `in it, escalate — that reaches a human who can answer you, where this would only park an issue ` +
+        `already under way.`,
+    };
+  }
+  const working = /^issue:(\d+)(?::part:.+)?$/.exec(ref);
   if (working) {
     return {
       ok: false,

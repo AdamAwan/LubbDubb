@@ -23,6 +23,11 @@ import {
 import { defaultSocketPath, McpBridgeServer } from '../src/mcp/server.js';
 import { parseWorldRef, readWorldItem, WORLD_READ_KINDS } from '../src/mcp/worldRead.js';
 import { parseItemRef } from '../src/mcp/findings.js';
+import { assessmentOrigin } from '../src/mcp/assessment.js';
+import { assayerOrigin } from '../src/mcp/goalAssay.js';
+import { conclusionOrigin } from '../src/issueConclusion.js';
+import { partConclusionOrigin } from '../src/mcp/partOutcome.js';
+import { planOriginIssue } from '../src/plans/planning.js';
 import { factJobRequest } from '../src/knowledge/graduation.js';
 import { MAX_NOTE_LENGTH, normaliseNote } from '../src/mcp/progress.js';
 import { validateClaimText } from '../src/knowledge/knowledge.js';
@@ -2030,4 +2035,42 @@ test('every advertised tool is its own module, and tools.ts is assembly and noth
     MCP_TOOL_NAMES.length,
     'one module per advertised tool, and no module that is not one',
   );
+});
+
+// The round trip every origin fence must keep: a refusal names a tool, and that
+// tool accepts the caller it was named to. One remedy for three callers — the
+// #535 shape — is refused again by the tool it points at.
+test('every origin fence points a refused caller at a tool that accepts it', () => {
+  const accepts: Record<string, (ref: string) => boolean> = {
+    conclude_work: (ref) => conclusionOrigin(ref).ok,
+    conclude_part: (ref) => partConclusionOrigin(ref).ok,
+    assess_issue: (ref) => assessmentOrigin(ref).ok,
+    assay_issue: (ref) => assayerOrigin(ref).ok,
+    plan_submit: (ref) => planOriginIssue(ref) !== null,
+  };
+  const fences: [string, (ref: string) => { ok: boolean; error?: string }][] = [
+    ['assess_issue', assessmentOrigin],
+    ['assay_issue', assayerOrigin],
+    ['conclude_work', conclusionOrigin],
+    ['conclude_part', partConclusionOrigin],
+  ];
+  const origins = ['issue:12', 'issue:12:plan', 'issue:12:part:schema', 'issue:12:assess', 'issue:12:assay'];
+
+  for (const [tool, fence] of fences) {
+    for (const origin of origins) {
+      const verdict = fence(origin);
+      if (verdict.ok) continue;
+      const error = verdict.error ?? '';
+      // `escalate` is the remedy where no tool is the caller's — an agent already
+      // at work asking whether its own goal is workable wants a human, not a tool.
+      const named = Object.keys(accepts).filter((name) => name !== tool && error.includes(name));
+      if (named.length === 0) {
+        assert.match(error, /escalate|raise/, `${tool} refusing ${origin} names no tool and no other remedy`);
+        continue;
+      }
+      for (const name of named) {
+        assert.ok(accepts[name]!(origin), `${tool} refuses ${origin} by naming ${name}, which refuses it too`);
+      }
+    }
+  }
 });

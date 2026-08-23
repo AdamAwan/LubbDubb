@@ -374,8 +374,10 @@ resolved from the credential.
 - **`assessmentOrigin` refuses every agent that is _doing_ the work**, which is `conclusionOrigin`'s
   discipline pointed the other way. There a part agent is refused because the plan speaks for the
   issue; here a pickup, planner or part agent is refused because judging your own delivery is not an
-  assessment — having someone else look is the entire point of the rule. Both refusals name the tool
-  that _is_ the caller's, so an agent reaching for the wrong one is told which is right.
+  assessment — having someone else look is the entire point of the rule. Every refusal names the tool
+  that _is_ the caller's, so an agent reaching for the wrong one is told which is right, and the three
+  are three different tools: a pickup is pointed at `conclude_work`, a planner at `plan_submit`, a part
+  agent at `conclude_part`. One remedy for all three would be refused by name on the next call.
 - **The two verdicts land in two rows of opposite polarity.** `delivered` writes the
   `issue_deliveries` park, which **gates pickup**; `more_work` writes an `issue_shortfalls` row,
   which gates nothing and exists to _release_ work. They are mutually exclusive — writing either
