@@ -197,6 +197,11 @@ should quote.
 An **arrival** is one goal's _whole_ work confirmed in one environment, the first time it was —
 `goal_arrivals`, one row per `(goal, environment)`.
 
+That whole-work claim is also why a historical row written by an older reach denominator cannot be
+corrected in place. If a live plan part remains owed, `dropPartialGoalArrivals()` discards the row on
+boot and the desk re-derives the real arrival once every part is confirmed. →
+[14](14-persistence.md#repairing-arrivals-from-the-old-reach-denominator)
+
 A row rather than a fold, because an arrival is a **moment and reach is a status**. `goalReach` can
 say a goal is in testUk on every pulse from now until the heat death; only a row can say it has just
 got there, which is what keeps the ticket to one comment rather than one every five minutes, and what
