@@ -103,8 +103,12 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
  * The PR number a stack ref names — `stack:124` → `124`, and null for anything
  * else. The bottom rung at the time the ref was minted, which is all `revoke`
  * needs: it is keyed on a rung, and one PR belongs to one chain.
+ *
+ * A fork's paths share a bottom and so spell their refs `stack:<bottom>:<leaf>`;
+ * the trailing segment is ignored here, because either rung finds the same
+ * standing intent.
  */
 function rungOf(ref: string): number | null {
-  const match = /^stack:(\d+)$/.exec(ref);
+  const match = /^stack:(\d+)(?::\d+)?$/.exec(ref);
   return match ? Number(match[1]) : null;
 }

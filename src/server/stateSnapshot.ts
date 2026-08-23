@@ -195,6 +195,10 @@ export function buildStateSnapshot(
   const plans = store.listPlans();
   const planParts = store.listAllPlanParts();
   const stacks = buildStacks(world.pullRequests, plans, planParts, config.defaultBranch);
+  // Open, not merely present: `landingFor` rejects an intent covering a rung
+  // outside the chain only while that rung is still open, or a chain that has
+  // shrunk by merging would lose its own landing.
+  const openPrNumbers = new Set(world.pullRequests.filter((p) => !p.merged).map((p) => p.number));
   // Standing *and* stopped: a stopped intent is the one the rack most has to keep
   // showing, since it is the state that says nothing further will merge on its own.
   const landings = store.listStackLandings().filter((l) => l.status === 'standing' || l.status === 'stopped');
@@ -682,7 +686,8 @@ export function buildStateSnapshot(
     environmentArrivals: config.environments.length === 0 ? [] : store.listGoalArrivals().slice(0, 50),
     // The "land the stack" control, one entry per chain above: whether the click
     // may be offered, and the operator's standing intent over it. Joined to a
-    // stack by rung membership rather than by ref — see `landingFor`.
+    // stack by rung membership rather than by ref — see `landingFor`, which needs
+    // the open set to tell one path of a fork from its sibling.
     stackLandings: [
       ...stacks.map((stack) => {
         const rungPrs = stack.rungs.flatMap((rung) => {
@@ -692,6 +697,7 @@ export function buildStateSnapshot(
         const landing = landingFor(
           stack.rungs.map((r) => r.prNumber),
           landings,
+          openPrNumbers,
         );
         return {
           ref: stack.ref,

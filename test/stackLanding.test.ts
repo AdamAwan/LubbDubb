@@ -10,7 +10,7 @@ import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 import type { PullRequest } from '../src/types.js';
-import { landingReadiness, rungFault, settleLandings } from '../src/stacks/landing.js';
+import { landingFor, landingReadiness, rungFault, settleLandings } from '../src/stacks/landing.js';
 import { buildApp } from '../src/server/app.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 
@@ -508,4 +508,23 @@ test('a blocked rung and an uncomputed one each say which they are', () => {
 
   // `behind` stays clear: it is a fact about the queue, and it resolves on retarget.
   assert.equal(landingReadiness([rung(1, 'main', { mergeableState: 'behind' })]).offer, true);
+});
+
+/**
+ * A fork's paths share every rung beneath the split, so overlap alone no longer
+ * identifies an intent (issue #567). An intent over one path must not be drawn
+ * against its sibling, which it does not authorize.
+ */
+test('an intent over one path of a fork is not drawn against the other', () => {
+  const system = build(countingSink());
+  const landing = system.landings.land('stack:1:2', [1, 2]);
+  const open = new Set([1, 2, 3]);
+
+  assert.equal(landingFor([1, 2], [landing], open)?.id, landing.id, 'the path it authorizes');
+  assert.equal(landingFor([1, 3], [landing], open), null, 'and not the sibling, which shares only the bottom');
+
+  // The shrink the rung-keying exists for still works: once #1 merges the chain is
+  // [2] and the intent must still be found, so a rung that is no longer open
+  // cannot be grounds for rejecting one.
+  assert.equal(landingFor([2], [landing], new Set([2, 3]))?.id, landing.id, '"landing 1 of 2" survives the merge');
 });

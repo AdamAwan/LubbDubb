@@ -225,6 +225,24 @@ A chain of one is not a stack. A merged rung is not a base. A cycle in the base 
 rather than hanging the pulse. It takes the **unfiltered** open list, so an unwatched rung does not
 put a hole in the chain.
 
+**A fork is every path, not one of them.** A branch with two open PRs based on it yields one `Stack`
+per root-to-leaf path, sharing the rungs beneath the split. This is not a hypothetical world: it is
+what the planning funnel produces for a diamond plan, since `partBase` returns the first unsettled
+dependency's branch and `dependencySatisfied` clears a part as soon as its dependency has pushed, so
+two parts depending on the same part are both dispatched and both based on it. Walking one child per
+rung dropped the second sibling from **every** chain — it is not a bottom, because `baseOf` resolves,
+and no walk reached it — so it had no head line, no readiness verdict and no landing control, while
+`isStackedPr` stayed true for it so no rule would merge it either. Worse, which sibling survived was
+the provider's list order, and a stack is meant to be a fact about the world.
+
+Because a fork's paths share a bottom, `Stack.ref` names the leaf as well when — and only when — the
+bottom carries more than one chain: `stack:<bottom>:<leaf>`, against `stack:<bottom>` for the linear
+case, which is every ref written before forks were modelled. `landingFor` follows: rung overlap alone
+identified an intent only while a PR belonged to one chain, so it now also rejects an intent covering
+a rung that is **still open** and outside the chain being drawn. Still open is load-bearing — a chain
+shrinks as its rungs merge, and rejecting on a merged rung would lose the intent at its first success,
+which is the thing the rung-keying exists to prevent.
+
 ### Landing a stack
 
 An operator's standing authorization to merge a whole chain: one click, and each rung's merge is

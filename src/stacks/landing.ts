@@ -246,10 +246,24 @@ export function settleLandings(landings: StackLanding[], world: SettleWorld): La
  * The ref would be the obvious key and it is the wrong one: `stack:<bottom PR>`
  * renames itself the instant the bottom rung merges, so a match on it would lose
  * the intent at the first success — exactly when the operator most needs to see
- * "landing 1 of 3". Any overlap is unambiguous, since a PR belongs to one chain.
+ * "landing 1 of 3".
+ *
+ * Overlap alone was unambiguous only while a PR belonged to one chain, which a
+ * **fork** breaks: two paths off one bottom share every rung beneath the split, so
+ * an intent over one path overlaps the other and the sibling would draw a landing
+ * that does not authorize it. `openPrNumbers` closes that — an intent covering a
+ * rung that is *still open* and not in this chain is some other chain's. It has to
+ * be open: a chain shrinks as its rungs merge, and rejecting on a merged rung
+ * would lose the intent at the first success all over again.
  */
-export function landingFor(rungPrNumbers: number[], landings: StackLanding[]): StackLanding | null {
-  return landings.find((l) => l.rungs.some((n) => rungPrNumbers.includes(n))) ?? null;
+export function landingFor(
+  rungPrNumbers: number[],
+  landings: StackLanding[],
+  openPrNumbers?: ReadonlySet<number>,
+): StackLanding | null {
+  const elsewhere = (l: StackLanding): boolean =>
+    openPrNumbers !== undefined && l.rungs.some((n) => openPrNumbers.has(n) && !rungPrNumbers.includes(n));
+  return landings.find((l) => l.rungs.some((n) => rungPrNumbers.includes(n)) && !elsewhere(l)) ?? null;
 }
 
 /** How many of an intent's rungs have landed — the numerator of "landing 1 of 3". */

@@ -5,6 +5,7 @@ import { FakeConnector } from '../src/connector/fakeConnector.js';
 import { readFileSync, readdirSync } from 'node:fs';
 import { buildStacks } from '../src/stacks/stack.js';
 import { retargetsFor } from '../src/prRetarget.js';
+import { basePrOf } from '../src/prHealth.js';
 import type { Plan, PlanPart, PullRequest } from '../src/types.js';
 
 function connector(): FakeConnector {
@@ -291,4 +292,85 @@ test('an abandoned parent strands its child deliberately rather than rebasing it
 
 test('nothing recently closed means no work and no reads', () => {
   assert.deepEqual(retargetsFor([pr({ number: 45, branch: 'b', baseBranch: 'a' })], [], 'main'), []);
+});
+
+/**
+ * A fork is a rung the rack used to lose (issue #567).
+ *
+ * `partBase` returns the first unsettled dependency's branch, and
+ * `dependencySatisfied` clears a part as soon as its dependency has pushed — so a
+ * diamond plan puts two parts on the same base, and their pull requests fork.
+ * Walked with `find`, the second sibling was in no chain at all: not a bottom
+ * (`baseOf` resolves), never reached by any walk. It had no head line, no
+ * readiness verdict and no "land the stack" control, while `isStackedPr` stayed
+ * true for it so no rule would merge it either — and *which* sibling was lost was
+ * decided by the order the provider happened to list the pull requests in, which
+ * is not a fact about the world.
+ */
+test('a fork keeps both rungs, whichever order the provider lists them in', () => {
+  const world = [
+    pr({ number: 1, branch: 'issue/12/a', baseBranch: 'main' }),
+    pr({ number: 2, branch: 'issue/12/b', baseBranch: 'issue/12/a' }),
+    pr({ number: 3, branch: 'issue/12/c', baseBranch: 'issue/12/a' }),
+  ];
+
+  const rungsOf = (prs: PullRequest[]): string[] =>
+    buildStacks(prs, [], [], 'main')
+      .map((s) => `${s.ref}[${s.rungs.map((r) => r.prNumber).join('>')}]`)
+      .sort();
+
+  const abc = rungsOf(world);
+  const acb = rungsOf([world[0]!, world[2]!, world[1]!]);
+  assert.deepEqual(abc, acb, 'the same world folds the same way whatever order it arrives in');
+  assert.deepEqual(abc, ['stack:1:2[1>2]', 'stack:1:3[1>3]'], 'both paths, and the refs do not collide');
+
+  // The property the issue states: every PR whose base resolves to another open
+  // PR is a rung by the spec's own definition, so it must appear in some chain.
+  const stacks = buildStacks(world, [], [], 'main');
+  for (const p of world) {
+    if (basePrOf(p, world) === null) continue;
+    assert.ok(
+      stacks.some((s) => s.rungs.some((r) => r.prNumber === p.number)),
+      `#${p.number} resolves a base PR, so it belongs to some stack`,
+    );
+  }
+});
+
+/** A chain that does not fork keeps the ref it always had. */
+test('a linear chain is unchanged by the fork walk', () => {
+  const stacks = buildStacks(
+    [
+      pr({ number: 1, branch: 'issue/12/a', baseBranch: 'main' }),
+      pr({ number: 2, branch: 'issue/12/b', baseBranch: 'issue/12/a' }),
+      pr({ number: 3, branch: 'issue/12/c', baseBranch: 'issue/12/b' }),
+    ],
+    [],
+    [],
+    'main',
+  );
+  assert.equal(stacks.length, 1);
+  assert.equal(stacks[0]?.ref, 'stack:1');
+  assert.deepEqual(
+    stacks[0]?.rungs.map((r) => r.prNumber),
+    [1, 2, 3],
+  );
+});
+
+/** A fork above the bottom splits there and keeps everything beneath it shared. */
+test('a fork partway up a chain keeps the shared rungs on both paths', () => {
+  const stacks = buildStacks(
+    [
+      pr({ number: 1, branch: 'issue/12/a', baseBranch: 'main' }),
+      pr({ number: 2, branch: 'issue/12/b', baseBranch: 'issue/12/a' }),
+      pr({ number: 3, branch: 'issue/12/c', baseBranch: 'issue/12/b' }),
+      pr({ number: 4, branch: 'issue/12/d', baseBranch: 'issue/12/b' }),
+    ],
+    [],
+    [],
+    'main',
+  );
+  assert.deepEqual(
+    stacks.map((s) => `${s.ref}[${s.rungs.map((r) => r.prNumber).join('>')}]`),
+    ['stack:1:3[1>2>3]', 'stack:1:4[1>2>4]'],
+  );
 });
