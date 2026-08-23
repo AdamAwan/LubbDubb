@@ -7,6 +7,7 @@ import { buildMcpInsights } from '../src/mcpInsights.js';
 import { resolveWindow } from '../src/insightsWindow.js';
 import { Store } from '../src/store/store.js';
 import { DEFAULT_MCP_ARGS_RETENTION_DAYS } from '../src/store/mcpCalls.js';
+import { RETIRED_TOOL_NAMES } from '../src/mcp/names.js';
 import { buildSystem, type System } from '../src/system.js';
 import { loadConfig } from '../src/config.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
@@ -558,3 +559,48 @@ function testSystem(): System {
     { worktrees: new FakeWorktreeManager(), backend: new FakePtyBackend(), errorMirror: () => {} },
   );
 }
+
+// #536 — the tile draws `toolsQuiet` over `toolsAdvertised`, so the two must
+// count the same set. Written as invariants rather than expected numbers, so a
+// tool being added does not rewrite the test.
+test('a window full of retired and never-existed names keeps every fraction a fraction', () => {
+  const calls = [
+    ...RETIRED_TOOL_NAMES.map((tool) => call({ tool, ok: false, error: 'retired' })),
+    call({ tool: 'summon_the_kraken', ok: false, error: 'no such tool' }),
+  ];
+  const insights = build({ calls, agents: [agent('a1')], tasks: [task('a1', 'issue:12')] });
+
+  assert.ok(RETIRED_TOOL_NAMES.length > 0, 'the fixture needs a retired name to be about anything');
+  assert.ok(
+    insights.totals.toolsQuiet <= insights.totals.toolsAdvertised,
+    `${insights.totals.toolsQuiet}/${insights.totals.toolsAdvertised} is not a reading`,
+  );
+  assert.equal(
+    insights.totals.toolsRetiredCalled,
+    RETIRED_TOOL_NAMES.length,
+    'a retired name still being called is counted, just not as a live tool gone quiet',
+  );
+  for (const channel of insights.channels) {
+    assert.ok(
+      channel.toolsCalled <= channel.toolsAdvertised,
+      `${channel.channel} ${channel.toolsCalled}/${channel.toolsAdvertised}`,
+    );
+  }
+
+  // And the traffic that belongs to no advertised row is stated rather than
+  // quietly missing from the shares.
+  const unknown = insights.naming.find((n) => n.naming === 'unknown');
+  assert.ok(unknown, 'a name that was never a tool has a class of its own');
+  assert.equal(unknown.calls, 1);
+  const shares = insights.naming.reduce((sum, n) => sum + n.calls, 0);
+  assert.equal(shares, insights.totals.calls, 'every fleet call is in exactly one naming class');
+});
+
+test('the naming classes drop the two rows that are a permanent zero on a healthy deployment', () => {
+  const insights = build({ calls: [call({ tool: 'note_progress' })] });
+  assert.equal(
+    insights.naming.some((n) => n.naming === 'retired' || n.naming === 'unknown'),
+    false,
+    'nothing called a withdrawn or invented name, so neither row is drawn',
+  );
+});

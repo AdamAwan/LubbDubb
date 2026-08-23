@@ -133,6 +133,7 @@ export function mcpCsv(insights: McpInsights): string {
     ['Median call (ms)', totals.medianMs ?? ''],
     ['Tools advertised', totals.toolsAdvertised],
     ['Tools with something to answer for', totals.toolsQuiet],
+    ['Retired names still being called', totals.toolsRetiredCalled],
     ['Recorded argument bytes', totals.argsBytes],
     ['Calls whose arguments have been compacted', totals.argsCompacted],
     ['Operator --allowedTools override present', insights.allowedToolsOverridden ? 'yes' : 'no'],
@@ -221,14 +222,22 @@ function Tiles({ totals }: { totals: McpInsights['totals'] }): JSX.Element {
         <span className="vl">{totals.silentRuns}</span>
         <span className="sb">{fmtShare(totals.silentRuns, totals.runs)} of settled runs</span>
       </div>
-      <div className={totals.toolsQuiet > 0 ? 'sp-tile sp-watch' : 'sp-tile'}>
+      {/* Both numbers count the advertised set, so the fraction is a reading and
+          not two counters. A retired name still being called is its own finding
+          and says so beneath, rather than pushing the numerator past 20/20. */}
+      <div className={totals.toolsQuiet > 0 || totals.toolsRetiredCalled > 0 ? 'sp-tile sp-watch' : 'sp-tile'}>
         <span className="lb">Tools to answer for</span>
         <span className="vl">
           {totals.toolsQuiet}
           <small>/</small>
           {totals.toolsAdvertised}
         </span>
-        <span className="sb">silent, or refusing everything</span>
+        <span className="sb">
+          silent, or refusing everything
+          {totals.toolsRetiredCalled > 0
+            ? ` · plus ${totals.toolsRetiredCalled} retired ${totals.toolsRetiredCalled === 1 ? 'name' : 'names'} still called`
+            : ''}
+        </span>
       </div>
       <div className="sp-tile">
         <span className="lb">Refused</span>

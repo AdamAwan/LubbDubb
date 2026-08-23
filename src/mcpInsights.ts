@@ -139,10 +139,16 @@ const NAMING_COPY: Record<McpNaming, { label: string; blurb: string }> = {
     label: 'Retired',
     blurb: 'A withdrawn name, answered only with a refusal naming `raise`. Any call at all is a prompt out of date.',
   },
+  unknown: {
+    label: 'Never a tool',
+    blurb:
+      'A name that is neither advertised nor retired — reached for by a prompt or a model and answered by nothing. ' +
+      'It has no row of its own above; this is where its traffic is.',
+  },
 };
 
 /** Where a tool is named — `TOOL_NAMING`'s two classes, plus the two channels' own. */
-export type McpNaming = 'addendum' | 'point-of-use' | 'desktop' | 'retired';
+export type McpNaming = 'addendum' | 'point-of-use' | 'desktop' | 'retired' | 'unknown';
 
 export interface McpToolUsage {
   tool: string;
@@ -246,7 +252,10 @@ interface McpTotals {
   busiestRunCalls: number;
   medianMs: number | null;
   toolsAdvertised: number;
+  /** Advertised fleet tools with something to answer for. Never above `toolsAdvertised`. */
   toolsQuiet: number;
+  /** Withdrawn names something is still calling. Counted apart: not a live tool gone quiet. */
+  toolsRetiredCalled: number;
   /** What the recorded arguments measure in total, and how much has been compacted. */
   argsBytes: number;
   argsCompacted: number;
@@ -357,7 +366,12 @@ export function buildMcpInsights(input: McpInsightsInput): McpInsights {
       busiestRunCalls: perRun.reduce((most, n) => Math.max(most, n), 0),
       medianMs: median(fleetCalls.map((c) => c.durationMs)),
       toolsAdvertised: MCP_TOOL_NAMES.length,
-      toolsQuiet: quiet.filter((q) => q.channel === 'fleet').length,
+      // Over the advertised set only. A retired name being called is its own
+      // finding — it is *not* a live tool gone quiet — and counting it here read
+      // as 24 tools to answer for out of 20 advertised, on exactly the
+      // deployment the verdict exists to help.
+      toolsQuiet: quiet.filter((q) => q.channel === 'fleet' && q.naming !== 'retired').length,
+      toolsRetiredCalled: quiet.filter((q) => q.channel === 'fleet' && q.naming === 'retired').length,
       argsBytes: calls.reduce((sum, c) => sum + c.argsBytes, 0),
       argsCompacted: calls.filter((c) => c.argsDropped).length,
     },
@@ -459,13 +473,22 @@ function verdictFor(usage: McpToolUsage): McpQuietVerdict | null {
   return usage.namedInAddendum || usage.namedInPrompts > 0 ? 'named-never-called' : 'never-named';
 }
 
+/**
+ * `toolsCalled` counts the **advertised** names called, because it is drawn over
+ * `toolsAdvertised` as a fraction. Calls carry whatever name the model reached
+ * for — a retired one, or one that never existed — and counting those here put
+ * the numerator above its denominator on the deployment the reading is for.
+ * Retired names are counted once, on the totals; an unknown name is a naming
+ * class of its own.
+ */
 function channelUsage(channel: McpChannel, channelCalls: McpCall[], advertised: readonly string[]): McpChannelUsage {
+  const live = new Set(advertised);
   return {
     channel,
     calls: channelCalls.length,
     refused: channelCalls.filter((c) => !c.ok).length,
     toolsAdvertised: advertised.length,
-    toolsCalled: new Set(channelCalls.map((c) => c.tool)).size,
+    toolsCalled: new Set(channelCalls.filter((c) => live.has(c.tool)).map((c) => c.tool)).size,
   };
 }
 
@@ -521,11 +544,28 @@ function byPhase(
 }
 
 function namingTotals(tools: readonly McpToolUsage[], fleetCalls: readonly McpCall[]): McpNamingTotal[] {
-  const classes: readonly McpNaming[] = ['addendum', 'point-of-use', 'retired'];
+  const classes: readonly McpNaming[] = ['addendum', 'point-of-use', 'retired', 'unknown'];
+  // A call to a name that is neither live nor retired belongs to no `tools` row,
+  // so without a class of its own its traffic is in the total and in none of the
+  // shares — the by-task-type table's remainder, unstated. Stated instead, since
+  // a prompt naming a tool that has never existed is itself the finding.
+  const known = new Set(tools.filter((t) => t.channel === 'fleet').map((t) => t.tool));
+  const unknown = fleetCalls.filter((c) => !known.has(c.tool));
   return (
     classes
       .map((naming) => {
         const mine = tools.filter((t) => t.naming === naming);
+        const names = new Set(unknown.map((c) => c.tool));
+        if (naming === 'unknown')
+          return {
+            naming,
+            label: NAMING_COPY[naming].label,
+            blurb: NAMING_COPY[naming].blurb,
+            calls: unknown.length,
+            share: fleetCalls.length === 0 ? 0 : round(unknown.length / fleetCalls.length),
+            tools: names.size,
+            toolsCalled: names.size,
+          };
         const calls = mine.reduce((sum, t) => sum + t.calls, 0);
         return {
           naming,
@@ -539,7 +579,8 @@ function namingTotals(tools: readonly McpToolUsage[], fleetCalls: readonly McpCa
       })
       // A retired name nothing has called does not earn a row: it is the expected
       // state, and drawing it would put a permanent zero beside two real readings.
-      .filter((row) => row.naming !== 'retired' || row.tools > 0)
+      // Same for a name nothing has ever reached for, which is every deployment.
+      .filter((row) => (row.naming !== 'retired' && row.naming !== 'unknown') || row.tools > 0)
   );
 }
 

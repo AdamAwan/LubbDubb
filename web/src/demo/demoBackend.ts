@@ -2874,6 +2874,7 @@ function buildDemoMcp(): McpInsights {
       medianMs: 22,
       toolsAdvertised: 20,
       toolsQuiet: 4,
+      toolsRetiredCalled: 0,
       argsBytes: 432_300,
       argsCompacted: 0,
     },

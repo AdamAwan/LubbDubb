@@ -2652,6 +2652,19 @@ be a second opinion drawn inches from the first. The ladder, worst first:
 | **Named, never reached for** | Agents were told and none called it. The job did not come up, or the wording is not landing.       |
 | **No desktop session used it** | A person did not sit down and run one. A reading, and the one verdict with no remedy.           |
 
+**"Tools to answer for" is a fraction, so both halves count the advertised set.** `toolsAdvertised` is
+what `tools/list` offers and nothing else, and the quiet count is over the same names — a retired name
+something is still calling is a _different_ finding from a live tool gone quiet, and counted in the
+numerator it read `24/20` in amber on precisely the deployment the "Retired, still called" verdict
+exists to help. Retired names still being called are counted apart and said beneath the fraction. The
+per-channel `toolsCalled/toolsAdvertised` counts the advertised names called, for the same reason.
+
+**Traffic under a name that was never a tool is stated, not dropped.** A call to a name that is neither
+advertised nor retired belongs to no tool row, so it would be in the total and in none of the naming
+shares — the Work mix table's remainder, unstated. It is its own naming class instead, since a prompt
+or a model reaching for a tool that has never existed is itself a finding; like the retired class, the
+row is drawn only when something is in it.
+
 The evidence is drawn beside the verdict — whether the addendum names it, and how many dispatch prompts
 did — so the claim is checkable rather than merely stated. That separation is load-bearing:
 `TOOL_NAMING` says where a tool is _supposed_ to be named and the text says whether it was, so a tool
