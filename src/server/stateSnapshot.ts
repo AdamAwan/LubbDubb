@@ -683,22 +683,42 @@ export function buildStateSnapshot(
     // The "land the stack" control, one entry per chain above: whether the click
     // may be offered, and the operator's standing intent over it. Joined to a
     // stack by rung membership rather than by ref — see `landingFor`.
-    stackLandings: stacks.map((stack) => {
-      const rungPrs = stack.rungs.flatMap((rung) => {
-        const pr = world.pullRequests.find((p) => p.number === rung.prNumber);
-        return pr ? [pr] : [];
-      });
-      const landing = landingFor(
-        stack.rungs.map((r) => r.prNumber),
-        landings,
-      );
-      return {
-        ref: stack.ref,
-        ...landingReadiness(rungPrs),
-        landing,
-        landed: landing ? landedCount(landing, world) : 0,
-      };
-    }),
+    stackLandings: [
+      ...stacks.map((stack) => {
+        const rungPrs = stack.rungs.flatMap((rung) => {
+          const pr = world.pullRequests.find((p) => p.number === rung.prNumber);
+          return pr ? [pr] : [];
+        });
+        const landing = landingFor(
+          stack.rungs.map((r) => r.prNumber),
+          landings,
+        );
+        return {
+          ref: stack.ref,
+          ...landingReadiness(rungPrs),
+          landing,
+          landed: landing ? landedCount(landing, world) : 0,
+        };
+      }),
+      // And the intents no chain above accounts for. A chain of one is not a
+      // stack, so a two-rung intent whose bottom rung has merged has no stack
+      // left to hang off — and mapped over `stacks` alone the standing intent
+      // over the survivor is invisible, taking the "stop" control with it at
+      // exactly the moment an operator wants it. The row says what is standing;
+      // `offer` is false because there is no chain left to land.
+      // → `docs/spec/07-pull-requests.md#landing-a-stack`
+      ...landings
+        .filter(
+          (l) => l.status === 'standing' && !stacks.some((s) => s.rungs.some((r) => l.rungs.includes(r.prNumber))),
+        )
+        .map((landing) => ({
+          ref: landing.ref,
+          offer: false,
+          blockedBy: null,
+          landing,
+          landed: landedCount(landing, world),
+        })),
+    ],
     tasks,
     // Operator-launched jobs (newest first) — the cockpit shows the queued
     // ones and their place in line, plus recently-dispatched/cancelled history.

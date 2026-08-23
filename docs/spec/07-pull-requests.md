@@ -281,6 +281,34 @@ unresolved comment, a real conflict — stops the chain. An absent `approved` is
 A stopped intent is never resumed. The button returns once the rungs are clear, and that click is the
 operator re-authorizing a chain they have looked at again.
 
+**Revocation is reachable for as long as the intent stands, including after the chain stops being a
+stack.** `DELETE /api/stacks/:ref/land` reads the ref for the rung it names (`stack:<bottom PR>`) and
+finds the intent by what it covers — keyed on a rung end to end, not only in the desk. It must not
+resolve the ref through `landingScope`, because that resolves through `buildStacks` and a chain of
+one is not a stack: the moment a two-rung chain's bottom rung merges, every ref an operator could
+send 404s while the intent goes on authorizing the survivor's merge. That is the same orphaning the
+rung-keying exists to prevent, arriving at the last rung instead of the first, and the 404 body reads
+"no open stack" — which a person reasonably takes to mean nothing is standing. The model may still
+widen the search (a ref whose own rung is in no intent may name a chain whose other rungs are); it
+may never gate it. `POST` keeps going through `landingScope`, because the scope of an authorization
+is the server's own reading of the chain and `DELETE` authorizes nothing.
+
+`StackLandingView` follows: `stackLandings` is the chains above **plus a row for every standing
+intent no chain accounts for**, so the stop control is drawable on a one-rung remainder. Such a row
+carries `offer: false` — there is no chain left to land, only one to stop.
+
+**A settlement is only ever written from a world every source reported fresh.** A settle is the one
+terminal write in the pulse that a later pulse cannot revise — `settleStackLanding` is a
+compare-and-set onto a terminal status, so unlike `observePartPr` or `retainedRunIssues` it does not
+correct itself when the provider recovers. And a world with a stale slice is exactly the world in
+which rungs go missing: a provider serving its last-good list under-reports, and every rung it fails
+to report reads as having left the open set. One bad pulse would otherwise end the operator's chain
+permanently, naming a pull request that never changed. So a pulse carrying any
+[`staleSources`](03-world-model.md#worldsnapshot) settles nothing — the _landed_ arm included, since
+"all rungs merged" is as unsupportable from a world nobody could read as "a rung is gone" is.
+`staleSources` names the integration rather than the slice, so there is no way to ask whether it was
+the source-control half that went old; any stale source at all stops the settle.
+
 `settleLandings` **never calls `buildStacks`** — it re-reads the chain from the intent's own numbers
 and the world, which is what keeps the lens out of the harness's per-pulse decision path. The only
 place the model is consulted is `landingScope`, at the click, in the route.

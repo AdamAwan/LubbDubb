@@ -11,6 +11,8 @@ import type { ActionSink } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 import type { PullRequest } from '../src/types.js';
 import { landingReadiness, rungFault, settleLandings } from '../src/stacks/landing.js';
+import { buildApp } from '../src/server/app.js';
+import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 
 /**
  * "Land the stack": one click that authorizes a whole chain, and then keeps
@@ -326,4 +328,110 @@ test('a second click supersedes the first rather than racing it', () => {
   const standing = system.store.listStandingLandings();
   assert.equal(standing.length, 1, 'exactly one authorization covers a chain');
   assert.deepEqual(standing[0]?.rungs, [1, 2, 3]);
+});
+
+/**
+ * A settle is the one terminal write in the pulse a later pulse cannot revise, so
+ * it is taken only against a world every provider reported fresh (issue #576). A
+ * stale slice under-reports, and every rung it fails to report reads as gone.
+ */
+test('nothing is settled from a world a provider could not read', () => {
+  const system = build(countingSink());
+  const landing = system.landings.land('stack:1', [1, 2, 3]);
+  const open = [rung(1, 'main'), rung(2, 'issue/12/r1'), rung(3, 'issue/12/r2')];
+
+  system.landings.settle({ pullRequests: open, closedPullRequests: [] });
+  assert.equal(system.store.getStackLanding(landing.id)?.status, 'standing', 'a healthy pulse leaves it standing');
+
+  // The cheapest stale world there is: a provider whose read failed serves its
+  // last-good slice, which before its first success is empty.
+  system.landings.settle({ pullRequests: [], closedPullRequests: [], staleSources: ['github'] });
+
+  const after = system.store.getStackLanding(landing.id);
+  assert.equal(after?.status, 'standing', 'an authorization is not revoked by a world nobody could read');
+  assert.equal(after?.reason, null);
+  assert.equal(system.store.listOpenEscalations().length, 0, 'and the operator is told nothing false');
+
+  // And the other arm: "all rungs merged" is as unsupportable from an empty world
+  // as "a rung is gone" is, so the landed arm skips too.
+  assert.deepEqual(
+    settleLandings([landing], { pullRequests: [], staleSources: ['github'] }),
+    [],
+    'the landed arm skips a stale world as well',
+  );
+
+  system.landings.settle({ pullRequests: open, closedPullRequests: [] });
+  assert.equal(system.store.getStackLanding(landing.id)?.status, 'standing', 'and it is intact when the world is');
+});
+
+/**
+ * Calling it off has to stay reachable for as long as the intent stands
+ * (issue #568). A chain of one is not a stack, so once a two-rung chain's bottom
+ * rung merges the model has nothing left to resolve a ref against — and the DELETE
+ * route used to gate on exactly that, 404ing "no open stack" while the intent went
+ * on authorizing the survivor's merge.
+ */
+test('the stop control survives the chain dropping below two rungs', async () => {
+  const system = build(countingSink(), { auth: { enabled: false } });
+  system.connector.inject({ kind: 'new_pr', number: 1, title: 'rung 1', branch: 'issue/12/r1' });
+  system.connector.inject({
+    kind: 'new_pr',
+    number: 2,
+    title: 'rung 2',
+    branch: 'issue/12/r2',
+    baseBranch: 'issue/12/r1',
+  });
+  for (const n of [1, 2]) {
+    system.connector.inject({ kind: 'ci_passed', prNumber: n });
+    system.connector.inject({ kind: 'pr_approved', prNumber: n });
+    system.connector.inject({ kind: 'pr_mergeable', prNumber: n, mergeable: true, mergeableState: 'clean' });
+  }
+
+  const { app } = await buildApp(system);
+  try {
+    const landed = await app.inject({ method: 'POST', url: '/api/stacks/stack:1/land' });
+    assert.equal(landed.statusCode, 200);
+    assert.deepEqual(system.store.listStandingLandings()[0]?.rungs, [1, 2]);
+
+    // The bottom rung merges. The chain is one rung now, so `buildStacks` no
+    // longer produces it at all — and the intent still authorizes #2.
+    system.connector.inject({ kind: 'pr_closed', prNumber: 1, merged: true });
+    system.store.setWorldBaseline(await system.connector.getState());
+    assert.equal(system.store.listStandingLandings().length, 1, 'the authorization outlived the chain');
+
+    // The control still draws: the cockpit gets a row for the standing intent
+    // even though no stack accounts for it.
+    const shipped = (await buildStateSnapshot(system)).stackLandings;
+    assert.equal(shipped.length, 1);
+    assert.equal(shipped[0]?.landing?.status, 'standing');
+    assert.equal(shipped[0]?.offer, false, 'there is no chain left to land, only one to stop');
+
+    const stopped = await app.inject({ method: 'DELETE', url: '/api/stacks/stack:1/land' });
+    assert.equal(stopped.statusCode, 200, 'the ref the operator was shown still calls it off');
+    assert.equal(system.store.listStackLandings()[0]?.status, 'revoked');
+    assert.equal(system.store.listStandingLandings().length, 0, 'and nothing authorizes #2 any more');
+  } finally {
+    await app.close();
+  }
+});
+
+/** The other ref an operator could reasonably send: the surviving rung's own. */
+test('a stack ref naming any rung of a standing intent calls it off', async () => {
+  const system = build(countingSink(), { auth: { enabled: false } });
+  system.landings.land('stack:1', [1, 2]);
+
+  const { app } = await buildApp(system);
+  try {
+    const stopped = await app.inject({ method: 'DELETE', url: '/api/stacks/stack:2/land' });
+    assert.equal(stopped.statusCode, 200);
+    assert.equal(system.store.listStackLandings()[0]?.status, 'revoked');
+
+    // And a ref covering nothing standing is still a 404 — in the words that are
+    // true of it, rather than "no open stack".
+    const none = await app.inject({ method: 'DELETE', url: '/api/stacks/stack:9/land' });
+    assert.equal(none.statusCode, 404);
+    assert.equal(none.json<{ error: string }>().error, 'nothing standing for stack:9');
+  } finally {
+    await app.close();
+  }
 });

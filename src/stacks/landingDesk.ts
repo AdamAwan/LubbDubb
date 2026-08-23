@@ -8,6 +8,8 @@ import { settleLandings } from './landing.js';
 interface SettleWorld {
   pullRequests: PullRequest[];
   closedPullRequests?: PullRequest[];
+  /** Which providers served a fallback slice. See {@link StackLandingDesk.settle}. */
+  staleSources?: string[];
 }
 
 /**
@@ -66,6 +68,11 @@ export class StackLandingDesk {
    */
   settle(world: SettleWorld): void {
     try {
+      // A world a provider could not read is not grounds to end an authorization
+      // the operator gave. Guarded here as well as inside `settleLandings` so the
+      // desk does no store work at all on a pulse it cannot judge from.
+      // → `src/stacks/landing.ts` `settleable`
+      if ((world.staleSources ?? []).length > 0) return;
       for (const settlement of settleLandings(this.store.listStandingLandings(), world)) {
         if (settlement.status === 'landed') {
           this.store.settleStackLanding(settlement.landing.id, 'landed', null);

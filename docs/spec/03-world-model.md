@@ -36,11 +36,19 @@ old changes what a decision taken against it is worth: a stale issue list with f
 a fleet that will not pick up new work, and the reverse is one that may act on a pull request that
 has since merged.
 
-**Nothing gates on it.** A stale world is still the best available world, and a pulse that refused to
-decide on one would turn a provider blip into a stalled fleet — the failure the fallback exists to
-prevent. Its one consumer is the cycle's rationale row, which is prefixed `[stale: <ids>]` so the
-Decision log explains a decision the world no longer justifies
+**Nothing in `decide` gates on it.** A stale world is still the best available world, and a pulse that
+refused to dispatch on one would turn a provider blip into a stalled fleet — the failure the fallback
+exists to prevent. Its first consumer is the cycle's rationale row, which is prefixed
+`[stale: <ids>]` so the Decision log explains a decision the world no longer justifies
 ([18](18-observability.md#the-decision-log)).
+
+**One pass does gate on it, and it is the exception that says what the rule is for.** Every other fold
+that reads absence corrects itself on the next healthy pulse; settling a stack landing
+([07](07-pull-requests.md#landing-a-stack)) does not, because it is a compare-and-set onto a terminal
+status that revokes an authorization the operator gave. A stale slice under-reports, and an
+under-reported rung is indistinguishable from one that left the chain — so that pass settles nothing
+from a world any source disowned. The test for a future gate is that one: a decision this pulse can
+revise takes the best world available, and a decision it cannot must wait for a whole one.
 
 ### What is in the dispatcher's world, and what puts it there
 

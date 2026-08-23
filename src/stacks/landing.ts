@@ -131,6 +131,32 @@ interface LandingSettlement {
 interface SettleWorld {
   pullRequests: PullRequest[];
   closedPullRequests?: PullRequest[];
+  /**
+   * The integrations that served a fallback slice on this pulse. Named per
+   * integration rather than per slice, so there is no way to ask whether it was
+   * the *source-control* half that went old — which is why any stale source at
+   * all stops a settle rather than only a stale one.
+   */
+  staleSources?: string[];
+}
+
+/**
+ * Whether this pulse's world may end an operator's standing authorization.
+ *
+ * A world with a stale slice is exactly the world in which rungs go missing: a
+ * provider serving its last-good list under-reports, and `settleLandings` reads
+ * every rung it cannot find as gone. Unlike the other folds that read absence, a
+ * settle is **not idempotent** — `settleStackLanding` is a compare-and-set onto a
+ * terminal status, and the next healthy pulse does not put the intent back. So
+ * one bad read would revoke the authorization permanently, over a pull request
+ * that never changed, with a reason that is false about it.
+ *
+ * Both arms skip, not just the stop: "all rungs merged" is just as unsupportable
+ * from a world nobody could read as "a rung is gone" is.
+ * → `docs/spec/03-world-model.md#worldsnapshot`
+ */
+function settleable(world: SettleWorld): boolean {
+  return (world.staleSources ?? []).length === 0;
 }
 
 /**
@@ -144,8 +170,11 @@ interface SettleWorld {
  * set is settled first — merged is progress, anything else is a fact about the
  * chain that outranks whatever the remaining rungs look like — and only then are
  * the survivors examined for a fault.
+ *
+ * **Nothing is settled from a world a provider disowned** ({@link settleable}).
  */
 export function settleLandings(landings: StackLanding[], world: SettleWorld): LandingSettlement[] {
+  if (!settleable(world)) return [];
   const open = new Map<number, PullRequest>();
   for (const pr of world.pullRequests) if (!pr.merged) open.set(pr.number, pr);
   const closed = new Map<number, PullRequest>();
