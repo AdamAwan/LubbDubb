@@ -494,7 +494,10 @@ that bucket hollow.
 
 **`comparison` is null below two complete weeks a side.** A comparison drawn off one week of goals is
 noise with a percentage sign on it, and withholding it from the payload is the only way the panel can
-be made not to draw it.
+be made not to draw it. The weeks counted are the ones that **closed a goal**, not the buckets on the
+axis: `trendSpan` returns a fixed eight buckets whatever the data, so a count of buckets is a
+condition with one answer and withholds nothing — which is how "$20, was $10, +100%" off one goal a
+side reached the headline tile.
 
 **Goals that closed with no measured spend are counted apart** (`goalsUnmeasured`) and appear in no
 figure, for `totals.unmeasuredRuns`' reason exactly.

@@ -4,6 +4,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { validationReadyPass } from '../src/validation/ready.js';
+import { ValidationReadyDesk } from '../src/validation/readyDesk.js';
 import { FakeWorldStore } from '../src/integrations/fake/fakeWorld.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
@@ -170,14 +171,24 @@ test('a check with the fleet is not on the bench, and a hand-back puts it straig
   const handed = check({ actor: 'fleet' });
   assert.deepEqual(pass({ issues: [issue(12)], deliveries: [delivery(12)], checks: checksOn(handed) }), []);
 
+  // A hand-back sets the actor back to `human` in the same write, which is what
+  // puts the check on the bench — the note outlives a re-hand-over now, so it is
+  // not what the bench reads.
   const back = pass({
     issues: [issue(12)],
     deliveries: [delivery(12)],
-    checks: checksOn(check({ actor: 'fleet', handbackNote: 'no account on the staging console' })),
+    checks: checksOn(check({ actor: 'human', handbackNote: 'no account on the staging console' })),
   });
   assert.equal(back.length, 1);
   assert.equal(back[0]!.kind, 'file');
   assert.match(back[0]!.kind === 'file' ? back[0]!.detail : '', /no account on the staging console/);
+});
+
+test('a check handed over again is off the bench, note or no note', () => {
+  // The state a re-hand-over leaves: the previous attempt's reason is still on the
+  // row, because the next dispatch is briefed with it.
+  const again = check({ actor: 'fleet', handbackNote: 'no account on the staging console' });
+  assert.deepEqual(pass({ issues: [issue(12)], deliveries: [delivery(12)], checks: checksOn(again) }), []);
 });
 
 test('a failed check and a deferred one are both still a person’s to deal with', () => {
@@ -354,6 +365,45 @@ test('a pulse files the validate row, and the next one settles it once the resul
   const settled = system.store.getHumanTask(filed[0]!.id)!;
   assert.equal(settled.status, 'done');
   assert.match(settled.resolution ?? '', /nothing is left for you to run/);
+});
+
+test('clearing the last delivery retracts the row, with nothing else on the board', () => {
+  // The retraction reads the standing rows, not the deliveries, so it is the one
+  // arm with work to do precisely when nothing is delivered. A desk that reads the
+  // deliveries first and returns on an empty list therefore retracts only while
+  // some *unrelated* goal happens to still be parked — which is a harness working
+  // one goal at a time never retracting at all.
+  const system = build();
+  const desk = new ValidationReadyDesk(system.store);
+  system.store.ingestValidation('issue:12', {
+    checks: [
+      {
+        id: 'merged-branch-gone',
+        seq: 0,
+        title: 'A squash-merged part branch is gone on both sides',
+        do: 'Run the harness against the fixture repo…',
+        expect: 'No reap ref, locally or on the remote.',
+        uses: [],
+        covers: [],
+        fleetCandidate: false,
+        candidateWhy: null,
+      },
+    ],
+    resources: [],
+    supersededReason: 'the plan no longer declares it',
+    amendNote: 'the plan was re-read',
+  });
+
+  system.store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  desk.run({ issues: [issue(12)] });
+  const filed = system.store.listHumanTasksOfKind('validate');
+  assert.equal(filed.length, 1);
+
+  system.store.clearDelivery('issue:12');
+  desk.run({ issues: [issue(12)] });
+  const settled = system.store.getHumanTask(filed[0]!.id)!;
+  assert.equal(settled.status, 'declined');
+  assert.match(settled.resolution ?? '', /back into production/);
 });
 
 // -- the environment gate -----------------------------------------------------

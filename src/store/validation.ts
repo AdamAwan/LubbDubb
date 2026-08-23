@@ -425,10 +425,12 @@ export class ValidationStore {
    * keeps "an agent may run this" a statement about the deployment rather than a
    * planner's guess about it.
    *
-   * Handing it over clears any previous hand-back: the operator has read why the
-   * fleet gave it up and is sending it again anyway, so leaving the old reason
-   * standing beside a check that is now in flight would describe the wrong
-   * attempt.
+   * Handing it over **keeps** any previous hand-back. The next dispatch is briefed
+   * with it, which is the whole of why a re-hand-over does not rediscover the same
+   * wall and spend an attempt saying so ([20](../../docs/spec/20-validation.md)) —
+   * and clearing it here was destroying the only copy. What stops the old reason
+   * being drawn beside a check now in flight is the reader (`whoOwesIt`), which
+   * prefers the actor; what clears it is the next reading.
    */
   setValidationActor(originRef: string, checkId: string, actor: ValidationCheckActor): ValidationCheck | null {
     const current = this.getValidationCheck(originRef, checkId);
@@ -436,7 +438,6 @@ export class ValidationStore {
     const next: ValidationCheck = {
       ...current,
       actor,
-      handbackNote: actor === 'fleet' ? null : current.handbackNote,
       updatedAt: this.ctx.now(),
     };
     this.writeCheck(next);

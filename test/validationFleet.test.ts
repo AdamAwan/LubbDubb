@@ -14,6 +14,7 @@ import type { DispatchContext } from '../src/dispatcher/dispatcher.js';
 import { ingestPlanDocument } from '../src/plans/planIngest.js';
 import { validatePlanDocument } from '../src/plans/planDocument.js';
 import { outstandingChecks } from '../src/validation/verdict.js';
+import { checkBriefing } from '../src/validation/fleet.js';
 import { renderPlanComment } from '../src/plans/planComment.js';
 import type { Agent, Issue, IssueDelivery, Plan, ValidationCheck, ValidationCheckAmendment } from '../src/types.js';
 
@@ -473,6 +474,24 @@ test('the next reading answers a hand-back, exactly as it answers an amendment',
   assert.equal(byId(system, planId, 'csv-opens').handbackNote, null, 'the operator has moved past it');
 });
 
+test('handing a check over again briefs the next agent with the last attempt’s reason', async () => {
+  const system = build();
+  const planId = planWith(system, [CHECK]);
+
+  system.store.setValidationActor(planId, 'csv-opens', 'fleet');
+  system.store.recordValidationHandback(planId, 'csv-opens', 'no login for staging');
+  // The operator reads why, fixes the deployment, and sends it again. Without the
+  // reason in front of it the next agent hits the same wall and spends one of the
+  // three attempts saying what was already on the row.
+  const again = system.store.setValidationActor(planId, 'csv-opens', 'fleet');
+  assert.ok(again);
+  assert.equal(again.actor, 'fleet');
+  assert.match(checkBriefing(again), /gave this back before[\s\S]*no login for staging/);
+
+  // And the row itself does not describe the last attempt while this one is out.
+  assert.match(outstandingChecks(system.store.listValidationChecks(planId)).join('\n'), /handed to the fleet/);
+});
+
 // -- what reaches somebody who is not at the cockpit -------------------------
 
 test('the close-out line says who owes the check, and the ticket says who recorded it', async () => {
@@ -485,7 +504,7 @@ test('the close-out line says who owes the check, and the ticket says who record
   // Without these, both render as a bare `unrun` — the same word for "nobody has
   // got to it", "an agent is about to" and "an agent tried and could not".
   assert.match(lines.join('\n'), /handed to the fleet/);
-  assert.match(lines.join('\n'), /handed this back.*printer is not reachable/);
+  assert.match(lines.join('\n'), /handed back.*printer is not reachable/);
 
   system.store.recordValidationResult(goal, 'csv-opens', { state: 'passed', note: 'it opened', by: 'agent' });
   const comment = renderPlanComment(

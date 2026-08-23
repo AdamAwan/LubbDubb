@@ -7,13 +7,7 @@ import { resolve } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import type { System } from '../system.js';
 import { Hub } from './hub.js';
-import {
-  authRefusalHint,
-  authorizeRequest,
-  createAuthThrottle,
-  describeAuthAttempt,
-  resolveCockpitToken,
-} from './auth.js';
+import { authRefusalHint, createAuthThrottle, describeAuthAttempt, guardRequest, resolveCockpitToken } from './auth.js';
 import { debugLog } from '../debug.js';
 import type { RouteModule } from './routes/context.js';
 import { register as registerAgents } from './routes/agents.js';
@@ -76,6 +70,17 @@ const ROUTE_MODULES: RouteModule[] = [
 /** Bind addresses that mean "this machine only" — the ones the Host check is sound for. */
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
 
+/**
+ * The status a caught error already classified itself with, when that is a 4xx —
+ * the caller's fault, stated by the framework before any handler ran. Anything
+ * else (a 5xx, or no status at all) is an unanticipated throw and belongs in the
+ * error log. Fastify's body-parser errors are the ones this exists for.
+ */
+function clientRefusalStatus(err: unknown): number | null {
+  const status = (err as { statusCode?: unknown } | null)?.statusCode;
+  return typeof status === 'number' && status >= 400 && status < 500 ? status : null;
+}
+
 interface BuiltApp {
   app: FastifyInstance;
   hub: Hub;
@@ -133,13 +138,17 @@ export async function buildApp(system: System): Promise<BuiltApp> {
             ? (req.query as { t: string }).t
             : undefined,
       };
-      const verdict = authorizeRequest(attempt, {
+      // Asking the throttle, deciding and counting the refusal are one call, because
+      // the order of them is the property — a throttled refusal must not renew the
+      // window that produced it. See `guardRequest`.
+      const verdict = guardRequest(attempt, {
         token: auth.token,
         requireLoopbackHost,
-        throttled: throttle.blocked(req.ip, now),
+        throttle,
+        key: req.ip,
+        now,
       });
       if (verdict.ok) return;
-      throttle.fail(req.ip, now);
       const summary = `${verdict.code} ${verdict.error} — ${describeAuthAttempt(attempt)}`;
       if (refused) {
         debugLog('auth', summary);
@@ -199,8 +208,16 @@ export async function buildApp(system: System): Promise<BuiltApp> {
   // cockpit), then return a plain 500.
   // fastify 5 types the handler's error as `unknown` — a route may throw a
   // non-Error, and the recorded message must not read as "undefined".
+  //
+  // An error that carries its own 4xx is the framework refusing a malformed
+  // request before `checked` can see it — the JSON body parser is the one that
+  // reaches every mutating route — so it is returned with that status and *not*
+  // recorded. Recording it would bury real faults under other people's typos,
+  // which is the whole reason the surface refuses by value rather than by throw.
   app.setErrorHandler((err: unknown, req, reply) => {
     const message = err instanceof Error ? err.message : String(err);
+    const status = clientRefusalStatus(err);
+    if (status !== null) return reply.code(status).send({ error: message });
     errors.record({
       source: 'server',
       message: `${req.method} ${req.url} failed: ${message}`,

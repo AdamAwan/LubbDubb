@@ -270,6 +270,27 @@ test('a database written before the sweep existed reads its rows as asks', () =>
   assert.equal(store.getHumanTask(ask.id)!.status, 'open');
 });
 
+test('clearing the last delivery retracts the row, with nothing else on the board', () => {
+  // The retraction reads the standing rows, not the deliveries, so it is the one
+  // arm with work to do precisely when nothing is delivered. A desk that reads the
+  // deliveries first and returns on an empty list therefore retracts only while
+  // some *unrelated* goal happens to still be parked — which is a harness working
+  // one goal at a time never retracting at all.
+  const store = new Store(':memory:');
+  const desk = new DeliveryCloseOutDesk(store);
+
+  store.recordDelivery({ originRef: 'issue:12', summary: 'PR #40 landed it', by: 'assessor' });
+  desk.run({ issues: [issue(12)] });
+  const filed = store.listHumanTasksOfKind('close_out');
+  assert.equal(filed.length, 1);
+
+  store.clearDelivery('issue:12');
+  desk.run({ issues: [issue(12)] });
+  const settled = store.getHumanTask(filed[0]!.id)!;
+  assert.equal(settled.status, 'declined');
+  assert.match(settled.resolution ?? '', /back into production/);
+});
+
 // -- the sequence -------------------------------------------------------------
 
 test('the close is not asked for while validation is still somebody’s', () => {

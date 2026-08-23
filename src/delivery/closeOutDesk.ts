@@ -33,14 +33,18 @@ export class DeliveryCloseOutDesk {
   /** @public called by `Harness.runCycle`, beside the other bookkeeping passes. */
   run(world: CloseOutWorld): void {
     const deliveries = this.store.listDeliveries();
-    // A pass with nothing standing reads nothing. Every deployment until an issue
-    // is assessed is that case, and the sweep runs on every pulse.
-    if (deliveries.length === 0) return;
+    const existing = this.store.listHumanTasksOfKind('close_out');
+    // A pass with nothing standing *and* nothing on the bench reads nothing. Every
+    // deployment until an issue is assessed is that case, and the sweep runs on
+    // every pulse. Both halves are load-bearing: the retraction arm reads the
+    // standing rows, so it is the one arm with work to do precisely when nothing
+    // is delivered — clearing the last delivery is exactly that state.
+    if (deliveries.length === 0 && existing.length === 0) return;
     const steps = closeOutPass({
       issues: world.issues,
       deliveries,
       shortfalls: this.store.listShortfalls(),
-      existing: this.store.listHumanTasksOfKind('close_out'),
+      existing,
       validation: this.validationByOrigin(),
       // The bench's own state, not the verdict's: an operator who marked the
       // validate row done is finished with it whatever the checks say.
