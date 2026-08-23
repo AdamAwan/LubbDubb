@@ -8,6 +8,8 @@ import {
   buildUnresolvedComments,
 } from '../src/integrations/github/sourceControl.js';
 import { GitHubIssuesIntegration, linkedPrFromTimeline, viewerAddedLabels } from '../src/integrations/github/issues.js';
+import { diffWorlds } from '../src/world/worldDiff.js';
+import type { Issue, WorldSnapshot } from '../src/types.js';
 import { resolvePullDetail } from '../src/integrations/github/octokitGitHubApi.js';
 import type {
   GhAnnotation,
@@ -918,4 +920,50 @@ test('setPullTitle and setPullBase each write only their own field', async () =>
   await sc.setPullBase({ prNumber: 42, base: 'main' });
   assert.deepEqual(recorded.titleSets, [{ number: 42, title: '#12 feat(store): cursor' }]);
   assert.deepEqual(recorded.baseSets, [{ number: 42, base: 'main' }]);
+});
+
+/**
+ * `issue_closed` is unreachable on a real provider (issue #577).
+ *
+ * `diffWorlds` needs an in-place open→closed transition, and the issues provider
+ * snapshots the **open set** only — so a closed issue simply leaves the world, and
+ * "a removal emits nothing" is absolute. `pr_merged` has the identical defect and
+ * arrives on `closedPullRequests` instead; there is no closed-issue list, so the
+ * closure signal a reader wants is the ticket mirror and never `world_events`.
+ *
+ * `test/worldDiff.test.ts` exercises the branch with a hand-built pair of
+ * snapshots in which a closed issue is still present — a world no provider
+ * produces — so this drives the real integration instead.
+ */
+test('a closed issue produces no world event, because it leaves the world instead', async () => {
+  const open: Script['issues'] = [
+    { number: 10, title: 'Bug', body: '', labels: [], state: 'open', url: 'https://i/10', isPullRequest: false },
+  ];
+  const store = new Store(':memory:');
+
+  const before = await new GitHubIssuesIntegration({ api: fakeApi({ issues: open }).api }).snapshot();
+  assert.deepEqual(
+    before.issues!.map((i) => `#${i.number}(${i.state})`),
+    ['#10(open)'],
+  );
+
+  // The tracker closes it. The open list stops carrying it — which is the whole
+  // point: `state: 'closed'` never reaches a snapshot.
+  const closedScript: Script['issues'] = [{ ...open[0]!, state: 'closed' }];
+  const after = await new GitHubIssuesIntegration({ api: fakeApi({ issues: closedScript }).api }).snapshot();
+  assert.deepEqual(after.issues, [], 'the issue left the world rather than changing state in it');
+
+  const world = (issues: Issue[]): WorldSnapshot => ({ takenAt: 'now', pullRequests: [], issues });
+  assert.deepEqual(
+    diffWorlds(world(before.issues!), world(after.issues!)),
+    [],
+    'no issue_closed, ever — a disappearance is not a progress signal',
+  );
+
+  // The one thing this lifecycle does report: a reopen is an appearance.
+  assert.deepEqual(
+    diffWorlds(world(after.issues!), world(before.issues!)).map((e) => e.kind),
+    ['issue_opened'],
+  );
+  store.close();
 });

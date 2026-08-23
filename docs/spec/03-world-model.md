@@ -221,7 +221,7 @@ Object identity is by domain `id`. Two standing rules:
 | `pr_closed`    | The PR appears in the closed list, not merged.                                                 |
 | `pr_comment`   | An unresolved comment id appears that was not there before.                                    |
 | `issue_opened` | An issue id appears.                                                                           |
-| `issue_closed` | `state` went open→closed.                                                                      |
+| `issue_closed` | `state` went open→closed — **unreachable on both real providers**, see below.                  |
 | `issue_linked` | `linkedPrNumber` went null→set.                                                                |
 
 Because the second rule (removals are silent) is absolute, `pr_merged` **cannot** be observed on the
@@ -230,6 +230,27 @@ a PR from the world the moment it merges. The merge therefore arrives as an _app
 `closedPullRequests`. A closed row is news the first cycle it appears there and never again (it
 lingers for the whole retention window), and a merge already announced off the open list — which the
 fake provider does, marking a PR merged in place before it closes — is not announced twice.
+
+**`issue_closed` has the identical defect, and no closed-issue list to arrive on instead.** The
+transition needs an in-place open→closed, and both real issue providers snapshot the open set only —
+`GitHubIssuesIntegration.snapshot` calls `listOpenIssues()` (`state: 'open'`), and Azure's
+`workItems.ts` is the same shape. The `state: 'all'` sibling call exists, but it feeds the **ticket
+mirror**, not the world. So a closed issue simply leaves `issues` and the branch is never reached: no
+`issue_closed`, ever, on any real deployment. A _reopen_ does emit `issue_opened`, which is the one
+thing this issue's lifecycle does report.
+
+**So the closure signal a reader wants is the ticket mirror** (`src/store/tickets.ts`,
+[14](14-persistence.md)), never `world_events`. This is not a new discovery — `spendTrend`'s
+goal-closure cohort was rebuilt off the mirror for exactly this reason, after every deployment drew
+the empty state forever — and it is written down here because a future hold or lens designed off this
+table would otherwise pick `issue_closed` as its signal, ship, and observe nothing. `deliveryHold` and
+`assayHold` both name it among the events they expire on, and both are relying on `issue_opened` and
+`issue_linked` for anything that actually fires.
+
+The kind itself is kept rather than retired, symmetric with how `pr_merged`'s open-list arm was kept:
+it is the honest reading of a transition a provider that reported closed issues would deliver, and
+retiring it would cost a `WorldEventKind` narrowing and a migration story for rows the fake has
+already written.
 
 ## The closed-PR window
 

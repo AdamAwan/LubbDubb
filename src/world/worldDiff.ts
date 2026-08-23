@@ -104,6 +104,14 @@ export function diffWorlds(prev: WorldSnapshot, next: WorldSnapshot): WorldEvent
       });
       continue;
     }
+    // Kept, and unreachable on every real deployment: the transition needs an
+    // in-place open→closed, and both real issue providers snapshot the open set
+    // only — a closed issue leaves `issues` and removals are silent. `pr_merged`
+    // has the same defect and arrives on `closedPullRequests` instead; there is no
+    // closed-issue list, so the closure signal a reader wants is the **ticket
+    // mirror**, never this. Retained rather than retired for `pr_merged`'s reason:
+    // it is the honest reading of what a provider reporting closed issues would
+    // deliver. → `docs/spec/03-world-model.md`
     if (before.state === 'open' && issue.state === 'closed') {
       events.push({ kind: 'issue_closed', ref: issueRef(issue), summary: `Issue #${issue.number} closed` });
     }
