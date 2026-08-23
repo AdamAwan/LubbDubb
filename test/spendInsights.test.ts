@@ -543,6 +543,41 @@ test('landed counts merges, and what never landed counts faults only', () => {
 });
 
 /**
+ * A fleet that is out right now is never an empty window.
+ *
+ * `EconomicsTab` short-circuits on `totals.measuredRuns === 0` and prints "No
+ * agent ran in this window, so there is nothing to break down" — while the top
+ * bar's chip, a plain sum since an instant, shows the money on the same screen.
+ * A local run meets this normally rather than exceptionally: it is held open for
+ * as long as somebody is looking at it.
+ */
+test('a run still out when the window opened is counted in it, agent and local run alike', () => {
+  const day = 24 * 60 * 60 * 1000;
+  const nodes = [node('issue:41', null)];
+  const live = agent('a-live', {
+    status: 'running',
+    costUsd: 5,
+    startedAt: new Date(NOW - 8 * 60 * 60 * 1000).toISOString(),
+    endedAt: null,
+  });
+  const preview = localRun('lr-live', 'issue:41', {
+    status: 'running',
+    costUsd: 2,
+    startedAt: new Date(NOW - 3 * day).toISOString(),
+    endedAt: null,
+  });
+
+  const six = build({ agents: [live], localRuns: [preview], tasks: [task('a-live', 'issue:41:part:api')], nodes }, '6h'); // prettier-ignore
+  // Both spenders, both live: the agent and the preview each count as a measured
+  // run, so the tab has a breakdown to draw rather than its empty state.
+  assert.equal(six.totals.measuredRuns, 2, 'the empty state is not drawn over a fleet that is out');
+  assert.equal(six.totals.costUsd, 7);
+  assert.equal(six.phases.find((p) => p.phase === 'build')?.costUsd, 5);
+  assert.equal(six.phases.find((p) => p.phase === 'local')?.costUsd, 2);
+  assert.equal(six.goals.find((g) => g.issueNumber === 41)?.costUsd, 7);
+});
+
+/**
  * The window cuts both spenders, and by the same rule.
  *
  * A local run is a session that held the dev environment for as long as somebody

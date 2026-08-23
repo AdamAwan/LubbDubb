@@ -241,6 +241,25 @@ test('scope drift reports writes outside a declared prefix, and nothing for an u
   assert.deepEqual(drift[0]?.paths, ['src/storefront/x.ts', 'docs/spec/14-persistence.md']);
 });
 
+/**
+ * The declaration a sweep or a tree-wide rename writes. `.` is the spelling
+ * `pathIsInside`'s own comment names first, and the one that used to survive
+ * normalisation as a literal prefix nothing matches — so a part that declared the
+ * widest possible scope had every file it wrote drawn under a drift line.
+ */
+test('the four spellings of the repository are one declaration, and none of them drift', () => {
+  const tasks: Task[] = [task('issue:12:part:sweep', 'agent-1')];
+  const files: AgentFile[] = [file('agent-1', 'src/store/plans.ts'), file('agent-1', 'README.md')];
+  for (const touches of [['.'], ['./'], ['/'], [''], [' . ']]) {
+    const declared = part('sweep', { touches });
+    assert.deepEqual(
+      planScopeDrift(12, [declared], tasks, files),
+      [],
+      `${JSON.stringify(touches)} declares the repository, so nothing is outside it`,
+    );
+  }
+});
+
 test('scope drift reads every agent a part had, not only its last', () => {
   const declared = part('schema', { touches: ['src/store/'] });
   const tasks: Task[] = [task('issue:12:part:schema', 'agent-1'), task('issue:12:part:schema', 'agent-2')];

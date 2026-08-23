@@ -225,6 +225,16 @@ export interface RunwayReading {
   medianHeldMinutes: number | null;
   /** How many completed goals that median was taken over. */
   completedRuns: number;
+  /**
+   * Completed goals the median could **not** be taken over: a span that was not
+   * finite and positive, or one covered end to end by holds.
+   *
+   * Carried beside the count above rather than folded into it because it is the
+   * only diagnosis of a fleet whose runway has gone permanently dark — every
+   * goal finishing with no fleet time in it reads, from the raw completed count
+   * alone, as a gauge that disagrees with its own `minimumRuns`.
+   */
+  unmeasuredRuns: number;
   /** Slots doing nothing this instant. Zero while paused, which is not idleness. */
   idleSlots: number;
   /** The row's one line, and what sits under it. Written here so the desk and the card cannot word it differently. */
@@ -358,12 +368,12 @@ export function readRunway(input: RunwayInput): RunwayReading {
     }
   }
 
-  const { lead: medianLeadMinutes, held: medianHeldMinutes } = medianLead(
-    input.runs,
-    input.policy.minimumRuns,
-    humanHolds(input),
-  );
-  const completedRuns = input.runs.filter((r) => r.completedAt !== null).length;
+  const {
+    lead: medianLeadMinutes,
+    held: medianHeldMinutes,
+    measured: completedRuns,
+    unmeasured: unmeasuredRuns,
+  } = medianLead(input.runs, input.policy.minimumRuns, humanHolds(input));
   const supply = inflight + queued;
   const cap = Math.max(1, input.cap);
   // Off the pulse's own headroom, never `cap - inflight`. They are different
@@ -411,6 +421,7 @@ export function readRunway(input: RunwayInput): RunwayReading {
     medianLeadMinutes,
     medianHeldMinutes,
     completedRuns,
+    unmeasuredRuns,
     idleSlots,
   };
   return { ...reading, ...say(reading, cap) };
@@ -467,9 +478,10 @@ function medianLead(
   runs: readonly IssueRun[],
   minimum: number,
   holds: Map<string, Hold[]>,
-): { lead: number | null; held: number | null } {
-  const pairs = runs
-    .filter((r) => r.completedAt !== null)
+): { lead: number | null; held: number | null; measured: number; unmeasured: number } {
+  const done = runs.filter((r) => r.completedAt !== null);
+  const completed = done.length;
+  const pairs = done
     .map((r) => {
       const from = Date.parse(r.startedAt);
       const to = Date.parse(r.completedAt as string);
@@ -479,8 +491,20 @@ function medianLead(
     // A clock that went backwards between two pulses, or a row written by an
     // older build, would otherwise put a negative span in the middle of the sort.
     .filter((p) => Number.isFinite(p.work) && p.work > 0);
-  if (pairs.length < minimum) return { lead: null, held: null };
-  return { lead: medianMinutes(pairs.map((p) => p.work)), held: medianMinutes(pairs.map((p) => p.held)) };
+  // Both counts, because the sentence `unknown` writes has to tell the two
+  // reasons apart: too few completed goals, and enough of them whose spans went
+  // entirely to holds. Reporting the raw completed count for either states a
+  // number the operator can read against `minimumRuns` and conclude the gauge
+  // is broken.
+  const measured = pairs.length;
+  const unmeasured = completed - measured;
+  if (measured < minimum) return { lead: null, held: null, measured, unmeasured };
+  return {
+    lead: medianMinutes(pairs.map((p) => p.work)),
+    held: medianMinutes(pairs.map((p) => p.held)),
+    measured,
+    unmeasured,
+  };
 }
 
 /** The median of a non-empty list of milliseconds, in whole minutes. */
@@ -706,8 +730,11 @@ function say(reading: Omit<RunwayReading, 'headline' | 'detail'>, cap: number): 
     return {
       headline: 'Not enough history for a runway yet',
       detail:
-        `${reading.completedRuns} goal${reading.completedRuns === 1 ? ' has' : 's have'} completed; a median ` +
-        `lead time is taken over more. ${reading.inflight} in flight, ${reading.queued} waiting.`,
+        (reading.unmeasuredRuns > 0
+          ? `${reading.completedRuns} of ${reading.completedRuns + reading.unmeasuredRuns} completed goals left ` +
+            `fleet time to measure; a median lead time is taken over more. `
+          : `${reading.completedRuns} goal${reading.completedRuns === 1 ? ' has' : 's have'} completed; a median ` +
+            `lead time is taken over more. `) + `${reading.inflight} in flight, ${reading.queued} waiting.`,
     };
   }
   return {

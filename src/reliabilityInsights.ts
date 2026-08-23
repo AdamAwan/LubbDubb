@@ -4,7 +4,7 @@ import { phaseLabel, phaseOf, type SpendPhase } from './spendInsights.js';
 import { ciStatusOf } from './world/worldDiff.js';
 import {
   bucketIndexIn,
-  inWindow,
+  runInWindow,
   runInstant,
   timelineSpan,
   windowView,
@@ -341,7 +341,7 @@ export function buildReliabilityInsights(input: ReliabilityInput): ReliabilityIn
   // different stretches, both rendered as though they were about the same fleet.
   const windowed: ReliabilityInput = {
     ...input,
-    agents: input.agents.filter((agent) => inWindow(window, runInstant(agent))),
+    agents: input.agents.filter((agent) => runInWindow(window, agent)),
   };
   const span = timelineSpan(
     window,

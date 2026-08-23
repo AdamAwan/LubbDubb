@@ -201,9 +201,50 @@ test('a goal whose whole span is one hold is dropped, not counted as zero work',
       humanTasks: [hold('issue:500', 0, 40)],
     }),
   );
-  assert.equal(r.completedRuns, 5);
+  // Four goals' worth of evidence, and the count the card names is that
+  // population — the fifth is carried beside it as unmeasured rather than folded
+  // into a figure the operator would read against `minimumRuns`.
+  assert.equal(r.completedRuns, 4);
+  assert.equal(r.unmeasuredRuns, 1);
   assert.equal(r.medianLeadMinutes, null);
   assert.equal(r.state, 'unknown');
+});
+
+/**
+ * What `unknown` says about itself, when the reason is not a short history.
+ *
+ * Eight completed goals with `minimumRuns` at five is not `unknown` by the
+ * spec's own definition, and a card stating both numbers can only be read as a
+ * gauge that has broken. The two reasons want different sentences, and the
+ * second is the one an operator cannot otherwise diagnose: a deployment that
+ * adopted a repository full of already-closed tickets is in it on day one.
+ */
+test('`unknown` counts the population the median was taken over, never the raw completed rows', () => {
+  const covered = readRunway(
+    input({
+      issues: [issue(1)],
+      runs: history(8),
+      // Every run covered end to end, so every span goes to holds.
+      humanTasks: history(8).map((r, i) => hold(r.originRef, 0, 40, { id: `ht_${i}` })),
+    }),
+  );
+  assert.equal(covered.state, 'unknown');
+  assert.equal(covered.completedRuns, 0);
+  assert.equal(covered.unmeasuredRuns, 8);
+  assert.ok(
+    !/\b([5-9]|\d{2,}) goals? ha[sv]e? completed\b/.test(covered.detail),
+    `the sentence must not state a completed count at or above minimumRuns: ${covered.detail}`,
+  );
+  assert.match(covered.detail, /0 of 8 completed goals left fleet time to measure/);
+
+  // The same shape with no holds at all: a goal the operator declared done
+  // without the harness ever staffing it is written complete on its first
+  // sighting, so `started_at` and `completed_at` are one instant.
+  const zeroLength = readRunway(input({ issues: [issue(1)], runs: history(8).map((r) => ({ ...r, completedAt: r.startedAt })) })); // prettier-ignore
+  assert.equal(zeroLength.state, 'unknown');
+  assert.equal(zeroLength.completedRuns, 0);
+  assert.equal(zeroLength.unmeasuredRuns, 8);
+  assert.match(zeroLength.detail, /0 of 8 completed goals left fleet time to measure/);
 });
 
 test('a burn notice and a standalone ask are not holds — the fleet is working through both', () => {

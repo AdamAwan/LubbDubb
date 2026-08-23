@@ -201,6 +201,21 @@ export function runInstant(run: { startedAt: string; endedAt: string | null }): 
 }
 
 /**
+ * Whether a run falls inside the window.
+ *
+ * A run that has not ended is inside every window that ends at `now`, whatever
+ * its age: its money is being spent now, which is the question the window asks.
+ * Dating it at `startedAt` — the instant it counts at on a timeline, where the
+ * start is the only honest end it has — put a nine-hour live agent outside the
+ * six-hour window it is in fact spending in, and the tab then drew the empty
+ * state over a fleet that is out.
+ */
+export function runInWindow(window: ResolvedWindow, run: { startedAt: string; endedAt: string | null }): boolean {
+  if (run.endedAt === null) return true;
+  return inWindow(window, runInstant(run));
+}
+
+/**
  * The window as the cockpit reads it back.
  *
  * Shipped with every payload rather than re-derived in the browser, for the

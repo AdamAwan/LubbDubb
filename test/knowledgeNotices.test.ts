@@ -230,6 +230,43 @@ test('a condition is settled by green, by the check going away, and by the pull 
 
 // -- the desk, against a real store -------------------------------------------
 
+/**
+ * The second occurrence is news again.
+ *
+ * A base branch that goes red, recovers, and goes red again is the case the
+ * condition exists for — and the resolved notice must not be the row the second
+ * sighting joins. Settling before raising is not what delivers that: resolution
+ * writes `expires_at` and nothing else, so a writer matching on scope and reach
+ * alone joined the row it had just lapsed, and the fleet was never told the base
+ * was red again. The corroboration count went up, the row drew fine, and the
+ * harness's own reading landed on a claim nothing answers.
+ */
+test('a notice resolved and then seen again is raised afresh, not corroborated onto the dead row', () => {
+  const system = build();
+  const desk = new KnowledgeNoticeDesk({ store: system.store });
+  const baseRed = pr({ number: 404, branch: 'feat/base', ciChecks: [check('check (build)', 'failing')] });
+  const baseGreen = pr({ number: 404, branch: 'feat/base', ciChecks: [check('check (build)', 'passing')] });
+  const rung = pr({ number: 405, baseBranch: 'feat/base' });
+
+  desk.run(world([baseGreen, rung]), world([baseRed, rung]));
+  const first = system.store.listFacts().find((f) => f.resolvesWhen !== null)!;
+  assert.ok(first);
+
+  desk.run(world([baseRed, rung]), world([baseGreen, rung]));
+  const now = new Date().toISOString();
+  assert.ok(system.store.getFact(first.id)!.expiresAt! <= now, 'the condition was met, so the notice lapsed');
+
+  desk.run(world([baseGreen, rung]), world([baseRed, rung]));
+  assert.equal(system.store.listFacts().length, 2, 'the second red is its own notice, with its own clock');
+  assert.equal(system.store.listCorroborations(first.id).length, 1, 'and not a second voice on the lapsed one');
+  // One notice anybody could still be told, and it is the new one. The first is
+  // still there saying what it said, with its clock spent.
+  const live = system.store.listFacts().filter((f) => f.resolvesWhen !== null && f.expiresAt! > now);
+  assert.equal(live.length, 1);
+  assert.notEqual(live[0]!.id, first.id);
+  system.store.close();
+});
+
 test('the harness corroborates for itself, and a settled notice leaves every read with its row intact', () => {
   const system = build();
   const desk = new KnowledgeNoticeDesk({ store: system.store });

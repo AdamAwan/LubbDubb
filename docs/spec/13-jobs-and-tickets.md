@@ -481,6 +481,13 @@ on `part_id`; and from there the existing graph does the work:
   true and readiness releases the dependents on the next pulse.
 - **Declining** it leaves the part `blocked` rather than concluded — see below.
 
+**An ask is only ever as long-lived as the part it is keyed on.** Whatever retires the part — an
+amendment that dropped the step, or a refusal that sent the whole plan back
+([08](08-planning.md#the-approval-gate)) — declines the row with it, through the one
+path both reach. A retirement that left the row open would put a step no plan schedules on the bench
+with nothing able to settle it, and it would be indistinguishable there from an ask the operator still
+owes.
+
 **A standalone human task blocks nothing.** It is a visible obligation, not a gate. That line is what
 keeps the capability an agent gains to "ask a person" rather than "stop the fleet": the blocking half
 only ever arrives through a plan, and a plan is already gated by an operator's approval.

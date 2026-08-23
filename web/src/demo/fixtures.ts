@@ -2661,6 +2661,7 @@ export function buildDemoState(): DemoSeed {
       medianLeadMinutes: 40,
       medianHeldMinutes: 95,
       completedRuns: 47,
+      unmeasuredRuns: 0,
       idleSlots: 0,
       headline: 'About 3h 7m of work queued',
       detail: '3 in flight, 11 waiting.',

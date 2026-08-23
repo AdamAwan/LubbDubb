@@ -284,6 +284,52 @@ test('an ask reaches nothing that is only one agent’s claim, and nothing that 
   assert.equal(stale.reach, 'injected');
 });
 
+/**
+ * The writer honours the lapse too, and it is the half that decides whether the
+ * fleet is ever told the thing again.
+ *
+ * A notice that ran out its clock is out of every read, so joining a re-raise to
+ * it buries the second occurrence on a row nothing answers — wearing the first
+ * one's date and a clock already spent, while the agent is told its call landed
+ * as agreement. That is `retired`'s rule, for `retired`'s reason.
+ */
+test('a re-raise after a notice lapsed files a fresh one, and a rejection still bars however old it is', () => {
+  let now = '2026-08-22T09:00:00.000Z';
+  const store = new Store(':memory:', () => now);
+  const notice = {
+    claim: 'The runner is out of disk this afternoon.',
+    lifetime: 'expiring',
+    expiresInHours: 1,
+  } as const;
+
+  const first = store.proposeFact(proposal(notice), seenOn('issue:41'));
+  assert.equal(first.outcome, 'filed');
+
+  now = '2026-08-29T09:00:00.000Z'; // a week later; the notice lapsed six days ago
+  assert.equal(store.askFacts({ limit: 50 }).length, 0, 'the lapsed row is out of every read');
+  const second = store.proposeFact(proposal(notice), seenOn('issue:88'));
+  assert.equal(second.outcome, 'filed', 'a second sighting is news again, not agreement with a dead row');
+  assert.notEqual(second.fact.id, first.fact.id);
+  assert.equal(store.listFacts().length, 2);
+  assert.deepEqual(
+    store.askFacts({ limit: 50 }).map((f) => f.id),
+    [],
+    'and the fresh one carries its own clock — one voice, so it is nobody’s yet',
+  );
+  const third = store.proposeFact(proposal(notice), seenOn('issue:99'));
+  assert.equal(third.outcome, 'corroborated', 'the live row is the one a third sighting joins');
+  assert.equal(third.fact.id, second.fact.id);
+
+  // The bar is not filtered the same way: a rejection is a ruling with no clock
+  // on it, so it bars the claim by name however long ago its row was written.
+  const ruled = store.proposeFact(proposal({ claim: 'The staging key is rotated weekly.' }), seenOn('issue:41'));
+  assert.ok(ruled.outcome !== 'barred');
+  store.setFactReach(ruled.fact.id, 'rejected');
+  now = '2027-08-29T09:00:00.000Z';
+  assert.equal(store.proposeFact(proposal({ claim: 'The staging key is rotated weekly.' }), seenOn('issue:88')).outcome, 'barred'); // prettier-ignore
+  store.close();
+});
+
 test('an ask is answered from the scopes it names, and matched on the words a question shares', () => {
   const { store } = build();
   for (const goal of ['issue:41', 'issue:88']) {

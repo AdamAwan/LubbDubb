@@ -1,6 +1,7 @@
 import type { Store } from '../store/store.js';
 import type { Plan, PlanPart } from '../types.js';
 import { liveParts, partsToRetire } from './parts.js';
+import { REFUSED_PART_RESOLUTION, withdrawPartAsks } from './partAsks.js';
 import { followupPartInput } from '../delivery/shortfall.js';
 
 /**
@@ -162,6 +163,10 @@ export function refusePlan(store: Store, planId: string, originRef: string, note
   const parts = store.listPlanParts(planId);
   const retire = partsToRetire(parts, []);
   for (const part of retire) store.updatePlanPart(part.id, { status: 'retired' });
+  // Retiring the part and withdrawing its ask are one act, wherever a part is
+  // retired — a refusal that did only the first left the operator's bench holding
+  // a step no plan schedules.
+  withdrawPartAsks(store, retire, REFUSED_PART_RESOLUTION);
   const surviving = survivorsOf(parts, retire);
   store.setPlanStatus(planId, 'planning', refusedPlanReason(plan.reason, note ?? null));
 

@@ -599,6 +599,14 @@ reason to decide differently to the way it just decided. It cannot loop — the 
 ends it, and a spent cap fails the issue open and gets it worked, which is the funnel's existing answer
 to a planner that cannot settle.
 
+**The parts a refusal retires take their asks with them.** A retired human part's `human_tasks` row is
+`declined` with a resolution saying why, through the one `withdrawPartAsks` both refusal and ingestion
+reach — an open ask pointing at a part no plan schedules is an obligation on the operator that nothing
+will ever settle, and the bench is their own to-do list, so a row on it nothing can settle is what makes
+the bench stop being read. Retiring the node and withdrawing the item are one act, in one place, for the
+reason `IssueVerdictStore.recordVerdict` is one place: a second retirer that settled its own asks would
+compile, pass, and leave a row an operator cannot tell from one they still owe.
+
 **Rejecting used to fork on the part count**, and the fork is what this replaces. A refused plan with
 parts collapsed to the no-parts "single" shape and was picked up whole; a refused plan that was
 _already_ that shape had nowhere to fall — the single route is what the other arm fell _back_ to — so
@@ -641,6 +649,11 @@ which needs them to be **concurrent** to notice. This needs nothing but a merged
 - **A declaration is a prefix**, tested on a path segment, so `src/store/` covers `src/store/plans.ts`
   and not a sibling directory whose name merely starts the same way. Prefix rather than glob because that is the form the prompt asks for, and
   a glob dialect would be a syntax the planner has to get right for the check to mean anything.
+- **`.`, `./`, `/` and the empty string all declare the repository**, and are the same declaration. A
+  sweep, a tree-wide rename or a lint-fix part is entitled to say so in whichever of those spellings its
+  planner reaches for, and a part that declared the widest possible scope cannot have left it — so the
+  one spelling that read as an ordinary prefix drew a drift line under every file the part touched,
+  which is exactly the noise that stops the badge being read.
 - **It reads every agent a part had**, joined by part origin rather than by `part.taskId` — that holds
   only the last dispatch, and a part that stalled and was re-dispatched has writes from both on its
   branch.
