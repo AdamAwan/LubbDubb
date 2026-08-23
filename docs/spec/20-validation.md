@@ -789,6 +789,12 @@ returned value, never a throw.
 | `POST /api/issues/:number/validation/:checkId/reset`    | Back to `unrun`; the undo for all three.                                           |
 | `POST /api/issues/:number/validation/:checkId/handover` | `{to: fleet｜human}` — the only writer of `actor`.                                 |
 
+The required account is called `note` on `result` and `reason` on `defer` and `waive`, and each
+route's 400 says the name **its own** body takes. The 400 body joins the schema's messages and drops
+their field paths ([16](16-http-api.md#request-validation)), so the message is the caller's only
+statement of which field is wrong — and zod strips the unknown key, so a refusal naming the wrong one
+asks for a field that is then discarded, refused again, forever.
+
 Handing a **settled** check to the fleet is refused with a 400 pointing at `reset`, rather than
 accepted and silently doing nothing: the rule only ever runs an `unrun` check, so it would otherwise
 look like it took and then never move — and refusing also protects the reading, since an agent

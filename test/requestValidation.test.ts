@@ -239,3 +239,38 @@ function routeSources(): [string, string][] {
   }
   return files.map((file) => [file, readFileSync(new URL(file, server), 'utf8')]);
 }
+
+// #523 — the 400 body keeps only the message, so a refusal naming a field the
+// schema then strips sends the caller round the same loop forever. Driven off
+// the field each route actually accepts rather than a literal, so a route that
+// renames its body field and forgets its message is caught.
+test('the validation routes refuse a missing account by naming the field each one takes', async () => {
+  const system = build();
+  const { app } = await buildApp(system);
+
+  const routes = [
+    { verb: 'result', field: 'note', payload: { result: 'failed' } },
+    { verb: 'defer', field: 'reason', payload: {} },
+    { verb: 'waive', field: 'reason', payload: {} },
+  ];
+  for (const route of routes) {
+    const url = `/api/issues/12/validation/a-check/${route.verb}`;
+    for (const payload of [route.payload, { ...route.payload, [route.field]: '   ' }]) {
+      const res = await app.inject({ method: 'POST', url, payload });
+      assert.equal(res.statusCode, 400, `${url} ${JSON.stringify(payload)}`);
+      const { error } = res.json() as { error: string };
+      assert.ok(error.startsWith(`${route.field} is required`), `${url} refuses by naming ${route.field}: ${error}`);
+    }
+    // And the field the refusal names is the one the schema keeps: sending it
+    // gets past validation, to the store's answer about the check itself.
+    const accepted = await app.inject({
+      method: 'POST',
+      url,
+      payload: { ...route.payload, [route.field]: 'it is waiting on the staging rebuild' },
+    });
+    assert.equal(accepted.statusCode, 409, `${url} passes validation once ${route.field} is given`);
+  }
+
+  await app.close();
+  system.store.close?.();
+});
