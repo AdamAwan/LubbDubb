@@ -780,7 +780,8 @@ the MCP credential, the session map entry, the pid — **without** a terminal tr
 credential bound would keep a live bearer token for the length of a park, which can be hours. The
 `exited`/`exitCodes` entries are dropped for `kill`'s reason: no reap is owed for a process whose work
 is unfinished, and a stale `exited` would make the _resumed_ run's first terminal reap a worktree out
-from under a live agent.
+from under a live agent. This shed is owed whichever of the turn-end and process-exit arms declares the
+park, regardless of which event arrives first.
 
 `resumeParked(agentId)` ends it, and is the only thing that does — reached two ways, which is not the
 same as two paths. If the session somehow survived, one message goes down

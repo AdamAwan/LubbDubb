@@ -2136,6 +2136,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     this.store.updateTask(task.id, { status: 'waiting' });
     this.reflectStatus(agentId, task.id, 'waiting');
     this.emit('limited', { agentId, taskId: task.id, reason, resetsAt: park.resetsAt });
+    // The process may have exited before it declared the park. In that order the
+    // exit handler saw no limit yet, so shed the dead launch after the park lands.
+    if (this.exited.has(agentId)) this.shedLimitedSession(agentId);
   }
 
   /**
