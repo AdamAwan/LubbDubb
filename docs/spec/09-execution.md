@@ -618,9 +618,20 @@ write side is the half that mutates a repository.
 ([below](#the-read-only-checkout)):
 
 1. `git worktree prune`, so a slot whose directory vanished stops counting against the bound.
-2. A worktree already checked out on the branch — or, read-only, a slot this key still holds — is
+2. A **pool slot** already checked out on the branch — or, read-only, a slot this key still holds — is
    returned as-is, and re-leased: untouched, with everything in it. This is the only arm that reuses
-   anything.
+   anything. **Scoped to slots under `worktreeRoot`**, the way the survey is: `git worktree list`
+   answers for the repository's own main worktree too, and an operator standing on `issue/12` in their
+   own clone to read what an agent did is the obvious way to be standing there. Handed that as a slot,
+   the next dispatch onto the branch runs an agent in the operator's working copy — committing into
+   it, switching under them, and released by a `remove` that deletes nothing, so nothing puts it back.
+   It is not a slot, so the bound, the eviction, the salvage, the reclaim and the exhaustion refusal
+   are all blind to it as well. **The repo's own main worktree is never a slot**, at either end: this
+   arm will not take it and [`deleteBranch`](#release) will not detach it. A branch checked out
+   outside the pool **throws by name** rather than falling through the ladder — git will not check one
+   branch out twice, so `git worktree add` would refuse the slot anyway with a `fatal:` naming a path
+   and no reason; the refusal says which directory is in the way, and the whole fix is the operator
+   switching their own checkout off the branch.
 3. Read-only only: a free slot that is already a read-only checkout of the **same ref**. Handing it
    over costs nothing and burns nothing, so it beats both a spare and a fresh slot.
 4. Otherwise a **spare** slot: free, and on an unmarked detached HEAD or a branch whose ref is gone,
@@ -669,7 +680,8 @@ A slot is **held** while either is true, and the two arms cover windows the othe
   reports done, but the agent's _process_ is still sitting in that directory until `reaped` fires,
   and cleaning and switching a tree out from under an exiting process is the damage that shows up as
   an `EBUSY` two days later. `system.ts` releases on `reaped`, the honest end of "something is still
-  in there".
+  in there". This is also the arm `deleteBranch` has to ask about and the reap's own guard cannot see
+  — see [Release](#release).
 - **The branch it is checked out on still has outstanding work** — `Store.findActiveTaskByBranch`,
   the same predicate the executor's [branch gate](#2-branch-gate--deferred-code-dispatches-only)
   asks. This is the half that survives a restart, where the in-memory leases are empty by
@@ -951,7 +963,19 @@ other ending: there is no ref for a reap to collect, which is the whole of why i
 `deleteBranch(branch)` — the local half of the reap after a pull request merges — releases the lease
 and deletes the ref. `git branch -D` refuses a branch that is checked out anywhere, and the directory
 is no longer the branch's to delete, so the slot holding it is **detached** (`git switch --detach`)
-and left standing for the next occupant. The repo's own main worktree is exempt: detaching an
+and left standing for the next occupant.
+
+**It asks the lease first, and refuses a held slot rather than damaging it.** This is the one
+`Worktrees` method that mutates a slot without handing one out, which is how it escaped
+[the lease](#the-lease)'s "never reached past". Its caller's guard — `reapableBranches` skipping a
+branch with an active task — is the **durable** half of the lease and only that half, so it evaporates
+the moment a task settles, while the agent's process is still in the directory until `reaped` fires;
+the window is widest for a killed agent, where `kill` settles the task synchronously and the process
+death is asynchronous. Detaching in that window hands a live process's tree to the next dispatch,
+which wipes it `git clean -ffdx` — and on Windows is the `EBUSY`-forever wedge. So both arms are
+asked, and a held slot makes this **throw**: `BranchReapDesk` catches, records and continues **without**
+writing the `branch_reaps` row, so the reap is retried next pulse and the remote branch is not deleted
+either. One pulse held is the same trade the active-task guard already makes. The repo's own main worktree is exempt: detaching an
 operator's checkout to reap a branch would be a rude surprise, and `-D` failing loudly is the honest
 answer there. `-D` and not `-d` for the reason it always was — `merge_pr` squashes, so `-d`'s "is
 this merged" test says no for every branch this is called on.

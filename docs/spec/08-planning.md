@@ -276,7 +276,7 @@ For an amendment:
    every time. An amendment lands the same way whatever it does to the part count.
 3. `store.upsertPlan`, then retire, then `store.upsertPlanParts` (which merges on slug and never
    deletes). **A slug the document re-declares is un-retired**, back to `pending` with its
-   `blocked_reason` cleared: retirement is a _declaration_ verdict, not progress, so a document that
+   `blocked_reason` cleared: retirement is a *declaration* verdict, not progress, so a document that
    declares a slug again is a plan delivering it again. Every other status is progress and survives
    untouched, which is the split `upsertPlanParts` is made of. Retirement is therefore reversible by
    the planner and by nothing else — the operator's Reject retires, and only the replan that follows
@@ -402,27 +402,23 @@ readiness then decides when the ask becomes actionable, exactly as it does for a
 `blocked`, with `declinedStepReason` on the row. **Not `concluded`**: concluding it would make
 `partSettled` answer true and release every dependent waiting on the thing that was refused — a plan
 completing on work nobody did. The dependents stay `pending`, the goal page draws the part under
-**Held** with the reason on it, and the way out is Replan, on the plan sheet. Nothing escalates: the
-operator is the one who declined, and the button is in front of them — which is a promise the harness
-kept only because of `blocked_by` below. `declinedStepReason` names Replan and **only** Replan: it
-used to offer "abandon the decomposition to work it whole" as a second exit, a control that has not
-existed since that route was removed.
+**Held** with the reason on it, and the way out is Replan, on the plan sheet. Nothing escalates for the
+decline itself: the operator is the one who declined, and the button is in front of them. What *does*
+ask is a decline that leaves other work stranded behind it — see [the wedge](#the-ref-collision-guard)
+below, which is a question about the plan rather than about the refusal.
 
 That makes a declined step the **second** thing that can block a part, beside the ref collision. The
 readiness pass is still not one of them — it answers `pending` or `ready` and never `blocked` — and
 each blocking reading states its own reason from its own pure function, so a part is never left
 claiming a collision that has been resolved or a refusal that was withdrawn.
 
-**Which of the two it is travels with the status, as `plan_parts.blocked_by`** (`ref-collision` |
-`declined-step`), and `planIsWedged` reads that rather than `blocked` — see
-[When the collision arrives after approval](#when-the-collision-arrives-after-approval). The prose is
-not enough to carry it: a predicate matching on a sentence drifts the first time the sentence is
-edited, and the two readings' reasons are written to be read by a person, not parsed. The column is
-additive with **no backfill**, so a row blocked by an older build reads as neither — and the
-reconciler's transition test includes `blocked_by`, which is what fills it on the next pulse over a
-still-blocked part. Reading null as a collision would have escalated exactly the refusals this is
-about; reading it as a decline would have lost a real wedge for as long as it lasted. Neither, for one
-pulse, is the honest third answer.
+**Which of the two blocked a part is carried on the row**, as `plan_parts.blocked_by`
+(`collision | declined`), written by the reconciler beside the reason and cleared with it. It is on the
+row rather than re-derived because the two blockers now have different consequences and the reconciler
+is the only thing that knows which it wrote: a reader sniffing `blocked_reason`'s prose to tell them
+apart would be one rewording away from escalating the operator's own refusal back at them. Null is
+*unattributed* — every blocked row on a database from before the column — and counts toward the wedge
+the way it did when there was nothing to count.
 
 `concluded` is **not** a kind of retirement. `retired` means "dropped by an amendment before anything
 was started", which `partHasWork` enforces; a concluded part did its work and found there was nothing
@@ -642,7 +638,7 @@ flight is a _replan_ being refused, and the work already running carries on whil
 around it.
 
 **The retirement lifts when the replan re-declares the slug**, and that is what makes the route a route
-rather than a dead end. A replan _must_ reuse slugs — the slug is the merge key and has to survive one —
+rather than a dead end. A replan *must* reuse slugs — the slug is the merge key and has to survive one —
 so a retirement that outlived a re-declaration would merge every part of the new plan onto a retired
 row and release a plan with nothing live in it: rule `plan-part` schedules nothing, `rollUpPlanStatus`
 returns early on no parts, `planIsWedged` is false because nothing is `blocked`, and the goal sits
@@ -778,7 +774,7 @@ parked `blocked` and **one** clear error is recorded naming the branch to delete
 **A human part is outside the guard, because it is outside the branch namespace entirely.** It is
 never cut, so the flat branch is not in its way — the same reason the fold loop skips it, and the
 reason a plan of nothing but human steps records no collision at all and is not `planIsWedged` for
-one. Parked by it, such a part carries a reason that reads correctly and is _false about that part_:
+one. Parked by it, such a part carries a reason that reads correctly and is *false about that part*:
 the person is not waiting on git, and their step starts no sooner for the branch going away (it is
 settled by `Store.concludeHumanPart`, not by readiness).
 
@@ -830,21 +826,28 @@ to unplanned pickup. The plan sits there, nothing is dispatched, and nothing say
 it, kept separate because they are two different jobs (`src/plans/planWedge.ts`), and the way _out_ is
 Replan — which is the way out of every plan that is wrong for any other reason too:
 
-- **Noticing** — `planIsWedged(parts)`: every _live_ part blocked **by the collision**, not any, and
-  not merely `blocked`. The collision blocks them together or not at all, so a mixture is a plan still
-  making progress — reasoning that holds for the collision and for nothing else, which is why the
-  predicate reads `blocked_by` and not the status. A **declined** step blocks a part too
-  ([above](#declining-one-blocks-the-part-rather-than-concluding-it)), so a plan cut entirely into
-  human steps — a console-only change, or one whose code parts have all merged — was every-live-part-
-  blocked on the first decline, and this rule escalated the operator's own refusal back to them: a
-  card about a branch a plan with no branches does not have, telling them to "clear what is blocking
-  the parts" when the only exit is Replan. Nothing errored, because an escalation is the harness
-  working. For the same reason `wedgeReason` quotes only a collision's reason: both prompts' prose is
-  written about branches, and a declined step's sentence read into that frame is false twice over. [Rule `plan-blocked`](05-dispatcher.md#the-rules-in-evaluation-order) escalates it once, deduped on an open
+- **Noticing** — `planIsWedged(parts)`: something blocked, and **nothing moving**. It judges movement
+  rather than blocked-ness, and the reason is that the two blockers behave differently. It read "every
+  live part blocked" while the collision was the only one — a collision blocks them together or not at
+  all, so a mixture was a plan still making progress — and that reading broke in both directions once
+  a decline could block one part alone. It escalated a one-part plan whose only part was a step the
+  operator had just refused; and it *missed* a real wedge as soon as one sibling had settled, since a
+  merged part is not a blocked one and `every` then said no. `[merged, blocked, pending]` is the
+  ordinary shape of that, and it stalled the goal permanently with nothing in "Needs you": `plan-part`
+  finds no `ready` part, `rollUpPlanStatus` keeps the plan `active` so `issue-assess` skips it, and the
+  route stays `parts` so `issue-pickup` skips it too. A `ready` part counts as moving even when it is a
+  **human** part, since the bench is where that one is visible
+  ([05](05-dispatcher.md)). And a plan blocked **only** by declines asks nothing, matching the
+  paragraph above: what makes it a question is an **unfinished** part nobody refused waiting behind one
+  somebody did — `liveParts` keeps merged and concluded rows, so "live" and "still to do" are not the
+  same set, and counting a finished part among the stuck ones is what the old reading did in reverse. [Rule `plan-blocked`](05-dispatcher.md#the-rules-in-evaluation-order) escalates it once, deduped on an open
   escalation for `issue:<n>:plan` **and** a recent executed one, exactly as rule `pr-ci-blocked` is. No agent is
   dispatched, because none could help. Only `active` plans: an unapproved one is already in front of
   a human, with the same fact in the ask. `wedgedPlanPrompt(issueNumber, issue, parts, openPrs)`
-  quotes the parts' stored reason and **names any open PR for the issue that no part claims** — its
+  quotes the blocked parts' stored reasons — all of them, since two declines name two different steps —
+  and words its way out for the blocker that is actually there: "clear what is blocking the parts" is
+  offered only when something clearable is blocking them, because a decline is not a branch and
+  clearing reaches nothing. It **names any open PR for the issue that no part claims** — its
   number, title and branch, and that it must be merged or abandoned before the branch can go. It is
   the same `unclaimedIssuePrs` the approval warning uses, private to the module with two callers,
   because approval can be days behind the moment the operator is standing in front of the wedge, and

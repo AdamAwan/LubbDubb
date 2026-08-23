@@ -2611,12 +2611,6 @@ export type PartSize = 's' | 'm' | 'l';
 type PlanPartStatus = 'pending' | 'ready' | 'dispatched' | 'in_review' | 'merged' | 'concluded' | 'blocked' | 'retired';
 
 /**
- * What put a part in `blocked` — the two readings `PlanReconciler` has, kept apart
- * because they have different owners and different exits.
- */
-type PlanPartBlocker = 'ref-collision' | 'declined-step';
-
-/**
  * What a part produces. `code` ends in a merged pull request, which the world
  * observes; `report` and `determination` end in a record already durable in the
  * store the moment the agent writes it — which is why the plan reconciler's fold
@@ -2711,22 +2705,37 @@ export interface PlanPart {
    */
   blockedReason: string | null;
   /**
-   * **What** blocks it, as against {@link PlanPart.blockedReason}'s prose — written
-   * and cleared with the status, and null on an older row the reconciler has not
-   * revisited yet (which reads as neither, deliberately: see `planIsWedged`).
+   * **Which** of the two blockers put it there, for the readers that must tell
+   * them apart — {@link planIsWedged} above all, which escalates one and must not
+   * escalate the other.
    *
-   * Two readings produce `blocked`, and folding them together is what let rule
-   * `plan-blocked` escalate an operator's own refusal back to them as a git
-   * problem. A collision is a fact about the world somebody else can clear; a
-   * declined step is a decision the operator already made, and its only exit is
-   * Replan. Nothing reading `status === 'blocked'` alone can tell them apart, and
-   * both look identical on the row.
+   * Carried on the row rather than re-derived from {@link blockedReason}'s prose:
+   * the reconciler is the only writer and already knows which it wrote, and a
+   * reader sniffing the sentence would be one rewording away from silently
+   * escalating a refusal back at the operator who made it.
+   *
+   * Null on every unblocked part, and null on a blocked one from a database before
+   * the column existed — read as *unattributed*, which counts toward the wedge the
+   * way it did before there was anything to attribute.
    */
-  blockedBy?: PlanPartBlocker | null;
+  blockedBy: PlanPartBlocker | null;
   taskId: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * The two things that block a plan part, named so a reader can tell them apart.
+ *
+ * A **collision** is git's: `refs/heads/issue/12` is taken, so no part's branch
+ * can be cut, and it blocks every part together or none. A **decline** is the
+ * operator's: they refused one human step, and it blocks that part alone.
+ *
+ * One predicate answering for both is the bug in #505 — the collision's "every
+ * live part is blocked" reading escalates a refusal back at the person who made
+ * it, and misses the collision the moment one sibling has settled.
+ */
+export type PlanPartBlocker = 'collision' | 'declined';
 
 /** A part as the planner declared it, before the store assigns identity or progress. */
 export type PlanPartInput = Pick<

@@ -615,6 +615,10 @@ export class Store {
   listHumanTasksOfKind(kind: HumanTaskKind): HumanTask[] {
     return this.humanTasks.listHumanTasksOfKind(kind);
   }
+  reopenHumanTask(id: string, detail: string): HumanTask | null {
+    return this.humanTasks.reopenHumanTask(id, detail);
+  }
+
   settleHumanTask(id: string, status: Exclude<HumanTaskStatus, 'open'>, resolution: string | null): HumanTask | null {
     return this.humanTasks.settleHumanTask(id, status, resolution);
   }

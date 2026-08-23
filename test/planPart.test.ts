@@ -81,6 +81,7 @@ function part(slug: string, seq: number, overrides: Partial<PlanPart> = {}): Pla
     prNumber: null,
     status: 'ready',
     blockedReason: null,
+    blockedBy: null,
     taskId: null,
     createdAt: '2026-07-25T00:00:00.000Z',
     updatedAt: '2026-07-25T00:00:00.000Z',
@@ -737,7 +738,6 @@ test('the plan comment never describes a non-code part as merged, and names a mi
 function wedgedParts(): PlanPart[] {
   const blocked = {
     status: 'blocked' as const,
-    blockedBy: 'ref-collision' as const,
     blockedReason: 'The branch issue/12 exists, and git cannot create it.',
   };
   return [part('a', 1, blocked), part('b', 2, blocked)];

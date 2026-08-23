@@ -2,7 +2,7 @@ import type { ErrorRecorder } from '../errorLog.js';
 import type { BranchPresence, GitObserver } from '../git/gitObserver.js';
 import type { ActionSink } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
-import type { Plan, PlanPart, PullRequest, TaskSummary, WorldSnapshot } from '../types.js';
+import type { Plan, PlanPart, PlanPartBlocker, PullRequest, TaskSummary, WorldSnapshot } from '../types.js';
 import { issueBranch } from '../dispatcher/issuePickup.js';
 import { renderPlanComment } from './planComment.js';
 import {
@@ -189,17 +189,13 @@ export class PlanReconciler {
         : refused
           ? declinedStepReason(part.title)
           : null;
-      // Which of the two readings it is, carried as data beside the prose. Rule
-      // `plan-blocked` escalates a *wedge* — a plan held by something outside it —
-      // and `blocked` alone cannot say whether that is what this is: a declined
-      // step read as one put the operator's own refusal back in "Needs you",
-      // phrased as a branch to clear.
-      const blockedBy = collision ? 'ref-collision' : refused ? 'declined-step' : null;
-      // `blockedBy` is part of the transition test, not just of the write, so a row
-      // blocked before the column existed is filled on the next pulse rather than
-      // sitting null for as long as it stays blocked — which is exactly as long as
-      // it matters.
-      if (status !== part.status || blockedReason !== part.blockedReason || blockedBy !== (part.blockedBy ?? null))
+      // Which blocker, beside the sentence about it. `planIsWedged` escalates a
+      // collision and must not escalate a decline, and the reconciler is the one
+      // place that knows which it just wrote — a reader re-deriving it from the
+      // prose would be one rewording away from putting the operator's own refusal
+      // back in front of them. → `docs/spec/08-planning.md`
+      const blockedBy: PlanPartBlocker | null = collision ? 'collision' : refused ? 'declined' : null;
+      if (status !== part.status || blockedReason !== part.blockedReason || blockedBy !== part.blockedBy)
         next.set(part.slug, { ...next.get(part.slug), status, blockedReason, blockedBy });
     }
 
@@ -348,9 +344,8 @@ export class PlanReconciler {
  * answer true, and every dependent waiting on the thing that was refused would be
  * released to an agent — the plan completing on work nobody did. So the part stops
  * where it is, its dependents stay `pending`, and the operator's own words stand
- * on the row as the account of why. The way out is the one on the panel: Replan.
- * "Abandon the decomposition to work it whole" is not offered — the route and the
- * control are gone, and naming it handed the operator a button that is not there.
+ * on the row as the account of why. The ways out are the two already on the panel:
+ * Replan, or abandon the decomposition.
  *
  * The operator's note is not repeated here. It is on the {@link HumanTask} row the
  * panel draws beside this one, and a copy would be a second place for it to be
@@ -359,7 +354,7 @@ export class PlanReconciler {
 function declinedStepReason(title: string): string {
   return (
     `"${title}" is a step for a person, and it was declined. Nothing that depends on it can start. ` +
-    `Replan the issue from the plan sheet.`
+    `Replan the issue, or abandon the decomposition to work it whole.`
   );
 }
 

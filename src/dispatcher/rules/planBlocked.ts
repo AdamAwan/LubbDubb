@@ -36,7 +36,9 @@ export function planBlocked(s: StageContext): void {
       prompt: wedgedPlanPrompt(issueNumber, issue, parts, s.openPrs),
       context: { originRef: wedgeOrigin, taskTitle: issue.title },
       rule: 'plan-blocked',
-      reason: `Every part of issue #${issueNumber}'s approved plan is blocked, so nothing will be dispatched for it.`,
+      reason:
+        `Issue #${issueNumber}'s approved plan is going nowhere — something is blocked and nothing is moving, ` +
+        `so nothing will be dispatched for it.`,
     } satisfies RawAction);
   }
 }

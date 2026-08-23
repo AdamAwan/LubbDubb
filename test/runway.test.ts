@@ -21,6 +21,7 @@ import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { buildStateSnapshot } from '../src/server/stateSnapshot.js';
 import { Store } from '../src/store/store.js';
+import { RunwayDesk } from '../src/supply/runwayDesk.js';
 import type { EscalationSpan, HumanTask, Issue, IssueAssay, IssueRun, Plan } from '../src/types.js';
 
 /**
@@ -690,6 +691,88 @@ test('an answered row is not raised again under the same wording', () => {
     enabled: true,
   });
   assert.deepEqual(steps, []);
+});
+
+test('the desk’s own supersede is not an answer: the same state files again, on one row', () => {
+  // #545: the desk settles its own rows on every state change, and a superseded row
+  // is `status: 'done'` exactly like an answered one. Read as answered, the first
+  // pass through a state spends that wording for the life of the deployment — every
+  // deployment gets one starvation warning and one dry warning, ever. Driven as a
+  // sequence because one pass cannot show it.
+  const dry = readRunway(input({ issues: [], pickup: { ...input().pickup, headroom: 0 } }));
+  const healthy = readRunway(input({ issues: [1, 2, 3, 4, 5, 6].map((n) => issue(n)) }));
+  assert.equal(dry.state, 'dry');
+  assert.equal(healthy.state, 'healthy');
+
+  // Dry, then recovered: the desk supersedes its own row.
+  const first = runwayPass({ reading: dry, existing: [], enabled: true });
+  assert.deepEqual(
+    first.map((s) => s.kind),
+    ['file'],
+  );
+  const filed = task({ id: 'ht_x', kind: 'supply', title: dry.headline });
+  const settle = runwayPass({ reading: healthy, existing: [filed], enabled: true });
+  assert.equal(settle[0]?.kind, 'settle');
+  const settled = task({
+    ...filed,
+    status: 'done',
+    resolution: settle[0]?.kind === 'settle' ? settle[0].resolution : null,
+  });
+
+  // Dry again. The row comes back rather than the fleet going quiet — and it is the
+  // *same* row reopened, since `recordHumanTask` would refresh the settled one's
+  // detail and leave it `done`.
+  const again = runwayPass({ reading: dry, existing: [settled], enabled: true });
+  assert.deepEqual(
+    again.map((s) => s.kind),
+    ['reopen'],
+    'the fleet is dry a second time and the bench says so',
+  );
+  assert.equal(again[0]?.kind === 'reopen' && again[0].taskId, 'ht_x');
+
+  // And the operator's own answer still stands forever, which is the property the
+  // suppression exists for.
+  const answered = task({ id: 'ht_x', kind: 'supply', title: dry.headline, status: 'done' });
+  assert.deepEqual(runwayPass({ reading: dry, existing: [answered], enabled: true }), []);
+});
+
+test('a fleet that goes dry twice files twice, through the real desk and store', () => {
+  // The half `runwayPass` alone cannot show: `recordHumanTask`'s dedup ignores
+  // status, so filing over the settled row would refresh its detail and leave it
+  // `done` even with the guard removed. Only the store can prove the row is open.
+  const store = new Store(':memory:');
+  const desk = new RunwayDesk(store, DEFAULT_RUNWAY);
+  // The desk reads `runs`, `humanTasks`, `escalations` and `standing` off the store
+  // itself, so what it is handed is the pulse's half of the reading and no more.
+  const deskInput = (issues: Issue[]) => {
+    const full = input({ issues });
+    return { issues: full.issues, pickup: full.pickup, cap: full.cap };
+  };
+  const empty: Issue[] = [];
+  // Six goals with no completed history reads `unknown` — no row, and the standing
+  // one settled. Which state the fleet recovers *into* is not the point; that the
+  // desk settled its own row on the way through is.
+  const stocked = [1, 2, 3, 4, 5, 6].map((n) => issue(n));
+
+  const openSupply = () => store.listHumanTasksOfKind('supply').filter((t) => t.status === 'open');
+
+  assert.equal(desk.run(deskInput(empty)).state, 'dry');
+  assert.equal(openSupply().length, 1, 'the first dry spell is on the bench');
+  assert.equal(desk.run(deskInput(stocked)).state, 'unknown');
+  assert.equal(openSupply().length, 0, 'and the recovery clears it');
+
+  assert.equal(desk.run(deskInput(empty)).state, 'dry');
+  assert.equal(openSupply().length, 1, 'the second one is on it too — silence here is the bug');
+  assert.equal(store.listHumanTasksOfKind('supply').length, 1, 'on one row, never a second describing one fleet');
+  // And it is on the *feed*, not merely in the table: the bench draws newest-first
+  // under a hundred-row cap, so a reopened row keeping the first episode's
+  // `created_at` would be open and invisible — the same silence from one step out.
+  assert.ok(
+    store.listHumanTasks().some((t) => t.kind === 'supply' && t.status === 'open'),
+    'and on the bench feed the cockpit actually draws',
+  );
+
+  store.close();
 });
 
 test('switched off files nothing and still drains the bench', () => {

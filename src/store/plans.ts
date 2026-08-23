@@ -8,6 +8,7 @@ import type {
   PlanEvidence,
   PlanNarrative,
   PlanPart,
+  PlanPartBlocker,
   PlanPartInput,
   PlanRevision,
   PlanStatus,
@@ -46,10 +47,9 @@ export const PLAN_COLUMNS: ColumnMigrations = {
     outcome_summary: 'TEXT',
     blocked_reason: 'TEXT',
     /**
-     * Which of the two blocking readings this is — see {@link PlanPart.blockedBy}.
-     * No backfill: null means "the reconciler has not revisited this row", which
-     * `planIsWedged` reads as neither reading rather than guessing at one, and the
-     * next pulse over a still-blocked part fills it.
+     * Which blocker — see {@link PlanPart.blockedBy}. Null on an older database's
+     * standing blocked row, and that is the safe reading: an unattributed block
+     * counts toward the wedge exactly as it did before this column existed.
      */
     blocked_by: 'TEXT',
   },
@@ -290,7 +290,8 @@ export class PlanStore {
          touches=excluded.touches, rationale=excluded.rationale, acceptance=excluded.acceptance,
          size=excluded.size, expected_kind=excluded.expected_kind, profile=excluded.profile,
          depends_on=excluded.depends_on, status=excluded.status,
-         blocked_reason=excluded.blocked_reason, blocked_by=excluded.blocked_by, updated_at=excluded.updated_at`,
+         blocked_reason=excluded.blocked_reason, blocked_by=excluded.blocked_by,
+         updated_at=excluded.updated_at`,
     );
     const insertAll = this.ctx.db.transaction((all: PlanPart[]) => {
       for (const p of all)
@@ -332,7 +333,6 @@ export class PlanStore {
       prNumber?: number | null;
       taskId?: string | null;
       blockedReason?: string | null;
-      blockedBy?: PlanPart['blockedBy'];
     },
   ): PlanPart | null {
     const row = this.ctx.db.prepare(`SELECT * FROM plan_parts WHERE id=?`).get(id) as PlanPartRow | undefined;
@@ -354,7 +354,7 @@ export class PlanStore {
         prNumber: next.prNumber,
         taskId: next.taskId,
         blockedReason: next.blockedReason,
-        blockedBy: next.blockedBy ?? null,
+        blockedBy: next.blockedBy,
         updatedAt: next.updatedAt,
       });
     return next;
@@ -698,16 +698,6 @@ function rowToPlan(r: PlanRow): Plan {
   };
 }
 
-/**
- * A stored `blocked_by`, narrowed. Anything else — including the null every row
- * written before the column existed carries — reads as "not said", which is what
- * `planIsWedged` needs it to be: a guess either way would either escalate a
- * refusal or lose a real wedge.
- */
-function planPartBlockerOf(value: string | null | undefined): PlanPart['blockedBy'] {
-  return value === 'ref-collision' || value === 'declined-step' ? value : null;
-}
-
 function rowToPlanPart(r: PlanPartRow): PlanPart {
   return {
     id: r.id,
@@ -733,7 +723,7 @@ function rowToPlanPart(r: PlanPartRow): PlanPart {
     prNumber: r.pr_number,
     status: r.status as PlanPart['status'],
     blockedReason: r.blocked_reason ?? null,
-    blockedBy: planPartBlockerOf(r.blocked_by),
+    blockedBy: partBlockerOf(r.blocked_by),
     taskId: r.task_id,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -760,6 +750,17 @@ function partOutcomeKindOf(raw: string | null | undefined): PartOutcomeKind | nu
 /** Narrowed for {@link partOutcomeKindOf}'s reason — absent on older databases, and hand-editable. */
 function partSizeOf(raw: string | null | undefined): PartSize | null {
   return raw === 's' || raw === 'm' || raw === 'l' ? raw : null;
+}
+
+/**
+ * Narrowed for {@link partOutcomeKindOf}'s reason, and the null it degrades to is
+ * the reading a database from before the column has: *blocked, attribution
+ * unstated*. {@link planIsWedged} counts one toward the wedge exactly as it did
+ * when there was nothing to count — an unattributed block is the pre-column
+ * behaviour, which is the direction that keeps a real collision escalating.
+ */
+function partBlockerOf(raw: string | null | undefined): PlanPartBlocker | null {
+  return raw === 'collision' || raw === 'declined' ? raw : null;
 }
 
 function parseDependsOn(raw: string): string[] {

@@ -397,6 +397,13 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   // question that answers itself after five minutes is worse than no question at
   // all. In memory for `limited`'s reason: it describes a park *this process* is
   // holding, and a restart hands the same rows to the recovery desk instead.
+  //
+  // The exclusion holds however the two arrive in order, and that is not a detail:
+  // arming reads the other latches, and every path that *ends* a stop drops the
+  // clock with it — `respond`, `releasePark`, `handleLimited`, `resumeParked` — with
+  // `completeExpiredStalls` re-checking `limited` as the backstop. Entered-once-then-
+  // never-rechecked is the shape that settles a limit park, and a resumed agent, as
+  // `done`.
   private readonly stalled = new Map<string, number>();
 
   constructor(
@@ -616,6 +623,9 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       }
       this.limited.delete(agentId);
       this.parked.delete(agentId);
+      // `respond`'s reason: it is working again, so there is no unanswered stop left
+      // for a clock to settle. Without this the resumed agent is killed mid-turn.
+      this.stalled.delete(agentId);
       this.store.setAgentResumed(agentId, null);
       // Cleared before either arm: `resume` reads the row to decide whether the agent
       // was parked on a *question* (which it re-establishes), and this park is
@@ -745,6 +755,11 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * escalation it left is dismissed by the terminal listeners — so its clock is
    * simply dropped, not an error: there is nothing to settle and nobody to tell.
    *
+   * A **limit park** is dropped the same way rather than settled. That park has its
+   * own ending and the account will be able to continue the conversation; the two
+   * latch writes that clear the clock when the limit arrives already cover it, and
+   * this is the backstop that does not depend on a future third park remembering to.
+   *
    * Returns the ids it settled, for the caller to log.
    */
   completeExpiredStalls(): string[] {
@@ -753,6 +768,13 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     // Copied before iterating: `complete` deletes from the map it walks.
     for (const [agentId, at] of [...this.stalled]) {
       if (at > now) continue;
+      // The backstop the two latch writes above must not be the only thing standing
+      // between a limit park and `complete`. A third park added later inherits this
+      // rather than needing to remember its own `stalled.delete`.
+      if (this.limited.has(agentId)) {
+        this.stalled.delete(agentId);
+        continue;
+      }
       debugLog('agent', `stall park expired agent=${agentId}`);
       if (this.complete(agentId, 'expiry')) settled.push(agentId);
       else this.stalled.delete(agentId);
@@ -2099,6 +2121,11 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     const asked = this.parked.has(agentId);
     this.limited.set(agentId, { reason, resetsAt: park.resetsAt });
     this.parked.add(agentId);
+    // The stop's countdown does not survive the account running out. A limit park
+    // has its own ending — the window turning over — and settling it `done` on the
+    // stop's clock throws away a conversation the account will continue in an hour.
+    // The arm-time guard above cannot see this: the limit arrived *after* the clock.
+    this.stalled.delete(agentId);
     this.store.setAgentResumed(agentId, null);
     // An agent that asked a question and *then* ran the account out keeps its
     // question on the row: the escalation it raised is still open and still the
