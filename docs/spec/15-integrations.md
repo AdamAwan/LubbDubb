@@ -463,11 +463,17 @@ field, feed it into `buildRefUrls`.
 ## Snapshot failures
 
 Providers take an optional `errors` recorder in their `IntegrationContext`. A snapshot failure is
-recorded through it — never swallowed — and the provider degrades to its last good slice. All four
-real integrations do this: both source-control providers and both issue providers hold the lists
-their previous successful read produced, and serve those rather than nothing. Emptying the world
-instead would make every open pull request look closed and every watched issue look gone, which is a
-far more destructive reading of "GitHub returned a 502" than simply being a cycle behind.
+recorded through it — never swallowed — and the provider degrades to its last good slice. "Last
+good" means **a read that succeeded**: all four real integrations hold the lists their previous
+successful read produced, and serve those rather than nothing. Emptying the world instead would make
+every open pull request look closed and every watched issue look gone, which is a far more
+destructive reading of "GitHub returned a 502" than simply being a cycle behind.
+
+A provider that has **no** successful read yet has nothing to degrade to, and must not present an
+empty world as if it did — that is the one case where an empty slice would be a fabricated world, not
+a stale one. On a first-read failure the integration rethrows, `CompositeConnector.getState()`
+rejects, and the cycle is recorded as failed rather than deciding against a world that says every PR
+vanished. The next pulse tries again.
 
 **A degraded slice sets `stale: true` on the `WorldSlice`**, and `CompositeConnector` folds those
 into `WorldSnapshot.staleSources` ([03](03-world-model.md#worldsnapshot)). The fallback was correct

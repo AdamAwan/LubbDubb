@@ -49,7 +49,7 @@ export class GitHubIssuesIntegration
   readonly id = 'issues:github';
   readonly capability: Capability = 'issues';
 
-  private lastGood: Issue[] = [];
+  private lastGood: Issue[] | null = null;
 
   constructor(private readonly opts: GitHubIssuesOpts) {}
 
@@ -173,6 +173,9 @@ export class GitHubIssuesIntegration
         source: 'provider',
         message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
+      // No successful read yet — nothing to degrade to. An empty slice would make
+      // every watched issue look gone; fail the pulse instead.
+      if (this.lastGood === null) throw err;
       return { issues: this.lastGood, stale: true };
     }
   }

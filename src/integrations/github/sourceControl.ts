@@ -86,8 +86,8 @@ export class GitHubSourceControlIntegration
   readonly capability: Capability = 'sourceControl';
 
   /** Last successful slice, served on a transient failure so PRs don't flap. */
-  private lastGood: PullRequest[] = [];
-  private lastGoodClosed: PullRequest[] = [];
+  private lastGood: PullRequest[] | null = null;
+  private lastGoodClosed: PullRequest[] | null = null;
 
   constructor(private readonly opts: GitHubSourceControlOpts) {}
 
@@ -144,7 +144,11 @@ export class GitHubSourceControlIntegration
         source: 'provider',
         message: `${this.id} snapshot failed: ${(err as Error).message}`,
       });
-      return { pullRequests: this.lastGood, closedPullRequests: this.lastGoodClosed, stale: true };
+      // "Last good" means a read that succeeded. With none yet, an empty slice is a
+      // fabricated world, not a stale one — rethrow so the pulse fails rather than
+      // presenting every open PR as vanished.
+      if (this.lastGood === null) throw err;
+      return { pullRequests: this.lastGood!, closedPullRequests: this.lastGoodClosed!, stale: true };
     }
   }
 

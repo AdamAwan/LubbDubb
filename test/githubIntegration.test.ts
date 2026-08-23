@@ -525,22 +525,38 @@ test('snapshot applies the prAuthor filter client-side', async () => {
   store.close();
 });
 
-test('snapshot returns the last-good slice and records an error event on failure', async () => {
+test('a first-read failure rejects rather than serving an empty world', async () => {
+  const store = new Store(':memory:');
+  const bad = fakeApi({ throwOn: 'listOpenPulls' });
+  const sc = new GitHubSourceControlIntegration({ api: bad.api });
+  // With no successful read to fall back on, an empty slice would fabricate a
+  // world in which every open PR has vanished. It must fail instead.
+  await assert.rejects(() => sc.snapshot(), /boom/);
+  store.close();
+});
+
+test('a failure after a successful read serves the last-good slice, marked stale', async () => {
   const store = new Store(':memory:');
   const good = fakeApi({
     pulls: [pull({ number: 7 })],
     detail: { 7: { mergeable: true, mergeableState: 'clean', merged: false } },
   });
   const sc = new GitHubSourceControlIntegration({ api: good.api });
-  await sc.snapshot(); // warm the last-good cache
+  const first = await sc.snapshot(); // warm the last-good cache
+  assert.deepEqual(
+    first.pullRequests!.map((p) => p.number),
+    [7],
+  );
 
-  const bad = fakeApi({ throwOn: 'listOpenPulls' });
-  const sc2 = new GitHubSourceControlIntegration({ api: bad.api });
-  await sc2.snapshot(); // cold + failing → empty, and it must not throw
-  const slice = await sc2.snapshot();
-  assert.deepEqual(slice.pullRequests, []);
-  // The fallback says so. Without this the cycle cannot tell a world that did not
-  // change from one it was refused a read of.
+  // Fail the second read, in place, on the same integration.
+  good.api.listOpenPulls = async () => {
+    throw new Error('boom');
+  };
+  const slice = await sc.snapshot();
+  assert.deepEqual(
+    slice.pullRequests!.map((p) => p.number),
+    [7],
+  );
   assert.equal(slice.stale, true);
   store.close();
 });
@@ -840,12 +856,11 @@ test('a related item becomes the cross-reference GitHub draws on both issues', a
   assert.match(recorded.createdIssues[0]!.body, /The symptom\.\n\nRelated to #12\./);
 });
 
-test('issues snapshot returns the last-good slice and records an error event on failure', async () => {
+test('a first-read failure rejects rather than serving an empty issue list', async () => {
   const store = new Store(':memory:');
   const bad = fakeApi({ throwOn: 'listOpenIssues' });
   const issues = new GitHubIssuesIntegration({ api: bad.api });
-  const slice = await issues.snapshot();
-  assert.deepEqual(slice.issues, []);
+  await assert.rejects(() => issues.snapshot(), /boom/);
   store.close();
 });
 
