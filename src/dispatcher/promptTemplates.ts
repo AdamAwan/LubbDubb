@@ -105,14 +105,22 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '   "validation": {"resources": [...], "checks": [...]}}\n\n' +
       'Nothing here needs to be guessed at: submit it, and a rejection tells you exactly which field was wrong.\n\n' +
       '## What the fields mean\n\n' +
+      '**`diagnosis`, `approach` and `verification` are a quick overview, not the argument.** Write each as ' +
+      'markdown bullets — one plain-English point per bullet, a line or so each, four or five at most. No ' +
+      'file paths, no line numbers: name the code in words ("the bulk workflow handler", "the target ' +
+      'resolver"). The paths belong in `evidence`, which is drawn beside the diagnosis as links, and the ' +
+      'full reasoning belongs in `document`. Somebody reads these three side by side to decide in a minute ' +
+      'whether the work happens; a paragraph makes them hunt for the points, and a path mid-sentence is a ' +
+      'token they cannot click. The prose fields — `alternatives`, `openQuestions`, `reason` — are arguments ' +
+      'rather than lists, and stay sentences.\n\n' +
       'Four of them carry the whole decision, and they are the four nobody can reconstruct from the rest.\n\n' +
-      '- **diagnosis** — what is actually wrong, in the code, named precisely. "The cache is never invalidated ' +
-      'because `refresh()` writes the new value under the old key (`src/cache.ts:88`)" is a diagnosis. "Users ' +
+      '- **diagnosis** — what is actually wrong, in the code, named precisely. "The cache is never ' +
+      'invalidated because the refresh writes the new value under the old key" is a diagnosis. "Users ' +
       'see stale data" is the ticket, restated. If you find yourself writing the issue text back, you have not ' +
       'read far enough yet. Leave it out only when the work is not a defect and there is genuinely nothing to ' +
       'diagnose — there is no root cause of a feature.\n' +
-      '- **approach** — what you are going to do about it, in two or three sentences. Not the shape of the ' +
-      'pull requests: the change.\n' +
+      '- **approach** — what you are going to do about it, one bullet per move you are ' +
+      'making. Not the shape of the pull requests: the change.\n' +
       '- **alternatives** — what you considered and rejected, and why each was rejected. Name options you ' +
       'actually weighed, not strawmen. This is the field an operator reads to decide whether you looked around ' +
       'before you chose, and a plan with none reads as the first idea you had.\n' +
@@ -124,7 +132,8 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       '- **evidence** — the places you read that the diagnosis rests on, as `path` (+ optional `line`) and a ' +
       '`note` saying what the reader is meant to see. A root cause with no citation cannot be checked, and ' +
       'one that can be checked in four seconds is worth far more than one that is merely well argued.\n' +
-      '- **verification** — how anyone will know the *whole* thing worked once every part has landed. Not per ' +
+      '- **verification** — how anyone will know the *whole* thing worked once every part has landed, one ' +
+      'bullet per thing that has to be true. Not per ' +
       'part (that is "acceptance"), and not "the tests pass" unless the tests genuinely settle it.\n' +
       '- **reason** — the narrow question of shape: why these parts. Not the fix, not the root cause. One or ' +
       'two sentences, and on a one-part plan it is usually one.\n' +
@@ -284,6 +293,9 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'The field guide from a cold plan applies unchanged: `diagnosis` is the root cause in the code, ' +
       '`approach` is what you are going to do about it, `alternatives` is what you rejected and why, ' +
       '`openQuestions` is what you would most like argued with, and `reason` is the narrow question of shape. ' +
+      '`diagnosis`, `approach` and `verification` are a quick overview rather than the argument: markdown ' +
+      'bullets, one plain-English point each, and no file paths — the paths go in `evidence` and the ' +
+      'reasoning in `document`. ' +
       'Per part, `touches` is the paths that part owns and `size` is `s`/`m`/`l` — how big it is to review.\n\n' +
       'Do not implement anything and do not open a pull request. Writing {planFile} is the whole job — you are on ' +
       'branch {branch} only so you have the repository to read.',
@@ -309,7 +321,8 @@ const REGISTRY: Record<PromptId, TemplateDef> = {
       'a replan would: slugs are the merge key, re-declare every part that is already merged, dispatched or in ' +
       'review, and a part you leave out is retired only if nothing was started for it. Re-state the whole ' +
       'narrative — "diagnosis", "approach", "alternatives", "openQuestions", "verification", "evidence", ' +
-      '"risks", "outOfScope" and "document" are replaced by what you submit, not merged. Rewrite ' +
+      '"risks", "outOfScope" and "document" are replaced by what you submit, not merged, and "diagnosis", ' +
+      '"approach" and "verification" stay bullets with no file paths in them. Rewrite ' +
       '"openQuestions" in particular: the ones you have just settled with them are no longer open, and leaving ' +
       'them standing puts the conversation you have had back in front of the person who had it.\n' +
       '- If they end up wanting no change at all, submit the plan unchanged. Submitting is what ends the ' +

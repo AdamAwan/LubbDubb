@@ -19,13 +19,17 @@ export const PLAN_DOCUMENT_SCHEMA: Record<string, unknown> = {
       type: 'string',
       description:
         'What is actually wrong, in the code — the root cause you found, not a restatement of the ' +
-        'issue. Omit only when the work is not a defect and there is nothing to diagnose.',
+        'issue. A quick overview, not the argument: markdown bullets, one plain-English point each, four ' +
+        'or five at most, and no file paths or line numbers — name the code in words and put the citations ' +
+        'in "evidence", which is drawn beside this. The full reasoning goes in "document". Omit only when ' +
+        'the work is not a defect and there is nothing to diagnose.',
     },
     approach: {
       type: 'string',
       description:
-        'What you are going to do about it, in two or three sentences. This is the summary the ' +
-        'operator approves on, so write the fix, not the shape of the pull requests.',
+        'What you are going to do about it, as two or three markdown bullets — one plain-English point ' +
+        'per move you are making, and no file paths. This is the summary the operator approves on, so ' +
+        'write the fix, not the shape of the pull requests.',
     },
     reason: { type: 'string', description: 'Why this shape — one or two sentences. Not the fix; the split.' },
     risks: { type: 'string', description: 'What could go wrong with this split.' },
@@ -47,7 +51,8 @@ export const PLAN_DOCUMENT_SCHEMA: Record<string, unknown> = {
     verification: {
       type: 'string',
       description:
-        'How anyone will know the whole thing worked, once every part has landed. Not per part — that is ' +
+        'How anyone will know the whole thing worked, once every part has landed, as markdown bullets — ' +
+        'one plain-English point per thing that has to be true, and no file paths. Not per part — that is ' +
         '"acceptance" — and not the test suite unless the test suite genuinely settles it.',
     },
     evidence: {
