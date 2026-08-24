@@ -654,6 +654,20 @@ test('the project stamp is written as the fact is, and a deployment with no name
 // ---------------------------------------------------------------------------
 
 /**
+ * An identity for the commits the transport makes.
+ *
+ * `gitRepo` configures one on the repository it creates, but the pool clone is made
+ * by the transport itself — so there is nothing for a test to configure it on, and a
+ * runner with no global identity fails the commit for the author rather than for
+ * anything under test. The environment is the one place that reaches a clone nobody
+ * has created yet. `??=` so a developer's own identity is left alone.
+ */
+process.env.GIT_AUTHOR_NAME ??= 'Test';
+process.env.GIT_AUTHOR_EMAIL ??= 'test@example.com';
+process.env.GIT_COMMITTER_NAME ??= 'Test';
+process.env.GIT_COMMITTER_EMAIL ??= 'test@example.com';
+
+/**
  * A bare repository with `main` and one commit on it, standing in for the pool's
  * remote. Bare because that is what a remote is, and seeded because
  * `clone --branch main` on an empty one names a branch that does not exist yet.
