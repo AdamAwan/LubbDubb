@@ -3105,11 +3105,15 @@ export interface Proposal {
    * operator having authorized a whole chain in advance, over the pull request
    * numbers it was clicked across, before any rung of it was proposed.
    *
-   * `auto_send` is **historical only** and nothing writes it any more: the
-   * confidence gate that produced it is gone, and the harness now authorizes no
-   * outbound act on its own. It stays in the union because a database written
-   * before that removal still holds rows carrying it, and a decider the cockpit
-   * cannot name reads as a missing authority rather than an old one.
+   * `auto_send` is the operator having authorized a *class* of act in advance,
+   * in their config, rather than one chain of pull requests with a click:
+   * `sendPrRepliesWithoutApproval` sends a drafted review reply without asking.
+   * It is scoped to replies and it can only ever *accept* — a machine "no" would
+   * mean the question is never put to anyone.
+   *
+   * It also predates that key: the removed confidence gate wrote the same value,
+   * so a database from before it went carries rows with no config key behind
+   * them. Both read as "auto-send authorized", which is what they were.
    */
   decidedBy: 'human' | 'auto_send' | 'stack_landing' | null;
   decidedAt: string | null;

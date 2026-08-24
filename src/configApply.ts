@@ -55,14 +55,15 @@ type LiveArm = (next: Config, deps: LiveConfigDeps) => void;
  *
  * Deliberately short. Every arm is a second place a value lives and so a place
  * two copies can disagree; a key nobody changes twice a year is better left
- * restart-only than made live for the sake of it. Six earn it: the cap because
+ * restart-only than made live for the sake of it. Seven earn it: the cap because
  * an operator changes it while watching the fleet, the lesson cap because it is
  * already read at every launch, the CI policy because it is the one rule set an
  * operator tunes against a red pull request in front of them, the state
- * colours because they are picked while looking at the chips they change, and the
- * local run's instruction because it is corrected while a start is failing, and
- * the scope-staleness window because it is a reading tuned against the page that
- * draws it.
+ * colours because they are picked while looking at the chips they change, the
+ * local run's instruction because it is corrected while a start is failing, the
+ * scope-staleness window because it is a reading tuned against the page that
+ * draws it, and the reply auto-send because the switch that matters is turning it
+ * back **off**.
  */
 const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
   // Already live by construction: `RuntimeControl` is read by reference each
@@ -71,6 +72,15 @@ const LIVE_ARMS: Readonly<Record<string, LiveArm>> = {
   maxConcurrentAgents: (next, deps) => {
     deps.running.maxConcurrentAgents = next.maxConcurrentAgents;
     deps.runtimeControl.apply({ cap: next.maxConcurrentAgents });
+  },
+  // The executor asks the running config by reference at every act it authorizes
+  // (`autoSendReplies` in `system.ts` is a thunk over this object), so assigning
+  // onto it *is* the arm. Live because it is the one switch an operator flips
+  // while watching a draft they did not want to be asked about — and, more
+  // importantly, because it is the one they flip back: a restart-only off switch
+  // would keep sending replies for as long as it took to bounce the harness.
+  sendPrRepliesWithoutApproval: (next, deps) => {
+    deps.running.sendPrRepliesWithoutApproval = next.sendPrRepliesWithoutApproval;
   },
   // `system.ts` renders the knowledge block through a closure at every agent
   // launch, reading `config.knowledgeBlockChars` each time — so assigning onto the

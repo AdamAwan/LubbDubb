@@ -9,7 +9,7 @@ import { buildSystem } from '../src/system.js';
 import { Store } from '../src/store/store.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { defaultPromptTemplates } from '../src/dispatcher/promptTemplates.js';
-import { reviewRecheckNote, reviewThreadsNote } from '../src/dispatcher/reviewThreads.js';
+import { replyToolNote, reviewRecheckNote, reviewThreadsNote } from '../src/dispatcher/reviewThreads.js';
 import { remedyAskNote } from '../src/remedies/remedies.js';
 import type { ActionSink } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
@@ -65,6 +65,7 @@ function reviewCommentPrompt(number: number, branch: string, comment: string, id
     defaultPromptTemplates().render('pr-review-comment', { number, branch, author: 'reviewer', comment }) +
     reviewThreadsNote([{ id, author: 'reviewer', body: comment, handled: false }]) +
     reviewRecheckNote(number) +
+    replyToolNote() +
     // Every append the rule makes, in its order — this fixture is only worth
     // anything while it mirrors that composition exactly. The prior-remedy note
     // is absent rather than forgotten: nothing has been accounted for in these

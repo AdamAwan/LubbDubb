@@ -33,6 +33,29 @@ export interface Config {
    * and ephemeral, so a restart reverts to this value.
    */
   startPaused: boolean;
+  /**
+   * Send a review reply the fleet drafted **without asking you first**.
+   *
+   * Off by default, and the default is the promise the rest of the harness makes:
+   * a drafted reply is put to you as a proposal and waits. Turning it on is you
+   * authorizing a *class* of act in advance — every reply an agent hands to the
+   * harness, on every pull request — where a stack landing authorizes named pull
+   * request numbers with a click. Both are your authority; they are not the same
+   * promise, and this is the wider one. What goes out is prose an agent wrote,
+   * onto a thread you do not control, signed as the harness.
+   *
+   * **Replies only, and it can only ever accept.** A merge has its own, better
+   * scoped standing authority (the stack landing), and a plan is always put to a
+   * human — `planning.requireApproval` is a retired key for that reason. And a
+   * rejection you already gave still governs: the hold is asked first, so this
+   * means "you do not need to ask me", never "ignore what I said no to".
+   *
+   * Deliberately a plain boolean and deliberately **not** the removed `autoSend`
+   * block, which gated on a confidence threshold that measured nothing. There is
+   * no number here to resolve between two constants.
+   * → `docs/spec/09-execution.md`
+   */
+  sendPrRepliesWithoutApproval: boolean;
   /** PTY prompt substrings the harness may auto-answer instead of escalating. */
   whitelistedApprovals: WhitelistRule[];
   /**
@@ -762,6 +785,8 @@ const DEFAULTS: Config = {
   heartbeatIntervalMs: 5 * 60 * 1000,
   maxConcurrentAgents: 3,
   startPaused: false,
+  // Off: a drafted reply is put to the operator and waits. See the key's own doc.
+  sendPrRepliesWithoutApproval: false,
   whitelistedApprovals: [],
   // True, so the split off `userId` changes nothing for a deployment that takes
   // the build: one carrying an identity keeps the gates it had, one without keeps
@@ -958,8 +983,13 @@ const REMOVED_KEYS: Readonly<Record<string, string>> = {
   dispatcher:
     'the "claude" dispatcher was removed and the rule dispatcher is the only one, so there is nothing left to select',
   steeringPriorities: 'it was only ever injected into the removed "claude" dispatcher\'s prompt and now steers nothing',
+  // Kept refusing, and deliberately not revived as the boolean that replaced it:
+  // an old `autoSend` was a *block* carrying a confidence threshold, so a name
+  // shared with a boolean would merge an object where one is expected. The
+  // capability came back narrowed — replies only, no number anywhere — under a
+  // name that says what it does.
   autoSend:
-    'the harness never acts on a pull request autonomously — a reply or a merge is always put to you as a proposal',
+    'it gated on a confidence threshold that resolved between two constants and measured nothing — if you want the harness to send a drafted reply without asking, set "sendPrRepliesWithoutApproval": true, which is replies only and has no threshold; a merge is still authorized per pull request by landing a stack',
 };
 
 /**

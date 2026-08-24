@@ -20,6 +20,7 @@ import {
   reviewRecheckNote,
   reviewThreadNote,
   reviewThreadsNote,
+  replyToolNote,
 } from '../reviewThreads.js';
 import { priorCiRemediesNote, priorReviewRemediesNote } from '../../remedies/priorRemedies.js';
 import { remedyAskNote } from '../../remedies/remedies.js';
@@ -102,6 +103,10 @@ export function prCiFailing(s: StageContext): void {
           }) +
           reviewThreadsNote(unhandled) +
           reviewRecheckNote(pr.number) +
+          // After the threads and the re-check, because it is about what to *do*
+          // with an answer once there is one — and before the remedies, which are
+          // about the repository rather than this review.
+          replyToolNote() +
           // Last, after the threads and the re-check: it is the least urgent thing
           // in the prompt and the only part that is not about *this* review. An
           // agent that read it first would answer the repository's habits instead

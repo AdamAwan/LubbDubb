@@ -76,8 +76,17 @@ ask for different things.
 A **removed key** (`REMOVED_KEYS`: `dispatcher`, `steeringPriorities`, `autoSend`) is **refused**, by
 name, with what to do about it. It names a capability that no longer exists on any setting, so
 honouring it is impossible and ignoring it would have the harness do the opposite of what the file
-says while the file goes on saying it. `autoSend` is the clearest case: a file asking the harness to
-send or merge on its own authority is asking for the one thing it will now never do.
+says while the file goes on saying it. `dispatcher` is the clearest case: it selected between two
+dispatchers where there is now one, so no value it can carry means anything.
+
+`autoSend` is the entry worth reading carefully, because what it asked for came **back** — narrowed —
+and the entry still refuses. It was a block carrying a confidence _threshold_, and that number is the
+thing that is gone for good ([09](09-execution.md#the-two-standing-authorities)). What replaced it is
+`sendPrRepliesWithoutApproval`: a plain boolean, replies only, with nothing to resolve between two
+constants. Reviving the old name for it would be worse than useless — an old
+`{"autoSend": {"threshold": 0.8}}` would merge an object where a boolean is expected — so the name
+stays refused and its refusal **names the key that replaced it**. A `REMOVED_KEYS` entry is permanent;
+its reason is the part that gets rewritten.
 
 A **retired key** (`RETIRED_KEYS`) is **warned about, dropped, and the harness boots**. Almost every
 entry named a subsystem that is now **unconditional**, so a file setting one is asking for something
@@ -245,7 +254,7 @@ failure this repo catalogues. `test/configFields.test.ts` asserts the classifica
 in both directions; `test/configApply.test.ts` asserts each arm through its _effect_, never through the
 flag, so an arm that stops doing anything fails rather than passing.
 
-Seven keys have arms, and the shortness is deliberate — every arm is a second place a value lives, and
+Few keys have arms, and the shortness is deliberate — every arm is a second place a value lives, and
 so a place two copies can disagree:
 
 | Key                       | The arm                                                                                                                                                                                                                                                                                                                                                                                                                                        |
@@ -257,6 +266,7 @@ so a place two copies can disagree:
 | `issueStateColours`       | Assign. `buildStateSnapshot` reads the running config by reference at every poll and ships the colours to the cockpit, so the chips are recoloured a heartbeat later. Nothing in the harness reads a colour, so there is no consumer to re-seat.                                                                                                                                                                                               |
 | `pets.visible`            | Assign **onto `running.pets`**, never over it: `PetKeeper` closed over that object and reads `visible` on every `state()`, so replacing the policy would leave the keeper on the old one while the config page said the change had applied. Live because it is pure presentation — nothing it reaches hatches, feeds or clears. → [22](22-pets.md#configuration)                                                                               |
 | `localRun.*`              | Assign **onto `running.localRun`**. The runner reads the policy by reference at every start and the snapshot at every poll, so the object _is_ the late reader. Live because this is the one field an operator corrects while a start is failing in front of them: restart-only would mean bouncing the harness — and the fleet's agents with it — to fix a typo in a command. → [23](23-local-runs.md#the-instruction-is-config-not-a-prompt) |
+| `sendPrRepliesWithoutApproval` | Assign. The executor asks the running config by reference at every act it authorizes (`system.ts` wires `autoSendReplies` as a thunk over the object), so the object _is_ the late reader. Live because of the flip that matters — turning it back **off**: restart-only, the harness would go on sending replies unasked for as long as it took to bounce it. → [09](09-execution.md#the-two-standing-authorities) |
 | `ci.checks`               | Assign, and hand `RuleDispatcher` a new policy — it took `{checks}` at construction, so assignment alone would leave the cockpit drawing one policy while the dispatcher ran another.                                                                                                                                                                                                                                                          |
 
 Everything else is restart-only, including the ones that could be made live. A key nobody changes twice
@@ -344,6 +354,7 @@ resolve them against the wrong directory:
 | `heartbeatIntervalMs` | `number`  | `300000`                    | Gap between timer-driven cycles.                                                                                                                                                                                                                                                                      |
 | `maxConcurrentAgents` | `number`  | `3`                         | Seeds the runtime cap. Live changes go through `POST /api/control` and are **not** persisted. It is also the fleet's **only** size knob: the worktree pool is the live cap plus a slack of two, read on every acquire, so raising the cap raises the pool with it. → [09](09-execution.md#exhaustion) |
 | `startPaused`         | `boolean` | `false`                     | Seeds the runtime pause flag. The only config-level pause knob; live pause/resume is ephemeral, so a restart reverts to this.                                                                                                                                                                         |
+| `sendPrRepliesWithoutApproval` | `boolean` | `false` | Send a review reply the fleet drafted straight to the thread, without asking you. Off, every draft waits in your inbox as a proposal. Replies only — a merge is authorized per pull request by landing a stack. → [09](09-execution.md#the-two-standing-authorities) |
 | `port`                | `number`  | `4300`                      | HTTP/WS port. Overridable via `PORT`.                                                                                                                                                                                                                                                                 |
 | `host`                | `string`  | `127.0.0.1`                 | Bind address. Loopback by default; `"0.0.0.0"` exposes the cockpit on the network and then requires `auth.enabled`. Overridable via `LUBBDUBB_HOST`.                                                                                                                                                  |
 | `auth.enabled`        | `boolean` | `true`                      | Require a bearer token on `/api/*` and `/ws`. See [16 — HTTP API](16-http-api.md#authentication).                                                                                                                                                                                                     |

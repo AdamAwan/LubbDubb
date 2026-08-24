@@ -89,6 +89,12 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     why: 'Boot with dispatch paused. Live pause/resume is ephemeral and separate.',
   },
   {
+    path: 'sendPrRepliesWithoutApproval',
+    type: 'boolean',
+    access: 'plain',
+    why: 'Send a reply an agent drafted straight to the review thread, without asking you. It is prose the fleet wrote, on a thread you do not control, signed as the harness — off, every draft waits in your inbox. Replies only; a merge is still authorized per pull request by landing a stack.',
+  },
+  {
     path: 'closedPrWindowMs',
     type: 'number',
     ms: true,

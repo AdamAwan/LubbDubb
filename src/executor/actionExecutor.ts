@@ -50,7 +50,16 @@ interface ExecutorDeps {
   landings: StackLandingDesk;
   /** Outbound seam for side-effectful actions the harness may auto-send. */
   sink: ActionSink;
-  /** Confidence-gated auto-send policy. */
+  /**
+   * Whether the operator has said in their config that a drafted review reply
+   * goes out without being put to them (`sendPrRepliesWithoutApproval`).
+   *
+   * A thunk, not a boolean: the key is live-applied onto the running config
+   * object, so a copy taken here would keep sending replies until the harness was
+   * bounced — on the flip that matters, which is the one turning it *off*.
+   * Absent = off, which is the direction that asks rather than acts.
+   */
+  autoSendReplies?: () => boolean;
   /**
    * Which model each kind of work runs on (issue #321), or undefined for a
    * deployment that configures none. Consulted here, at dispatch, because this is
@@ -527,11 +536,19 @@ export class ActionExecutor {
    * acts the harness can publish — a drafted reply and a merge — come through
    * here, and every one of them is written as a `Proposal` first.
    *
-   * **The harness authorizes nothing on its own.** There was once a confidence
-   * gate here that could clear an act by comparing a dispatcher-reported number
-   * against a threshold; it is gone, along with the `auto_send` decider it wrote.
-   * What remains is one standing authority — a stack landing the operator clicked
-   * over a named set of pull requests — and otherwise the question goes to them.
+   * **The harness authorizes nothing on its own.** Every authority here is the
+   * operator's, and there are two of them: a **stack landing** they clicked over a
+   * named set of pull request numbers, which authorizes those merges; and
+   * **`sendPrRepliesWithoutApproval`**, a config key that authorizes a *class* of
+   * act — every reply the fleet drafts — in advance. The second is the wider
+   * promise, which is why it is a switch they set deliberately and why it is
+   * scoped to replies. Otherwise the question goes to them.
+   *
+   * What is *not* here is the confidence gate that used to be: a
+   * dispatcher-reported number compared against a configured threshold, where the
+   * number was a hardcoded literal at its one emitter, so the threshold resolved
+   * between two constants and measured nothing. Neither authority above is a
+   * number, and nothing here is to become one again.
    *
    * The order matters and is the point: the **landing is asked after the hold**, so
    * a standing verdict (a pending question, a rejection you made, an act just
@@ -575,7 +592,20 @@ export class ActionExecutor {
     // is not here, because the intent's scope is the PR numbers it covers.
     const landing = merge ? store.standingLandingForPr(action.prNumber) : null;
 
-    if (landing) {
+    // The operator's other standing authority, and the wider one: a config key
+    // saying a drafted reply need not be put to them at all. Replies only — a
+    // merge has the landing above, which is scoped to the pull request numbers
+    // they clicked over, and a plan is always asked (`planning.requireApproval`
+    // is retired for that reason).
+    //
+    // Asked here, below the hold, for the landing's reason: a rejection they gave
+    // still governs, because "you do not need to ask me" is not "ignore what I
+    // said no to". And it can only ever *accept* — there is no arm below that
+    // refuses, because a machine "no" is durable and would mean the question is
+    // never put to anyone.
+    const autoSend = !merge && (this.deps.autoSendReplies?.() ?? false);
+
+    if (landing || autoSend) {
       const proposal = store.createProposal({
         kind,
         ref,
@@ -586,8 +616,16 @@ export class ActionExecutor {
       });
       // The row was created `pending` one statement ago, so this compare-and-set
       // always wins; `?? proposal` is the type narrowing, not a fallback path.
-      const note = `you authorized landing ${landing.ref} (${landing.rungs.length} pull requests) on ${landing.createdAt}`;
-      const accepted = store.decideProposal(proposal.id, 'accepted', note, 'stack_landing') ?? proposal;
+      //
+      // The note names *which* authority, because that is the whole of what an
+      // audit trail over an act nobody watched can say: an operator reading this
+      // six weeks later has to be able to tell a reply they clicked from one their
+      // config sent, and the key's own name is the only thing that says the second.
+      const note = landing
+        ? `you authorized landing ${landing.ref} (${landing.rungs.length} pull requests) on ${landing.createdAt}`
+        : 'you set "sendPrRepliesWithoutApproval", which sends a drafted reply without asking';
+      const accepted =
+        store.decideProposal(proposal.id, 'accepted', note, landing ? 'stack_landing' : 'auto_send') ?? proposal;
       const run = await this.runAuthorized(accepted, cycleId);
       return { ...run, recorded: true };
     }
@@ -622,6 +660,57 @@ export class ActionExecutor {
         : `Drafted PR reply and proposed it for approval: ${esc.id} / ${proposal.id}. Accepting sends it.`,
       recorded: false,
     };
+  }
+
+  /**
+   * Raise a review reply an agent handed to the harness, from outside the pulse.
+   *
+   * **The tool does not send anything.** `reply_to_review` builds the same
+   * `reply_on_pr` act a rule would and hands it here, so an agent's reply takes
+   * exactly the route a drafted one already took: the hold that suppresses a
+   * duplicate ask, the rejection the operator already gave, the re-ask that names
+   * it, the authority (theirs, either way), the signing on the way out, and the
+   * escalation if the send fails. An agent that posted the reply itself — with the
+   * tracker's CLI and the operator's credential, which is what the prompt used to
+   * leave it to do — got none of that, and the reply was not the harness's.
+   *
+   * The cycle id names the agent rather than a pulse, the way a human accept names
+   * its proposal: this decision belongs to the agent's call, not to whatever cycle
+   * happened to be running when it made it.
+   *
+   * @public — reached from the MCP tool layer through `McpToolDeps.prReply`.
+   */
+  async proposeReply(input: {
+    agentId: string;
+    prNumber: number;
+    /** The review thread being answered, or null for a reply on the pull request itself. */
+    commentId: string | null;
+    draft: string;
+    reason: string;
+  }): Promise<{ outcome: DecisionOutcome; detail: string }> {
+    const cycleId = `agent-reply:${input.agentId}`;
+    const action = {
+      type: 'reply_on_pr' as const,
+      prNumber: input.prNumber,
+      commentId: input.commentId,
+      draft: input.draft,
+      reason: input.reason,
+      rule: null,
+      admission: null,
+    };
+    const outbound = await this.authorize(cycleId, action);
+    // The authorized path audits itself, under this same cycle id — the executor's
+    // own rule, kept here rather than restated: `execute` writes the row only when
+    // `runAuthorized` did not.
+    if (!outbound.recorded) {
+      this.deps.store.recordDecision({
+        cycleId,
+        action: action as unknown as Action,
+        outcome: outbound.outcome,
+        detail: outbound.detail,
+      });
+    }
+    return { outcome: outbound.outcome, detail: outbound.detail };
   }
 
   /**
@@ -687,9 +776,9 @@ export class ActionExecutor {
           )
         : audit('skipped', `Nothing to act on for ${act.originRef}: ${settled.detail} (${proposal.id}).`);
     }
-    // The verdict's note is the decider's own reason — a human's comment, or the
-    // threshold auto-send cleared — so the audit line carries it verbatim rather
-    // than re-deriving why the act was allowed.
+    // The verdict's note is the decider's own reason — a human's comment, the
+    // landing they clicked, or the config key they set — so the audit line carries
+    // it verbatim rather than re-deriving why the act was allowed.
     const because = proposal.note ? ` (${proposal.note})` : '';
 
     try {

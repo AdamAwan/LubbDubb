@@ -100,3 +100,61 @@ function quote(body: string): string {
     .map((line) => `   > ${line}`)
     .join('\n');
 }
+
+/**
+ * Which pull request's review this caller may reply to, refusing every other
+ * origin **by name and with what to do instead** — `remedyOrigin`'s shape, for
+ * its reason.
+ *
+ * The pull request comes out of the origin rather than out of an argument, so an
+ * agent cannot answer a review on a pull request it was not dispatched for. That
+ * is the tool channel's one structural guarantee, and it is the whole of what
+ * makes a reply the harness sends attributable at all.
+ *
+ * Fenced to the review dispatch and not to `pr:<n>:ci`: a CI agent is answering a
+ * red check, and a reply from it is a comment nobody asked for on a thread
+ * somebody else's agent is working.
+ */
+export function replyOrigin(
+  originRef: string | null,
+): { ok: true; prNumber: number; originRef: string } | { ok: false; error: string } {
+  const match = originRef ? /^pr:(\d+):comments$/.exec(originRef) : null;
+  if (match) return { ok: true, prNumber: Number(match[1]), originRef: originRef! };
+  return {
+    ok: false,
+    error:
+      `reply_to_review is only for an agent dispatched to answer a pull request's review threads, and ` +
+      `this task's origin is ${originRef ?? '(none)'}. Do not post to the thread yourself instead: if you ` +
+      `have something to say about a pull request that is not yours to answer, say it in the summary you ` +
+      `finish with, or raise it.`,
+  };
+}
+
+/**
+ * The appendix that names {@link replyToReview} — and, just as importantly, tells
+ * the agent **not** to post to the thread itself.
+ *
+ * The tool existing is not enough. This prompt hands an agent every thread id it
+ * needs to reply with, a deployment's `agentAllowedTools` commonly grants it a
+ * shell that reaches the tracker's CLI, and the sentence above about defending an
+ * approach reads as an instruction to answer *somewhere*. Left to fill that in,
+ * an agent posts as whoever is logged in on the machine: unsigned, unrecorded by
+ * the harness, and attributed to the operator rather than to the fleet — with
+ * nothing anywhere saying it happened.
+ *
+ * **Appended, never interpolated**, for {@link reviewThreadsNote}'s reason, and
+ * unconditionally: an override written before the tool existed is exactly the
+ * deployment whose agents still reach for `gh`.
+ */
+export function replyToolNote(): string {
+  return (
+    '\n\nWhen you have a reply for a thread — a defence, an answer, or a note about what you changed — ' +
+    'call `reply_to_review` with the reply and that thread’s id. One call per thread.\n\n' +
+    '**Do not post to a review thread yourself**: not with `gh`, not with `az`, not with the provider’s ' +
+    'REST API, not from a shell of any kind, even if your credentials would let you. A reply the harness ' +
+    'sends is signed as the harness and recorded against the pull request; one you post is unsigned, ' +
+    'unrecorded, and attributed to the person whose credential is on this machine, who did not write it. ' +
+    'The harness may put your reply to the operator before it goes out — that is their setting, not a ' +
+    'fault — and the tool tells you which happened.'
+  );
+}

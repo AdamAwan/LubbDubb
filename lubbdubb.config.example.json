@@ -12,6 +12,9 @@
   "// startPaused": "Boot with dispatch paused (no new agents until resumed). The only config-level pause knob — live pause/resume is runtime-only and ephemeral. Default false.",
   "startPaused": false,
 
+  "// sendPrRepliesWithoutApproval": "Send a review reply the fleet drafted straight to the thread, without asking you. Default false, and off it changes nothing: every draft an agent hands over with the reply_to_review tool waits in your inbox as a proposal you accept or reject. On, it is you authorizing a CLASS of act in advance — prose an agent wrote, onto a thread you do not control, signed as the harness — and the proposal row still records that your config sent it. Replies only: a merge is authorized per pull request by landing a stack, and a plan is always put to you. A rejection you already gave still governs either way. Applies live, without a restart.",
+  "sendPrRepliesWithoutApproval": false,
+
   "// closedPrWindowMs": "How far back a provider looks for pull requests that have LEFT the open set, so a merged or abandoned PR is observed rather than inferred from its disappearance. Feeds the cockpit's 'Recently closed' list, the pr_merged/pr_closed world events, and plan reconciliation's ability to tell a merge from an abandonment. Costs one extra list request per snapshot per provider (no per-PR fan-out). Default 21600000 (6h); 0 disables the lookup, and every consumer falls back to the older 'absence means merged' reading.",
   "closedPrWindowMs": 21600000,
 

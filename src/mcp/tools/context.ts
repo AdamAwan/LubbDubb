@@ -15,6 +15,7 @@ import type {
   Remedy,
   ScratchEntry,
   ShortfallCause,
+  DecisionOutcome,
   Task,
   BugFiling,
 } from '../../types.js';
@@ -184,6 +185,18 @@ export interface McpToolDeps {
     watchLabel: string;
   };
   /**
+   * Where `reply_to_review` hands the reply it was given. The `ActionExecutor`,
+   * narrowed to the one method — the tool raises a `reply_on_pr` act and returns,
+   * because the executor is the only path that asks the hold, applies the
+   * operator's authority and signs what goes out.
+   *
+   * Optional for {@link McpToolDeps.openPr}'s reason, and the floor is *not* the
+   * agent posting it itself: unwired, the tool says so and tells the agent to put
+   * the reply in its summary. An agent posting with the operator's credential is
+   * the behaviour this tool exists to end, so it cannot be the fallback.
+   */
+  prReply?: PrReplyDesk;
+  /**
    * How `link_ticket` creates the item an agent has written up (issue #394).
    * Optional for {@link McpToolDeps.openPr}'s reason and with the same floor: with
    * no tracker configured there is nothing to file into, nothing dispatches a
@@ -191,6 +204,17 @@ export interface McpToolDeps {
    */
   filing?: TicketFiler;
   errors?: ErrorRecorder;
+}
+
+/** The executor, as the reply tool reaches it. */
+interface PrReplyDesk {
+  proposeReply(input: {
+    agentId: string;
+    prNumber: number;
+    commentId: string | null;
+    draft: string;
+    reason: string;
+  }): Promise<{ outcome: DecisionOutcome; detail: string }>;
 }
 
 /** A resolved caller: the agent row the credential names, and its task. */
