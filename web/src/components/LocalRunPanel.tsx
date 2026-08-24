@@ -2,6 +2,7 @@ import { useEffect, useState, type JSX } from 'react';
 import type { Issue, LocalRunRefFacts, LocalRunTargetView, LocalRunView } from '../types.js';
 import { AsyncButton } from './AsyncButton.js';
 import { Ref } from './refs.js';
+import { TranscriptPane } from './TranscriptPane.js';
 import { elapsed, fmtUsd, relTime } from './util.js';
 
 /** How often the tail is refetched while the run is live. */
@@ -306,7 +307,20 @@ export function LocalRunPanel({
         </div>
       </div>
 
-      {lines.length > 0 && <pre className="lrun-log">{lines.join('\n')}</pre>}
+      {/* The session's own words, in the pane the fleet's transcripts use. These are
+          the same bytes off the same `output` event, so anything else here shows the
+          operator the SGR escapes raw and every tool call at full length — which is
+          the whole of what there is to read when a bring-up did not work. Keyed on
+          the run, so a swap redraws rather than appending one goal's output to
+          another's. */}
+      {lines.length > 0 && (
+        <TranscriptPane
+          text={lines.join('\n')}
+          streamId={run?.id ?? 'none'}
+          label="Local run output"
+          className="compact"
+        />
+      )}
     </div>
   );
 }

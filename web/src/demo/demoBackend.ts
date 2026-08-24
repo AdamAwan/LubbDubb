@@ -185,17 +185,64 @@ function injectedIssue(
 }
 
 /**
+ * One tool call as `renderBlocks` writes it, with its result under it — the blank
+ * lines dropped, because {@link LocalRunner}'s tail drops them too.
+ *
+ * The line count is written only past one line, which is `renderBlocks`' own rule and
+ * worth copying rather than approximating: this fixture is the only thing that
+ * demonstrates the panel, so "· 1 lines" would be a demo of a bug nothing has.
+ */
+function toolLines(at: string, tool: string, summary: string, done: string, body: readonly string[]): string[] {
+  const count = body.length > 1 ? `\x1b[2m · ${String(body.length)} lines\x1b[0m` : '';
+  return [
+    `\x1b[2m[${at}]\x1b[0m \x1b[36m⚙ ${tool}\x1b[0m \x1b[2m${summary}\x1b[0m`,
+    `\x1b[90m  ↳ result\x1b[0m\x1b[2m [${done}]\x1b[0m${count}`,
+    ...body.map((l) => `  ${l}`),
+  ];
+}
+
+/**
  * A bring-up as the panel sees one: a phase, then the output of that phase.
  *
  * Scripted rather than instant, because "it takes minutes and says nothing" was the
  * complaint this answers — a demo that came up the moment it was asked to would
  * show none of it.
+ *
+ * **Real `renderBlocks` output, markers and stamps intact**, exactly as the drawer's
+ * fixture is and for the same reason: what the runner puts in this tail is that
+ * session's own transcript, so a demo of dressed-up prose would exercise none of the
+ * folding the panel now draws it with. The times are literals like every other demo
+ * value — nothing here reads a clock.
  */
 const BRINGUP: readonly { phase: string; lines: readonly string[] }[] = [
-  { phase: 'starting the containers', lines: ['> docker compose up -d', '> postgres ready', '> redis ready'] },
-  { phase: 'building the services', lines: ['> build api      ok', '> build worker   ok'] },
-  { phase: 'seeding the sample data', lines: ['> 240 invoices, 18 suppliers'] },
-  { phase: 'starting the web app', lines: ['> vite ready in 1204 ms'] },
+  {
+    phase: 'starting the containers',
+    lines: toolLines('09:41:12', 'Bash', 'docker compose up -d', '09:41:38', [
+      'Container demo-shop-postgres  Started',
+      'Container demo-shop-redis     Started',
+    ]),
+  },
+  {
+    phase: 'building the services',
+    lines: toolLines('09:41:39', 'Bash', 'npm run build -w api -w worker', '09:42:20', [
+      'api     built in 18.2s',
+      'worker  built in 21.9s',
+    ]),
+  },
+  {
+    phase: 'seeding the sample data',
+    lines: [
+      'The compose file brings the database up empty, so it needs seeding before the app has anything to draw.',
+      ...toolLines('09:42:21', 'Bash', 'npm run seed', '09:42:44', ['seeded 240 invoices across 18 suppliers']),
+    ],
+  },
+  {
+    phase: 'starting the web app',
+    lines: toolLines('09:42:45', 'Bash', 'npm run dev -- --host', '09:42:47', [
+      'VITE ready in 1204 ms',
+      '➜  Local:   http://localhost:5173/',
+    ]),
+  },
 ];
 
 /**
@@ -204,8 +251,18 @@ const BRINGUP: readonly { phase: string; lines: readonly string[] }[] = [
  * to the Docker daemon and no signal the harness can send reaches them.
  */
 const TEARDOWN: readonly { phase: string; lines: readonly string[] }[] = [
-  { phase: 'stopping the web app and the services', lines: ['> vite     stopped', '> api      stopped'] },
-  { phase: 'taking the containers down', lines: ['> docker compose down', '> 6 containers stopped'] },
+  {
+    phase: 'stopping the web app and the services',
+    lines: toolLines('10:02:11', 'Bash', 'npm run stop', '10:02:14', ['vite    stopped', 'api     stopped']),
+  },
+  {
+    phase: 'taking the containers down',
+    lines: toolLines('10:02:15', 'Bash', 'docker compose down', '10:02:39', [
+      'Container demo-shop-postgres  Removed',
+      'Container demo-shop-redis     Removed',
+      'Network demo-shop_default     Removed',
+    ]),
+  },
 ];
 
 class DemoServer {
@@ -217,7 +274,15 @@ class DemoServer {
   private beatTimer: ReturnType<typeof setInterval> | null = null;
   private chatterIdx = 0;
   /** What the local run's session has 'printed', for the panel's tail. */
-  private lines: string[] = ['> starting the dev environment for #395', '> up on http://localhost:5173'];
+  private lines: string[] = [
+    'Bringing #395 up on this machine — the compose file first, then the app.',
+    ...toolLines('09:12:04', 'Bash', 'docker compose up -d', '09:12:31', [
+      'Container demo-shop-postgres  Started',
+      'Container demo-shop-redis     Started',
+    ]),
+    ...toolLines('09:12:32', 'Bash', 'npm run dev -- --host', '09:12:34', ['VITE ready in 1180 ms']),
+    'Up on http://localhost:5173. Nothing needed that the instruction did not mention.',
+  ];
   /** Which step of {@link BRINGUP} is next. Past the end: the fixture is already up. */
   private bringUp = BRINGUP.length;
   /** Which step of {@link TEARDOWN} is next. */
@@ -1260,7 +1325,7 @@ class DemoServer {
       refFacts: facts,
     };
     this.state.localRun = starting;
-    this.lines = [`> starting the dev environment for #${String(issue)}`];
+    this.lines = [`Bringing #${String(issue)} up on this machine — the compose file first, then the app.`];
     this.bringUp = 0;
     // The first phase now rather than on the next poll, so the panel never draws a
     // start with nothing under it.

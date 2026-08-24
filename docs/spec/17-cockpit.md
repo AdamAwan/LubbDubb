@@ -2837,6 +2837,23 @@ The one terminal feature it reproduces is SGR colour, via the pure parser in
 `web/src/components/ansi.ts` (`parseAnsi` / `ansiClass`, tested in `test/ansi.test.ts`), which handles
 the five codes `renderBlocks` emits and threads the active style across streamed deltas.
 
+**The pane is a component, `TranscriptPane`, and every surface showing a session's output draws it
+there.** It is not the drawer's private business, because what a session emits is `renderBlocks` output
+whoever is watching it: the local run panel's tail is the same bytes off the same `output` event
+([23](23-local-runs.md#the-cockpit)), and it used to go into a `<pre>` — which showed an operator the
+SGR escapes raw, with every tool call at full length, on the one surface there is to read when a
+bring-up did not work. That is not a plainer rendering of the same text, and nothing in `check` has an
+opinion about it: it compiles, it renders, and it is unreadable. The component takes the text, a
+`streamId` naming which stream it is, and an aria label; `compact` on its wrapper caps it for a panel
+rather than letting it fill a drawer.
+
+**A reseed is any text that is not an extension of what was written**, as well as a `streamId` change.
+The drawer's buffer only ever grows, so this is the agent-switch case there — but the local run's tail
+is a rolling two hundred lines, and once it rolls, every poll drops lines off the top. That reseeds,
+which is correct: those lines are gone. The cost is that the blocks come back collapsed while a
+bring-up is still printing, and it is the right trade — the pane sticks to the bottom, and what is being
+read at that moment is the newest output rather than an expanded call from four minutes ago.
+
 ### Tool calls fold out of the way
 
 The pane is read to follow an agent's **reasoning**, and tool output drowned it — one `grep` filled the
@@ -2867,7 +2884,7 @@ for the same reason `Agent.notedAt` is (the longest quiet stretches are the long
 
 The structure is found, not shipped: the transcript is still a flat text stream, and
 `web/src/components/transcriptBlocks.ts` (`feedBlocks`, pure, tested in `test/transcriptBlocks.test.ts`)
-recognises the labelled lines the server writes and emits DOM operations the drawer applies. Its tests
+recognises the labelled lines the server writes and emits DOM operations the pane applies. Its tests
 feed it **real `renderBlocks` output**, so the writer and the reader of those markers cannot drift apart
 quietly. A partial trailing line is held in parse state — a marker split across two deltas must not
 half-parse — and rendered separately so streaming text is still shown while it arrives.

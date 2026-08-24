@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Agent, AgentFile, AgentFlag, TaskSummary } from '../types.js';
 import { api } from '../api.js';
 import { statusDot, linkify, agentUsageLine } from './util.js';
@@ -7,103 +7,13 @@ import { ConfirmButton } from './ConfirmButton.js';
 import { AsyncButton, SubmitButton, useAsyncAction } from './AsyncButton.js';
 import { FlagChips } from './FlagChips.js';
 import { FilesList } from './FilesList.js';
-import { parseAnsi, ansiClass, type AnsiStyle } from './ansi.js';
-import { feedBlocks, emptyBlockState, type BlockState } from './transcriptBlocks.js';
-
-/** How close to the bottom (px) still counts as "following the stream". */
-const STICK_THRESHOLD = 24;
-
-function atBottom(el: HTMLElement): boolean {
-  return el.scrollHeight - el.scrollTop - el.clientHeight < STICK_THRESHOLD;
-}
-
-/** What one pane carries between deltas: ANSI run, block parse, and the open block's body. */
-interface PaneState {
-  ansi: AnsiStyle;
-  blocks: BlockState;
-  /** The open block's body, or null when writing straight into the pane. */
-  body: HTMLElement | null;
-}
-
-/** Append styled text into `target`, resuming the ANSI run and returning where it ends. */
-function appendStyled(target: HTMLElement, text: string, style: AnsiStyle): AnsiStyle {
-  const { segments, end } = parseAnsi(text, style);
-  const frag = document.createDocumentFragment();
-  for (const seg of segments) {
-    const cls = ansiClass(seg.style);
-    if (!cls) {
-      frag.appendChild(document.createTextNode(seg.text));
-    } else {
-      const span = document.createElement('span');
-      span.className = cls;
-      span.textContent = seg.text;
-      frag.appendChild(span);
-    }
-  }
-  target.appendChild(frag);
-  return end;
-}
-
-/** A collapsed tool call: its summary line, and an empty body for the result. */
-function openBlock(summary: string, error: boolean): { block: HTMLDetailsElement; body: HTMLElement } {
-  const block = document.createElement('details');
-  block.className = error ? 'tool-block error' : 'tool-block';
-  // A failure that hides is worse than a noisy one, so an error is never collapsed.
-  block.open = error;
-  const head = document.createElement('summary');
-  appendStyled(head, summary, {});
-  block.appendChild(head);
-  const body = document.createElement('div');
-  body.className = 'tool-body';
-  block.appendChild(body);
-  return { block, body };
-}
+import { TranscriptPane } from './TranscriptPane.js';
 
 /**
- * Apply a transcript chunk to the pane as blocks. `tailEl` holds the line still being
- * written — it is rewritten each delta and everything else is inserted before it, so
- * streaming text shows immediately without the parser having to guess at a partial line.
- */
-function appendChunk(el: HTMLElement, tailEl: HTMLElement, chunk: string, state: PaneState): void {
-  const { ops, tail, state: blocks } = feedBlocks(chunk, state.blocks);
-  for (const op of ops) {
-    if (op.kind === 'open') {
-      const { block, body } = openBlock(op.text ?? '', op.error === true);
-      el.insertBefore(block, tailEl);
-      state.body = body;
-      state.ansi = {};
-    } else if (op.kind === 'close') {
-      state.body = null;
-      state.ansi = {};
-    } else {
-      const target = state.body ?? proseSlot(el, tailEl);
-      state.ansi = appendStyled(target, op.text ?? '', state.ansi);
-    }
-  }
-  tailEl.replaceChildren();
-  if (tail) appendStyled(tailEl, tail, state.ansi);
-  state.blocks = blocks;
-}
-
-/** Prose accumulates in one span before the tail, so appends stay ordered. */
-function proseSlot(el: HTMLElement, tailEl: HTMLElement): HTMLElement {
-  const prev = tailEl.previousElementSibling;
-  if (prev instanceof HTMLElement && prev.classList.contains('prose')) return prev;
-  const span = document.createElement('span');
-  span.className = 'prose';
-  el.insertBefore(span, tailEl);
-  return span;
-}
-
-/**
- * The drill-down: the transcript for one agent, rendered as an HTML pane, plus a
- * box to type a response straight into its session. Seeds from the persisted
- * transcript, then appends live deltas streamed over the socket.
- *
- * The transcript is already legible text in every mode (`renderBlocks` / settled
- * PTY text), never raw TUI bytes, so it renders as real DOM: words wrap on their
- * boundaries, the browser scrolls it natively, and the text is selectable. The
- * only terminal feature we reproduce is SGR colour on tool labels (see `ansi.ts`).
+ * The drill-down: the transcript for one agent, rendered in the shared
+ * {@link TranscriptPane}, plus a box to type a response straight into its session.
+ * Seeds from the persisted transcript, then appends live deltas streamed over the
+ * socket.
  */
 export function AgentDrawer({
   agent,
@@ -141,17 +51,7 @@ export function AgentDrawer({
 }) {
   const [seed, setSeed] = useState('');
   const [text, setText] = useState('');
-  // The stream ran ahead while the user was scrolled up — offer a jump-to-latest.
-  const [behind, setBehind] = useState(false);
   const send = useAsyncAction();
-  const paneRef = useRef<HTMLDivElement>(null);
-  // What's already rendered into the pane, so we append only the new tail.
-  const writtenRef = useRef('');
-  // Parse and style state carried across appends (a run can split across deltas).
-  const stateRef = useRef<PaneState>({ ansi: {}, blocks: emptyBlockState, body: null });
-  // The line still being written, kept as the pane's last child.
-  const tailRef = useRef<HTMLSpanElement | null>(null);
-  const agentIdRef = useRef(agent.id);
 
   useEffect(() => {
     let active = true;
@@ -166,51 +66,6 @@ export function AgentDrawer({
 
   // Same output value as before: prefer the live stream once it overtakes the seed.
   const output = live !== undefined && live.length > seed.length ? live : seed;
-
-  // Render-diff into the pane: append only what's new; on an agent switch or a
-  // non-append change (shrink/reseed), clear and rewrite the whole buffer.
-  useEffect(() => {
-    const el = paneRef.current;
-    if (!el) return;
-    const prev = writtenRef.current;
-    const switched = agentIdRef.current !== agent.id;
-    const following = atBottom(el);
-    // No tail element yet means nothing has been written — the first frame renders an
-    // empty transcript, and the seed that follows it is a rewrite, not an append.
-    if (switched || !output.startsWith(prev) || !tailRef.current) {
-      el.replaceChildren();
-      stateRef.current = { ansi: {}, blocks: emptyBlockState, body: null };
-      // Expansion is DOM-only state, so a reseed starts every block collapsed.
-      const tailEl = document.createElement('span');
-      el.appendChild(tailEl);
-      tailRef.current = tailEl;
-      appendChunk(el, tailEl, output, stateRef.current);
-      el.scrollTop = el.scrollHeight;
-      setBehind(false);
-    } else if (output.length > prev.length && tailRef.current) {
-      appendChunk(el, tailRef.current, output.slice(prev.length), stateRef.current);
-      if (following) {
-        el.scrollTop = el.scrollHeight;
-        setBehind(false);
-      } else {
-        setBehind(true);
-      }
-    }
-    writtenRef.current = output;
-    agentIdRef.current = agent.id;
-  }, [output, agent.id]);
-
-  const onScroll = useCallback(() => {
-    const el = paneRef.current;
-    if (el && atBottom(el)) setBehind(false);
-  }, []);
-
-  const jumpToLatest = useCallback(() => {
-    const el = paneRef.current;
-    if (!el) return;
-    el.scrollTop = el.scrollHeight;
-    setBehind(false);
-  }, []);
 
   // A limit park takes the reply box away rather than leaving one that cannot send:
   // the process is usually gone with the limit, so typing here would reach nothing —
@@ -327,14 +182,7 @@ export function AgentDrawer({
           </div>
         )}
         <FilesList files={files} />
-        <div className="terminal-wrap">
-          <div className="terminal" ref={paneRef} onScroll={onScroll} aria-label="Agent transcript" />
-          {behind && (
-            <button type="button" className="term-jump" onClick={jumpToLatest}>
-              ↓ New output
-            </button>
-          )}
-        </div>
+        <TranscriptPane text={output} streamId={agent.id} label="Agent transcript" />
         {canRespond && (
           <form
             className="reply"

@@ -1517,6 +1517,21 @@ a.btn {
 .terminal .tool-block.error > summary {
   color: var(--ansi-red);
 }
+/* The same pane inside a panel rather than a drawer: it sizes to its content up to a
+   cap, instead of taking whatever height is going. The tail is up to two hundred
+   lines and the interesting end is the bottom, so it scrolls rather than growing the
+   panel it sits in. */
+.terminal-wrap.compact {
+  flex: none;
+  min-height: 0;
+}
+.terminal-wrap.compact .terminal {
+  max-height: 260px;
+  font-size: 12px;
+  line-height: 1.5;
+  padding: 8px 10px;
+  border-radius: 6px;
+}
 /* Jump-to-latest: shown only when the stream ran ahead while scrolled up. */
 .term-jump {
   position: absolute;
@@ -5613,22 +5628,6 @@ a.btn {
 .lrun-hint {
   color: var(--muted);
 }
-/* The session's own words. Scrolls rather than growing the panel: the tail is up
-   to two hundred lines and the interesting end is the bottom. */
-.lrun-log {
-  margin: 0;
-  max-height: 260px;
-  overflow: auto;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.5;
-  color: var(--muted);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
 .build-panel {
   display: flex;
   flex-direction: column;
@@ -7250,7 +7249,6 @@ a.btn {
   color: var(--muted);
   font-size: 12px;
 }
-
 
 /* ============================ MCP usage ==========================
 
