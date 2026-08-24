@@ -787,7 +787,11 @@ changes five readings:
   nowhere to type one, End the run sent none either, and the 400 reached a `catch` that dropped it
   and an unhandled rejection — so a rule stated as "it costs a sentence" arrived as a button that
   swallowed clicks. The bench's Done reads `Done…` and opens the same box Decline uses; End the run
-  opens `EndRunModal`. Both mirror the route in its **condition only** — `close_out` on a goal whose
+  opens `EndRunModal` — on **every** goal now, because ending a run also kills the goal's agents and
+  cancels its queued work ([16](16-http-api.md#post-apiissuesnumberdismiss-run)), so it confirms
+  whether or not a plan is flagged. What the flag still decides is what happens *inside* that modal:
+  the note is required and the confirm disabled until it is filled. Both mirror the route in its
+  **condition only** — `close_out` on a goal whose
   `validation` is `flagged` — and never in its counts, which stay the server's fold; and the route
   stays the authority, so a plan flagged between the draw and the click refuses there and the refusal
   is drawn where it lands. → [17](17-cockpit.md#saying-the-sentence-a-refusal-asks-for)

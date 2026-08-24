@@ -660,9 +660,18 @@ run.
 - **End the run** is keyed on the run **existing and not yet ended**, never on anything else the page
   is showing — the lesson `planId` and `retroRef` learned. It is how a retained run is ended, so it
   has to be reachable for exactly as long as the harness still holds one
-  ([16](16-http-api.md#post-apiissuesnumberdismiss-run)). On a goal whose validation plan is flagged
-  it reads `End the run…` and opens `EndRunModal`, because the route refuses a dismissal with no note
-  while it is — [below](#saying-the-sentence-a-refusal-asks-for).
+  ([16](16-http-api.md#post-apiissuesnumberdismiss-run)). It is the header's one **destructive**
+  control: it wears `cn-danger` (red at rest, not only on hover — the warning has to be there before
+  the pointer is), it reads `End the run…` on every goal, and it opens `EndRunModal` rather than
+  posting. That is unconditional now, and the change is earned by what the route became: ending a run
+  kills the goal's live agents, cancels its queued jobs and settles its standing instructions, none of
+  which can be undone. A one-click toggle that abandons work in flight is the friction rule pointed
+  the wrong way — the rule is against friction nobody's decision asked for, and this is a decision.
+  The modal **states the counts** rather than summarising them: "2 running agents killed mid-turn" is
+  a sentence an operator can check against the header they are looking at, and "stops work in flight"
+  is one they cannot. The live count is read over the same `issue:<n>` subtree the header's agent
+  count uses, so the two agree by construction. The flagged-plan note is one more requirement _inside_
+  the modal — [below](#saying-the-sentence-a-refusal-asks-for).
 
 ### The bands
 
@@ -690,9 +699,15 @@ one thing wherever it lands.
 ([20](20-validation.md#where-it-lands)) posted no note and offered no box to type one in, so the
 refusal was not merely invisible — it was unsatisfiable, and the control could not work at all. The
 bench verdict's Done reads `Done…` on a `close_out` whose goal is flagged and opens the note box
-Decline already had; `End the run` opens `EndRunModal` on the same condition and stays one click on
-every other goal. The condition is mirrored, the counts are not: they are `issue.validation`, folded
+Decline already had. `EndRunModal` mirrors the same condition **inside itself** rather than in whether
+it opens: on a flagged goal the box is required and the confirm stays disabled until it is filled; on
+every other goal it is offered and optional, since an operator with a reason should not need a flagged
+plan to record it. The condition is mirrored, the counts are not: they are `issue.validation`, folded
 once on the server, and the row's own detail already lists what is outstanding.
+
+The header no longer draws a `.launch-error` of its own for this control. It had one because ending a
+run was a one-click post with nowhere else to put a refusal; the refusal now lands in the modal that
+sent it, which is where the text that was refused still is.
 
 **A band whose source has left the snapshot draws nothing at all.** A header over an empty box would
 claim something is waiting while offering no way to answer it.

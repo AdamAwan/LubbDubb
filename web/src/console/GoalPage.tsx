@@ -3,6 +3,7 @@ import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { GoalPageView, PartGroup } from '../view/goalPage.js';
 import type {
+  Agent,
   EnvironmentGate,
   GoalReachStatus,
   Issue,
@@ -30,6 +31,9 @@ import { NeedsBand } from './NeedsBand.js';
 
 /** Where the header's validation chip jumps to. Anchors, not refs — one element. */
 const VALIDATION_ANCHOR = 'cn-validation';
+
+/** The three statuses that mean an agent is still going, as `countLiveAgents` reads them. */
+const LIVE_AGENT = new Set<Agent['status']>(['starting', 'running', 'waiting']);
 
 /**
  * One goal, with what it wants from you pinned above everything it is doing.
@@ -137,7 +141,6 @@ function Header({
   const moreWork = issue.conclusion.verdict === 'more_work';
   const [instructing, setInstructing] = useState(false);
   const [endingRun, setEndingRun] = useState(false);
-  const [runRefusal, setRunRefusal] = useState<string | null>(null);
   // What ending the run costs, or null when it costs nothing: the route refuses a
   // dismissal with no note while the plan is flagged
   // ([20](../../../docs/spec/20-validation.md#where-it-lands)), and the button
@@ -145,6 +148,9 @@ function Header({
   // rejection, so the click did nothing and said nothing.
   const owed = issue.validation !== null && issue.validation.state === 'flagged' ? issue.validation : null;
   const standing = issue.instructions.length;
+  // What ending the run kills, in the same subtree the header's agent count reads
+  // — so the confirmation states a number the operator can already see above it.
+  const live = page.agents.filter((a) => LIVE_AGENT.has(a.status)).length;
   const merged = page.parts.filter((p) => p.group === 'merged').length;
   const url = issue.url ?? refUrls[`#${issue.number}`];
   // Keyed on the run existing and not having been ended, never on anything the
@@ -297,35 +303,22 @@ function Header({
             Open ticket ↗
           </a>
         )}
-        {/* A flagged plan asks for the sentence first, so that arm opens a modal
-            rather than posting; a clear one is left the one click the route leaves
-            it, through the button that can at least say when it is refused. */}
-        {retained &&
-          (owed !== null ? (
-            <button
-              type="button"
-              className="cn-tgl"
-              onClick={() => {
-                setRunRefusal(null);
-                setEndingRun(true);
-              }}
-              title="End the harness's run at this goal. One way, and terminal for the dispatcher — and this goal's validation plan is not clear, so it asks what you are doing about that."
-            >
-              End the run…
-            </button>
-          ) : (
-            <AsyncButton
-              className="cn-tgl"
-              onClick={() => {
-                setRunRefusal(null);
-                return actions.dismissRun(issue.number);
-              }}
-              onRefused={setRunRefusal}
-              title="End the harness's run at this goal. One way, and terminal for the dispatcher — the report stays readable."
-            >
-              End the run
-            </AsyncButton>
-          ))}
+        {/* Destructive, and always confirmed. Ending a run no longer merely clears
+            the card: it kills the goal's live agents, cancels its queued jobs and
+            settles its standing instructions, none of which can be undone — so the
+            one thing the header must not do is fire it on a stray click. The modal
+            is where what it costs is stated, and the flagged-plan note is one more
+            requirement inside it rather than the reason it opens. */}
+        {retained && (
+          <button
+            type="button"
+            className="cn-tgl cn-danger"
+            onClick={() => setEndingRun(true)}
+            title="End the harness's run at this goal — one way, terminal for the dispatcher, and it stops the agents, jobs and instructions still standing on it. It asks before it does."
+          >
+            End the run…
+          </button>
+        )}
       </div>
       {instructing && (
         <InstructionModal
@@ -335,19 +328,13 @@ function Header({
           onClose={() => setInstructing(false)}
         />
       )}
-      {/* Whatever the route said about the last click in this row, verbatim and
-          under it. The header's controls are one-click verdicts, so a refused one
-          has nowhere else to appear — and appeared nowhere. */}
-      {runRefusal !== null && (
-        <p className="launch-error" role="alert">
-          {runRefusal}
-        </p>
-      )}
-      {endingRun && owed !== null && (
+      {endingRun && (
         <EndRunModal
           issueNumber={issue.number}
           issueTitle={issue.title}
-          outstanding={outstanding(owed)}
+          outstanding={owed === null ? null : outstanding(owed)}
+          agents={live}
+          instructions={standing}
           onSubmit={(note) => actions.dismissRun(issue.number, note)}
           onClose={() => setEndingRun(false)}
         />

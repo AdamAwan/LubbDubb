@@ -1705,6 +1705,8 @@ export type {
 export type { RemedyCauseTotal, RemedyInsights, RemedyKindHealth, RemedyRow } from './remedyInsights.js';
 export type { RemedyCause, RemedyGuard, RemedyKind } from './types.js';
 export type { McpChannel } from './types.js';
+/** What `POST /api/issues/:number/dismiss-run` stopped on its way out. */
+export type { RunClearOut } from './floor/endRun.js';
 export type { SpendGoal, SpendInsights, SpendPhase, SpendPhaseTotal, SpendRun } from './spendInsights.js';
 export type {
   McpChannelUsage,

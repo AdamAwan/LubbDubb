@@ -3434,6 +3434,22 @@ a.btn {
   color: var(--muted);
   font-weight: 400;
 }
+/* What ending a run is about to destroy, itemised. A list rather than a sentence
+   because each line is a count the operator can check against the header they are
+   looking at, and a paragraph is where a number goes to be skimmed past. Red ink on
+   the red tint the rest of the cockpit's warnings use, from the tokens — a literal
+   here would be a colour no theme could reach. */
+.rb-costs {
+  background: var(--red-fill);
+  border: 1px solid var(--red-line);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.6;
+  list-style: disc;
+  margin: 0 0 12px;
+  padding: 8px 10px 8px 26px;
+}
 .rb-text {
   background: var(--well);
   border: 1px solid var(--border);

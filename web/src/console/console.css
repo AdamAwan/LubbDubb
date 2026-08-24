@@ -1196,6 +1196,20 @@
   border-color: var(--cn-line-hi);
   color: var(--cn-fg);
 }
+/* A toggle that destroys something. Red at rest rather than only on hover, because
+   the warning has to be there before the pointer is — this is the one control in the
+   header row an operator must not reach for by accident. Filled on hover, the shape
+   `.btn.danger` already uses. */
+.cn-tgl.cn-danger {
+  border-color: var(--cn-red-line);
+  background: var(--cn-red-fill);
+  color: var(--cn-red-ink);
+}
+.cn-tgl.cn-danger:hover {
+  border-color: var(--cn-red);
+  background: var(--cn-red);
+  color: var(--cn-on-red);
+}
 .cn-tgl.cn-watch {
   border-color: var(--cn-blue-line-hi);
   color: var(--cn-blue-ink-hi);

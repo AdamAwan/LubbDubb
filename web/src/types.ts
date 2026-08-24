@@ -126,6 +126,7 @@ export type {
   RemedyKind,
   RemedyKindHealth,
   RemedyRow,
+  RunClearOut,
   RunOutcome,
   RunOutcomeTotal,
   RunPhaseHealth,

@@ -158,7 +158,10 @@ thing you have to remember on the day you happen to open the goal.
 
 ### 5. Conclude, or let it end
 
-A run lives until it is ended. `Mark done`, `More work`, or `End the run` on a retained one. A fleet
+A run lives until it is ended. `Mark done`, `More work`, or `End the run` on a retained one. `End the
+run` is the destructive one and asks before it acts: it stops the dispatcher **and** kills whatever the
+goal still has in flight — its live agents, its queued jobs, the instructions you left standing — so
+the confirmation states the counts before you take them. A fleet
 whose goals never conclude fills the rail with obligations nobody has retired, and that is the state
 in which people stop reading the rail — which is the only real failure mode of this whole
 arrangement.

@@ -530,8 +530,11 @@ export interface CockpitActions {
    * End the harness's run at a goal (issues #203, #234). A run is retained until
    * this is clicked — no pulse, poll or ticket close drops it — so the operator can still
    * open its report; this is the one thing that ends it, it persists, and since
-   * #234 it also stops the dispatcher. On the seam for every mutation's reason:
-   * `console/` may not reach `api.js`.
+   * #234 it also stops the dispatcher. It is **destructive**: it kills the goal's
+   * live agents, cancels its queued jobs and settles its standing instructions, so
+   * every caller goes through `EndRunModal`'s confirmation rather than posting on a
+   * click. On the seam for every mutation's reason: `console/` may not reach
+   * `api.js`.
    */
   dismissRun(issueNumber: number, note?: string): Promise<void>;
 
