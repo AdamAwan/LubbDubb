@@ -46,6 +46,7 @@ import type {
   RemedyCause,
   RemedyInsights,
   RemedyRow,
+  RunClearOut,
   RunOutcome,
   RunningConfigGroup,
   Proposal,
@@ -118,6 +119,20 @@ function dispatchAction(kind: TaskSummary['kind']): Decision['action']['type'] {
  * a `TaskStatus` at all — so killing or completing an agent left its task row
  * saying `running` forever.
  */
+/**
+ * The issue an origin in the `issue:<n>` subtree belongs to — a planner, a part, an
+ * assay — or null for a ref naming anything else.
+ *
+ * The server's `originIssueNumber`, restated rather than imported for the reason
+ * `ownsPr` restates the branch convention: this is a *string shape*, not a verdict,
+ * and the cockpit names `src/wire.ts` and nothing else. Anchored, because
+ * `startsWith` alone reads `issue:14` as belonging to `issue:1`.
+ */
+function goalOriginIssue(originRef: string | null | undefined): number | null {
+  const match = /^issue:(\d+)(?::|$)/.exec(originRef ?? '');
+  return match ? Number(match[1]) : null;
+}
+
 function isLiveTask(task: TaskSummary): boolean {
   return task.status === 'queued' || task.status === 'running' || task.status === 'waiting';
 }
@@ -584,13 +599,36 @@ class DemoServer {
    * The note the route requires while the goal's validation plan is flagged goes
    * into the decision line, which is the demo's only record of what happened —
    * dropping it would show a run ended with no account of what was said.
+   *
+   * The clear-out is mirrored too, and it is the half worth demonstrating: the
+   * confirmation states that ending a run kills the goal's live agents, cancels
+   * its queued jobs and settles its standing instructions, and a demo where the
+   * agents kept running under a dismissed run would teach the opposite of what the
+   * sentence says.
    */
-  async dismissRun(issueNumber: number, note?: string): Promise<{ ok: true }> {
+  async dismissRun(issueNumber: number, note?: string): Promise<{ ok: true; cleared: RunClearOut }> {
     const present = this.state.world.issues.find((i) => i.number === issueNumber);
     const forgotten = (this.state.retainedRuns ?? []).find((i) => i.number === issueNumber);
     const target = present ?? forgotten;
+    const cleared: RunClearOut = { agents: 0, jobs: 0, instructions: 0 };
     if (target?.run) {
       target.run = { ...target.run, dismissed: true };
+      for (const agent of this.state.agents) {
+        const task = this.state.tasks.find((t) => t.id === agent.taskId);
+        if (goalOriginIssue(task?.originRef ?? null) !== issueNumber) continue;
+        if (agent.status === 'done' || agent.endedAt !== null) continue;
+        await this.killAgent(agent.id);
+        cleared.agents += 1;
+      }
+      for (const job of this.state.jobs) {
+        if (job.status !== 'queued' || goalOriginIssue(job.originRef) !== issueNumber) continue;
+        await this.cancelJob(job.id);
+        cleared.jobs += 1;
+      }
+      if (present) {
+        cleared.instructions = present.instructions.length;
+        present.instructions = [];
+      }
       this.addDecision(
         'no_op',
         'executed',
@@ -602,7 +640,7 @@ class DemoServer {
       );
       this.dirty();
     }
-    return { ok: true };
+    return { ok: true, cleared };
   }
 
   /**

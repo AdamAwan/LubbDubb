@@ -127,13 +127,17 @@ test('a close-out on a flagged goal asks for the note before posting, not after 
   assert.ok(!none.includes('Done…'), 'no plan is not a flagged plan');
 });
 
-test('ending the run on a flagged goal asks for the same sentence, and on a clear one does not', () => {
-  const flagged = render(goalWith(FLAGGED));
-  assert.ok(flagged.includes('End the run…'), 'the control that refuses without a note must offer one');
-
-  const clear = render(goalWith(CLEAR));
-  assert.ok(clear.includes('>End the run<'), 'a clear goal keeps the one click the route keeps');
-  assert.ok(!clear.includes('End the run…'), 'and is asked for nothing');
+test('ending the run is one destructive control that confirms on every goal', () => {
+  // The note's condition is still mirrored — it is the modal's, now, rather than
+  // the button's — but the *confirmation* is unconditional: the route kills the
+  // goal's agents, cancels its jobs and settles its instructions, and none of that
+  // may fire on a stray click at a goal whose plan happens to be clear.
+  for (const verdict of [FLAGGED, CLEAR, null]) {
+    const html = render(goalWith(verdict));
+    assert.ok(html.includes('End the run…'), 'the control always says it will ask first');
+    assert.ok(!html.includes('>End the run<'), 'and never posts on the click itself');
+    assert.match(html, /cn-tgl cn-danger/, 'it is drawn as the destructive control it is');
+  }
 });
 
 test('the note the cockpit sends is the one the routes read, and a refusal survives the round trip', async () => {

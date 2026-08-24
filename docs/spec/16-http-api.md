@@ -652,6 +652,26 @@ or one already dismissed, is a **409** rather than an error state, and the dismi
 restart. The report itself is untouched — the row is the run, not the write-up. 400 on a non-integer
 issue number.
 
+**It also clears the goal out**, and that is the half that makes it destructive. Stopping the
+dispatcher is a statement about what will be _started_: on its own it left the goal's live agents
+mid-turn, its queued jobs waiting for a slot and its standing instructions waiting for whoever picked
+the goal up — so a run the cockpit had already drawn as over went on producing commits and costing
+money. `clearGoalWork` (`src/floor/endRun.ts`) runs **below** the dismissal, so a 409 clears nothing,
+and does three things over the `issue:<n>` subtree — the same scope the goal page's own agent count
+reads, so a `pr:` agent is not the goal's and `issue:1` never sweeps up `issue:12`:
+
+- **Live agents are killed**, not completed. `kill` records the abandonment (task `interrupted`, the
+  worktree kept for the reap), which is what happened; `complete` would stamp a clean `done` on work
+  nobody read.
+- **Queued jobs standing in for the goal's work are cancelled** — matched on `Job.originRef`, the
+  field that says whose work a job redoes. A job's own `job:<id>` origin says nothing about a goal.
+- **Standing instructions are settled**, not deleted: the append-only record of what the operator
+  asked for survives, and only its standing-ness ends.
+
+The response carries the counts — `{ok: true, cleared: {agents, jobs, instructions}}`, the
+`RunClearOut` on the wire — so the cockpit can report the destruction rather than a bare `ok`. None of
+it is undone by an un-dismissal, because there is none: a goal worked again is worked afresh.
+
 Body `{note?}`, and **required when the goal's validation plan is flagged** — this is the button that
 ends the harness's run at a goal, it is one-way, and it is exactly the "close the goal and move on"
 it is named after. The 400 states the counts. It blocks nothing else: the note is the whole of the

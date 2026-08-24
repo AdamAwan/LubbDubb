@@ -10,6 +10,7 @@ import { ShortfallBody } from '../../delivery/shortfall.js';
 import { GateReleaseBody } from '../../environments/arrival.js';
 import { validationHeadline } from '../../delivery/closeOut.js';
 import { goalValidation } from '../../validation/goal.js';
+import { clearGoalWork } from '../../floor/endRun.js';
 import { watchLabelFor } from '../../watchLabels.js';
 import { fleetWorksUpstream, UPSTREAM_REPO } from '../../tickets/upstream.js';
 import { modelLabelsFor } from '../../modelLabels.js';
@@ -672,6 +673,13 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // dismissing an already-dismissed or unrecorded run is a no-op 409, not an error
   // state. One-way; how it ended (`judged` / `abandoned`) is stamped from the row.
   //
+  // **It is destructive, and the destruction is the point.** Stopping the
+  // dispatcher only governs what is *started*, so it left the goal's live agents,
+  // its queued jobs and its standing instructions running on under a run the
+  // cockpit had already drawn as over. `clearGoalWork` ends those too, and the
+  // counts come back so the cockpit can say what it just did rather than a bare
+  // `ok` (`src/floor/endRun.ts`).
+  //
   // **A flagged validation plan costs a sentence here**, and this is the sharper
   // of the two places it does: the close-out obligation is an ask an operator may
   // never open, but this is the button that ends the harness's run at a goal, it
@@ -691,8 +699,15 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
         });
       const dismissed = store.dismissIssueRun(origin, body.note ?? null);
       if (!dismissed) return reply.code(409).send({ error: 'no run to dismiss' });
+      // The other half of ending a run, and the half the dismissal alone never did:
+      // stopping the dispatcher says what will not be *started*, so without this the
+      // goal's live agents kept working, its queued job took the next slot and its
+      // standing instructions waited for whoever picked it up — all under a run the
+      // cockpit had already drawn as over. Below the dismissal, so a 409 clears
+      // nothing.
+      const cleared = clearGoalWork(store, system.agents, params.number);
       hub.broadcast({ type: 'dirty' });
-      return { ok: true };
+      return { ok: true, cleared };
     }),
   );
 

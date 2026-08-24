@@ -27,6 +27,7 @@ import type {
   McpUsagePayload,
   PromptsPayload,
   RetrospectivePayload,
+  RunClearOut,
   RunningConfigPayload,
   SetupPayload,
   SetupResolvePayload,
@@ -383,7 +384,10 @@ const realApi = {
   // without one while the goal's validation plan is flagged, and it is kept on the
   // run, so what the goal owed and what was said about it survive together.
   dismissRun: (issueNumber: number, note?: string) =>
-    post<{ ok: true }>(`/api/issues/${issueNumber}/dismiss-run`, note === undefined ? undefined : { note }),
+    post<{ ok: true; cleared: RunClearOut }>(
+      `/api/issues/${issueNumber}/dismiss-run`,
+      note === undefined ? undefined : { note },
+    ),
   replan: (planId: string) => post<{ ok: true }>(`/api/plans/${planId}/replan`),
   // A plan's revisions and the last amendment as a diff, fetched when the sheet is
   // opened. Not polled, for the retrospective's reason: every revision carries a
