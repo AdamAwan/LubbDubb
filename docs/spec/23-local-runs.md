@@ -339,7 +339,8 @@ The panel (`web/src/components/LocalRunPanel.tsx`) is `'localRun'` on `ConsolePa
 **place**: it survives a reload and the back button steps out of it
 ([17](17-cockpit.md#the-address-bar)). It draws one state and a picker, never a table of runs — a list
 would imply two could be up. What is running, since when, the URL as a link _to try_, the session's
-output, and Stop plus a goal picker whose button says it stops what is running now.
+output — in the fleet's own transcript pane, see below — and Stop plus a goal picker whose button says
+it stops what is running now.
 
 ### The picker
 
@@ -406,6 +407,19 @@ Three details are about the minutes a start takes rather than the state it ends 
   off the snapshot, so nothing else would ever refetch it. The prop that fetches it is also a fresh
   closure per render and so polls incidentally — the explicit tick is there because a `useCallback`
   upstream is a reasonable thing for somebody to add and would silently freeze the log.
+- **The tail is drawn in `TranscriptPane`, the same pane the fleet's transcripts use**
+  ([17](17-cockpit.md#the-agent-drawer)). A local run is a session and `absorb` takes its `output`
+  event, so what this holds is `renderBlocks` output — the identical bytes the drawer renders, ANSI
+  colour and `⚙` / `↳` markers and all. It went into a `<pre>` first, which put the escape sequences on
+  the glass as literal text and every tool call at full length, on the one surface there is to read when
+  a bring-up did not work. The pane translates the colour and folds each call to a line, so the
+  session's account of what it did is the spine and the output of any one step is a click away. The
+  wrapper carries `compact`, which caps it at the panel's height rather than letting it fill the way it
+  does in a drawer.
+
+  The tail rolls at two hundred lines, so once it is full every poll drops lines off its top and the
+  pane reseeds rather than appending — correct, since those lines are gone, at the cost of blocks
+  coming back collapsed while a bring-up is still printing.
 
 ## Persistence
 
