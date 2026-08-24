@@ -25,6 +25,7 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   burn: 'Spend',
   limit: 'Usage limit',
   supply: 'Runway',
+  dispatch: 'Refused',
 };
 
 /**
@@ -83,6 +84,11 @@ export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
   // would put "you have not queued anything up" beside "a restart orphaned four
   // runs", which is the reading the hue exists to keep apart.
   supply: 'amber',
+  // Red on `config`'s terms and not `permission`'s: nothing here is waiting on a
+  // yes. The harness has proposed this dispatch on every pulse and refused it on
+  // every pulse, and it will go on doing that until somebody moves what is in the
+  // way. That is something wrong, which is the only thing this hue says.
+  dispatch: 'red',
 };
 
 /**
@@ -127,6 +133,11 @@ export const KIND_SYMBOL: Record<NeedKind, string> = {
   // climbing, the other is work draining, and they are the two readings a fleet
   // takes about itself rather than about a piece of work.
   supply: '\u25bd',
+  // A crossed box: the squared family is where the harness's own plumbing sits
+  // (`placement`'s filled box), and the cross is the refusal. Deliberately not
+  // `permission`'s circled slash — that one is a gate somebody may open, and this
+  // is a door the harness has already tried on every pulse.
+  dispatch: '\u22a0',
 };
 
 // The mockup's two railsub headings, in the order they're drawn — 'blocking'

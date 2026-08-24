@@ -41,6 +41,13 @@ stops nothing: the next failure records as usual.
 The event is named **`logged`, not `error`**: an unlistened `error` event throws on an EventEmitter,
 and recording a failure must never throw.
 
+**A refused dispatch is deliberately not one of these.** `ensure` refusing a lease is a decision the
+harness made and audits as such, and the failure mode worth catching is not the refusal but its
+_repetition_ — which the queue rail derives from `decisions`
+([09](09-execution.md#a-refusal-that-keeps-repeating)). Recording it here instead would put a hundred
+rows an hour of one standing fact into the one list whose shape means "something threw once", in the
+one record an operator clears.
+
 ### Who records what
 
 | `source`   | Recorded by                                                                                                                                                                                                     |

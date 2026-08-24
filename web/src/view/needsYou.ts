@@ -1,5 +1,6 @@
 import type {
   AppState,
+  CockpitDecision,
   Escalation,
   HumanTask,
   PlanPart,
@@ -35,6 +36,14 @@ import { goalIssue, goalOfPr } from './goalPage.js';
  * cannot work, or is spending money it should not), `config_gap` amber (it works,
  * but something of yours is hiding work from it).
  */
+/**
+ * `dispatch` is the one kind derived from the *decision log* rather than from a
+ * row somebody raised — a dispatch the executor has refused on every pulse for
+ * three pulses running. Nothing else in the harness records that: no escalation
+ * is raised, no task is filed, and the task row the attempt made is settled
+ * `interrupted` on the way out, so a fleet stuck on one reads as a fleet with
+ * nothing to do. → `docs/spec/09-execution.md#a-refusal-that-keeps-repeating`
+ */
 export type NeedKind =
   | 'config'
   | 'config_gap'
@@ -52,7 +61,8 @@ export type NeedKind =
   | 'validate'
   | 'burn'
   | 'limit'
-  | 'supply';
+  | 'supply'
+  | 'dispatch';
 
 /**
  * Who is stopped. `blocking` means an agent is parked and cannot proceed;
@@ -435,6 +445,185 @@ function configRows(setup: SetupPayload | null, applied: readonly AppliedFix[]):
     }));
 }
 
+/**
+ * How many separate pulses a dispatch must be refused on, unbroken, before the
+ * rail says anything.
+ *
+ * Three rather than one, because a single rejection is not news: a slot is held
+ * from `ensure` until the agent's process is reaped, so a fleet running at its
+ * cap trips exhaustion transiently and the very next pulse goes through. Three
+ * consecutive pulses is a refusal that is not clearing on its own — which is the
+ * only kind a person has to do anything about.
+ * → `docs/spec/09-execution.md#a-refusal-that-keeps-repeating`
+ */
+const REFUSAL_PULSES = 3;
+
+/**
+ * A dispatch the executor has refused on every recent pulse, and what the last
+ * refusal said.
+ *
+ * @public read back by the needs band, which draws the refusal in full under the row
+ */
+export interface RefusedDispatch {
+  /** What the run is grouped by: the action's `originRef`, or its branch when it has none. */
+  key: string;
+  originRef: string | null;
+  /** The branch the dispatch wanted, on a code dispatch. Null for a desk one. */
+  branch: string | null;
+  /** How many separate pulses the refusal has survived. */
+  pulses: number;
+  /** The newest refusal's reason, verbatim as the executor recorded it. */
+  detail: string;
+  /** The rule that keeps proposing it, when the row carries one. */
+  rule: string | null;
+  /** When the unbroken run of refusals started. */
+  since: string;
+}
+
+function str(v: unknown): string | null {
+  return typeof v === 'string' && v.length > 0 ? v : null;
+}
+
+/**
+ * Every dispatch that is being refused every pulse, newest run first.
+ *
+ * **Keyed on the outcome, never on the message.** A refusal is `rejected` in the
+ * decision log whatever threw it, so the two the worktree pool raises — a branch
+ * checked out somewhere the pool cannot lease, and a pool with nothing left to
+ * give ([09](../../../docs/spec/09-execution.md#exhaustion)) — arrive here
+ * together, and so does whatever the next one turns out to be. Matching the
+ * sentence instead would cover exactly the two failures that have already
+ * happened.
+ *
+ * **`deferred` is not a refusal.** The branch, pause and cap gates defer by
+ * design and clear themselves on a later pulse; a rail that counted those would
+ * raise an alarm every time the fleet ran at its cap, which is the fleet working.
+ *
+ * **The run has to be unbroken at the head of that origin's history**, rather
+ * than a count over the window. That is what makes the row clear itself: the
+ * moment one dispatch for the origin gets through, the streak is over and the row
+ * is gone on the next snapshot — where a count would keep drawing until the old
+ * rows aged out of the hundred the snapshot carries, which is a surface still
+ * saying "stuck" some minutes after the operator fixed it.
+ */
+function refusedDispatches(state: AppState): RefusedDispatch[] {
+  const runs = new Map<string, CockpitDecision[]>();
+  const settled = new Set<string>();
+  // Newest first, which is the order the snapshot ships them in — so the first
+  // non-rejection seen for a key is the one that ends the run. Guarded like
+  // `planParts` beside it: a test or a fixture assembling a partial state is a
+  // shape the derivation has to survive, since it renders the whole console.
+  for (const d of state.decisions ?? []) {
+    if (d.action.type !== 'dispatch_code_agent' && d.action.type !== 'dispatch_desk_agent') continue;
+    const key = d.subjectRef ?? str(d.action.branch);
+    if (key === null || settled.has(key)) continue;
+    // The run ends here and what is already collected stands: walking newest
+    // first, everything gathered above this row *is* the unbroken head of the
+    // origin's history. Dropping it on the older success would be reading the
+    // list the wrong way round.
+    if (d.outcome !== 'rejected') {
+      settled.add(key);
+      continue;
+    }
+    const run = runs.get(key);
+    if (run) run.push(d);
+    else runs.set(key, [d]);
+  }
+  const out: RefusedDispatch[] = [];
+  for (const [key, run] of runs) {
+    // Distinct cycles, not rows: one pulse can propose the same origin twice, and
+    // two refusals inside a single cycle are still one bad pulse.
+    const pulses = new Set(run.map((d) => d.cycleId)).size;
+    if (pulses < REFUSAL_PULSES) continue;
+    const newest = run[0];
+    const oldest = run[run.length - 1];
+    if (!newest || !oldest) continue;
+    out.push({
+      key,
+      originRef: newest.subjectRef,
+      branch: str(newest.action.branch),
+      pulses,
+      detail: newest.detail,
+      rule: newest.rule,
+      // The start of the run, because "how long has this been stuck" is the
+      // question the age beside the row answers. The newest refusal's stamp would
+      // read "just now" on a dispatch that has been refused for an hour.
+      since: oldest.createdAt,
+    });
+  }
+  return out;
+}
+
+/**
+ * One refused run by its row id, for the band that draws it in full.
+ *
+ * Through the same derivation the rail's row came from rather than a second walk
+ * of the log: a band that re-counted could disagree with the row above it about
+ * how many pulses, which is the drift the shared function exists to prevent.
+ *
+ * @public the needs band resolves the row it was handed back to its refusal
+ */
+export function refusedDispatchFor(state: AppState, id: string): RefusedDispatch | null {
+  return refusedDispatches(state).find((r) => `dispatch:${r.key}` === id) ?? null;
+}
+
+/**
+ * The refusal, clamped to a line the rail can hold.
+ *
+ * The whole message is drawn in the band under the row — this is a display clamp
+ * and not a parse: nothing downstream reads what comes back, and the sentence
+ * boundary is preferred only because both refusals the pool raises put the branch
+ * and the reason in their first one. A message with no sentence break is simply
+ * cut.
+ */
+function refusalLine(detail: string): string {
+  const stop = detail.indexOf('. ');
+  if (stop > 0 && stop < 200) return detail.slice(0, stop + 1);
+  return detail.length > 200 ? `${detail.slice(0, 199)}…` : detail;
+}
+
+/**
+ * Rows for the dispatches that keep being refused.
+ *
+ * **`yours`, not `blocking`**, and against how much is stopped — the same call the
+ * profile gate takes. The group is strictly about a held slot, and a refused
+ * dispatch holds none: nothing was leased, `abandonUnstarted` settles the task,
+ * and no agent is sitting in it. It is also the honest reading of the fix, which
+ * is outside the harness in both cases the pool raises — an operator's own
+ * checkout to switch, or a cap to lower.
+ *
+ * **Red, on `config`'s terms.** Nothing here is a gate waiting on a yes: the
+ * harness has proposed this dispatch on every pulse and will go on proposing and
+ * refusing it until somebody acts. That is something wrong, which is what the hue
+ * says.
+ */
+function refusedDispatchRows(state: AppState): NeedRow[] {
+  return refusedDispatches(state).map((r) => {
+    const goalRef = goalOf(r.originRef, state);
+    return {
+      // Prefixed, because the run is derived from the log rather than from a row
+      // of its own: a bare `pr:142` would collide with anything else keyed on the
+      // ref, and the ask panel resolves a row by this id.
+      id: `dispatch:${r.key}`,
+      kind: 'dispatch' as const,
+      group: 'yours' as const,
+      title: askLine(`Refused on ${r.pulses} pulses running — ${refusalLine(r.detail)}`, goalRef, state),
+      goalRef,
+      originRef: r.originRef ?? r.branch,
+      opens: opensAt(goalRef, state),
+      // The dispatch never started, so there is no run to send anybody to. An id
+      // here would name the agent of some earlier, unrelated attempt.
+      agentId: null,
+      agentLabel: null,
+      // Genuinely zero: what is held is a dispatch, not a part waiting on an
+      // answer, and a count invented here would sort it against asks that really
+      // are holding work.
+      holding: 0,
+      raisedAt: r.since,
+    };
+  });
+}
+
 const GROUP_RANK: Record<NeedGroup, number> = { blocking: 0, yours: 1 };
 
 /**
@@ -452,6 +641,7 @@ export function buildNeedsYou(
   const rows: NeedRow[] = [];
 
   rows.push(...configRows(setup, applied));
+  rows.push(...refusedDispatchRows(state));
 
   if ((state.recovery ?? []).length > 0) {
     rows.push({

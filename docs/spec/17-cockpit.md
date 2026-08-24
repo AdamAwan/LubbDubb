@@ -381,7 +381,7 @@ reads the `ticket*` fields off `place.ts` and asserts the hook forwards every on
 
 A permanent left column holding **every** blocking item in one list: escalations, plan proposals,
 permission requests, unanswered goal-profile proposals, usage-limit parks, bench tasks, close-outs,
-validate rows and the recovery hold. `buildNeedsYou`
+validate rows, dispatches the executor keeps refusing and the recovery hold. `buildNeedsYou`
 (`web/src/view/needsYou.ts`) is the merge, and it is pure.
 
 **The snapshot carries only the escalations that are still open** — the rail's own
@@ -400,7 +400,7 @@ tagged `Plan`, which is the name of the one act among the four it might be: a dr
 sign-off, a merge waiting on a verdict and an assessment's follow-up all arrived on the rail, and in
 the ask panel's own header, under the word `Plan`. `PROPOSAL_KIND` (`web/src/view/needsYou.ts`) is
 total over `ProposalKind`, so a fifth act fails the typecheck rather than inheriting whichever word the
-last one wore. A shortfall the harness only *asks* about — the arm where the goal itself is what the
+last one wore. A shortfall the harness only _asks_ about — the arm where the goal itself is what the
 assessor found wrong, so nothing is dispatched and no proposal is written
 ([13](13-jobs-and-tickets.md)) — is `shortfall` too, read off its `issue:<n>:shortfall` origin: it is the
 same news, and a row reading `Escalation` would file the one ask about a delivered goal with the ones
@@ -455,6 +455,26 @@ named has turned over ([10](10-agent-runtimes.md#ending-it-on-the-clock)), so `R
 early, and for the parks that carry no reset time and would otherwise sit there for good. It draws no reply box anywhere, because the agent's process is usually gone with the
 limit and a box that cannot send is worse than no box.
 
+**`dispatch` is the one kind derived from the decision log**, and the only one whose subject is
+something the harness _tried_ rather than something anybody raised. A dispatch the executor has
+refused on three separate pulses running draws a row naming the origin, the refusal verbatim, and how
+long it has been going on ([09](09-execution.md#a-refusal-that-keeps-repeating)). Nothing else in the
+harness records it: no escalation, no task, no error — the attempt's own task row is settled
+`interrupted` on the way out — so a fleet stuck on one reads as a fleet with nothing to do, which is
+what it did for four minutes with a branch checked out where the pool could not lease it.
+
+Three pulses rather than one, because a slot is held from `ensure` until an agent's process is reaped:
+a fleet at its cap trips a refusal that the next pulse clears, and a rail that cried wolf on that
+would be noise on a working deployment. The run has to be **unbroken at the head** of that origin's
+history, which is what clears the row the instant one dispatch gets through rather than when the old
+rows age out of the hundred the snapshot ships. It keys on the `rejected` outcome and never on the
+sentence, so both refusals the worktree pool raises arrive here together and so does the next one.
+
+**It has no control, and must not grow one.** What is in the way is outside the harness in both
+cases — a checkout of the operator's own standing on the branch, or a cap that has to come down — and
+a button that could perform neither is the dead end this cockpit's rules exist to prevent. The band
+draws the thrower's own message instead, which already names the branch, the path and what clears it.
+
 **Two groups, split on who is stopped.** `blocking` means an agent is parked and cannot proceed;
 `yours` means the obligation is the operator's and nothing inside the fleet is waiting. A profile gate
 is `yours` for that reason and against how much it stops: it holds a whole goal's dispatch, and no
@@ -472,22 +492,23 @@ and an operator glancing at the rail could not tell a queue of successes from a 
 reading every row. The palette now answers _what the ask is_, and the group is carried as weight
 within it.
 
-| Kind         | Tag         | Tone  | Glyph | Why that tone                                        |
-| ------------ | ----------- | ----- | ----- | ---------------------------------------------------- |
-| `recovery`   | Recovery    | red   | `↺`   | A restart left runs orphaned. Something went wrong.  |
-| `escalation` | Escalation  | red   | `?`   | An agent hit a question it cannot get past.          |
-| `permission` | Permission  | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes. |
-| `limit`      | Usage limit | amber | `‖`   | Nothing broke; an allowance window has to turn over. |
-| `burn`       | Spend       | amber | `▲`   | A heads-up on a run that carries on either way.      |
-| `plan`       | Plan        | blue  | `◇`   | A plan to read and decide on.                        |
-| `reply`      | Reply       | amber | `↵`   | A drafted reply, held until you send it.             |
-| `merge`      | Merge       | amber | `⊕`   | A merge waiting on your verdict.                     |
-| `shortfall`  | Shortfall   | blue  | `✗`   | Delivered work that did not reach its goal.          |
-| `profile`    | Profile     | blue  | `⊙`   | Which profile a goal runs on.                        |
-| `placement`  | Backlog     | amber | `▣`   | Nothing is held; the ticket is off the board.        |
-| `bench`      | Bench       | blue  | `◆`   | Work only a person can do. Informative, not broken.  |
-| `close_out`  | Close-out   | green | `⚑`   | A goal was **delivered**; this is the step after it. |
-| `validate`   | Validate    | green | `✓`   | The other step after a delivery — run its checks.    |
+| Kind         | Tag         | Tone  | Glyph | Why that tone                                          |
+| ------------ | ----------- | ----- | ----- | ------------------------------------------------------ |
+| `recovery`   | Recovery    | red   | `↺`   | A restart left runs orphaned. Something went wrong.    |
+| `escalation` | Escalation  | red   | `?`   | An agent hit a question it cannot get past.            |
+| `permission` | Permission  | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes.   |
+| `limit`      | Usage limit | amber | `‖`   | Nothing broke; an allowance window has to turn over.   |
+| `burn`       | Spend       | amber | `▲`   | A heads-up on a run that carries on either way.        |
+| `plan`       | Plan        | blue  | `◇`   | A plan to read and decide on.                          |
+| `reply`      | Reply       | amber | `↵`   | A drafted reply, held until you send it.               |
+| `merge`      | Merge       | amber | `⊕`   | A merge waiting on your verdict.                       |
+| `shortfall`  | Shortfall   | blue  | `✗`   | Delivered work that did not reach its goal.            |
+| `profile`    | Profile     | blue  | `⊙`   | Which profile a goal runs on.                          |
+| `placement`  | Backlog     | amber | `▣`   | Nothing is held; the ticket is off the board.          |
+| `bench`      | Bench       | blue  | `◆`   | Work only a person can do. Informative, not broken.    |
+| `close_out`  | Close-out   | green | `⚑`   | A goal was **delivered**; this is the step after it.   |
+| `validate`   | Validate    | green | `✓`   | The other step after a delivery — run its checks.      |
+| `dispatch`   | Refused     | red   | `⊠`   | The harness keeps trying this and keeps being told no. |
 
 `KIND_TONE` and `KIND_SYMBOL` (`web/src/console/QueueRail.tsx`) are total over `NeedKind`, beside
 `KIND_LABEL`, so a new kind fails the typecheck rather than drawing in whatever the last rule in the
@@ -519,21 +540,21 @@ both hold — asserted in `test/console.test.ts`.
 
 The band on the goal page had the same fault one layer down, and worse: a plan approval drew its whole
 prompt — the template's sentence, why the planner split it that way, and a paragraph on what approving
-and rejecting do — *above* `context.detail`, which is the planner's diagnosis and approach, the same
+and rejecting do — _above_ `context.detail`, which is the planner's diagnosis and approach, the same
 summary the plan sheet leads with. Two accounts of one plan, the longer one first, on a card that also
 carries the buttons.
 
 `EscalationCard` now drops that prose for a `plan` proposal and keeps the summary, which is what the
 operator is deciding on; the split, the evidence and what it rules out stay behind **Read the full
 plan**, and what approving and rejecting do is what the two buttons' own hints say. A drafted reply
-drops its prose for the plainer version of the same reason — its body *is* the draft, which the card
+drops its prose for the plainer version of the same reason — its body _is_ the draft, which the card
 already draws under a label of its own, now open rather than folded away, since it is the thing being
 approved.
 
 **What is kept is the appended caution.** `planApprovalWarnings` (`src/plans/planWedge.ts`) writes its
 bullets under a `Before you decide:` line, appended to the rendered ask rather than interpolated into
 it — an unclaimed pull request on the branch, parts already blocked. It is the one part of the ask that
-is about *this* decision and appears nowhere else, so `splitCaution` keeps it while the rest goes.
+is about _this_ decision and appears nowhere else, so `splitCaution` keeps it while the rest goes.
 
 A tone is five custom properties on the row or the band — `--cn-tone`, `--cn-tone-fill`, `--cn-tone-bg`,
 `--cn-tone-line`, `--cn-tone-ink` — set by one `.cn-t-*` class and inherited by everything inside. Five
@@ -563,7 +584,7 @@ a glance. `askLine` (`web/src/view/needsYou.ts`) words each row instead: a summa
 
 - **The act, from the row's own source and never from the prose.** A proposal knows which act it is,
   so `Plan ready`, `Draft reply to <the reviewer> for PR #412`, `Merge waiting on your verdict for
-  PR #412`, `The delivered work did not reach the goal`. A permission states its tool and command; a
+PR #412`, `The delivered work did not reach the goal`. A permission states its tool and command; a
   questionnaire states its count; a plain question is the only one with no act to name, and its own
   first line is the most factual thing there is.
 - **The goal is named, not numbered.** `#395` alone is not something an operator recognises, so the
