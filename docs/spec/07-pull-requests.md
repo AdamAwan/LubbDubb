@@ -120,17 +120,19 @@ conflicted.
 
 ## `needsBaseUpdate(pr)`
 
-`isConflicted(pr) || mergeableState === 'behind'`. False for a merged PR. This is what rule `pr-base-update`
-consumes; the dispatcher then splits on `mergeableState === 'behind'`, and the two arms cost
-different things.
+`isConflicted(pr) || mergeableState === 'behind'`. False for a merged PR. This is what rules
+`pr-base-update` and `pr-base-update-conflict` consume; the dispatcher splits on
+`mergeableState === 'behind'`, and the two arms cost different things — which is why they are two
+rule ids over one predicate, so `agentModels.byRule` can price them apart.
 
 - **`behind`** — the provider has said the merge is clean, so the harness asks it to merge the base in
   itself: an `update_pr_branch` act, no worktree and no agent. The `pr-base-update-behind` prompt is
   still rendered, but only for the fallback — a provider that cannot do the merge (Azure DevOps has no
   such endpoint) or refuses it gets the code agent on the next pulse instead.
   → [05](05-dispatcher.md#pr-base-update--two-arms)
-- **`dirty`** — `pr-base-update-conflict`, and a code agent: merge, resolve, push, escalate if not
-  cleanly resolvable. Resolving a conflict is judgement, so it is never taken directly.
+- **`dirty`** — rule `pr-base-update-conflict`, its like-named prompt, and a code agent: merge,
+  resolve, push, escalate if not cleanly resolvable. Resolving a conflict is judgement, so it is never
+  taken directly. → [05](05-dispatcher.md#pr-base-update--two-arms)
 
 ## Stacks
 
@@ -473,7 +475,7 @@ folding them would make one of the two a lie every time they disagree.
 | `done`      | nobody — off the board        | `prState(pr) !== 'open'`.                                                                                                                                                                                                                                                                                                                                            |
 | `unwatched` | nobody — nobody opted it in   | `!isPrWatched(pr, watchLabel)`. First, because the harness filters these out of the dispatch world entirely — every arm below would describe rules that cannot fire.                                                                                                                                                                                                 |
 | `you`       | yours                         | A **pending proposal** whose ref names this PR; an agent on the branch **parked waiting**; a concern whose **attempt cap is spent** (rule `cooldown-escalate` did); or a failing check the **CI policy holds** (rule `pr-ci-blocked` handed it to a human) **with no other concern under it** — a held check that is one of two problems is a reason, not the court. |
-| `harness`   | the harness's                 | An agent is **running or queued** on the branch; an unstaffed **concern** (rules `pr-ci-failing`/`pr-ci-gate`/`pr-base-update`/`pr-review-comment`) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window.                                                                |
+| `harness`   | the harness's                 | An agent is **running or queued** on the branch; an unstaffed **concern** (rules `pr-ci-failing`/`pr-ci-gate`/`pr-base-update`/`pr-base-update-conflict`/`pr-review-comment`) is dispatchable or on cooldown; the PR is **merge-ready** and the merge gate runs next cycle, or an accepted verdict is inside its settle window.                                                                |
 | `settled`   | nobody — you already answered | Merge-ready, and a **rejection still stands** on `pr:<n>:merge`. The reason quotes the note you left.                                                                                                                                                                                                                                                                |
 | `elsewhere` | outside the loop              | Stacked on a PR that has to merge first (naming the inherited CI failure when there is one); CI still running; waiting on review; merge blocked by required checks/reviews.                                                                                                                                                                                          |
 | `stalled`   | nobody, and that is the point | Everything else: green, approved, unstaffed, unproposed and still not mergeable by rule `pr-merge-ready`'s reading, so no rule will ever act on it and no human has been asked to. The reasons name what is missing — including the **muted-only** case below.                                                                                                       |

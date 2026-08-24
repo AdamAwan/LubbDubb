@@ -79,7 +79,8 @@ unconditional.
 | `pr-ci-failing`            | Failing CI                           | —                    | An open PR has failing CI that is not inherited from its base, at least one failing check is actionable under `ci.checks`, and no agent is on its branch.                   |
 | `pr-ci-blocked`            | CI blocked elsewhere                 | —                    | Same, but every failing check is configured non-actionable and at least one asks to escalate. Asked once; no agent is dispatched.                                           |
 | `pr-ci-gate`               | Check waiting on an action           | —                    | A check is waiting rather than failing: a `ci.checks` rule watches it in a non-failing state (`states`), or the provider reports it `expired`. Own origin `pr:<n>:ci-gate`. |
-| `pr-base-update`           | Base out of date                     | —                    | A PR is `behind` its base (merged up to date with no agent) or conflicts with it (a code agent resolves it).                                                                |
+| `pr-base-update`           | Base out of date                     | —                    | A PR is `behind` its base: the provider merges it up to date, with no agent.                                                                                                |
+| `pr-base-update-conflict`  | Conflicts with base                  | —                    | A PR conflicts with its base: a code agent resolves it. Shares `pr-base-update`'s `pr:<n>:mergeable` origin, priced separately in `agentModels.byRule`.                     |
 | `pr-merge-ready`           | Merge-ready PR                       | —                    | A non-stacked PR is green, approved, mergeable, and has no unhandled comments.                                                                                              |
 | `work-item-in-progress`    | Advance to in-progress state         | `workItemInProgress` | A work item in a pickup state has a live **work** agent on it, no open PR and no plan.                                                                                      |
 | `work-item-in-review`      | Back off to review state             | `workItemStates`     | A work item in a pickup state has an open PR (or is decomposed).                                                                                                            |
@@ -361,11 +362,13 @@ Candidates are appended as the pipeline is walked, so **the pipeline order _is_ 
 is no second list to keep in step with it. What each stage contributes:
 
 1. **Queued jobs** (`manual-job`), oldest first — a manual request takes the next free slot.
-2. **PR concerns** (`pr-review-comment` / `pr-ci-failing` / `pr-ci-gate` / `pr-base-update`), ranked **cross-PR** by
-   concern class then by PR number. `pr-base-update`'s `behind` arm produces **no candidate at all**
-   when the provider can take it directly — see [below](#pr-base-update--two-arms) — so
-   what it contributes here is the conflict, and the fallback after a direct update that did not
-   happen. World order is arbitrary and must not decide who wins scarce
+2. **PR concerns** (`pr-review-comment` / `pr-ci-failing` / `pr-ci-gate` / `pr-base-update` /
+   `pr-base-update-conflict`), ranked **cross-PR** by
+   concern class then by PR number. `pr-base-update` produces **no candidate at all**
+   when the provider can take the merge directly — see [below](#pr-base-update--two-arms) — so
+   what the two contribute here is the conflict, and the fallback after a direct update that did not
+   happen. The two are adjacent and mutually exclusive on any one PR, so their relative position only
+   ever decides which of two *different* PRs goes first. World order is arbitrary and must not decide who wins scarce
    headroom. Only the single most urgent concern per PR becomes a candidate, and "most urgent" is
    their pipeline order. An operator-flagged `urgent` CI check sorts its PR ahead of all of them, and
    is read off **every** concern on the PR rather than off the one that won — the flag is set by a CI
@@ -1011,10 +1014,28 @@ returns the check to the operator without recording a reading. See
 ## `pr-base-update` — two arms
 
 `needsBaseUpdate(pr)` ([07](07-pull-requests.md#needsbaseupdate)) is one predicate over two very
-different situations, and the rule splits them on `mergeableState === 'behind'`.
+different situations, split on `mergeableState === 'behind'` — and, since the two cost different
+things, carried by **two rule ids**: `pr-base-update` for the behind arm, `pr-base-update-conflict`
+for the other. One pass in `prCiFailing.ts` builds both, off that one boolean.
 
 **Conflicted** (`dirty`) is judgement: a code agent on the branch, the `pr-base-update-conflict`
 prompt, and an instruction to escalate if it cannot resolve cleanly. Unchanged.
+
+**Why two ids and one origin.** `agentModels.byRule` keys on the rule id
+([02](02-configuration.md#model-assignment-by-rule)), so a single id priced conflict resolution and a
+routine base merge on one profile — and on a provider with no `update_pr_branch` endpoint (Azure
+DevOps has none) _both_ arms dispatch an agent, so the cheap arm's existence is not what saves the
+deployment from paying deep-model prices for a base merge. The **origin stays one**
+(`pr:<n>:mergeable`) because it is one PR with one problem: a cooldown and an attempt budget shared
+across the arms is the honest accounting, and a PR that flips from `behind` to `dirty` between pulses
+must not have its attempt count reset by the flip. The cost of sharing is one inexact backfill:
+`RULE_OF_ORIGIN` (`src/store/tasks.ts`) maps the origin back to a rule for rows dispatched before the
+`rule` column existed, and it can only answer `pr-base-update` — which is what those rows carried at
+the time, and is stated as an approximation in its comment rather than as a structural fact.
+
+The id is spelled the same as the **prompt id** the conflict arm renders, which is a coincidence of
+naming and nothing more — the two vocabularies never meet, and the behind arm's prompt keeps its own
+name (`pr-base-update-behind`).
 
 **Merely behind** is not. The provider has already said the merge is clean — that is what `behind`
 _means_, as against `dirty` — so there is no judgement anywhere on that path, and cutting a worktree,

@@ -193,7 +193,7 @@ export function prAttentionStatus(pr: PullRequest, ctx: PrAttentionContext): PrA
   const ci = ciReading(pr, ctx);
 
   // The concerns rules `pr-review-comment`/`pr-ci-failing`/`pr-base-update` build,
-  // in their urgency order (comments > CI > gate > base) and off their own
+  // in their urgency order (comments > CI > gate > base > conflict) and off their own
   // predicates. Re-derived here rather than shared with the
   // dispatcher because the rules build prompt-bearing concerns and this needs only
   // the labels and the top origin — the same relationship `issuePickupStatus` has
@@ -392,8 +392,8 @@ function ciReading(pr: PullRequest, ctx: PrAttentionContext): CiReading {
 }
 
 /**
- * The concerns rules `pr-review-comment`/`pr-ci-failing`/`pr-ci-gate`/`pr-base-update`
- * would raise for this PR, most urgent first. Same predicates, same origins and
+ * The concerns the five PR-concern rules (`pr-review-comment` through
+ * `pr-base-update-conflict`) would raise for this PR, most urgent first. Same predicates, same origins and
  * the same order as the dispatcher — the order asked for rather than restated
  * (see {@link concernUrgency}); the labels are the operator-facing half only, so
  * nothing here can drift into deciding what an agent is *told*.
@@ -438,10 +438,15 @@ function prConcerns(pr: PullRequest, ctx: PrAttentionContext, ci: CiReading): Pr
   }
   if (needsBaseUpdate(pr)) {
     const base = pr.baseBranch ?? ctx.defaultBranch;
+    // Split on the same boolean the rule splits its id on, so the lens names the
+    // rule the dispatch will actually record — the two are separately priced in
+    // `agentModels.byRule`, and a row explaining itself by the wrong one would
+    // quote the wrong profile. The origin is shared, exactly as the rule shares it.
+    const behind = pr.mergeableState === 'behind';
     concerns.push({
-      rule: 'pr-base-update',
+      rule: behind ? 'pr-base-update' : 'pr-base-update-conflict',
       origin: `pr:${pr.number}:mergeable`,
-      label: pr.mergeableState === 'behind' ? `behind ${base}` : `conflicts with ${base}`,
+      label: behind ? `behind ${base}` : `conflicts with ${base}`,
     });
   }
   // The order is the pipeline's, asked for rather than reproduced. Statement order

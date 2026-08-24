@@ -2627,7 +2627,7 @@ export function buildDemoState(): DemoSeed {
         subjectRef: null,
         outcome: 'executed',
         detail: 'Rebase conflict on PR #409 needs a call',
-        rule: 'pr-base-update',
+        rule: 'pr-base-update-conflict',
         admission: null,
         createdAt: ago(2),
       },
@@ -2826,7 +2826,13 @@ export function buildDemoState(): DemoSeed {
         kind: 'rule',
         name: 'Base out of date',
         description:
-          'A PR that is behind its base branch (clean update) or conflicts with it (resolve and push) gets a code agent, so it never sits unmergeable while the base moves on.',
+          'A PR that has fallen behind its base branch has the base merged in by the provider itself — no agent, no worktree — so it never sits unmergeable while the base moves on.',
+      },
+      'pr-base-update-conflict': {
+        kind: 'rule',
+        name: 'Conflicts with base',
+        description:
+          'A PR that conflicts with its base branch gets a code agent to resolve and push, because a conflict is judgement rather than a merge the provider has already called clean.',
       },
       'branch-notify': {
         kind: 'admission',

@@ -126,7 +126,14 @@ const RULES = [
     kind: 'rule',
     name: 'Base out of date',
     description:
-      'A PR that has fallen behind its base branch, or conflicts with it, is brought back into line so it never sits unmergeable while the base moves on. The two arms cost very different things. Merely **behind** means the provider has already said the merge is clean, so there is no judgement in it and no agent is spent: the harness asks the provider to merge the base in itself, in one request, and the act is audited under the same origin an agent would have been. **Conflicted** keeps its code agent, because resolving a conflict is judgement, and the prompt tells it to escalate if it cannot resolve cleanly. A provider that cannot do the merge itself — or one that refuses — falls back to the agent on the next pulse, so the cheap path being unavailable never leaves a PR behind. Last of the concerns either way, because a merge resolved now against code an open review is about to change is a conflict resolved twice.',
+      'A PR that has fallen **behind** its base branch is brought back into line so it never sits unmergeable while the base moves on. Behind means the provider has already said the merge is clean, so there is no judgement in it and no agent is spent: the harness asks the provider to merge the base in itself, in one request, and the act is audited under the same origin an agent would have been. A provider that cannot do the merge itself — Azure DevOps has no such endpoint — or one that refuses falls back to a code agent on the next pulse, so the cheap path being unavailable never leaves a PR behind. Second-to-last of the concerns, because a base merged now into code an open review is about to change is a merge done twice.',
+  },
+  {
+    id: 'pr-base-update-conflict',
+    kind: 'rule',
+    name: 'Conflicts with base',
+    description:
+      'A PR that **conflicts** with its base branch keeps its code agent, because resolving a conflict is judgement rather than a merge the provider has already called clean — and the prompt tells the agent to escalate if it cannot resolve cleanly. Split from `pr-base-update` so the two arms of one predicate can be priced apart in `agentModels.byRule`: conflict resolution and a routine base merge want different models, and on a provider with no direct-merge endpoint both arms would otherwise dispatch an agent on one profile. It shares the `pr:<n>:mergeable` origin with the behind arm — same PR, same problem, so one cooldown and one attempt budget. Last of the concerns, for the reason the behind arm is second-to-last.',
   },
   {
     id: 'pr-merge-ready',
