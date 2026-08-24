@@ -30,6 +30,15 @@ import type { EventEmitter } from 'node:events';
  * `AgentManager` decides which of the two it becomes. The PTY runtime has no turn
  * boundary to read one off, and parks on silence (`agentIdleWaitMs`) instead.
  *
+ * The stream runtime alone also emits 'silent'(ms) — `agentSilenceParkMs` has
+ * passed with **no output at all**. It is the one ending not read off a turn
+ * boundary, and it exists because an agent wedged *inside* a turn reaches no
+ * boundary to be read off: it never ends the turn, so it never stalls, and without
+ * a wall clock it holds a slot and a worktree until a person notices. It is not
+ * 'stalled': a stop at a turn boundary is an agent that can still be asked
+ * something, and this is an agent that has not said a word — which is why
+ * `AgentManager` parks it rather than nudging it.
+ *
  * The stream runtime
  * additionally emits 'usage'(AgentUsage) at each turn end — cumulative
  * cost/tokens/turns off the `result` event; the PTY runtime has no such channel

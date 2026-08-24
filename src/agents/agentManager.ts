@@ -71,7 +71,7 @@ import { ingestPlanDocument } from '../plans/planIngest.js';
 import { issueOrigin, planOriginIssue } from '../plans/planning.js';
 import { liveParts } from '../plans/parts.js';
 import type { AgentSession, SessionFactory } from './session.js';
-import { STALL_NUDGE, stallReason } from './agentProtocol.js';
+import { STALL_NUDGE, silenceReason, stallReason } from './agentProtocol.js';
 import { HUMAN_BLOCK, renderBlocks } from './streamTranscript.js';
 import type { RateLimitPark } from './streamJsonSession.js';
 import { debugEnabled, debugLog } from '../debug.js';
@@ -157,6 +157,17 @@ interface AgentManagerOptions {
   /** `agentStallExtendMs` — what one press of Extend adds to that countdown. */
   stallExtendMs?: number;
   /**
+   * `agentSilenceParkMs` — how long a stream agent may produce nothing at all
+   * before the runtime calls it silent. Unset or 0 means it never does, which is
+   * the behaviour this replaced.
+   *
+   * Held here as well as in the session because it is the *grace* a silence park
+   * re-arms on: an agent that goes quiet for this long has proved that this is
+   * longer than its work takes between words, so it is the honest amount of rope to
+   * give it back when it speaks again (see {@link StallClock}).
+   */
+  silenceParkMs?: number;
+  /**
    * Whether this runtime can capture a session id and be resumed after a restart.
    * True only for the interactive PTY `claude`; the mock and stream runtimes leave
    * agents without a session id, so boot reconciliation falls back to interrupting.
@@ -202,6 +213,24 @@ interface LimitPark {
   reason: string;
   /** ISO, from the `rate_limit_event`'s own `resetsAt`. */
   resetsAt: string | null;
+}
+
+/**
+ * The countdown on a park that settles itself — one per entry in
+ * {@link AgentManager.stalled}.
+ *
+ * Two numbers rather than one because two different parties push the deadline, and
+ * they are claims about different clocks. `at` is when the harness settles the
+ * agent unless somebody says otherwise, which the operator moves with Extend. The
+ * `grace` is what the *agent* moves it by, by doing something: a parked agent that
+ * makes a tool call is working, and buying it back this much is what stops the
+ * countdown finishing an agent under its own hands. For a silence park that is the
+ * agent's own silence window, which it has just proved is shorter than its work
+ * goes between words; for an unannounced stop the two are the same number.
+ */
+interface StallClock {
+  at: number;
+  grace: number;
 }
 
 /**
@@ -392,6 +421,10 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   // turning over and a question park's answer: nobody has to do anything, and if
   // nobody does, the stop is read as the finish it almost always is.
   //
+  // Two parks are entered here and they are not the same observation — a stop the
+  // nudges could not settle ({@link handleStalled}), and a session that has said
+  // nothing at all for `agentSilenceParkMs` ({@link handleSilent}) — but they have
+  // the same ending, and the ending is the whole of what this map is for.
   // Only a stop the nudges could not settle is entered here. A park an agent asked
   // for — the `escalate` tool, the WAITING sentinel — is a real question, and a
   // question that answers itself after five minutes is worse than no question at
@@ -404,7 +437,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
   // `completeExpiredStalls` re-checking `limited` as the backstop. Entered-once-then-
   // never-rechecked is the shape that settles a limit park, and a resumed agent, as
   // `done`.
-  private readonly stalled = new Map<string, number>();
+  private readonly stalled = new Map<string, StallClock>();
 
   constructor(
     private readonly store: Store,
@@ -707,7 +740,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * from putting a countdown on a question nobody is counting down.
    */
   stallDeadlines(): StallPark[] {
-    return [...this.stalled].map(([agentId, at]) => ({ agentId, expiresAt: new Date(at).toISOString() }));
+    return [...this.stalled].map(([agentId, clock]) => ({ agentId, expiresAt: new Date(clock.at).toISOString() }));
   }
 
   /**
@@ -724,9 +757,12 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    * over.
    */
   extendStallPark(agentId: string): { ok: true; expiresAt: string } | { ok: false; error: string } {
-    if (!this.stalled.has(agentId)) return { ok: false, error: 'this agent is not parked on an unannounced stop' };
+    const clock = this.stalled.get(agentId);
+    if (!clock) return { ok: false, error: 'this agent is not parked on an unannounced stop' };
     const at = Date.now() + (this.opts.stallExtendMs ?? 0);
-    this.stalled.set(agentId, at);
+    // The grace rides through untouched: it is what the *agent* buys back by working,
+    // and this is the operator buying time. Two different claims on the same clock.
+    clock.at = at;
     const expiresAt = new Date(at).toISOString();
     debugLog('agent', `stall park extended agent=${agentId} until=${expiresAt}`);
     return { ok: true, expiresAt };
@@ -766,8 +802,8 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     const now = Date.now();
     const settled: string[] = [];
     // Copied before iterating: `complete` deletes from the map it walks.
-    for (const [agentId, at] of [...this.stalled]) {
-      if (at > now) continue;
+    for (const [agentId, clock] of [...this.stalled]) {
+      if (clock.at > now) continue;
       // The backstop the two latch writes above must not be the only thing standing
       // between a limit park and `complete`. A third park added later inherits this
       // rather than needing to remember its own `stalled.delete`.
@@ -1897,6 +1933,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
 
     session.on('waiting', (reason: string) => this.handleWaiting(agentId, task, reason));
     session.on('stalled', (lastWords: string) => this.handleStalled(session, agentId, task, lastWords));
+    session.on('silent', (silenceMs: number) => this.handleSilent(agentId, task, silenceMs));
     session.on('limited', (park: RateLimitPark) => this.handleLimited(agentId, task, park));
     // Both runtimes emit `exit` (with the process exit code) before `failed`, so
     // the code is in hand by the time the terminal transition is recorded.
@@ -2062,16 +2099,53 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
       }
     }
     this.handleWaiting(agentId, task, stallReason(lastWords));
-    // Armed *after* the park and only if the park took: `handleWaiting` auto-answers
-    // a whitelisted reason and returns with the agent running, and an agent already
-    // parked on a question of its own keeps that park — neither is a stop waiting on
-    // a clock. Read off the latch rather than from what we just did, because both of
-    // those arms are decided in there.
-    const window = this.opts.stallParkMs ?? 0;
-    if (window > 0 && this.parked.has(agentId) && !this.limited.has(agentId)) {
-      this.stalled.set(agentId, Date.now() + window);
-      debugLog('agent', `stall park armed agent=${agentId} window=${window}ms`);
-    }
+    this.armStallClock(agentId, this.opts.stallParkMs ?? 0, 'stall');
+  }
+
+  /**
+   * The runtime has heard nothing from a session for `agentSilenceParkMs` — the
+   * agent is wedged *inside* a turn rather than stopped at the end of one.
+   *
+   * **It is not nudged, and that is the difference from {@link handleStalled}.** A
+   * nudge is a message written to stdin, which `claude` reads at the end of the turn
+   * it is in; an agent that has not produced a byte has not reached that end and is
+   * not going to, so the nudge would sit in the pipe of a process nobody is going to
+   * hear from again while its budget was spent asking. The stop at a turn boundary
+   * can be asked something. This one can only be told about.
+   *
+   * So it goes straight to the park and the countdown, which settle it exactly as
+   * they settle an unanswered stop: `complete` kills the session (reaping the
+   * subtree, which is the point here — the wedged tool call's own children are what
+   * hold the worktree open), keeps the branch and its commits, and releases the
+   * slot. If there was more to do, the world still says so and the pulse dispatches
+   * for it again.
+   */
+  private handleSilent(agentId: string, task: Task, silenceMs: number): void {
+    // A park already owns this agent, and every one of them is legitimately quiet: a
+    // question waiting on a person, a limit waiting on the window. Silence is only
+    // evidence about an agent nobody is already waiting on.
+    if (this.parked.has(agentId)) return;
+    debugLog('agent', `silence park agent=${agentId} after=${silenceMs}ms`);
+    this.handleWaiting(agentId, task, silenceReason(silenceMs));
+    // The countdown the operator sees is the same one every park gets, but the grace
+    // is this agent's own silence window: it has just demonstrated that its work goes
+    // quiet for longer than the operator's window, so re-arming on the shorter one
+    // would settle it the moment it came back and started something else long.
+    this.armStallClock(agentId, this.opts.stallParkMs ?? 0, 'silence', this.opts.silenceParkMs ?? 0);
+  }
+
+  /**
+   * Start a park's countdown — the one place either park's clock is armed.
+   *
+   * Read off the latches rather than from what the caller just did, because both
+   * arms are decided in {@link handleWaiting}: it auto-answers a whitelisted reason
+   * and returns with the agent running, and an agent already parked on a question of
+   * its own keeps that park. Neither is a stop waiting on a clock.
+   */
+  private armStallClock(agentId: string, window: number, kind: 'stall' | 'silence', grace = window): void {
+    if (window <= 0 || !this.parked.has(agentId) || this.limited.has(agentId)) return;
+    this.stalled.set(agentId, { at: Date.now() + window, grace: grace > 0 ? grace : window });
+    debugLog('agent', `${kind} park armed agent=${agentId} window=${window}ms grace=${grace}ms`);
   }
 
   private handleWaiting(agentId: string, task: Task, reason: string, ask?: AgentAsk): void {
@@ -2192,6 +2266,15 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
    */
   private noteResumed(agentId: string, taskId: string): void {
     if (!this.parked.has(agentId)) return;
+    // A tool call from a parked agent is the one thing that contradicts its clock:
+    // whatever the park says, this agent is working, and settling it `done` under
+    // its own hands is the one outcome the countdown must not have. The clock is
+    // pushed out rather than dropped — dropping it would leave an agent that works
+    // for one more minute and then goes quiet for good parked forever, which is the
+    // state the countdown exists to end. Never pulled *in*: an operator's Extend
+    // outlives any grace, so the later of the two stands.
+    const clock = this.stalled.get(agentId);
+    if (clock) clock.at = Math.max(clock.at, Date.now() + clock.grace);
     const resumedAt = new Date().toISOString();
     this.store.setAgentResumed(agentId, resumedAt);
     this.emit('resumed', { agentId, taskId, resumedAt });

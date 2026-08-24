@@ -56,6 +56,11 @@ const defaultSpawner: Spawner = (command, args, opts) => {
  * Only the turn that leaves nothing queued behind it is scanned that way — see
  * {@link StreamJsonSession.pendingTurns}.
  *
+ * All three of those are read off a turn *ending*, which is why there is a fourth
+ * that is not: an agent wedged inside a turn ends none, and would otherwise hold
+ * its slot for as long as the harness ran. `silent` is the wall clock saying so —
+ * see {@link StreamJsonSession.silenceMs}.
+ *
  * One turn ending is not a sentinel question at all: an account whose usage limit
  * is exhausted. That ends the turn — and usually the process — with nothing the
  * agent did wrong, so it emits `limited` rather than `waiting` or `failed`; see
@@ -89,6 +94,11 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
   private limit: RateLimitPark | null = null;
   /** Whether the limit park has already been announced, so exit doesn't repeat it. */
   private limitParked = false;
+  /**
+   * The pending silence watchdog (see {@link silenceMs}), or null while it is not
+   * armed — which is every moment the session is not `running`.
+   */
+  private silenceTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly spec: AgentSessionSpec,
@@ -103,6 +113,24 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
      * real reaper alongside the real spawner; nothing else constructs this.
      */
     private readonly reap: ProcessReaper = () => {},
+    /**
+     * `agentSilenceParkMs` — how long the process may produce **nothing at all**
+     * before the runtime says so, in milliseconds. 0 disables it.
+     *
+     * The turn boundary this runtime reads its endings off is not a liveness check:
+     * an agent wedged *inside* a turn — a tool call that never returns, a command
+     * waiting on input nobody will type — emits no `result`, so it emits no
+     * `stalled` either and holds its slot and its worktree until somebody notices.
+     * That silence is the only observable such an agent has, and this is how long it
+     * has to last before it becomes one.
+     *
+     * Any byte on stdout re-arms it, so the window is the longest a *legitimate*
+     * step may take without a word — a full install or test run, not a repaint —
+     * which is why it is measured in tens of minutes where the PTY runtime's
+     * `agentIdleWaitMs` is measured in seconds. A screen that repaints every second
+     * and a protocol that says nothing during a tool call are different silences.
+     */
+    private readonly silenceMs: number = 0,
   ) {
     super();
   }
@@ -133,6 +161,10 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     this.pendingTurns += 1;
     this.turnText = '';
     if (this._status === 'waiting') this.setStatus('running');
+    // Explicitly, rather than leaving it to the transition above: a message typed
+    // into an agent that never stopped being `running` is still a fresh start for
+    // the clock, and `setStatus` short-circuits when the status does not change.
+    this.armSilence();
   }
 
   /**
@@ -154,6 +186,11 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
    * below it is skipped.
    */
   kill(signal: NodeJS.Signals = 'SIGTERM'): void {
+    // First, and outside the guard below, because it is the one thing here that is
+    // ours rather than the process's: a watchdog left armed by a kill that found
+    // nothing to signal — or that threw on the way to the status change — outlives
+    // the session and parks an agent nobody is running any more.
+    this.clearSilence();
     if (this.child && ['starting', 'running', 'waiting'].includes(this._status)) {
       try {
         this.child.stdin.end();
@@ -170,6 +207,10 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
   // -- internals -----------------------------------------------------------
 
   private onStdout(chunk: string): void {
+    // Liveness is bytes, not events: a line we cannot parse is still the process
+    // saying something, and reading only the events we understand would make an
+    // unrecognised event a reason to park.
+    this.armSilence();
     this.stdoutBuf += chunk;
     let nl: number;
     while ((nl = this.stdoutBuf.indexOf('\n')) >= 0) {
@@ -328,6 +369,37 @@ export class StreamJsonSession extends EventEmitter implements AgentSession {
     if (this._status === status) return;
     this._status = status;
     this.emit('status', status);
+    // The one place every transition passes through, which is what keeps the
+    // watchdog off every status that is *legitimately* silent: a session parked on
+    // a question, on a spent limit, or ended. An agent waiting on a person may wait
+    // all night, and a clock on that park is the thing this must never become.
+    this.armSilence();
+  }
+
+  /**
+   * Start the silence window over, or leave it stopped if the session is not
+   * running. Idempotent, and called on every sign of life — a byte on stdout, a
+   * message written in, a transition back to `running`.
+   */
+  private armSilence(): void {
+    this.clearSilence();
+    if (this.silenceMs <= 0 || this._status !== 'running') return;
+    this.silenceTimer = setTimeout(() => {
+      // Dropped before the announcement, not after: `silent` is a statement that the
+      // window passed, and nothing re-arms until the agent or the harness says
+      // something. Re-arming here instead would announce the same wedge on a loop.
+      this.silenceTimer = null;
+      this.emit('silent', this.silenceMs);
+    }, this.silenceMs);
+    // The status quo is that a live agent holds the process open through its child,
+    // not through a timer of ours — an unref'd timer keeps a shutdown that has
+    // already reaped the child from waiting out the window.
+    this.silenceTimer.unref?.();
+  }
+
+  private clearSilence(): void {
+    if (this.silenceTimer) clearTimeout(this.silenceTimer);
+    this.silenceTimer = null;
   }
 }
 

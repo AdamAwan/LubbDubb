@@ -192,6 +192,27 @@ export function stallReason(lastWords: string): string {
 }
 
 /**
+ * The park reason for an agent that has produced no output at all for
+ * `agentSilenceParkMs`.
+ *
+ * It has no last words to quote — that is the whole of what happened — so it states
+ * the span instead, which is the only fact about the wedge the harness holds. The
+ * blank line is load-bearing for the same reason it is in {@link stallReason}: the
+ * cockpit's escalation card splits the prompt on the first one into a headline and
+ * a body.
+ */
+export function silenceReason(ms: number): string {
+  const minutes = Math.max(1, Math.round(ms / 60_000));
+  return [
+    'Went silent mid-turn — it has produced no output at all, so it cannot be asked anything.',
+    '',
+    `Nothing has come from it for ${minutes} minute${minutes === 1 ? '' : 's'}. An agent stops like this when`,
+    'something it started never returned — a command waiting on input, a fetch that hung — and it holds',
+    'its worktree and a slot against the cap for as long as it stands here.',
+  ].join('\n');
+}
+
+/**
  * The system prompt for a launch: the protocol, the tool addendum when tools are
  * wired, and what the fleet knows when it knows anything (issue #27).
  *
