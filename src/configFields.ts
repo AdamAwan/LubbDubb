@@ -92,7 +92,7 @@ export const CONFIG_FIELDS: readonly ConfigField[] = [
     path: 'sendPrRepliesWithoutApproval',
     type: 'boolean',
     access: 'plain',
-    why: 'Send a reply an agent drafted straight to the review thread, without asking you. It is prose the fleet wrote, on a thread you do not control, signed as the harness — off, every draft waits in your inbox. Replies only; a merge is still authorized per pull request by landing a stack.',
+    why: 'Send a reply an agent drafted straight to the review thread, without asking you. On by default — it is prose the fleet wrote, on a thread you do not control, signed as the harness. Turn it off to be asked instead: every draft then waits in your inbox as a proposal. Replies only; a merge is still authorized per pull request by landing a stack.',
   },
   {
     path: 'closedPrWindowMs',

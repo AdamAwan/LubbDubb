@@ -166,7 +166,7 @@ operator's; there are two of them, and they are two because they are different p
 | Authority                                       | Reaches                       | The operator said                                             |
 | ----------------------------------------------- | ----------------------------- | ------------------------------------------------------------- |
 | **Stack landing** — `store.standingLandingForPr` | the merges of named rungs     | _these pull request numbers_, clicked once over the chain      |
-| **`sendPrRepliesWithoutApproval`** — the config  | every reply the fleet drafts  | _this class of act_, set in advance, for as long as it is on   |
+| **`sendPrRepliesWithoutApproval`** — the config  | every reply the fleet drafts  | _this class of act_, in advance — **and by default**, until they turn it off |
 
 A **stack landing** is the operator's authorization over a chain, clicked once over the pull request
 numbers it covers ([12](12-stacked-prs.md)). Its scope _is_ those numbers: it is asked only of a
@@ -176,7 +176,20 @@ merge, and a landing says nothing about replies.
 one: while it is on, a drafted reply is sent rather than put to them. It is the wider promise of the
 two — nothing about it names a pull request — which is why it is scoped to **replies only** and why
 its config entry says plainly what it does: prose an agent wrote, onto a thread the operator does not
-control, signed as the harness. A merge is not in it (the landing is the better-scoped answer, and it
+control, signed as the harness.
+
+**It is on by default, because that is already what happened.** Until `reply_to_review` existed an
+agent had no way to answer a reviewer but to post to the thread from its own shell with the operator's
+credential — unsigned, unrecorded, attributed to them, and with nobody asked
+([11](11-mcp-tools.md#reply_to_review)). The reply was going out either way. What the default preserves
+is that; what the tool changes is **who sends it**: signed, recorded, held by a standing rejection,
+and carrying a proposal row that names the authority.
+
+Read the other way round, `false` is the setting that changes something, and it is the stricter one —
+it buys a click on every reply. Defaulting *there* would have been the silent change: a deployment
+that edited nothing would take the build and find its replies stopping and its inbox filling with
+drafts nobody had asked to review. An operator who wants that sets one key, and every draft waits in
+the inbox again — the arm below, unchanged, and still the only thing a merge or a plan can take. A merge is not in it (the landing is the better-scoped answer, and it
 is per pull request), and neither is a plan: a plan is always put to a human, permanently, because
 the undo for a plan that started itself is a replan — `planning.requireApproval` is a `RETIRED_KEY`
 for exactly that reason ([08](08-planning.md#the-approval-gate)).

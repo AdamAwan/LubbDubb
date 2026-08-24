@@ -36,13 +36,28 @@ export interface Config {
   /**
    * Send a review reply the fleet drafted **without asking you first**.
    *
-   * Off by default, and the default is the promise the rest of the harness makes:
-   * a drafted reply is put to you as a proposal and waits. Turning it on is you
-   * authorizing a *class* of act in advance — every reply an agent hands to the
-   * harness, on every pull request — where a stack landing authorizes named pull
-   * request numbers with a click. Both are your authority; they are not the same
-   * promise, and this is the wider one. What goes out is prose an agent wrote,
-   * onto a thread you do not control, signed as the harness.
+   * **On by default: this is opt-out.** A reply the fleet writes goes to the
+   * thread, and the proposal row records that your config authorized it. Setting
+   * it `false` is how you get asked instead — every draft then waits in the inbox
+   * as a proposal you accept or reject, which is what every other outbound act
+   * still does.
+   *
+   * **On, because that is already what happens.** Before the `reply_to_review`
+   * tool an agent had no way to answer a reviewer except to post to the thread
+   * itself, from its own shell with your credential — so a reply already went out
+   * with nobody asked. What this changes is not *whether* it goes out but who
+   * sends it: signed as the harness, recorded against the pull request, held by a
+   * standing rejection, and on a proposal row that says your config authorized it.
+   * Defaulting to `false` would have been the behaviour change — every deployment
+   * taking the build would find its replies stopping and its inbox filling.
+   *
+   * So `false` is the stricter setting, and it is the interesting one: it buys a
+   * click on prose an agent wrote, onto a thread you do not control.
+   *
+   * Either way it is *your* authority, given in advance over a **class** of act,
+   * where a stack landing is given over named pull request numbers with a click.
+   * They are not the same promise, and this is the wider one — which is why it is
+   * the narrowest capability that could carry it.
    *
    * **Replies only, and it can only ever accept.** A merge has its own, better
    * scoped standing authority (the stack landing), and a plan is always put to a
@@ -785,8 +800,9 @@ const DEFAULTS: Config = {
   heartbeatIntervalMs: 5 * 60 * 1000,
   maxConcurrentAgents: 3,
   startPaused: false,
-  // Off: a drafted reply is put to the operator and waits. See the key's own doc.
-  sendPrRepliesWithoutApproval: false,
+  // On: replies go out, and `false` is how an operator asks to be asked. The one
+  // default here that changes what an existing deployment does. See the key's doc.
+  sendPrRepliesWithoutApproval: true,
   whitelistedApprovals: [],
   // True, so the split off `userId` changes nothing for a deployment that takes
   // the build: one carrying an identity keeps the gates it had, one without keeps

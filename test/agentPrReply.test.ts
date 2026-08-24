@@ -111,9 +111,12 @@ async function callReply(system: System, agent: Agent, args: Record<string, unkn
   return { isError: result.isError === true, text: result.content[0]?.text ?? '' };
 }
 
-test('a reply an agent hands over is proposed, not sent — and accepting it sends that body', async () => {
+test('with sendPrRepliesWithoutApproval off, the reply is proposed — and accepting it sends that body', async () => {
   const sink = countingSink();
-  const system = build(sink);
+  // The stricter posture. On the default the reply goes out, which the test below
+  // covers: an agent already posted its own replies with nobody asked, so what the
+  // harness changes there is who signs and records it, not whether it goes.
+  const system = build(sink, { sendPrRepliesWithoutApproval: false });
   const agent = reviewAgent(system);
 
   const res = await callReply(system, agent, {
@@ -164,9 +167,10 @@ test('an empty reply is refused, and nothing is proposed for it', async () => {
   system.store.close();
 });
 
-test('with sendPrRepliesWithoutApproval the reply goes out, and the row says which authority sent it', async () => {
+test('on the default the reply goes out, and the row says which authority sent it', async () => {
   const sink = countingSink();
-  const system = build(sink, { sendPrRepliesWithoutApproval: true });
+  // No override: the key is on unless an operator turns it off.
+  const system = build(sink);
   const agent = reviewAgent(system);
 
   const res = await callReply(system, agent, { body: 'Fixed in the latest commit.', thread: 'c-1' });
@@ -188,7 +192,7 @@ test('with sendPrRepliesWithoutApproval the reply goes out, and the row says whi
 
 test('auto-send never overrides a rejection the operator already gave', async () => {
   const sink = countingSink();
-  const system = build(sink, { sendPrRepliesWithoutApproval: true });
+  const system = build(sink);
   const agent = reviewAgent(system);
 
   // The operator refused a reply on this very thread. "I do not need to be asked"
@@ -210,7 +214,7 @@ test('auto-send never overrides a rejection the operator already gave', async ()
 
 test('and it authorizes replies only — a merge still waits for the operator', async () => {
   const sink = countingSink();
-  const system = build(sink, { sendPrRepliesWithoutApproval: true });
+  const system = build(sink);
   await system.executor.execute('cyc', {
     rationale: 'test',
     rejected: [],

@@ -108,9 +108,10 @@ owns it.
 7. **Nothing side-effectful leaves the machine on the harness's own authority.** Every outbound act
    is written as a proposal, and unless the operator authorized it in advance it is put to them. There
    are two standing authorities, both theirs: a **stack landing** they clicked over the pull request
-   numbers it covers, and **`sendPrRepliesWithoutApproval`**, a config key (default off) that sends a
-   drafted review reply without asking. Neither can reject, and neither is a judgement the harness
-   makes. → [09](09-execution.md#the-two-standing-authorities)
+   numbers it covers, and **`sendPrRepliesWithoutApproval`**, a config key (on by default, so a review
+   reply is the one act that goes out unasked — where it previously went out from inside the agent,
+   unsigned and unrecorded). Neither can reject, and neither is a judgement the harness makes.
+   → [09](09-execution.md#the-two-standing-authorities)
 8. **Every caught failure is recorded through `ErrorLog.record`.** It is persisted, mirrored to
    stderr, and streamed to the cockpit.
 9. **Every decision is auditable.** Executed, deferred, rejected and skipped alike, each with a

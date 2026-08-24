@@ -57,7 +57,9 @@ interface ExecutorDeps {
    * A thunk, not a boolean: the key is live-applied onto the running config
    * object, so a copy taken here would keep sending replies until the harness was
    * bounced — on the flip that matters, which is the one turning it *off*.
-   * Absent = off, which is the direction that asks rather than acts.
+   * Absent = off — not the config default, deliberately. Absent means an executor
+   * nobody wired this into, and an unwired seam that *sends* is the failure mode
+   * worth refusing; a deployment's actual default arrives through the thunk.
    */
   autoSendReplies?: () => boolean;
   /**
