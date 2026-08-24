@@ -156,6 +156,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   proposal: 'A decision is waiting on you',
   permission: 'An agent wants a command',
   profile: 'A goal is waiting on which profile to run on',
+  placement: 'A goal is missing from the backlog',
   bench: 'Work only you can do',
   close_out: 'A delivered goal needs closing',
   validate: 'A delivered goal is ready to be validated',

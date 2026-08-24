@@ -15,6 +15,8 @@ import type {
   PrTitleInput,
   SendResult,
   WorkItemLinkInput,
+  WorkItemAreaPathInput,
+  WorkItemParentInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { Store } from '../store/store.js';
@@ -73,6 +75,18 @@ export class FakeConnector implements Connector, ActionSink {
 
   setWorkItemState(input: WorkItemStateInput): Promise<SendResult> {
     return this.composite.setWorkItemState(input);
+  }
+
+  canPlaceWorkItem(): boolean {
+    return this.composite.canPlaceWorkItem();
+  }
+
+  setWorkItemParent(input: WorkItemParentInput): Promise<SendResult> {
+    return this.composite.setWorkItemParent(input);
+  }
+
+  setWorkItemAreaPath(input: WorkItemAreaPathInput): Promise<SendResult> {
+    return this.composite.setWorkItemAreaPath(input);
   }
 
   linkWorkItem(input: WorkItemLinkInput): Promise<SendResult> {

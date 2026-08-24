@@ -35,6 +35,7 @@ export type NeedKind =
   | 'permission'
   | 'proposal'
   | 'profile'
+  | 'placement'
   | 'bench'
   | 'close_out'
   | 'validate'
@@ -422,6 +423,50 @@ export function buildNeedsYou(
       holding: 0,
       raisedAt: assay.decidedAt,
     });
+  }
+
+  // Where a goal belongs on the backlog: the container it rolls up to, and the
+  // area node that puts it on a board. Read off `world.issues` for the profile
+  // gate's reason — a goal the world no longer carries is not one whose ticket
+  // anybody is still grooming.
+  //
+  // Unlike every other row on this queue, **nothing is held**. The work is
+  // dispatched, done and merged whatever the answer is; what is wrong is that the
+  // ticket is invisible to whoever plans the backlog, which is a fault nobody sees
+  // until they go looking for the work and it is not on the board. That is
+  // `config_gap`'s reading exactly — the harness works, and something of the
+  // operator's own is hiding the work from them — which is why the two share a
+  // tone rather than this borrowing the profile gate's.
+  //
+  // The server decides which questions are open, because it is the only side that
+  // can: the browser has neither the project's area tree nor the root node that
+  // says what "unclassified" means.
+  for (const issue of state.world.issues) {
+    for (const ask of issue.assay?.placement ?? []) {
+      const goalRef = `issue:${issue.number}`;
+      rows.push({
+        // Keyed by field as well as goal: a goal can carry both questions at once,
+        // and the panel resolves an ask by this id.
+        id: `placement:${ask.field}:${goalRef}`,
+        kind: 'placement',
+        group: 'yours',
+        title:
+          ask.field === 'parent'
+            ? `This goal has no parent — should it be #${ask.proposedParent}?`
+            : `This goal is on no team's board — should it be “${ask.proposedAreaPath}”?`,
+        goalRef,
+        originRef: goalRef,
+        opens: opensAt(goalRef, state),
+        // The assayer that proposed it is long gone, and nothing was ever parked
+        // on the answer — an id here would point at a run that ended.
+        agentId: null,
+        agentLabel: null,
+        // Genuinely zero, and not the profile gate's "nothing yet": this holds no
+        // part because it holds nothing at all.
+        holding: 0,
+        raisedAt: issue.assay?.decidedAt ?? '',
+      });
+    }
   }
 
   for (const t of (state.humanTasks ?? []).filter((x) => x.status === 'open')) {

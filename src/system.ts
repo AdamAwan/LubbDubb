@@ -16,6 +16,8 @@ import { GitCliObserver, type GitObserver } from './git/gitObserver.js';
 import { fetchRemote } from './git/gitCli.js';
 import { PlanReconciler } from './plans/planReconciler.js';
 import { AssayDesk } from './intake/assayDesk.js';
+import { AreaPathDirectory } from './intake/areaPaths.js';
+import type { AreaPathTree } from './intake/placement.js';
 import { TicketSweep } from './tickets/sweep.js';
 import { WorkGraphRecorder } from './graph/workGraphRecorder.js';
 import { AgentManager } from './agents/agentManager.js';
@@ -97,6 +99,13 @@ export interface System {
    * the allow-list doesn't cover blocks until the operator allows or denies it.
    */
   permissions: PermissionDesk;
+  /**
+   * The project's area tree, cached. Read by the state snapshot to tell an
+   * unclassified work item from a classified one, and by the assay tool to offer
+   * the nodes — both synchronously, which is the whole reason it is a directory
+   * rather than a provider call.
+   */
+  areaPaths: AreaPathDirectory;
   /**
    * Where agents orphaned by a crash or a shutdown wait for an operator to choose
    * restore / requeue / remove. Its pending set holds the harness's pulse, so no
@@ -333,6 +342,11 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
   const errors = new ErrorLog(store, opts.errorMirror);
   const integrations = buildIntegrations(config.integrations, { store, config, now, errors });
   const connector = new CompositeConnector(integrations, now);
+  // The project's area tree, cached so the assay tool and the state snapshot can
+  // both read it without awaiting. Refreshed from the pulse under its own TTL, and
+  // null until the first read lands — which is the same reading a tracker with no
+  // classification tree gives, and the right one: nothing offered, nothing asked.
+  const areaPaths = new AreaPathDirectory(connector, { now: () => Date.now(), errors });
   const backend = opts.backend ?? new NodePtyBackend();
 
   // Live, in-memory dispatch controls both the harness and executor read by
@@ -561,6 +575,10 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     socketPath: defaultSocketPath(),
     // What the assayer is offered when it proposes a profile for a goal.
     profiles: orderedProfiles(config.agentModels),
+    // What the assayer is offered when it proposes where a goal belongs. A thunk
+    // rather than a snapshot: the directory refreshes on the pulse, and a list
+    // captured here would pin every agent to the tree as it stood at boot.
+    areaPaths: (): AreaPathTree | null => areaPaths.current(),
     // Lazy for the same reason as `agents`: the desk is built after this server
     // (it needs the escalation inbox).
     permissions: (): PermissionDesk => permissions,
@@ -913,6 +931,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     executor,
     plans,
     assays,
+    areaPaths,
     naming,
     closeOuts,
     validationAsks,
@@ -1103,6 +1122,7 @@ export function buildSystem(config: Config, opts: BuildOptions = {}): System {
     proposals,
     landings,
     permissions,
+    areaPaths,
     recovery,
     executor,
     dispatcher,

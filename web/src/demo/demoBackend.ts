@@ -574,6 +574,9 @@ class DemoServer {
               // control, and a hand-set assay must not raise a question nobody asked.
               proposedProfile: null,
               awaitingProfileAnswer: false,
+              // Nor any placement: the same argument. What the operator sets by
+              // hand is a verdict, never a suggestion about where the item is filed.
+              placement: [],
               summary: 'Set by the operator from the cockpit.',
               decidedAt: new Date().toISOString(),
             };
@@ -659,6 +662,50 @@ class DemoServer {
       this.dirty();
     }
     return { ok: true };
+  }
+
+  /**
+   * Settle a goal's placement — the demo mirror of the tracker write and of the
+   * question it ends.
+   *
+   * The row is dropped from `assay.placement` rather than flagged answered,
+   * because that is what the real snapshot does: the question is *derived* from
+   * the live work item, so once the field is set — or the operator has said it
+   * wants none — there is nothing left to derive it from. `parent` is written onto
+   * the issue as well, so the demo's goal page shows the item where it now hangs
+   * rather than only stopping asking.
+   */
+  async setIssueParent(issueNumber: number, parent: number | null): Promise<{ ok: true }> {
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (issue) {
+      const container = parent === null ? null : this.state.world.issues.find((i) => i.number === parent);
+      if (parent !== null && container)
+        issue.parent = {
+          number: container.number,
+          title: container.title,
+          issueType: container.issueType ?? 'Feature',
+          workItemState: container.workItemState ?? 'Active',
+          state: container.state,
+        };
+      this.settlePlacement(issueNumber, 'parent');
+    }
+    return { ok: true };
+  }
+
+  async setIssueAreaPath(issueNumber: number, areaPath: string | null): Promise<{ ok: true }> {
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (issue) {
+      if (areaPath !== null) issue.areaPath = areaPath;
+      this.settlePlacement(issueNumber, 'areaPath');
+    }
+    return { ok: true };
+  }
+
+  private settlePlacement(issueNumber: number, field: 'parent' | 'areaPath'): void {
+    const issue = this.state.world.issues.find((i) => i.number === issueNumber);
+    if (!issue?.assay) return;
+    issue.assay = { ...issue.assay, placement: issue.assay.placement.filter((p) => p.field !== field) };
+    this.dirty();
   }
 
   /** Override one part's profile — `null` returns it to inheriting the goal's pin. */
@@ -3881,6 +3928,9 @@ export const demoApi = {
   setIssueState: (issueNumber: number, state: string) => getServer().setIssueState(issueNumber, state),
   setGoalPriority: (issueNumber: number, priority: boolean) => getServer().setGoalPriority(issueNumber, priority),
   setIssueProfile: (issueNumber: number, profile: string | null) => getServer().setIssueProfile(issueNumber, profile),
+  setIssueParent: (issueNumber: number, parent: number | null) => getServer().setIssueParent(issueNumber, parent),
+  setIssueAreaPath: (issueNumber: number, areaPath: string | null) =>
+    getServer().setIssueAreaPath(issueNumber, areaPath),
   setPartProfile: (planId: string, slug: string, profile: string | null) =>
     getServer().setPartProfile(planId, slug, profile),
   setIssueConclusion: (issueNumber: number, verdict: 'done' | 'more_work' | null) =>

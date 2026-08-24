@@ -4,10 +4,13 @@ import type {
   IssueCreateInput,
   IssueLabelInput,
   SendResult,
+  WorkItemAreaPathInput,
   WorkItemLinkInput,
+  WorkItemParentInput,
   WorkItemStateInput,
 } from '../../sink/actionSink.js';
 import type { Issue, IssueRelative, IssueState, TrackerItem } from '../../types.js';
+import type { AreaPathTree } from '../../intake/placement.js';
 import type {
   Capability,
   Integration,
@@ -17,6 +20,8 @@ import type {
   RefResolvable,
   TicketHistoryCapable,
   WorkItemLinkCapable,
+  AreaPathCapable,
+  WorkItemPlacementCapable,
   WorkItemStateCapable,
   WorldSlice,
 } from '../integration.js';
@@ -62,6 +67,8 @@ export class AzureDevOpsWorkItemsIntegration
     RefResolvable,
     WorkItemStateCapable,
     WorkItemLinkCapable,
+    WorkItemPlacementCapable,
+    AreaPathCapable,
     IssueLabelCapable,
     IssueCreateCapable,
     IssueCommentCapable,
@@ -132,6 +139,7 @@ export class AzureDevOpsWorkItemsIntegration
             ...(labelsAddedByViewer ? { labelsAddedByViewer } : {}),
             state: normalizeState(w.state),
             issueType: w.workItemType,
+            areaPath: w.areaPath,
             ...hierarchy(w),
             // Preserve the raw System.State alongside the open/closed collapse so the
             // dispatcher's state-based pickup gate and "in review" back-off can see it.
@@ -303,6 +311,36 @@ export class AzureDevOpsWorkItemsIntegration
       }
     }
     return { ok: true, ref };
+  }
+
+  /**
+   * The project's area tree, straight from the provider.
+   *
+   * Not cached here: `AreaPathDirectory` (`src/intake/areaPaths.ts`) owns how
+   * often this is asked, because it is the thing that knows who is asking and
+   * how stale an answer may be. An integration that cached as well would be a
+   * second policy about the same read, and the two would disagree the day either
+   * moved.
+   */
+  async listAreaPaths(): Promise<AreaPathTree> {
+    return this.opts.api.listAreaPaths();
+  }
+
+  /**
+   * Hang this item off its container. The relation is
+   * `System.LinkTypes.Hierarchy-Reverse`, which is what a rollup and a board
+   * position are actually made of — unlike the `related` edge `createIssue` hangs
+   * for a bug, which is deliberately neither.
+   */
+  async setWorkItemParent(input: WorkItemParentInput): Promise<SendResult> {
+    await this.opts.api.setWorkItemParent(input.number, input.parentNumber);
+    return { ok: true, ref: `#${input.number} -> #${input.parentNumber}` };
+  }
+
+  /** Move this item onto a classification node — the write that puts it on a team's board. */
+  async setWorkItemAreaPath(input: WorkItemAreaPathInput): Promise<SendResult> {
+    await this.opts.api.setWorkItemAreaPath(input.number, input.areaPath);
+    return { ok: true, ref: input.areaPath };
   }
 
   /** The outbound side of the watch/ignore toggle: add/remove a `System.Tags` entry. */

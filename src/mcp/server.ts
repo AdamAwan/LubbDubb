@@ -17,6 +17,7 @@ import { buildCallLog, type McpCallLog } from './callLog.js';
 import { MCP_SERVER_ID } from './names.js';
 import { buildTools } from './tools.js';
 import type { AgentToolTarget, McpIdentity, McpToolDeps } from './tools/context.js';
+import type { AreaPathTree } from '../intake/placement.js';
 
 /** Absolute path to the shipped stdio bridge `claude` spawns. See {@link file://./bridge.mjs}. */
 const BRIDGE_PATH = fileURLToPath(new URL('./bridge.mjs', import.meta.url));
@@ -39,6 +40,13 @@ interface McpBridgeServerOptions {
    * profile is asked for and none is stored.
    */
   profiles?: { name: string; description: string }[];
+  /**
+   * The project's area tree, for `assay_issue` to offer an assayer when it says
+   * where a goal belongs. A thunk for {@link agents}' reason — the directory
+   * behind it refreshes on the pulse. Absent/null = no tree the harness could
+   * read, and then nothing is offered and nothing accepted.
+   */
+  areaPaths?: () => AreaPathTree | null;
   /**
    * The permission backstop (issue #130 phase B), resolved lazily for the same
    * reason as {@link agents}: it is built after this server (it needs the
@@ -275,6 +283,7 @@ export class McpBridgeServer {
         store: this.opts.store,
         agents: this.opts.agents(),
         profiles: this.opts.profiles,
+        areaPaths: this.opts.areaPaths,
         permissions: this.opts.permissions?.(),
         openPr: this.opts.openPr?.(),
         filing: this.opts.filing?.(),

@@ -270,6 +270,96 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     }),
   );
 
+  // Settle one of a goal's two **placement** questions: which container it hangs
+  // off, and which area node it sits on. One route each, and each takes the three
+  // answers the assay's proposal has — take it, use a different value, or say it
+  // does not apply.
+  //
+  // The write is the harness's, never an agent's, and never a shell command in a
+  // prompt: it goes through `ActionSink` exactly as the watch toggle and the
+  // profile pin do, for `src/tickets/filing.ts`'s reason. What an agent proposed
+  // is a suggestion; what changes the tracker is a click here.
+  //
+  // Every answer stamps the row, including the two that also change the work item.
+  // The question's visibility is derived from the live item, and that read is a
+  // pulse behind this write — a row that came back for one refresh would read as a
+  // click that did not take.
+  //
+  // Nothing here holds anything up, so nothing here runs a cycle for urgency's
+  // sake — the manual cycle is only what refreshes the world the cockpit is
+  // showing, the way the profile route's does.
+  const PlacementBody = z.object({
+    // Absent is the third answer — "this goal wants no parent" — rather than a
+    // missing field: the route settles the question either way, and a separate
+    // `/dismiss` route would be a second place the goal-ref scoping is written.
+    parent: z.number().int().positive().optional(),
+  });
+  app.post(
+    '/api/issues/:number/parent',
+    checked({ params: IssueNumberParams, body: PlacementBody }, async ({ params, body, reply }) => {
+      const outcome = await settlePlacement(params.number, 'parent', async () => {
+        if (body.parent === undefined) return;
+        await connector.setWorkItemParent({ number: params.number, parentNumber: body.parent });
+      });
+      if (!outcome.ok) return reply.code(400).send({ error: outcome.error });
+      return { ok: true, parent: body.parent ?? null, settled: outcome.settled };
+    }),
+  );
+
+  const AreaPathBody = z.object({ areaPath: optionalText('areaPath') });
+  app.post(
+    '/api/issues/:number/area-path',
+    checked({ params: IssueNumberParams, body: AreaPathBody }, async ({ params, body, reply }) => {
+      const outcome = await settlePlacement(params.number, 'areaPath', async () => {
+        if (body.areaPath === undefined) return;
+        await connector.setWorkItemAreaPath({ number: params.number, areaPath: body.areaPath });
+      });
+      if (!outcome.ok) return reply.code(400).send({ error: outcome.error });
+      return { ok: true, areaPath: body.areaPath ?? null, settled: outcome.settled };
+    }),
+  );
+
+  /**
+   * The half both placement routes share: refuse where nothing can write one, make
+   * the write, stamp the row the operator was looking at, and republish.
+   *
+   * The refusal is asked of the **connector** rather than inferred from the
+   * provider name, exactly as the work-item-state route asks: the one place that
+   * decides is the one the route asks. It is drawn nowhere either — the question
+   * is only ever raised where a proposal exists, and a proposal only exists on a
+   * tracker that has these fields — so this is the floor under that rather than a
+   * case anybody meets.
+   *
+   * The row is stamped **after** a successful write and not before: a stamp on a
+   * write that then failed would settle a question nobody answered, and the
+   * operator would be left with a tracker unchanged and a cockpit that had stopped
+   * asking.
+   */
+  async function settlePlacement(
+    issueNumber: number,
+    field: 'parent' | 'areaPath',
+    write: () => Promise<void>,
+  ): Promise<{ ok: true; settled: boolean } | { ok: false; error: string }> {
+    if (!connector.canPlaceWorkItem())
+      return {
+        ok: false,
+        error: "This deployment's tracker has no parent or area path to set.",
+      };
+    try {
+      await write();
+    } catch (err) {
+      const message = (err as Error).message;
+      errors.record({ source: 'server', message: `Failed to place #${issueNumber}: ${message}` });
+      return { ok: false, error: message };
+    }
+    const origin = issueConclusionOrigin(issueNumber);
+    const assay = store.getAssay(origin);
+    const settled = assay !== null && store.settleAssayPlacement(origin, assay.goalRef, field);
+    hub.broadcast({ type: 'world:changed' });
+    await harness.runCycle('manual');
+    return { ok: true, settled };
+  }
+
   // Mark this goal a priority, or clear the mark: everything the harness dispatches
   // under it ranks ahead of the natural cross-rule order until it is cleared.
   //

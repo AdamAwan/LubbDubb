@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import type { MergeMethod } from '../../sink/actionSink.js';
 import { withinClosedWindow } from '../closedWindow.js';
+import type { AreaPathTree } from '../../intake/placement.js';
 import type {
   AzClosedPull,
   AzCommentRef,
@@ -174,6 +175,35 @@ interface RawWorkItem {
   id: number;
   fields?: Record<string, unknown>;
   relations?: Array<{ rel?: string; url?: string }>;
+}
+
+/**
+ * How deep {@link RestAzureDevOpsApi.listAreaPaths} asks for. Azure's parameter
+ * has no "everything", and an area tree past this depth is one nobody navigates.
+ */
+const AREA_DEPTH = 6;
+
+interface RawClassificationNode {
+  name?: string;
+  path?: string;
+  children?: RawClassificationNode[];
+}
+
+/**
+ * A classification node's address in the form `System.AreaPath` accepts.
+ *
+ * Azure returns `\Contoso\Area\Web` and the field takes `Contoso\Web`: the
+ * `\Area` infix names the *tree*, not a node, and writing it back is rejected.
+ * Dropping it here is what keeps "the strings offered" and "the strings writable"
+ * one set — two readings of one path is the drift worth avoiding, since an
+ * unwritable candidate looks exactly like a writable one until the patch fails.
+ */
+function areaNodePath(node: RawClassificationNode): string | null {
+  const raw = typeof node.path === 'string' && node.path !== '' ? node.path : null;
+  if (raw === null) return null;
+  const parts = raw.split('\\').filter((p) => p !== '');
+  if (parts.length === 0) return null;
+  return [parts[0], ...parts.slice(1).filter((p) => p !== 'Area')].join('\\');
 }
 
 interface RawWorkItemUpdate {
@@ -683,6 +713,7 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
         .map((t) => t.trim())
         .filter((t) => t !== ''),
       workItemType: String(fields['System.WorkItemType'] ?? ''),
+      areaPath: String(fields['System.AreaPath'] ?? ''),
       createdAt: String(fields['System.CreatedDate'] ?? ''),
       changedAt: String(fields['System.ChangedDate'] ?? ''),
       relationUrls: (w.relations ?? [])
@@ -855,6 +886,67 @@ export class RestAzureDevOpsApi implements AzureDevOpsApi {
     } catch (err) {
       if (!isRelationAlreadyExists((err as Error).message)) throw err;
     }
+  }
+
+  /**
+   * The project's area tree, flattened depth-first.
+   *
+   * `$depth=<n>` rather than a walk: Azure returns the whole subtree in one call,
+   * and paging it a level at a time would cost a request per node for a list the
+   * harness reads at most once an hour. The depth is bounded rather than
+   * unlimited because the parameter has no "all" — a tree deeper than this is one
+   * whose leaves nobody navigates to anyway.
+   *
+   * `name` is a node's own label and `path` its full address; only the address is
+   * a value `System.AreaPath` accepts, so that is what is carried. Azure writes
+   * the root as `\<Project>\Area`, which is not the form the field takes — the
+   * `\Area` infix is dropped here so the strings offered are the strings that can
+   * be written back.
+   */
+  async listAreaPaths(): Promise<AreaPathTree> {
+    const data = await this.request<RawClassificationNode>(
+      this.withApiVersion(`${this.projectUrl}/_apis/wit/classificationnodes/areas`, { $depth: String(AREA_DEPTH) }),
+    );
+    const root = areaNodePath(data) ?? this.project;
+    const paths: string[] = [];
+    const walk = (node: RawClassificationNode): void => {
+      for (const child of node.children ?? []) {
+        const path = areaNodePath(child);
+        if (path !== null) paths.push(path);
+        walk(child);
+      }
+    };
+    walk(data);
+    return { root, paths };
+  }
+
+  async setWorkItemParent(id: number, parentId: number): Promise<void> {
+    try {
+      await this.request(this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}`), {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json-patch+json' },
+        body: JSON.stringify([
+          {
+            op: 'add',
+            path: '/relations/-',
+            value: {
+              rel: 'System.LinkTypes.Hierarchy-Reverse',
+              url: `${this.orgUrl}/_apis/wit/workItems/${parentId}`,
+            },
+          },
+        ]),
+      });
+    } catch (err) {
+      if (!isRelationAlreadyExists((err as Error).message)) throw err;
+    }
+  }
+
+  async setWorkItemAreaPath(id: number, areaPath: string): Promise<void> {
+    await this.request(this.withApiVersion(`${this.orgUrl}/_apis/wit/workitems/${id}`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json-patch+json' },
+      body: JSON.stringify([{ op: 'add', path: '/fields/System.AreaPath', value: areaPath }]),
+    });
   }
 
   async setWorkItemTag(id: number, tag: string, present: boolean): Promise<void> {

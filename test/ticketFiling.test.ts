@@ -27,6 +27,9 @@ function sinkRecording(created: IssueCreateInput[], ref: string | null = 'issue:
     // A predicate rather than an act, so `unused` is the wrong shape: this test's
     // subject cannot reach it, and a throw would be a stub failing on a question.
     canSetWorkItemState: () => false,
+    canPlaceWorkItem: () => false,
+    setWorkItemParent: () => Promise.reject(new Error('not used')),
+    setWorkItemAreaPath: () => Promise.reject(new Error('not used')),
     requeueCiCheck: unused,
     postPrReply: unused,
     mergePr: unused,

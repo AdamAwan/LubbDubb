@@ -1,3 +1,4 @@
+import type { AreaPathTree } from '../../intake/placement.js';
 import type { MergeMethod } from '../../sink/actionSink.js';
 
 /**
@@ -187,6 +188,34 @@ export interface AzureDevOpsApi {
   relateWorkItem(id: number, relatedId: number): Promise<void>;
   /** Add (`present`) or remove a `System.Tags` entry on a work item — the watch/ignore toggle. Idempotent. */
   setWorkItemTag(id: number, tag: string, present: boolean): Promise<void>;
+  /**
+   * The project's classification tree: the root node, and every area beneath it.
+   *
+   * The one read on this seam that is about the *project* rather than about an
+   * item, and it is here because there is nowhere else the harness could learn
+   * it — an area path is a node in a tree only the provider holds, and the world
+   * snapshot carries items, not schema. It is what lets the assayer be **offered**
+   * the areas rather than free-typing one, which is the difference between a
+   * choice and an invented node that does not exist.
+   *
+   * The root is returned rather than left to be derived, for
+   * {@link AreaPathTree}'s reason: on a project that has never subdivided, a root
+   * and a leaf are the same string shape.
+   */
+  listAreaPaths(): Promise<AreaPathTree>;
+  /**
+   * Hang this item off `parentId` — the `System.LinkTypes.Hierarchy-Reverse`
+   * relation, which is the only thing that makes a work item roll up to anything.
+   *
+   * Idempotent for {@link relateWorkItem}'s reason and by the same absorption: a
+   * parent the item already carries is a success. Unlike that one this **is** a
+   * hierarchy link and so is refused where the process template will not take it
+   * (a Bug under a User Story where bugs are managed at the task level) — which
+   * surfaces as a throw, and is the honest answer.
+   */
+  setWorkItemParent(id: number, parentId: number): Promise<void>;
+  /** Move a work item onto a classification node — a patch on `System.AreaPath`. Idempotent. */
+  setWorkItemAreaPath(id: number, areaPath: string): Promise<void>;
   /** Open a pull request. Branch names are plain here; the REST arm adds `refs/heads/`. */
   createPull(input: { head: string; base: string; title: string; body: string }): Promise<{ pullRequestId: number }>;
   /** Rewrite a pull request's title — the naming convention. */
@@ -390,6 +419,15 @@ export interface AzWorkItem {
   workItemType: string;
   /** System.Tags, split into a list. */
   tags: string[];
+  /**
+   * `System.AreaPath` — the classification node the item sits on, which is what
+   * puts it on a team's board.
+   *
+   * Always present on a real work item: an item nobody has classified sits on the
+   * project root, so this is never empty and "unclassified" is a comparison
+   * against the root rather than an absence (`src/intake/placement.ts`).
+   */
+  areaPath: string;
   /** ArtifactLink relation urls (e.g. `vstfs:///Git/PullRequestId/{project}%2F{repo}%2F{id}`). */
   relationUrls: string[];
   /**

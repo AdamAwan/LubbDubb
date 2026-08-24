@@ -21,6 +21,9 @@ function recordingSink(): { sink: ActionSink; comments: IssueCommentInput[] } {
     comments,
     sink: {
       canSetWorkItemState: () => false,
+      canPlaceWorkItem: () => false,
+      setWorkItemParent: () => Promise.reject(new Error('not used')),
+      setWorkItemAreaPath: () => Promise.reject(new Error('not used')),
       postPrReply: unused,
       mergePr: unused,
       setPrLabel: unused,

@@ -161,6 +161,9 @@ function fakeApi(evals: AzPolicyEvaluation[], requeue: RequeueScript = { asked: 
     setWorkItemState: unused('setWorkItemState'),
     createWorkItem: unused('createWorkItem'),
     relateWorkItem: unused('relateWorkItem'),
+    listAreaPaths: () => Promise.resolve({ root: 'Contoso', paths: [] }),
+    setWorkItemParent: () => Promise.reject(new Error('not used')),
+    setWorkItemAreaPath: () => Promise.reject(new Error('not used')),
     setWorkItemTag: unused('setWorkItemTag'),
     linkWorkItemToPull: unused('linkWorkItemToPull'),
     createWorkItemComment: unused('createWorkItemComment'),
@@ -195,6 +198,9 @@ function azureSink(evals: AzPolicyEvaluation[], requeue: RequeueScript): ActionS
   };
   return {
     canSetWorkItemState: () => false,
+    canPlaceWorkItem: () => false,
+    setWorkItemParent: () => Promise.reject(new Error('not used')),
+    setWorkItemAreaPath: () => Promise.reject(new Error('not used')),
     requeueCiCheck: (input) => integration.requeueCiCheck(input),
     createIssue: unused('createIssue'),
     postPrReply: unused('postPrReply'),

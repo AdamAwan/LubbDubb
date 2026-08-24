@@ -443,6 +443,31 @@ moves immediately.
 (by name, with the configured set listed — the boundary half of the boot rejection), and on a provider
 failure, which is recorded on the error log. Returns `{ok: true, profile, answered}`.
 
+### `POST /api/issues/:number/parent` · `POST /api/issues/:number/area-path`
+
+Bodies `{parent?: number}` and `{areaPath?: string}`. Settle one of a goal's two **placement**
+questions — which container it hangs off, and which area node puts it on a team's board. Each takes
+the three answers the assay's proposal has: the value proposed, a different value the operator picked,
+or **absent**, which is "this goal wants no such thing". The route does not distinguish the first two,
+because nothing downstream does.
+
+The write goes through `ActionSink` (`setWorkItemParent` / `setWorkItemAreaPath`) — the harness's own,
+never an agent's and never a shell command in a prompt ([13](13-jobs-and-tickets.md#filing-a-ticket)).
+It is then recorded on the assay row (`parent_settled_at` / `area_path_settled_at`), scoped to the
+`goal_ref` the operator was looking at so a superseded proposal cannot be settled. The stamp is
+written on **all three** answers and not only the dismissal: whether the question still stands is
+otherwise derived from the live work item, and that read is a pulse behind this write.
+
+The row is stamped **after** a successful write, never before — a stamp on a write that then failed
+would settle a question nobody answered and leave the operator with an unchanged tracker and a cockpit
+that had stopped asking. Broadcasts `world:changed` and runs a cycle, which is only what refreshes the
+world the cockpit is showing: nothing here holds anything up.
+
+400 when no configured integration can place a work item (asked of the connector, never inferred from
+the provider name) and on a provider failure, which is recorded on the error log. Returns
+`{ok: true, parent | areaPath, settled}`.
+→ [06](06-issue-pickup.md#where-the-goal-belongs-the-placement-proposals-issue-463)
+
 ### `POST /api/issues/:number/priority`
 
 Body `{priority: boolean}`. Marks this goal a priority, or clears the mark: every origin under it —

@@ -492,6 +492,13 @@ CREATE TABLE IF NOT EXISTS issue_assays (
   by          TEXT NOT NULL,        -- assayer | operator
   proposed_profile    TEXT,         -- the model profile the assayer proposed for this goal's work
   profile_answered_at TEXT,         -- null while that proposal is waiting on a human (the gate)
+  -- Where the goal belongs on the backlog, proposed by the same assayer. Neither
+  -- holds anything: whether the question still stands is derived from the live work
+  -- item, and only the operator's "does not apply" is stored.
+  proposed_parent       INTEGER,    -- the container work item it should hang off
+  parent_settled_at   TEXT,       -- when the operator answered that question
+  proposed_area_path    TEXT,       -- the classification node it should sit on
+  area_path_settled_at TEXT,      -- when the operator answered that one
   agent_id    TEXT,                 -- null for an operator verdict
   task_id     TEXT,
   comment_ref TEXT,                 -- the one living comment on the ticket, edited in place

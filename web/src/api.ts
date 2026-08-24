@@ -319,6 +319,15 @@ const realApi = {
   // a decision rather than a refusal to answer.
   setIssueProfile: (issueNumber: number, profile: string | null) =>
     post<{ ok: true }>(`/api/issues/${issueNumber}/profile`, { profile: profile ?? '' }),
+  // Settle where this goal belongs on the backlog — the container it hangs off,
+  // and the area node that puts it on a board. `null` is the third answer, "this
+  // goal wants no such thing"; the other two are the assay's proposal and a value
+  // the operator picked instead, and the route cannot tell them apart because it
+  // does not need to. The write is the harness's either way.
+  setIssueParent: (issueNumber: number, parent: number | null) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/parent`, parent === null ? {} : { parent }),
+  setIssueAreaPath: (issueNumber: number, areaPath: string | null) =>
+    post<{ ok: true }>(`/api/issues/${issueNumber}/area-path`, { areaPath: areaPath ?? '' }),
   // Override which profile one plan part runs on. Clearing it makes the part
   // inherit the goal's pin again, which is not the same as naming the goal's
   // current profile.
