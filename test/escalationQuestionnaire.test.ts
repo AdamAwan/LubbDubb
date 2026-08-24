@@ -57,6 +57,7 @@ async function parkedOnQuestionnaire() {
   };
   const system = buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',
       agentMode: 'stream',

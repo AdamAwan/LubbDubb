@@ -123,6 +123,7 @@ function recordingSpawner(): { spawner: Spawner; children: FakeChild[] } {
 
 function streamConfig(dir: string, patch: Record<string, unknown> = {}): Config {
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'stream',

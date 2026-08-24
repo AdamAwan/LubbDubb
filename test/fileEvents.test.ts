@@ -227,6 +227,7 @@ test('FileEventsSpool drains each record once, then dispose removes the dir', ()
 function testConfig(agentMode: 'raw' | 'pty' = 'raw', sessionTranscriptRoot?: string) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-fe-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode,

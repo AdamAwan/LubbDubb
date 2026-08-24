@@ -32,6 +32,7 @@ function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-graduation-'));
   return buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       auth: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',

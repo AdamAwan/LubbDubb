@@ -331,6 +331,7 @@ function systemFor(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-prior-'));
   return buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',
       agentMode: 'raw',

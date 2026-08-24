@@ -213,6 +213,7 @@ test('the helper is a clean no-op when LUBBDUBB_STATUS_FILE is unset', async () 
 test('pty mode exports LUBBDUBB_STATUS_FILE keyed by the chosen session id', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-usage-pty-'));
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'pty',
@@ -260,6 +261,7 @@ class FakeChild extends EventEmitter implements StreamChild {
 test('stream mode: result usage lands on the agent row and in the snapshot windows', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-usage-stream-'));
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'stream',

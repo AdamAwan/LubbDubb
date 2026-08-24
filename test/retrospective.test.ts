@@ -26,6 +26,7 @@ function build(overrides: Record<string, unknown> = {}): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-retro-'));
   return buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       auth: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',

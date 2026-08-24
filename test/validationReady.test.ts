@@ -330,6 +330,7 @@ function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-vready-'));
   return buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       auth: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',

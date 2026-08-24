@@ -76,6 +76,7 @@ function refusingSystem(worktrees: FakeWorktreeManager): System {
   const spawner: Spawner = () => new SilentChild();
   return buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',
       deskRoot: join(dir, 'desk'),

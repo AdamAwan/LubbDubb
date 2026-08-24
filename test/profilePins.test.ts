@@ -199,7 +199,7 @@ test('a refused goal reads as refused, not as unpriced', () => {
 
 /** `loadConfig`, never `loadDeploymentConfig` — the latter reads this machine's own file. */
 function load(agentModels: Config['agentModels']) {
-  return loadConfig({ dbPath: ':memory:', agentModels });
+  return loadConfig({ selfUpdate: { enabled: false } as never, dbPath: ':memory:', agentModels });
 }
 
 test('config load rejects a profile with no rank, naming it', () => {
@@ -253,6 +253,7 @@ class FakeChild extends EventEmitter implements StreamChild {
 function pinConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-pins-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: 'lubbdubb',
     dbPath: ':memory:',
     agentMode: 'stream',

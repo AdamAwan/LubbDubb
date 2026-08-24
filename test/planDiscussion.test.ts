@@ -170,6 +170,7 @@ type Session = NonNullable<ReturnType<McpDesktopServer['session']>>;
 async function buildDesk(): Promise<{ system: System; session: Session; close: () => Promise<void> }> {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',

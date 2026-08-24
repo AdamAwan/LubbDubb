@@ -14,6 +14,7 @@ import { gitRepo } from './support/gitRepo.js';
 function build(overrides: Partial<Config> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     dbPath: ':memory:',
     agentMode: 'raw',

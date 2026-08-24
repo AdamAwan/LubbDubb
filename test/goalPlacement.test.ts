@@ -308,6 +308,7 @@ function build(): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-placement-'));
   const system = buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       auth: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',

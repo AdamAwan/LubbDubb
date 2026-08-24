@@ -17,6 +17,7 @@ const tick = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)
 function build() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'raw',
@@ -67,6 +68,7 @@ class FakeStreamChild extends EventEmitter implements StreamChild {
 function buildStream() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'stream',

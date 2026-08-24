@@ -33,6 +33,7 @@ const GIF = Buffer.concat([Buffer.from('GIF89a', 'latin1'), Buffer.alloc(32, 3)]
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-survive-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     // The watch gate off: this file is about where an image goes, not about
     // which issues the harness picks up, and an unlabelled injected issue would

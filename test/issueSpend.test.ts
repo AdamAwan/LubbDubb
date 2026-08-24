@@ -303,6 +303,7 @@ test('a goal card carries what its agent reported, and the fleet remainder stays
   };
   const system = buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',
       agentMode: 'stream',

@@ -18,6 +18,7 @@ import { gitRepo } from './support/gitRepo.js';
 function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     dbPath: ':memory:',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),

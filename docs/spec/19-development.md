@@ -309,6 +309,25 @@ checkout's shape stops mattering. Inject the fake unless git behaviour **is** th
 `hasCommitsBeyond`. Those tests point `repoRoot` at a throwaway repository from
 `test/support/gitRepo.ts` and use the real manager.
 
+### Why a test turns the self-update check off
+
+`selfUpdate.enabled` defaults to **on**, and `UpdateDesk.run` is awaited inside `Harness.runCycle`
+beside the other bookkeeping — so a test that builds a `System` and runs a single cycle spends a
+`git ls-remote` **against the real `origin`** before the cycle does anything else. The interval is a
+floor on traffic, not on the first reading: `lastCheckedMs` starts at zero, so the first cycle of
+every fresh `System` is always due. A test builds a fresh `System` per case, which is what turns one
+hourly round trip in production into one per test.
+
+Nothing is red either way — the reader answers `unavailable` rather than throwing, so an offline
+machine passes exactly as a connected one does, only faster. That is the whole hazard: the suite's
+runtime, and whether it touches the network at all, depend on a remote nobody declared. It was
+roughly half the suite's wall clock before the tests said otherwise.
+
+So a test config sets `selfUpdate: { enabled: false }` unless the self-update watch **is** the
+subject; `src/system.ts` reads that flag and hands the harness no desk at all. The same shape as the
+`gitObserver` row above, and for the same reason — the default reaches the real world, and only the
+test can say it should not.
+
 That combination exercises the whole **inject → dispatch → agent → escalate → answer → done** loop
 without a model, a network or a real terminal. Prefer adding tests at that seam. Put new tests in
 `test/*.test.ts`; do not edit unrelated test files.

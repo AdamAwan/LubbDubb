@@ -32,6 +32,7 @@ import type { Agent, Issue, WorldSnapshot } from '../src/types.js';
 function testConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-human-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',

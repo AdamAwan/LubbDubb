@@ -306,6 +306,7 @@ test('an override re-orders a held item but never un-holds it', async () => {
 function testConfig(over: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'raw',
@@ -354,6 +355,7 @@ test('a priority override holds after the next pulse and after a restart', async
   const dbPath = join(dir, 'db.sqlite');
   const cfg = () =>
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       labelPrefix: '',
       dbPath,
       agentMode: 'raw',

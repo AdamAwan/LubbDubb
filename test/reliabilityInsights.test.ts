@@ -383,6 +383,7 @@ test('the CI read is bounded by kind and comes back oldest first', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-rl-'));
   const system = buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',
       agentMode: 'raw',

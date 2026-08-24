@@ -64,7 +64,7 @@ test('a rule mapped explicitly to the default profile resolves the same as falli
 
 /** `loadConfig`, never `loadDeploymentConfig` — the latter reads this machine's own file. */
 function load(agentModels: Config['agentModels']) {
-  return loadConfig({ dbPath: ':memory:', agentModels });
+  return loadConfig({ selfUpdate: { enabled: false } as never, dbPath: ':memory:', agentModels });
 }
 
 test('config load rejects a default naming a profile that does not exist', () => {
@@ -167,6 +167,7 @@ class FakeChild extends EventEmitter implements StreamChild {
 function streamConfig(agentModels: Config['agentModels']) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-models-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'stream',

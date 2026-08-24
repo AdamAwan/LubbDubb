@@ -43,6 +43,7 @@ class FakeChild extends EventEmitter implements StreamChild {
 function streamConfig(overrides: Record<string, unknown> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-dismiss-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode: 'stream',

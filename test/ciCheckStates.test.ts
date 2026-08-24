@@ -159,6 +159,7 @@ function build(ci: CiPolicy, pullRequests: PullRequest[]): System {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-gate-'));
   const system = buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',
       agentMode: 'raw',

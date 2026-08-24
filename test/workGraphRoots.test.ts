@@ -601,6 +601,7 @@ test('the fold is the only writer: a second filing cannot re-parent an adopted n
 /** A harness with an issue tracker configured, so filing has somewhere to go. */
 function buildServed(over: Record<string, unknown> = {}) {
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     dbPath: ':memory:',
     labelPrefix: '',

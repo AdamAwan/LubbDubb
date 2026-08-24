@@ -36,6 +36,7 @@ class FlakyWorktrees extends FakeWorktreeManager {
 function testConfig(agentMode: 'raw' | 'stream') {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-dispatchfail-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',
     agentMode,

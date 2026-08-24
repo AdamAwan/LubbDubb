@@ -18,6 +18,7 @@ import { z } from 'zod';
 function testConfig(overrides: Partial<Config> = {}): Config {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     auth: { enabled: false } as never,
     labelPrefix: '',
     dbPath: ':memory:',

@@ -235,6 +235,7 @@ async function build(
   let integration: GitHubSourceControlIntegration | AzureDevOpsSourceControlIntegration | null = null;
   const system = buildSystem(
     loadConfig({
+      selfUpdate: { enabled: false } as never,
       labelPrefix: '',
       dbPath: ':memory:',
       agentMode: 'raw',

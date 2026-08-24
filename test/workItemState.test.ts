@@ -9,11 +9,13 @@ import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import type { ActionSink, SendResult, WorkItemStateInput } from '../src/sink/actionSink.js';
 import type { DispatchResult } from '../src/dispatcher/dispatcher.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
+import { FakeGitObserver } from '../src/git/fakeGitObserver.js';
 import { failAssayOpen, failPlanningOpen, planWithOnePart } from './support/plans.js';
 
 function testConfig() {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-'));
   return loadConfig({
+    selfUpdate: { enabled: false } as never,
     dbPath: ':memory:',
     deskRoot: join(dir, 'desk'),
     worktreeRoot: join(dir, 'wt'),
@@ -89,6 +91,7 @@ test('set_work_item_state routes to the sink and is audited (no auto-send gate)'
   const { sink, states } = recordingSink();
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
+    gitObserver: new FakeGitObserver(),
     backend: new FakePtyBackend(),
     sink,
   });
@@ -155,6 +158,7 @@ test('a failing transition is recorded as rejected, not escalated', async () => 
   };
   const system = buildSystem(testConfig(), {
     worktrees: new FakeWorktreeManager(),
+    gitObserver: new FakeGitObserver(),
     backend: new FakePtyBackend(),
     sink: failingSink,
   });
@@ -179,6 +183,7 @@ function walkSystem(
 ) {
   const dir = mkdtempSync(join(tmpdir(), 'lubbdubb-progress-'));
   const config = loadConfig({
+    selfUpdate: { enabled: false } as never,
     // No watch gate: this file is about states, and an opt-in tag would only be a
     // second thing every case here has to remember.
     labelPrefix: '',
@@ -192,6 +197,7 @@ function walkSystem(
   });
   return buildSystem(config, {
     worktrees: new FakeWorktreeManager(),
+    gitObserver: new FakeGitObserver(),
     backend: new FakePtyBackend(),
     errorMirror: () => {},
   });
