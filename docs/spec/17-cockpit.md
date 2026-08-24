@@ -122,6 +122,37 @@ Three consequences worth stating, because each is a thing a reasonable change wo
 would be invisible to `tsx`, which has no CSS loader and would throw when `test/console.test.ts` pulls
 those modules in.
 
+### Scrollbars
+
+Left alone, a scrollbar is the one thing on the screen the theme does not reach: the browser draws it
+from the platform's own palette, so a dark cockpit gets a light grey bar down its side and every
+preset gets the same one. Three tokens fix that — `--scrollbar-track`, `--scrollbar-thumb` and
+`--scrollbar-thumb-hover`, on `:root` in `styles.css`.
+
+**They are overlays, not tints of a ground.** Each is `--text` at a low alpha over `transparent`,
+because a scroll pane's ground is `--cn-bg` on the overview, `--panel` inside a modal and `--well` in
+a transcript: ink over whatever it happens to be over reads on all three, where a mix of any one of
+them is a stripe on the other two. It also means the bar inverts with the theme for free — near-white
+at 24% on Dark, near-black at 24% on Light — so no preset owes them a value.
+
+**There is one family, and it is the shared one.** A scrollbar is furniture rather than a component,
+drawn on both families' grounds, so it is neither's — which is why `console.css` says nothing about it
+at all. The alternative, a `--cn-scrollbar-*` declared on `.cn`, is the shadowing trap above in its
+worst position: it would sit on the element that contains nearly every scroll pane in the cockpit, so
+an operator's override of the scrollbar could reach almost nothing.
+
+**Both grammars are written, and exactly one is ever live.** Firefox styles a scrollbar through
+`scrollbar-color` / `scrollbar-width` and has no `::-webkit-scrollbar`; Blink and WebKit do the
+opposite, handing a box a fully custom scrollbar as soon as a pseudo-element rule applies to it and
+ignoring `scrollbar-color` from then on. So the standard properties sit behind
+`@supports not selector(::-webkit-scrollbar)`. Written unguarded the two would not conflict so much
+as make it unknowable which one a given browser drew. The gate fails safe in the right direction: an
+engine too old to evaluate a `selector()` query leaves the `not` false and keeps the pseudo-elements,
+which is the grammar such an engine supports.
+
+The thumb's corner is `var(--r-sm)` — square with the rest of the instrument by default, and it
+follows the operator's [Corners](#the-theme) rather than deciding for them.
+
 ## Shape
 
 Five surfaces and one shell.

@@ -87,6 +87,15 @@
   --shadow: #00000073;
   --veil: #ffffff0f;
 
+  /* The scrollbar, and an overlay for the same reason the veil is one: ink over
+     whatever it happens to be over, rather than a mix of any one ground. A scroll
+     pane's ground is `--cn-bg` on the overview, `--panel` in a modal and `--well`
+     in a transcript, and one bar has to read on all three — pin it to a ground and
+     it is a stripe on the other two. The alphas are the decision. */
+  --scrollbar-track: color-mix(in srgb, var(--text) 6%, transparent);
+  --scrollbar-thumb: color-mix(in srgb, var(--text) 24%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--text) 40%, transparent);
+
   /* The transcript. Four ANSI colours rather than sixteen because `ansi.ts` emits
      exactly four codes; the other twelve would be swatches that do nothing. */
   --term-fg: #b9c6e0;
@@ -143,6 +152,51 @@ body {
      components around them do not. */
   font: 14px/1.5 var(--font-ui);
 }
+
+/* ---------- scrollbars ----------
+   A scrollbar is furniture, not a component: it is drawn on both token families'
+   grounds — a console pane, a shared drawer, the page itself — so it belongs to
+   neither, and there is deliberately nothing about it in `console.css`. One family
+   on `:root` is also the only form a theme can reach everywhere: a `--cn-scrollbar-*`
+   declared on `.cn` would shadow the operator's override inside the very element
+   that holds nearly every scroll pane in the cockpit.
+
+   Both grammars are written, gated so exactly one is ever live. Firefox has no
+   `::-webkit-scrollbar`; Blink and WebKit hand a box a fully custom scrollbar the
+   moment a pseudo-element rule applies to it and ignore `scrollbar-color` outright.
+   Unguarded the two do not conflict so much as make it unknowable which one a given
+   browser drew — and a `selector()` query a browser cannot evaluate leaves the
+   `not` false, which is the right way round: it keeps the pseudo-elements, which is
+   what an engine old enough to fail the query supports.
+   → docs/spec/17-cockpit.md#scrollbars */
+@supports not selector(::-webkit-scrollbar) {
+  html {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+}
+/* Where a horizontal bar meets a vertical one — the tickets board has both. Left
+   out, it is the one patch of platform grey left in the frame. */
+::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  /* Square with the rest of the instrument, and it follows the operator's corners
+     rather than deciding for them. */
+  border-radius: var(--r-sm);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
 .loading {
   padding: 3rem;
   color: var(--muted);

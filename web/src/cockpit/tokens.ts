@@ -496,6 +496,27 @@ export const THEME_TOKENS: readonly ThemeToken[] = [
     why: 'The wash over a transcript row under the pointer',
   },
   {
+    name: '--scrollbar-track',
+    label: 'Scrollbar channel',
+    group: 'overlays',
+    kind: 'colour',
+    why: 'The groove a scrollbar runs in, on every scrolling pane',
+  },
+  {
+    name: '--scrollbar-thumb',
+    label: 'Scrollbar thumb',
+    group: 'overlays',
+    kind: 'colour',
+    why: 'The bar you drag',
+  },
+  {
+    name: '--scrollbar-thumb-hover',
+    label: 'Scrollbar thumb, hovered',
+    group: 'overlays',
+    kind: 'colour',
+    why: 'The bar you drag, under the pointer',
+  },
+  {
     name: '--cn-scrim',
     label: 'Console scrim',
     group: 'overlays',
