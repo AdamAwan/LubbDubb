@@ -1,8 +1,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Store } from '../src/store/store.js';
 import { loadConfig } from '../src/config.js';
 import { FakePoolTransport } from '../src/integrations/fake/fakePool.js';
+import { GitPoolTransport } from '../src/integrations/pool/gitPool.js';
 import { foldPoolDigest } from '../src/pool/aggregate.js';
 import { buildClaimsDocument, importClaims, type ClaimArrival } from '../src/pool/claimsArm.js';
 import { buildDigestDocument, POOL_RETENTION_DAYS, utcDay } from '../src/pool/digestArm.js';
@@ -17,6 +22,7 @@ import { PoolDesk } from '../src/pool/poolDesk.js';
 import { secretRefusal } from '../src/pool/secrets.js';
 import { distinctCorroborators } from '../src/knowledge/knowledge.js';
 import type { FactObservation, PoolClaimsDocument, PoolDigestDocument } from '../src/types.js';
+import { gitRepo } from './support/gitRepo.js';
 
 /**
  * The cross-fleet pool (docs/spec/28-cross-fleet-pool.md).
@@ -641,4 +647,110 @@ test('the project stamp is written as the fact is, and a deployment with no name
     null,
     'null spells *no project*, which is the honest answer rather than a guess',
   );
+});
+
+// ---------------------------------------------------------------------------
+// The git transport, against real git
+// ---------------------------------------------------------------------------
+
+/**
+ * An identity for the commits the transport makes.
+ *
+ * `gitRepo` configures one on the repository it creates, but the pool clone is made
+ * by the transport itself — so there is nothing for a test to configure it on, and a
+ * runner with no global identity fails the commit for the author rather than for
+ * anything under test. The environment is the one place that reaches a clone nobody
+ * has created yet. `??=` so a developer's own identity is left alone.
+ */
+process.env.GIT_AUTHOR_NAME ??= 'Test';
+process.env.GIT_AUTHOR_EMAIL ??= 'test@example.com';
+process.env.GIT_COMMITTER_NAME ??= 'Test';
+process.env.GIT_COMMITTER_EMAIL ??= 'test@example.com';
+
+/**
+ * A bare repository with `main` and one commit on it, standing in for the pool's
+ * remote. Bare because that is what a remote is, and seeded because
+ * `clone --branch main` on an empty one names a branch that does not exist yet.
+ */
+function poolRemote(): string {
+  const bare = mkdtempSync(join(tmpdir(), 'lubbdubb-pool-remote-'));
+  execFileSync('git', ['init', '-q', '--bare', '-b', 'main'], { cwd: bare });
+  const seed = gitRepo('lubbdubb-pool-seed-');
+  execFileSync('git', ['push', '-q', bare, 'main'], { cwd: seed });
+  return bare;
+}
+
+/** What the remote holds, read through a throwaway clone rather than plumbing. */
+function remoteFile(remote: string, path: string): string | null {
+  const reader = mkdtempSync(join(tmpdir(), 'lubbdubb-pool-read-'));
+  execFileSync('git', ['clone', '-q', '--branch', 'main', remote, reader]);
+  try {
+    return readFileSync(join(reader, ...path.split('/')), 'utf8');
+  } catch {
+    return null;
+  }
+}
+
+function gitOut(cwd: string, args: string[]): string {
+  return execFileSync('git', args, { cwd, encoding: 'utf8' }).trim();
+}
+
+/**
+ * The regression that shipped: `rev-parse --git-dir` walks *up*, so a pool root
+ * inside another repository's working tree reported that repository's git dir and
+ * the guard returned early — never cloning, and writing the fleet's document into
+ * the enclosing checkout instead. This is the default configuration and not an
+ * exotic one: `poolRoot` is `<deskRoot>/pool` and `deskRoot` resolves against
+ * `repoRoot`, so the pool root is always inside the target repository.
+ */
+test('the git transport clones its own root even when that root sits inside another repository', async () => {
+  const remote = poolRemote();
+  const enclosing = gitRepo('lubbdubb-pool-enclosing-');
+  const root = join(enclosing, '.lubbdubb', 'desk', 'pool');
+  mkdirSync(root, { recursive: true });
+
+  const transport = new GitPoolTransport({ root, remote, branch: 'main', path: '', fleetId: 'alice@acme-api' });
+  await transport.publish(claimsDoc({ fleetId: 'alice@acme-api' }));
+
+  assert.equal(gitOut(root, ['rev-parse', '--show-toplevel']), realpathSync(root), 'the pool root is its own clone');
+  assert.notEqual(remoteFile(remote, 'fleets/alice@acme-api/claims.json'), null, 'the document reached the pool');
+  // The worse outcome of the same bug, and the silent one: where the enclosing
+  // repository does not happen to ignore the path, `git add` succeeds and the
+  // harness commits a pool document into the operator's repository on a schedule.
+  assert.equal(gitOut(enclosing, ['rev-list', '--count', 'HEAD']), '1', 'nothing was committed to the enclosing repo');
+  assert.equal(gitOut(enclosing, ['diff', '--cached', '--name-only']), '', 'nothing was staged there either');
+});
+
+test('a stray document tree left by the unsound guard is cleared when the clone is made', async () => {
+  const remote = poolRemote();
+  const enclosing = gitRepo('lubbdubb-pool-stray-');
+  const root = join(enclosing, '.lubbdubb', 'desk', 'pool');
+  const stray = join(root, 'fleets', 'alice@acme-api');
+  mkdirSync(stray, { recursive: true });
+  writeFileSync(join(stray, 'claims.json'), '{"stray":true}', 'utf8');
+
+  const transport = new GitPoolTransport({ root, remote, branch: 'main', path: '', fleetId: 'alice@acme-api' });
+  await transport.publish(claimsDoc({ fleetId: 'alice@acme-api' }));
+
+  // Re-derivable by construction — the put is a whole replace — so the directory the
+  // transport owns is cleared rather than merged into the clone.
+  assert.notEqual(readFileSync(join(stray, 'claims.json'), 'utf8'), '{"stray":true}');
+  assert.notEqual(remoteFile(remote, 'fleets/alice@acme-api/claims.json'), null);
+});
+
+test('a clone whose origin is not the configured remote is refused rather than written to', async () => {
+  const configured = poolRemote();
+  const other = poolRemote();
+  const root = join(mkdtempSync(join(tmpdir(), 'lubbdubb-pool-wrong-')), 'pool');
+  execFileSync('git', ['clone', '-q', '--branch', 'main', other, root]);
+
+  const transport = new GitPoolTransport({
+    root,
+    remote: configured,
+    branch: 'main',
+    path: '',
+    fleetId: 'alice@acme-api',
+  });
+  await assert.rejects(() => transport.publish(claimsDoc({ fleetId: 'alice@acme-api' })), /not the configured remote/);
+  assert.equal(remoteFile(other, 'fleets/alice@acme-api/claims.json'), null, 'and nothing reached the wrong pool');
 });
