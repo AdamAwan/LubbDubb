@@ -230,6 +230,64 @@ Implements both seams:
   sites) and nothing else. Faking a world change is a demo affordance, and the only demo is the
   static Pages build, which has its own in-browser injection ([17](17-cockpit.md#demo-mode)).
 
+## Signing what the harness says
+
+Every outbound write rides on the **operator's own credential** — their `GITHUB_TOKEN`, their PAT. So
+a plan comment, an assay question, a review reply or a filed ticket arrives on the thread wearing
+their avatar and their name, indistinguishable from something they typed. That is a misattribution
+rather than an untidiness: a reviewer answers a machine's question believing a colleague asked it,
+and the thread's permanent record says a person said something they never said.
+
+So the composite **signs every piece of prose on its way out**, in `signed()`:
+
+> 🤖 Automated comment from **LubbDubb** — automating PR busy work so the user can go to the beach.
+
+Four decisions hold it up.
+
+**It is appended at the seam, not rendered by the callers.** Six surfaces write prose today — the
+plan status comment, the assay question, the arrival announcement, the PR review reply, the filed
+ticket body and the opened PR body — and every one of them reaches a provider through
+`postPrReply`, `upsertIssueComment`, `createIssue` or `createPullRequest`. Signing there signs the
+surfaces that exist *and* the ones added later. Six call sites each remembering to sign is six that
+can quietly become five, on a comment that reads perfectly and is attributed to the wrong author.
+Same reasoning as appending to a rendered prompt rather than interpolating into it
+([05](05-dispatcher.md#prompt-templates)).
+
+**Only prose is signed.** A label, a merge, a title rewrite, a state transition and a branch delete
+are *acts*: they carry no voice for a reader to mistake for a human's, and a footer is not a thing
+you can attach to them anyway.
+
+**It names no account.** The avatar beside the comment already says whose credential it went out
+under, so naming them restates it — and a line built from `userId` would have a second, quieter
+rendering on every deployment that leaves that unset.
+
+**It is unconditional, and not a config key.** A sign-off an operator can switch off is one that is
+off exactly where the impersonation matters most.
+
+### Markdown or HTML
+
+`Integration.bodyFormat` says which markup a provider renders, defaulting to `markdown` — what every
+provider but one speaks, so only the exception declares anything. The exception is
+`issues:azure`: work item descriptions and discussion comments are HTML fields, and Markdown sent
+to one arrives as its own punctuation. Azure's **pull request** threads render Markdown, which is why
+the flag rides on the integration rather than on the provider family — one provider, two answers.
+
+### Idempotence, and why the ending is hashed
+
+The footer carries a `<!-- lubbdubb:signoff -->` marker — invisible in both flavours, since a
+Markdown renderer draws nothing for an HTML comment and Azure's sanitiser drops it. `signOff`
+returns a body already carrying one untouched, so a body read back from a provider and re-sent gains
+no second footer.
+
+The line's last clause is drawn from a list of endings, because one fixed ending read a hundred times
+stops being a joke and becomes furniture — and furniture is what a reader's eye learns to skip,
+taking the half of the line that *matters* along with it. Which ending a body gets is **hashed from
+the body**, not drawn at random: the plan status comment and the assay question are each one living
+comment edited in place, and a random ending would move under every edit, filling the thread's
+revision history with diffs whose only content is the joke. Hashing spreads endings across comments
+while holding each comment's own ending still — and keeps the function pure, so a test asserts
+against it without a seed or a clock injected.
+
 ## The `fake` provider
 
 Two integrations over one `FakeWorldStore`, which persists to `connector_state` so an injected world

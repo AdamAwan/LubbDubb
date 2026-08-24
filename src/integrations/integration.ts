@@ -21,6 +21,7 @@ import type {
   WorkItemParentInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
+import type { BodyFormat } from '../sink/signOff.js';
 import type { CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import type { AreaPathTree } from '../intake/placement.js';
 import type { TrackerItem, WorldSnapshot } from '../types.js';
@@ -75,6 +76,18 @@ export interface Integration {
   readonly capability: Capability;
   /** This integration's slice of the world right now. Called every dispatch cycle. */
   snapshot(): Promise<WorldSlice>;
+  /**
+   * How this provider renders the prose the harness sends it — what
+   * {@link signOff} needs to know to append a sign-off that renders rather than
+   * showing a reader its own markup.
+   *
+   * Optional, defaulting to `markdown`, because that is what every provider but
+   * Azure DevOps speaks: a provider that says nothing gets the common case, and
+   * only the one that renders HTML has to declare it. Declaring the wrong one is
+   * cosmetic and visible on the first comment, which is the one class of mistake
+   * here that does not need guarding against.
+   */
+  readonly bodyFormat?: BodyFormat;
 }
 
 // ---------------------------------------------------------------------------

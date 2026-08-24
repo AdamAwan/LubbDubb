@@ -20,6 +20,7 @@ import type {
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { TrackerItem, WorldSnapshot } from '../types.js';
+import { signOff } from '../sink/signOff.js';
 import type { CiEvidenceReader, CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
 import type { AreaPathTree } from '../intake/placement.js';
 import {
@@ -138,10 +139,28 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     return this.integrations.some(isTicketHistoryCapable);
   }
 
+  /**
+   * `body` with the harness's sign-off, in the handling provider's markup.
+   *
+   * **Here rather than at the call sites, and that is the whole of it.** Every
+   * piece of prose the harness sends passes through one of the four methods below
+   * on its way to any provider, so signing here signs the surfaces that exist and
+   * the ones added later — where six call sites each remembering to sign is six
+   * that can be five, silently, on a comment that reads perfectly and is
+   * attributed to a person who never wrote it.
+   *
+   * Nothing else routed here is signed, because nothing else is prose: a label, a
+   * merge, a title or a state transition is an act, and an act carries no voice to
+   * mistake for a human's.
+   */
+  private signed(handler: Integration, body: string): string {
+    return signOff(body, handler.bodyFormat ?? 'markdown');
+  }
+
   async postPrReply(input: PrReplyInput): Promise<SendResult> {
     const handler = this.integrations.find(isPrReplyCapable);
     if (!handler) throw new Error('no integration can post PR replies (no sourceControl provider is PrReplyCapable)');
-    return handler.postPrReply(input);
+    return handler.postPrReply({ ...input, body: this.signed(handler, input.body) });
   }
 
   async mergePr(input: PrMergeInput): Promise<SendResult> {
@@ -159,7 +178,7 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
   async createPullRequest(input: PrCreateInput): Promise<SendResult> {
     const handler = this.integrations.find(isPrCreateCapable);
     if (!handler) throw new Error('no integration can open PRs (no sourceControl provider is PrCreateCapable)');
-    return handler.createPullRequest(input);
+    return handler.createPullRequest({ ...input, body: this.signed(handler, input.body) });
   }
 
   async setPullTitle(input: PrTitleInput): Promise<SendResult> {
@@ -260,13 +279,13 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
   async createIssue(input: IssueCreateInput): Promise<SendResult> {
     const handler = this.integrations.find(isIssueCreateCapable);
     if (!handler) throw new Error('no integration can create issues (no issues provider is IssueCreateCapable)');
-    return handler.createIssue(input);
+    return handler.createIssue({ ...input, body: this.signed(handler, input.body) });
   }
 
   async upsertIssueComment(input: IssueCommentInput): Promise<SendResult> {
     const handler = this.integrations.find(isIssueCommentCapable);
     if (!handler) throw new Error('no integration can comment on issues (no issues provider is IssueCommentCapable)');
-    return handler.upsertIssueComment(input);
+    return handler.upsertIssueComment({ ...input, body: this.signed(handler, input.body) });
   }
 
   /**

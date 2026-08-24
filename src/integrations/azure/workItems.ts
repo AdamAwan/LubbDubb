@@ -76,6 +76,13 @@ export class AzureDevOpsWorkItemsIntegration
 {
   readonly id = 'issues:azure';
   readonly capability: Capability = 'issues';
+  /**
+   * Work item descriptions and discussion comments are HTML fields — Azure stores
+   * and renders them as markup, so Markdown sent to one arrives as its own
+   * punctuation. The *pull request* side of the same provider renders Markdown,
+   * which is why this rides on the integration rather than on the provider family.
+   */
+  readonly bodyFormat = 'html' as const;
 
   private lastGood: Issue[] | null = null;
 
