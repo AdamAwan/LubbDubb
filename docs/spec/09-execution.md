@@ -108,6 +108,42 @@ run only after the spawn, so the job is still `queued` and the part still `ready
 re-dispatches the same work. One transient `worktrees.ensure` failure therefore costs a cycle rather
 than wedging a chain of work shut for the life of the database (`test/dispatchFailure.test.ts`).
 
+### A refusal that keeps repeating
+
+One rejection costs a cycle and nothing else, which is exactly right and is why the executor writes a
+`decisions` row and no more. **A refusal that repeats every pulse is a different thing**, and it used to
+reach nobody: no error is recorded, no escalation is raised, the task row it made was
+settled `interrupted` on the way out, and the two surfaces that carry `decisions` neither raise nor
+sort by it. What a fleet stuck that way presents as is a fleet with nothing to do — nothing paused,
+nothing red, an "Up next" queue that keeps refilling, and no symptom but work not happening.
+
+So the cockpit derives a **`dispatch` row on the queue rail** ([17](17-cockpit.md#the-queue-rail--needs-you))
+from the decision log it is already shipped: a dispatch whose origin has been `rejected` on **three
+separate pulses running** raises an ask naming the origin, the refusal in the words the thrower wrote,
+and how long it has been going on.
+
+Three things about that shape are load-bearing:
+
+- **It keys on the outcome, never on the message.** Both refusals the worktree pool raises — a branch
+  checked out where the pool cannot lease it, and a pool with [nothing left to give](#exhaustion) —
+  are `rejected` dispatches with different sentences, and so is whatever the next one turns out to be.
+  A surface matching the sentence would cover only the failures that have already happened.
+- **`deferred` is not a refusal.** The [branch](#2-branch-gate--deferred-code-dispatches-only),
+  [pause](#3-pause-gate--deferred) and [cap](#4-cap-gate--deferred) gates defer by design and clear
+  themselves on a later pulse. Counting those would raise an alarm every time the fleet ran at its
+  cap, which is the fleet working.
+- **The run must be unbroken at the head of that origin's history**, rather than a count over the
+  window the snapshot ships. That is what makes the row clear itself the instant one dispatch for the
+  origin gets through; a count would go on drawing "stuck" until the old rows aged out, some minutes
+  after the operator had fixed it.
+
+**The refusal itself does not change, and must not.** `checkedOutElsewhere` and the exhaustion message
+are correct to reject, correct to say what they say, and correct to let the next cycle try again — the
+whole of what was missing was somewhere for that to be read. It is deliberately **not** routed through
+`errors.record` either: the error log is a list an operator clears
+([18](18-observability.md#the-error-log)), and a per-pulse recording of a standing condition is a
+hundred rows an hour of one fact, in the one place shape means "something threw once".
+
 ## Task materialisation
 
 The row and the directory are separate steps, so the executor holds the created task when the
@@ -163,10 +199,10 @@ dispatcher's prose-composed `reply_on_pr` included. Two call sites, one predicat
 **The harness authorizes no outbound act on its own judgement.** Every authority here is the
 operator's; there are two of them, and they are two because they are different promises.
 
-| Authority                                       | Reaches                       | The operator said                                             |
-| ----------------------------------------------- | ----------------------------- | ------------------------------------------------------------- |
-| **Stack landing** — `store.standingLandingForPr` | the merges of named rungs     | _these pull request numbers_, clicked once over the chain      |
-| **`sendPrRepliesWithoutApproval`** — the config  | every reply the fleet drafts  | _this class of act_, in advance — **and by default**, until they turn it off |
+| Authority                                        | Reaches                      | The operator said                                                            |
+| ------------------------------------------------ | ---------------------------- | ---------------------------------------------------------------------------- |
+| **Stack landing** — `store.standingLandingForPr` | the merges of named rungs    | _these pull request numbers_, clicked once over the chain                    |
+| **`sendPrRepliesWithoutApproval`** — the config  | every reply the fleet drafts | _this class of act_, in advance — **and by default**, until they turn it off |
 
 A **stack landing** is the operator's authorization over a chain, clicked once over the pull request
 numbers it covers ([12](12-stacked-prs.md)). Its scope _is_ those numbers: it is asked only of a
@@ -186,7 +222,7 @@ is that; what the tool changes is **who sends it**: signed, recorded, held by a 
 and carrying a proposal row that names the authority.
 
 Read the other way round, `false` is the setting that changes something, and it is the stricter one —
-it buys a click on every reply. Defaulting *there* would have been the silent change: a deployment
+it buys a click on every reply. Defaulting _there_ would have been the silent change: a deployment
 that edited nothing would take the build and find its replies stopping and its inbox filling with
 drafts nobody had asked to review. An operator who wants that sets one key, and every draft waits in
 the inbox again — the arm below, unchanged, and still the only thing a merge or a plan can take. A merge is not in it (the landing is the better-scoped answer, and it
@@ -265,11 +301,11 @@ number". A malformed payload is reported, never guessed at.
 `authorityOf(proposal, pulseCycleId)` decides the whole decider → cycle id → wording chain at once,
 because the three are a chain and not three facts:
 
-| Decider         | Cycle id                                                                          | Reads as                                         |
-| --------------- | --------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `human`         | `human:<proposal id>` — a decision made outside the pulse, like `agent-lifecycle` | `authorized by you`                              |
-| `stack_landing` | the pulse's own cycle id                                                          | `authorized by you, landing the stack`           |
-| `auto_send`     | the pulse's own cycle id, or the agent's call                                     | `authorized by auto-send`                        |
+| Decider         | Cycle id                                                                          | Reads as                               |
+| --------------- | --------------------------------------------------------------------------------- | -------------------------------------- |
+| `human`         | `human:<proposal id>` — a decision made outside the pulse, like `agent-lifecycle` | `authorized by you`                    |
+| `stack_landing` | the pulse's own cycle id                                                          | `authorized by you, landing the stack` |
+| `auto_send`     | the pulse's own cycle id, or the agent's call                                     | `authorized by auto-send`              |
 
 A standing landing accepts _inside_ a cycle, so its row stays grouped with the pulse that produced
 the action and **cannot** carry the `human:` prefix the cockpit badges "you · accepted" off — that
@@ -907,7 +943,8 @@ not delete anything either: the slots already standing keep their warm trees, an
 stops growing.
 
 With every slot unavailable and nothing left to reclaim, `ensure` **throws** and the executor audits
-a rejected dispatch, which settles the task and leaves the next cycle to try again. Rejecting is
+a rejected dispatch, which settles the task and leaves the next cycle to try again — and, if it goes
+on doing that, [says so on the rail](#a-refusal-that-keeps-repeating). Rejecting is
 preferable to blocking — waiting on a directory would hold the pulse. The refusal names each slot and
 why it is unavailable, what the reclaim did or could not do, the two knobs, and the directories under
 `worktreeRoot` that are not registered worktrees at all, because a rejection that names none of that

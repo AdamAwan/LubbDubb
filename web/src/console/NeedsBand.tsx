@@ -10,6 +10,7 @@ import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
 import { Ref } from '../components/refs.js';
 import { goalIssue } from '../view/goalPage.js';
+import { refusedDispatchFor } from '../view/needsYou.js';
 import { relTime } from '../components/util.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel } from './QueueRail.js';
 
@@ -231,6 +232,42 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
             Open transcript
           </button>
         </div>
+      </>
+    );
+  }
+  // A dispatch the executor keeps refusing. There is no control here and there
+  // must not be one: what is in the way is outside the harness in both cases the
+  // worktree pool raises — a checkout of the operator's own standing on the
+  // branch, or a cap that has to come down — and a button that could not perform
+  // either would be the dead end this cockpit's rules exist to prevent.
+  //
+  // The refusal is drawn **verbatim**. It is the harness's own prose, written to
+  // be read here: it names the branch, the path, why the lease cannot be taken
+  // and what clears it, and every attempt to summarise it on the way through has
+  // to be re-made the next time the pool learns a new way to refuse.
+  if (row.kind === 'dispatch') {
+    const refusal = refusedDispatchFor(view.state, row.id);
+    if (!refusal) return null;
+    const rule = refusal.rule === null ? undefined : view.state.dispatchRules[refusal.rule];
+    return (
+      <>
+        <p>
+          <strong>
+            Nothing has dispatched for this since {relTime(refusal.since, view.now)} — {refusal.pulses} pulses, each
+            refused.
+          </strong>
+        </p>
+        <p className="cn-tick">{refusal.detail}</p>
+        <p className="cn-tick">
+          The harness is proposing it again on every pulse and will go on doing so; it is not paused, and nothing about
+          it is retried differently. Clearing what the refusal names is the whole of the fix.
+          {rule && ` The rule proposing it is “${rule.name}”.`}
+        </p>
+        {refusal.originRef !== null && (
+          <div className="cn-refs">
+            <Ref to={refusal.originRef} title="Open what the refused dispatch is about" />
+          </div>
+        )}
       </>
     );
   }

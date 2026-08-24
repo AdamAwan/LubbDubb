@@ -163,6 +163,7 @@ const NEED_KIND_LABEL: Record<NeedKind, string> = {
   burn: 'A run is spending far more than usual',
   limit: 'An agent is out of account limit',
   supply: 'The fleet is running out of work',
+  dispatch: 'A dispatch is being refused every pulse',
 };
 
 /** Reduce a snapshot to what {@link notifiableChanges} compares. */

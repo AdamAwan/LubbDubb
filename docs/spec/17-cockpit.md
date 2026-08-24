@@ -381,7 +381,7 @@ reads the `ticket*` fields off `place.ts` and asserts the hook forwards every on
 
 A permanent left column holding **every** blocking item in one list: escalations, plan proposals,
 permission requests, unanswered goal-profile proposals, usage-limit parks, bench tasks, close-outs,
-validate rows and the recovery hold. `buildNeedsYou`
+validate rows, dispatches the executor keeps refusing and the recovery hold. `buildNeedsYou`
 (`web/src/view/needsYou.ts`) is the merge, and it is pure.
 
 **The snapshot carries only the escalations that are still open** — the rail's own
@@ -444,6 +444,26 @@ named has turned over ([10](10-agent-runtimes.md#ending-it-on-the-clock)), so `R
 early, and for the parks that carry no reset time and would otherwise sit there for good. It draws no reply box anywhere, because the agent's process is usually gone with the
 limit and a box that cannot send is worse than no box.
 
+**`dispatch` is the one kind derived from the decision log**, and the only one whose subject is
+something the harness _tried_ rather than something anybody raised. A dispatch the executor has
+refused on three separate pulses running draws a row naming the origin, the refusal verbatim, and how
+long it has been going on ([09](09-execution.md#a-refusal-that-keeps-repeating)). Nothing else in the
+harness records it: no escalation, no task, no error — the attempt's own task row is settled
+`interrupted` on the way out — so a fleet stuck on one reads as a fleet with nothing to do, which is
+what it did for four minutes with a branch checked out where the pool could not lease it.
+
+Three pulses rather than one, because a slot is held from `ensure` until an agent's process is reaped:
+a fleet at its cap trips a refusal that the next pulse clears, and a rail that cried wolf on that
+would be noise on a working deployment. The run has to be **unbroken at the head** of that origin's
+history, which is what clears the row the instant one dispatch gets through rather than when the old
+rows age out of the hundred the snapshot ships. It keys on the `rejected` outcome and never on the
+sentence, so both refusals the worktree pool raises arrive here together and so does the next one.
+
+**It has no control, and must not grow one.** What is in the way is outside the harness in both
+cases — a checkout of the operator's own standing on the branch, or a cap that has to come down — and
+a button that could perform neither is the dead end this cockpit's rules exist to prevent. The band
+draws the thrower's own message instead, which already names the branch, the path and what clears it.
+
 **Two groups, split on who is stopped.** `blocking` means an agent is parked and cannot proceed;
 `yours` means the obligation is the operator's and nothing inside the fleet is waiting. A profile gate
 is `yours` for that reason and against how much it stops: it holds a whole goal's dispatch, and no
@@ -461,19 +481,20 @@ and an operator glancing at the rail could not tell a queue of successes from a 
 reading every row. The palette now answers _what the ask is_, and the group is carried as weight
 within it.
 
-| Kind         | Tag         | Tone  | Glyph | Why that tone                                        |
-| ------------ | ----------- | ----- | ----- | ---------------------------------------------------- |
-| `recovery`   | Recovery    | red   | `↺`   | A restart left runs orphaned. Something went wrong.  |
-| `escalation` | Escalation  | red   | `?`   | An agent hit a question it cannot get past.          |
-| `permission` | Permission  | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes. |
-| `limit`      | Usage limit | amber | `‖`   | Nothing broke; an allowance window has to turn over. |
-| `burn`       | Spend       | amber | `▲`   | A heads-up on a run that carries on either way.      |
-| `proposal`   | Plan        | blue  | `◇`   | A plan to read and decide on.                        |
-| `profile`    | Profile     | blue  | `⊙`   | Which profile a goal runs on.                        |
-| `placement`  | Backlog     | amber | `▣`   | Nothing is held; the ticket is off the board.        |
-| `bench`      | Bench       | blue  | `◆`   | Work only a person can do. Informative, not broken.  |
-| `close_out`  | Close-out   | green | `⚑`   | A goal was **delivered**; this is the step after it. |
-| `validate`   | Validate    | green | `✓`   | The other step after a delivery — run its checks.    |
+| Kind         | Tag         | Tone  | Glyph | Why that tone                                          |
+| ------------ | ----------- | ----- | ----- | ------------------------------------------------------ |
+| `recovery`   | Recovery    | red   | `↺`   | A restart left runs orphaned. Something went wrong.    |
+| `escalation` | Escalation  | red   | `?`   | An agent hit a question it cannot get past.            |
+| `permission` | Permission  | amber | `⊘`   | A gate, not a fault — a command is waiting on a yes.   |
+| `limit`      | Usage limit | amber | `‖`   | Nothing broke; an allowance window has to turn over.   |
+| `burn`       | Spend       | amber | `▲`   | A heads-up on a run that carries on either way.        |
+| `proposal`   | Plan        | blue  | `◇`   | A plan to read and decide on.                          |
+| `profile`    | Profile     | blue  | `⊙`   | Which profile a goal runs on.                          |
+| `placement`  | Backlog     | amber | `▣`   | Nothing is held; the ticket is off the board.          |
+| `bench`      | Bench       | blue  | `◆`   | Work only a person can do. Informative, not broken.    |
+| `close_out`  | Close-out   | green | `⚑`   | A goal was **delivered**; this is the step after it.   |
+| `validate`   | Validate    | green | `✓`   | The other step after a delivery — run its checks.      |
+| `dispatch`   | Refused     | red   | `⊠`   | The harness keeps trying this and keeps being told no. |
 
 `KIND_TONE` and `KIND_SYMBOL` (`web/src/console/QueueRail.tsx`) are total over `NeedKind`, beside
 `KIND_LABEL`, so a new kind fails the typecheck rather than drawing in whatever the last rule in the
