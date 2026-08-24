@@ -98,6 +98,9 @@ function countingSink(fail = false): ActionSink & { merges: number[]; replies: n
     merges,
     replies,
     canSetWorkItemState: () => false,
+    canPlaceWorkItem: () => false,
+    setWorkItemParent: () => Promise.reject(new Error('not used')),
+    setWorkItemAreaPath: () => Promise.reject(new Error('not used')),
     async mergePr({ prNumber }) {
       merges.push(prNumber);
       if (fail) throw new Error('merge conflict');

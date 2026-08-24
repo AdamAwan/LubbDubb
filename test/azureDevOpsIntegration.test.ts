@@ -41,6 +41,7 @@ import type {
 } from '../src/integrations/azure/azureDevOpsApi.js';
 import { validatePolicyCheckModes, type PolicyCheckModes } from '../src/integrations/azure/policyKinds.js';
 import type { MergeMethod } from '../src/sink/actionSink.js';
+import type { AreaPathTree } from '../src/intake/placement.js';
 
 /** Everything a test wants to script. Every field defaults to empty/benign. */
 interface Script {
@@ -64,6 +65,8 @@ interface Script {
   createdPullNumber?: number;
   /** The id `createWorkItem` reports having created. */
   createdWorkItemId?: number;
+  /** The project's area tree, as `listAreaPaths` serves it. */
+  areaPaths?: AreaPathTree;
   /** When set, `createWorkItem` throws with this message. */
   createThrows?: string;
   /** When set, `relateWorkItem` throws with this message — the second of a bug's two writes. */
@@ -86,6 +89,8 @@ interface Recorded {
   labelSets: Array<{ prId: number; label: string; present: boolean }>;
   stateSets: Array<{ id: number; state: string }>;
   tagSets: Array<{ id: number; tag: string; present: boolean }>;
+  parentSets: Array<{ id: number; parentId: number }>;
+  areaPathSets: Array<{ id: number; areaPath: string }>;
   workItemLinks: Array<{ id: number; pullRequestId: number }>;
   createdWorkItems: Array<{
     type: string;
@@ -121,6 +126,8 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     labelSets: [],
     stateSets: [],
     tagSets: [],
+    parentSets: [],
+    areaPathSets: [],
     workItemLinks: [],
     createdWorkItems: [],
     relations: [],
@@ -222,6 +229,15 @@ function fakeApi(script: Script = {}): { api: AzureDevOpsApi; recorded: Recorded
     },
     async setWorkItemState(id, state) {
       recorded.stateSets.push({ id, state });
+    },
+    async listAreaPaths() {
+      return script.areaPaths ?? { root: 'Contoso', paths: [] };
+    },
+    async setWorkItemParent(id, parentId) {
+      recorded.parentSets.push({ id, parentId });
+    },
+    async setWorkItemAreaPath(id, areaPath) {
+      recorded.areaPathSets.push({ id, areaPath });
     },
     async setWorkItemTag(id, tag, present) {
       recorded.tagSets.push({ id, tag, present });
@@ -979,6 +995,7 @@ function workItem(over: Partial<AzWorkItem> = {}): AzWorkItem {
     body: 'b',
     state: 'Active',
     workItemType: 'Bug',
+    areaPath: 'Contoso',
     tags: ['bug'],
     relationUrls: [],
     parentId: null,

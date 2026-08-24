@@ -36,6 +36,21 @@ export const ISSUE_VERDICT_COLUMNS: ColumnMigrations = {
      * the gate needs both.
      */
     profile_answered_at: 'TEXT',
+    /** The container the assayer proposed — see {@link IssueAssay.proposedParent}. */
+    proposed_parent: 'INTEGER',
+    /**
+     * When the operator answered the parent question — see
+     * {@link IssueAssay.parentSettledAt}.
+     *
+     * Null on every row written before this existed, which is the right reading:
+     * those rows carry no proposal either, and the question is only asked where
+     * both a proposal and a still-missing field are present.
+     */
+    parent_settled_at: 'TEXT',
+    /** The area path the assayer proposed — see {@link IssueAssay.proposedAreaPath}. */
+    proposed_area_path: 'TEXT',
+    /** {@link parent_settled_at} for the area path, and null on old rows for its reason. */
+    area_path_settled_at: 'TEXT',
   },
 };
 
@@ -357,6 +372,18 @@ export class IssueVerdictStore {
      * in hand exactly once, where the proposal is written.
      */
     profileDiverges?: boolean;
+    /**
+     * The container this goal should hang off, and the classification node it
+     * should sit on, as the assayer proposed them — or null for either where it
+     * named none.
+     *
+     * Stored exactly as given and **never gated here on whether the work item is
+     * still missing the field**. That reading is derived where it is drawn, off
+     * the live work item, so an operator who sets it by hand in the tracker ends
+     * the question with no write to this row at all.
+     */
+    proposedParent?: number | null;
+    proposedAreaPath?: string | null;
   }): IssueAssay {
     const ts = this.ctx.now();
     const prev = this.getAssay(input.originRef);
@@ -372,6 +399,14 @@ export class IssueVerdictStore {
       // must not cost a click. A proposal that *does* diverge is stored unanswered
       // and `assayHold` holds the funnel on exactly this field being null.
       profileAnsweredAt: proposedProfile !== null && input.profileDiverges === true ? null : ts,
+      proposedParent: input.proposedParent ?? null,
+      proposedAreaPath: input.proposedAreaPath ?? null,
+      // A re-assay is a fresh proposal about a fresh reading of the ticket, so the
+      // dismissal that answered the *previous* one does not carry over. That is
+      // the whole of "a rewritten ticket is asked again" — there is no second
+      // mechanism, and nothing here has to have witnessed the edit.
+      parentSettledAt: null,
+      areaPathSettledAt: null,
       agentId: input.agentId ?? null,
       taskId: input.taskId ?? null,
       // Kept only while the verdict is about the same text: a comment written for
@@ -383,12 +418,15 @@ export class IssueVerdictStore {
     };
     return this.recordVerdict(
       'assay',
-      `INSERT INTO issue_assays (origin_ref, verdict, summary, goal_ref, by, proposed_profile, profile_answered_at, agent_id, task_id, comment_ref, decided_at, updated_at)
-       VALUES (@originRef, @verdict, @summary, @goalRef, @by, @proposedProfile, @profileAnsweredAt, @agentId, @taskId, @commentRef, @decidedAt, @updatedAt)
+      `INSERT INTO issue_assays (origin_ref, verdict, summary, goal_ref, by, proposed_profile, profile_answered_at, proposed_parent, parent_settled_at, proposed_area_path, area_path_settled_at, agent_id, task_id, comment_ref, decided_at, updated_at)
+       VALUES (@originRef, @verdict, @summary, @goalRef, @by, @proposedProfile, @profileAnsweredAt, @proposedParent, @parentSettledAt, @proposedAreaPath, @areaPathSettledAt, @agentId, @taskId, @commentRef, @decidedAt, @updatedAt)
        ON CONFLICT(origin_ref) DO UPDATE SET
          verdict=excluded.verdict, summary=excluded.summary, goal_ref=excluded.goal_ref,
          by=excluded.by, proposed_profile=excluded.proposed_profile,
          profile_answered_at=excluded.profile_answered_at,
+         proposed_parent=excluded.proposed_parent, parent_settled_at=excluded.parent_settled_at,
+         proposed_area_path=excluded.proposed_area_path,
+         area_path_settled_at=excluded.area_path_settled_at,
          agent_id=excluded.agent_id, task_id=excluded.task_id,
          comment_ref=excluded.comment_ref, updated_at=excluded.updated_at`,
       row,
@@ -434,6 +472,38 @@ export class IssueVerdictStore {
       this.ctx.db
         .prepare(
           `UPDATE issue_assays SET profile_answered_at=?, updated_at=? WHERE origin_ref=? AND goal_ref=? AND profile_answered_at IS NULL`,
+        )
+        .run(ts, ts, originRef, goalRef).changes > 0
+    );
+  }
+
+  /**
+   * Settle one of a goal's placement questions — the operator's one click,
+   * whichever of the three answers they gave.
+   *
+   * The only stored half of a question whose visibility is otherwise **derived**
+   * from the live work item. Two of the answers end it out there as well, and this
+   * is written for them too: the derived read lags a pulse behind the write, and a
+   * question that came back for one refresh would read as a click that did not
+   * take.
+   *
+   * Scoped to the row the operator was looking at, exactly as
+   * {@link answerAssayProfile} is: a re-assay writes a new `goal_ref` with its own
+   * proposals, and settling a superseded one must not silence a question nobody
+   * has seen.
+   *
+   * One method over a column name rather than two near-identical ones: the two
+   * fields differ in what they hold and not at all in how they are settled, and a
+   * second copy of this is a second place for the goal-ref scoping to be got
+   * wrong. The column is chosen from a closed union, never from a caller's string.
+   */
+  settleAssayPlacement(originRef: string, goalRef: string, field: 'parent' | 'areaPath'): boolean {
+    const column = field === 'parent' ? 'parent_settled_at' : 'area_path_settled_at';
+    const ts = this.ctx.now();
+    return (
+      this.ctx.db
+        .prepare(
+          `UPDATE issue_assays SET ${column}=?, updated_at=? WHERE origin_ref=? AND goal_ref=? AND ${column} IS NULL`,
         )
         .run(ts, ts, originRef, goalRef).changes > 0
     );
@@ -497,6 +567,11 @@ interface IssueAssayRow {
   /** Nullable *and* possibly absent: added by `ensureColumns` on databases from an older build. */
   proposed_profile: string | null;
   profile_answered_at: string | null;
+  /** Nullable *and* possibly absent, exactly as the two profile columns are. */
+  proposed_parent: number | null;
+  parent_settled_at: string | null;
+  proposed_area_path: string | null;
+  area_path_settled_at: string | null;
   agent_id: string | null;
   task_id: string | null;
   comment_ref: string | null;
@@ -557,6 +632,14 @@ function rowToAssay(r: IssueAssayRow): IssueAssay {
     // proposal and park an issue nobody had proposed anything for.
     proposedProfile: r.proposed_profile ?? null,
     profileAnsweredAt: r.profile_answered_at ?? null,
+    // `?? null` for the same reason, and with a smaller consequence than the
+    // profile pair's: an `undefined` here would reach the wire as a missing key
+    // rather than as a proposal nobody made, since nothing about these two gates
+    // a dispatch.
+    proposedParent: r.proposed_parent ?? null,
+    parentSettledAt: r.parent_settled_at ?? null,
+    proposedAreaPath: r.proposed_area_path ?? null,
+    areaPathSettledAt: r.area_path_settled_at ?? null,
     agentId: r.agent_id,
     taskId: r.task_id,
     commentRef: r.comment_ref,

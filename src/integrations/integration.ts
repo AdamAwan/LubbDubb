@@ -16,10 +16,13 @@ import type {
   PrReplyInput,
   PrTitleInput,
   SendResult,
+  WorkItemAreaPathInput,
   WorkItemLinkInput,
+  WorkItemParentInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
+import type { AreaPathTree } from '../intake/placement.js';
 import type { TrackerItem, WorldSnapshot } from '../types.js';
 
 /**
@@ -260,6 +263,27 @@ export function isTicketHistoryCapable(x: Integration): x is Integration & Ticke
   return typeof (x as Partial<TicketHistoryCapable>).listTicketHistory === 'function';
 }
 
+/**
+ * An integration whose tracker classifies items into a **tree** — the area paths
+ * an item can be filed under, which is what puts it on a team's board.
+ *
+ * A read among the outbound capabilities, exactly as {@link CiEvidenceCapable} is
+ * and for its reason: it is deliberately off {@link Integration.snapshot}, which
+ * carries the items the harness acts on. This carries the tracker's own *schema*,
+ * it changes at the speed a team reorganises, and paying for it every pulse would
+ * buy nothing — see `src/intake/areaPaths.ts`, which reads it about once an hour.
+ *
+ * A provider with no such tree simply is not capable, and then the whole
+ * area-path question is absent rather than answered wrongly.
+ */
+export interface AreaPathCapable {
+  listAreaPaths(): Promise<AreaPathTree>;
+}
+
+export function isAreaPathCapable(x: Integration): x is Integration & AreaPathCapable {
+  return typeof (x as Partial<AreaPathCapable>).listAreaPaths === 'function';
+}
+
 /** An integration that can add/remove a label on an issue / work item — the watch/ignore toggle. */
 export interface IssueLabelCapable {
   setIssueLabel(input: IssueLabelInput): Promise<SendResult>;
@@ -276,6 +300,26 @@ export interface WorkItemStateCapable {
 
 export function isWorkItemStateCapable(x: Integration): x is Integration & WorkItemStateCapable {
   return typeof (x as Partial<WorkItemStateCapable>).setWorkItemState === 'function';
+}
+
+/**
+ * An integration that can **place** a work item on the backlog: set the container
+ * it rolls up to, and the classification node that puts it on a team's board.
+ *
+ * One capability for the two writes rather than two, unlike every split above,
+ * and for the mirror of their reason: no provider has one of these without the
+ * other. They are both Azure Boards concepts and they arrive together, so a
+ * provider that could serve one and not the other is not a configuration anybody
+ * has — where the splits above exist precisely because GitHub genuinely has one
+ * half and not the other.
+ */
+export interface WorkItemPlacementCapable {
+  setWorkItemParent(input: WorkItemParentInput): Promise<SendResult>;
+  setWorkItemAreaPath(input: WorkItemAreaPathInput): Promise<SendResult>;
+}
+
+export function isWorkItemPlacementCapable(x: Integration): x is Integration & WorkItemPlacementCapable {
+  return typeof (x as Partial<WorkItemPlacementCapable>).setWorkItemParent === 'function';
 }
 
 /**

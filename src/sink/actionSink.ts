@@ -88,6 +88,29 @@ export interface WorkItemLinkInput {
   prNumber: number;
 }
 
+/**
+ * Where a tracker item sits on the backlog — the container it rolls up to, and
+ * the node that puts it on a team's board (`src/intake/placement.ts`).
+ *
+ * Two inputs rather than one placement object, because they are two writes on
+ * every provider that has them (Azure hangs a hierarchy relation for one and
+ * patches a field for the other) and the operator settles them one at a time. A
+ * combined input would have to model "set this, leave that alone", which is the
+ * `null`-means-two-things shape this codebase keeps out of its wire types.
+ */
+export interface WorkItemParentInput {
+  /** The item being re-parented. */
+  number: number;
+  /** The container it should hang off. */
+  parentNumber: number;
+}
+
+export interface WorkItemAreaPathInput {
+  number: number;
+  /** The provider-native classification node, exactly as the provider stated it. */
+  areaPath: string;
+}
+
 export interface IssueLabelInput {
   /** The issue / work item number to label. */
   number: number;
@@ -191,6 +214,27 @@ export interface ActionSink {
    * it fails. Only providers with a rich state model implement it.
    */
   setWorkItemState(input: WorkItemStateInput): Promise<SendResult>;
+  /**
+   * Whether any configured integration can place a work item at all — set its
+   * parent and its area path.
+   *
+   * Asked rather than inferred for {@link canSetWorkItemState}'s reason, and with
+   * the same caller in mind: the cockpit **offers** the placement question, and a
+   * surface that drew the buttons where nothing implements them would let every
+   * click fail separately and teach nothing each time. GitHub issues have neither
+   * concept and answer false, which is what makes the whole feature absent there
+   * rather than broken.
+   */
+  canPlaceWorkItem(): boolean;
+  /**
+   * Hang a work item off its container — the relation that makes it roll up to
+   * anything. Idempotent: a parent the item already carries is a success. Throws
+   * if it fails, including where the process template refuses the link, which is
+   * a real answer rather than a shape.
+   */
+  setWorkItemParent(input: WorkItemParentInput): Promise<SendResult>;
+  /** Move a work item onto a classification node — what puts it on a board. Idempotent. Throws if it fails. */
+  setWorkItemAreaPath(input: WorkItemAreaPathInput): Promise<SendResult>;
   /**
    * Create or update a comment on an issue / work item — the plan's status comment,
    * the one progress channel both providers share. `ref` on the result is the

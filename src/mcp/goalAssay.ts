@@ -11,6 +11,8 @@
  * once per issue rather than once a minute.
  */
 
+import { normalizeAreaPath } from '../intake/placement.js';
+
 /** What an assayer may conclude about a goal. */
 export const GOAL_ASSAY_VERDICTS = ['workable', 'unclear'] as const;
 
@@ -47,7 +49,17 @@ const MAX_ASSAY_SUMMARY = 2000;
 export function validateGoalAssay(
   args: Record<string, unknown>,
   profiles: readonly string[] = [],
-): { ok: true; verdict: GoalAssayVerdictName; summary: string; profile: string | null } | { ok: false; error: string } {
+  areaPaths: readonly string[] = [],
+):
+  | {
+      ok: true;
+      verdict: GoalAssayVerdictName;
+      summary: string;
+      profile: string | null;
+      parent: number | null;
+      areaPath: string | null;
+    }
+  | { ok: false; error: string } {
   const verdict = args.status;
   if (typeof verdict !== 'string' || !GOAL_ASSAY_VERDICTS.includes(verdict as GoalAssayVerdictName)) {
     return {
@@ -76,7 +88,91 @@ export function validateGoalAssay(
   }
   const named = verdict === 'workable' ? checkProfile(args.profile, profiles) : { ok: true as const, profile: null };
   if (!named.ok) return named;
-  return { ok: true, verdict: verdict as GoalAssayVerdictName, summary, profile: named.profile };
+  // Both placements are dropped on an `unclear` verdict for the profile's reason:
+  // a goal nobody could start from has no work to file anywhere, so proposing a
+  // home for it answers a question that does not arise.
+  const workable = verdict === 'workable';
+  const parent = workable ? checkParent(args.parent) : { ok: true as const, parent: null };
+  if (!parent.ok) return parent;
+  const area = workable ? checkAreaPath(args.area_path, areaPaths) : { ok: true as const, areaPath: null };
+  if (!area.ok) return area;
+  return {
+    ok: true,
+    verdict: verdict as GoalAssayVerdictName,
+    summary,
+    profile: named.profile,
+    parent: parent.parent,
+    areaPath: area.areaPath,
+  };
+}
+
+/**
+ * The proposed parent, or why it is not one.
+ *
+ * **Optional, unlike the profile**, and that asymmetry is the design rather than
+ * an oversight. A profile is required because every dispatch runs on one, so an
+ * omission is indistinguishable from "the default is right" — an answer the
+ * harness would then act on at the default's price. A parent is not like that:
+ * most items already have one, the tool cannot see whether this one does, and an
+ * argument required of every assay would make a proposal for an item that needs
+ * none the common case.
+ *
+ * Validated only for **shape**: a positive work item number.
+ * The candidates the assayer picks from are the open containers already appended
+ * to its prompt (`relatedWorkNote`), and they are a suggestion rather than a
+ * closed set — a board is narrowed by tag and assignee, so the right container is
+ * sometimes one the harness never listed. Refusing anything outside the list
+ * would make the harness's own view of the board the limit of what can be
+ * proposed. What stops a hallucinated id doing damage is that nothing acts on it:
+ * a human sees the number, with a link to it, before anything is written.
+ */
+function checkParent(value: unknown): { ok: true; parent: number | null } | { ok: false; error: string } {
+  if (value === undefined || value === null) return { ok: true, parent: null };
+  const n =
+    typeof value === 'number' ? value : typeof value === 'string' ? Number(value.trim().replace(/^#/, '')) : NaN;
+  if (!Number.isInteger(n) || n <= 0)
+    return {
+      ok: false,
+      error: `parent must be the number of an existing work item — "${String(value)}" is not one. Omit it if none of the containers you were shown fit.`,
+    };
+  return { ok: true, parent: n };
+}
+
+/**
+ * The proposed area path, or why it is not one.
+ *
+ * **Closed over the offered set**, where the parent above is not, and the two
+ * differ because the failure modes do. A parent is a number a human immediately
+ * recognises as wrong; an area path is a string that has to match a node in the
+ * project's tree exactly, and a plausible near-miss — the right team spelled the
+ * wrong way, a node that was renamed last quarter — is not visibly wrong to
+ * anyone until the write is refused. So the harness offers the tree and the
+ * assayer picks from it.
+ *
+ * Empty offer means this deployment has no tree the harness could read, and then
+ * nothing is asked and nothing refused — the same shape an absent `agentModels`
+ * gives the profile.
+ */
+function checkAreaPath(
+  value: unknown,
+  areaPaths: readonly string[],
+): { ok: true; areaPath: string | null } | { ok: false; error: string } {
+  if (areaPaths.length === 0) return { ok: true, areaPath: null };
+  if (value === undefined || value === null || value === '') return { ok: true, areaPath: null };
+  if (typeof value !== 'string')
+    return { ok: false, error: `area_path must be one of this project's area paths: ${areaPaths.join(', ')}.` };
+  // Matched on the provider's own normalisation, then answered with the
+  // provider's own spelling: a path that came back differently cased or
+  // slash-separated is one node, and storing the agent's spelling of it would
+  // hand the write a string the tracker may not accept.
+  const wanted = normalizeAreaPath(value);
+  const match = areaPaths.find((p) => normalizeAreaPath(p) === wanted);
+  if (match === undefined)
+    return {
+      ok: false,
+      error: `area_path "${value}" is not one of this project's area paths: ${areaPaths.join(', ')}.`,
+    };
+  return { ok: true, areaPath: match };
 }
 
 /**

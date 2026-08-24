@@ -15,10 +15,13 @@ import type {
   PrTitleInput,
   SendResult,
   WorkItemLinkInput,
+  WorkItemAreaPathInput,
+  WorkItemParentInput,
   WorkItemStateInput,
 } from '../sink/actionSink.js';
 import type { TrackerItem, WorldSnapshot } from '../types.js';
 import type { CiEvidenceReader, CiEvidenceTarget, CiFailureEvidence } from '../ci/ciEvidence.js';
+import type { AreaPathTree } from '../intake/placement.js';
 import {
   isBranchDeleteCapable,
   isCiCheckRequeueCapable,
@@ -37,6 +40,8 @@ import {
   isRefResolvable,
   isTicketHistoryCapable,
   isWorkItemLinkCapable,
+  isAreaPathCapable,
+  isWorkItemPlacementCapable,
   isWorkItemStateCapable,
   type Integration,
 } from './integration.js';
@@ -101,6 +106,26 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     const handler = this.integrations.find(isTicketHistoryCapable);
     if (!handler) return [];
     return handler.listTicketHistory(since);
+  }
+
+  /**
+   * The project's area tree, or **null when no provider has one** — the third
+   * routed read that answers rather than throwing, for {@link listTicketHistory}'s
+   * reason. A tracker with no classification tree is an ordinary configuration
+   * (GitHub, the fake), and the whole area-path question is then absent.
+   *
+   * Null rather than an empty tree, because the two are different readings and
+   * only one of them is about this project: an empty tree is a project that has
+   * never subdivided, and null is a tracker with no such concept at all.
+   *
+   * @public read structurally through `AreaPathSource` (`src/intake/areaPaths.ts`),
+   * which is what `AreaPathDirectory` is handed. Name-based analysis cannot see
+   * that seam.
+   */
+  async listAreaPaths(): Promise<AreaPathTree | null> {
+    const handler = this.integrations.find(isAreaPathCapable);
+    if (!handler) return null;
+    return handler.listAreaPaths();
   }
 
   /**
@@ -212,6 +237,24 @@ export class CompositeConnector implements Connector, ActionSink, CiEvidenceRead
     if (!handler)
       throw new Error('no integration can set work item state (no issues provider is WorkItemStateCapable)');
     return handler.setWorkItemState(input);
+  }
+
+  canPlaceWorkItem(): boolean {
+    return this.integrations.some(isWorkItemPlacementCapable);
+  }
+
+  async setWorkItemParent(input: WorkItemParentInput): Promise<SendResult> {
+    const handler = this.integrations.find(isWorkItemPlacementCapable);
+    if (!handler)
+      throw new Error('no integration can place work items (no issues provider is WorkItemPlacementCapable)');
+    return handler.setWorkItemParent(input);
+  }
+
+  async setWorkItemAreaPath(input: WorkItemAreaPathInput): Promise<SendResult> {
+    const handler = this.integrations.find(isWorkItemPlacementCapable);
+    if (!handler)
+      throw new Error('no integration can place work items (no issues provider is WorkItemPlacementCapable)');
+    return handler.setWorkItemAreaPath(input);
   }
 
   async createIssue(input: IssueCreateInput): Promise<SendResult> {

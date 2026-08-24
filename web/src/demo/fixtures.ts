@@ -337,6 +337,7 @@ export function buildDemoState(): DemoSeed {
       // the same token there is no tracker to file a ticket into, so that button
       // is hidden exactly as it would be on a `fake` deployment.
       canFileTickets: false,
+      areaPaths: [],
     },
     control: { cap: 3, paused: false },
     // What the plan sheet's approval bar states: two of a plan's parts run at once.
@@ -807,6 +808,7 @@ export function buildDemoState(): DemoSeed {
             // from has no work to size.
             proposedProfile: null,
             awaitingProfileAnswer: false,
+            placement: [],
             decidedAt: ago(52),
             commentRef: 'issue:379:comment:8402',
           },

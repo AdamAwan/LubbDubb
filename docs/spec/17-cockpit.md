@@ -411,6 +411,30 @@ is standing — both through one write, so "keep mine" settles the question rath
 re-readable as an unanswered disagreement. It is derived from `world.issues` and never the retained
 runs: a goal the world no longer carries is not one the funnel is refusing to dispatch.
 
+**`placement` is the third kind with no row of its own underneath it**, and the first that holds
+nothing at all. It is read off `issue.assay.placement` — the goal's missing parent and its missing area
+path, as the assay proposed them ([06](06-issue-pickup.md#where-the-goal-belongs-the-placement-proposals-issue-463)).
+Every other row on this rail stands between the fleet and some work; this one does not. The work is
+dispatched, done and merged whatever the answer is, and what is wrong is that the ticket is invisible
+to whoever plans the backlog — a fault nobody sees until they go looking for work that is not on the
+board. That is `config_gap`'s reading, which is why it borrows that **tone** rather than the profile
+gate's blue.
+
+One row per open question rather than one per goal, because the two are answered separately and by
+different writes. Its verdict is **three** buttons where the profile gate has two, and the third is
+what the shape needs: nothing here blocks, so without an explicit "it wants none" a goal that
+legitimately has no parent would sit on the rail for ever — the two blocking gates get their third
+answer free, because somebody has to clear them. The alternatives are offered rather than typed: the
+containers from `world.issues` under `config.containerTypes`, and the area nodes from
+`config.areaPaths`, which is the tracker's own tree read by the harness.
+
+**The proposed parent is drawn as a `<Ref>` beside the button and never inside one** — the rule
+([links](#links)), and here also the point: verifying the suggestion has to be as cheap as accepting
+it, or three buttons collapse into one rubber stamp. Like the profile gate it is derived from
+`world.issues` and never the retained runs, and it is drawn nowhere at all where the sink cannot make
+the write — a proposal answered by three buttons that all 400 is the dead end this cockpit's rules
+exist to prevent.
+
 **`limit` is the one kind with no row of its own underneath it.** It is built from the _fleet_ —
 `state.parkedOnLimit`, keyed on the agent — because a usage-limit park raises no escalation on purpose:
 there is no question in it to answer ([10](10-agent-runtimes.md#the-limit-park)). Its verdict is
@@ -446,6 +470,7 @@ within it.
 | `burn`       | Spend       | amber | `▲`   | A heads-up on a run that carries on either way.      |
 | `proposal`   | Plan        | blue  | `◇`   | A plan to read and decide on.                        |
 | `profile`    | Profile     | blue  | `⊙`   | Which profile a goal runs on.                        |
+| `placement`  | Backlog     | amber | `▣`   | Nothing is held; the ticket is off the board.        |
 | `bench`      | Bench       | blue  | `◆`   | Work only a person can do. Informative, not broken.  |
 | `close_out`  | Close-out   | green | `⚑`   | A goal was **delivered**; this is the step after it. |
 | `validate`   | Validate    | green | `✓`   | The other step after a delivery — run its checks.    |

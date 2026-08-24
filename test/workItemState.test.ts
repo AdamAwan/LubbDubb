@@ -35,6 +35,9 @@ function recordingSink(): { sink: ActionSink; states: WorkItemStateInput[] } {
   const states: WorkItemStateInput[] = [];
   const sink: ActionSink = {
     canSetWorkItemState: () => true,
+    canPlaceWorkItem: () => false,
+    setWorkItemParent: () => Promise.reject(new Error('not used')),
+    setWorkItemAreaPath: () => Promise.reject(new Error('not used')),
     async postPrReply(): Promise<SendResult> {
       return { ok: true };
     },
@@ -104,6 +107,9 @@ test('set_work_item_state routes to the sink and is audited (no auto-send gate)'
 test('a failing transition is recorded as rejected, not escalated', async () => {
   const failingSink: ActionSink = {
     canSetWorkItemState: () => true,
+    canPlaceWorkItem: () => false,
+    setWorkItemParent: () => Promise.reject(new Error('not used')),
+    setWorkItemAreaPath: () => Promise.reject(new Error('not used')),
     async postPrReply(): Promise<SendResult> {
       return { ok: true };
     },

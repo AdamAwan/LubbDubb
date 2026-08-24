@@ -445,6 +445,13 @@ export interface CockpitActions {
    */
   setIssueProfile(issueNumber: number, profile: string | null): Promise<void>;
   /**
+   * Settle one of a goal's placement questions — where it hangs off the backlog,
+   * and which area node puts it on a board. `null` is "this goal wants neither",
+   * the answer that has nowhere else to be recorded.
+   */
+  setIssueParent(issueNumber: number, parent: number | null): Promise<void>;
+  setIssueAreaPath(issueNumber: number, areaPath: string | null): Promise<void>;
+  /**
    * Override one plan part's profile, or clear it with `null` so the part
    * inherits the goal's pin again.
    */

@@ -345,6 +345,7 @@ test('an unanswered profile proposal is a row, and an answered one is not', () =
                   commentRef: null,
                   proposedProfile: 'deep',
                   awaitingProfileAnswer: over.awaiting,
+                  placement: [],
                 },
               }
             : i,
@@ -365,6 +366,70 @@ test('an unanswered profile proposal is a row, and an answered one is not', () =
   assert.ok(rows[0]?.title.includes('deep'), 'the row names the profile it is asking about');
 
   assert.deepEqual(buildNeedsYou(proposed({ awaiting: false })), [], 'a settled proposal asks nothing');
+});
+
+/**
+ * The placement questions (#463) — the goal's parent and its area path.
+ *
+ * A row per open question rather than one per goal, because they are answered
+ * separately and by different writes. Amber and `yours`, and holding nothing:
+ * unlike every other row on this queue, the work is dispatched, done and merged
+ * whatever the answer is. What is wrong is that the ticket is invisible to
+ * whoever plans the backlog — which is exactly `config_gap`'s reading, and why it
+ * borrows that tone rather than the profile gate's.
+ */
+test('each open placement question is its own row, and a settled one is gone', () => {
+  const base = buildDemoState();
+  const goal = base.world.issues[0]!;
+  const withAsks = (
+    placement: { field: 'parent' | 'areaPath'; proposedParent: number | null; proposedAreaPath: string | null }[],
+  ) =>
+    stateWith({
+      escalations: [],
+      humanTasks: [],
+      proposals: [],
+      recovery: [],
+      world: {
+        ...base.world,
+        issues: base.world.issues.map((i) =>
+          i.number === goal.number
+            ? {
+                ...i,
+                assay: {
+                  verdict: 'workable' as const,
+                  summary: 'Reconcile the statement totals.',
+                  by: 'assayer' as const,
+                  decidedAt: '2026-01-01T00:00:00.000Z',
+                  commentRef: null,
+                  proposedProfile: null,
+                  awaitingProfileAnswer: false,
+                  placement,
+                },
+              }
+            : i,
+        ),
+      },
+    });
+
+  const rows = buildNeedsYou(
+    withAsks([
+      { field: 'parent', proposedParent: 345, proposedAreaPath: null },
+      { field: 'areaPath', proposedParent: null, proposedAreaPath: 'Contoso\\Web' },
+    ]),
+  );
+  assert.deepEqual(
+    rows.map((r) => [r.kind, r.group, r.id]),
+    [
+      ['placement', 'yours', `placement:parent:issue:${goal.number}`],
+      ['placement', 'yours', `placement:areaPath:issue:${goal.number}`],
+    ],
+  );
+  assert.equal(rows[0]?.holding, 0, 'nothing is held: the work happens either way');
+  assert.equal(rows[0]?.agentId, null);
+  assert.ok(rows[0]?.title.includes('#345'), 'the row names what it is proposing, so it can be judged from the rail');
+  assert.ok(rows[1]?.title.includes('Contoso'));
+
+  assert.deepEqual(buildNeedsYou(withAsks([])), [], 'the server stops shipping a question the moment it is settled');
 });
 
 /** A demo agent that has a task on the snapshot, with that task beside it. */

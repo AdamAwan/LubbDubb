@@ -28,6 +28,7 @@ import type {
   ValidationResourceView,
 } from '../wire.js';
 import { buildRefUrls, decisionSubjectRef, issueCommentRef } from './refUrls.js';
+import { placementAsks, truncateAreaPaths, type AreaPathTree } from '../intake/placement.js';
 import { buildStacks } from '../stacks/stack.js';
 import { landedCount, landingFor, landingReadiness } from '../stacks/landing.js';
 import { prHealth, prState } from '../prHealth.js';
@@ -454,6 +455,14 @@ export function buildStateSnapshot(
     const checks = checksByGoal.get(origin) ?? [];
     return checks.length === 0 ? null : validationVerdict(checks);
   };
+  // Where a goal *belongs*, as the placement questions are judged against it: the
+  // project's area tree as the harness last read it, and whether anything can
+  // write a placement at all. Both are facts about the deployment, so they are
+  // resolved once here rather than per issue.
+  const placementCtx: PlacementContext = {
+    areaTree: system.areaPaths.current(),
+    canPlace: connector.canPlaceWorkItem(),
+  };
   const enrichIssue = (issue: Issue) => {
     const origin = issueConclusionOrigin(issue.number);
     const run = runByOrigin.get(origin);
@@ -476,7 +485,7 @@ export function buildStateSnapshot(
       // while it still stands (`standingDelivery`).
       delivery: standingDelivery(deliveriesByOrigin.get(origin), issue, pickupCtx),
       // The intake verdict, beside the other two and inside `pickup` for none.
-      assay: assayVerdictOf(assaysByOrigin.get(origin)),
+      assay: assayVerdictOf(assaysByOrigin.get(origin), issue, placementCtx),
       // What this goal's work is pinned to, read off its own labels through the
       // same pure function the dispatcher resolves the pin with — so the chip and
       // the dispatch can never disagree about which profile is standing.
@@ -585,6 +594,10 @@ export function buildStateSnapshot(
       // that decides is the one the route asks. `setWorkItemState` throws when
       // nothing implements it, so there is no other way to *offer* the operation.
       canSetWorkItemState: connector.canSetWorkItemState(),
+      // The nodes an item can be filed under, capped by the same rule the assayer's
+      // offer is capped by — one list, so the operator and the agent are choosing
+      // between the same things.
+      areaPaths: placementCtx.areaTree === null ? [] : truncateAreaPaths(placementCtx.areaTree).paths,
       stateRules: workItemStateRules(config),
     },
     // When the world below was actually observed — null before the first cycle,
@@ -979,7 +992,7 @@ function padReading(pad: ScratchPadSummary | undefined) {
  * opening the tracker and reading the thread. `goalRef` is still deliberately not
  * shipped: it is a fingerprint the hold is measured against, not a reading.
  */
-function assayVerdictOf(assay: IssueAssay | undefined) {
+function assayVerdictOf(assay: IssueAssay | undefined, issue: Issue, placement: PlacementContext) {
   if (!assay) return null;
   const { verdict, summary, by, decidedAt, proposedProfile } = assay;
   return {
@@ -993,7 +1006,31 @@ function assayVerdictOf(assay: IssueAssay | undefined) {
     // was settled on arrival (the assayer agreed) is still worth showing, and it
     // is holding nothing.
     awaitingProfileAnswer: proposedProfile !== null && assay.profileAnsweredAt === null,
+    // The placement questions still open on this goal — derived here, every time,
+    // against the **live** work item. Nothing about them is stored except the
+    // operator's "does not apply", which is what makes setting the field by hand
+    // in the tracker end the question with no write anywhere.
+    //
+    // Gated on the sink being able to make the write at all, because a proposal
+    // nobody can act on is the cockpit's dead-end bug in its purest form: three
+    // buttons, all of which 400. In practice the gate never bites — only a
+    // provider that tracks hierarchy can report an orphan in the first place — and
+    // it is here so that stays true by construction rather than by coincidence.
+    placement: placement.canPlace ? placementAsks(assay, issue, placement.areaTree, assay.goalRef) : [],
   };
+}
+
+/**
+ * What the placement questions are judged against: the project's area tree, and
+ * whether anything can write a placement.
+ *
+ * Resolved once per snapshot rather than per issue — both halves are facts about
+ * the deployment, and asking the connector per issue would put a capability probe
+ * in a loop over the whole board.
+ */
+interface PlacementContext {
+  areaTree: AreaPathTree | null;
+  canPlace: boolean;
 }
 
 /**

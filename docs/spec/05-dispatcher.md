@@ -708,6 +708,13 @@ hold are in [06](06-issue-pickup.md); the dispatcher's half is:
 `originSummary` are what the verdict is later fingerprinted against — dropping them would stamp every
 verdict with the fingerprint of an empty goal.
 
+The prompt also carries `relatedWorkNote` — the item's parent, siblings, children, and for an orphan
+the open containers it might belong to — **appended**, never interpolated, for
+[the prompt templates' reason](#prompt-templates). That block is what the assayer's `parent` proposal
+picks from (issue #463): the assay's verdict now carries where the goal belongs on the backlog as well
+as whether it can be worked from, and neither placement holds anything.
+→ [06](06-issue-pickup.md#where-the-goal-belongs-the-placement-proposals-issue-463)
+
 ## `issue-assess` — the assessor
 
 Rule `issue-assess` is **unconditional** and puts an assessing agent in front of re-pickup. It exists

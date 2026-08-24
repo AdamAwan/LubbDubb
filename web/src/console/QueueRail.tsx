@@ -15,6 +15,7 @@ export const KIND_LABEL: Record<NeedKind, string> = {
   permission: 'Permission',
   proposal: 'Plan',
   profile: 'Profile',
+  placement: 'Backlog',
   bench: 'Bench',
   close_out: 'Close-out',
   validate: 'Validate',
@@ -56,6 +57,11 @@ export const KIND_TONE: Record<NeedKind, 'red' | 'amber' | 'blue' | 'green'> = {
   permission: 'amber',
   proposal: 'blue',
   profile: 'blue',
+  // Amber on `config_gap`'s terms rather than blue on the profile gate's: nothing
+  // is held and nothing failed, and what is wrong is that work the fleet is doing
+  // correctly is hidden from whoever plans the backlog. Blue here would file it
+  // with the questions that stop a dispatch, which is the one thing it never does.
+  placement: 'amber',
   bench: 'blue',
   close_out: 'green',
   validate: 'green',
@@ -91,6 +97,8 @@ export const KIND_SYMBOL: Record<NeedKind, string> = {
   permission: '\u2298',
   proposal: '\u25c7',
   profile: '\u2299',
+  // A box: where the item is filed, against the profile gate's ringed dot.
+  placement: '\u25a3',
   bench: '\u25c6',
   close_out: '\u2691',
   validate: '\u2713',

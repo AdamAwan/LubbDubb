@@ -839,6 +839,9 @@ export class Store {
   answerAssayProfile(originRef: string, goalRef: string): boolean {
     return this.verdicts.answerAssayProfile(originRef, goalRef);
   }
+  settleAssayPlacement(originRef: string, goalRef: string, field: 'parent' | 'areaPath'): boolean {
+    return this.verdicts.settleAssayPlacement(originRef, goalRef, field);
+  }
   setAssayComment(originRef: string, commentRef: string): void {
     this.verdicts.setAssayComment(originRef, commentRef);
   }

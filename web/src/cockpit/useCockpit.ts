@@ -285,6 +285,8 @@ export function useCockpit(): CockpitStatus {
       setIssueState: (n, state) => then(api.setIssueState(n, state)),
       setGoalPriority: (n, priority) => then(api.setGoalPriority(n, priority)),
       setIssueProfile: (n, profile) => then(api.setIssueProfile(n, profile)),
+      setIssueParent: (n, parent) => then(api.setIssueParent(n, parent)),
+      setIssueAreaPath: (n, areaPath) => then(api.setIssueAreaPath(n, areaPath)),
       setPartProfile: (planId, slug, profile) => then(api.setPartProfile(planId, slug, profile)),
       setIssueConclusion: (n, verdict) => then(api.setIssueConclusion(n, verdict)),
       setIssueAssay: (n, verdict) => then(api.setIssueAssay(n, verdict)),

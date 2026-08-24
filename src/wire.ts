@@ -46,6 +46,7 @@ import type { PetRules } from './pets/rules.js';
 import type { CiPolicyDescription } from './ci/describeCiPolicy.js';
 import type { CiVerdict } from './ci/ciPolicy.js';
 import type { IssuePickupStatus } from './dispatcher/issuePickup.js';
+import type { PlacementAsk } from './intake/placement.js';
 import type { DispatchRule } from './dispatcher/rules.js';
 import type { QueueItem } from './dispatcher/dispatcher.js';
 import type { PromptTemplateDescription } from './dispatcher/promptTemplates.js';
@@ -231,6 +232,19 @@ export interface Issue extends WorldIssue {
      */
     proposedProfile: string | null;
     awaitingProfileAnswer: boolean;
+    /**
+     * Where the assayer says this goal belongs on the backlog, for the questions
+     * that are **still open** — the assayer proposed a value, the operator has
+     * not said it does not apply, and the live work item still lacks the field.
+     * Empty is the ordinary case, and covers a flat tracker entirely.
+     *
+     * Derived server-side on every snapshot rather than stored, which is what
+     * makes it end by itself: an operator who sets the parent in the tracker by
+     * hand drops the row on the next world read, with no timer and no dismissal.
+     * The browser must not re-derive it — it has neither the area tree nor the
+     * root node that says what "unclassified" means.
+     */
+    placement: PlacementAsk[];
   } | null;
   /**
    * The profile this goal's work is pinned to (#342) — the tag on its ticket —
@@ -823,6 +837,18 @@ interface CockpitConfig {
    * rather than every drag failing separately and teaching nothing each time.
    */
   canSetWorkItemState: boolean;
+  /**
+   * The project's area nodes, as the harness last read them from the tracker —
+   * what the cockpit offers when the operator answers a placement question with a
+   * value of their own.
+   *
+   * Shipped rather than left to the browser to guess, for the reason the assayer
+   * is offered them rather than free-typing one: an area path has to match a node
+   * exactly, and a plausible near-miss is refused by the provider and visibly
+   * wrong to nobody until then. Empty for a tracker with no such tree, and then
+   * the whole question is absent.
+   */
+  areaPaths: string[];
   /**
    * The state words the three work-item rules act on, so a column header can say
    * what dropping there disturbs.

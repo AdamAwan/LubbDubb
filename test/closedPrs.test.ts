@@ -330,6 +330,9 @@ function azApi(closed: AzClosedPull[], recorded: string[]): AzureDevOpsApi {
     updateWorkItemComment: unused,
     createWorkItem: unused,
     relateWorkItem: unused,
+    listAreaPaths: () => Promise.resolve({ root: 'Contoso', paths: [] }),
+    setWorkItemParent: () => Promise.reject(new Error('not used')),
+    setWorkItemAreaPath: () => Promise.reject(new Error('not used')),
     setWorkItemTag: unused,
     linkWorkItemToPull: unused,
   };

@@ -704,6 +704,7 @@ test('an unanswered profile proposal reaches the rail, not only the goal page', 
       commentRef: null,
       proposedProfile: 'deep',
       awaitingProfileAnswer: true,
+      placement: [],
     };
   };
 

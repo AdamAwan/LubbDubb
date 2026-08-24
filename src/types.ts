@@ -269,6 +269,18 @@ export interface Issue {
    */
   issueType?: string;
   /**
+   * The classification node the item sits on — an Azure DevOps `System.AreaPath`,
+   * which is what puts it on a team's board. `undefined` for trackers with no such
+   * concept (GitHub issues, the fake), which leaves every area-based reading off
+   * for them.
+   *
+   * **Never empty on a provider that has it.** An item nobody has classified sits
+   * on the project's *root* node, so "unclassified" is this equalling the root
+   * rather than this being absent — see `src/intake/placement.ts`, which is the
+   * one place that comparison is made.
+   */
+  areaPath?: string;
+  /**
    * The item this one hangs off — an Azure DevOps hierarchy parent, typically the
    * Feature a story or bug belongs to. Carries the parent's **description**,
    * because that is where the overall goal of the feature is written and it is
@@ -1981,6 +1993,44 @@ export interface IssueAssay {
    * was already standing, so agreement costs no click and raises no question.
    */
   profileAnsweredAt: string | null;
+  /**
+   * The container work item the assayer proposed this goal should hang off, or
+   * null when it named none — every `unclear` verdict, every flat tracker, and any
+   * assayer that had nothing to suggest.
+   *
+   * A number rather than a resolved item: what the tracker holds is the id, and a
+   * title cached here would be free to drift from the one on the board. The
+   * cockpit resolves it through `refUrls` like every other ref.
+   *
+   * **Nothing here expires it.** Whether the question is still worth asking is
+   * derived from the live work item — an operator who sets the parent by hand in
+   * the tracker makes the row disappear on the next read, with no timer and no
+   * world event to have missed. See {@link parentSettledAt} for the one thing
+   * that is stored.
+   */
+  proposedParent: number | null;
+  /**
+   * When the operator answered the parent question — whichever of the three
+   * answers they gave.
+   *
+   * The one piece of state a *derived* question needs. Two of the answers end it
+   * on their own: accepting the proposal and supplying a different value both
+   * change the work item, which the next world read sees. The third — "this goal
+   * wants no parent" — changes nothing out there, so without a stamp a goal that
+   * legitimately has none sits in the needs band for ever. Stamped on all three
+   * rather than only that one, because the derived read lags a pulse behind the
+   * write and a row that reappeared for one refresh would read as a click that
+   * did not take.
+   *
+   * Scoped to this row, so a re-assay against rewritten goal text asks again: the
+   * ticket having been rewritten is the one signal that the old answer may no
+   * longer be the right one.
+   */
+  parentSettledAt: string | null;
+  /** The area path the assayer proposed, from the candidates the harness offered it. */
+  proposedAreaPath: string | null;
+  /** {@link parentSettledAt} for the area path — the same three answers, the same scope. */
+  areaPathSettledAt: string | null;
   /** The assaying agent and its task, from the credential. Null for an operator verdict. */
   agentId: string | null;
   taskId: string | null;

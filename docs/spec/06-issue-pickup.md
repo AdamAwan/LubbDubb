@@ -591,6 +591,99 @@ for good with nothing anywhere saying so. The queue is what the harness has for 
 this".
 → [02](02-configuration.md#the-gate-the-assayer-proposes-a-human-confirms)
 
+## Where the goal belongs: the placement proposals (issue #463)
+
+The assayer also says **where the goal belongs on the backlog** — the container work item it should
+hang off, and the area path that puts it on a team's board. Both can be missing on an item the fleet
+then works perfectly, and both fail the same silent way: the work is done, the pull request merges,
+and the ticket is invisible to whoever plans the backlog. Nothing checked either before this.
+
+**It is not a third arm of `assayHold`, and it holds nothing.** That is the whole difference from the
+profile proposal above, and it is a difference in kind rather than degree: a wrong profile spends real
+money irreversibly before anybody sees the result, so it must be settled first; a missing parent costs
+nothing at dispatch and is fixable at any point afterwards. So `assayHold` is untouched, and so is
+`goalFingerprint` — which fingerprints goal **text** on purpose, and a metadata edit is not a goal
+edit.
+
+### The question's lifetime is derived, not stored
+
+A question is asked while three things hold, all read fresh on every snapshot
+(`placementAsks`, `src/intake/placement.ts`):
+
+1. the assayer proposed a value,
+2. the operator has not answered it, and
+3. the **live** work item still lacks the field.
+
+Condition 3 is what ends it in the ordinary case. An operator who sets the parent by hand in the
+tracker makes the row disappear on the next world read — no timer, no world event to have missed, and
+nothing to remember. It is `assayHold`'s fingerprint arm pointed at a different fact, and a lookup
+against current state for the same reason.
+
+**An Azure work item is never *without* an area path.** An item nobody has classified sits on the
+project **root** node, so "missing" is equalling the root — compared on a normalised form, because
+Azure echoes whatever separator and casing were written. A reader that tested for an empty string
+would find nothing missing anywhere, on every project, with nothing red.
+
+### Three answers, because nothing else ends it
+
+The operator takes the proposal, supplies a different value, or says it does not apply. The first two
+end the question by changing the work item, which condition 3 then sees; the third changes nothing out
+there, so it is stored (`parent_settled_at` / `area_path_settled_at`). Without it a goal that
+legitimately has no parent would sit in the needs band for ever — the profile gate gets its third
+answer free by blocking, and this one does not.
+
+All three stamp the row, not only the third: the derived read is a pulse behind the write, and a
+question that came back for one refresh would read as a click that did not take. The stamp is scoped
+to the row's `goal_ref`, so a **re-assay against rewritten goal text asks again** — the ticket having
+been rewritten is the one signal that the old answer may no longer be the right one.
+
+### What the assayer is offered, and what it may say
+
+The two fields are different in kind, and the tool treats them differently
+(`validateGoalAssay`):
+
+| Field       | How it is answered                                                                                                                                                                                                                             |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `parent`    | A work item number, **free**. The open containers the harness can see are already appended to the assay prompt (`relatedWorkNote`, `candidateParents`), and they are a suggestion rather than a closed set — a board is narrowed by tag and assignee, so the right container is often not in it. A hallucinated id costs nothing: a human sees the number, linked, before anything is written. |
+| `area_path` | **Only from the offered set.** A path has to match a node exactly, and a plausible near-miss — the right team spelled the wrong way, a node renamed last quarter — is refused by the provider and visibly wrong to nobody before then. The harness reads the project's tree and offers it; the answer is stored in the provider's own spelling, since that is the string the write has to carry. |
+
+Both are **optional**, unlike the profile. A profile is required because every dispatch runs on one,
+so an omission is indistinguishable from "the default is right"; most items already have a parent, the
+tool cannot see whether this one does, and an argument required of every assay would make a proposal
+for an item that needs none the common case. Both are dropped on an `unclear` verdict, for the
+profile's reason: a goal nobody could start from has no work to file anywhere.
+
+The area tree is read through `AreaPathDirectory` (`src/intake/areaPaths.ts`), refreshed from the
+pulse under its own TTL because both readers — the tool's argument schema and the state snapshot — are
+synchronous. A failed read **leaves the last good tree standing** and records the failure; emptying it
+would silently retire the argument and make every item read as classified, neither of which is red.
+The offer is capped at 40 nodes and says how many it left out, so a cut list is never read as the
+complete set.
+
+### The write is the harness's
+
+The assayer proposes and does nothing else. Applying a proposal is a cockpit click →
+`POST /api/issues/:number/parent` or `/area-path` → `ActionSink` → the Azure adapter — the discipline
+`src/tickets/filing.ts` states, and for its reason: an instruction in a prompt is only as reliable as
+one model's memory of one line. There is no `az boards work-item update` anywhere, and no shell command
+handed to a model.
+
+**Azure only.** A hierarchy parent and a classification node are things only Azure DevOps reports and
+only Azure DevOps accepts, so the whole feature is absent on GitHub — the way `filingType` and
+`ticketAssignee` are (`src/ticketTypes.ts`, `src/ticketAssignment.ts`). The snapshot also gates the
+questions on the sink being **able** to make the write (`canPlaceWorkItem`), so a proposal nobody can
+act on is never drawn.
+
+**Tickets the harness files itself** — a blueprint, a deferred finding, unrecorded work, an
+operator-raised bug — are out of scope: for those the value belongs on `IssueCreateInput` at creation
+rather than proposed afterwards. When that lands it should call the same two sink methods, since Azure
+cannot create an item already parented (`createIssue` already does that two-write dance for
+`relatedTo`).
+
+**Goals already in flight are never asked.** The assay runs once per goal fingerprint and only on
+issues with no prior work, and that trigger is deliberately not widened here: a sweep over goals that
+are already under way is a different rule with its own dispatch cost.
+
 The hold's string names **what happened and nothing else** — `the goal assay could not act on this
 goal`, or `you …` for an operator's own verdict. The assayer's words and the time it decided are not
 folded into it: this is one reason among several on a row that already carries the whole `IssueAssay`,

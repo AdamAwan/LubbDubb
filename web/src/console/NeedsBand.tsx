@@ -1,12 +1,14 @@
 import type { JSX, ReactNode } from 'react';
+import { useState } from 'react';
 import type { CockpitView } from '../view/viewModel.js';
 import type { CockpitActions } from '../cockpit/actions.js';
 import type { NeedRow } from '../view/needsYou.js';
-import type { HumanTask } from '../types.js';
+import type { HumanTask, Issue } from '../types.js';
 import { AsyncButton } from '../components/AsyncButton.js';
 import { EscalationCard } from '../components/EscalationCard.js';
 import { HumanTaskActions } from '../components/HumanTaskActions.js';
 import { renderMarkdown } from '../components/markdown.js';
+import { Ref } from '../components/refs.js';
 import { goalIssue } from '../view/goalPage.js';
 import { relTime } from '../components/util.js';
 import { KIND_LABEL, KIND_SYMBOL, KIND_TONE, holdingLabel } from './QueueRail.js';
@@ -184,6 +186,25 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       </>
     );
   }
+  // Where a goal belongs on the backlog. Three answers rather than the profile
+  // gate's two, and the third is what the shape needs: this holds nothing, so
+  // without an explicit "it wants none" a goal that legitimately has no parent
+  // would sit here for ever. The other two gates get their third answer free by
+  // blocking — somebody has to clear them.
+  //
+  // Drawn here rather than on the goal page for the profile gate's reason: the
+  // page draws its own rows through this same band, so one arm serves the page,
+  // the rail's panel and the console.
+  if (row.kind === 'placement') {
+    const issue = row.goalRef === null ? undefined : goalIssue(view.state, row.goalRef);
+    const ask = (issue?.assay?.placement ?? []).find((p) => `placement:${p.field}:${row.goalRef}` === row.id);
+    if (!issue || !ask) return null;
+    return ask.field === 'parent' ? (
+      <ParentAsk issue={issue} proposed={ask.proposedParent} view={view} actions={actions} />
+    ) : (
+      <AreaPathAsk issue={issue} proposed={ask.proposedAreaPath} view={view} actions={actions} />
+    );
+  }
   // A usage-limit park (issue #318). The row's id *is* the agent, because there is
   // no escalation under it: nothing was asked, so the only verdict is "the limit has
   // cleared, carry on" — and the transcript, which is where an operator decides
@@ -234,5 +255,167 @@ export function needBody(row: NeedRow, view: CockpitView, actions: CockpitAction
       onExtend={(id) => actions.extendStall(id)}
       onViewPlan={(id) => actions.viewPlan(id)}
     />
+  );
+}
+
+/**
+ * The parent question: take the assay's container, pick another, or say this goal
+ * wants none.
+ *
+ * The proposed container is drawn as a `<Ref>` **beside** the button and never
+ * inside it, which is the rule and here also the point: verifying the suggestion
+ * has to be as cheap as accepting it, or the three buttons collapse into one
+ * rubber stamp. The row draws the title where the harness can see it, so the
+ * common case needs no click at all to judge.
+ *
+ * "Choose another" is a select over the containers in the world — the same set
+ * `issueContainerTypes` names for every other gate — rather than a free number
+ * box: an id typed by hand is the one answer here nobody can check.
+ */
+function ParentAsk({
+  issue,
+  proposed,
+  view,
+  actions,
+}: {
+  issue: Issue;
+  proposed: number | null;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element | null {
+  const [chosen, setChosen] = useState<string>('');
+  if (proposed === null) return null;
+  const container = view.state.world.issues.find((i) => i.number === proposed);
+  const types = view.state.config.containerTypes.map((t) => t.toLowerCase());
+  const options = view.state.world.issues
+    .filter((i) => i.number !== issue.number && i.issueType && types.includes(i.issueType.toLowerCase()))
+    .sort((a, b) => a.number - b.number);
+  return (
+    <>
+      <p>
+        <strong>This goal rolls up to nothing.</strong> The assay suggests{' '}
+        {container ? `“${container.title}”` : `work item #${proposed}`}.
+        <span className="cn-refs">
+          <Ref to={`issue:${proposed}`} title="Open the suggested parent and check it before you accept it" />
+        </span>
+      </p>
+      <p className="cn-tick">
+        Nothing is held up by this: the work is dispatched, done and merged either way. What is missing is the item’s
+        place on the backlog — unparented, it rolls up to nothing and whoever plans the work cannot see it.
+      </p>
+      <div className="cn-acts">
+        <AsyncButton
+          className="cn-btn cn-primary"
+          onClick={() => actions.setIssueParent(issue.number, proposed)}
+          title={`Hang this goal off #${proposed}`}
+        >
+          Use #{proposed}
+        </AsyncButton>
+        {options.length > 0 && (
+          <>
+            <select value={chosen} aria-label="A different parent" onChange={(e) => setChosen(e.currentTarget.value)}>
+              <option value="">Choose another…</option>
+              {options.map((o) => (
+                <option key={o.number} value={String(o.number)}>
+                  #{o.number} — {o.title}
+                </option>
+              ))}
+            </select>
+            <AsyncButton
+              className="cn-btn"
+              disabled={chosen === ''}
+              onClick={() => actions.setIssueParent(issue.number, Number(chosen))}
+              title="Hang this goal off the container you picked"
+            >
+              Use that one
+            </AsyncButton>
+          </>
+        )}
+        <AsyncButton
+          className="cn-btn"
+          onClick={() => actions.setIssueParent(issue.number, null)}
+          title="This goal belongs under nothing — stop asking"
+        >
+          Not applicable
+        </AsyncButton>
+      </div>
+    </>
+  );
+}
+
+/**
+ * The area-path question, in {@link ParentAsk}'s three answers.
+ *
+ * The alternatives come from `config.areaPaths` — the tracker's own tree, read by
+ * the harness — and never from a text box, for the reason the assayer is offered
+ * them: a path has to match a node exactly, and a near-miss is refused by the
+ * provider and visibly wrong to nobody before then. An empty list is a deployment
+ * whose tree the harness could not read, and then the proposal stands alone with
+ * no alternative offered, which is honest rather than broken.
+ */
+function AreaPathAsk({
+  issue,
+  proposed,
+  view,
+  actions,
+}: {
+  issue: Issue;
+  proposed: string | null;
+  view: CockpitView;
+  actions: CockpitActions;
+}): JSX.Element | null {
+  const [chosen, setChosen] = useState<string>('');
+  if (proposed === null) return null;
+  const options = view.state.config.areaPaths.filter((p) => p !== proposed);
+  return (
+    <>
+      <p>
+        <strong>This goal is on no team’s board.</strong> The assay suggests the area “{proposed}”.
+      </p>
+      <p className="cn-tick">
+        It is still on the project root, which is where an item nobody has filed sits. Nothing is held up — the work
+        happens either way — but until it is filed it is on nobody’s board.
+      </p>
+      <div className="cn-acts">
+        <AsyncButton
+          className="cn-btn cn-primary"
+          onClick={() => actions.setIssueAreaPath(issue.number, proposed)}
+          title={`File this goal under “${proposed}”`}
+        >
+          Use “{proposed}”
+        </AsyncButton>
+        {options.length > 0 && (
+          <>
+            <select
+              value={chosen}
+              aria-label="A different area path"
+              onChange={(e) => setChosen(e.currentTarget.value)}
+            >
+              <option value="">Choose another…</option>
+              {options.map((o) => (
+                <option key={o} value={o}>
+                  {o}
+                </option>
+              ))}
+            </select>
+            <AsyncButton
+              className="cn-btn"
+              disabled={chosen === ''}
+              onClick={() => actions.setIssueAreaPath(issue.number, chosen)}
+              title="File this goal under the area you picked"
+            >
+              Use that one
+            </AsyncButton>
+          </>
+        )}
+        <AsyncButton
+          className="cn-btn"
+          onClick={() => actions.setIssueAreaPath(issue.number, null)}
+          title="This goal wants no area path — stop asking"
+        >
+          Not applicable
+        </AsyncButton>
+      </div>
+    </>
   );
 }

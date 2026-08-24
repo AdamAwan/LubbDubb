@@ -23,6 +23,7 @@ import type { TicketFiler } from '../../tickets/filing.js';
 import type { PromptTemplates } from '../../dispatcher/promptTemplates.js';
 import type { AssessmentVerdict } from '../assessment.js';
 import type { GoalAssayVerdictName } from '../goalAssay.js';
+import type { AreaPathTree } from '../../intake/placement.js';
 import type { RemedySubmission } from '../../remedies/remedies.js';
 import type { FactContradiction, FactProposal } from '../../knowledge/knowledge.js';
 import type { FactContradictionOutcome, FactProposalOutcome } from '../../store/knowledge.js';
@@ -76,6 +77,17 @@ export interface AgentToolTarget {
     verdict: GoalAssayVerdictName,
     summary: string,
     profile: string | null,
+    /**
+     * Where the assayer says this goal belongs on the backlog — the container it
+     * should hang off, and the area node it should sit on. Both null where it
+     * proposed neither, which is every `unclear` verdict and every flat tracker.
+     *
+     * One object rather than two more positional arguments: they are one
+     * statement about placement, they arrive together, and a fifth and sixth
+     * `string | null` beside `profile` is a call site where two nulls can be
+     * transposed with nothing red.
+     */
+    placement?: { parent: number | null; areaPath: string | null },
   ):
     | {
         ok: true;
@@ -138,6 +150,16 @@ export interface McpToolDeps {
    * offered, none is required, and every dispatch resolves on its rule alone.
    */
   profiles?: { name: string; description: string }[];
+  /**
+   * The project's area tree as the harness last read it, or null where the
+   * tracker has no such concept and while the first read has not landed.
+   *
+   * A thunk for the reason `agents` and `openPr` are: the directory behind it is
+   * refreshed on the pulse, and a value captured when the tool set was composed
+   * would pin every later agent to the tree as it stood at the first launch. Read
+   * at description-build time, which is why it cannot be a promise.
+   */
+  areaPaths?: () => AreaPathTree | null;
   /**
    * The permission backstop (issue #130 phase B). Present when
    * `mcp.permissionEscalation` is on; the `request_permission` tool blocks on it.

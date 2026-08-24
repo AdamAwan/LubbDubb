@@ -1501,6 +1501,7 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
     verdict: GoalAssayVerdictName,
     summary: string,
     profile: string | null,
+    placement?: { parent: number | null; areaPath: string | null },
   ):
     | { ok: true; issueOrigin: string; verdict: GoalAssayVerdictName; profileHeld: boolean }
     | { ok: false; error: string } {
@@ -1524,6 +1525,14 @@ export class AgentManager extends EventEmitter implements AgentToolTarget {
         by: 'assayer',
         proposedProfile,
         profileDiverges: profileHeld,
+        // Stored exactly as proposed, with **no check here that the work item is
+        // still missing the field**. That reading is derived where the question is
+        // drawn, off the live item — so an operator who sets the parent by hand
+        // while the assayer is running ends the question with no write at all,
+        // and this stays a record of what was said rather than a second opinion
+        // about the tracker.
+        proposedParent: placement?.parent ?? null,
+        proposedAreaPath: placement?.areaPath ?? null,
         agentId,
         taskId: task.id,
       });

@@ -19,6 +19,8 @@ interface ActionSink {
   setPrLabel(input): Promise<SendResult>;
   setIssueLabel(input): Promise<SendResult>;
   setWorkItemState(input): Promise<SendResult>;
+  setWorkItemParent(input): Promise<SendResult>;
+  setWorkItemAreaPath(input): Promise<SendResult>;
   upsertIssueComment(input): Promise<SendResult>;
   createIssue(input): Promise<SendResult>;
 }
@@ -201,6 +203,20 @@ Implements both seams:
   a lens nothing dispatches from, and a provider with no such listing is an empty tab rather than a
   failed pulse. `tracksTicketHistory` says whether any provider can answer at all, which is what stops
   the sweep stamping a floor for a history it will never read.
+- **`listAreaPaths()`** — the first `AreaPathCapable`, or **`null`**. The **third** routed read that
+  answers rather than throwing, and null rather than an empty tree because the two are different
+  readings and only one is about this project: an empty tree is a project that has never subdivided,
+  null is a tracker with no such concept at all. `AreaPathDirectory` (`src/intake/areaPaths.ts`) is
+  what calls it, from the pulse and under its own TTL, because both its readers — the `assay_issue`
+  argument schema and the state snapshot — are synchronous.
+  → [06](06-issue-pickup.md#where-the-goal-belongs-the-placement-proposals-issue-463)
+- **`canPlaceWorkItem()` / `setWorkItemParent` / `setWorkItemAreaPath`** — where a work item sits on
+  the backlog. **One capability for the two writes**, unlike every split above and for the mirror of
+  their reason: those exist because GitHub genuinely has one half and not the other, and these two are
+  both Azure Boards concepts that arrive together. The predicate is asked for `canSetWorkItemState`'s
+  reason — the two writes throw when nothing implements them, so a caller that wants to **offer** the
+  operation has no other way to find out, and the cockpit draws no placement question where nothing
+  could act on it.
 - **`canCreateIssues()` / `describeFilingTarget()`** — the two halves of "can I file, and where".
   The predicate is the cheap cut, asked first by both filing routes; the probe delegates to the first
   `IssueCreateCapable` and throws when there is none, exactly as `createIssue` does. They are kept
