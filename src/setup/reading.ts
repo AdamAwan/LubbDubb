@@ -185,7 +185,7 @@ export async function buildSetupReading(deps: {
   const restated = new Set<string>();
   for (const check of [
     pointedCheck(config, onMock, configFileExists, install),
-    credentialCheck(config, probes),
+    await credentialCheck(config, probes),
     await identityCheck(config, probes),
     ...watchChecks(config, store),
     await agentCheck(config, probes),
@@ -355,16 +355,28 @@ function pointedCheck(config: Config, onMock: boolean, fileExists: boolean, inst
   };
 }
 
-function credentialCheck(config: Config, probes: SetupProbes): SetupCheck {
-  // Asked of whichever provider is actually selected, and of both when they
-  // differ — a deployment reading issues from one and pull requests from another
-  // needs both credentials, and checking only one would pass while half the world
-  // stayed unreadable.
-  const variables = [
-    ...new Set([credentialVar(config.integrations.issues), credentialVar(config.integrations.sourceControl)]),
-  ].filter((name): name is string => name !== null);
+/**
+ * Whether the selected providers can be read at all.
+ *
+ * Asked of whichever provider is actually selected, and of both when they differ —
+ * a deployment reading issues from one and pull requests from another needs both,
+ * and checking only one would pass while half the world stayed unreadable.
+ *
+ * **A provider is asked for every route it has, not for its variable.** Azure has
+ * two: `resolveAzureAuth` prefers `AZURE_DEVOPS_PAT` and falls back to the
+ * logged-in `az` CLI, so an operator who has run `az login` and set nothing reads
+ * the whole world — and the reading that named only the variable told them, in a
+ * `bad` row on the surface that exists to be believed, that their working harness
+ * could not be read at all. A route this check does not know about is the same bug
+ * again, pointed the other way: it would call a fault what is just a second way in.
+ * → `docs/spec/26-setup.md#the-credential-check-asks-both-routes`
+ */
+async function credentialCheck(config: Config, probes: SetupProbes): Promise<SetupCheck> {
+  const providers = [...new Set([config.integrations.issues, config.integrations.sourceControl])].filter(
+    (provider) => credentialVar(provider) !== null,
+  );
 
-  if (variables.length === 0) {
+  if (providers.length === 0) {
     return {
       id: 'credential',
       label: 'Credential',
@@ -372,27 +384,79 @@ function credentialCheck(config: Config, probes: SetupProbes): SetupCheck {
       detail: 'the fake provider needs none',
     };
   }
-  const missing = variables.filter((name) => {
-    const value = probes.env(name);
-    return value === undefined || value === '';
-  });
-  if (missing.length === 0) {
-    return { id: 'credential', label: 'Credential', verdict: 'ok', detail: `${variables.join(', ')} present` };
+
+  const routes = await Promise.all(providers.map((provider) => credentialRoute(provider, probes)));
+  const unmet = routes.filter((route) => !route.met);
+  if (unmet.length === 0) {
+    return { id: 'credential', label: 'Credential', verdict: 'ok', detail: routes.map((r) => r.detail).join(', ') };
   }
   return {
     id: 'credential',
     label: 'Credential',
     verdict: 'bad',
-    detail: `${missing.join(' and ')} not set in this process — the provider cannot be read at all.`,
+    detail: `${unmet.map((route) => route.detail).join('; ')} — the provider cannot be read at all.`,
     // Named as the environment's rather than the file's, because that is the
     // whole reason no secret is a config key: the file stays safe to paste.
-    remedy: `Export ${missing.join(' and ')} in the shell that starts the harness, then restart.`,
+    remedy: unmet.map((route) => route.remedy).join(' '),
     fix: {
       kind: 'shell',
       label: 'Copy',
-      command: missing.map((name) => `export ${name}=…`).join(' && '),
-      why: 'Nothing here can reach the environment of a process that is already running — and no secret is ever a config key, which is what keeps the file safe to paste.',
+      command: unmet.map((route) => route.command).join(' && '),
+      // Deduped rather than taken from the first: two providers can be unmet for
+      // different reasons, and a sentence explaining one of them stands as a claim
+      // about both.
+      why: [...new Set(unmet.map((route) => route.why))].join(' '),
     },
+  };
+}
+
+/** What a check row says about one provider: whether it can be authenticated, and how. */
+interface CredentialRoute {
+  met: boolean;
+  detail: string;
+  remedy: string;
+  command: string;
+  /** Why the harness cannot do this one itself — a `shell` fix is copied, never run. */
+  why: string;
+}
+
+/**
+ * One provider's routes in, asked in the order {@link resolveAzureAuth} tries them.
+ *
+ * The `az` route is asked **only** when the variable is unset, because it costs a
+ * subprocess and the PAT wins anyway — asking it first would spend an `az` spawn on
+ * every cockpit mount of a deployment that never uses the CLI.
+ */
+async function credentialRoute(provider: string, probes: SetupProbes): Promise<CredentialRoute> {
+  const name = credentialVar(provider)!;
+  const value = probes.env(name);
+  if (value !== undefined && value !== '') {
+    return { met: true, detail: `${name} present`, remedy: '', command: '', why: '' };
+  }
+  if (provider === 'azure') {
+    if (await probes.azSignedIn()) {
+      // Said in full rather than as "present": the operator has no such variable
+      // set, and a row claiming they do is the next hour of their life.
+      return { met: true, detail: 'the az CLI is signed in', remedy: '', command: '', why: '' };
+    }
+    return {
+      met: false,
+      detail: `${name} is not set and the az CLI is not signed in`,
+      // `az login` first: it is the shorter path, and it needs no restart — auth is
+      // resolved per request, so the fleet picks a fresh sign-in up on its next pulse.
+      // A PAT is read once at request time too, but only from the environment of the
+      // running process, which is the one thing nothing here can reach.
+      remedy: `Run \`az login\`, or export ${name} in the shell that starts the harness and restart.`,
+      command: 'az login',
+      why: 'Signing in opens a browser and asks you a question, which is not a thing the harness can answer on your behalf — and the other route is a secret, which is never a config key.',
+    };
+  }
+  return {
+    met: false,
+    detail: `${name} is not set`,
+    remedy: `Export ${name} in the shell that starts the harness, then restart.`,
+    command: `export ${name}=…`,
+    why: 'Nothing here can reach the environment of a process that is already running — and no secret is ever a config key, which is what keeps the file safe to paste.',
   };
 }
 

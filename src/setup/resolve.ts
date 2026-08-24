@@ -31,7 +31,15 @@ export interface SetupResolution {
   target: RemoteTarget | null;
   defaultBranch: { name: string; commit: string | null } | null;
   identity: SetupIdentity;
-  credential: { variable: string | null; present: boolean };
+  /**
+   * Whether the target can be authenticated at all, and by which route.
+   *
+   * `source` exists because `present` is not a fact about the variable: Azure has
+   * a second way in ({@link SetupProbes.azSignedIn}), and a row that reported a
+   * signed-in `az` CLI as `AZURE_DEVOPS_PAT — present` would state something the
+   * operator can check and find false. Null when nothing authenticates.
+   */
+  credential: { variable: string | null; present: boolean; source: 'env' | 'az-cli' | null };
   /** The team's shared layer, and which keys it is contributing. */
   project: { file: string | null; keys: readonly string[] };
   /** The derived watch tag, and whether the prefix behind it is the team's or the default. */
@@ -123,6 +131,13 @@ export async function resolveFromRepo(
   const token = variable === null ? undefined : probes.env(variable);
   const identity = await resolveIdentity(input.email, target, token, probes);
 
+  // The `az` CLI is asked only when the variable is unset and the target is Azure:
+  // a PAT wins anyway, and the probe costs a subprocess on a route debounced behind
+  // the panel's fields. → `docs/spec/26-setup.md#the-credential-check-asks-both-routes`
+  const hasToken = token !== undefined && token !== '';
+  const azCli = !hasToken && target?.provider === 'azure' && (await probes.azSignedIn());
+  const source = hasToken ? 'env' : azCli ? 'az-cli' : null;
+
   const prefix = projectLayer.labelPrefix ?? config.labelPrefix;
   const watch = { label: watchLabelFor(prefix), fromProject: projectLayer.labelPrefix !== undefined };
 
@@ -155,7 +170,7 @@ export async function resolveFromRepo(
     target,
     defaultBranch,
     identity,
-    credential: { variable, present: token !== undefined && token !== '' },
+    credential: { variable, present: source !== null, source },
     project: { file: projectPresent ? projectFile : null, keys: projectKeys },
     watch,
     writes,

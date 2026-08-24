@@ -74,7 +74,7 @@ class AzCliAuth implements AzureAuth {
   /** Refresh well inside the token's real lifetime (typically 60–90 min). */
   private static readonly TTL_MS = 45 * 60 * 1000;
 
-  constructor(private readonly fetchToken: () => Promise<string> = defaultAzToken) {}
+  constructor(private readonly fetchToken: () => Promise<string> = azCliAccessToken) {}
 
   async header(): Promise<string> {
     const now = Date.now();
@@ -90,8 +90,15 @@ class AzCliAuth implements AzureAuth {
   }
 }
 
-/** Spawn the `az` CLI for an Azure DevOps access token. Throws a clear error if `az` isn't logged in. */
-async function defaultAzToken(): Promise<string> {
+/**
+ * Spawn the `az` CLI for an Azure DevOps access token. Throws a clear error if `az` isn't logged in.
+ *
+ * Exported so Setup's credential probe asks the *same* question the auth path asks
+ * (`src/setup/probes.ts`). A second spawn written to look equivalent is how the
+ * panel came to report a PAT as the only way in while the fleet ran happily on the
+ * CLI. @public called by `RealSetupProbes.azSignedIn`.
+ */
+export async function azCliAccessToken(): Promise<string> {
   try {
     const { stdout } = await execFileAsync(
       'az',

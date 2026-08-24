@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { existsSync, statSync } from 'node:fs';
 import { promisify } from 'node:util';
 import { runGit } from '../git/gitCli.js';
+import { azCliAccessToken } from '../integrations/azure/restAzureDevOpsApi.js';
 import { OctokitGitHubApi } from '../integrations/github/octokitGitHubApi.js';
 import { installRoot } from '../selfUpdate/buildStanding.js';
 import type { RemoteTarget } from './remote.js';
@@ -53,6 +54,18 @@ export interface SetupProbes {
    * this. Null when the walk found no `.git`.
    */
   installRoot(): string | null;
+  /**
+   * Whether the logged-in `az` CLI can mint an Azure DevOps token right now — the
+   * harness's **second** way into Azure, and the reason a missing
+   * `AZURE_DEVOPS_PAT` is not by itself a fault.
+   *
+   * `resolveAzureAuth` prefers a PAT and falls back to the CLI, so a deployment
+   * signed in with `az login` reads the whole world with no variable set anywhere.
+   * A check that asked only the environment therefore called a working harness
+   * unreadable, in the operator's own words, on the surface that exists to be
+   * believed. → `docs/spec/26-setup.md#the-credential-check-asks-both-routes`
+   */
+  azSignedIn(): Promise<boolean>;
   /** One environment variable, read at the moment it is asked for. */
   env(name: string): string | undefined;
 }
@@ -76,6 +89,11 @@ export class RealSetupProbes implements SetupProbes {
    * moment the operator exports a token and the page re-reads.
    */
   private readonly logins = new Map<string, string>();
+
+  /** When the `az` CLI last answered yes, or null when it has not since the window lapsed. */
+  private azOkAtMs: number | null = null;
+  /** Short enough that a lapsed `az` session surfaces within minutes of expiring. */
+  private static readonly AZ_TTL_MS = 5 * 60 * 1000;
 
   async originUrl(repoRoot: string): Promise<string | null> {
     try {
@@ -154,6 +172,32 @@ export class RealSetupProbes implements SetupProbes {
 
   installRoot(): string | null {
     return installRoot();
+  }
+
+  /**
+   * Asked of `azCliAccessToken` — the same call the Azure client authenticates
+   * with, never a second spawn written to look equivalent.
+   *
+   * Cached only when it succeeds, and only for a window: `GET /api/setup` runs on
+   * every cockpit mount and `POST /api/setup/resolve` sits debounced behind the
+   * panel's fields, so an uncached probe is an `az` subprocess per keystroke. The
+   * window is short because unlike a token, a CLI session expires under us — a
+   * positive remembered forever would go on reporting a signed-out machine as
+   * fine. A failure is never remembered: "not signed in" is the reading this panel
+   * exists to correct, so `az login` must clear it on the next read.
+   */
+  async azSignedIn(): Promise<boolean> {
+    if (this.azOkAtMs !== null && Date.now() - this.azOkAtMs < RealSetupProbes.AZ_TTL_MS) return true;
+    try {
+      // The token itself is discarded — this probe answers a yes/no and must never
+      // carry a credential any further than the stack frame that minted it.
+      const ok = (await azCliAccessToken()).length > 0;
+      if (ok) this.azOkAtMs = Date.now();
+      return ok;
+    } catch {
+      this.azOkAtMs = null;
+      return false;
+    }
   }
 
   env(name: string): string | undefined {

@@ -396,7 +396,9 @@ Behaviour worth knowing:
   completions and abandonments, re-filtered client-side because the range is boundary-inclusive and an
   older API version may ignore the parameters.
 - Auth: `AZURE_DEVOPS_PAT` (Basic) preferred, else the logged-in `az` CLI (Bearer, cached).
-  `resolveAzureAuth` is the one place `az` is invoked. `isSignInHtml` detects a sign-in-HTML response,
+  `azCliAccessToken` is the one place `az` is invoked — by `resolveAzureAuth`'s CLI arm, and by
+  Setup's credential probe, which must ask exactly what the auth path asks
+  ([26](26-setup.md#the-credential-check-asks-both-routes)). `isSignInHtml` detects a sign-in-HTML response,
   which is retried; transient-retry notices are surfaced in the Errors panel so an occasional failure
   is visible even when the retry recovers.
 
