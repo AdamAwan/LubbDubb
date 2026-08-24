@@ -387,6 +387,14 @@ the operator was unhappy with. The rows are in
 [14](14-persistence.md#operator-instructions-on-a-goal); the routes that write them are in
 [16](16-http-api.md#post-apiissuesnumberinstruction).
 
+**Writing one also restarts the goal**, and that half belongs to the route rather than to this note.
+An operator presses **More work** on a goal that looks finished, which is precisely a goal the funnel
+has parked — a standing delivery, or a plan that has rolled up `complete` — so for as long as the
+route only wrote rows, the words reached the cockpit and no agent. The route therefore writes the
+`more_work` conclusion whatever verdict is standing (which retracts a delivery) and sends a settled
+plan back to a planner. What that costs and why it is the honest reading is argued where the route is
+specified, in [16](16-http-api.md#post-apiissuesnumberinstruction).
+
 `recordDispatchTask` appends `operatorInstructionsNote(...)` (`src/goalInstructions.ts`, pure) to the
 dispatch prompt whenever the goal carries an instruction nobody has concluded yet.
 

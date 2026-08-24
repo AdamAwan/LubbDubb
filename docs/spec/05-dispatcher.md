@@ -790,6 +790,13 @@ it changed no dispatch at all; and on either provider, for an issue with a plan,
 the unplanned route and rule `plan-part` finds every part settled. The assessor said "not delivered" and the
 harness scheduled nothing, anywhere.
 
+**The operator's door into the same two dead ends is the instruction route**, not this rule. Pressing
+**More work** used to write the words and stop, on a goal whose delivery held it out of
+`eligibleIssues` or whose plan had rolled up `complete` — the same silence by the same two mechanisms.
+That is fixed where it is caused: the route retracts the delivery and sends a settled plan back to a
+planner ([16](16-http-api.md#post-apiissuesnumberinstruction)). Nothing here reads instructions, and a
+rule that did would be a second opinion about a decision the operator already made.
+
 This rule is the one consumer of `issue_shortfalls`, and it routes by the cause the assessor
 **declared** rather than one the harness derived. Deriving it would send every shortfall to a replan
 and re-decompose plans whose shape was never the problem — the failure the issue itself names.

@@ -357,13 +357,56 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // had already produced the thing the operator was unhappy with; the words are the
   // whole feature (see src/goalInstructions.ts).
   //
-  // It writes **two** rows, and both are load-bearing. The instruction is what
+  // It writes the instruction and then **restarts the goal**, because those are two
+  // different jobs and only the first one used to happen. The instruction is what
   // reaches the agent — appended to every dispatch on the goal until one concludes
-  // it — and the conclusion is what makes there *be* a next dispatch: rule
-  // `work-item-back-to-pickup` acts on an explicit `more_work` and on nothing else,
-  // so an instruction without one would sit unread on a parked item. The verdict's
-  // note deliberately does not repeat the instruction: one fact rendered twice in a
-  // prompt reads as two, and the briefing renders a conclusion's note.
+  // it. What makes there *be* a next dispatch is everything below it, and the two
+  // states an operator presses this control in are exactly the two the funnel has
+  // already stopped in (issue #603):
+  //
+  // - **a standing delivery**, which holds the goal out of `eligibleIssues`
+  //   entirely — so no planner, no pickup and no part is scheduled for it;
+  // - **a settled plan**, which `resolvePlanRoute` answers `parts` whatever its
+  //   status, so rule `issue-pickup` skips it as planned and rule `plan-part` finds
+  //   every part finished and schedules nothing.
+  //
+  // That is the gap `src/delivery/shortfall.ts` names for the *assessor's* negative
+  // verdict, reached through the operator's door instead: the harness was told the
+  // goal is not reached and scheduled nothing, anywhere. The words landed, the
+  // cockpit drew them, and no agent was ever going to read them.
+  //
+  // The **conclusion** is written on a delivered goal too, which clears the delivery
+  // through `VERDICT_EXCLUSIONS.conclusion`. That is the point rather than a cost:
+  // `delivered` and "there is more work here" are opposite answers to one question,
+  // and `resolveIssueConclusion`'s first arm already says the operator outranks the
+  // assessor on it — "an operator looking at a complete plan and saying there is
+  // more to do here must not be argued with by a derivation". It used to be skipped
+  // on the grounds that the retrospective would read the instruction anyway, and it
+  // does; but `issue-retro` dispatches a *desk* agent with no branch and no
+  // worktree, deliberately, so the one agent the words reached was the one agent
+  // structurally unable to act on them — and once it had written up the run, nothing
+  // was dispatched for that goal again. `issue-retro`, `validate-check` and the
+  // close-out obligation all stop while the goal is back in play, which is the
+  // honest reading of a goal whose owner has just said it is not finished — and
+  // none of it is a new path: `closeOutPass` already declines an open close-out
+  // when the delivery row goes and reopens it when the goal is delivered again,
+  // which is the retraction `/delivered` has always been able to cause. A
+  // retrospective already written stays written.
+  //
+  // The **replan** is one status write, `shortfallArm`'s arm A through this door:
+  // rule `issue-plan` already routes a plan row in `planning` back to a planner with
+  // the `issue-replan` prompt and `currentPlanSummary`, and `plannerVerdict` already
+  // narrows the cooldown to decisions since `plan.updatedAt`. So the goal is planned
+  // out again, put to the operator for approval as usual, and then worked — which is
+  // what the control has always promised. Nothing is torn down, exactly as
+  // `POST /api/plans/:id/replan` tears nothing down. It also stops the assessor
+  // racing the planner it just asked for: `planInFlight` is true of a `planning`
+  // plan, and rule `issue-assess` skips on it.
+  //
+  // The words are **not** appended to the plan's reason. They reach the replanning
+  // agent through `operatorInstructionsNote`, whose `padOriginFor` scope covers the
+  // `:plan` origin, and one fact rendered twice in one prompt reads as two — the
+  // same reason the verdict's note below does not repeat the instruction either.
   //
   // The cycle runs for the toggle's reason, sharpened — an operator who has just
   // said what they want should not wait a heartbeat to be listened to.
@@ -379,26 +422,21 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
     checked({ params: IssueNumberParams, body: InstructionBody }, async ({ params, body }) => {
       const originRef = issueConclusionOrigin(params.number);
       const instruction = store.addIssueInstruction({ originRef, text: body.text });
-      // The conclusion is a *means* — it is what makes there be a next dispatch to
-      // read the words — and on a delivered goal there already is one: rule
-      // `issue-retro` fires on the delivery, and `instructionsFor` deliberately
-      // includes the retro origin. Writing it anyway would clear the delivery
-      // (`VERDICT_EXCLUSIONS.conclusion`), which un-parks the assessor and re-blocks
-      // the retrospective and every handed-over validation check — all three gate on
-      // `deliveryParked`. Nothing errors and the instruction still lands, so the
-      // whole cost is silent: a goal that was finished goes back round for pickup
-      // because somebody wrote a note on it.
-      const conclusion = store.getDelivery(originRef)
-        ? null
-        : store.recordIssueConclusion({
-            originRef,
-            verdict: 'more_work',
-            note: 'The operator wrote an instruction for this goal — it is in front of the next agent.',
-            by: 'operator',
-          });
+      const conclusion = store.recordIssueConclusion({
+        originRef,
+        verdict: 'more_work',
+        note: 'The operator wrote an instruction for this goal — it is in front of the next agent.',
+        by: 'operator',
+      });
+      // Only a *settled* plan is sent back. One still in flight — `planning`,
+      // `awaiting_approval`, `active` — already has a next dispatch or a decision
+      // the operator owes, and rewinding it would throw away the decomposition
+      // they are in the middle of.
+      const plan = store.getPlanByOrigin(originRef);
+      const replanned = plan?.status === 'complete' ? store.setPlanStatus(plan.id, 'planning') : null;
       hub.broadcast({ type: 'world:changed' });
       await harness.runCycle('manual');
-      return { ok: true, instruction, conclusion };
+      return { ok: true, instruction, conclusion, replanned };
     }),
   );
 
@@ -410,6 +448,14 @@ export function register(app: FastifyInstance, { system, hub }: RouteContext): v
   // behind would keep bouncing the item back to pickup for words nobody is going to
   // read. An agent's own declaration is left exactly where it was found — it is
   // about the work, not about the instruction.
+  //
+  // What a withdrawal does **not** undo is the rest of the restart: a delivery the
+  // write retracted stays retracted, and a plan it sent back to a planner stays in
+  // `planning`. Neither is recoverable by guessing — a cleared verdict has no row
+  // to resurrect, and a plan re-marked `complete` from here would claim a roll-up
+  // that nothing re-derived. Both have their own control (`/delivered`,
+  // `/api/plans/:id/approve` once the replan lands), which is where an operator who
+  // meant to take the whole act back goes.
   const InstructionParams = IssueNumberParams.extend({ id: z.string() });
   app.delete(
     '/api/issues/:number/instruction/:id',

@@ -9,7 +9,8 @@ import { buildApp } from '../src/server/app.js';
 import { FakePtyBackend } from '../src/pty/fakeBackend.js';
 import { FakeWorktreeManager } from '../src/worktree/fakeWorktreeManager.js';
 import { operatorInstructionsNote, ticketAmendCommands } from '../src/goalInstructions.js';
-import type { Agent, IssueInstruction } from '../src/types.js';
+import type { Agent, IssueInstruction, Plan } from '../src/types.js';
+import { planWithOnePart } from './support/plans.js';
 import { findTask } from './support/tasks.js';
 
 // -- the pure note -----------------------------------------------------------
@@ -311,3 +312,120 @@ test('concluding the goal settles every instruction standing on it', async () =>
     system.store.close();
   }
 });
+
+// -- restarting a goal the funnel had already stopped at (issue #603) ----------
+//
+// The words landing was never the hard half. An operator presses **More work** on
+// a goal that looks finished, which is precisely a goal the funnel has parked: a
+// standing delivery holds it out of `eligibleIssues` altogether, and a settled
+// plan is answered `parts` by `resolvePlanRoute`, so pickup skips it as planned
+// while `plan-part` finds every part done. Both states drew the instruction in the
+// cockpit and dispatched nobody who could act on it.
+
+test('an instruction on a delivered goal takes the park down with it', async () => {
+  // The delivery is cleared through `VERDICT_EXCLUSIONS.conclusion`, not a
+  // hand-rolled delete — `delivered` and "there is more here" are opposite answers
+  // to one question, and the operator outranks the assessor on it.
+  const system = build();
+  const { app } = await buildApp(system);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
+    system.store.recordDelivery({ originRef: 'issue:1', summary: 'assessed as delivered', by: 'assessor' });
+
+    await app.inject({ method: 'POST', url: '/api/issues/1/instruction', payload: { text: 'the button is wrong' } });
+    assert.equal(system.store.getDelivery('issue:1'), null, 'the goal is not delivered any more');
+    assert.equal(system.store.getIssueConclusion('issue:1')?.verdict, 'more_work');
+
+    await system.harness.runCycle('manual');
+    const dispatched = system.store.listTasks().filter((t) => t.originRef?.startsWith('issue:1') === true);
+    assert.ok(dispatched.length > 0, 'and an agent is on it');
+    assert.ok(
+      dispatched.every((t) => t.originRef !== 'issue:1:retro'),
+      'not the write-up desk, which has no worktree and could not act on the words if it read them',
+    );
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});
+
+test('an instruction on a goal whose plan is finished sends the plan back to a planner', async () => {
+  // `shortfallArm`'s arm A through the operator's door: one status write, and rule
+  // `issue-plan` — which was already there — dispatches a replanner primed with the
+  // plan that exists. The decomposition it draws is put to the operator as usual.
+  const system = build();
+  const { app } = await buildApp(system);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
+    const plan = settledPlan(system, 1);
+    assert.equal(system.store.getPlan(plan.id)?.status, 'complete', 'the state the funnel used to stop in');
+
+    await app.inject({ method: 'POST', url: '/api/issues/1/instruction', payload: { text: 'the button is wrong' } });
+    assert.equal(system.store.getPlan(plan.id)?.status, 'planning');
+
+    await system.harness.runCycle('manual');
+    const replanner = findTask(system.store, (t) => t.originRef === 'issue:1:plan');
+    assert.ok(replanner, 'a planner was dispatched');
+    assert.match(replanner.title, /Replan issue #1/, 'primed with the plan that exists, not asked to plan it cold');
+    assert.match(replanner.prompt, /the button is wrong/, 'and it reads what the operator asked for');
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});
+
+test('a plan still in flight is left exactly where it is', async () => {
+  // Only a *settled* plan is rewound. One mid-decomposition already has a next
+  // dispatch or a decision the operator owes, and rewinding it would throw away
+  // the plan they are in the middle of.
+  const system = build();
+  const { app } = await buildApp(system);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
+    const plan = planWithOnePart(system.store, 1, 'Ship the thing');
+    await app.inject({ method: 'POST', url: '/api/issues/1/instruction', payload: { text: 'the button is wrong' } });
+    assert.equal(system.store.getPlan(plan.id)?.status, 'active');
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});
+
+test('the goal in issue #603: delivered, plan complete, written up — and More work restarts it', async () => {
+  // The state a goal actually reaches, rather than either half on its own: the plan
+  // rolled up, the assessor parked it delivered, the desk wrote the run up. Every
+  // rule that could schedule anything had stopped, and the control that exists to
+  // say "there is more here" moved nothing.
+  const system = build();
+  const { app } = await buildApp(system);
+  try {
+    system.connector.inject({ kind: 'new_issue', number: 1, title: 'Ship the thing', body: 'Please.' });
+    settledPlan(system, 1);
+    system.store.recordDelivery({ originRef: 'issue:1', summary: 'assessed as delivered', by: 'assessor' });
+    await system.harness.runCycle('manual');
+    assert.ok(
+      findTask(system.store, (t) => t.originRef === 'issue:1:retro'),
+      'the run was written up',
+    );
+
+    await app.inject({ method: 'POST', url: '/api/issues/1/instruction', payload: { text: 'the button is wrong' } });
+    await system.harness.runCycle('manual');
+
+    const replanner = findTask(system.store, (t) => t.originRef === 'issue:1:plan');
+    assert.ok(replanner, 'a planner is on it');
+    assert.match(replanner.prompt, /the button is wrong/, 'and it reads what the operator asked for');
+  } finally {
+    await app.close();
+    system.store.close();
+  }
+});
+
+/** A plan with every part finished and rolled up — a goal the harness considers done. */
+function settledPlan(system: System, issueNumber: number): Plan {
+  const plan = planWithOnePart(system.store, issueNumber, `Issue #${issueNumber}`);
+  const [part] = system.store.listPlanParts(plan.id);
+  system.store.markPartDispatched(part!.id, 'task_seed', `issue/${issueNumber}/whole`);
+  system.store.concludePlanPart(part!.id, { kind: 'report', ref: null, summary: 'delivered' });
+  system.store.rollUpPlanStatus(plan.id);
+  return plan;
+}

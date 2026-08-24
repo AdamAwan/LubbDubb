@@ -57,8 +57,9 @@ export function InstructionModal({
         </div>
         <p className="rb-intro">
           On “{issueTitle}”. Say what you want done — it goes in front of the next agent on this goal, word for word,
-          and the goal is picked up again once no pull request is open for it. The agent updates the ticket itself when
-          what you say changes what the goal asks for.
+          and the goal goes back in front of the harness once no pull request is open for it. If it was already marked
+          delivered that verdict is retracted, and if its plan had finished it goes back to a planner, which draws a new
+          one for you to approve. The agent updates the ticket itself when what you say changes what the goal asks for.
         </p>
         <label className="rb-label" htmlFor="ins-text">
           What needs doing

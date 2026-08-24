@@ -281,7 +281,7 @@ function Header({
             onClick={() => setInstructing(true)}
             title={
               standing === 0
-                ? 'Say what you want done next on this goal — your words go to the next agent, and the harness picks it up again once no PR is open'
+                ? 'Say what you want done next on this goal — your words go to the next agent, and the goal goes back in front of the harness: a "delivered" verdict is retracted, and a plan whose parts have all landed is sent back to a planner for you to approve again'
                 : `Add to the ${standing} instruction${standing === 1 ? '' : 's'} already standing on this goal`
             }
           >

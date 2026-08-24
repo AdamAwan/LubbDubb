@@ -640,9 +640,12 @@ run.
 - **Three conclusion controls, not two.** `Mark done` / `Unfinish` writes or withdraws `done`. **More
   work** opens `InstructionModal` and writes what the operator wants done next, in words — it is a
   third control rather than the finished toggle's other end because what it writes is not the opposite
-  of `done`: it is an instruction, plus the `more_work` that puts the goal back in front of the harness
-  once no PR is open ([06](06-issue-pickup.md#concluding-an-issue),
-  [16](16-http-api.md#post-apiissuesnumberinstruction)). It is offered on any open ticket, **including
+  of `done`: it is an instruction, plus everything that puts the goal back in front of the harness once
+  no PR is open — the `more_work` verdict, which retracts a standing delivery, and a plan that had
+  rolled up `complete` sent back to a planner for the operator to approve again
+  ([06](06-issue-pickup.md#concluding-an-issue),
+  [16](16-http-api.md#post-apiissuesnumberinstruction)). The modal says both, because a control that
+  quietly unwinds a delivery is one an operator has to be able to predict. It is offered on any open ticket, **including
   one that already carries instructions** — a second thing the operator wants is a second instruction,
   and the button that hid itself once the verdict was set was a goal they could no longer say anything
   about. It carries the standing count, so the header says how much is waiting without opening
