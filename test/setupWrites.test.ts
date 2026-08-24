@@ -38,6 +38,7 @@ function probes(over: Partial<SetupProbes> = {}): SetupProbes {
     agentVersion: () => Promise.resolve('2.1.4'),
     viewerLogin: () => Promise.resolve('adamawan'),
     installRoot: () => '/srv/lubbdubb',
+    azSignedIn: () => Promise.resolve(false),
     env: () => undefined,
     ...over,
   };

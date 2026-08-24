@@ -33,6 +33,9 @@ function probes(over: Partial<SetupProbes> = {}): SetupProbes {
     agentVersion: () => Promise.resolve('2.1.4'),
     viewerLogin: () => Promise.resolve('adamawan'),
     installRoot: () => '/srv/lubbdubb',
+    // Signed out by default: the fake must never assert a route the test did not
+    // ask for, or an azure test would pass on a credential nobody set.
+    azSignedIn: () => Promise.resolve(false),
     env: () => undefined,
     ...over,
   };
@@ -114,7 +117,26 @@ test('a login nothing could confirm is never written as one', async () => {
   assert.equal(resolved.identity.userId, null);
   assert.ok(!Object.hasOwn(resolved.writes, 'userId'));
   assert.equal(resolved.credential.present, false);
+  assert.equal(resolved.credential.source, null);
   assert.equal(resolved.credential.variable, 'GITHUB_TOKEN');
+});
+
+test('the setup sheet reports which route authenticates, not that a variable is present', async () => {
+  const repoRoot = mkdtempSync(join(tmpdir(), 'lubbdubb-setup-'));
+  const resolved = await resolveFromRepo(
+    { email: 'adam@contoso.com', repoRoot },
+    {
+      probes: probes({
+        originUrl: () => Promise.resolve('https://dev.azure.com/contoso/Platform/_git/api'),
+        env: () => undefined,
+        azSignedIn: () => Promise.resolve(true),
+      }),
+      config: config(),
+    },
+  );
+  assert.equal(resolved.credential.variable, 'AZURE_DEVOPS_PAT');
+  assert.equal(resolved.credential.present, true, 'the harness can authenticate, which is what the row is about');
+  assert.equal(resolved.credential.source, 'az-cli');
 });
 
 test('a key the team’s project file already sets is not copied into the operator’s own', async () => {
@@ -162,6 +184,89 @@ test('a credential the environment does not hold is bad, and the fleet’s own k
   // Agents inherit the harness's environment and the CLI prefers a key with no
   // prompt, so a stray export moves the whole fleet onto API billing silently.
   assert.equal(reading.checks.find((c) => c.id === 'billing')?.verdict, 'bad');
+});
+
+/**
+ * The bug the second route exists for: `resolveAzureAuth` prefers a PAT and falls
+ * back to the logged-in `az` CLI, so an operator who has run `az login` and set no
+ * variable reads the whole world — and was told, in a `bad` row, that the provider
+ * could not be read at all. A check that asks one of a provider's two routes states
+ * something the operator can check and find false.
+ */
+test('a signed-in az CLI is a credential, and the row says so without naming a variable nobody set', async () => {
+  const azure = {
+    integrations: { sourceControl: 'azure' as const, issues: 'azure' as const },
+    azureDevOps: { organization: 'contoso', project: 'Platform', repository: 'api' },
+  };
+  const reading = await buildSetupReading({
+    config: config(azure),
+    store: buildSystem(config()).store,
+    probes: probes({ env: () => undefined, azSignedIn: () => Promise.resolve(true) }),
+    configFile: '/nowhere/lubbdubb.config.json',
+    pending: [],
+    prompts: defaultPromptTemplates(),
+  });
+  const check = reading.checks.find((c) => c.id === 'credential');
+  assert.equal(check?.verdict, 'ok');
+  assert.match(check?.detail ?? '', /az CLI is signed in/);
+  assert.doesNotMatch(check?.detail ?? '', /present/, 'a variable nobody set is never reported as present');
+});
+
+test('azure with neither route names both, and offers the one that needs no restart', async () => {
+  const reading = await buildSetupReading({
+    config: config({
+      integrations: { sourceControl: 'azure', issues: 'azure' },
+      azureDevOps: { organization: 'contoso', project: 'Platform', repository: 'api' },
+    }),
+    store: buildSystem(config()).store,
+    probes: probes({ env: () => undefined, azSignedIn: () => Promise.resolve(false) }),
+    configFile: '/nowhere/lubbdubb.config.json',
+    pending: [],
+    prompts: defaultPromptTemplates(),
+  });
+  const check = reading.checks.find((c) => c.id === 'credential');
+  assert.equal(check?.verdict, 'bad');
+  assert.match(check?.detail ?? '', /AZURE_DEVOPS_PAT is not set and the az CLI is not signed in/);
+  assert.match(check?.remedy ?? '', /az login/);
+  assert.match(check?.remedy ?? '', /AZURE_DEVOPS_PAT/);
+  assert.equal(check?.fix?.kind, 'shell');
+  assert.equal(check?.fix?.kind === 'shell' ? check.fix.command : null, 'az login');
+});
+
+/**
+ * The `az` probe costs a subprocess, and `GET /api/setup` runs on every cockpit
+ * mount. A PAT wins in `resolveAzureAuth` anyway, so asking the CLI first would
+ * spend that spawn on every deployment that never uses it.
+ */
+test('the az CLI is not asked when the PAT is set, and never asked for github at all', async () => {
+  let asked = 0;
+  const counting = () => {
+    asked += 1;
+    return Promise.resolve(true);
+  };
+  const withPat = await buildSetupReading({
+    config: config({
+      integrations: { sourceControl: 'azure', issues: 'azure' },
+      azureDevOps: { organization: 'contoso', project: 'Platform', repository: 'api' },
+    }),
+    store: buildSystem(config()).store,
+    probes: probes({ env: (name) => (name === 'AZURE_DEVOPS_PAT' ? 'pat_x' : undefined), azSignedIn: counting }),
+    configFile: '/nowhere/lubbdubb.config.json',
+    pending: [],
+    prompts: defaultPromptTemplates(),
+  });
+  assert.equal(withPat.checks.find((c) => c.id === 'credential')?.verdict, 'ok');
+  assert.equal(asked, 0);
+
+  await buildSetupReading({
+    config: config({ integrations: { sourceControl: 'github', issues: 'github' }, github: { owner: 'a', repo: 'b' } }),
+    store: buildSystem(config()).store,
+    probes: probes({ env: () => undefined, azSignedIn: counting }),
+    configFile: '/nowhere/lubbdubb.config.json',
+    pending: [],
+    prompts: defaultPromptTemplates(),
+  });
+  assert.equal(asked, 0, 'github has one route in, and it is not the az CLI');
 });
 
 test('a world nothing has been read into yet is unknown, never “nothing is watched”', async () => {

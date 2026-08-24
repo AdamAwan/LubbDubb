@@ -202,12 +202,8 @@ function Derived({ resolved }: { resolved: SetupResolvePayload }): React.JSX.Ele
         />
         <Row
           what="Credential"
-          value={
-            resolved.credential.variable === null
-              ? '—'
-              : `${resolved.credential.variable} — ${resolved.credential.present ? 'present' : 'not set'}`
-          }
-          from="the environment; never a config key"
+          value={credentialValue(resolved.credential)}
+          from="the environment, or the signed-in az CLI; never a config key"
           bad={resolved.credential.variable !== null && !resolved.credential.present}
         />
         <Row
@@ -238,6 +234,19 @@ function Derived({ resolved }: { resolved: SetupResolvePayload }): React.JSX.Ele
       </tbody>
     </table>
   );
+}
+
+/**
+ * The credential row's words, which name the route rather than the variable.
+ *
+ * A signed-in `az` CLI is a whole way into Azure with no variable set anywhere, so
+ * "AZURE_DEVOPS_PAT — present" would be a sentence the operator can check and find
+ * false. → `docs/spec/26-setup.md#the-credential-check-asks-both-routes`
+ */
+function credentialValue(credential: SetupResolvePayload['credential']): string {
+  if (credential.variable === null) return '—';
+  if (credential.source === 'az-cli') return 'the az CLI is signed in';
+  return `${credential.variable} — ${credential.source === 'env' ? 'present' : 'not set'}`;
 }
 
 /** The exact bytes, and when each key takes effect. */

@@ -138,7 +138,7 @@ filter of their own is hiding every tagged item on the tracker.
 | Check          | Bad when                                                | Why it is silent                                                                                                                 |
 | -------------- | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
 | `pointed`      | both capabilities are still `fake`                      | the invented world reads exactly like a real one                                                                                 |
-| `credential`   | the selected provider's env var is unset                | asked of **both** capabilities, since a deployment may read issues from one provider and PRs from another                        |
+| `credential`   | no route into the selected provider answers             | asked of **both** capabilities, since a deployment may read issues from one provider and PRs from another                        |
 | `identity`     | `userId` is unset                                       | tickets it files go unassigned and its branches are not named as yours ([02](02-configuration.md#userid))                        |
 | `eligibility`  | tagged work exists and none of it is yours              | the fleet is idle **and correct**, which is the hardest state to tell from broken                                                |
 | `wiring`       | nothing tagged, and nothing ever picked up              | the same, on the one day an empty panel is unreadable because none has ever been full                                            |
@@ -146,6 +146,37 @@ filter of their own is hiding every tagged item on the tracker.
 | `billing`      | `ANTHROPIC_API_KEY` is in the environment               | agents inherit it and the CLI prefers a key with no prompt, so the whole fleet bills the API ([02](02-configuration.md#secrets)) |
 | `prompt-tools` | a prompt override names a tool `raise` replaced         | the tool still works, so nothing is broken — the deployment is one withdrawal away from a call refused with nothing in the logs  |
 | `restart`      | the file holds changes this process is not running      | `warn`, not `bad` — the harness works, it is just not working on what the operator last wrote                                    |
+
+### The credential check asks both routes
+
+A provider is asked for **every way in it has**, not for its variable. Azure has two:
+`resolveAzureAuth` (`src/integrations/azure/restAzureDevOpsApi.ts`) prefers `AZURE_DEVOPS_PAT` and
+falls back to a token minted by the logged-in `az` CLI — so an operator who has run `az login` and
+exported nothing reads the whole world, and the check that named only the variable told them, in a
+`bad` row, that the provider could not be read at all. That is the worst thing this surface can do:
+every other check here is believed because it reports something silent, and one that contradicts a
+harness the operator can watch working spends the credibility all of them run on. GitHub has one
+route, and is asked for one.
+
+- **`SetupProbes.azSignedIn`** is the second route's reading, and it calls **`azCliAccessToken`** —
+  the same function the Azure client authenticates with. A second spawn written to look equivalent
+  is how the two came apart the first time; the token it returns is discarded in the frame that
+  minted it and never travels.
+- **The CLI is asked only when the variable is unset**, in `resolveAzureAuth`'s own order. A PAT
+  wins anyway, so asking first would spend an `az` subprocess on every cockpit mount of a deployment
+  that never uses it — and `GET /api/setup` runs on every mount.
+- **An `ok` row names the route, never the variable.** "AZURE_DEVOPS_PAT — present" for a signed-in
+  CLI is a sentence the operator can check and find false, which is the same fault as the row this
+  section replaced, wearing the other face. `SetupResolution.credential.source` carries it to the
+  confirm sheet for the same reason.
+- **The remedy names both, and offers `az login`.** It is the shorter path and the one that needs no
+  restart: auth is resolved per request, so a fresh sign-in is picked up on the next pulse, while a
+  PAT reaches only the environment of a process that is already running — which is why the `why` on
+  a `shell` fix is the route's own, deduped across an unmet pair rather than taken from the first.
+- **`RealSetupProbes` caches a yes for five minutes and a no never.** A CLI session, unlike a token,
+  expires under us, so a positive remembered forever would go on reporting a signed-out machine as
+  fine; and "not signed in" is the reading this panel exists to have corrected, so it must be
+  re-asked the moment the operator runs `az login`.
 
 ### A check earns a row for a discrepancy, never a quantity
 
@@ -330,6 +361,10 @@ or a real network would answer differently on every developer's machine and in C
 
 `env()` reads at the moment it is asked rather than snapshotting, because a credential exported after
 boot is exactly the case the `credential` check exists for.
+
+`azSignedIn()` sits between the two: a subprocess rather than a request, but one asked on every
+mount of an Azure deployment with no PAT, so a yes is remembered for a short window and a no is not
+([above](#the-credential-check-asks-both-routes)).
 
 `viewerLogin()` is the opposite, and the one probe that costs a rate-limited request rather than a
 subprocess. It is also the one asked most often: `GET /api/setup` runs on every cockpit mount and

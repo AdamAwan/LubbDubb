@@ -1051,7 +1051,10 @@ committed:
 - **Azure DevOps** — `AZURE_DEVOPS_PAT` (Basic auth) is preferred; if unset, the logged-in `az` CLI
   is used (Bearer, cached). Auth is resolved lazily, so a missing login surfaces as a recorded
   connector error at snapshot time rather than blocking boot. A missing **target** is still a boot
-  error.
+  error. Setup's `credential` check asks **both** routes for the same reason
+  ([26](26-setup.md#the-credential-check-asks-both-routes)): with `az login` done and no variable
+  set the harness reads everything, and a check that asked only the variable called a working
+  deployment unreadable.
 - **Model credentials are inherited**, not supplied. Agents spawn with `{...process.env, ...spec.env}`
   plus only `LUBBDUBB_PROMPT`, `LUBBDUBB_TASK_ID`, and the status-file / events-dir variables. In
   non-interactive mode `claude` always uses `ANTHROPIC_API_KEY` when it is present, with no approval

@@ -3609,7 +3609,7 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
         confidence: 'unknown',
         why: 'no provider yet — nothing to resolve a login against',
       },
-      credential: { variable: null, present: false },
+      credential: { variable: null, present: false, source: null },
       project: { file: null, keys: [] },
       watch: { label: 'lubbdubb-watch', fromProject: false },
       writes: { repoRoot: answers.repoRoot, agentMode: 'stream', maxConcurrentAgents: 1 },
@@ -3629,7 +3629,7 @@ function demoSetupResolution(answers: { email: string; repoRoot: string }): Setu
       confidence: 'confirmed',
       why: `the credential authenticates as ${login}`,
     },
-    credential: { variable: 'GITHUB_TOKEN', present: true },
+    credential: { variable: 'GITHUB_TOKEN', present: true, source: 'env' },
     project: {
       file: `${DEMO_REPO_ROOT}/lubbdubb.project.json`,
       keys: ['ci', 'environments', 'issuePickupStates', 'labelPrefix'],
